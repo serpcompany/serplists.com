@@ -79,16 +79,16 @@ CREATE TABLE checklist_runs (
 
 -- Additional tables from migrations
 -- Users table extensions (from migrations/0002_add_username_and_profiles.sql):
--- username TEXT, affiliate_code TEXT, referral_count INTEGER, total_earnings REAL
+-- username TEXT
 
--- template_favorites, template_forks, sessions, referral_visits, referrals, pages
+-- template_favorites, template_forks, sessions
 ```
 
 ### Key Schema Notes
 - Uses `crypto.randomUUID()` for IDs, not SQLite functions
 - JSON data stored as TEXT strings, parsed in application
 - Categories stored as JSON array in `category` column for templates
-- Additional tables added via migrations for user profiles, referrals, and content pages
+- Additional tables added via migrations for user profiles
 
 ## Actual API Implementation
 
@@ -527,37 +527,11 @@ migrations/
 
 **Username and Profiles (0002_add_username_and_profiles.sql):**
 ```sql
--- Add username and affiliate fields to users table
+-- Add username field to users table
 ALTER TABLE users ADD COLUMN username TEXT;
-ALTER TABLE users ADD COLUMN affiliate_code TEXT;
-ALTER TABLE users ADD COLUMN referral_count INTEGER DEFAULT 0;
-ALTER TABLE users ADD COLUMN total_earnings REAL DEFAULT 0;
 
--- Create referral system tables
-CREATE TABLE IF NOT EXISTS referral_visits (
-  id TEXT PRIMARY KEY,
-  referral_code TEXT NOT NULL,
-  referrer_id TEXT NOT NULL,
-  visitor_ip TEXT,
-  user_agent TEXT,
-  template_id TEXT,
-  converted INTEGER DEFAULT 0,
-  converted_user_id TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (referrer_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
--- Pages table for blog/content
-CREATE TABLE IF NOT EXISTS pages (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  title TEXT NOT NULL,
-  slug TEXT UNIQUE NOT NULL,
-  content TEXT,
-  is_public INTEGER DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+-- Create unique index (acts like UNIQUE constraint)
+CREATE UNIQUE INDEX idx_users_username ON users(username);
 ```
 
 ### Migration Management

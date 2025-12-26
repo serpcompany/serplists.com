@@ -4,10 +4,11 @@ import {
   handleLogin, 
   handleProfile, 
   handleProfileByUsername, 
-  handleProfileByAffiliate 
+  handleProfileById
 } from './handlers/auth';
 import { handleTemplates } from './handlers/templates';
 import { handleChecklists } from './handlers/checklists';
+import { handleUploads } from './handlers/uploads';
 
 export const onRequestGet = handleRequest;
 export const onRequestPost = handleRequest;
@@ -52,12 +53,14 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       response = await handleProfile(request, env);
     } else if (path === 'profiles/by-username') {
       response = await handleProfileByUsername(request, env);
-    } else if (path === 'profiles/by-affiliate') {
-      response = await handleProfileByAffiliate(request, env);
+    } else if (path === 'profiles/by-id') {
+      response = await handleProfileById(request, env);
     } else if (path.startsWith('templates')) {
       response = await handleTemplates(request, env);
     } else if (path.startsWith('checklists')) {
       response = await handleChecklists(request, env);
+    } else if (path.startsWith('uploads')) {
+      response = await handleUploads(request, env);
     } else {
       response = new Response('Not Found', { status: 404 });
     }

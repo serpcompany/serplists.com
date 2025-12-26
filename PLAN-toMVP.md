@@ -2,8 +2,21 @@
 
 This doc is the practical, sequenced plan to ship an MVP given the current repo state and the agreed scope:
 
-- **In scope**: core templates + runs, public sharing, **public user profiles**, **billing/subscriptions**
-- **Out of scope (cut for MVP)**: **Pages**, **Affiliate**
+- **In scope**: core templates + runs, public sharing, **public user profiles**
+- **Out of scope (cut for MVP)**: **Pages**, **Affiliate**, **Billing/subscriptions**
+
+## Status (what’s left)
+
+Already handled in this repo:
+- ✅ Removed Pages + Affiliate + Billing surfaces/code paths.
+- ✅ Slugs are unique; seed data includes stable slugs + usernames.
+- ✅ Public template lookup by slug works (`/checklists/:slug`) and start-run routes to `/run/:id`.
+- ✅ Public content rendering is hardened (no raw HTML; URL sanitization).
+- ✅ R2 uploads endpoint exists and `R2_UPLOADS` binding is wired (avatars + template assets).
+
+Remaining to ship:
+- Set production secrets + bindings (real `JWT_SECRET`, real D1 `database_id`, and R2 bucket binding in the deployed Pages/Worker environment).
+- Apply `migrations/0005_backfill_template_slugs.sql` to remote if you have older templates with missing slugs.
 
 ## 0) MVP definition (what “done” means)
 
@@ -13,7 +26,7 @@ This doc is the practical, sequenced plan to ship an MVP given the current repo 
    - multiple **sections**
    - item **descriptions**
    - item **contents** (markdown text, image URL, video URL, embeds, sub-items)
-   - public/private visibility (private behind paid plan)
+   - public/private visibility
 3. **Public sharing**:
    - public template page loads by **unique slug**
    - public page renders content safely (no XSS)
@@ -24,16 +37,12 @@ This doc is the practical, sequenced plan to ship an MVP given the current repo 
 5. **Profiles (public)**:
    - `GET /profile/:username` shows user profile + user’s public templates
    - template cards show author (username) and link to profile
-6. **Billing**:
-   - account page shows subscription status (free vs premium)
-   - upgrade flow works (checkout)
-   - manage subscription works (customer portal)
-   - premium gates are enforced server-side (not just UI)
+6. **No Billing**: app runs free-only (no subscriptions).
 
 ### Non-goals for MVP (explicit cuts)
 - No `/pages` authoring or public pages.
 - No affiliate tracking, referral attribution, or affiliate dashboards.
-- No avatar file upload (can be “URL only” or deferred).
+- No general file uploads beyond avatar (defer any “attachments” feature).
 
 ## 1) Reality check: current state (what’s already good)
 
@@ -75,7 +84,7 @@ This doc is the practical, sequenced plan to ship an MVP given the current repo 
 ## 3) Scope cuts (Pages + Affiliate)
 
 ### Pages = NO
-**Current**: `/pages` UI exists but CRUD is stubbed (`src/hooks/usePages.ts`) and public pages always 404 (`src/pages/PublicPost.tsx`).
+**Current**: removed from UI and routing (no `/pages` surfaces in the app).
 
 **MVP action**:
 - Remove `/pages` routes from `src/App.tsx` (private) and `/pages/:slug` (public).
@@ -83,7 +92,7 @@ This doc is the practical, sequenced plan to ship an MVP given the current repo 
 - Remove/ignore unused page backup utilities (keep code but don’t expose via UI).
 
 ### Affiliate = NO
-**Current**: tracking hook is mounted (`src/App.tsx`), account shows affiliate UI (`src/pages/Account.tsx`).
+**Current**: removed (no affiliate tracking hook or account UI).
 
 **MVP action**:
 - Remove `useAffiliateTracking()` mount from `src/App.tsx`.
@@ -95,7 +104,6 @@ This doc is the practical, sequenced plan to ship an MVP given the current repo 
 ### Backend endpoints required
 Already present:
 - `GET /api/profiles/by-username?username=...` (`functions/api/handlers/auth.ts`)
-- `GET /api/profiles/by-affiliate?code=...` (exists, but affiliate is out-of-scope for MVP usage)
 
 Missing for MVP UX:
 1. **Get public profile by user id** (for template cards / UserInfo):
@@ -113,38 +121,6 @@ Missing for MVP UX:
   - compute stats from returned templates
 - Decide avatar strategy:
   - MVP: **no file upload** (remove editable avatar upload UI, or accept URL field only)
-
-## 5) Billing = YES (required backend + frontend)
-
-### Important decision (must confirm)
-This repo currently has billing UI but no working backend. MVP billing needs a provider choice.
-
-Default assumption:
-- **Stripe** subscriptions (matches UI language like “checkout” + “customer portal”).
-
-### Backend requirements (Stripe)
-1. **D1 schema**: add billing fields to `users` (or a new `subscriptions` table):
-   - `stripe_customer_id`, `stripe_subscription_id`
-   - `subscription_status` (active/canceled/past_due/none)
-   - `subscription_tier` (free/premium)
-   - `current_period_end` (timestamp)
-2. **Endpoints**:
-   - `GET /api/billing/subscription` (auth required)
-   - `POST /api/billing/checkout` (auth required) → returns checkout URL
-   - `POST /api/billing/portal` (auth required) → returns portal URL
-   - `POST /api/billing/webhook` (Stripe webhook) → updates D1
-3. **Secrets/config**:
-   - Stripe keys + webhook secret as Cloudflare secrets
-4. **Server-side gating**:
-   - enforce private templates / premium-only features in API (never trust only client checks)
-
-### Frontend requirements
-- Wire `src/pages/Account.tsx` to real billing endpoints:
-  - subscription status polling
-  - “Upgrade” → open checkout URL
-  - “Manage” → open portal URL
-- Wire `src/pages/TemplateEditor.tsx` subscription check to real status (premium enables private templates)
-- Replace any “dev override” logic with a proper feature flag or remove from production build.
 
 ## 6) Milestones (sequenced work)
 
@@ -188,18 +164,6 @@ Primary files:
 - `src/pages/UserProfile.tsx`
 - `src/components/shared/UserInfo.tsx`
 
-### Milestone 4 — Billing MVP
-Deliverables:
-- Subscription status accurate.
-- Checkout + portal flows functional.
-- Premium gating enforced server-side.
-
-Primary files:
-- `functions/api/[[route]].ts` (route wiring)
-- `functions/api/handlers/billing.ts` (new)
-- `migrations/*.sql` (new migration)
-- `src/pages/Account.tsx`, `src/pages/TemplateEditor.tsx`
-
 ## 7) Test plan (what to run + what to add)
 
 Run existing suite:
@@ -212,15 +176,8 @@ Add/extend tests where risk is high:
 - Integration tests for:
   - template create stores sections (not flattened)
   - template-by-slug endpoint
-  - billing endpoints (mock Stripe calls; webhook signature validation)
 - Unit tests for profile page data mapping.
-
-## 8) Open questions (need answers to finalize Milestone 4)
-- Billing provider: **Stripe** confirmed?
-- Premium feature list: private templates only, or also template limits, analytics, etc.?
-- Price + product IDs: do we have Stripe price IDs yet?
-- Do we want to keep “affiliate_code” concept in DB even though affiliate is out-of-scope for MVP?
 
 ---
 
-If you want, I can turn this into an implementation PR sequence (actual code changes) starting with Milestone 1 (data integrity + route + slug uniqueness + XSS), then do the scope cuts, then profiles, then billing.
+If you want, I can turn this into an implementation PR sequence (actual code changes) starting with Milestone 1 (data integrity + route + slug uniqueness + XSS), then do the scope cuts, then profiles.

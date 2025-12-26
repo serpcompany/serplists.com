@@ -2,20 +2,17 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { ChecklistItemContent } from "@/types/checklist";
-import { Page } from "@/types/page";
 import { ContentAddPanel } from "./ContentAddPanel";
 import { TextContentEditor } from "./content-types/TextContentEditor";
 import { MediaContentEditor } from "./content-types/MediaContentEditor";
 import { EmbedContentEditor } from "./content-types/EmbedContentEditor";
 import { SubItemsEditor } from "./content-types/SubItemsEditor";
-import { PageContentEditor } from "./content-types/PageContentEditor";
 
 interface ContentEditorProps {
   contents: ChecklistItemContent[];
   sectionIndex: number;
   itemIndex: number;
-  pages?: Page[];
-  onAddItemContent: (sectionIndex: number, itemIndex: number, contentType: "text" | "image" | "video" | "file" | "embed" | "subItems" | "page") => void;
+  onAddItemContent: (sectionIndex: number, itemIndex: number, contentType: "text" | "image" | "video" | "file" | "embed" | "subItems") => void;
   onUpdateItemContent: (sectionIndex: number, itemIndex: number, contentIndex: number, value: string) => void;
   onUpdateItemContentMeta: (sectionIndex: number, itemIndex: number, contentIndex: number, updates: unknown) => void;
   onRemoveItemContent: (sectionIndex: number, itemIndex: number, contentIndex: number) => void;
@@ -28,7 +25,6 @@ export const ContentEditor = ({
   contents,
   sectionIndex,
   itemIndex,
-  pages = [],
   onAddItemContent,
   onUpdateItemContent,
   onUpdateItemContentMeta,
@@ -39,7 +35,7 @@ export const ContentEditor = ({
 }: ContentEditorProps) => {
   const [showAddPanel, setShowAddPanel] = useState(false);
 
-  const handleAddContent = (contentType: "text" | "image" | "video" | "file" | "embed" | "subItems" | "page") => {
+  const handleAddContent = (contentType: "text" | "image" | "video" | "file" | "embed" | "subItems") => {
     onAddItemContent(sectionIndex, itemIndex, contentType);
   };
 
@@ -94,17 +90,6 @@ export const ContentEditor = ({
           />
         );
 
-      case "page":
-        return (
-          <PageContentEditor
-            value={content.value}
-            pageId={content.pageId}
-            pages={pages}
-            onValueChange={(value: unknown) => onUpdateItemContent(sectionIndex, itemIndex, contentIndex, value)}
-            onUpdateMeta={(updates: unknown[]) => onUpdateItemContentMeta(sectionIndex, itemIndex, contentIndex, updates)}
-          />
-        );
-
       default:
         return null;
     }
@@ -138,7 +123,7 @@ export const ContentEditor = ({
           {contents.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <p>No content added yet.</p>
-              <p className="text-sm">Use the "Add Content" button above to add text, images, videos, files, embeds, pages, or sub-tasks.</p>
+              <p className="text-sm">Use the "Add Content" button above to add text, images, videos, files, embeds, or sub-tasks.</p>
             </div>
           )}
         </div>

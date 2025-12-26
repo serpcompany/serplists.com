@@ -4,7 +4,8 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { LogOut, Home, FileText, User, CheckSquare, BookOpen, Settings, ExternalLink } from "lucide-react";
+import { LogOut, Home, FileText, CheckSquare, Settings, ExternalLink } from "lucide-react";
+import { api } from "@/lib/api";
 // Supabase removed - using Cloudflare API
 interface LayoutProps {
   children: React.ReactNode;
@@ -20,23 +21,19 @@ export const Layout: React.FC<LayoutProps> = ({
   const location = useLocation();
   const [userProfile, setUserProfile] = useState<{
     username: string | null;
-    affiliate_code: string | null;
   }>({
-    username: null,
-    affiliate_code: null
+    username: null
   });
 
-  // Fetch user's username and affiliate_code for profile link
+  // Fetch user's username for profile link
   useEffect(() => {
     const fetchUserProfile = async () => {
       if (!user?.id) return;
       try {
-        // TODO: Replace with Cloudflare API call
-        // const profile = await api.getProfile();
-        // if (profile) {
-        //   setUserProfile({ username: profile.username, affiliate_code: profile.affiliate_code });
-        // }
-        console.log('Profile fetch disabled - needs Cloudflare API implementation');
+        const profile = await api.getProfile();
+        if (profile) {
+          setUserProfile({ username: profile.username || null });
+        }
       } catch (error) {
         console.error('Error fetching user profile:', error);
       }
@@ -59,10 +56,6 @@ export const Layout: React.FC<LayoutProps> = ({
     name: "Checklists",
     href: "/checklists",
     icon: CheckSquare
-  }, {
-    name: "Pages",
-    href: "/pages",
-    icon: BookOpen
   }];
   const isActive = (href: string) => location.pathname === href;
   return <div className="min-h-screen bg-background flex flex-col">
@@ -114,8 +107,8 @@ export const Layout: React.FC<LayoutProps> = ({
                     </Link>
                   </DropdownMenuItem>
                   
-                  {(userProfile.username || userProfile.affiliate_code) && <DropdownMenuItem asChild>
-                       <Link to={`/profile/${userProfile.username || userProfile.affiliate_code}`} target="_blank" rel="noopener noreferrer" className="w-full flex items-center gap-2 cursor-pointer">
+                  {userProfile.username && <DropdownMenuItem asChild>
+                       <Link to={`/profile/${userProfile.username}`} target="_blank" rel="noopener noreferrer" className="w-full flex items-center gap-2 cursor-pointer">
                         <ExternalLink className="h-4 w-4" />
                         Public Profile
                       </Link>

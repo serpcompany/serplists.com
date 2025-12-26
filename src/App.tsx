@@ -17,14 +17,11 @@ import Dashboard from "./pages/Dashboard";
 import Templates from "./pages/Templates";
 import TemplateEditor from "./pages/TemplateEditor";
 import ChecklistRun from "./pages/ChecklistRun";
-import Pages from "./pages/Pages";
-import PublicPost from "./pages/PublicPost";
 import PublicTemplate from "./pages/PublicTemplate";
 import ChecklistLibrary from "./pages/ChecklistLibrary";
 import Categories from "./pages/Categories";
 import Account from "./pages/Account";
 import UserProfile from "./pages/UserProfile";
-import { useAffiliateTracking } from "./hooks/useAffiliateTracking";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,11 +32,6 @@ const queryClient = new QueryClient({
   },
 });
 
-const AppWithTracking = () => {
-  useAffiliateTracking(); // Track referral visits
-  return null;
-};
-
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
@@ -49,7 +41,6 @@ const App = () => {
             <AuthProvider>
               <TemplatesProvider>
                 <Router>
-                  <AppWithTracking />
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Layout><Index /></Layout>} />
@@ -57,14 +48,6 @@ const App = () => {
             <Route path="/register" element={<Register />} />
             
             {/* Public Content Routes */}
-            <Route 
-              path="/pages/:slug"
-              element={
-                <Layout>
-                  <PublicPost />
-                </Layout>
-              } 
-            />
             <Route 
               path="/checklists/:slug" 
               element={
@@ -163,16 +146,6 @@ const App = () => {
                 <PrivateRoute>
                   <Layout>
                     <ChecklistRun />
-                  </Layout>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/pages"
-              element={
-                <PrivateRoute>
-                  <Layout>
-                    <Pages />
                   </Layout>
                 </PrivateRoute>
               }

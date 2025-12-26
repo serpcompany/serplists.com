@@ -67,18 +67,19 @@ export type ChecklistRun = {
 export interface TemplatesContextProps {
   templates: ChecklistTemplate[];
   allTemplates: ChecklistTemplate[];
+  templatesLoading?: boolean;
   runs: ChecklistRun[];
+  runsLoading?: boolean;
   getTemplate: (id: string) => ChecklistTemplate | undefined;
   getTemplateBySlug: (slug: string) => ChecklistTemplate | undefined;
   getRun: (id: string) => ChecklistRun | undefined;
   getRunsForTemplate: (templateId: string) => ChecklistRun[];
   getAllPublicTemplates: () => ChecklistTemplate[];
-  createTemplate: (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "isPublic" | "slug">) => Promise<ChecklistTemplate>;
+  createTemplate: (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => Promise<ChecklistTemplate>;
   updateTemplate: (template: ChecklistTemplate) => void;
   deleteTemplate: (id: string) => void;
   createRun: (params: { templateId: string; runName?: string }) => Promise<ChecklistRun | null>;
   updateRun: (run: ChecklistRun) => void;
   deleteRun: (id: string) => void;
-  hideTemplate: (templateId: string) => void;
   importTemplates: (templates: ChecklistTemplate[]) => Promise<void>;
 }

@@ -506,7 +506,6 @@ interface ProfileData {
   email: string;
   fullName: string;
   username: string;
-  affiliate_code: string;
   avatar_url: string;
 }
 
@@ -517,7 +516,6 @@ const Account = () => {
     email: user?.email || '',
     fullName: '',
     username: '',
-    affiliate_code: '',
     avatar_url: ''
   });
 
@@ -537,7 +535,6 @@ const Account = () => {
           ...prev,
           fullName: data.name || '',
           username: data.username || '',
-          affiliate_code: data.affiliate_code || '',
           avatar_url: data.avatar_url || '',
           ...data
         }));

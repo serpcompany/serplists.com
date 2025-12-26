@@ -6,12 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { CheckCircle, Calendar, User, ArrowLeft, ExternalLink, Star, Clock, Grid, List } from "lucide-react";
-// Supabase removed - using Cloudflare API
 import { ChecklistTemplate } from "@/types/checklist";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { AvatarUpload } from "@/components/shared/AvatarUpload";
-import { useAuth } from "@/contexts/CloudflareAuthContext";
+import { api } from "@/lib/api";
 interface UserProfile {
   id: string;
   full_name: string | null;
@@ -32,109 +31,56 @@ const UserProfile = () => {
   } = useParams<{
     username: string;
   }>();
-  const {
-    user
-  } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+	  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const calculateStats = (templatesData: ChecklistTemplate[]): UserStats => {
-    const totalItems = templatesData.reduce((total, template) => total + template.sections.reduce((sectionTotal, section) => sectionTotal + section.items.length, 0), 0);
-    const allCategories = templatesData.flatMap(template => template.categories || []);
-    const categoriesUsed = [...new Set(allCategories)];
-    const averageItemsPerTemplate = templatesData.length > 0 ? Math.round(totalItems / templatesData.length) : 0;
-    const mostRecentTemplate = templatesData.length > 0 ? templatesData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0].title : null;
-    return {
-      totalTemplates: templatesData.length,
-      totalItems,
-      categoriesUsed,
-      averageItemsPerTemplate,
+	  const calculateStats = (templatesData: ChecklistTemplate[]): UserStats => {
+	    const totalItems = templatesData.reduce((total, template) => total + template.sections.reduce((sectionTotal, section) => sectionTotal + section.items.length, 0), 0);
+	    const allCategories = templatesData.flatMap(template => template.categories || []);
+	    const categoriesUsed = [...new Set(allCategories)];
+	    const averageItemsPerTemplate = templatesData.length > 0 ? Math.round(totalItems / templatesData.length) : 0;
+	    const mostRecentTemplate = templatesData.length > 0 ? [...templatesData].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0].title : null;
+	    return {
+	      totalTemplates: templatesData.length,
+	      totalItems,
+	      categoriesUsed,
+	      averageItemsPerTemplate,
       mostRecentTemplate
     };
   };
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        const cleanUsername = username || '';
-        console.log('UserProfile loading for:', cleanUsername);
-        if (!cleanUsername) {
+        if (!username) {
           setError("No username provided");
           setIsLoading(false);
           return;
         }
 
-        // TODO: Replace with Cloudflare API call
-        // Try to find user by username
-        const profileData = null;
-        const profileError = true;
-        if (profileError || !profileData) {
-          // TODO: Replace with Cloudflare API call
-          // Fallback: try to find by affiliate_code
-          const affiliateData = null;
-          const affiliateError = true;
-          if (affiliateError || !affiliateData) {
-            setError("User not found");
-            setIsLoading(false);
-            return;
-          }
+        const profileData = await api.getProfileByUsername(username);
+        setProfile(profileData);
 
-          // Use affiliate data
-          setProfile({
-            ...affiliateData,
-            username: affiliateData.username || affiliateData.affiliate_code
-          });
-          const userIdToFetch = affiliateData.id;
-          if (userIdToFetch) {
-            // TODO: Replace with Cloudflare API call
-            // Fetch user's public templates
-            const templatesData = [];
-            if (templatesData) {
-              const formattedTemplates = templatesData.map((template: { id: unknown; title: unknown; description: unknown; sections: unknown; created_at: unknown; updated_at: unknown; slug: unknown; categories: unknown; tags: unknown }) => ({
-                id: template.id,
-                title: template.title,
-                description: template.description || '',
-                sections: template.sections as unknown,
-                userId: userIdToFetch,
-                createdAt: template.created_at,
-                updatedAt: template.updated_at,
-                isPublic: true,
-                slug: template.slug || '',
-                categories: template.categories || [],
-                tags: template.tags || []
-              }));
-              setTemplates(formattedTemplates);
-              setStats(calculateStats(formattedTemplates));
-            }
-          }
-        } else {
-          setProfile(profileData);
-          const userIdToFetch = profileData.id;
-          if (userIdToFetch) {
-            // TODO: Replace with Cloudflare API call
-            // Fetch user's public templates
-            const templatesData = [];
-            if (templatesData) {
-              const formattedTemplates = templatesData.map((template: { id: unknown; title: unknown; description: unknown; sections: unknown; created_at: unknown; updated_at: unknown; slug: unknown; categories: unknown; tags: unknown }) => ({
-                id: template.id,
-                title: template.title,
-                description: template.description || '',
-                sections: template.sections as unknown,
-                userId: userIdToFetch,
-                createdAt: template.created_at,
-                updatedAt: template.updated_at,
-                isPublic: true,
-                slug: template.slug || '',
-                categories: template.categories || [],
-                tags: template.tags || []
-              }));
-              setTemplates(formattedTemplates);
-              setStats(calculateStats(formattedTemplates));
-            }
-          }
-        }
+        const templatesData = await api.getPublicTemplatesForUser(profileData.id);
+        const formattedTemplates: ChecklistTemplate[] = templatesData.map((template: Record<string, unknown>) => ({
+          id: String(template.id),
+          title: String(template.title),
+          description: typeof template.description === 'string' ? template.description : '',
+          sections: Array.isArray(template.sections) ? (template.sections as unknown as ChecklistTemplate["sections"]) : [],
+          userId: String(template.user_id),
+          createdAt: String(template.created_at),
+          updatedAt: typeof template.updated_at === 'string' ? template.updated_at : String(template.created_at),
+          isPublic: true,
+          slug: typeof template.slug === 'string' ? template.slug : '',
+          categories: Array.isArray(template.categories) ? (template.categories as string[]) : [],
+          tags: Array.isArray(template.tags) ? (template.tags as string[]) : [],
+          version: typeof template.version === 'number' ? template.version : 1,
+        }));
+
+        setTemplates(formattedTemplates);
+        setStats(calculateStats(formattedTemplates));
       } catch (error) {
         console.error('Error fetching user data:', error);
         setError("Failed to load user data");
@@ -144,27 +90,18 @@ const UserProfile = () => {
     };
     fetchUserProfile();
   }, [username]);
-  const getTotalItems = (template: ChecklistTemplate) => {
-    return template.sections.reduce((total, section) => total + section.items.length, 0);
-  };
-  const getFeaturedTemplates = () => {
-    return templates.sort((a, b) => getTotalItems(b) - getTotalItems(a)).slice(0, 3);
-  };
-  const getRecentTemplates = () => {
-    return templates.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 6);
-  };
-  const handleAvatarUpdate = (newAvatarUrl: string) => {
-    if (profile) {
-      setProfile({
-        ...profile,
-        avatar_url: newAvatarUrl
-      });
-    }
-  };
-  const isOwnProfile = user?.id === profile?.id;
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
+	  const getTotalItems = (template: ChecklistTemplate) => {
+	    return template.sections.reduce((total, section) => total + section.items.length, 0);
+	  };
+	  const getFeaturedTemplates = () => {
+	    return [...templates].sort((a, b) => getTotalItems(b) - getTotalItems(a)).slice(0, 3);
+	  };
+	  const getRecentTemplates = () => {
+	    return [...templates].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 6);
+	  };
+	  if (isLoading) {
+	    return <LoadingSpinner message="Loading profile..." />;
+	  }
   if (error || !profile) {
     return <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8">
@@ -203,7 +140,7 @@ const UserProfile = () => {
               <div className="flex flex-col md:flex-row gap-6 items-start">
                 {/* Avatar */}
                 <div className="relative">
-                  <AvatarUpload currentAvatarUrl={profile.avatar_url} onAvatarUpdate={handleAvatarUpdate} size="lg" editable={isOwnProfile} />
+                  <AvatarUpload currentAvatarUrl={profile.avatar_url} size="lg" editable={false} />
                 </div>
                 
                 {/* User Details */}
@@ -290,7 +227,7 @@ const UserProfile = () => {
                             <span>{template.sections.length} sections</span>
                             <span>{getTotalItems(template)} items</span>
                           </div>
-                          <Link to={`/template/${template.slug || template.id}`}>
+	                          <Link to={`/checklists/${template.slug || template.id}`}>
                             <Button variant="outline" size="sm" className="w-full">
                               <ExternalLink className="mr-2 h-3 w-3" />
                               View Template
@@ -322,7 +259,7 @@ const UserProfile = () => {
                           <span>{template.sections.length} sections</span>
                           <span>{getTotalItems(template)} items</span>
                         </div>
-                        <Link to={`/template/${template.slug || template.id}`}>
+	                        <Link to={`/checklists/${template.slug || template.id}`}>
                           <Button variant="outline" size="sm" className="w-full text-xs">
                             View Template
                           </Button>
@@ -377,7 +314,7 @@ const UserProfile = () => {
                           Created {new Date(template.createdAt).toLocaleDateString()}
                         </div>
 
-                        <Link to={`/template/${template.slug || template.id}`}>
+	                        <Link to={`/checklists/${template.slug || template.id}`}>
                           <Button variant="outline" className="w-full">
                             <ExternalLink className="mr-2 h-4 w-4" />
                             View Template

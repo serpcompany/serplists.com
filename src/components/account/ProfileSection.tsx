@@ -12,7 +12,6 @@ interface ProfileData {
   email: string;
   fullName: string;
   username: string;
-  affiliate_code: string;
   avatar_url: string;
 }
 

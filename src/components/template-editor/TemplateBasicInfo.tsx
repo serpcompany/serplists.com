@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { X, Plus, Lock, Globe, Crown, Check } from "lucide-react";
+import { X, Plus, Lock, Globe, Check } from "lucide-react";
 import { PREDEFINED_CATEGORIES } from "@/utils/categories";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +24,6 @@ interface TemplateBasicInfoProps {
   onTagsChange: (value: string[]) => void;
   onPublicChange: (value: boolean) => void;
   errors: { type: string; message: string }[];
-  isPremiumUser?: boolean;
 }
 
 export const TemplateBasicInfo = ({
@@ -38,8 +37,7 @@ export const TemplateBasicInfo = ({
   onCategoriesChange,
   onTagsChange,
   onPublicChange,
-  errors,
-  isPremiumUser = false
+  errors
 }: TemplateBasicInfoProps) => {
   const [categoryInput, setCategoryInput] = useState("");
   const [tagInput, setTagInput] = useState("");
@@ -260,64 +258,32 @@ export const TemplateBasicInfo = ({
           {/* Privacy Settings */}
           <div>
             <Label className="text-base font-medium">Privacy Settings</Label>
-            
-            {!isPremiumUser ? (
-              <div className="mt-2 p-4 border border-orange-200 bg-orange-50 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <Globe className="h-5 w-5 text-orange-600 mt-0.5" />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="font-medium text-orange-800">Public Template</span>
-                      <Badge variant="outline" className="text-xs border-orange-300 text-orange-700">
-                        FREE PLAN
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-orange-700 mb-3">
-                      Free accounts can only create public templates. Upgrade to make templates private.
+
+            <div className="mt-2 space-y-3">
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <div className="flex items-center gap-3">
+                  {isPublic ? (
+                    <Globe className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <Lock className="h-5 w-5 text-blue-600" />
+                  )}
+                  <div>
+                    <span className="font-medium">
+                      {isPublic ? 'Public Template' : 'Private Template'}
+                    </span>
+                    <p className="text-sm text-muted-foreground">
+                      {isPublic
+                        ? 'Anyone can discover and use this template'
+                        : 'Only you can access this template'}
                     </p>
-                    <div className="flex items-center gap-2 text-sm text-orange-600">
-                      <Crown className="h-4 w-4" />
-                      <span>Upgrade to Premium for private templates</span>
-                    </div>
                   </div>
                 </div>
+                <Switch checked={isPublic} onCheckedChange={onPublicChange} />
               </div>
-            ) : (
-              <div className="mt-2 space-y-3">
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    {isPublic ? (
-                      <Globe className="h-5 w-5 text-green-600" />
-                    ) : (
-                      <Lock className="h-5 w-5 text-blue-600" />
-                    )}
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">
-                          {isPublic ? 'Public Template' : 'Private Template'}
-                        </span>
-                        <Badge variant="outline" className="text-xs border-green-300 text-green-700">
-                          PREMIUM
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {isPublic 
-                          ? 'Anyone can discover and use this template'
-                          : 'Only you can access this template'
-                        }
-                      </p>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={isPublic}
-                    onCheckedChange={onPublicChange}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Public templates appear in the community library and can be discovered by other users.
-                </p>
-              </div>
-            )}
+              <p className="text-xs text-muted-foreground">
+                Public templates appear in the community library and can be discovered by other users.
+              </p>
+            </div>
           </div>
         </div>
       </CardContent>

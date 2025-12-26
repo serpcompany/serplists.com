@@ -1,24 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { toast } from 'sonner';
-import { useDevMode } from '@/hooks/useDevMode';
 import { ProfileSection } from '@/components/account/ProfileSection';
-import { BillingSection } from '@/components/account/BillingSection';
-import { DeveloperSection } from '@/components/account/DeveloperSection';
-import { AffiliateStats } from '@/components/affiliate/AffiliateStats';
 
 interface ProfileData {
   email: string;
   fullName: string;
   username: string;
-  affiliate_code: string;
   avatar_url: string;
-}
-
-interface SubscriptionData {
-  subscribed: boolean;
-  subscription_tier: string | null;
-  subscription_end: string | null;
 }
 
 const Account = () => {
@@ -28,38 +17,12 @@ const Account = () => {
     email: user?.email || '',
     fullName: '',
     username: '',
-    affiliate_code: '',
     avatar_url: ''
   });
-  const [subscription, setSubscription] = useState<SubscriptionData>({
-    subscribed: false,
-    subscription_tier: null,
-    subscription_end: null
-  });
-  const { devOverride, toggleDevOverride } = useDevMode();
 
   useEffect(() => {
     if (user) {
       loadProfile();
-      checkSubscription();
-
-      // Auto-refresh subscription when page becomes visible
-      const handleVisibilityChange = () => {
-        if (!document.hidden) {
-          checkSubscription();
-        }
-      };
-
-      // Auto-refresh every 5 minutes
-      const intervalId = setInterval(() => {
-        checkSubscription();
-      }, 5 * 60 * 1000); // 5 minutes
-
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      return () => {
-        clearInterval(intervalId);
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      };
     }
   }, [user]);
 
@@ -73,50 +36,11 @@ const Account = () => {
           ...prev,
           fullName: data.name || '',
           username: data.username || '',
-          affiliate_code: data.affiliate_code || '',
-          avatar_url: data.avatar_url || '',
-          ...data // Include affiliate data
+          avatar_url: data.avatar_url || ''
         }));
       }
     } catch (error) {
       console.error('Error loading profile:', error);
-    }
-  };
-
-  const checkSubscription = async () => {
-    try {
-      // TODO: Replace with Cloudflare API call for subscription
-      const data = null;
-      const error = null;
-      // const { data, error } = await api.checkSubscription();
-      if (error) throw error;
-      if (data) {
-        setSubscription(data);
-      }
-    } catch (error) {
-      console.error('Error checking subscription:', error);
-    }
-  };
-
-  const testGHLIntegration = async () => {
-    try {
-      setLoading(true);
-      toast.info('Testing GHL integration...');
-      
-      // TODO: Replace with Cloudflare API call
-      const data = null;
-      const error = null;
-      if (error) throw error;
-      
-      if (data) {
-        setSubscription(data);
-        toast.success('GHL integration test completed! Check the logs.');
-      }
-    } catch (error) {
-      console.error('Error testing GHL integration:', error);
-      toast.error('GHL integration test failed');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -164,43 +88,11 @@ const Account = () => {
     }));
   };
 
-  const handleUpgrade = async () => {
-    try {
-      // TODO: Replace with Cloudflare API call for checkout
-      const data = { url: null };
-      const error = null;
-      // const { data, error } = await api.createCheckout();
-      if (error) throw error;
-      if (data?.url) {
-        window.open(data.url, '_blank');
-      }
-    } catch (error) {
-      console.error('Error creating checkout:', error);
-      toast.error('Failed to start checkout process');
-    }
-  };
-
-  const handleManageSubscription = async () => {
-    try {
-      // TODO: Replace with Cloudflare API call for customer portal
-      const data = { url: null };
-      const error = null;
-      // const { data, error } = await api.getCustomerPortal();
-      if (error) throw error;
-      if (data?.url) {
-        window.open(data.url, '_blank');
-      }
-    } catch (error) {
-      console.error('Error opening customer portal:', error);
-      toast.error('Failed to open subscription management');
-    }
-  };
-
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Account Settings</h1>
-        <p className="text-muted-foreground">Manage your profile and billing preferences</p>
+        <p className="text-muted-foreground">Manage your profile</p>
       </div>
 
       <div className="grid gap-6">
@@ -212,26 +104,6 @@ const Account = () => {
           onProfileUpdate={handleProfileUpdate}
           onAvatarUpdate={handleAvatarUpdate}
         />
-
-        {/* Affiliate Program Section */}
-        <AffiliateStats profile={profileData} />
-
-        {/* Billing Section */}
-        <BillingSection
-          subscription={subscription}
-          onUpgrade={handleUpgrade}
-          onManageSubscription={handleManageSubscription}
-        />
-
-        {/* Developer Settings (only show in development) */}
-        {process.env.NODE_ENV === 'development' && (
-          <DeveloperSection
-            devOverride={devOverride}
-            onToggleDevOverride={toggleDevOverride}
-            onTestGHLIntegration={testGHLIntegration}
-            loading={loading}
-          />
-        )}
       </div>
     </div>
   );

@@ -15,8 +15,6 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   register: (name: string, email: string, password: string) => Promise<boolean>;
-  signInWithOAuth: (provider: 'github') => Promise<void>;
-  signInWithMagicLink: (email: string) => Promise<boolean>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
 }
@@ -76,16 +74,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(null);
   };
 
-  const signInWithOAuth = async (provider: 'github'): Promise<void> => {
-    // OAuth not implemented in Cloudflare version yet
-    throw new Error('OAuth login not yet implemented');
-  };
-
-  const signInWithMagicLink = async (email: string): Promise<boolean> => {
-    // Magic link not implemented in Cloudflare version yet
-    throw new Error('Magic link login not yet implemented');
-  };
-
   const refreshProfile = async () => {
     if (session?.token) {
       try {
@@ -106,8 +94,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login, 
       register, 
       logout,
-      signInWithOAuth,
-      signInWithMagicLink,
       refreshProfile
     }}>
       {children}

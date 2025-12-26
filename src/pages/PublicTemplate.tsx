@@ -5,11 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, PlayCircle } from "lucide-react";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
-import { useTemplates, ChecklistTemplate } from "@/contexts/TemplatesContext";
+import { useTemplates } from "@/contexts/TemplatesContext";
 import { toast } from "sonner";
 import { SEOHead } from "@/components/shared/SEOHead";
 import { analytics } from "@/lib/analytics";
 import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
+import { api } from "@/lib/api";
+import type { ChecklistTemplate } from "@/types/checklist";
 
 const PublicTemplate = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -19,7 +21,7 @@ const PublicTemplate = () => {
   const [isCreatingRun, setIsCreatingRun] = useState(false);
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
-  const { createRun, templates, getTemplateBySlug } = useTemplates();
+  const { createRun } = useTemplates();
 
   useEffect(() => {
     const fetchTemplate = async () => {
@@ -31,35 +33,44 @@ const PublicTemplate = () => {
 
       setLoading(true);
       
-      // Try to find template by slug or ID
-      let foundTemplate: ChecklistTemplate | undefined;
-      
-      // Check if slug looks like a UUID (ID)
-      if (slug.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-        foundTemplate = templates.find((t: { id: unknown; isPublic: unknown }) => t.id === slug && t.isPublic);
-      } else {
-        // Try finding by slug first
-        foundTemplate = getTemplateBySlug?.(slug);
-        
-        // If not found by slug, try finding by ID (for backwards compatibility)
-        if (!foundTemplate) {
-          foundTemplate = templates.find((t: { id: unknown; isPublic: unknown }) => t.id === slug && t.isPublic);
-        }
-      }
+      try {
+        // Check if slug looks like a UUID (ID)
+        const isUuid = slug.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+        const foundTemplate = isUuid
+          ? await api.getTemplateById(slug)
+          : await api.getTemplateBySlug(slug);
 
-      if (!foundTemplate || !foundTemplate.isPublic) {
+        // If the API returns DB-shaped fields, normalize to ChecklistTemplate shape.
+        const normalized: ChecklistTemplate = {
+          id: foundTemplate.id,
+          title: foundTemplate.title,
+          description: foundTemplate.description || '',
+          sections: foundTemplate.sections || [],
+          categories: foundTemplate.categories || [],
+          tags: foundTemplate.tags || [],
+          userId: foundTemplate.user_id,
+          createdAt: foundTemplate.created_at,
+          updatedAt: foundTemplate.updated_at || foundTemplate.created_at,
+          isPublic: Boolean(foundTemplate.is_public),
+          slug: foundTemplate.slug || slug,
+          version: foundTemplate.version || 1,
+        };
+
+        if (!normalized.isPublic) {
+          setNotFound(true);
+        } else {
+          setTemplate(normalized);
+          analytics.trackTemplateView(normalized.id, normalized.title);
+        }
+      } catch (error) {
         setNotFound(true);
-      } else {
-        setTemplate(foundTemplate);
-        // Track template view
-        analytics.trackTemplateView(foundTemplate.id, foundTemplate.title);
       }
       
       setLoading(false);
     };
 
     fetchTemplate();
-  }, [slug, templates, getTemplateBySlug]);
+  }, [slug]);
 
   const handleStartRun = async () => {
     if (!template) return;
@@ -78,7 +89,7 @@ const PublicTemplate = () => {
       
       if (newRun) {
         toast.success("Template run started!");
-        navigate(`/checklist/${newRun.id}`);
+        navigate(`/run/${newRun.id}`);
       }
     } catch (error) {
       console.error('Error creating run:', error);
@@ -125,7 +136,7 @@ const PublicTemplate = () => {
         description={template?.description || `${template?.title} - Interactive checklist template`}
         keywords={template?.categories || ['checklist', 'template']}
         type="article"
-        publishedTime={template?.created_at}
+        publishedTime={template?.createdAt}
       />
       <div className="container max-w-4xl mx-auto px-4 py-8">
         <div className="mb-8">
@@ -139,9 +150,6 @@ const PublicTemplate = () => {
           <header className="mb-8">
             <div className="flex items-start justify-between mb-4">
               <h1 className="text-4xl font-bold">{template.title}</h1>
-              {template.is_premium && (
-                <Badge variant="secondary">Premium</Badge>
-              )}
             </div>
             
             {template.description && (
@@ -151,7 +159,7 @@ const PublicTemplate = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <span className="text-sm text-muted-foreground">
-                  Created on {new Date(template.created_at).toLocaleDateString('en-US', {
+                  Created on {new Date(template.createdAt).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric'

@@ -3,22 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { UserInfo } from "@/components/shared/UserInfo";
-import { ChecklistSection } from "@/lib/schemas/checklistSchema";
-
-interface Template {
-  id: string;
-  title: string;
-  description: string | null;
-  sections: ChecklistSection[];
-  categories: string[];
-  slug: string | null;
-  user_id: string;
-}
+import type { ChecklistTemplate } from "@/types/checklist";
 
 interface TemplateCardProps {
-  template: Template;
+  template: ChecklistTemplate;
   viewMode: "grid" | "list";
-  onTemplateClick: (template: Template) => void;
+  onTemplateClick: (template: ChecklistTemplate) => void;
 }
 
 export const TemplateCard: React.FC<TemplateCardProps> = ({
@@ -35,6 +25,7 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
   };
 
   const totalItems = template.sections.reduce((count: number, section) => count + section.items.length, 0);
+  const categories = template.categories || [];
 
   if (viewMode === "list") {
     return (
@@ -49,9 +40,9 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
               <p className="text-sm text-muted-foreground line-clamp-1 mb-2">
                 {template.description || "No description provided"}
               </p>
-              {template.categories.length > 0 && (
+              {categories.length > 0 && (
                 <div className="flex flex-wrap gap-1">
-                  {template.categories.slice(0, 4).map((cat) => (
+                  {categories.slice(0, 4).map((cat) => (
                     <a
                       key={cat}
                       href={`/checklists/category/${encodeURIComponent(cat)}`}
@@ -63,9 +54,9 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
                       </Badge>
                     </a>
                   ))}
-                  {template.categories.length > 4 && (
+                  {categories.length > 4 && (
                     <Badge variant="secondary" className="text-xs">
-                      +{template.categories.length - 4}
+                      +{categories.length - 4}
                     </Badge>
                   )}
                 </div>
@@ -98,10 +89,10 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             <span>{template.sections.length} sections</span>
             <span>{totalItems} items</span>
           </div>
-          <UserInfo userId={template.user_id} />
-          {template.categories.length > 0 && (
+          <UserInfo userId={template.userId} />
+          {categories.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {template.categories.slice(0, 3).map((cat) => (
+              {categories.slice(0, 3).map((cat) => (
                 <a
                   key={cat}
                   href={`/checklists/category/${encodeURIComponent(cat)}`}
@@ -113,9 +104,9 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
                   </Badge>
                 </a>
               ))}
-              {template.categories.length > 3 && (
+              {categories.length > 3 && (
                 <Badge variant="secondary" className="text-xs">
-                  +{template.categories.length - 3}
+                  +{categories.length - 3}
                 </Badge>
               )}
             </div>

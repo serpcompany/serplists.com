@@ -1,5 +1,6 @@
 // Supabase removed - using Cloudflare API
 import { optimizeImage, isImageFile } from "@/lib/imageOptimization";
+import { api } from "@/lib/api";
 
 export type UploadResult = {
   success: boolean;
@@ -36,25 +37,17 @@ export const uploadFile = async (
       }
     }
 
-    // Create a unique filename with user folder structure
-    const fileExt = fileToUpload.name.split('.').pop();
-    const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    // API handles key naming; userId is kept for callsite compatibility.
+    void userId;
 
-    // TODO: Replace with Cloudflare R2 storage
-    console.log('File upload disabled - needs Cloudflare R2 implementation');
-    return { 
-      success: false, 
-      error: 'File upload is temporarily disabled while we migrate to Cloudflare R2' 
+    const result = await api.uploadToR2({ bucket, file: fileToUpload });
+
+    return {
+      success: true,
+      url: result.url,
+      fileName: result.fileName || file.name,
+      fileSize: result.fileSize || file.size,
     };
-    
-    // Future implementation:
-    // const url = await api.uploadFile(fileToUpload, bucket, fileName);
-    // return {
-    //   success: true,
-    //   url,
-    //   fileName: file.name,
-    //   fileSize: file.size
-    // };
   } catch (error) {
     console.error('Upload error:', error);
     return { 
@@ -69,18 +62,12 @@ export const deleteFile = async (
   bucket: 'template-images' | 'template-videos' | 'template-files'
 ): Promise<boolean> => {
   try {
-    // Extract the file path from the URL
-    const urlParts = url.split('/');
-    const fileName = urlParts[urlParts.length - 1];
-    const userFolder = urlParts[urlParts.length - 2];
-    const filePath = `${userFolder}/${fileName}`;
-
-    // TODO: Replace with Cloudflare R2 storage
-    console.log('File delete disabled - needs Cloudflare R2 implementation');
-    return false;
-    
-    // Future implementation:
-    // return await api.deleteFile(filePath, bucket);
+    void bucket;
+    const parsed = new URL(url, window.location.origin);
+    const key = parsed.searchParams.get('key');
+    if (!key) return false;
+    await api.deleteFromR2(key);
+    return true;
   } catch (error) {
     console.error('Delete error:', error);
     return false;

@@ -227,19 +227,16 @@ Setting up communication handlers:
 
 ### Current Features
 - ✅ User authentication with JWT tokens and bcrypt password hashing
-- ✅ User profiles with usernames and affiliate codes
+- ✅ User profiles with usernames
 - ✅ Template creation and management with rich content editor
 - ✅ Public template sharing with SEO-friendly slugs
 - ✅ Checklist runs with progress tracking and completion status
-- ✅ Rich content types (text/markdown, images, videos, files, embeds, sub-items, pages)
+- ✅ Rich content types (text/markdown, images, videos, files, embeds, sub-items)
 - ✅ Template library with categories and search functionality
-- ✅ Account management with profile, billing, and developer sections
-- ✅ Template export/backup functionality with JSZip
+- ✅ Account management with profile settings
+- ✅ Template export/backup functionality
 - ✅ Responsive design with Tailwind CSS and shadcn/ui components
 - ✅ GitHub integration for developers
-- ✅ Affiliate tracking and referral system with earnings
-- ✅ Blog/pages system for content management
-- ✅ DevMode tools for testing and development
 - ✅ Public user profiles and template browsing
 
 ### Architecture Highlights
@@ -395,10 +392,9 @@ This project has migrated from Supabase to Cloudflare Workers with D1 database. 
 - ✅ Fully migrated to Cloudflare Workers + D1 (SQLite)
 - ✅ Custom JWT authentication system with bcrypt hashing
 - ✅ API routes fully functional (auth, templates, checklists)
-- ✅ Database schema with 8 tables including referral system
 - ✅ Template slugs for SEO-friendly URLs
-- ✅ User profiles and affiliate tracking
-- ✅ Blog/pages system for content management
+- ✅ Public user profiles (by username)
+- ✅ R2-backed uploads (e.g., avatars)
 - ⚠️ Some legacy Supabase references may exist in comments
 
 ---

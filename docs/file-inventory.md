@@ -58,16 +58,10 @@ serp-checklists/
 
 ### `/src/components/` - React Components (94 Files Total)
 
-#### Authentication Components (`/auth/` - 1 file)
-- `OAuthButtons.tsx` - OAuth provider buttons
+#### Authentication Components (`/auth/` - 0 files)
 
-#### Account Management (`/account/` - 3 files)
-- `BillingSection.tsx` - Billing management interface
-- `DeveloperSection.tsx` - Developer settings
+#### Account Management (`/account/` - 1 file)
 - `ProfileSection.tsx` - User profile management
-
-#### Affiliate System (`/affiliate/` - 1 file)
-- `AffiliateStats.tsx` - Affiliate tracking dashboard
 
 #### Checklist Components (`/checklist/` - 3 files)
 - `ChecklistContent.tsx` - Main checklist content display
@@ -156,9 +150,6 @@ Comprehensive shadcn/ui component library including:
 - `useTemplateActions.ts` - Template CRUD actions
 - `useTemplateLibrary.ts` - Template library operations
 - `useChecklistState.ts` - Checklist run state
-- `useAffiliateTracking.ts` - Affiliate tracking
-- `useDevMode.ts` - Development mode utilities
-- `usePages.ts` - Page management
 - `use-mobile.tsx` - Mobile detection
 - `use-toast.ts` - Toast notifications (duplicate of ui/use-toast.ts)
 
@@ -168,7 +159,6 @@ Comprehensive shadcn/ui component library including:
 - `utils.ts` - General utilities (cn function for class names)
 - `analytics.ts` - Analytics integration
 - `imageOptimization.ts` - Image optimization utilities
-- `stripe-setup.ts` - Stripe configuration
 - `validation.ts` - Validation utilities
 
 #### API Client (`/lib/api/`)
@@ -179,7 +169,6 @@ Comprehensive shadcn/ui component library including:
 
 #### Utilities (`/lib/utils/`)
 - `fileUpload.ts` - File upload utilities
-- `pageBackup.ts` - Page backup/restore functionality
 - `templateBackup.ts` - Template backup/restore functionality
 
 ### `/src/pages/` - Page Components (15 Files)

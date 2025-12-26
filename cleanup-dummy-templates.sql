@@ -1,5 +1,8 @@
--- Safe cleanup script for dummy/untitled templates
--- This script will delete templates with specific dummy titles while preserving data integrity
+-- NOTE:
+-- If you're trying to remove the seed/test data shipped in `migrations/seed-test-data.sql`,
+-- use `migrations/cleanup-seed-data.sql` (or `pnpm run db:cleanup:local|remote`).
+--
+-- This file is a separate, title-based cleanup script for ad-hoc dummy templates.
 
 -- First, let's see what we're going to delete (run this part first to preview)
 SELECT 

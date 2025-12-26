@@ -62,6 +62,7 @@ export const useTemplateSave = () => {
           seoUrl,
           categories,
           tags,
+          isPublic,
         });
         
         toast.success("Template created successfully");

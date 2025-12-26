@@ -22,9 +22,12 @@ export type {
 } from "@/types/checklist";
 
 import { generateSlug } from "@/utils/urlHelpers";
+import { calculateSectionsProgress, isSectionsShape, normalizeSections, resetSectionsCompletion } from "@/lib/utils/checklistSections";
 
 
 const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
+
+// calculateSectionsProgress is imported from lib/utils/checklistSections
 
 export const useTemplates = () => {
   const context = useContext(TemplatesContext);
@@ -39,7 +42,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const queryClient = useQueryClient();
 
   // Fetch all public templates for visitors and logged-in users
-  const { data: templates = [] } = useQuery({
+  const { data: templates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ['templates', user?.id],
     queryFn: async () => {
       try {
@@ -67,7 +70,9 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             }
             return [];
           })(),
-          categories: template.category ? [template.category] : [],
+          categories: Array.isArray(template.categories)
+            ? template.categories
+            : (template.category ? [String(template.category)] : []),
           tags: typeof template.tags === 'string' ? JSON.parse(template.tags) : (template.tags || []),
           userId: template.user_id,
           createdAt: template.created_at,
@@ -78,7 +83,10 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           ownerProfile: undefined
         }));
 
-        return transformedTemplates;
+        return transformedTemplates.map((t: Record<string, unknown>) => ({
+          ...t,
+          sections: normalizeSections(t.sections),
+        }));
       } catch (error) {
         console.error('Error fetching templates:', error);
         return [];
@@ -107,7 +115,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   // Fetch user's runs (only if logged in)
-  const { data: runs = [] } = useQuery({
+  const { data: runs = [], isLoading: runsLoading } = useQuery({
     queryKey: ['runs', user?.id],
     queryFn: async () => {
       if (!user) return [];
@@ -115,22 +123,30 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       try {
         const checklistsData = await api.getChecklists();
         // Transform to run format
-        const transformedRuns = checklistsData.map((checklist: Record<string, unknown>) => ({
+        const transformedRuns = checklistsData.map((checklist: Record<string, unknown>) => {
+          const sections = (() => {
+            const raw = typeof checklist.items === 'string' ? JSON.parse(checklist.items) : (checklist.items || []);
+            if (isSectionsShape(raw)) return raw as ChecklistSection[];
+            return [{ id: '1', title: 'Checklist', items: raw }];
+          })();
+
+          return ({
           id: checklist.id,
           templateId: checklist.template_id || '',
           title: checklist.title,
           status: (checklist.status || 'in_progress') as "in_progress" | "completed",
-          progress: 0,
-          sections: typeof checklist.items === 'string' ? 
-            [{ id: '1', title: 'Checklist', items: JSON.parse(checklist.items) }] : 
-            [{ id: '1', title: 'Checklist', items: checklist.items || [] }],
+          sections: normalizeSections(sections),
           startedAt: checklist.started_at || checklist.created_at,
           completedAt: checklist.completed_at || undefined,
           userId: checklist.user_id || '',
-          templateVersion: 1
-        }));
+          templateVersion: typeof checklist.template_version === 'number' ? checklist.template_version : 1
+        });
+        });
 
-        return transformedRuns;
+        return transformedRuns.map((r: ChecklistRun) => ({
+          ...r,
+          progress: calculateSectionsProgress(r.sections),
+        }));
       } catch (error) {
         console.error('Error fetching runs:', error);
         return [];
@@ -148,24 +164,14 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     mutationFn: async (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => {
       if (!user) throw new Error("User must be logged in to create a template");
       
-      // For now, all templates are public (can add premium check later)
       const finalIsPublic = templateData.isPublic ?? true;
-      
-      // Convert sections to flat items array for API
-      const items = templateData.sections.flatMap(section => 
-        section.items.map((item: { id: unknown; title: unknown }) => ({
-          id: item.id,
-          title: item.title,
-          completed: false
-        }))
-      );
-      
+
       const result = await api.createTemplate({
         title: templateData.title,
         description: templateData.description,
-        items,
+        sections: templateData.sections,
         is_public: finalIsPublic,
-        category: templateData.categories?.[0] || '',
+        categories: templateData.categories || [],
         tags: templateData.tags || []
       });
       
@@ -180,7 +186,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         isPublic: finalIsPublic,
-        slug: generateSlug(templateData.title),
+        slug: result.slug || generateSlug(templateData.title),
         version: 1
       };
     },
@@ -255,27 +261,12 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (!template) throw new Error("Template not found");
       
       // Create a deep copy of the template sections with isCompleted set to false
-      const runSections = JSON.parse(JSON.stringify(template.sections)).map((section: ChecklistSection) => ({
-        ...section,
-        items: section.items.map((item: ChecklistItem) => ({
-          ...item,
-          isCompleted: false
-        }))
-      }));
-      
-      // Convert sections to flat items array for API
-      const items = runSections.flatMap((section: ChecklistSection) => 
-        section.items.map((item: { id: unknown; title: unknown }) => ({
-          id: item.id,
-          title: item.title,
-          completed: false
-        }))
-      );
+      const runSections = resetSectionsCompletion(template.sections);
       
       const result = await api.createChecklist({
         template_id: templateId,
         title: runName || template.title,
-        items,
+        sections: runSections,
         status: 'in_progress'
       });
       
@@ -335,18 +326,11 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
       const runWithProgress = { ...run, progress };
       
-      // Convert sections to flat items array for API
-      const items = runWithProgress.sections.flatMap(section => 
-        section.items.map((item: { id: unknown; title: unknown; isCompleted: unknown }) => ({
-          id: item.id,
-          title: item.title,
-          completed: item.isCompleted || false
-        }))
-      );
-      
       await api.updateChecklist(runWithProgress.id, {
+        title: runWithProgress.title,
         status: runWithProgress.status,
-        items,
+        progress: runWithProgress.progress,
+        sections: runWithProgress.sections,
         completed_at: runWithProgress.completedAt
       });
       
@@ -379,23 +363,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   });
 
-  const hideTemplateMutation = useMutation({
-    mutationFn: async (templateId: string) => {
-      if (!user) throw new Error("User must be logged in to hide a template");
-      
-      // TODO: Implement hide template API endpoint
-      console.warn('Hide template functionality not yet implemented in API');
-      return true;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-      toast.success("Template hidden from your view");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    }
-  });
-
   const importTemplatesMutation = useMutation({
     mutationFn: async (templatesData: ChecklistTemplate[]) => {
       if (!user) throw new Error("User must be logged in to import templates");
@@ -408,9 +375,9 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         await api.createTemplate({
           title: template.title,
           description: template.description,
-          items: template.sections, // Pass full sections structure to preserve descriptions, contents, subItems
+          sections: template.sections, // Preserve descriptions, contents, subItems
           is_public: template.isPublic,
-          category: template.categories?.[0] || '',
+          categories: template.categories || [],
           tags: template.tags || []
         });
       }
@@ -455,7 +422,9 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const value: TemplatesContextProps = {
     templates,
     allTemplates,
+    templatesLoading,
     runs,
+    runsLoading,
     getTemplate,
     getTemplateBySlug,
     getRun,
@@ -467,7 +436,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     createRun: createRunMutation.mutateAsync,
     updateRun: updateRunMutation.mutate,
     deleteRun: deleteRunMutation.mutate,
-    hideTemplate: hideTemplateMutation.mutate,
     importTemplates: importTemplatesWrapper,
   };
 

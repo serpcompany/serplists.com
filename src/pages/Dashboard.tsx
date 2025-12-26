@@ -18,6 +18,7 @@ const Dashboard = () => {
   const {
     templates,
     runs,
+    runsLoading,
     updateRun,
     deleteRun
   } = useTemplates();
@@ -29,11 +30,11 @@ const Dashboard = () => {
   const [editingRunId, setEditingRunId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
 
-  // Handle Stripe checkout success
+  // Handle checkout redirect (legacy)
   useEffect(() => {
     const checkout = searchParams.get('checkout');
     if (checkout === 'success') {
-      toast.success('🎉 Welcome to Premium! Your subscription is now active.');
+      toast.success('Checkout complete.');
       // Clear the URL parameter
       setSearchParams({});
     }
@@ -97,7 +98,13 @@ const Dashboard = () => {
 
         <div className="mb-10">
           <h2 className="mb-4 text-xl font-semibold">Runs</h2>
-          {activeRuns.length > 0 ? <div className="space-y-2">
+          {runsLoading ? (
+            <Card className="bg-gray-50">
+              <CardContent className="py-8">
+                <LoadingSpinner message="Loading runs..." />
+              </CardContent>
+            </Card>
+          ) : activeRuns.length > 0 ? <div className="space-y-2">
               {activeRuns.map((run: { id: unknown; title: unknown; templateId: unknown; progress: unknown }) => <Card key={run.id} className="overflow-hidden">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
@@ -170,7 +177,13 @@ const Dashboard = () => {
 
         <div>
           <h2 className="mb-4 text-xl font-semibold">Completed</h2>
-          {completedRuns.length > 0 ? <div className="space-y-2">
+          {runsLoading ? (
+            <Card className="bg-gray-50">
+              <CardContent className="py-8">
+                <LoadingSpinner message="Loading completed runs..." />
+              </CardContent>
+            </Card>
+          ) : completedRuns.length > 0 ? <div className="space-y-2">
               {completedRuns.slice(0, 6).map((run: { id: unknown; title: unknown; templateId: unknown; completedAt: unknown }) => <Card key={run.id} className="overflow-hidden">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">

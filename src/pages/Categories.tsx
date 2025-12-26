@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-// Supabase removed - using Cloudflare API
-import { getPredefinedCategories } from "@/utils/categories";
 import { ArrowRight, Folder, Tag } from "lucide-react";
+import { useTemplates } from "@/contexts/TemplatesContext";
 
 interface CategoryData {
   name: string;
@@ -14,49 +13,27 @@ interface CategoryData {
 
 const Categories = () => {
   const navigate = useNavigate();
-  const [categories, setCategories] = useState<CategoryData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { templates, templatesLoading } = useTemplates();
 
-  useEffect(() => {
-    fetchCategories();
-  }, []);
+  const categories = useMemo((): CategoryData[] => {
+    const categoryCount = new Map<string, number>();
 
-  const fetchCategories = async () => {
-    setLoading(true);
-    try {
-      // TODO: Replace with Cloudflare API call to fetch template categories
-      // const { data, error } = await supabase
-      //   .from('templates')
-      //   .select('categories')
-      //   .eq('is_public', true);
-
-      // if (error) throw error;
-
-      // Get all unique categories and their counts
-      const categoryCount = new Map<string, number>();
-      const predefinedCategories = getPredefinedCategories();
-      
-      // Initialize predefined categories with 0 count (temporary dummy data)
-      predefinedCategories.forEach(cat => categoryCount.set(cat, 0));
-      
-      // Since Supabase is disabled, no template data to count
-      // TODO: Count categories from templates when API is implemented
-
-      // Convert to array and sort by count, then alphabetically
-      const categoriesData = Array.from(categoryCount.entries())
-        .map(([name, count]) => ({ name, count }))
-        .sort((a: { count: number; name: string }, b: { count: number; name: string }) => {
-          if (b.count !== a.count) return b.count - a.count;
-          return a.name.localeCompare(b.name);
+    templates
+      .filter((t) => t.isPublic === true)
+      .forEach((template) => {
+        (template.categories || []).forEach((cat) => {
+          categoryCount.set(cat, (categoryCount.get(cat) || 0) + 1);
         });
+      });
 
-      setCategories(categoriesData);
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    return Array.from(categoryCount.entries())
+      .map(([name, count]) => ({ name, count }))
+      .filter((category) => category.count > 0)
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return a.name.localeCompare(b.name);
+      });
+  }, [templates]);
 
   const getCategoryDescription = (categoryName: string): string => {
     const descriptions: Record<string, string> = {
@@ -71,7 +48,7 @@ const Categories = () => {
     return descriptions[categoryName.toLowerCase()] || `Discover ${categoryName} checklists and templates`;
   };
 
-  if (loading) {
+  if (templatesLoading) {
     return (
       <div className="min-h-screen bg-background">
         <div className="mx-auto max-w-6xl px-4 py-8">

@@ -1,1 +1,0 @@
-// This will be used for Stripe integration - placeholder for now

@@ -5,8 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { OAuthButtons } from "@/components/auth/OAuthButtons";
 import { toast } from "sonner";
 import { Loader2, CheckCircle } from "lucide-react";
 const Register = () => {
@@ -66,22 +64,9 @@ const Register = () => {
         <Card>
           <CardHeader>
             <CardTitle>Create your account</CardTitle>
-            <CardDescription>
-              Choose your preferred sign up method
-            </CardDescription>
+            <CardDescription>Sign up with email and password</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <OAuthButtons mode="register" />
-            
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <Separator className="w-full" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">Or continue with email</span>
-              </div>
-            </div>
-
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Name</Label>

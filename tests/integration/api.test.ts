@@ -8,6 +8,10 @@ describe('API Integration Tests', () => {
   let testUserId: string;
   let testTemplateId: string;
   let testChecklistId: string;
+  let baselineEmail: string;
+  let baselinePassword: string;
+  let baselineToken: string;
+  let baselineUserId: string;
 
   beforeAll(async () => {
     // Start the worker in test mode
@@ -16,6 +20,24 @@ describe('API Integration Tests', () => {
       local: true,
       persist: false,
     });
+
+    // Create a baseline user for auth-required tests (do not rely on pre-seeded DB state)
+    baselineEmail = `baseline${Date.now()}@example.com`;
+    baselinePassword = 'password123';
+
+    const registerResponse = await worker.fetch('http://localhost/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: baselineEmail,
+        password: baselinePassword,
+        name: 'Baseline User'
+      })
+    });
+
+    const registerData = await registerResponse.json();
+    baselineToken = registerData.token;
+    baselineUserId = registerData.user.id;
   });
 
   afterAll(async () => {
@@ -90,15 +112,15 @@ describe('API Integration Tests', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            email: 'admin@test.com',
-            password: 'password123'
+            email: baselineEmail,
+            password: baselinePassword
           })
         });
 
         expect(response.status).toBe(200);
         const data = await response.json();
         expect(data).toHaveProperty('token');
-        expect(data.user.email).toBe('admin@test.com');
+        expect(data.user.email).toBe(baselineEmail);
         
         authToken = data.token; // Save for subsequent tests
         testUserId = data.user.id;
@@ -109,7 +131,7 @@ describe('API Integration Tests', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            email: 'admin@test.com',
+            email: baselineEmail,
             password: 'wrongpassword'
           })
         });
@@ -137,17 +159,7 @@ describe('API Integration Tests', () => {
 
     describe('GET /api/auth/profile', () => {
       beforeEach(async () => {
-        // Login to get token
-        const loginResponse = await worker.fetch('http://localhost/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: 'admin@test.com',
-            password: 'password123'
-          })
-        });
-        const loginData = await loginResponse.json();
-        authToken = loginData.token;
+        authToken = baselineToken;
       });
 
       it('should get user profile with valid token', async () => {
@@ -157,7 +169,7 @@ describe('API Integration Tests', () => {
 
         expect(response.status).toBe(200);
         const data = await response.json();
-        expect(data.email).toBe('admin@test.com');
+        expect(data.email).toBe(baselineEmail);
         expect(data).toHaveProperty('id');
         expect(data).toHaveProperty('name');
       });
@@ -177,16 +189,7 @@ describe('API Integration Tests', () => {
 
     describe('PUT /api/auth/profile', () => {
       beforeEach(async () => {
-        const loginResponse = await worker.fetch('http://localhost/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: 'admin@test.com',
-            password: 'password123'
-          })
-        });
-        const loginData = await loginResponse.json();
-        authToken = loginData.token;
+        authToken = baselineToken;
       });
 
       it('should update user profile', async () => {
@@ -212,17 +215,8 @@ describe('API Integration Tests', () => {
 
   describe('Template Endpoints', () => {
     beforeAll(async () => {
-      // Login once for all template tests
-      const loginResponse = await worker.fetch('http://localhost/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: 'admin@test.com',
-          password: 'password123'
-        })
-      });
-      const loginData = await loginResponse.json();
-      authToken = loginData.token;
+      authToken = baselineToken;
+      testUserId = baselineUserId;
     });
 
     describe('GET /api/templates', () => {
@@ -301,7 +295,7 @@ describe('API Integration Tests', () => {
           body: JSON.stringify({
             title: 'Template to Update',
             sections: [],
-            is_public: false
+            is_public: true
           })
         });
         const { id } = await createResponse.json();
@@ -365,16 +359,8 @@ describe('API Integration Tests', () => {
 
   describe('Checklist Endpoints', () => {
     beforeAll(async () => {
-      const loginResponse = await worker.fetch('http://localhost/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: 'admin@test.com',
-          password: 'password123'
-        })
-      });
-      const loginData = await loginResponse.json();
-      authToken = loginData.token;
+      authToken = baselineToken;
+      testUserId = baselineUserId;
     });
 
     describe('POST /api/checklists', () => {
@@ -386,7 +372,6 @@ describe('API Integration Tests', () => {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            template_id: 'template-1',
             title: 'My Checklist Run',
             items: [
               { id: '1', title: 'Task 1', completed: false }

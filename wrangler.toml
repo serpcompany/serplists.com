@@ -8,6 +8,11 @@ binding = "DB"
 database_name = "serp-checklists-db"
 database_id = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1"
 
+# R2 bucket binding (create bucket + set name to match)
+[[r2_buckets]]
+binding = "R2_UPLOADS"
+bucket_name = "serp-checklists-uploads"
+
 # Environment variables
 [vars]
 JWT_SECRET = "YOUR_JWT_SECRET_HERE"

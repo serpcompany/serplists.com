@@ -84,7 +84,7 @@ export async function handleProfile(request: Request, env: Env): Promise<Respons
   
   if (request.method === 'GET') {
     const user = await env.DB.prepare(
-      'SELECT id, email, name, username, affiliate_code, avatar_url, referral_count, total_earnings FROM users WHERE id = ?'
+      'SELECT id, email, name, username, avatar_url FROM users WHERE id = ?'
     ).bind(userId).first();
     
     if (!user) {
@@ -135,7 +135,7 @@ export async function handleProfile(request: Request, env: Env): Promise<Respons
     ).bind(...values).run();
     
     const updatedUser = await env.DB.prepare(
-      'SELECT id, email, name, username, affiliate_code, avatar_url FROM users WHERE id = ?'
+      'SELECT id, email, name, username, avatar_url FROM users WHERE id = ?'
     ).bind(userId).first();
     
     return new Response(JSON.stringify(updatedUser), {
@@ -173,28 +173,28 @@ export async function handleProfileByUsername(request: Request, env: Env): Promi
   });
 }
 
-export async function handleProfileByAffiliate(request: Request, env: Env): Promise<Response> {
+export async function handleProfileById(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  const affiliateCode = url.searchParams.get('code');
-  
-  if (!affiliateCode) {
-    return new Response(JSON.stringify({ error: 'Affiliate code required' }), {
+  const userId = url.searchParams.get('userId');
+
+  if (!userId) {
+    return new Response(JSON.stringify({ error: 'userId required' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  
+
   const user = await env.DB.prepare(
-    'SELECT id, name as full_name, username, affiliate_code, avatar_url, created_at FROM users WHERE affiliate_code = ?'
-  ).bind(affiliateCode).first();
-  
+    'SELECT id, name as full_name, username, avatar_url, created_at FROM users WHERE id = ?'
+  ).bind(userId).first();
+
   if (!user) {
     return new Response(JSON.stringify({ error: 'User not found' }), {
       status: 404,
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  
+
   return new Response(JSON.stringify(user), {
     headers: { 'Content-Type': 'application/json' }
   });

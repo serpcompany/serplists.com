@@ -82,7 +82,7 @@ export const validateItemData = (data: unknown) => {
 
 export const validateContentData = (data: unknown) => {
   const baseValidation = {
-    type: z.enum(["text", "image", "video", "file", "embed", "subItems", "page"]).parse(data.type),
+    type: z.enum(["text", "image", "video", "file", "embed", "subItems"]).parse(data.type),
   };
 
   switch (data.type) {

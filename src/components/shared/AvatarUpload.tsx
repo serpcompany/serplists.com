@@ -2,9 +2,9 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Camera, Upload, User } from "lucide-react";
-// Supabase removed - using Cloudflare API
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;
@@ -52,21 +52,10 @@ export const AvatarUpload = ({
     setIsUploading(true);
 
     try {
-      // Create a unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/avatar.${fileExt}`;
-
-      // TODO: Replace with Cloudflare R2 storage
-      // For now, disable avatar upload
-      toast.error("Avatar upload is temporarily disabled while we migrate to Cloudflare");
-      return;
-      
-      // Future implementation:
-      // const publicUrl = await api.uploadAvatar(file, fileName);
-      // await api.updateProfile({ avatar_url: publicUrl });
-
+      const upload = await api.uploadToR2({ bucket: 'avatars', file });
+      await api.updateProfile({ avatar_url: upload.url });
       toast.success("Avatar updated successfully!");
-      onAvatarUpdate?.(publicUrl);
+      onAvatarUpdate?.(upload.url);
     } catch (error) {
       console.error('Error uploading avatar:', error);
       toast.error("Failed to upload avatar");

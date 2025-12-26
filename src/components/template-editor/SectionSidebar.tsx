@@ -36,7 +36,6 @@ export const SectionSidebar = ({
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
   
-  console.log('SectionSidebar state:', { editingSectionIndex, editingItemIndex, editingValue });
 
   const handleSectionDoubleClick = (sectionIndex: number, currentTitle: string) => {
     setEditingSectionIndex(sectionIndex);

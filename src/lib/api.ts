@@ -32,6 +32,27 @@ class ApiClient {
     return response.json();
   }
 
+  private async requestFormData(endpoint: string, formData: FormData) {
+    const headers: HeadersInit = {};
+
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(error.error || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+  }
+
   setToken(token: string | null) {
     this.token = token;
     if (token) {
@@ -67,6 +88,18 @@ class ApiClient {
   // Templates
   async getTemplates() {
     return this.request('/templates');
+  }
+
+  async getTemplateById(id: string) {
+    return this.request(`/templates/${encodeURIComponent(id)}`);
+  }
+
+  async getTemplateBySlug(slug: string) {
+    return this.request(`/templates/slug/${encodeURIComponent(slug)}`);
+  }
+
+  async getPublicTemplatesForUser(userId: string) {
+    return this.request(`/templates/public?userId=${encodeURIComponent(userId)}`);
   }
 
   async createTemplate(template: {
@@ -110,10 +143,15 @@ class ApiClient {
     return this.request('/checklists');
   }
 
+  async getChecklistById(id: string) {
+    return this.request(`/checklists/${encodeURIComponent(id)}`);
+  }
+
   async createChecklist(checklist: {
     template_id?: string;
     title: string;
-    items: unknown[];
+    items?: unknown[];
+    sections?: unknown[];
     status?: string;
   }) {
     return this.request('/checklists', {
@@ -126,6 +164,7 @@ class ApiClient {
     template_id?: string;
     title?: string;
     items?: unknown[];
+    sections?: unknown[];
     status?: string;
     progress?: number;
     completed_at?: string;
@@ -152,6 +191,27 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
+  }
+
+  // Public profiles
+  async getProfileByUsername(username: string) {
+    return this.request(`/profiles/by-username?username=${encodeURIComponent(username)}`);
+  }
+
+  async getProfileById(userId: string) {
+    return this.request(`/profiles/by-id?userId=${encodeURIComponent(userId)}`);
+  }
+
+  // Uploads (R2-backed)
+  async uploadToR2(params: { bucket: 'avatars' | 'template-images' | 'template-videos' | 'template-files'; file: File }) {
+    const formData = new FormData();
+    formData.set('bucket', params.bucket);
+    formData.set('file', params.file);
+    return this.requestFormData('/uploads', formData);
+  }
+
+  async deleteFromR2(key: string) {
+    return this.request(`/uploads/file?key=${encodeURIComponent(key)}`, { method: 'DELETE' });
   }
 }
 

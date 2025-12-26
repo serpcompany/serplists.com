@@ -16,6 +16,7 @@ import { SectionSidebar } from "@/components/template-editor/SectionSidebar";
 import { SectionEditor } from "@/components/template-editor/SectionEditor";
 import { ItemEditor } from "@/components/template-editor/ItemEditor";
 // Supabase removed - using Cloudflare API
+import { api } from "@/lib/api";
 
 const TemplateEditor = () => {
   const { id } = useParams();
@@ -23,8 +24,8 @@ const TemplateEditor = () => {
   const { getTemplate } = useTemplates();
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isPublic, setIsPublic] = useState(true);
-  const [isPremiumUser, setIsPremiumUser] = useState(false);
   const [templateSlug, setTemplateSlug] = useState<string | undefined>();
   
   const {
@@ -74,70 +75,96 @@ const TemplateEditor = () => {
 
   const { saveTemplate, isSaving } = useTemplateSave();
 
-  // Check subscription status
+  // Load template data if editing
   useEffect(() => {
-    const checkSubscription = async () => {
-      if (!user) return;
-      
+    let cancelled = false;
+
+    const applyTemplate = (template: {
+      title: string;
+      description?: string;
+      seoTitle?: string;
+      seoDescription?: string;
+      seoUrl?: string;
+      categories?: string[];
+      tags?: string[];
+      isPublic: boolean;
+      slug?: string;
+      sections: unknown[];
+    }) => {
+      setTitle(template.title);
+      setDescription(template.description || "");
+      setSeoTitle(template.seoTitle || "");
+      setSeoDescription(template.seoDescription || "");
+      setSeoUrl(template.seoUrl || "");
+      setCategories(template.categories || []);
+      setTags(template.tags || []);
+      setIsPublic(template.isPublic);
+      setTemplateSlug(template.slug);
+      setSections(JSON.parse(JSON.stringify(template.sections)));
+    };
+
+    const load = async () => {
+      setLoadError(null);
+
+      if (!id) {
+        // New template - initialize with one empty section
+        setSections([
+          {
+            id: `section_${Date.now()}`,
+            title: "",
+            items: [],
+          },
+        ]);
+        setIsPublic(true);
+        setIsLoading(false);
+        return;
+      }
+
+      const cached = getTemplate(id);
+      if (cached) {
+        applyTemplate(cached);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
       try {
-        // TODO: Replace with Cloudflare API call
-        // const subscription = await api.checkSubscription();
-        // setIsPremiumUser(subscription?.subscribed || false);
-        setIsPremiumUser(false); // Default to free user for now
+        const fetched = (await api.getTemplateById(id)) as Record<string, unknown>;
+        if (cancelled) return;
+
+        const categories = Array.isArray(fetched.categories)
+          ? (fetched.categories as string[])
+          : (typeof fetched.category === 'string' && fetched.category ? [fetched.category] : []);
+
+        applyTemplate({
+          title: typeof fetched.title === 'string' ? fetched.title : "",
+          description: typeof fetched.description === 'string' ? fetched.description : "",
+          seoTitle: "",
+          seoDescription: "",
+          seoUrl: "",
+          categories,
+          tags: Array.isArray(fetched.tags) ? (fetched.tags as string[]) : [],
+          isPublic: Boolean((fetched as { is_public?: unknown }).is_public),
+          slug: typeof fetched.slug === 'string' ? fetched.slug : "",
+          sections: Array.isArray(fetched.sections) ? fetched.sections : [],
+        });
       } catch (error) {
-        console.error('Error checking subscription:', error);
-        setIsPremiumUser(false);
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : "Failed to load template";
+        setLoadError(message);
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
     };
 
-    checkSubscription();
-  }, [user]);
+    void load();
 
-  // Load template data if editing
-  useEffect(() => {
-    if (id) {
-      const template = getTemplate(id);
-      if (template) {
-        console.log('Loading template data:', {
-          id: template.id,
-          title: template.title,
-          categories: template.categories,
-          tags: template.tags,
-          sectionsCount: template.sections?.length,
-          sections: template.sections
-        });
-        setTitle(template.title);
-        setDescription(template.description || "");
-        setSeoTitle(template.seoTitle || "");
-        setSeoDescription(template.seoDescription || "");
-        setSeoUrl(template.seoUrl || "");
-        setCategories(template.categories || []);
-        setTags(template.tags || []);
-        setIsPublic(template.isPublic);
-        setTemplateSlug(template.slug);
-        setSections(JSON.parse(JSON.stringify(template.sections)));
-      } else {
-        navigate("/templates");
-      }
-    } else {
-      // New template - initialize with one empty section
-      setSections([
-        {
-          id: `section_${Date.now()}`,
-          title: "",
-          items: [],
-        },
-      ]);
-      // For free users, always default to public; for premium users, default to public too
-      setIsPublic(true);
-    }
-    setIsLoading(false);
-  }, [id, getTemplate, navigate, setSections, setTitle, setDescription, setSeoTitle, setSeoDescription, setSeoUrl, setCategories, setTags]);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, getTemplate, setSections, setTitle, setDescription, setSeoTitle, setSeoDescription, setSeoUrl, setCategories, setTags]);
 
   const handleSave = async () => {
-    // For free users, always force public
-    const finalIsPublic = isPremiumUser ? isPublic : true;
-    
     const result = await saveTemplate(
       id,
       title,
@@ -148,7 +175,7 @@ const TemplateEditor = () => {
       seoUrl,
       categories,
       tags,
-      finalIsPublic
+      isPublic
     );
     setErrors(result.errors);
   };
@@ -157,6 +184,23 @@ const TemplateEditor = () => {
     return (
       <div className="flex h-52 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-10">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Unable to load template</AlertTitle>
+          <AlertDescription>{loadError}</AlertDescription>
+        </Alert>
+        <div className="mt-4">
+          <Button variant="outline" onClick={() => navigate("/templates")}>
+            Back to Templates
+          </Button>
+        </div>
       </div>
     );
   }
@@ -272,7 +316,6 @@ const TemplateEditor = () => {
                 onTagsChange={setTags}
                 onPublicChange={setIsPublic}
                 errors={errors}
-                isPremiumUser={isPremiumUser}
               />
             ) : showingSEO ? (
               <SEOMetaEditor

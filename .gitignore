@@ -38,6 +38,7 @@ CLAUDE.md
 .dev.vars
 
 .wrangler
+.page-audit
 .git
 *.tmp
 __pycache__

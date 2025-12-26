@@ -7,7 +7,7 @@ import {
 interface ContentAddPanelProps {
   showAddPanel: boolean;
   onTogglePanel: () => void;
-  onAddContent: (contentType: "text" | "image" | "video" | "file" | "embed" | "subItems" | "page") => void;
+  onAddContent: (contentType: "text" | "image" | "video" | "file" | "embed" | "subItems") => void;
 }
 
 export const ContentAddPanel = ({ 
@@ -22,7 +22,6 @@ export const ContentAddPanel = ({
     { type: "file" as const, icon: File, label: "Add File" },
     { type: "embed" as const, icon: Code, label: "Add Embed" },
     { type: "subItems" as const, icon: ListCheck, label: "Add Sub-tasks" },
-    { type: "page" as const, icon: FileText, label: "Add Page" },
   ];
 
   return (

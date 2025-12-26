@@ -3,6 +3,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ReactMarkdown from "react-markdown";
 import { FileText } from "lucide-react";
+import remarkGfm from "remark-gfm";
+import { safeUrl } from "@/lib/utils/safeUrl";
 
 interface TextContentEditorProps {
   value: string;
@@ -30,7 +32,9 @@ export const TextContentEditor = ({ value, onChange }: TextContentEditorProps) =
         </TabsContent>
         <TabsContent value="preview">
           <div className="prose prose-sm max-w-none rounded-md border p-3 min-h-[150px]">
-            <ReactMarkdown>{value}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeUrl}>
+              {value}
+            </ReactMarkdown>
           </div>
         </TabsContent>
       </Tabs>

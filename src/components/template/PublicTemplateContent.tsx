@@ -1,10 +1,12 @@
-import { ChecklistSection, ChecklistItem, ChecklistContent } from "@/contexts/TemplatesContext";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import type { ChecklistItem, ChecklistItemContent, ChecklistSection } from "@/types/checklist";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronDown, ChevronRight, FileText, Video, Image, Link2, ListTodo } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { safeUrl } from "@/lib/utils/safeUrl";
 
 interface PublicTemplateContentProps {
   sections: ChecklistSection[];
@@ -20,12 +22,16 @@ export function PublicTemplateContent({ sections }: PublicTemplateContentProps) 
     }));
   };
 
-  const renderContent = (content: ChecklistContent) => {
+  const renderContent = (content: ChecklistItemContent) => {
     switch (content.type) {
       case "text":
         return content.value ? (
           <div className="mt-2 p-3 bg-muted/50 rounded-md">
-            <p className="text-sm">{content.value}</p>
+            <div className="prose prose-sm max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeUrl}>
+                {content.value}
+              </ReactMarkdown>
+            </div>
           </div>
         ) : null;
       
@@ -49,14 +55,18 @@ export function PublicTemplateContent({ sections }: PublicTemplateContentProps) 
           </div>
         ) : null;
       
-      case "link":
+      case "embed":
         return content.value ? (
           <div className="mt-2 p-3 bg-muted/50 rounded-md">
             <div className="flex items-center gap-2 text-sm">
               <Link2 className="h-4 w-4" />
-              <a href={content.value} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                {content.value}
-              </a>
+              {safeUrl(content.value) ? (
+                <a href={safeUrl(content.value)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                  {content.value}
+                </a>
+              ) : (
+                <span className="text-muted-foreground">Invalid link</span>
+              )}
             </div>
           </div>
         ) : null;
@@ -122,7 +132,7 @@ export function PublicTemplateContent({ sections }: PublicTemplateContentProps) 
               )}
               onClick={() => (hasContent || hasDescription) && toggleItem(itemKey)}
               >
-                {item.title || item.text}
+                {item.title}
               </span>
             </div>
             
@@ -156,9 +166,6 @@ export function PublicTemplateContent({ sections }: PublicTemplateContentProps) 
           <Card key={section.id || sectionIndex}>
             <CardHeader>
               <CardTitle className="text-lg">{section.title}</CardTitle>
-              {section.description && (
-                <CardDescription>{section.description}</CardDescription>
-              )}
             </CardHeader>
             
             {section.items && section.items.length > 0 && (

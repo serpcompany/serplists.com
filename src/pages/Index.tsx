@@ -4,22 +4,26 @@ import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { CheckCircle, ArrowRight, ListChecks, BookOpen } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTemplates } from "@/contexts/TemplatesContext";
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
 import { UserInfo } from "@/components/shared/UserInfo";
+import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 const Index = () => {
   const {
     user
   } = useAuth();
   const {
-    getAllPublicTemplates
+    templates,
+    templatesLoading
   } = useTemplates();
-  const [publicTemplates, setPublicTemplates] = useState([]);
-  const [featuredTemplates, setFeaturedTemplates] = useState([]);
-  useEffect(() => {
-    const templates = getAllPublicTemplates();
-    setPublicTemplates(templates.filter(t => t.userId !== "system"));
-    setFeaturedTemplates(templates.filter(t => t.userId === "system"));
-  }, [getAllPublicTemplates]);
+
+  const publicTemplates = useMemo(() => {
+    return templates.filter((t) => t.isPublic === true && t.userId !== "system");
+  }, [templates]);
+
+  const featuredTemplates = useMemo(() => {
+    return templates.filter((t) => t.isPublic === true && t.userId === "system");
+  }, [templates]);
+
   return <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-16">
         <div className="mb-16 text-center">
@@ -84,8 +88,13 @@ const Index = () => {
             </div>
           </div>}
 
-        {publicTemplates.length > 0 && <div className="py-12">
-            <h2 className="mb-8 text-center text-2xl font-bold">Community Checklists</h2>
+        <div className="py-12">
+          <h2 className="mb-8 text-center text-2xl font-bold">Community Checklists</h2>
+          {templatesLoading ? (
+            <div className="mx-auto max-w-md">
+              <LoadingSpinner message="Loading checklists..." />
+            </div>
+          ) : publicTemplates.length > 0 ? (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {publicTemplates.map((template: { id: unknown; title: unknown; description: unknown; sections: unknown; userId: unknown; slug: unknown }) => <Card key={template.id} className="overflow-hidden">
                   <CardHeader>
@@ -117,7 +126,12 @@ const Index = () => {
                   </CardFooter>
                 </Card>)}
             </div>
-          </div>}
+          ) : (
+            <div className="text-center text-muted-foreground">
+              No public checklists yet.
+            </div>
+          )}
+        </div>
 
         <div className="mt-16 grid gap-8 md:grid-cols-3">
           <div className="rounded-lg border bg-card p-6 shadow-sm">

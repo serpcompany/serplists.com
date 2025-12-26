@@ -1,18 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Download, Upload, FileText, AlertCircle, CheckCircle, Crown } from "lucide-react";
+import { Download, Upload, FileText, AlertCircle, CheckCircle } from "lucide-react";
 import { useTemplates } from "@/contexts/TemplatesContext";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
 import { exportTemplatesToJSON, downloadBackupFile, parseTemplatesFromJSON } from "@/lib/utils/templateBackup";
 import { ChecklistTemplate } from "@/lib/schemas/checklistSchema";
 // Supabase removed - using Cloudflare API
-import { useDevMode } from "@/hooks/useDevMode";
 interface TemplateBackupProps {
   className?: string;
 }
@@ -29,46 +28,8 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<ChecklistTemplate[] | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isPremium, setIsPremium] = useState(false);
-  const [checkingSubscription, setCheckingSubscription] = useState(true);
-  const { devOverride } = useDevMode();
-
-  useEffect(() => {
-    const checkSubscription = async () => {
-      if (!user) {
-        setIsPremium(false);
-        setCheckingSubscription(false);
-        return;
-      }
-
-      try {
-        // For now, all users are free (premium features disabled)
-        // TODO: Implement subscription check with Cloudflare
-        setIsPremium(false);
-      } catch (error) {
-        console.error('Error checking subscription:', error);
-        setIsPremium(false);
-      } finally {
-        setCheckingSubscription(false);
-      }
-    };
-
-    checkSubscription();
-  }, [user]);
-
-  // Computed premium status with dev override taking precedence for testing
-  const effectivePremiumStatus = devOverride !== null ? devOverride : isPremium;
-  
-  // Debug logging
-  console.log('TemplateBackup - isPremium:', isPremium, 'devOverride:', devOverride, 'effectivePremiumStatus:', effectivePremiumStatus);
 
   const handleExportAll = () => {
-    console.log('handleExportAll called - effectivePremiumStatus:', effectivePremiumStatus);
-    if (!effectivePremiumStatus) {
-      toast.error("Export feature is available for Premium users only");
-      return;
-    }
-
     try {
       const backup = exportTemplatesToJSON(templates, user?.email);
       downloadBackupFile(backup);
@@ -79,11 +40,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     }
   };
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!effectivePremiumStatus) {
-      toast.error("Import feature is available for Premium users only");
-      return;
-    }
-
     const file = event.target.files?.[0];
     if (!file) return;
     if (file.type !== "application/json") {
@@ -249,20 +205,16 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const publicTemplateCount = templates.filter(t => t.isPublic).length;
   const privateTemplateCount = templates.filter(t => !t.isPublic).length;
   return <div className={className}>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Template Backup & Import
-            <Badge variant="secondary" className="flex items-center gap-1">
-              <Crown className="h-3 w-3" />
-              Premium
-            </Badge>
-          </CardTitle>
-          <CardDescription>
-            Export your templates to backup files or import templates from JSON files
-          </CardDescription>
-        </CardHeader>
+	      <Card>
+	        <CardHeader>
+	          <CardTitle className="flex items-center gap-2">
+	            <FileText className="h-5 w-5" />
+	            Template Backup & Import
+	          </CardTitle>
+	          <CardDescription>
+	            Export your templates to backup files or import templates from JSON files
+	          </CardDescription>
+	        </CardHeader>
         <CardContent className="space-y-6">
           {/* Current Templates Stats */}
           <div className="grid grid-cols-3 gap-4">
@@ -282,59 +234,30 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 
           <Separator />
 
-          {/* Export Section */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Export Templates</h3>
-            {!effectivePremiumStatus ? (
-              <div className="p-4 bg-muted rounded-lg border-dashed border-2">
-                <div className="text-center space-y-2">
-                  <Crown className="h-8 w-8 mx-auto text-muted-foreground" />
-                  <p className="font-medium">Premium Feature</p>
-                  <p className="text-sm text-muted-foreground">
-                    Upgrade to Premium to export your templates as backup files
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <Button onClick={handleExportAll} className="flex items-center gap-2">
-                <Download className="h-4 w-4" />
-                Export All My Templates
-              </Button>
-            )}
-          </div>
+	          {/* Export Section */}
+	          <div className="space-y-4">
+	            <h3 className="text-lg font-semibold">Export Templates</h3>
+	            <Button onClick={handleExportAll} className="flex items-center gap-2">
+	              <Download className="h-4 w-4" />
+	              Export All My Templates
+	            </Button>
+	          </div>
 
           <Separator />
 
-          {/* Import Section */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Import Templates</h3>
-            {!effectivePremiumStatus ? (
-              <div className="p-4 bg-muted rounded-lg border-dashed border-2">
-                <div className="text-center space-y-2">
-                  <Crown className="h-8 w-8 mx-auto text-muted-foreground" />
-                  <p className="font-medium">Premium Feature</p>
-                  <p className="text-sm text-muted-foreground">
-                    Upgrade to Premium to import templates from JSON files
-                  </p>
-                  <div className="pt-2">
-                    <Button variant="link" className="p-0 h-auto text-primary" onClick={downloadSampleTemplate}>
-                      Download sample template file (preview only)
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="template-file-input">Select a JSON template file</Label>
-                <Input id="template-file-input" type="file" accept=".json" onChange={handleFileSelect} disabled={isImporting || checkingSubscription} />
-                <p className="text-sm text-muted-foreground">
-                  Need an example? {" "}
-                  <Button variant="link" className="p-0 h-auto text-primary" onClick={downloadSampleTemplate}>
-                    Download sample template file
-                  </Button>
-                </p>
-              </div>
-            )}
+	          {/* Import Section */}
+	          <div className="space-y-4">
+	            <h3 className="text-lg font-semibold">Import Templates</h3>
+	            <div className="space-y-2">
+	              <Label htmlFor="template-file-input">Select a JSON template file</Label>
+	              <Input id="template-file-input" type="file" accept=".json" onChange={handleFileSelect} disabled={isImporting} />
+	              <p className="text-sm text-muted-foreground">
+	                Need an example?{" "}
+	                <Button variant="link" className="p-0 h-auto text-primary" onClick={downloadSampleTemplate}>
+	                  Download sample template file
+	                </Button>
+	              </p>
+	            </div>
 
             {/* Import Preview */}
             {importPreview && <Card className="border-dashed">

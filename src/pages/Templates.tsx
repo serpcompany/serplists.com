@@ -7,14 +7,15 @@ import { RunNameDialog } from "@/components/ui/run-name-dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useTemplates } from "@/contexts/TemplatesContext";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
-import { PlusCircle, Trash2, EyeOff } from "lucide-react";
+import { PlusCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 const Templates = () => {
   const {
     templates,
+    templatesLoading,
     createRun,
-    deleteTemplate,
-    hideTemplate
+    deleteTemplate
   } = useTemplates();
   const {
     user,
@@ -54,14 +55,6 @@ const Templates = () => {
       toast.error('Failed to delete template');
     }
   };
-  const handleHideTemplate = async (templateId: string) => {
-    try {
-      await hideTemplate(templateId);
-    } catch (error) {
-      console.error('Failed to hide template:', error);
-      toast.error('Failed to hide template');
-    }
-  };
   const handleConfirmRun = async (runName: string) => {
     console.log('handleConfirmRun called with runName:', runName, 'templateId:', selectedTemplateId);
     console.log('Current user:', user);
@@ -98,7 +91,13 @@ const Templates = () => {
         </div>
 
       <div className="space-y-2">
-        {userTemplates.length === 0 ? (
+        {templatesLoading ? (
+          <Card className="p-8">
+            <CardContent>
+              <LoadingSpinner message="Loading templates..." />
+            </CardContent>
+          </Card>
+        ) : userTemplates.length === 0 ? (
           <Card className="p-8 text-center">
             <CardContent>
               <p className="text-muted-foreground mb-4">You haven't created any templates yet.</p>
@@ -160,11 +159,6 @@ const Templates = () => {
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>}
-                  
-                  {/* Show hide button for templates NOT owned by current user */}
-                  {user?.id !== template.userId && <Button variant="outline" size="sm" onClick={() => handleHideTemplate(template.id)} title="Hide this template from your view">
-                      <EyeOff className="h-4 w-4" />
-                    </Button>}
                   
                   <Button size="sm" onClick={() => handleStartRun(template.id)}>Start</Button>
                 </div>

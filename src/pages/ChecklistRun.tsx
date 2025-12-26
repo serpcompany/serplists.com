@@ -14,6 +14,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
 import ReactMarkdown from "react-markdown";
+import { api } from "@/lib/api";
+import remarkGfm from "remark-gfm";
+import { calculateSectionsProgress, isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
+import { safeUrl } from "@/lib/utils/safeUrl";
 
 const ChecklistRunPage = () => {
   const { id } = useParams();
@@ -28,40 +32,85 @@ const ChecklistRunPage = () => {
   const [editTitle, setEditTitle] = useState("");
 
   useEffect(() => {
-    if (id) {
+    let cancelled = false;
+
+    const load = async () => {
+      if (!id) return;
+
+      setIsLoading(true);
+      setRun(null);
+
       const foundRun = getRun(id);
       if (foundRun) {
         setRun(foundRun);
-        // Auto-select the first incomplete item
-        if (!selectedItemId) {
-          for (const section of foundRun.sections) {
-            for (const item of section.items) {
-              if (!item.isCompleted) {
-                setSelectedItemId(item.id);
-                return;
-              }
-            }
-          }
-          // If all items are complete, select the first item
-          if (foundRun.sections[0]?.items[0]) {
-            setSelectedItemId(foundRun.sections[0].items[0].id);
-          }
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const checklist = (await api.getChecklistById(id)) as Record<string, unknown>;
+        if (cancelled) return;
+
+        const rawItemsValue = checklist.items;
+        const rawItems = typeof rawItemsValue === 'string'
+          ? JSON.parse(rawItemsValue)
+          : (rawItemsValue || []);
+
+        const rawSections = isSectionsShape(rawItems)
+          ? rawItems
+          : [{ id: '1', title: 'Checklist', items: rawItems }];
+
+        const sections = normalizeSections(rawSections);
+
+        const computedProgress = calculateSectionsProgress(sections);
+
+        setRun({
+          id: typeof checklist.id === 'string' ? checklist.id : id,
+          templateId: typeof checklist.template_id === 'string' ? checklist.template_id : '',
+          title: typeof checklist.title === 'string' ? checklist.title : 'Checklist Run',
+          status: (typeof checklist.status === 'string' ? checklist.status : 'in_progress') as "in_progress" | "completed",
+          progress: computedProgress,
+          sections,
+          startedAt:
+            (typeof checklist.started_at === 'string' && checklist.started_at)
+              ? checklist.started_at
+              : (typeof checklist.created_at === 'string' ? checklist.created_at : new Date().toISOString()),
+          completedAt: typeof checklist.completed_at === 'string' ? checklist.completed_at : undefined,
+          userId: typeof checklist.user_id === 'string' ? checklist.user_id : '',
+          templateVersion: typeof checklist.template_version === 'number' ? checklist.template_version : 1,
+        });
+      } catch (error) {
+        if (cancelled) return;
+        toast.error("Run not found");
+        navigate("/dashboard");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, getRun, navigate]);
+
+  useEffect(() => {
+    if (!run || selectedItemId) return;
+
+    for (const section of run.sections) {
+      for (const item of section.items) {
+        if (!item.isCompleted) {
+          setSelectedItemId(item.id);
+          return;
         }
-      } else {
-        // Give it a moment for the query to refresh after creation
-        setTimeout(() => {
-          const retryRun = getRun(id);
-          if (retryRun) {
-            setRun(retryRun);
-          } else {
-            toast.error("Run not found");
-            navigate("/dashboard");
-          }
-        }, 1000);
       }
     }
-    setIsLoading(false);
-  }, [id, getRun, navigate, selectedItemId]);
+
+    if (run.sections[0]?.items[0]) {
+      setSelectedItemId(run.sections[0].items[0].id);
+    }
+  }, [run, selectedItemId]);
 
   const handleItemToggle = (sectionIndex: number, itemIndex: number) => {
     if (!run) return;
@@ -366,9 +415,17 @@ const ChecklistRunPage = () => {
                       const { sectionIndex, itemIndex } = getItemPosition(item.id);
                       
                       return (
-                        <button
+                        <div
                           key={item.id}
                           onClick={() => setSelectedItemId(item.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setSelectedItemId(item.id);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
                           className={`w-full text-left px-4 py-3 border-l-2 transition-colors hover:bg-muted/50 ${
                             isSelected 
                               ? 'border-l-primary bg-muted/70 text-primary' 
@@ -394,7 +451,7 @@ const ChecklistRunPage = () => {
                               )}
                             </div>
                           </div>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -440,14 +497,16 @@ const ChecklistRunPage = () => {
                       <div key={contentIndex} className="space-y-3">
                         {content.type === "text" && content.value && (
                           <div className="prose prose-sm max-w-none">
-                            <ReactMarkdown>{content.value}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeUrl}>
+                              {content.value}
+                            </ReactMarkdown>
                           </div>
                         )}
                         
                         {content.type === "image" && content.value && (
                           <div className="rounded-lg border overflow-hidden">
                             <img 
-                              src={content.value} 
+                              src={safeUrl(content.value) || "https://placehold.co/400x200?text=Invalid+Image"} 
                               alt="Task content" 
                               className="w-full max-h-96 object-contain"
                               onError={(e) => {
@@ -470,7 +529,7 @@ const ChecklistRunPage = () => {
                               <div>
                                 <p className="font-medium">{content.fileName || "File"}</p>
                                 <a 
-                                  href={content.value} 
+                                  href={safeUrl(content.value)} 
                                   target="_blank" 
                                   rel="noopener noreferrer"
                                   className="text-sm text-primary hover:underline"
@@ -484,9 +543,9 @@ const ChecklistRunPage = () => {
                         
                         {content.type === "embed" && content.value && (
                           <div className="border rounded-lg p-4 bg-muted/20">
-                            {content.value.startsWith('http') ? (
+                            {safeUrl(content.value) ? (
                               <a 
-                                href={content.value} 
+                                href={safeUrl(content.value)} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-2 text-primary hover:underline"
@@ -495,7 +554,9 @@ const ChecklistRunPage = () => {
                                 Open Embedded Content
                               </a>
                             ) : (
-                              <div dangerouslySetInnerHTML={{ __html: content.value }} />
+                              <pre className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                                {content.value}
+                              </pre>
                             )}
                           </div>
                         )}

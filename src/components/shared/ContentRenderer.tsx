@@ -1,9 +1,11 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Checkbox } from '@/components/ui/checkbox';
 import { VideoEmbed } from './VideoEmbed';
 import { File, Code, ListCheck } from 'lucide-react';
 import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
+import { safeUrl } from '@/lib/utils/safeUrl';
 
 interface ContentRendererProps {
   contents: ChecklistItemContent[];
@@ -29,14 +31,16 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         <div key={contentIndex} className="space-y-3">
           {content.type === "text" && content.value && (
             <div className="prose prose-sm max-w-none">
-              <ReactMarkdown>{content.value}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeUrl}>
+                {content.value}
+              </ReactMarkdown>
             </div>
           )}
           
           {content.type === "image" && content.value && (
             <div className="rounded-lg border overflow-hidden">
               <img 
-                src={content.value} 
+                src={safeUrl(content.value) || "https://placehold.co/400x200?text=Invalid+Image"} 
                 alt="Task content" 
                 className="w-full max-h-96 object-contain"
                 onError={(e) => {
@@ -59,7 +63,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
                 <div>
                   <p className="font-medium">{content.fileName || "File"}</p>
                   <a 
-                    href={content.value} 
+                    href={safeUrl(content.value)} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="text-sm text-primary hover:underline"
@@ -73,9 +77,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
           
           {content.type === "embed" && content.value && (
             <div className="border rounded-lg p-4 bg-muted/20">
-              {content.value.startsWith('http') ? (
+              {safeUrl(content.value) ? (
                 <a 
-                  href={content.value} 
+                  href={safeUrl(content.value)} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-primary hover:underline"
@@ -84,7 +88,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
                   Open Embedded Content
                 </a>
               ) : (
-                <div dangerouslySetInnerHTML={{ __html: content.value }} />
+                <pre className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                  {content.value}
+                </pre>
               )}
             </div>
           )}

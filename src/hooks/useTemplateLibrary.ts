@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
-import { useTemplates, ChecklistTemplate } from "@/contexts/TemplatesContext";
+import { useTemplates } from "@/contexts/TemplatesContext";
 import { getPredefinedCategories } from "@/utils/categories";
 
 export const useTemplateLibrary = (category?: string) => {
-  const { templates: contextTemplates } = useTemplates();
-  const [loading, setLoading] = useState(false);
+  const { templates: contextTemplates, templatesLoading } = useTemplates();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
+  const loading = templatesLoading ?? false;
 
   // Filter to only public templates
   const templates = useMemo(() => {
