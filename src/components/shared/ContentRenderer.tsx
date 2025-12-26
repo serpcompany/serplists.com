@@ -1,0 +1,112 @@
+import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import { Checkbox } from '@/components/ui/checkbox';
+import { VideoEmbed } from './VideoEmbed';
+import { File, Code, ListCheck } from 'lucide-react';
+import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
+
+interface ContentRendererProps {
+  contents: ChecklistItemContent[];
+  disabled?: boolean;
+}
+
+export const ContentRenderer: React.FC<ContentRendererProps> = ({ 
+  contents, 
+  disabled = false 
+}) => {
+  if (!contents || contents.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <File className="h-12 w-12 mx-auto mb-3 opacity-50" />
+        <p>No additional content for this task</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {contents.map((content, contentIndex: number) => (
+        <div key={contentIndex} className="space-y-3">
+          {content.type === "text" && content.value && (
+            <div className="prose prose-sm max-w-none">
+              <ReactMarkdown>{content.value}</ReactMarkdown>
+            </div>
+          )}
+          
+          {content.type === "image" && content.value && (
+            <div className="rounded-lg border overflow-hidden">
+              <img 
+                src={content.value} 
+                alt="Task content" 
+                className="w-full max-h-96 object-contain"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "https://placehold.co/400x200?text=Invalid+Image";
+                }}
+              />
+            </div>
+          )}
+          
+          {content.type === "video" && content.value && (
+            <div className="rounded-lg border overflow-hidden">
+              <VideoEmbed url={content.value} />
+            </div>
+          )}
+          
+          {content.type === "file" && content.value && (
+            <div className="border rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <File className="h-8 w-8 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">{content.fileName || "File"}</p>
+                  <a 
+                    href={content.value} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Download File
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {content.type === "embed" && content.value && (
+            <div className="border rounded-lg p-4 bg-muted/20">
+              {content.value.startsWith('http') ? (
+                <a 
+                  href={content.value} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-primary hover:underline"
+                >
+                  <Code className="h-4 w-4" />
+                  Open Embedded Content
+                </a>
+              ) : (
+                <div dangerouslySetInnerHTML={{ __html: content.value }} />
+              )}
+            </div>
+          )}
+          
+          {content.type === "subItems" && content.subItems && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <ListCheck className="h-5 w-5 text-muted-foreground" />
+                <h4 className="font-medium">Sub-tasks</h4>
+              </div>
+              <div className="space-y-2 pl-7">
+                {content.subItems.map((subItem: ChecklistSubItem) => (
+                  <div key={subItem.id} className="flex items-center gap-3">
+                    <Checkbox disabled={disabled} className={disabled ? "opacity-50" : ""} />
+                    <span>{subItem.title}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};

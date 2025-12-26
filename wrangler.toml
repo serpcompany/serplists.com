@@ -1,0 +1,13 @@
+name = "serp-checklists"
+compatibility_date = "2024-08-11"
+pages_build_output_dir = "dist"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "serp-checklists-db"
+database_id = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1"
+
+# Environment variables
+[vars]
+JWT_SECRET = "YOUR_JWT_SECRET_HERE"

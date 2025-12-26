@@ -1,0 +1,172 @@
+{
+  "version": "1.0.0",
+  "exportedAt": "2025-07-25T00:24:51.156075Z",
+  "exportedBy": "Lovable Demo",
+  "templates": [
+    {
+      "id": "demo-content-types",
+      "title": "Complete Content Types Demo",
+      "description": "Comprehensive template showcasing all supported content types for testing and documentation.",
+      "user_id": "demo-user",
+      "created_at": "2025-07-25T00:24:51.156075Z",
+      "updated_at": "2025-07-25T00:24:51.156075Z",
+      "is_public": true,
+      "slug": "complete-content-demo",
+      "categories": ["demo", "testing", "examples"],
+      "tags": ["content-types", "showcase", "documentation"],
+      "sections": [
+        {
+          "id": "section-text-content",
+          "title": "Text Content Examples",
+          "items": [
+            {
+              "id": "item-markdown",
+              "title": "Markdown Text Content",
+              "description": "Example of rich text with markdown formatting",
+              "contents": [
+                {
+                  "type": "text",
+                  "value": "# Welcome to the Demo\n\nThis is **markdown** content with:\n- Bullet lists\n- *Italic text*\n- `Code snippets`\n- [Working links](https://example.com)\n\n## Subheading\n\nYou can include:\n1. Numbered lists\n2. **Bold text**\n3. > Blockquotes\n\n```javascript\n// Code blocks\nconsole.log('Hello World!');\n```"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "section-media-content",
+          "title": "Media Content Examples",
+          "items": [
+            {
+              "id": "item-image",
+              "title": "Image Content",
+              "description": "Example of image content",
+              "contents": [
+                {
+                  "type": "image",
+                  "value": "https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?w=500",
+                  "uploadType": "url"
+                }
+              ]
+            },
+            {
+              "id": "item-video",
+              "title": "Video Content",
+              "description": "Example of video embed",
+              "contents": [
+                {
+                  "type": "video",
+                  "value": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                  "uploadType": "url"
+                }
+              ]
+            },
+            {
+              "id": "item-file",
+              "title": "File Content",
+              "description": "Example of file attachment",
+              "contents": [
+                {
+                  "type": "file",
+                  "value": "https://example.com/sample.pdf",
+                  "fileName": "sample-document.pdf",
+                  "fileSize": 1024000,
+                  "uploadType": "url"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "section-interactive-content",
+          "title": "Interactive Content",
+          "items": [
+            {
+              "id": "item-subtasks",
+              "title": "Sub-tasks Example",
+              "description": "Example of nested checklist items",
+              "contents": [
+                {
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "sub-1",
+                      "title": "First sub-task to complete"
+                    },
+                    {
+                      "id": "sub-2",
+                      "title": "Second sub-task with more details"
+                    },
+                    {
+                      "id": "sub-3",
+                      "title": "Final sub-task in this group"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "item-embed",
+              "title": "Embed Content",
+              "description": "Example of embedded content",
+              "contents": [
+                {
+                  "type": "embed",
+                  "value": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3024.1234567890123!2d-74.00594!3d40.71278!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zNDDCsDQyJzQ2LjAiTiA3NMKwMDAnMjEuNCJX!5e0!3m2!1sen!2sus!4v1234567890123"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "section-mixed-content",
+          "title": "Mixed Content Item",
+          "items": [
+            {
+              "id": "item-everything",
+              "title": "Item with Multiple Content Types",
+              "description": "This item demonstrates multiple content types in one task",
+              "contents": [
+                {
+                  "type": "text",
+                  "value": "## Instructions\n\nReview the image below and complete the sub-tasks:"
+                },
+                {
+                  "type": "image",
+                  "value": "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400",
+                  "uploadType": "url"
+                },
+                {
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "mixed-sub-1",
+                      "title": "Analyze the code in the image"
+                    },
+                    {
+                      "id": "mixed-sub-2",
+                      "title": "Download the reference file"
+                    }
+                  ]
+                },
+                {
+                  "type": "file",
+                  "value": "https://example.com/reference.txt",
+                  "fileName": "reference-guide.txt",
+                  "fileSize": 2048,
+                  "uploadType": "url"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "totalTemplates": 1,
+    "publicTemplates": 1,
+    "privateTemplates": 0
+  }
+}

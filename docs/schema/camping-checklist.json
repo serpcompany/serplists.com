@@ -1,0 +1,322 @@
+{
+  "version": "1.0.0",
+  "exportedAt": "2025-01-14T00:00:00.000Z",
+  "exportedBy": "Example Generator",
+  "templates": [
+    {
+      "id": "camping-checklist-001",
+      "title": "Ultimate Camping Checklist",
+      "description": "A comprehensive camping checklist to ensure you have everything needed for a safe and enjoyable outdoor adventure.",
+      "userId": "example-user",
+      "createdAt": "2025-01-14T00:00:00.000Z",
+      "updatedAt": "2025-01-14T00:00:00.000Z",
+      "isPublic": true,
+      "slug": "ultimate-camping-checklist",
+      "seoTitle": "Ultimate Camping Checklist - Complete Gear & Food List",
+      "seoDescription": "Never forget essential camping gear again! Complete checklist with shelter, cooking, safety items and more for your perfect outdoor adventure.",
+      "categories": ["outdoor", "recreation", "travel"],
+      "tags": ["camping", "hiking", "outdoor-gear", "nature", "adventure"],
+      "sections": [
+        {
+          "id": "shelter-section",
+          "title": "Shelter & Sleeping",
+          "items": [
+            {
+              "id": "tent-item",
+              "title": "Tent (appropriate for group size and weather)",
+              "description": "Choose a tent that fits your group size with extra space for gear",
+              "contents": [
+                {
+                  "id": "tent-content-1",
+                  "type": "text",
+                  "value": "## Tent Selection Tips\n\n- **Capacity**: Choose tent rated for 1 more person than actual occupants\n- **Seasonality**: 3-season for spring/summer/fall, 4-season for winter\n- **Weight**: Consider weight if backpacking vs car camping\n- **Setup**: Practice setup at home before your trip"
+                },
+                {
+                  "id": "tent-content-2",
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "tent-sub-1",
+                      "title": "Check all tent poles are included"
+                    },
+                    {
+                      "id": "tent-sub-2", 
+                      "title": "Verify rainfly is present"
+                    },
+                    {
+                      "id": "tent-sub-3",
+                      "title": "Pack tent stakes and guylines"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "sleeping-bag-item",
+              "title": "Sleeping bag (rated for expected temperatures)",
+              "description": "Temperature rating should be 10-15°F below expected nighttime lows"
+            },
+            {
+              "id": "sleeping-pad-item",
+              "title": "Sleeping pad or air mattress",
+              "description": "Provides insulation from ground and comfort for better sleep"
+            },
+            {
+              "id": "pillow-item",
+              "title": "Pillow or inflatable pillow",
+              "description": "Don't forget comfort items for quality rest"
+            },
+            {
+              "id": "tarp-item",
+              "title": "Tarp or footprint",
+              "description": "Protects tent bottom and provides extra covered space"
+            }
+          ]
+        },
+        {
+          "id": "cooking-section",
+          "title": "Cooking & Food",
+          "items": [
+            {
+              "id": "stove-item",
+              "title": "Camping stove and fuel",
+              "description": "Portable cooking solution for preparing meals",
+              "contents": [
+                {
+                  "id": "stove-content-1",
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "stove-sub-1",
+                      "title": "Check fuel level/bring extra canisters"
+                    },
+                    {
+                      "id": "stove-sub-2",
+                      "title": "Test stove functionality before trip"
+                    },
+                    {
+                      "id": "stove-sub-3",
+                      "title": "Pack lighter/matches as backup"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "cookware-item",
+              "title": "Cookware and utensils",
+              "description": "Pots, pans, plates, cups, and eating utensils",
+              "contents": [
+                {
+                  "id": "cookware-content-1",
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "cookware-sub-1",
+                      "title": "Lightweight pot/pan set"
+                    },
+                    {
+                      "id": "cookware-sub-2",
+                      "title": "Plates and bowls"
+                    },
+                    {
+                      "id": "cookware-sub-3",
+                      "title": "Forks, knives, spoons"
+                    },
+                    {
+                      "id": "cookware-sub-4",
+                      "title": "Can opener/bottle opener"
+                    },
+                    {
+                      "id": "cookware-sub-5",
+                      "title": "Cutting board (small)"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "cooler-item",
+              "title": "Cooler with ice",
+              "description": "Keep perishable foods cold and safe to eat"
+            },
+            {
+              "id": "water-item",
+              "title": "Water containers and purification",
+              "description": "Adequate drinking water for entire trip duration",
+              "contents": [
+                {
+                  "id": "water-content-1",
+                  "type": "text",
+                  "value": "**Water Planning**: Plan for 1 gallon per person per day for drinking, cooking, and cleaning. Bring water purification tablets or filter if using natural water sources."
+                }
+              ]
+            },
+            {
+              "id": "food-item",
+              "title": "Food for all meals and snacks",
+              "description": "Plan and pack all meals, snacks, and drinks for the entire trip"
+            }
+          ]
+        },
+        {
+          "id": "clothing-section",
+          "title": "Clothing & Personal Items",
+          "items": [
+            {
+              "id": "weather-clothing-item",
+              "title": "Weather-appropriate clothing",
+              "description": "Layer system for changing conditions",
+              "contents": [
+                {
+                  "id": "clothing-content-1",
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "clothing-sub-1",
+                      "title": "Base layer (moisture-wicking)"
+                    },
+                    {
+                      "id": "clothing-sub-2",
+                      "title": "Insulating layer (fleece/down)"
+                    },
+                    {
+                      "id": "clothing-sub-3",
+                      "title": "Rain jacket and pants"
+                    },
+                    {
+                      "id": "clothing-sub-4",
+                      "title": "Extra socks and underwear"
+                    },
+                    {
+                      "id": "clothing-sub-5",
+                      "title": "Hat and gloves"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "footwear-item",
+              "title": "Appropriate footwear",
+              "description": "Hiking boots/shoes plus camp shoes"
+            },
+            {
+              "id": "toiletries-item",
+              "title": "Personal hygiene items",
+              "description": "Biodegradable soap, toothbrush, toilet paper, etc."
+            },
+            {
+              "id": "sunscreen-item",
+              "title": "Sunscreen and insect repellent",
+              "description": "Protection from sun and bugs"
+            }
+          ]
+        },
+        {
+          "id": "tools-section",
+          "title": "Tools & Safety",
+          "items": [
+            {
+              "id": "first-aid-item",
+              "title": "First aid kit",
+              "description": "Well-stocked medical kit for outdoor emergencies",
+              "contents": [
+                {
+                  "id": "first-aid-content-1",
+                  "type": "text",
+                  "value": "## Essential First Aid Items\n\n- Bandages and gauze\n- Antiseptic wipes\n- Pain relievers\n- Allergy medication\n- Medical tape\n- Emergency contact information"
+                }
+              ]
+            },
+            {
+              "id": "knife-item",
+              "title": "Multi-tool or knife",
+              "description": "Versatile tool for various camping tasks"
+            },
+            {
+              "id": "rope-item",
+              "title": "Rope or paracord",
+              "description": "50 feet minimum for various camp uses"
+            },
+            {
+              "id": "flashlight-item",
+              "title": "Flashlight/headlamp and extra batteries",
+              "description": "Hands-free lighting is essential for safety"
+            },
+            {
+              "id": "fire-item",
+              "title": "Fire starting materials",
+              "description": "Waterproof matches, lighter, tinder",
+              "contents": [
+                {
+                  "id": "fire-content-1",
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "fire-sub-1",
+                      "title": "Waterproof matches"
+                    },
+                    {
+                      "id": "fire-sub-2",
+                      "title": "Lighter (backup)"
+                    },
+                    {
+                      "id": "fire-sub-3",
+                      "title": "Fire starter/tinder"
+                    },
+                    {
+                      "id": "fire-sub-4",
+                      "title": "Check local fire restrictions"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "misc-section",
+          "title": "Miscellaneous",
+          "items": [
+            {
+              "id": "trash-bags-item",
+              "title": "Trash bags and recycling bags",
+              "description": "Leave no trace - pack out all waste"
+            },
+            {
+              "id": "camp-chairs-item",
+              "title": "Camp chairs or seating",
+              "description": "Comfortable seating around camp"
+            },
+            {
+              "id": "entertainment-item",
+              "title": "Entertainment (books, games, etc.)",
+              "description": "Activities for downtime and bad weather"
+            },
+            {
+              "id": "camera-item",
+              "title": "Camera or phone for photos",
+              "description": "Capture memories of your adventure"
+            },
+            {
+              "id": "maps-item",
+              "title": "Maps and navigation tools",
+              "description": "Know where you are and where you're going"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "totalTemplates": 1,
+    "publicTemplates": 1,
+    "privateTemplates": 0
+  }
+}

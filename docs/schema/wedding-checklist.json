@@ -1,0 +1,522 @@
+{
+  "version": "1.0.0",
+  "exportedAt": "2025-01-14T00:00:00.000Z",
+  "exportedBy": "Example Generator",
+  "templates": [
+    {
+      "id": "wedding-checklist-001",
+      "title": "Complete Wedding Planning Checklist",
+      "description": "Comprehensive wedding planning checklist organized by timeline from 12 months before to wedding day. Covers all major wedding planning tasks and details.",
+      "userId": "example-user",
+      "createdAt": "2025-01-14T00:00:00.000Z",
+      "updatedAt": "2025-01-14T00:00:00.000Z",
+      "isPublic": true,
+      "slug": "complete-wedding-planning-checklist",
+      "seoTitle": "Complete Wedding Planning Checklist - 12 Month Timeline",
+      "seoDescription": "Ultimate wedding planning checklist with timeline from 12 months to wedding day. Never miss a detail with our comprehensive guide for your perfect wedding.",
+      "categories": ["wedding", "events", "planning"],
+      "tags": ["wedding-planning", "timeline", "checklist", "marriage", "ceremony", "reception"],
+      "sections": [
+        {
+          "id": "12-months-section",
+          "title": "12+ Months Before Wedding",
+          "items": [
+            {
+              "id": "set-budget-item",
+              "title": "Set overall wedding budget",
+              "description": "Determine total budget and allocate to different categories",
+              "contents": [
+                {
+                  "id": "budget-content-1",
+                  "type": "text",
+                  "value": "## Budget Allocation Guidelines\n\n- **Venue & Catering**: 40-50% of budget\n- **Photography/Videography**: 10-15%\n- **Attire**: 8-10%\n- **Flowers**: 8-10%\n- **Music/Entertainment**: 8-10%\n- **Transportation**: 3-5%\n- **Miscellaneous**: 5-10%"
+                },
+                {
+                  "id": "budget-content-2",
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "budget-sub-1",
+                      "title": "Determine who is contributing financially"
+                    },
+                    {
+                      "id": "budget-sub-2",
+                      "title": "Create detailed budget spreadsheet"
+                    },
+                    {
+                      "id": "budget-sub-3",
+                      "title": "Set aside 5-10% emergency fund"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "set-date-item",
+              "title": "Choose wedding date and season",
+              "description": "Select your preferred date considering season, holidays, and availability"
+            },
+            {
+              "id": "guest-list-item",
+              "title": "Create initial guest list",
+              "description": "Rough estimate of guest count to determine venue size needs"
+            },
+            {
+              "id": "venue-research-item",
+              "title": "Research and visit venues",
+              "description": "Book venue for ceremony and reception",
+              "contents": [
+                {
+                  "id": "venue-content-1",
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "venue-sub-1",
+                      "title": "Schedule venue tours"
+                    },
+                    {
+                      "id": "venue-sub-2",
+                      "title": "Compare pricing and packages"
+                    },
+                    {
+                      "id": "venue-sub-3",
+                      "title": "Check availability for your date"
+                    },
+                    {
+                      "id": "venue-sub-4",
+                      "title": "Read contracts carefully"
+                    },
+                    {
+                      "id": "venue-sub-5",
+                      "title": "Book venue and pay deposit"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "choose-wedding-party-item",
+              "title": "Choose wedding party",
+              "description": "Ask your closest friends and family to be in your wedding party"
+            },
+            {
+              "id": "hire-planner-item",
+              "title": "Hire wedding planner (optional)",
+              "description": "If using a wedding planner, book them early"
+            }
+          ]
+        },
+        {
+          "id": "9-months-section",
+          "title": "9-11 Months Before Wedding",
+          "items": [
+            {
+              "id": "book-photographer-item",
+              "title": "Book photographer and videographer",
+              "description": "Research and book wedding photography/videography services",
+              "contents": [
+                {
+                  "id": "photographer-content-1",
+                  "type": "text",
+                  "value": "**Photography Tips**:\n- Review full wedding galleries, not just highlight reels\n- Meet photographers in person or video call\n- Understand what's included in packages\n- Ask about engagement session inclusion\n- Clarify timeline and delivery expectations"
+                }
+              ]
+            },
+            {
+              "id": "book-caterer-item",
+              "title": "Book caterer or finalize venue catering",
+              "description": "Arrange food and beverage service for reception"
+            },
+            {
+              "id": "book-music-item",
+              "title": "Book band, DJ, or ceremony musicians",
+              "description": "Secure entertainment for ceremony and reception"
+            },
+            {
+              "id": "book-officiant-item",
+              "title": "Book wedding officiant",
+              "description": "Secure someone to perform your ceremony"
+            },
+            {
+              "id": "engagement-photos-item",
+              "title": "Schedule engagement photo session",
+              "description": "Use for save-the-dates and wedding website"
+            },
+            {
+              "id": "register-gifts-item",
+              "title": "Create wedding registry",
+              "description": "Register at stores for wedding gifts"
+            }
+          ]
+        },
+        {
+          "id": "6-months-section",
+          "title": "6-8 Months Before Wedding",
+          "items": [
+            {
+              "id": "wedding-dress-item",
+              "title": "Shop for and order wedding dress",
+              "description": "Allow time for alterations and delivery",
+              "contents": [
+                {
+                  "id": "dress-content-1",
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "dress-sub-1",
+                      "title": "Research dress styles and designers"
+                    },
+                    {
+                      "id": "dress-sub-2",
+                      "title": "Make appointments at bridal salons"
+                    },
+                    {
+                      "id": "dress-sub-3",
+                      "title": "Bring trusted friends/family for opinions"
+                    },
+                    {
+                      "id": "dress-sub-4",
+                      "title": "Order dress with time for alterations"
+                    },
+                    {
+                      "id": "dress-sub-5",
+                      "title": "Shop for shoes, undergarments, accessories"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "groom-attire-item",
+              "title": "Shop for groom's attire",
+              "description": "Select and order groom's suit or tuxedo"
+            },
+            {
+              "id": "wedding-party-attire-item",
+              "title": "Choose wedding party attire",
+              "description": "Select bridesmaids dresses and groomsmen attire"
+            },
+            {
+              "id": "book-florist-item",
+              "title": "Book florist",
+              "description": "Arrange flowers for ceremony, reception, and bridal party"
+            },
+            {
+              "id": "send-save-dates-item",
+              "title": "Send save-the-dates",
+              "description": "Mail or email save-the-dates to all guests"
+            },
+            {
+              "id": "book-accommodations-item",
+              "title": "Book hotel room blocks",
+              "description": "Reserve room blocks for out-of-town guests"
+            }
+          ]
+        },
+        {
+          "id": "4-months-section",
+          "title": "4-5 Months Before Wedding",
+          "items": [
+            {
+              "id": "finalize-guest-list-item",
+              "title": "Finalize guest list",
+              "description": "Complete guest list with addresses for invitations"
+            },
+            {
+              "id": "order-invitations-item",
+              "title": "Order wedding invitations",
+              "description": "Design and order invitations, RSVP cards, and postage"
+            },
+            {
+              "id": "plan-bachelor-bachelorette-item",
+              "title": "Plan bachelor/bachelorette parties",
+              "description": "Coordinate celebration plans with wedding party"
+            },
+            {
+              "id": "book-transportation-item",
+              "title": "Book transportation",
+              "description": "Arrange limos, buses, or other wedding day transportation"
+            },
+            {
+              "id": "choose-cake-item",
+              "title": "Choose wedding cake or desserts",
+              "description": "Book cake baker and finalize dessert plans"
+            },
+            {
+              "id": "plan-honeymoon-item",
+              "title": "Plan honeymoon",
+              "description": "Book flights, hotels, and activities for honeymoon"
+            }
+          ]
+        },
+        {
+          "id": "2-months-section",
+          "title": "2-3 Months Before Wedding",
+          "items": [
+            {
+              "id": "mail-invitations-item",
+              "title": "Mail wedding invitations",
+              "description": "Send invitations 6-8 weeks before wedding date"
+            },
+            {
+              "id": "order-wedding-rings-item",
+              "title": "Order wedding rings",
+              "description": "Allow time for sizing and engraving"
+            },
+            {
+              "id": "schedule-tastings-item",
+              "title": "Attend menu and cake tastings",
+              "description": "Finalize food and cake selections"
+            },
+            {
+              "id": "apply-marriage-license-item",
+              "title": "Apply for marriage license",
+              "description": "Research requirements and apply in appropriate jurisdiction"
+            },
+            {
+              "id": "bridal-shower-item",
+              "title": "Attend bridal shower",
+              "description": "Celebrate with friends and family"
+            },
+            {
+              "id": "book-beauty-services-item",
+              "title": "Book beauty services",
+              "description": "Schedule hair and makeup artists for wedding day",
+              "contents": [
+                {
+                  "id": "beauty-content-1",
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "beauty-sub-1",
+                      "title": "Book hair stylist"
+                    },
+                    {
+                      "id": "beauty-sub-2",
+                      "title": "Book makeup artist"
+                    },
+                    {
+                      "id": "beauty-sub-3",
+                      "title": "Schedule trial runs"
+                    },
+                    {
+                      "id": "beauty-sub-4",
+                      "title": "Book manicure/pedicure"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "1-month-section",
+          "title": "1 Month Before Wedding",
+          "items": [
+            {
+              "id": "confirm-rsvps-item",
+              "title": "Follow up on RSVPs",
+              "description": "Contact guests who haven't responded"
+            },
+            {
+              "id": "finalize-headcount-item",
+              "title": "Give final headcount to caterer and venue",
+              "description": "Provide accurate guest count for planning"
+            },
+            {
+              "id": "create-seating-chart-item",
+              "title": "Create seating chart",
+              "description": "Plan table assignments for reception"
+            },
+            {
+              "id": "pick-up-dress-item",
+              "title": "Pick up wedding dress after final alterations",
+              "description": "Ensure dress fits perfectly and is ready"
+            },
+            {
+              "id": "write-vows-item",
+              "title": "Write wedding vows",
+              "description": "Prepare personal vows if writing your own"
+            },
+            {
+              "id": "break-in-shoes-item",
+              "title": "Break in wedding shoes",
+              "description": "Wear shoes around the house to ensure comfort"
+            },
+            {
+              "id": "confirm-vendors-item",
+              "title": "Confirm all vendor details",
+              "description": "Double-check timing and details with all vendors"
+            }
+          ]
+        },
+        {
+          "id": "1-week-section",
+          "title": "1 Week Before Wedding",
+          "items": [
+            {
+              "id": "pack-honeymoon-item",
+              "title": "Pack for honeymoon",
+              "description": "Pack bags for your post-wedding getaway"
+            },
+            {
+              "id": "rehearsal-dinner-item",
+              "title": "Attend rehearsal and rehearsal dinner",
+              "description": "Practice ceremony and celebrate with wedding party"
+            },
+            {
+              "id": "prepare-tips-item",
+              "title": "Prepare vendor tips",
+              "description": "Have cash ready to tip vendors on wedding day"
+            },
+            {
+              "id": "delegate-tasks-item",
+              "title": "Delegate day-of tasks to wedding party",
+              "description": "Assign specific responsibilities to trusted friends/family"
+            },
+            {
+              "id": "beauty-treatments-item",
+              "title": "Final beauty treatments",
+              "description": "Manicure, pedicure, facial (if desired)"
+            },
+            {
+              "id": "emergency-kit-item",
+              "title": "Prepare wedding day emergency kit",
+              "description": "Pack items for common wedding day issues",
+              "contents": [
+                {
+                  "id": "emergency-content-1",
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "emergency-sub-1",
+                      "title": "Safety pins and sewing kit"
+                    },
+                    {
+                      "id": "emergency-sub-2",
+                      "title": "Stain remover pen"
+                    },
+                    {
+                      "id": "emergency-sub-3",
+                      "title": "Extra makeup for touch-ups"
+                    },
+                    {
+                      "id": "emergency-sub-4",
+                      "title": "Pain reliever and antacid"
+                    },
+                    {
+                      "id": "emergency-sub-5",
+                      "title": "Breath mints and tissues"
+                    },
+                    {
+                      "id": "emergency-sub-6",
+                      "title": "Phone charger"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "wedding-day-section",
+          "title": "Wedding Day",
+          "items": [
+            {
+              "id": "eat-breakfast-item",
+              "title": "Eat a good breakfast",
+              "description": "Start the day with nutritious food for energy"
+            },
+            {
+              "id": "stay-hydrated-item",
+              "title": "Stay hydrated throughout the day",
+              "description": "Drink plenty of water, especially before ceremony"
+            },
+            {
+              "id": "hair-makeup-item",
+              "title": "Hair and makeup appointments",
+              "description": "Get ready with wedding party"
+            },
+            {
+              "id": "first-look-item",
+              "title": "First look photos (if planned)",
+              "description": "Private moment with spouse before ceremony"
+            },
+            {
+              "id": "ceremony-photos-item",
+              "title": "Pre-ceremony photos",
+              "description": "Family and wedding party photos"
+            },
+            {
+              "id": "ceremony-item",
+              "title": "Wedding ceremony",
+              "description": "The main event - exchange vows and rings!"
+            },
+            {
+              "id": "cocktail-hour-item",
+              "title": "Cocktail hour and couple photos",
+              "description": "Guests enjoy drinks while couple takes photos"
+            },
+            {
+              "id": "reception-item",
+              "title": "Reception celebration",
+              "description": "Dinner, dancing, and celebrating with loved ones",
+              "contents": [
+                {
+                  "id": "reception-content-1",
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "reception-sub-1",
+                      "title": "Grand entrance"
+                    },
+                    {
+                      "id": "reception-sub-2",
+                      "title": "First dance"
+                    },
+                    {
+                      "id": "reception-sub-3",
+                      "title": "Dinner service"
+                    },
+                    {
+                      "id": "reception-sub-4",
+                      "title": "Speeches and toasts"
+                    },
+                    {
+                      "id": "reception-sub-5",
+                      "title": "Cake cutting"
+                    },
+                    {
+                      "id": "reception-sub-6",
+                      "title": "Dancing and celebration"
+                    },
+                    {
+                      "id": "reception-sub-7",
+                      "title": "Send-off"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "take-moment-item",
+              "title": "Take a private moment together",
+              "description": "Step away briefly to soak in the moment as newlyweds"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "totalTemplates": 1,
+    "publicTemplates": 1,
+    "privateTemplates": 0
+  }
+}
