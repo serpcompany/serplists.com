@@ -58,7 +58,7 @@ export const useTemplateEditor = (initialSections: ChecklistSection[] = []) => {
     setSections(updatedSections);
   };
 
-  const addItemContent = (sectionIndex: number, itemIndex: number, contentType: "text" | "image" | "video" | "file" | "embed" | "subItems" | "page") => {
+  const addItemContent = (sectionIndex: number, itemIndex: number, contentType: "text" | "image" | "video" | "file" | "embed" | "subItems") => {
     const updatedSections = [...sections];
     const item = updatedSections[sectionIndex].items[itemIndex];
     
@@ -77,8 +77,6 @@ export const useTemplateEditor = (initialSections: ChecklistSection[] = []) => {
         id: `subitem_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         title: ""
       }];
-    } else if (contentType === "page") {
-      (newContent as unknown).pageId = "";
     }
     
     item.contents.push(newContent);

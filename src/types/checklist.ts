@@ -6,13 +6,12 @@ export type ChecklistSubItem = {
 };
 
 export type ChecklistItemContent = {
-  type: "text" | "image" | "video" | "file" | "embed" | "subItems" | "page";
-  value: string; // URL for image/video/file, embed code, markdown for text, page ID for pages, or empty for subItems
+  type: "text" | "image" | "video" | "file" | "embed" | "subItems";
+  value: string; // URL for image/video/file, embed code, markdown for text, or empty for subItems
   uploadType?: "url" | "upload"; // For image/video/file: whether it's a URL or uploaded file
   fileName?: string; // Original filename for uploaded files
   fileSize?: number; // File size in bytes for uploaded files
   subItems?: ChecklistSubItem[]; // Only used when type is "subItems"
-  pageId?: string; // Only used when type is "page"
 };
 
 export type ChecklistItem = {

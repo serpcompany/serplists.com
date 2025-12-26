@@ -1,7 +1,7 @@
 import type { ChecklistItem, ChecklistItemContent, ChecklistSection } from "@/types/checklist";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronDown, ChevronRight, FileText, Video, Image, Link2, ListTodo } from "lucide-react";
+import { ChevronDown, ChevronRight, Video, Image, Link2, ListTodo } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
@@ -67,16 +67,6 @@ export function PublicTemplateContent({ sections }: PublicTemplateContentProps) 
               ) : (
                 <span className="text-muted-foreground">Invalid link</span>
               )}
-            </div>
-          </div>
-        ) : null;
-      
-      case "page":
-        return content.value ? (
-          <div className="mt-2 p-3 bg-muted/50 rounded-md">
-            <div className="flex items-center gap-2 text-sm">
-              <FileText className="h-4 w-4" />
-              <span>Page reference</span>
             </div>
           </div>
         ) : null;

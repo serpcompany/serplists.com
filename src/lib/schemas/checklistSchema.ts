@@ -10,13 +10,12 @@ export const checklistSubItemSchema = z.object({
 // Schema for checklist item content
 export const checklistItemContentSchema = z.object({
   id: z.string(),
-  type: z.enum(["text", "image", "video", "file", "embed", "subItems", "page"]),
-  value: z.string(), // URL for image/video/file, embed code, markdown for text, page ID for pages, or empty for subItems
+  type: z.enum(["text", "image", "video", "file", "embed", "subItems"]),
+  value: z.string(), // URL for image/video/file, embed code, markdown for text, or empty for subItems
   uploadType: z.enum(["url", "upload"]).optional(), // For image/video/file: whether it's a URL or uploaded file
   fileName: z.string().optional(), // Original filename for uploaded files
   fileSize: z.number().optional(), // File size in bytes for uploaded files
-  subItems: z.array(checklistSubItemSchema).optional(),
-  pageId: z.string().optional() // For page content type
+  subItems: z.array(checklistSubItemSchema).optional()
 });
 
 // Schema for individual checklist items

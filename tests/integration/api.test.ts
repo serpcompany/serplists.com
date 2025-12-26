@@ -19,6 +19,9 @@ describe('API Integration Tests', () => {
       experimental: { disableExperimentalWarning: true },
       local: true,
       persist: false,
+      vars: {
+        JWT_SECRET: 'test-jwt-secret',
+      },
     });
 
     // Create a baseline user for auth-required tests (do not rely on pre-seeded DB state)

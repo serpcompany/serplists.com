@@ -13,6 +13,4 @@ database_id = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1"
 binding = "R2_UPLOADS"
 bucket_name = "serp-checklists-uploads"
 
-# Environment variables
-[vars]
-JWT_SECRET = "YOUR_JWT_SECRET_HERE"
+# Production secrets should be set via Pages Secrets (e.g. `wrangler pages secret put JWT_SECRET`).

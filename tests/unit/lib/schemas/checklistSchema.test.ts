@@ -98,18 +98,6 @@ describe('Checklist Schema Validation', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should validate page content', () => {
-      const pageContent = {
-        id: 'content-5',
-        type: 'page',
-        value: 'page-content-id',
-        pageId: 'page-123'
-      };
-      
-      const result = checklistItemContentSchema.safeParse(pageContent);
-      expect(result.success).toBe(true);
-    });
-
     it('should reject invalid content type', () => {
       const invalidContent = {
         id: 'content-bad',
