@@ -15,7 +15,6 @@ import { SEOMetaEditor } from "@/components/template-editor/SEOMetaEditor";
 import { SectionSidebar } from "@/components/template-editor/SectionSidebar";
 import { SectionEditor } from "@/components/template-editor/SectionEditor";
 import { ItemEditor } from "@/components/template-editor/ItemEditor";
-// Supabase removed - using Cloudflare API
 import { api } from "@/lib/api";
 
 const TemplateEditor = () => {

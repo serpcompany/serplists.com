@@ -11,7 +11,6 @@ import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
 import { exportTemplatesToJSON, downloadBackupFile, parseTemplatesFromJSON } from "@/lib/utils/templateBackup";
 import { ChecklistTemplate } from "@/lib/schemas/checklistSchema";
-// Supabase removed - using Cloudflare API
 interface TemplateBackupProps {
   className?: string;
 }

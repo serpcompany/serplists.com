@@ -1,6 +1,9 @@
-const API_BASE_URL = import.meta.env.DEV 
-  ? 'http://localhost:8788/api' 
-  : '/api';
+import { env } from "@/env";
+
+const DEV_API_BASE_URL = env.VITE_API_URL ?? 'http://localhost:8788/api';
+const API_BASE_URL = import.meta.env.DEV
+  ? DEV_API_BASE_URL
+  : env.VITE_API_URL ?? '/api';
 
 class ApiClient {
   private token: string | null = null;

@@ -1,4 +1,5 @@
 import { Env } from './types';
+import { getApiEnv } from './env';
 import { 
   handleRegister, 
   handleLogin, 
@@ -38,6 +39,7 @@ async function handleCORS(): Promise<Response> {
 
 async function handleRequest(context: { request: Request; env: Env }): Promise<Response> {
   const { request, env } = context;
+  getApiEnv(env);
   const url = new URL(request.url);
   const path = url.pathname.replace('/api/', '');
   

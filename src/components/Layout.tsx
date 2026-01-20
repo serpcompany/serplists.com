@@ -6,7 +6,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LogOut, Home, FileText, CheckSquare, Settings, ExternalLink } from "lucide-react";
 import { api } from "@/lib/api";
-// Supabase removed - using Cloudflare API
 interface LayoutProps {
   children: React.ReactNode;
 }

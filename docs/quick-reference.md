@@ -10,7 +10,10 @@ pnpm run preview
 pnpm run test
 pnpm run test:run
 pnpm run typecheck
+pnpm run typecheck:env
 pnpm run lint
+pnpm run sre:dup
+pnpm run sre:deps
 ```
 
 ## Database (local D1)

@@ -20,6 +20,7 @@ This document lists the current stack as implemented in the repository. Sources 
 ## Forms and validation
 - React Hook Form + `@hookform/resolvers`
 - Zod schemas in `src/lib/schemas/checklistSchema.ts`
+- `@t3-oss/env-core` for env validation
 
 ## API and backend
 - Cloudflare Pages Functions in `functions/api`
@@ -38,6 +39,7 @@ This document lists the current stack as implemented in the repository. Sources 
 - Wrangler for Pages/D1 local dev and deploy
 - `concurrently` for `pnpm run dev:all`
 - `lovable-tagger` for dev-time component tagging in Vite
+- `dependency-cruiser` and `jscpd` for architecture/duplication audits (warn-only)
 
 ## Legacy or unused code
 - `src/api/` contains a Hono-based worker that is not wired into the build.

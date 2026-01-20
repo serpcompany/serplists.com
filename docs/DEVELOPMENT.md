@@ -17,6 +17,7 @@ R2_PUBLIC_BASE_URL=https://your-public-domain
 Notes:
 - `src/lib/api.ts` hard-codes the dev API base to `http://localhost:8788/api`.
 - `.env.local` exists in the repo but is not read by the app today.
+- Client-side env validation lives in `src/env.ts` (Vite `VITE_` prefix). Optional: `VITE_API_URL` to override the API base.
 
 ## Run the app
 ```bash
@@ -61,5 +62,6 @@ If login fails, verify:
 pnpm run test
 pnpm run test:run
 pnpm run typecheck
+pnpm run typecheck:env
 pnpm run lint
 ```

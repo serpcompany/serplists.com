@@ -1,3 +1,4 @@
+.dev.vars*
 # Logs
 logs
 *.log
@@ -33,9 +34,6 @@ out
 *.vsix
 .claude
 CLAUDE.md
-
-# Local development variables
-.dev.vars
 
 .wrangler
 .page-audit
