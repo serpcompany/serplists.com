@@ -33,7 +33,7 @@
     "db:migrate:progress:remote": "npx wrangler d1 execute serp-checklists-db --remote --file=./db/migrations/0007_add_checklist_run_progress.sql",
     "db:seed:official:remote": "npx wrangler d1 execute serp-checklists-db --remote --file=./db/migrations/0006_seed_official_templates.sql",
     "db:query": "npx wrangler d1 execute serp-checklists-db --local --command",
-    "prepare": "husky"
+    "prepare": "if [ -d .git ]; then lefthook install; fi"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -114,8 +114,8 @@
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
-    "husky": "^9.1.7",
     "jscpd": "^4.0.7",
+    "lefthook": "^2.0.15",
     "lint-staged": "^16.1.5",
     "lovable-tagger": "^1.1.7",
     "postcss": "^8.4.47",

@@ -14,3 +14,4 @@
 - [x] Remove legacy Hono worker (`src/api`) and related tests/dependencies
 - [x] Add Playwright smoke/e2e scaffolding and scripts
 - [x] Add `/api/health` endpoint with integration coverage
+- [x] Replace Husky with Lefthook for git hooks

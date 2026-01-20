@@ -32,7 +32,7 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] Supabase + Vercel serverless/Postgres code removed; Cloudflare dev ignore added in .gitignore:1
 
 ### Phase 0 findings
-**Current scripts (serp-checklists)**: `dev`, `dev:api`, `dev:all`, `build`, `build:dev`, `preview`, `lint`, `typecheck`, `test`, `test:run`, and D1 helper scripts (`db:*`), plus `prepare` (husky).
+**Current scripts (serp-checklists)**: `dev`, `dev:api`, `dev:all`, `build`, `build:dev`, `preview`, `lint`, `typecheck`, `test`, `test:run`, and D1 helper scripts (`db:*`), plus `prepare` (lefthook).
 
 **Delta vs serp-boilerplate**:
 - Missing: `start`, `test:unit`, `test:smoke`, `test:e2e`, `test:e2e:ui`, `secret:scan`, `sre:dup`, `sre:deps`, `sre:react-scan`, and `lefthook`-based `prepare`.
@@ -76,16 +76,16 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] Keep R2 upload handlers as-is.
 
 ## Phase 4 - Monitoring, SRE, and tests
-- [ ] Mirror serp-boilerplate hook gates with Lefthook (pre-commit + pre-push).
+- [x] Mirror serp-boilerplate hook gates with Lefthook (pre-commit + pre-push).
 - [x] Add smoke/e2e test scaffolding (Playwright) if MVP requires it.
 - [ ] Ensure unit tests cover critical flows (auth, templates, runs).
 - [x] Add minimal API smoke checks (health, auth, templates).
 - [ ] Decide on runtime logging/analytics sink (Sentry or equivalent).
 
 ## Phase 5 - Hook migration (Lefthook)
-- [ ] Remove Husky (`prepare` script) and add Lefthook (`lefthook.yml`).
-- [ ] Mirror `serp-boilerplate` hook commands with project scripts.
-- [ ] Ensure `pnpm install` installs hooks (`prepare` script).
+- [x] Remove Husky (`prepare` script) and add Lefthook (`lefthook.yml`).
+- [x] Mirror `serp-boilerplate` hook commands with project scripts.
+- [x] Ensure `pnpm install` installs hooks (`prepare` script).
 
 ## Phase 6 - UI alignment with serp-boilerplate (serpui) (last)
 - [ ] Align shadcn style and base color (`new-york` + `neutral`) or document divergence.

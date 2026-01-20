@@ -12,6 +12,7 @@ serp-checklists/
 ├── wrangler.toml        # Cloudflare bindings
 ├── vite.config.ts       # Vite config
 ├── playwright.config.ts # Playwright config
+├── lefthook.yml         # Git hooks
 ├── tailwind.config.ts   # Tailwind config
 └── package.json         # Scripts and dependencies
 ```

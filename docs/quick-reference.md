@@ -9,6 +9,10 @@ pnpm run build
 pnpm run preview
 pnpm run test
 pnpm run test:run
+pnpm run test:unit
+pnpm run test:smoke
+pnpm run test:e2e
+pnpm run test:e2e:ui
 pnpm run typecheck
 pnpm run typecheck:env
 pnpm run lint

@@ -42,6 +42,7 @@ This document lists the current stack as implemented in the repository. Sources 
 - `concurrently` for `pnpm run dev:all`
 - `lovable-tagger` for dev-time component tagging in Vite
 - `dependency-cruiser` and `jscpd` for architecture/duplication audits (warn-only)
+- Lefthook for git hooks
 
 ## Legacy or unused code
 - `src/lib/api/client.ts` is not referenced by current app code.

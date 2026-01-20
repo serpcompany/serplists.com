@@ -75,3 +75,15 @@ pnpm run typecheck
 pnpm run typecheck:env
 pnpm run lint
 ```
+
+## Git hooks
+Hooks are installed via `pnpm install` (prepare). If needed:
+```bash
+pnpm exec lefthook install
+```
+
+If pnpm reports that lefthook build scripts were ignored, run:
+```bash
+pnpm approve-builds
+```
+Then re-run the install command above.
