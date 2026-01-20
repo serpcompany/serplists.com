@@ -11,8 +11,6 @@ Set these in Cloudflare Pages (production) or `.dev.vars` (local):
 - `JWT_SECRET` (required for auth)
 - `R2_PUBLIC_BASE_URL` (optional; used to generate public file URLs)
 
-`FRONTEND_URL` is only used by the legacy Hono worker in `src/api/` and is not required for the Pages Functions router.
-
 ## D1 database
 The database binding and name are defined in `wrangler.toml`:
 - Binding: `DB`

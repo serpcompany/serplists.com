@@ -65,5 +65,4 @@ serp-checklists/
 - `tests/integration/` - API integration tests
 
 ## Legacy or unused code
-- `src/api/` (Hono worker) is not wired into the build.
 - `src/lib/api/client.ts` is not referenced by the app.

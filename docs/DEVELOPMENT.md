@@ -9,7 +9,6 @@ Local Pages Functions use `.dev.vars` for server-side variables.
 
 ```
 JWT_SECRET=local-dev-secret-key-not-for-production-use
-FRONTEND_URL=http://localhost:8080
 # Optional for uploads
 R2_PUBLIC_BASE_URL=https://your-public-domain
 ```

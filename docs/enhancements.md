@@ -12,6 +12,5 @@ This list reflects verified limitations and cleanup opportunities based on the c
 - `src/lib/analytics.ts` stores events in memory and only logs to the console. There is no persistence or backend sink.
 
 ## Code cleanup
-- `src/api/` (Hono worker) is present but not wired into the build.
 - `src/lib/api/client.ts` is unused by the app.
 - `db/schema.sql` is a legacy snapshot and should be kept aligned with `db/migrations/` to avoid confusion.

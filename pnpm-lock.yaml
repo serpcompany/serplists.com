@@ -234,9 +234,6 @@ importers:
       globals:
         specifier: ^15.9.0
         version: 15.15.0
-      hono:
-        specifier: ^4.9.0
-        version: 4.9.2
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -3138,10 +3135,6 @@ packages:
 
   hastscript@9.0.1:
     resolution: {integrity: sha512-g7df9rMFX/SPi34tyGCyUBREQoKkapwdY/T04Qn9TDWfHhAYt4/I0gMVirzK5wEzeUqIjEB+LXC/ypb7Aqno5w==}
-
-  hono@4.9.2:
-    resolution: {integrity: sha512-UG2jXGS/gkLH42l/1uROnwXpkjvvxkl3kpopL3LBo27NuaDPI6xHNfuUSilIHcrBkPfl4y0z6y2ByI455TjNRw==}
-    engines: {node: '>=16.9.0'}
 
   html-url-attributes@3.0.1:
     resolution: {integrity: sha512-ol6UPyBWqsrO6EJySPz2O7ZSr856WDrEzM5zMqp+FJJLGMW35cLYmmZnl0vztAZxRUoNZJFTCohfjuIJ8I4QBQ==}
@@ -7292,8 +7285,6 @@ snapshots:
       hast-util-parse-selector: 4.0.0
       property-information: 7.1.0
       space-separated-tokens: 2.0.2
-
-  hono@4.9.2: {}
 
   html-url-attributes@3.0.1: {}
 

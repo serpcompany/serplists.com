@@ -19,4 +19,3 @@ The app uses a small API client wrapper plus React Query to manage server data.
 
 ## Legacy code
 - `src/lib/api/client.ts` is an older client and is not referenced.
-- `src/api/` contains a Hono-based worker not wired into the build.

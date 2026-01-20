@@ -11,3 +11,4 @@
 - [x] Move Pages Functions queries to Drizzle ORM (auth, templates, checklists)
 - [x] Update auth unit tests to mock Drizzle DB access
 - [x] Reorganize Drizzle schema/types into folders (`db/schema/`, `db/types/`)
+- [x] Remove legacy Hono worker (`src/api`) and related tests/dependencies

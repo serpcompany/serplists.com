@@ -43,6 +43,5 @@ This document lists the current stack as implemented in the repository. Sources 
 - `dependency-cruiser` and `jscpd` for architecture/duplication audits (warn-only)
 
 ## Legacy or unused code
-- `src/api/` contains a Hono-based worker that is not wired into the build.
 - `src/lib/api/client.ts` is not referenced by current app code.
 - `db/schema.sql` is a legacy snapshot; migrations in `db/migrations/` are the source of truth.
