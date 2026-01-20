@@ -20,6 +20,8 @@ pnpm run sre:deps
 ```bash
 pnpm run db:seed
 pnpm run db:reset
+pnpm run db:generate
+pnpm run db:migrate
 pnpm run db:query "SELECT * FROM templates LIMIT 5"
 ```
 

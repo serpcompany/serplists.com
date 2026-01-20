@@ -7,3 +7,7 @@
 - [ ] Review jscpd duplicate-code findings (API handlers + UI pages) and decide on refactors
 - [x] Add env validation with `@t3-oss/env-core` (Vite + Pages Functions)
 - [x] Add `pnpm run typecheck:env` for `.dev.vars` validation
+- [x] Add Drizzle schema/config + scripts (`db/schema/index.ts`, `db/drizzle.config.ts`, `db:generate`, `db:migrate`)
+- [x] Move Pages Functions queries to Drizzle ORM (auth, templates, checklists)
+- [x] Update auth unit tests to mock Drizzle DB access
+- [x] Reorganize Drizzle schema/types into folders (`db/schema/`, `db/types/`)

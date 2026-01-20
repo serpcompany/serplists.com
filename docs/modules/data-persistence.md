@@ -4,15 +4,18 @@ The persistence layer uses Cloudflare D1 (SQLite) for data, Cloudflare Pages Fun
 
 ## Related files
 - `functions/api/[[route]].ts` - API router
+- `functions/api/db.ts` - Drizzle D1 client
 - `functions/api/handlers/` - Auth, templates, checklists, uploads
 - `functions/api/utils/jwt.ts` - JWT verification
+- `db/schema/` - Drizzle schema (entry: `db/schema/index.ts`)
+- `db/types/` - Drizzle model types
 - `db/migrations/*.sql` - D1 schema changes
 - `src/lib/api.ts` - Client API wrapper
 - `src/contexts/TemplatesContext.tsx` - Templates and runs (React Query)
 - `src/lib/utils/templateBackup.ts` - Import/export helpers
 
 ## Storage model (D1)
-Source of truth: `db/migrations/*.sql`.
+Source of truth: `db/migrations/*.sql`. Drizzle schema in `db/schema/index.ts` mirrors the SQL for runtime queries.
 
 ### Core tables
 - `users` (auth + profile data)

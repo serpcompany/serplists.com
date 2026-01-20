@@ -1,5 +1,7 @@
 import { Env } from '../types';
 import { verifyJWT } from '../utils/jwt';
+import { and, desc, eq } from 'drizzle-orm';
+import { createDb, schema } from '../db';
 
 export async function handleChecklists(request: Request, env: Env): Promise<Response> {
   const authHeader = request.headers.get('Authorization');
@@ -7,21 +9,25 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
   const url = new URL(request.url);
   const pathParts = url.pathname.split('/').filter(Boolean); // ["api", "checklists", ...]
   const checklistsSubpath = pathParts.slice(2); // after /api/checklists
-  
+  const db = createDb(env);
+  const { checklist_runs } = schema;
+
   if (!userId) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  
+
   if (request.method === 'GET') {
     // GET /api/checklists/:id
     if (checklistsSubpath[0]) {
       const checklistId = checklistsSubpath[0];
-      const checklist = await env.DB.prepare(
-        'SELECT * FROM checklist_runs WHERE id = ? AND user_id = ? LIMIT 1'
-      ).bind(checklistId, userId).first();
+      const [checklist] = await db
+        .select()
+        .from(checklist_runs)
+        .where(and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId)))
+        .limit(1);
 
       if (!checklist) {
         return new Response(JSON.stringify({ error: 'Checklist not found' }), {
@@ -35,15 +41,17 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       });
     }
 
-    const checklists = await env.DB.prepare(
-      'SELECT * FROM checklist_runs WHERE user_id = ? ORDER BY created_at DESC'
-    ).bind(userId).all();
-    
-    return new Response(JSON.stringify(checklists.results), {
+    const checklists = await db
+      .select()
+      .from(checklist_runs)
+      .where(eq(checklist_runs.user_id, userId))
+      .orderBy(desc(checklist_runs.created_at));
+
+    return new Response(JSON.stringify(checklists), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  
+
   if (request.method === 'POST') {
     const { template_id, title, items, sections, status } = await request.json();
     const checklistId = crypto.randomUUID();
@@ -51,113 +59,103 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
 
     // Prefer rich sections payload; fall back to legacy flat items.
     const storedItems = sections ?? items ?? [];
-    
-    await env.DB.prepare(
-      'INSERT INTO checklist_runs (id, user_id, template_id, title, items, status, started_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(
-      checklistId,
-      userId,
-      template_id ?? null,
+
+    await db.insert(checklist_runs).values({
+      id: checklistId,
+      user_id: userId,
+      template_id: template_id ?? null,
       title,
-      JSON.stringify(storedItems),
-      status || 'in_progress',
-      now,  // started_at
-      now   // created_at
-    ).run();
-    
+      items: JSON.stringify(storedItems),
+      status: status || 'in_progress',
+      started_at: now,
+      created_at: now,
+    });
+
     return new Response(JSON.stringify({ id: checklistId }), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  
+
   if (request.method === 'PUT') {
     const checklistId = checklistsSubpath[0];
-    
+
     if (!checklistId || checklistId === 'checklists') {
       return new Response(JSON.stringify({ error: 'Checklist ID required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
+
     const { title, items, sections, status, progress, completed_at } = await request.json();
-    
+
     // Build dynamic update query
-    const updates = [];
-    const values = [];
-    
+    const updates: Record<string, unknown> = {};
+
     if (title !== undefined) {
-      updates.push('title = ?');
-      values.push(title);
+      updates.title = title;
     }
     const itemsToStore = sections !== undefined ? sections : items;
     if (itemsToStore !== undefined) {
-      updates.push('items = ?');
-      values.push(JSON.stringify(itemsToStore));
+      updates.items = JSON.stringify(itemsToStore);
     }
     if (status !== undefined) {
-      updates.push('status = ?');
-      values.push(status);
+      updates.status = status;
     }
     if (progress !== undefined) {
-      updates.push('progress = ?');
-      values.push(progress);
+      updates.progress = progress;
     }
     if (completed_at !== undefined) {
-      updates.push('completed_at = ?');
-      values.push(completed_at);
+      updates.completed_at = completed_at;
     }
-    
-    if (updates.length === 0) {
+
+    if (Object.keys(updates).length === 0) {
       return new Response(JSON.stringify({ error: 'No fields to update' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
-    values.push(checklistId);
-    values.push(userId);
-    
-    await env.DB.prepare(
-      `UPDATE checklist_runs SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`
-    ).bind(...values).run();
-    
+
+    await db.update(checklist_runs)
+      .set(updates)
+      .where(and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId)));
+
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  
+
   if (request.method === 'DELETE') {
     const checklistId = checklistsSubpath[0];
-    
+
     if (!checklistId || checklistId === 'checklists') {
       return new Response(JSON.stringify({ error: 'Checklist ID required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
+
     // First check if the checklist exists and belongs to the user
-    const existingChecklist = await env.DB.prepare(
-      'SELECT id FROM checklist_runs WHERE id = ? AND user_id = ?'
-    ).bind(checklistId, userId).first();
-    
+    const [existingChecklist] = await db
+      .select({ id: checklist_runs.id })
+      .from(checklist_runs)
+      .where(and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId)))
+      .limit(1);
+
     if (!existingChecklist) {
       return new Response(JSON.stringify({ error: 'Checklist not found or unauthorized' }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
+
     // Now delete the checklist
-    await env.DB.prepare(
-      'DELETE FROM checklist_runs WHERE id = ? AND user_id = ?'
-    ).bind(checklistId, userId).run();
-    
+    await db.delete(checklist_runs)
+      .where(and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId)));
+
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  
+
   return new Response('Method Not Allowed', { status: 405 });
 }

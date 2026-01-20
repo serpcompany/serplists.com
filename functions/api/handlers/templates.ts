@@ -1,21 +1,29 @@
 import { Env } from '../types';
 import { verifyJWT } from '../utils/jwt';
 import { generateSlug } from '../utils/slug';
+import { and, desc, eq, ne, or } from 'drizzle-orm';
+import { createDb, schema } from '../db';
 
 async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
   const base = generateSlug(title || 'template') || 'template';
+  const db = createDb(env);
+  const { templates } = schema;
 
   // Prefer the clean slug if available; otherwise fall back to a deterministic suffix.
-  const exists = await env.DB.prepare('SELECT id FROM templates WHERE slug = ? LIMIT 1')
-    .bind(base)
-    .first();
+  const [exists] = await db
+    .select({ id: templates.id })
+    .from(templates)
+    .where(eq(templates.slug, base))
+    .limit(1);
 
   if (!exists) return base;
 
   const suffixed = `${base}-${templateId.slice(0, 8)}`;
-  const existsSuffixed = await env.DB.prepare('SELECT id FROM templates WHERE slug = ? LIMIT 1')
-    .bind(suffixed)
-    .first();
+  const [existsSuffixed] = await db
+    .select({ id: templates.id })
+    .from(templates)
+    .where(eq(templates.slug, suffixed))
+    .limit(1);
 
   if (!existsSuffixed) return suffixed;
 
@@ -64,7 +72,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
   const url = new URL(request.url);
   const pathParts = url.pathname.split('/').filter(Boolean); // ["api", "templates", ...]
   const templatesSubpath = pathParts.slice(2); // after /api/templates
-  
+  const db = createDb(env);
+  const { templates } = schema;
+
   if (request.method === 'GET') {
     // GET /api/templates/public?userId=...
     if (templatesSubpath[0] === 'public') {
@@ -76,11 +86,13 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         });
       }
 
-      const templates = await env.DB.prepare(
-        'SELECT * FROM templates WHERE is_public = 1 AND user_id = ? ORDER BY created_at DESC'
-      ).bind(targetUserId).all();
+      const rows = await db
+        .select()
+        .from(templates)
+        .where(and(eq(templates.is_public, true), eq(templates.user_id, targetUserId)))
+        .orderBy(desc(templates.created_at));
 
-      return new Response(JSON.stringify(templates.results.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>))), {
+      return new Response(JSON.stringify(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>))), {
         headers: { 'Content-Type': 'application/json' }
       });
     }
@@ -88,9 +100,15 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     // GET /api/templates/slug/:slug
     if (templatesSubpath[0] === 'slug' && templatesSubpath[1]) {
       const slug = templatesSubpath.slice(1).join('/');
-      const template = await env.DB.prepare(
-        'SELECT * FROM templates WHERE slug = ? AND (is_public = 1 OR user_id = ?) LIMIT 1'
-      ).bind(slug, userId || '').first();
+      const whereClause = userId
+        ? and(eq(templates.slug, slug), or(eq(templates.is_public, true), eq(templates.user_id, userId)))
+        : and(eq(templates.slug, slug), eq(templates.is_public, true));
+
+      const [template] = await db
+        .select()
+        .from(templates)
+        .where(whereClause)
+        .limit(1);
 
       if (!template) {
         return new Response(JSON.stringify({ error: 'Template not found' }), {
@@ -107,9 +125,15 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     // GET /api/templates/:id
     if (templatesSubpath[0]) {
       const templateId = templatesSubpath[0];
-      const template = await env.DB.prepare(
-        'SELECT * FROM templates WHERE id = ? AND (is_public = 1 OR user_id = ?) LIMIT 1'
-      ).bind(templateId, userId || '').first();
+      const whereClause = userId
+        ? and(eq(templates.id, templateId), or(eq(templates.is_public, true), eq(templates.user_id, userId)))
+        : and(eq(templates.id, templateId), eq(templates.is_public, true));
+
+      const [template] = await db
+        .select()
+        .from(templates)
+        .where(whereClause)
+        .limit(1);
 
       if (!template) {
         return new Response(JSON.stringify({ error: 'Template not found' }), {
@@ -124,15 +148,21 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     }
 
     // GET /api/templates (list)
-    const templates = await env.DB.prepare(
-      'SELECT * FROM templates WHERE is_public = 1 OR user_id = ? ORDER BY created_at DESC'
-    ).bind(userId || '').all();
+    const whereClause = userId
+      ? or(eq(templates.is_public, true), eq(templates.user_id, userId))
+      : eq(templates.is_public, true);
 
-    return new Response(JSON.stringify(templates.results.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>))), {
+    const rows = await db
+      .select()
+      .from(templates)
+      .where(whereClause)
+      .orderBy(desc(templates.created_at));
+
+    return new Response(JSON.stringify(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>))), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  
+
   if (request.method === 'POST') {
     if (!userId) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -140,7 +170,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
+
     const body = await request.json();
     const { title, description, is_public, categories, category, tags, sections, items: bodyItems } = body;
 
@@ -150,34 +180,32 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       // Store the full sections structure as items to preserve all content
       items = sections;
     }
-    
+
     const templateId = crypto.randomUUID();
     const slug = await generateUniqueSlug(env, title || '', templateId);
 
     const finalCategories = Array.isArray(categories)
       ? categories
       : (typeof category === 'string' && category ? [category] : []);
-    
-    await env.DB.prepare(
-      'INSERT INTO templates (id, user_id, title, description, items, is_public, category, tags, slug, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(
-      templateId, 
-      userId, 
-      title || '', 
-      description || '', 
-      JSON.stringify(sections || items || []), // Store sections/items
-      is_public ? 1 : 0,
-      JSON.stringify(finalCategories || []),  // Store categories array as JSON
-      JSON.stringify(tags || []),
+
+    await db.insert(templates).values({
+      id: templateId,
+      user_id: userId,
+      title: title || '',
+      description: description || '',
+      items: JSON.stringify(sections || items || []),
+      is_public: Boolean(is_public),
+      category: JSON.stringify(finalCategories || []),
+      tags: JSON.stringify(tags || []),
       slug,
-      new Date().toISOString()
-    ).run();
-    
+      created_at: new Date().toISOString(),
+    });
+
     return new Response(JSON.stringify({ id: templateId, slug }), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  
+
   if (request.method === 'PUT') {
     if (!userId) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -185,17 +213,16 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
-    const url = new URL(request.url);
+
     const templateId = url.pathname.split('/').pop();
-    
+
     if (!templateId || templateId === 'templates') {
       return new Response(JSON.stringify({ error: 'Template ID required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
+
     const body = await request.json();
     const { title, description, is_public, categories, category, tags, slug: requestedSlug } = body;
 
@@ -210,9 +237,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     let nextSlug: string | null = null;
     if (typeof requestedSlug === 'string' && requestedSlug.trim()) {
       nextSlug = generateSlug(requestedSlug.trim());
-      const conflict = await env.DB.prepare('SELECT id FROM templates WHERE slug = ? AND id != ? LIMIT 1')
-        .bind(nextSlug, templateId)
-        .first();
+      const [conflict] = await db
+        .select({ id: templates.id })
+        .from(templates)
+        .where(and(eq(templates.slug, nextSlug), ne(templates.id, templateId)))
+        .limit(1);
+
       if (conflict) {
         nextSlug = `${nextSlug}-${templateId.slice(0, 8)}`;
       }
@@ -221,27 +251,30 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     const finalCategories = Array.isArray(categories)
       ? categories
       : (typeof category === 'string' && category ? [category] : []);
-    
-    await env.DB.prepare(
-      'UPDATE templates SET title = ?, description = ?, items = ?, is_public = ?, category = ?, tags = ?, slug = COALESCE(?, slug), updated_at = ? WHERE id = ? AND user_id = ?'
-    ).bind(
-      title || '',
-      description || '',
-      JSON.stringify(items || []),
-      is_public ? 1 : 0,
-      JSON.stringify(finalCategories || []),  // Store categories array as JSON in category column
-      JSON.stringify(tags || []),
-      nextSlug,
-      new Date().toISOString(),
-      templateId,
-      userId
-    ).run();
-    
+
+    const updates: Record<string, unknown> = {
+      title: title || '',
+      description: description || '',
+      items: JSON.stringify(items || []),
+      is_public: Boolean(is_public),
+      category: JSON.stringify(finalCategories || []),
+      tags: JSON.stringify(tags || []),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (nextSlug) {
+      updates.slug = nextSlug;
+    }
+
+    await db.update(templates)
+      .set(updates)
+      .where(and(eq(templates.id, templateId), eq(templates.user_id, userId)));
+
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  
+
   if (request.method === 'DELETE') {
     if (!userId) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -249,38 +282,38 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
-    const url = new URL(request.url);
+
     const templateId = url.pathname.split('/').pop();
-    
+
     if (!templateId || templateId === 'templates') {
       return new Response(JSON.stringify({ error: 'Template ID required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
+
     // First check if the template exists and belongs to the user
-    const existingTemplate = await env.DB.prepare(
-      'SELECT id FROM templates WHERE id = ? AND user_id = ?'
-    ).bind(templateId, userId).first();
-    
+    const [existingTemplate] = await db
+      .select({ id: templates.id })
+      .from(templates)
+      .where(and(eq(templates.id, templateId), eq(templates.user_id, userId)))
+      .limit(1);
+
     if (!existingTemplate) {
       return new Response(JSON.stringify({ error: 'Template not found or unauthorized' }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
+
     // Now delete the template
-    await env.DB.prepare(
-      'DELETE FROM templates WHERE id = ? AND user_id = ?'
-    ).bind(templateId, userId).run();
-    
+    await db.delete(templates)
+      .where(and(eq(templates.id, templateId), eq(templates.user_id, userId)));
+
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  
+
   return new Response('Method Not Allowed', { status: 405 });
 }

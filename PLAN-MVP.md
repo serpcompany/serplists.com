@@ -66,12 +66,14 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] Add a `typecheck:env` script (hook wiring will be done in Phase 5).
 
 ## Phase 3 - Data layer alignment (third)
-- [ ] Decide migration strategy: replace raw SQL handlers with Drizzle or use Drizzle only for migrations.
-- [ ] Add Drizzle schema mirroring existing tables in `db/migrations/*.sql`.
-- [ ] Add Drizzle config for D1 (see `serp-boilerplate/apps/web/drizzle.config.ts`).
-- [ ] Create migration scripts and a local migration workflow.
-- [ ] Update API handlers to use Drizzle queries incrementally (templates, checklists, auth).
-- [ ] Keep R2 upload handlers as-is, but align docs and env validation.
+### Plan
+- [x] Decide migration strategy: use Drizzle for runtime queries and add Drizzle Kit config; keep SQL migrations as source of truth for now.
+- [x] Add Drizzle schema mirroring existing tables in `db/migrations/*.sql`.
+- [x] Add Drizzle D1 client wrapper for Pages Functions.
+- [x] Update API handlers to use Drizzle queries (auth, templates, checklists).
+- [x] Add Drizzle Kit config and scripts (`db:generate`, `db:migrate`).
+- [x] Update docs to reflect Drizzle usage.
+- [x] Keep R2 upload handlers as-is.
 
 ## Phase 4 - Monitoring, SRE, and tests
 - [ ] Mirror serp-boilerplate hook gates with Lefthook (pre-commit + pre-push).

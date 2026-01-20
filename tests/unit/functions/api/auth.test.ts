@@ -1,6 +1,26 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { handleLogin, handleRegister } from '@functions/api/handlers/auth';
 import bcrypt from 'bcryptjs';
+
+const dbMocks = vi.hoisted(() => {
+  const selectChain = {
+    from: vi.fn(),
+    where: vi.fn(),
+    limit: vi.fn()
+  };
+  const insertChain = {
+    values: vi.fn()
+  };
+  const db = {
+    select: vi.fn(() => selectChain),
+    insert: vi.fn(() => insertChain)
+  };
+
+  return { selectChain, insertChain, db };
+});
+
+vi.mock('drizzle-orm/d1', () => ({
+  drizzle: vi.fn(() => dbMocks.db)
+}));
 
 // Mock bcrypt
 vi.mock('bcryptjs', () => ({
@@ -10,20 +30,21 @@ vi.mock('bcryptjs', () => ({
   }
 }));
 
+import { handleLogin, handleRegister } from '@functions/api/handlers/auth';
+
 describe('Auth Handlers', () => {
   let mockEnv: any;
-  let mockDB: any;
 
   beforeEach(() => {
-    mockDB = {
-      prepare: vi.fn().mockReturnThis(),
-      bind: vi.fn().mockReturnThis(),
-      first: vi.fn(),
-      run: vi.fn()
-    };
+    dbMocks.db.select.mockReturnValue(dbMocks.selectChain);
+    dbMocks.db.insert.mockReturnValue(dbMocks.insertChain);
+    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
+    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    dbMocks.selectChain.limit.mockReset();
+    dbMocks.insertChain.values.mockResolvedValue(undefined);
 
     mockEnv = {
-      DB: mockDB,
+      DB: {},
       JWT_SECRET: 'test-secret'
     };
   });
@@ -37,7 +58,7 @@ describe('Auth Handlers', () => {
         name: 'Test User'
       };
 
-      mockDB.first.mockResolvedValue(mockUser);
+      dbMocks.selectChain.limit.mockResolvedValueOnce([mockUser]);
 
       const request = new Request('http://localhost/api/auth/login', {
         method: 'POST',
@@ -57,7 +78,7 @@ describe('Auth Handlers', () => {
     });
 
     it('should return 401 for invalid credentials', async () => {
-      mockDB.first.mockResolvedValue(null);
+      dbMocks.selectChain.limit.mockResolvedValueOnce([]);
 
       const request = new Request('http://localhost/api/auth/login', {
         method: 'POST',
@@ -74,7 +95,7 @@ describe('Auth Handlers', () => {
 
   describe('handleRegister', () => {
     it('should successfully register a new user', async () => {
-      mockDB.first.mockResolvedValue(null); // No existing user
+      dbMocks.selectChain.limit.mockResolvedValueOnce([]); // No existing user
 
       const request = new Request('http://localhost/api/auth/register', {
         method: 'POST',
@@ -96,7 +117,7 @@ describe('Auth Handlers', () => {
     });
 
     it('should return 400 if user already exists', async () => {
-      mockDB.first.mockResolvedValue({ id: 'existing-user' });
+      dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: 'existing-user' }]);
 
       const request = new Request('http://localhost/api/auth/register', {
         method: 'POST',

@@ -6,7 +6,7 @@ SERP Checklists is a single-page React app backed by Cloudflare Pages Functions.
 ### High-level components
 - **Frontend**: React + Vite app in `src/`
 - **API**: Cloudflare Pages Functions router in `functions/api/[[route]].ts`
-- **Database**: D1 tables managed via `db/migrations/*.sql`
+- **Database**: D1 tables managed via `db/migrations/*.sql` and queried with Drizzle (`functions/api/db.ts`)
 - **Object storage**: R2 bucket bound as `R2_UPLOADS`
 
 ## Request flow

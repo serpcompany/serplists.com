@@ -15,7 +15,7 @@ R2_PUBLIC_BASE_URL=https://your-public-domain
 ```
 
 Notes:
-- `src/lib/api.ts` hard-codes the dev API base to `http://localhost:8788/api`.
+- `src/lib/api.ts` defaults the dev API base to `http://localhost:8788/api` and supports `VITE_API_URL` overrides.
 - `.env.local` exists in the repo but is not read by the app today.
 - Client-side env validation lives in `src/env.ts` (Vite `VITE_` prefix). Optional: `VITE_API_URL` to override the API base.
 
@@ -37,6 +37,8 @@ pnpm run db:query "SELECT * FROM templates LIMIT 5"
 ```
 
 Local D1 state lives under `.wrangler/state/...`. The `db:reset` script clears that local state and replays migrations.
+
+Drizzle schema lives in `db/schema/` (entry: `db/schema/index.ts`); Drizzle Kit config in `db/drizzle.config.ts`.
 
 ## Dev login (local dummy users)
 In development mode (`import.meta.env.DEV`), two helpers are available:

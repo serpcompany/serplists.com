@@ -26,6 +26,16 @@ pnpm run db:backfill-slugs:remote
 pnpm run db:migrate:progress:remote
 ```
 
+Drizzle Kit config lives at `db/drizzle.config.ts` and expects these env vars:
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_DATABASE_ID`
+- `CLOUDFLARE_D1_TOKEN`
+
+```bash
+pnpm run db:generate
+pnpm run db:migrate
+```
+
 ## R2 uploads
 The R2 binding is configured in `wrangler.toml`:
 - Binding: `R2_UPLOADS`

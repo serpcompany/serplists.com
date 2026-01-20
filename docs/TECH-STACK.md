@@ -30,6 +30,7 @@ This document lists the current stack as implemented in the repository. Sources 
 
 ## Storage and services
 - Cloudflare D1 (SQLite) for application data
+- Drizzle ORM + Drizzle Kit for queries and migrations
 - Cloudflare R2 for uploads (`R2_UPLOADS` binding)
 
 ## Tooling and testing

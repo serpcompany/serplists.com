@@ -26,11 +26,16 @@ serp-checklists/
 - `functions/api/handlers/templates.ts`
 - `functions/api/handlers/checklists.ts`
 - `functions/api/handlers/uploads.ts`
+- `functions/api/db.ts` (Drizzle D1 client)
+- `functions/api/env.ts` (env validation)
 - `functions/api/utils/jwt.ts`
 - `functions/api/utils/slug.ts`
 
 ## Data and migrations
 - `db/schema.sql` (legacy snapshot; keep in sync with migrations)
+- `db/schema/` (Drizzle schema used by API handlers; entry `db/schema/index.ts`)
+- `db/types/` (Drizzle model types)
+- `db/drizzle.config.ts` (Drizzle Kit config)
 - `db/migrations/0001_initial_schema.sql` (core tables)
 - `db/migrations/0002_add_slug_to_templates.sql`
 - `db/migrations/0002_add_username_and_profiles.sql`
