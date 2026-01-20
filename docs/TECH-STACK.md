@@ -37,6 +37,7 @@ This document lists the current stack as implemented in the repository. Sources 
 - pnpm
 - ESLint (flat config)
 - Vitest + React Testing Library
+- Playwright for smoke/e2e tests
 - Wrangler for Pages/D1 local dev and deploy
 - `concurrently` for `pnpm run dev:all`
 - `lovable-tagger` for dev-time component tagging in Vite

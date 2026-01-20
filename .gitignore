@@ -44,3 +44,6 @@ __pycache__
 .env.local
 .next
 .github
+playwright-report
+test-results
+tests/test-results

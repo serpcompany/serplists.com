@@ -15,6 +15,10 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:unit": "vitest run",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "sre:dup": "jscpd --ignore \"**/node_modules/**,**/dist/**,**/coverage/**,**/playwright-report/**,**/test-results/**,**/.wrangler/**,**/.turbo/**,**/db/migrations/**\" src functions || true",
     "sre:deps": "depcruise --no-config --exclude \"node_modules|dist|coverage|playwright-report|test-results|\\\\.wrangler|\\\\.turbo|db/migrations\" src functions || true",
     "db:seed": "npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/seed-test-data.sql",
@@ -94,6 +98,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250810.0",
     "@eslint/js": "^9.9.0",
+    "@playwright/test": "^1.57.0",
     "@tailwindcss/typography": "^0.5.15",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^22.5.5",

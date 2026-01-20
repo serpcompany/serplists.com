@@ -6,6 +6,13 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: './tests/setup.ts',
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/playwright-report/**',
+      '**/test-results/**',
+      'tests/e2e/**',
+    ],
   },
   resolve: {
     alias: {

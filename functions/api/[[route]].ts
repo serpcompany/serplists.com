@@ -47,7 +47,11 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
   
   try {
     // Handle specific auth routes
-    if (path === 'auth/register') {
+    if (path === 'health') {
+      response = new Response(JSON.stringify({ status: 'ok' }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } else if (path === 'auth/register') {
       response = await handleRegister(request, env);
     } else if (path === 'auth/login') {
       response = await handleLogin(request, env);
@@ -67,11 +71,18 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       response = new Response('Not Found', { status: 404 });
     }
   } catch (error) {
-    console.error('API Error:', error);
-    response = new Response(JSON.stringify({ error: 'Internal Server Error' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    if (error instanceof SyntaxError) {
+      response = new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } else {
+      console.error('API Error:', error);
+      response = new Response(JSON.stringify({ error: 'Internal Server Error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
   
   // Add CORS headers to all responses

@@ -11,6 +11,7 @@ serp-checklists/
 ├── docs/                # Documentation
 ├── wrangler.toml        # Cloudflare bindings
 ├── vite.config.ts       # Vite config
+├── playwright.config.ts # Playwright config
 ├── tailwind.config.ts   # Tailwind config
 └── package.json         # Scripts and dependencies
 ```
@@ -63,6 +64,7 @@ serp-checklists/
 ## Tests
 - `tests/unit/` - Unit tests for schemas, utils, contexts, and API
 - `tests/integration/` - API integration tests
+- `tests/e2e/` - Playwright smoke/e2e tests
 
 ## Legacy or unused code
 - `src/lib/api/client.ts` is not referenced by the app.

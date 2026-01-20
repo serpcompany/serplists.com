@@ -59,9 +59,18 @@ If login fails, verify:
 2. `pnpm run db:seed` has been executed
 
 ## Testing and checks
+Install Playwright browsers once before running e2e/smoke tests:
+```bash
+pnpm exec playwright install
+```
+
 ```bash
 pnpm run test
 pnpm run test:run
+pnpm run test:unit
+pnpm run test:smoke
+pnpm run test:e2e
+pnpm run test:e2e:ui
 pnpm run typecheck
 pnpm run typecheck:env
 pnpm run lint

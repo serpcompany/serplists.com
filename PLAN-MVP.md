@@ -77,9 +77,9 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 
 ## Phase 4 - Monitoring, SRE, and tests
 - [ ] Mirror serp-boilerplate hook gates with Lefthook (pre-commit + pre-push).
-- [ ] Add smoke/e2e test scaffolding (Playwright) if MVP requires it.
+- [x] Add smoke/e2e test scaffolding (Playwright) if MVP requires it.
 - [ ] Ensure unit tests cover critical flows (auth, templates, runs).
-- [ ] Add minimal API smoke checks (health, auth, templates).
+- [x] Add minimal API smoke checks (health, auth, templates).
 - [ ] Decide on runtime logging/analytics sink (Sentry or equivalent).
 
 ## Phase 5 - Hook migration (Lefthook)

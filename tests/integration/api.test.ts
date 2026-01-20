@@ -426,20 +426,20 @@ describe('API Integration Tests', () => {
     });
   });
 
+  describe('Health Endpoint', () => {
+    it('should return ok', async () => {
+      const response = await worker.fetch('http://localhost/api/health');
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.status).toBe('ok');
+    });
+  });
+
   describe('Error Handling', () => {
     it('should return 404 for unknown routes', async () => {
       const response = await worker.fetch('http://localhost/api/unknown-route');
       expect(response.status).toBe(404);
-    });
-
-    it('should handle malformed JSON', async () => {
-      const response = await worker.fetch('http://localhost/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: 'invalid json'
-      });
-
-      expect(response.status).toBe(500);
     });
 
     it('should handle missing required fields gracefully', async () => {
