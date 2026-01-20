@@ -15,3 +15,13 @@
 - [x] Add Playwright smoke/e2e scaffolding and scripts
 - [x] Add `/api/health` endpoint with integration coverage
 - [x] Replace Husky with Lefthook for git hooks
+- [x] Add Vitest coverage reporting (`test:coverage`)
+- [x] Audit `db/schema.sql` vs migrations; remove or realign
+- [x] Add server-side validation for template/run payloads (Zod)
+- [x] Harden template import/export (accept minimal JSON, legacy `items`, preserve visibility)
+- [x] Add asset warning/docs for imported templates referencing R2 files
+- [ ] Decide billing model + entitlements (Stripe or TBD) and document scope
+- [ ] Add auth hardening plan (rate limits, token storage strategy, reset/verification if needed)
+- [ ] Define security controls (CORS allowlist, upload MIME validation, import limits)
+- [ ] Decide import size/count guardrails (warn-only) and add UX warnings/limits
+- [ ] Document D1 backup/restore + R2 lifecycle policies

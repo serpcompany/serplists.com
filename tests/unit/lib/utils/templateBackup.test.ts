@@ -169,10 +169,10 @@ describe('Template Backup Utilities', () => {
         type: 'application/json'
       });
       
-      const templates = await parseTemplatesFromJSON(file);
+      const result = await parseTemplatesFromJSON(file);
       
-      expect(templates).toHaveLength(1);
-      expect(templates[0].title).toBe('Test Template');
+      expect(result.templates).toHaveLength(1);
+      expect(result.templates[0].title).toBe('Test Template');
     });
 
     it('should parse simple array format', async () => {
@@ -187,8 +187,44 @@ describe('Template Backup Utilities', () => {
       
       const result = await parseTemplatesFromJSON(file);
       
-      expect(result).toHaveLength(2);
-      expect(result[1].title).toBe('Second Template');
+      expect(result.templates).toHaveLength(2);
+      expect(result.templates[1].title).toBe('Second Template');
+    });
+
+    it('should surface warnings for uploaded assets', async () => {
+      const templates = [
+        createMockTemplate({
+          sections: [
+            {
+              id: 'section-1',
+              title: 'Assets',
+              items: [
+                {
+                  id: 'item-1',
+                  title: 'Image',
+                  contents: [
+                    {
+                      id: 'content-1',
+                      type: 'image',
+                      value: '/api/uploads/file?key=template-images/user/file.png',
+                      uploadType: 'upload'
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        })
+      ];
+
+      const file = new File([JSON.stringify(templates)], 'templates.json', {
+        type: 'application/json'
+      });
+
+      const result = await parseTemplatesFromJSON(file);
+
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0].message).toMatch(/uploaded asset/i);
     });
 
 
@@ -303,15 +339,15 @@ describe('Template Backup Utilities', () => {
         createMockTemplate({ id: 'template-2', isPublic: true })
       ];
       
-      const result = prepareTemplatesForImport(templates, 'user-123', true);
+      const result = prepareTemplatesForImport(templates, 'user-123', { visibility: 'public' });
       
       expect(result.every(t => t.isPublic)).toBe(true);
     });
 
-    it('should respect makePublic parameter', () => {
+    it('should respect visibility override', () => {
       const templates = [createMockTemplate({ isPublic: true })];
       
-      const result = prepareTemplatesForImport(templates, 'user-123', false);
+      const result = prepareTemplatesForImport(templates, 'user-123', { visibility: 'private' });
       
       expect(result[0].isPublic).toBe(false);
     });
@@ -419,7 +455,7 @@ describe('Template Backup Utilities', () => {
       
       // Import
       const importedTemplates = await parseTemplatesFromJSON(file);
-      const preparedTemplates = prepareTemplatesForImport(importedTemplates, 'new-user');
+      const preparedTemplates = prepareTemplatesForImport(importedTemplates.templates, 'new-user');
       
       // Verify structure is maintained
       expect(preparedTemplates[0].title).toBe('Complex Template');

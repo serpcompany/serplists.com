@@ -2,6 +2,12 @@
 
 This document describes the JSON format used for template export/import and the content structures stored in D1. Source of truth: `src/lib/schemas/checklistSchema.ts`.
 
+## Storage strategy (D1)
+- `templates.items` stores the full sections JSON today's UI uses (array of sections with nested items/contents).
+- `checklist_runs.items` stores the same sections JSON with completion state.
+- `templates.category` and `templates.tags` store JSON arrays as text.
+- Structured columns (`user_id`, `is_public`, `slug`, timestamps) remain relational for filtering and indexing.
+
 ## Template backup format
 ```ts
 export const templateBackupSchema = z.object({
@@ -33,6 +39,22 @@ export const checklistTemplateSchema = z.object({
   tags: z.array(z.string()).optional(),
 });
 ```
+
+## Import formats (lenient)
+We accept either the full backup format above or a simple array of templates. Minimal template fields:
+- `title` (required)
+- `sections` **or** legacy `items` (required; JSON array, can be a stringified array)
+- Optional: `description`, `categories`/`category`, `tags`, `isPublic`, `slug`
+
+Missing fields are auto-filled during import (ids, timestamps, userId).
+
+### Visibility defaults
+- If `isPublic` is present, it is preserved by default.
+- If missing, templates default to **private** unless the importer overrides visibility.
+
+### Assets
+JSON exports **do not** include R2 assets. If a template references uploaded files
+(`image`/`video`/`file` contents with `uploadType: "upload"`), re-upload assets after import.
 
 Note: `src/types/checklist.ts` includes optional fields like `seoTitle`, `seoDescription`, and `seoUrl`, but they are not required by the Zod schema.
 

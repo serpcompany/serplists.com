@@ -32,9 +32,10 @@ serp-checklists/
 - `functions/api/env.ts` (env validation)
 - `functions/api/utils/jwt.ts`
 - `functions/api/utils/slug.ts`
+- `functions/api/utils/payloads.ts` (payload normalization + Zod validation)
 
 ## Data and migrations
-- `db/schema.sql` (legacy snapshot; keep in sync with migrations)
+- `db/schema.sql` (schema snapshot; keep in sync with migrations)
 - `db/schema/` (Drizzle schema used by API handlers; entry `db/schema/index.ts`)
 - `db/types/` (Drizzle model types)
 - `db/drizzle.config.ts` (Drizzle Kit config)

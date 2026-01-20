@@ -1,14 +1,22 @@
--- Users table (simplified auth)
+-- Schema snapshot (aligned with db/migrations/*.sql)
+
+-- Users table
 CREATE TABLE users (
   id TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
-  password_hash TEXT,
+  password_hash TEXT NOT NULL,
   name TEXT,
   avatar_url TEXT,
-  role TEXT DEFAULT 'user',
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  username TEXT,
+  affiliate_code TEXT,
+  referral_count INTEGER DEFAULT 0,
+  total_earnings REAL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT
 );
+
+CREATE INDEX idx_users_email ON users(email);
+CREATE UNIQUE INDEX idx_users_username ON users(username);
 
 -- Templates table
 CREATE TABLE templates (
@@ -16,78 +24,63 @@ CREATE TABLE templates (
   user_id TEXT NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
+  items TEXT NOT NULL, -- JSON array of sections/items
+  is_public INTEGER DEFAULT 0,
   category TEXT,
-  tags TEXT, -- JSON array stored as text
-  sections TEXT NOT NULL, -- JSON stored as text
-  is_public BOOLEAN DEFAULT false,
-  is_featured BOOLEAN DEFAULT false,
-  view_count INTEGER DEFAULT 0,
-  fork_count INTEGER DEFAULT 0,
-  version INTEGER DEFAULT 1,
-  seo_title TEXT,
-  seo_description TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  tags TEXT, -- JSON array of tags
+  slug TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE INDEX idx_templates_user_id ON templates(user_id);
+CREATE INDEX idx_templates_public ON templates(is_public);
+CREATE INDEX idx_templates_category ON templates(category);
+CREATE INDEX idx_templates_slug ON templates(slug);
+CREATE UNIQUE INDEX idx_templates_slug_unique ON templates(slug);
 
 -- Checklist runs/instances
 CREATE TABLE checklist_runs (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
-  template_id TEXT NOT NULL,
-  template_version INTEGER NOT NULL,
+  template_id TEXT,
   title TEXT NOT NULL,
-  sections TEXT NOT NULL, -- JSON with progress stored as text
-  status TEXT DEFAULT 'in_progress', -- in_progress, completed, archived
-  progress REAL DEFAULT 0,
-  started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  completed_at DATETIME,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  items TEXT NOT NULL, -- JSON array with completion status
+  status TEXT DEFAULT 'in_progress',
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT,
+  progress INTEGER DEFAULT 0,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE SET NULL
 );
 
--- Template favorites
-CREATE TABLE template_favorites (
-  id TEXT PRIMARY KEY,
+CREATE INDEX idx_checklist_runs_user_id ON checklist_runs(user_id);
+CREATE INDEX idx_checklist_runs_template_id ON checklist_runs(template_id);
+CREATE INDEX idx_checklist_runs_status ON checklist_runs(status);
+
+-- Template likes
+CREATE TABLE template_likes (
   user_id TEXT NOT NULL,
   template_id TEXT NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(user_id, template_id),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, template_id),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
 );
 
--- Template forks
-CREATE TABLE template_forks (
+-- Analytics/Usage tracking
+CREATE TABLE usage_analytics (
   id TEXT PRIMARY KEY,
-  original_template_id TEXT NOT NULL,
-  forked_template_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (original_template_id) REFERENCES templates(id) ON DELETE CASCADE,
-  FOREIGN KEY (forked_template_id) REFERENCES templates(id) ON DELETE CASCADE,
+  action TEXT NOT NULL, -- template_created, checklist_started, checklist_completed
+  resource_id TEXT,
+  metadata TEXT, -- JSON for additional data
+  created_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Sessions for auth
-CREATE TABLE sessions (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  token TEXT UNIQUE NOT NULL,
-  expires_at DATETIME NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
--- Indexes for performance
-CREATE INDEX idx_templates_user_id ON templates(user_id);
-CREATE INDEX idx_templates_is_public ON templates(is_public);
-CREATE INDEX idx_templates_category ON templates(category);
-CREATE INDEX idx_checklist_runs_user_id ON checklist_runs(user_id);
-CREATE INDEX idx_checklist_runs_template_id ON checklist_runs(template_id);
-CREATE INDEX idx_checklist_runs_status ON checklist_runs(status);
-CREATE INDEX idx_sessions_token ON sessions(token);
-CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX idx_usage_analytics_user_id ON usage_analytics(user_id);
+CREATE INDEX idx_usage_analytics_action ON usage_analytics(action);

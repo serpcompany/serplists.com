@@ -14,7 +14,8 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 3) Data layer alignment  
 4) Monitoring/SRE & tests  
 5) Hook migration (Lefthook)  
-6) UI alignment (serpui) — **explicitly scheduled last**
+6) Product readiness (auth, entitlements, payments, security, services)  
+7) UI alignment (serpui) — **explicitly scheduled last**
 
 ## Non-goals (for now)
 - Re-architecture of the entire frontend (unless required for serpui alignment).
@@ -75,10 +76,24 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] Update docs to reflect Drizzle usage.
 - [x] Keep R2 upload handlers as-is.
 
+### Follow-up: schema + JSON strategy
+- [x] Audit legacy `db/schema.sql` vs migrations; remove or realign to avoid drift.
+- [x] Confirm JSON storage approach: keep `templates.items` and `checklist_runs.items` as JSON text + retain structured columns (`user_id`, `status`, `is_public`, `slug`, timestamps).
+- [x] Add server-side validation (Zod) for templates/runs payloads to prevent invalid JSON in D1.
+- [ ] Add guardrails for import size/count (warn-only).
+- [x] Add partial failure reporting for imports (warn-only).
+
+### Template import/export hardening
+- [x] Accept minimal JSON templates (title + sections), auto-fill ids/timestamps, and support legacy `items` arrays.
+- [x] Export only current user's templates by default; add explicit option to include public templates.
+- [x] Preserve public/private flags on import or provide a toggle.
+- [x] Warn when imported templates reference R2 assets (no auto-copy yet) and document limitations.
+
 ## Phase 4 - Monitoring, SRE, and tests
 - [x] Mirror serp-boilerplate hook gates with Lefthook (pre-commit + pre-push).
 - [x] Add smoke/e2e test scaffolding (Playwright) if MVP requires it.
-- [ ] Ensure unit tests cover critical flows (auth, templates, runs).
+- [x] Add Vitest coverage reporting (warn-only).
+- [x] Ensure unit tests cover critical flows (auth, templates, runs).
 - [x] Add minimal API smoke checks (health, auth, templates).
 - [ ] Decide on runtime logging/analytics sink (Sentry or equivalent).
 
@@ -87,7 +102,39 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] Mirror `serp-boilerplate` hook commands with project scripts.
 - [x] Ensure `pnpm install` installs hooks (`prepare` script).
 
-## Phase 6 - UI alignment with serp-boilerplate (serpui) (last)
+## Phase 6 - Product readiness (auth, entitlements, payments, security, services)
+### Payments (Stripe)
+- **Current**: no Stripe SDK, no billing tables, no webhook endpoint, no entitlements in API/UI.
+- [ ] Decide billing model (free/pro, trial, usage-based) and plan mapping.
+- [ ] Add Stripe integration: customer + subscription mapping, webhook handler with signature verification, idempotency, and retries.
+- [ ] Store entitlement state (D1 table or billing cache) and gate API/UI features accordingly.
+- [ ] Add billing entry point in Account settings (manage subscription, invoices).
+
+### Auth & entitlements hardening
+- **Current**: custom JWT stored in `localStorage`, no refresh/revocation, no rate limiting, no email verification/reset.
+- [ ] Decide token storage strategy (httpOnly cookies vs localStorage) and session revocation flow.
+- [ ] Add rate limiting for `/api/auth/*` and sensitive write endpoints.
+- [ ] Add password reset + email verification (if in MVP scope).
+- [ ] Define entitlement checks per endpoint (e.g., template limits, export/import limits).
+
+### Payload validation & data hygiene
+- **Current**: API accepts unvalidated JSON for templates/runs; client-only validation on backup import.
+- [ ] Add server-side Zod validation for template + run payloads and return consistent 4xx errors.
+- [ ] Enforce payload size limits for JSON bodies and import files.
+- [ ] Add schema versioning for template JSON to support future migrations.
+
+### Security & abuse controls
+- **Current**: CORS is `*`; uploads only validate size + bucket; public files are key-addressable.
+- [ ] Decide CORS policy for production (allow-list frontend origin).
+- [ ] Add server-side MIME/type allowlists per upload bucket.
+- [ ] Add import guardrails (max templates per import, per-user rate limits).
+
+### Services & ops readiness
+- **Current**: D1 + R2 only; no documented backup/restore or lifecycle policies.
+- [ ] Document D1 backup/restore and R2 lifecycle rules (Cloudflare settings).
+- [ ] Add runbook for incident response (what to check first, where logs live).
+
+## Phase 7 - UI alignment with serp-boilerplate (serpui) (last)
 - [ ] Align shadcn style and base color (`new-york` + `neutral`) or document divergence.
 - [ ] Update Tailwind/theme tokens to match serpui (as applicable in a Vite app).
 - [ ] Audit key screens (Login, Template Editor, Checklist Run) for UI parity.
@@ -101,3 +148,4 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [ ] UI aligned with serpui guidelines (or explicit divergence documented).
 - [ ] Pre-commit/pre-push hooks run via Lefthook.
 - [ ] Basic monitoring/alerting decision documented and stubbed in code.
+- [ ] Billing/entitlements approach documented (even if “not in MVP”).

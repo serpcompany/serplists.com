@@ -13,4 +13,4 @@ This list reflects verified limitations and cleanup opportunities based on the c
 
 ## Code cleanup
 - `src/lib/api/client.ts` is unused by the app.
-- `db/schema.sql` is a legacy snapshot and should be kept aligned with `db/migrations/` to avoid confusion.
+- Keep `db/schema.sql` aligned with `db/migrations/` to avoid drift.

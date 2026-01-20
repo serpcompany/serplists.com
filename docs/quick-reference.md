@@ -10,6 +10,7 @@ pnpm run preview
 pnpm run test
 pnpm run test:run
 pnpm run test:unit
+pnpm run test:coverage
 pnpm run test:smoke
 pnpm run test:e2e
 pnpm run test:e2e:ui

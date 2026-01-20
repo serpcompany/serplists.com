@@ -13,6 +13,20 @@ export default defineConfig({
       '**/test-results/**',
       'tests/e2e/**',
     ],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'lcov'],
+      reportsDirectory: 'coverage',
+      include: ['src/**/*.{ts,tsx}', 'functions/**/*.{ts,tsx}'],
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/tests/**',
+        '**/*.d.ts',
+        'tests/e2e/**',
+      ],
+      all: true,
+    },
   },
   resolve: {
     alias: {

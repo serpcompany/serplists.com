@@ -46,4 +46,4 @@ This document lists the current stack as implemented in the repository. Sources 
 
 ## Legacy or unused code
 - `src/lib/api/client.ts` is not referenced by current app code.
-- `db/schema.sql` is a legacy snapshot; migrations in `db/migrations/` are the source of truth.
+- `db/schema.sql` is a schema snapshot; migrations in `db/migrations/` are the source of truth.

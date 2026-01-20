@@ -47,3 +47,4 @@ __pycache__
 playwright-report
 test-results
 tests/test-results
+coverage

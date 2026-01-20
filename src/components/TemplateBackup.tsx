@@ -5,18 +5,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download, Upload, FileText, AlertCircle, CheckCircle } from "lucide-react";
 import { useTemplates } from "@/contexts/TemplatesContext";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
 import { exportTemplatesToJSON, downloadBackupFile, parseTemplatesFromJSON } from "@/lib/utils/templateBackup";
-import { ChecklistTemplate } from "@/lib/schemas/checklistSchema";
+import type { TemplateImportResult } from "@/lib/utils/templateBackup";
+import type { ChecklistTemplate } from "@/lib/schemas/checklistSchema";
+import type { TemplateImportOptions } from "@/types/checklist";
 interface TemplateBackupProps {
   className?: string;
 }
 export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   className
 }) => {
+  type ImportVisibility = NonNullable<TemplateImportOptions["visibility"]>;
   const {
     templates,
     importTemplates
@@ -25,14 +30,32 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     user
   } = useAuth();
   const [isImporting, setIsImporting] = useState(false);
-  const [importPreview, setImportPreview] = useState<ChecklistTemplate[] | null>(null);
+  const [importPreview, setImportPreview] = useState<TemplateImportResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [includePublicTemplates, setIncludePublicTemplates] = useState(false);
+  const [importVisibility, setImportVisibility] = useState<ImportVisibility>("preserve");
+
+  const ownedTemplates = user ? templates.filter(t => t.userId === user.id) : [];
+  const communityTemplates = templates.filter(t => t.isPublic && t.userId !== user?.id);
+  const templatesToExport = includePublicTemplates
+    ? [...ownedTemplates, ...communityTemplates]
+    : ownedTemplates;
 
   const handleExportAll = () => {
+    if (!user) {
+      toast.error("Log in to export your templates");
+      return;
+    }
+
+    if (templatesToExport.length === 0) {
+      toast.error("No templates available to export");
+      return;
+    }
+
     try {
-      const backup = exportTemplatesToJSON(templates, user?.email);
+      const backup = exportTemplatesToJSON(templatesToExport, user?.email);
       downloadBackupFile(backup);
-      toast.success(`Exported ${templates.length} templates successfully`);
+      toast.success(`Exported ${templatesToExport.length} templates successfully`);
     } catch (error) {
       toast.error("Failed to export templates");
       console.error("Export error:", error);
@@ -50,7 +73,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     try {
       const parsedTemplates = await parseTemplatesFromJSON(file);
       setImportPreview(parsedTemplates);
-      toast.success(`Preview: ${parsedTemplates.length} templates ready to import`);
+      toast.success(`Preview: ${parsedTemplates.templates.length} templates ready to import`);
     } catch (error) {
       toast.error(`Failed to parse file: ${(error as Error).message}`);
       setImportPreview(null);
@@ -63,8 +86,14 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     setIsImporting(true);
     try {
       // The importPreview has already been validated by parseTemplatesFromJSON
-      await importTemplates(importPreview as unknown);
-      toast.success(`Successfully imported ${importPreview.length} templates`);
+      const result = await importTemplates(importPreview.templates, {
+        visibility: importVisibility
+      });
+      if (result.failed.length > 0) {
+        toast.error(`Imported ${result.imported} templates. ${result.failed.length} failed.`);
+      } else {
+        toast.success(`Successfully imported ${result.imported} templates`);
+      }
       setImportPreview(null);
       setSelectedFile(null);
       // Reset file input
@@ -201,8 +230,8 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     downloadBackupFile(sampleBackup, "sample-moving-checklist.json");
     toast.success("Sample template downloaded! You can now import this file to see how it works.");
   };
-  const publicTemplateCount = templates.filter(t => t.isPublic).length;
-  const privateTemplateCount = templates.filter(t => !t.isPublic).length;
+  const publicTemplateCount = ownedTemplates.filter(t => t.isPublic).length;
+  const privateTemplateCount = ownedTemplates.filter(t => !t.isPublic).length;
   return <div className={className}>
 	      <Card>
 	        <CardHeader>
@@ -218,8 +247,8 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
           {/* Current Templates Stats */}
           <div className="grid grid-cols-3 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold">{templates.length}</div>
-              <div className="text-sm text-muted-foreground">Total Templates</div>
+              <div className="text-2xl font-bold">{ownedTemplates.length}</div>
+              <div className="text-sm text-muted-foreground">My Templates</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">{publicTemplateCount}</div>
@@ -236,9 +265,25 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 	          {/* Export Section */}
 	          <div className="space-y-4">
 	            <h3 className="text-lg font-semibold">Export Templates</h3>
-	            <Button onClick={handleExportAll} className="flex items-center gap-2">
+              <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+                <div>
+                  <Label htmlFor="include-public-templates" className="text-sm font-medium">
+                    Include public community templates
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Exports your templates plus any public templates you can see.
+                  </p>
+                </div>
+                <Switch
+                  id="include-public-templates"
+                  checked={includePublicTemplates}
+                  onCheckedChange={setIncludePublicTemplates}
+                  disabled={!user}
+                />
+              </div>
+	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={!user}>
 	              <Download className="h-4 w-4" />
-	              Export All My Templates
+	              Export My Templates
 	            </Button>
 	          </div>
 
@@ -247,6 +292,22 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 	          {/* Import Section */}
 	          <div className="space-y-4">
 	            <h3 className="text-lg font-semibold">Import Templates</h3>
+              <div className="space-y-2">
+                <Label>Import visibility</Label>
+                <Select value={importVisibility} onValueChange={(value) => setImportVisibility(value as ImportVisibility)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose visibility" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="preserve">Preserve visibility from file</SelectItem>
+                    <SelectItem value="public">Force public</SelectItem>
+                    <SelectItem value="private">Force private</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Templates missing a visibility flag default to private.
+                </p>
+              </div>
 	            <div className="space-y-2">
 	              <Label htmlFor="template-file-input">Select a JSON template file</Label>
 	              <Input id="template-file-input" type="file" accept=".json" onChange={handleFileSelect} disabled={isImporting} />
@@ -268,16 +329,16 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center gap-4">
-                    <Badge variant="secondary">{importPreview.length} templates</Badge>
+                    <Badge variant="secondary">{importPreview.templates.length} templates</Badge>
                     <Badge variant="outline">
-                      {importPreview.filter(t => t.isPublic).length} public
+                      {importPreview.templates.filter(t => t.isPublic).length} public
                     </Badge>
                   </div>
                   
                   <div className="space-y-2">
                     <h4 className="font-medium">Templates to import:</h4>
                     <div className="max-h-40 overflow-y-auto space-y-1">
-                      {importPreview.map((template, index: number) => <div key={index} className="text-sm p-2 bg-muted rounded">
+                      {importPreview.templates.map((template, index: number) => <div key={index} className="text-sm p-2 bg-muted rounded">
                           <div className="font-medium">{template.title}</div>
                           {template.description && <div className="text-muted-foreground truncate">{template.description}</div>}
                           <div className="text-xs text-muted-foreground">
@@ -286,6 +347,22 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                         </div>)}
                     </div>
                   </div>
+
+                  {importPreview.warnings.length > 0 && <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="font-medium text-amber-800 dark:text-amber-200">
+                            Import Warnings
+                          </p>
+                          <ul className="text-amber-700 dark:text-amber-300 mt-1 space-y-1">
+                            {importPreview.warnings.map((warning, index: number) => <li key={index}>
+                                • {warning.templateTitle}: {warning.message}
+                              </li>)}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>}
 
                   <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
                     <div className="flex items-start gap-2">
@@ -296,9 +373,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                         </p>
                         <ul className="text-yellow-700 dark:text-yellow-300 mt-1 space-y-1">
                           <li>• Templates will be assigned new unique IDs</li>
-                          <li>• All imported templates will be marked as public</li>
+                          <li>• Visibility follows your selection above</li>
                           <li>• Existing templates won&apos;t be affected</li>
                           <li>• Slugs will be regenerated to avoid conflicts</li>
+                          <li>• Uploaded assets are not copied; re-upload if needed</li>
                         </ul>
                       </div>
                     </div>

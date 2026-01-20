@@ -2,6 +2,7 @@ import { Env } from '../types';
 import { verifyJWT } from '../utils/jwt';
 import { and, desc, eq } from 'drizzle-orm';
 import { createDb, schema } from '../db';
+import { checklistPayloadSchema, normalizeSectionsPayload } from '../utils/payloads';
 
 export async function handleChecklists(request: Request, env: Env): Promise<Response> {
   const authHeader = request.headers.get('Authorization');
@@ -53,19 +54,42 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
   }
 
   if (request.method === 'POST') {
-    const { template_id, title, items, sections, status } = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid JSON payload' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const parsed = checklistPayloadSchema.safeParse(body);
+    if (!parsed.success) {
+      return new Response(JSON.stringify({ error: parsed.error.issues[0]?.message || 'Invalid checklist payload' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const { template_id, title, items, sections, status } = parsed.data;
     const checklistId = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    // Prefer rich sections payload; fall back to legacy flat items.
-    const storedItems = sections ?? items ?? [];
+    const normalizedSections = normalizeSectionsPayload(sections ?? items);
+    if (normalizedSections.error) {
+      return new Response(JSON.stringify({ error: normalizedSections.error }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
     await db.insert(checklist_runs).values({
       id: checklistId,
       user_id: userId,
       template_id: template_id ?? null,
-      title,
-      items: JSON.stringify(storedItems),
+      title: title || '',
+      items: JSON.stringify(normalizedSections.sections),
       status: status || 'in_progress',
       started_at: now,
       created_at: now,
@@ -86,7 +110,26 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       });
     }
 
-    const { title, items, sections, status, progress, completed_at } = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid JSON payload' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const parsed = checklistPayloadSchema.safeParse(body);
+    if (!parsed.success) {
+      return new Response(JSON.stringify({ error: parsed.error.issues[0]?.message || 'Invalid checklist payload' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const { title, items, sections, status, progress, completed_at } = parsed.data;
+    const rawBody = body as Record<string, unknown>;
 
     // Build dynamic update query
     const updates: Record<string, unknown> = {};
@@ -94,9 +137,15 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     if (title !== undefined) {
       updates.title = title;
     }
-    const itemsToStore = sections !== undefined ? sections : items;
-    if (itemsToStore !== undefined) {
-      updates.items = JSON.stringify(itemsToStore);
+    if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
+      const normalizedSections = normalizeSectionsPayload(sections ?? items);
+      if (normalizedSections.error) {
+        return new Response(JSON.stringify({ error: normalizedSections.error }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      updates.items = JSON.stringify(normalizedSections.sections);
     }
     if (status !== undefined) {
       updates.status = status;

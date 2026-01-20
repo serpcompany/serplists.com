@@ -3,6 +3,7 @@ import { verifyJWT } from '../utils/jwt';
 import { generateSlug } from '../utils/slug';
 import { and, desc, eq, ne, or } from 'drizzle-orm';
 import { createDb, schema } from '../db';
+import { normalizeSectionsPayload, normalizeStringArray, templatePayloadSchema } from '../utils/payloads';
 
 async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
   const base = generateSlug(title || 'template') || 'template';
@@ -33,36 +34,20 @@ async function generateUniqueSlug(env: Env, title: string, templateId: string): 
 
 function parseTemplateRow(template: Record<string, unknown>) {
   let sections: unknown[] = [];
-  if (template.items) {
-    const parsedItems = typeof template.items === 'string' ? JSON.parse(template.items) : template.items;
-    // Check if items is already in sections format (has id, title, items properties)
-    if (Array.isArray(parsedItems) && parsedItems.length > 0 && typeof (parsedItems[0] as Record<string, unknown>)?.items !== 'undefined') {
-      sections = parsedItems;
+  if (typeof template.items !== 'undefined') {
+    const normalized = normalizeSectionsPayload(template.items);
+    if (normalized.error) {
+      console.warn('Failed to parse template items JSON', { templateId: template.id });
     } else {
-      // Legacy format - wrap in a single section
-      sections = [{
-        id: '1',
-        title: 'Checklist',
-        items: parsedItems
-      }];
-    }
-  }
-
-  // Parse categories - handle both single string and JSON array
-  let categories: unknown[] = [];
-  if (template.category) {
-    try {
-      categories = JSON.parse(String(template.category));
-    } catch {
-      categories = [template.category];
+      sections = normalized.sections;
     }
   }
 
   return {
     ...template,
     sections,
-    categories,
-    tags: typeof template.tags === 'string' ? JSON.parse(template.tags || '[]') : (template.tags || [])
+    categories: normalizeStringArray(template.category),
+    tags: normalizeStringArray(template.tags)
   };
 }
 
@@ -171,32 +156,50 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       });
     }
 
-    const body = await request.json();
-    const { title, description, is_public, categories, category, tags, sections, items: bodyItems } = body;
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid JSON payload' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
-    // Handle both items and sections format
-    let items = bodyItems;
-    if (!items && sections) {
-      // Store the full sections structure as items to preserve all content
-      items = sections;
+    const parsed = templatePayloadSchema.safeParse(body);
+    if (!parsed.success) {
+      return new Response(JSON.stringify({ error: parsed.error.issues[0]?.message || 'Invalid template payload' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const { title, description, is_public, categories, category, tags, sections, items: bodyItems } = parsed.data;
+
+    const normalizedSections = normalizeSectionsPayload(sections ?? bodyItems);
+    if (normalizedSections.error) {
+      return new Response(JSON.stringify({ error: normalizedSections.error }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     const templateId = crypto.randomUUID();
     const slug = await generateUniqueSlug(env, title || '', templateId);
 
-    const finalCategories = Array.isArray(categories)
-      ? categories
-      : (typeof category === 'string' && category ? [category] : []);
+    const finalCategories = normalizeStringArray(categories ?? category);
+    const finalTags = normalizeStringArray(tags);
+    const isPublic = typeof is_public === 'boolean' ? is_public : false;
 
     await db.insert(templates).values({
       id: templateId,
       user_id: userId,
       title: title || '',
       description: description || '',
-      items: JSON.stringify(sections || items || []),
-      is_public: Boolean(is_public),
-      category: JSON.stringify(finalCategories || []),
-      tags: JSON.stringify(tags || []),
+      items: JSON.stringify(normalizedSections.sections),
+      is_public: isPublic,
+      category: JSON.stringify(finalCategories),
+      tags: JSON.stringify(finalTags),
       slug,
       created_at: new Date().toISOString(),
     });
@@ -223,15 +226,26 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       });
     }
 
-    const body = await request.json();
-    const { title, description, is_public, categories, category, tags, slug: requestedSlug } = body;
-
-    // Handle both items and sections format
-    let items = body.items;
-    if (!items && body.sections) {
-      // Store the full sections structure as items to preserve all content
-      items = body.sections;
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid JSON payload' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
+
+    const parsed = templatePayloadSchema.safeParse(body);
+    if (!parsed.success) {
+      return new Response(JSON.stringify({ error: parsed.error.issues[0]?.message || 'Invalid template payload' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const { title, description, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
+    const rawBody = body as Record<string, unknown>;
 
     // Only update slug if explicitly provided (avoid breaking shared URLs on title edits).
     let nextSlug: string | null = null;
@@ -248,19 +262,37 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       }
     }
 
-    const finalCategories = Array.isArray(categories)
-      ? categories
-      : (typeof category === 'string' && category ? [category] : []);
-
     const updates: Record<string, unknown> = {
-      title: title || '',
-      description: description || '',
-      items: JSON.stringify(items || []),
-      is_public: Boolean(is_public),
-      category: JSON.stringify(finalCategories || []),
-      tags: JSON.stringify(tags || []),
       updated_at: new Date().toISOString(),
     };
+
+    if (typeof title !== 'undefined') {
+      updates.title = title || '';
+    }
+    if (typeof description !== 'undefined') {
+      updates.description = description || '';
+    }
+    if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
+      const normalizedSections = normalizeSectionsPayload(sections ?? bodyItems);
+      if (normalizedSections.error) {
+        return new Response(JSON.stringify({ error: normalizedSections.error }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      updates.items = JSON.stringify(normalizedSections.sections);
+    }
+    if (Object.prototype.hasOwnProperty.call(rawBody, 'is_public') && typeof is_public === 'boolean') {
+      updates.is_public = is_public;
+    }
+    if (Object.prototype.hasOwnProperty.call(rawBody, 'categories') || Object.prototype.hasOwnProperty.call(rawBody, 'category')) {
+      const finalCategories = normalizeStringArray(categories ?? category);
+      updates.category = JSON.stringify(finalCategories);
+    }
+    if (Object.prototype.hasOwnProperty.call(rawBody, 'tags')) {
+      const finalTags = normalizeStringArray(tags);
+      updates.tags = JSON.stringify(finalTags);
+    }
 
     if (nextSlug) {
       updates.slug = nextSlug;
