@@ -1,4 +1,4 @@
--- Cleanup seed/test data inserted by `migrations/seed-test-data.sql`.
+-- Cleanup seed/test data inserted by `db/migrations/seed-test-data.sql`.
 -- Safe target: only users with ids `user-1..user-4` and/or emails ending in `@test.com`.
 
 -- Preview counts
@@ -45,4 +45,3 @@ WHERE id IN ('user-1', 'user-2', 'user-3', 'user-4') OR email LIKE '%@test.com';
 SELECT 'users_after' AS table_name, COUNT(*) AS count
 FROM users
 WHERE id IN ('user-1', 'user-2', 'user-3', 'user-4') OR email LIKE '%@test.com';
-

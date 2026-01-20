@@ -1,100 +1,44 @@
-# README 
+# SERP Checklists
 
-SERP Checklists is a powerful web application for creating, managing, and sharing process checklists. It helps teams standardize procedures, ensure consistency, and track completion across an organization.
-
+SERP Checklists is a web app for building checklist templates and running checklists with progress tracking. It supports public sharing and user profiles.
 
 ## Features
+- Create templates with sections, items, and rich content (markdown text, images, videos, files, embeds, sub-tasks)
+- Public and private templates with shareable slugs
+- Checklist runs with progress tracking
+- Public library, category browsing, and user profile pages
+- Template import/export (JSON backup)
 
-- [x] **User Authentication**
-  - [x] Register new accounts
-  - [x] Login with email and password
-  - [x] Demo login for quick testing
+## Tech stack
+- Frontend: React 18, TypeScript, Vite (SWC), Tailwind CSS, shadcn/ui (Radix UI)
+- Routing/metadata: React Router, react-helmet-async
+- State/data: React Context + TanStack React Query
+- Forms/validation: React Hook Form + Zod
+- Backend: Cloudflare Pages Functions (TypeScript)
+- Data: Cloudflare D1 (SQLite)
+- File storage: Cloudflare R2
+- Auth: Email/password with bcryptjs + custom JWT
 
-- [x] **Checklist Template Management**
-  - [x] Create detailed checklist templates
-  - [x] Organize templates with sections and items
-  - [x] Edit and delete templates
-  - [x] All templates are public by default with shareable URLs
+## Quickstart
+1. pnpm install
+2. Ensure `.dev.vars` has `JWT_SECRET` and `FRONTEND_URL` (see `docs/DEVELOPMENT.md`)
+3. pnpm run dev (frontend at http://localhost:8080)
+4. pnpm run dev:api (API at http://localhost:8788; run `pnpm run build` if `dist/` is missing)
+5. Optional: pnpm run dev:all to run both
 
-- [x] **Rich Checklist Content**
-  - [x] Support for text content (markdown)
-  - [x] Support for images
-  - [x] Support for video links
-  - [x] Support for sub-tasks/sub-items
+## Local database and seed data
+- pnpm run db:seed
+- pnpm run db:reset
 
-- [x] **Checklist Runs**
-  - [x] Create runs from templates
-  - [x] Track progress through checklist items
-  - [x] Mark items as completed
-  - [x] View completion percentage
+## Dev login (local dummy users)
+- In dev, a DevLoginBar and quick-fill buttons appear on the login page.
+- Seed users are defined in `db/migrations/seed-test-data.sql`.
+- Emails: admin@test.com, john@test.com, jane@test.com, bob@test.com
+- Password: password123
 
-- [x] **Public Sharing**
-  - [x] Public URLs for each checklist (e.g., /checklists/my-checklist)
-  - [x] Share checklists with anyone, even without an account
-  - [x] Public checklist discovery on the homepage
-
-
-## Tech Stack
-
-- React (with TypeScript)
-- Tailwind CSS for styling
-- shadcn/ui component library
-- React Router for navigation
-- Supabase for backend (database, authentication)
-- React Query for data fetching and caching
-- Zod for schema validation
-
-## Checklist Template Field Types
-
-### Content Types (`ChecklistItemContent`)
-
-**Text Field** (`type: "text"`)
-- `value`: Markdown text content
-
-**Image Embed** (`type: "image"`)
-- `value`: Image URL
-
-**Video Embed** (`type: "video"`)
-- `value`: Video URL (YouTube, etc.)
-
-**Sub-Items Checklist** (`type: "subItems"`)
-- `value`: Empty string
-- `subItems`: Array of sub-tasks with:
-  - `id`: Unique identifier
-  - `title`: Sub-task title
-  - `isCompleted`: Boolean completion state
-
-### Template Structure
-
-**Item Structure:**
-- `id`: Unique identifier
-- `title`: Item title
-- `description`: Optional description text
-- `contents`: Array of content types above
-- `isCompleted`: Boolean completion state
-
-**Template Structure:**
-- `id`, `title`, `description`
-- `sections`: Array of sections containing items
-- `userId`, `createdAt`, `updatedAt`
-- `isPublic`: Boolean visibility
-- `slug`: URL-friendly identifier
-
-### Missing Field Types (Future Enhancements)
-- Rich text editor
-- File upload
-- Date/time picker
-- Number input
-- Dropdown/select
-- Radio buttons
-- Advanced checkboxes
-
-## Project Structure
-
-- `/src/components` - UI components
-- `/src/contexts` - React contexts for state management
-- `/src/pages` - Application pages/routes
-- `/src/hooks` - Custom React hooks
-- `/src/lib/schemas` - Zod validation schemas
-- `/src/lib/utils` - Utility functions including backup/restore
-- `/src/integrations` - Third-party integrations (Supabase)
+## Documentation
+- docs/index.md
+- docs/ARCHITECTURE.md
+- docs/DEVELOPMENT.md
+- docs/OPERATIONS.md
+- docs/TECH-STACK.md
