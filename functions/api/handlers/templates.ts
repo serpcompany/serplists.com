@@ -4,6 +4,7 @@ import { generateSlug } from '../utils/slug';
 import { and, desc, eq, ne, or } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { normalizeSectionsPayload, normalizeStringArray, templatePayloadSchema } from '../utils/payloads';
+import { json, jsonError } from '../utils/response';
 
 async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
   const base = generateSlug(title || 'template') || 'template';
@@ -65,10 +66,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     if (templatesSubpath[0] === 'public') {
       const targetUserId = url.searchParams.get('userId');
       if (!targetUserId) {
-        return new Response(JSON.stringify({ error: 'userId required' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return jsonError('userId required', 400);
       }
 
       const rows = await db
@@ -77,9 +75,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         .where(and(eq(templates.is_public, true), eq(templates.user_id, targetUserId)))
         .orderBy(desc(templates.created_at));
 
-      return new Response(JSON.stringify(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>))), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
     }
 
     // GET /api/templates/slug/:slug
@@ -96,15 +92,10 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         .limit(1);
 
       if (!template) {
-        return new Response(JSON.stringify({ error: 'Template not found' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return jsonError('Template not found', 404);
       }
 
-      return new Response(JSON.stringify(parseTemplateRow(template as unknown as Record<string, unknown>)), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json(parseTemplateRow(template as unknown as Record<string, unknown>));
     }
 
     // GET /api/templates/:id
@@ -121,15 +112,10 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         .limit(1);
 
       if (!template) {
-        return new Response(JSON.stringify({ error: 'Template not found' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return jsonError('Template not found', 404);
       }
 
-      return new Response(JSON.stringify(parseTemplateRow(template as unknown as Record<string, unknown>)), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json(parseTemplateRow(template as unknown as Record<string, unknown>));
     }
 
     // GET /api/templates (list)
@@ -143,45 +129,31 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       .where(whereClause)
       .orderBy(desc(templates.created_at));
 
-    return new Response(JSON.stringify(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>))), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
   }
 
   if (request.method === 'POST') {
     if (!userId) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('Unauthorized', 401);
     }
 
     let body: unknown;
     try {
       body = await request.json();
     } catch {
-      return new Response(JSON.stringify({ error: 'Invalid JSON payload' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('Invalid JSON payload', 400);
     }
 
     const parsed = templatePayloadSchema.safeParse(body);
     if (!parsed.success) {
-      return new Response(JSON.stringify({ error: parsed.error.issues[0]?.message || 'Invalid template payload' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
     }
 
     const { title, description, is_public, categories, category, tags, sections, items: bodyItems } = parsed.data;
 
     const normalizedSections = normalizeSectionsPayload(sections ?? bodyItems);
     if (normalizedSections.error) {
-      return new Response(JSON.stringify({ error: normalizedSections.error }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError(normalizedSections.error, 400);
     }
 
     const templateId = crypto.randomUUID();
@@ -204,44 +176,30 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       created_at: new Date().toISOString(),
     });
 
-    return new Response(JSON.stringify({ id: templateId, slug }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json({ id: templateId, slug });
   }
 
   if (request.method === 'PUT') {
     if (!userId) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('Unauthorized', 401);
     }
 
     const templateId = url.pathname.split('/').pop();
 
     if (!templateId || templateId === 'templates') {
-      return new Response(JSON.stringify({ error: 'Template ID required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('Template ID required', 400);
     }
 
     let body: unknown;
     try {
       body = await request.json();
     } catch {
-      return new Response(JSON.stringify({ error: 'Invalid JSON payload' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('Invalid JSON payload', 400);
     }
 
     const parsed = templatePayloadSchema.safeParse(body);
     if (!parsed.success) {
-      return new Response(JSON.stringify({ error: parsed.error.issues[0]?.message || 'Invalid template payload' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
     }
 
     const { title, description, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
@@ -275,10 +233,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
       const normalizedSections = normalizeSectionsPayload(sections ?? bodyItems);
       if (normalizedSections.error) {
-        return new Response(JSON.stringify({ error: normalizedSections.error }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return jsonError(normalizedSections.error, 400);
       }
       updates.items = JSON.stringify(normalizedSections.sections);
     }
@@ -302,26 +257,18 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       .set(updates)
       .where(and(eq(templates.id, templateId), eq(templates.user_id, userId)));
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json({ success: true });
   }
 
   if (request.method === 'DELETE') {
     if (!userId) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('Unauthorized', 401);
     }
 
     const templateId = url.pathname.split('/').pop();
 
     if (!templateId || templateId === 'templates') {
-      return new Response(JSON.stringify({ error: 'Template ID required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('Template ID required', 400);
     }
 
     // First check if the template exists and belongs to the user
@@ -332,19 +279,14 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       .limit(1);
 
     if (!existingTemplate) {
-      return new Response(JSON.stringify({ error: 'Template not found or unauthorized' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('Template not found or unauthorized', 404);
     }
 
     // Now delete the template
     await db.delete(templates)
       .where(and(eq(templates.id, templateId), eq(templates.user_id, userId)));
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json({ success: true });
   }
 
   return new Response('Method Not Allowed', { status: 405 });

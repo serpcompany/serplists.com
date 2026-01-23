@@ -3,6 +3,7 @@ import { verifyJWT, generateJWT } from '../utils/jwt';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import { createDb, schema } from '../db';
+import { json, jsonError } from '../utils/response';
 
 export async function handleRegister(request: Request, env: Env): Promise<Response> {
   const { email, password, name } = await request.json();
@@ -11,10 +12,7 @@ export async function handleRegister(request: Request, env: Env): Promise<Respon
 
   // Validate required fields
   if (!email || !password) {
-    return new Response(JSON.stringify({ error: 'Email and password are required' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return jsonError('Email and password are required', 400);
   }
 
   // Check if user exists
@@ -25,10 +23,7 @@ export async function handleRegister(request: Request, env: Env): Promise<Respon
     .limit(1);
 
   if (existingUser) {
-    return new Response(JSON.stringify({ error: 'User already exists' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return jsonError('User already exists', 400);
   }
 
   const userId = crypto.randomUUID();
@@ -44,9 +39,7 @@ export async function handleRegister(request: Request, env: Env): Promise<Respon
 
   const token = await generateJWT(userId, env.JWT_SECRET);
 
-  return new Response(JSON.stringify({ token, user: { id: userId, email, name } }), {
-    headers: { 'Content-Type': 'application/json' }
-  });
+  return json({ token, user: { id: userId, email, name } });
 }
 
 export async function handleLogin(request: Request, env: Env): Promise<Response> {
@@ -61,19 +54,14 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
     .limit(1);
 
   if (!user || !user.password_hash || !(await bcrypt.compare(password, user.password_hash))) {
-    return new Response(JSON.stringify({ error: 'Invalid credentials' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return jsonError('Invalid credentials', 401);
   }
 
   const token = await generateJWT(user.id, env.JWT_SECRET);
 
-  return new Response(JSON.stringify({
+  return json({
     token,
     user: { id: user.id, email: user.email, name: user.name }
-  }), {
-    headers: { 'Content-Type': 'application/json' }
   });
 }
 
@@ -83,19 +71,13 @@ export async function handleProfile(request: Request, env: Env): Promise<Respons
   const { users } = schema;
 
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return jsonError('Unauthorized', 401);
   }
 
   const userId = await verifyJWT(authHeader.replace('Bearer ', ''), env.JWT_SECRET);
 
   if (!userId) {
-    return new Response(JSON.stringify({ error: 'Invalid token' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return jsonError('Invalid token', 401);
   }
 
   if (request.method === 'GET') {
@@ -112,15 +94,10 @@ export async function handleProfile(request: Request, env: Env): Promise<Respons
       .limit(1);
 
     if (!user) {
-      return new Response(JSON.stringify({ error: 'User not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('User not found', 404);
     }
 
-    return new Response(JSON.stringify(user), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json(user);
   }
 
   if (request.method === 'PUT') {
@@ -139,10 +116,7 @@ export async function handleProfile(request: Request, env: Env): Promise<Respons
     }
 
     if (Object.keys(updates).length === 0) {
-      return new Response(JSON.stringify({ error: 'No fields to update' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('No fields to update', 400);
     }
 
     updates.updated_at = new Date().toISOString();
@@ -161,9 +135,7 @@ export async function handleProfile(request: Request, env: Env): Promise<Respons
       .where(eq(users.id, userId))
       .limit(1);
 
-    return new Response(JSON.stringify(updatedUser), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json(updatedUser);
   }
 
   return new Response('Method Not Allowed', { status: 405 });
@@ -176,10 +148,7 @@ export async function handleProfileByUsername(request: Request, env: Env): Promi
   const { users } = schema;
 
   if (!username) {
-    return new Response(JSON.stringify({ error: 'Username required' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return jsonError('Username required', 400);
   }
 
   const [user] = await db
@@ -195,15 +164,10 @@ export async function handleProfileByUsername(request: Request, env: Env): Promi
     .limit(1);
 
   if (!user) {
-    return new Response(JSON.stringify({ error: 'User not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return jsonError('User not found', 404);
   }
 
-  return new Response(JSON.stringify(user), {
-    headers: { 'Content-Type': 'application/json' }
-  });
+  return json(user);
 }
 
 export async function handleProfileById(request: Request, env: Env): Promise<Response> {
@@ -213,10 +177,7 @@ export async function handleProfileById(request: Request, env: Env): Promise<Res
   const { users } = schema;
 
   if (!userId) {
-    return new Response(JSON.stringify({ error: 'userId required' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return jsonError('userId required', 400);
   }
 
   const [user] = await db
@@ -232,13 +193,8 @@ export async function handleProfileById(request: Request, env: Env): Promise<Res
     .limit(1);
 
   if (!user) {
-    return new Response(JSON.stringify({ error: 'User not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return jsonError('User not found', 404);
   }
 
-  return new Response(JSON.stringify(user), {
-    headers: { 'Content-Type': 'application/json' }
-  });
+  return json(user);
 }

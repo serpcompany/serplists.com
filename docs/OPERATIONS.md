@@ -10,6 +10,8 @@ npx wrangler pages deploy ./dist
 Set these in Cloudflare Pages (production) or `.dev.vars` (local):
 - `JWT_SECRET` (required for auth)
 - `R2_PUBLIC_BASE_URL` (optional; used to generate public file URLs)
+- `FRONTEND_URL` (optional; when set, used as a CORS allowlist origin)
+- `CORS_ALLOWED_ORIGINS` (optional; comma-separated CORS allowlist origins)
 
 ## D1 database
 The database binding and name are defined in `wrangler.toml`:
@@ -40,3 +42,5 @@ The R2 binding is configured in `wrangler.toml`:
 - Bucket name: `serp-checklists-uploads`
 
 Uploads are handled by `POST /api/uploads` and stored under per-user prefixes.
+
+Uploads enforce a per-bucket MIME allowlist (see `functions/api/handlers/uploads.ts`).

@@ -27,6 +27,7 @@ createEnv({
     JWT_SECRET: z.string().min(1),
     R2_PUBLIC_BASE_URL: z.string().url().optional(),
     FRONTEND_URL: z.string().url().optional(),
+    CORS_ALLOWED_ORIGINS: z.string().min(1).optional(),
   },
   runtimeEnv,
   emptyStringAsUndefined: true,

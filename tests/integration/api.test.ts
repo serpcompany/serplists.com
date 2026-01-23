@@ -2,7 +2,9 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { unstable_dev } from 'wrangler';
 import type { UnstableDevWorker } from 'wrangler';
 
-describe('API Integration Tests', () => {
+const describeIntegration = process.env.RUN_WRANGLER_INTEGRATION === 'true' ? describe : describe.skip;
+
+describeIntegration('API Integration Tests', () => {
   let worker: UnstableDevWorker;
   let authToken: string;
   let testUserId: string;

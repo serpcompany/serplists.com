@@ -10,6 +10,27 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+const allowedMimeTypesByBucket: Record<UploadBucket, Set<string>> = {
+  avatars: new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+  'template-images': new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+  'template-videos': new Set(['video/mp4', 'video/webm', 'video/quicktime']),
+  'template-files': new Set([
+    'application/pdf',
+    'application/zip',
+    'application/json',
+    'text/plain',
+    'text/markdown',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ]),
+};
+
+function isAllowedUploadType(bucket: UploadBucket, file: File): boolean {
+  if (!file.type) return true;
+  return allowedMimeTypesByBucket[bucket].has(file.type);
+}
+
 function getAuthUserId(request: Request, env: Env): Promise<string | null> {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) return Promise.resolve(null);
@@ -91,6 +112,18 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
     const maxBytes = 50 * 1024 * 1024;
     if (file.size > maxBytes) return json({ error: 'File too large (max 50MB)' }, 413);
 
+    if (!isAllowedUploadType(bucket, file)) {
+      return json(
+        {
+          error: 'Unsupported file type for bucket',
+          bucket,
+          contentType: file.type || null,
+          allowed: Array.from(allowedMimeTypesByBucket[bucket]),
+        },
+        415
+      );
+    }
+
     const filename = sanitizeFilename(file.name || 'upload');
     const ext = filename.includes('.') ? filename.split('.').pop() : '';
     const key = `${bucket}/${userId}/${crypto.randomUUID()}${ext ? `.${ext}` : ''}`;
@@ -116,4 +149,3 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
 
   return json({ error: 'Not Found' }, 404);
 }
-

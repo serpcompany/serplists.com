@@ -11,6 +11,10 @@ Local Pages Functions use `.dev.vars` for server-side variables.
 JWT_SECRET=local-dev-secret-key-not-for-production-use
 # Optional for uploads
 R2_PUBLIC_BASE_URL=https://your-public-domain
+# Optional for production CORS allowlisting
+FRONTEND_URL=https://your-frontend-domain
+# Optional: comma-separated additional allowed origins
+CORS_ALLOWED_ORIGINS=https://your-frontend-domain,https://www.your-frontend-domain
 ```
 
 Notes:

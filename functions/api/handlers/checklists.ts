@@ -3,6 +3,7 @@ import { verifyJWT } from '../utils/jwt';
 import { and, desc, eq } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { checklistPayloadSchema, normalizeSectionsPayload } from '../utils/payloads';
+import { json, jsonError } from '../utils/response';
 
 export async function handleChecklists(request: Request, env: Env): Promise<Response> {
   const authHeader = request.headers.get('Authorization');
@@ -14,10 +15,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
   const { checklist_runs } = schema;
 
   if (!userId) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return jsonError('Unauthorized', 401);
   }
 
   if (request.method === 'GET') {
@@ -31,15 +29,10 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         .limit(1);
 
       if (!checklist) {
-        return new Response(JSON.stringify({ error: 'Checklist not found' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return jsonError('Checklist not found', 404);
       }
 
-      return new Response(JSON.stringify(checklist), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json(checklist);
     }
 
     const checklists = await db
@@ -48,9 +41,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       .where(eq(checklist_runs.user_id, userId))
       .orderBy(desc(checklist_runs.created_at));
 
-    return new Response(JSON.stringify(checklists), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json(checklists);
   }
 
   if (request.method === 'POST') {
@@ -58,18 +49,12 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     try {
       body = await request.json();
     } catch {
-      return new Response(JSON.stringify({ error: 'Invalid JSON payload' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('Invalid JSON payload', 400);
     }
 
     const parsed = checklistPayloadSchema.safeParse(body);
     if (!parsed.success) {
-      return new Response(JSON.stringify({ error: parsed.error.issues[0]?.message || 'Invalid checklist payload' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
     }
 
     const { template_id, title, items, sections, status } = parsed.data;
@@ -78,10 +63,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
 
     const normalizedSections = normalizeSectionsPayload(sections ?? items);
     if (normalizedSections.error) {
-      return new Response(JSON.stringify({ error: normalizedSections.error }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError(normalizedSections.error, 400);
     }
 
     await db.insert(checklist_runs).values({
@@ -95,37 +77,26 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       created_at: now,
     });
 
-    return new Response(JSON.stringify({ id: checklistId }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json({ id: checklistId });
   }
 
   if (request.method === 'PUT') {
     const checklistId = checklistsSubpath[0];
 
     if (!checklistId || checklistId === 'checklists') {
-      return new Response(JSON.stringify({ error: 'Checklist ID required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('Checklist ID required', 400);
     }
 
     let body: unknown;
     try {
       body = await request.json();
     } catch {
-      return new Response(JSON.stringify({ error: 'Invalid JSON payload' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('Invalid JSON payload', 400);
     }
 
     const parsed = checklistPayloadSchema.safeParse(body);
     if (!parsed.success) {
-      return new Response(JSON.stringify({ error: parsed.error.issues[0]?.message || 'Invalid checklist payload' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
     }
 
     const { title, items, sections, status, progress, completed_at } = parsed.data;
@@ -140,10 +111,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
       const normalizedSections = normalizeSectionsPayload(sections ?? items);
       if (normalizedSections.error) {
-        return new Response(JSON.stringify({ error: normalizedSections.error }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return jsonError(normalizedSections.error, 400);
       }
       updates.items = JSON.stringify(normalizedSections.sections);
     }
@@ -158,29 +126,21 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     }
 
     if (Object.keys(updates).length === 0) {
-      return new Response(JSON.stringify({ error: 'No fields to update' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('No fields to update', 400);
     }
 
     await db.update(checklist_runs)
       .set(updates)
       .where(and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId)));
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json({ success: true });
   }
 
   if (request.method === 'DELETE') {
     const checklistId = checklistsSubpath[0];
 
     if (!checklistId || checklistId === 'checklists') {
-      return new Response(JSON.stringify({ error: 'Checklist ID required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('Checklist ID required', 400);
     }
 
     // First check if the checklist exists and belongs to the user
@@ -191,19 +151,14 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       .limit(1);
 
     if (!existingChecklist) {
-      return new Response(JSON.stringify({ error: 'Checklist not found or unauthorized' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return jsonError('Checklist not found or unauthorized', 404);
     }
 
     // Now delete the checklist
     await db.delete(checklist_runs)
       .where(and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId)));
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json({ success: true });
   }
 
   return new Response('Method Not Allowed', { status: 405 });

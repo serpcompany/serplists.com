@@ -1,0 +1,76 @@
+import { describe, it, expect } from 'vitest';
+import apiWorker from '../../functions/api/[[route]].ts';
+
+function buildEnv(overrides?: Record<string, unknown>) {
+  return {
+    JWT_SECRET: 'test-jwt-secret',
+    ...overrides,
+  } as any;
+}
+
+describe('API Worker (no-wrangler integration)', () => {
+  it('GET /api/health returns ok with CORS + request id', async () => {
+    const response = await apiWorker.fetch(new Request('http://localhost/api/health'), buildEnv());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(response.headers.get('X-Request-Id')).toBeTruthy();
+
+    const data = await response.json();
+    expect(data.status).toBe('ok');
+  });
+
+  it('OPTIONS preflight returns CORS headers', async () => {
+    const response = await apiWorker.fetch(
+      new Request('http://localhost/api/auth/login', { method: 'OPTIONS' }),
+      buildEnv()
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(response.headers.get('Access-Control-Allow-Methods')).toContain('POST');
+  });
+
+  it('rejects oversized JSON bodies before routing', async () => {
+    const response = await apiWorker.fetch(
+      new Request('http://localhost/api/templates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': String(1024 * 1024 + 1),
+        },
+        body: '{}',
+      }),
+      buildEnv()
+    );
+
+    expect(response.status).toBe(413);
+    expect(response.headers.get('X-Request-Id')).toBeTruthy();
+  });
+
+  it('enforces CORS allowlist when configured', async () => {
+    const env = buildEnv({ FRONTEND_URL: 'https://app.example.com' });
+
+    const preflightDenied = await apiWorker.fetch(
+      new Request('http://localhost/api/health', {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://evil.example.com' },
+      }),
+      env
+    );
+
+    expect(preflightDenied.status).toBe(403);
+
+    const preflightAllowed = await apiWorker.fetch(
+      new Request('http://localhost/api/health', {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://app.example.com' },
+      }),
+      env
+    );
+
+    expect(preflightAllowed.status).toBe(200);
+    expect(preflightAllowed.headers.get('Access-Control-Allow-Origin')).toBe('https://app.example.com');
+  });
+});
+

@@ -18,6 +18,27 @@ import type { TemplateImportOptions } from "@/types/checklist";
 interface TemplateBackupProps {
   className?: string;
 }
+
+const MAX_TEMPLATES_PER_IMPORT = 5;
+const MAX_ASSET_BYTES = 5 * 1024 * 1024;
+
+const countOversizedAssets = (templates: ChecklistTemplate[]): number => {
+  let count = 0;
+  templates.forEach((template) => {
+    template.sections.forEach((section) => {
+      section.items.forEach((item) => {
+        item.contents?.forEach((content) => {
+          if (content.type !== "image" && content.type !== "video" && content.type !== "file") return;
+          if (typeof content.fileSize === "number" && content.fileSize > MAX_ASSET_BYTES) {
+            count += 1;
+          }
+        });
+      });
+    });
+  });
+  return count;
+};
+
 export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   className
 }) => {
@@ -40,6 +61,8 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const templatesToExport = includePublicTemplates
     ? [...ownedTemplates, ...communityTemplates]
     : ownedTemplates;
+  const importOversizeAssets = importPreview ? countOversizedAssets(importPreview.templates) : 0;
+  const exceedsTemplateLimit = importPreview ? importPreview.templates.length > MAX_TEMPLATES_PER_IMPORT : false;
 
   const handleExportAll = () => {
     if (!user) {
@@ -364,6 +387,25 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                       </div>
                     </div>}
 
+                  {(exceedsTemplateLimit || importOversizeAssets > 0) && <div className="bg-sky-50 dark:bg-sky-900/20 p-3 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-sky-600 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="font-medium text-sky-800 dark:text-sky-200">
+                            Import Policy (warn-only)
+                          </p>
+                          <ul className="text-sky-700 dark:text-sky-300 mt-1 space-y-1">
+                            {exceedsTemplateLimit && <li>
+                                • {importPreview.templates.length} templates selected; paid plan limit is {MAX_TEMPLATES_PER_IMPORT} per import
+                              </li>}
+                            {importOversizeAssets > 0 && <li>
+                                • {importOversizeAssets} asset{importOversizeAssets === 1 ? "" : "s"} over 5MB; compress or replace before publishing
+                              </li>}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>}
+
                   <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
                     <div className="flex items-start gap-2">
                       <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
@@ -377,6 +419,9 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                           <li>• Existing templates won&apos;t be affected</li>
                           <li>• Slugs will be regenerated to avoid conflicts</li>
                           <li>• Uploaded assets are not copied; re-upload if needed</li>
+                          <li>• Import is a paid-only feature (warn-only for now)</li>
+                          <li>• Paid plan target: max {MAX_TEMPLATES_PER_IMPORT} templates per import (warn-only)</li>
+                          <li>• Asset uploads should be <= 5MB each (warn-only)</li>
                         </ul>
                       </div>
                     </div>

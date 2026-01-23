@@ -4,7 +4,10 @@
 - [x] Refresh reference docs (quick-reference, file-inventory, modules, patterns, recipes, schema, enhancements)
 - [x] Add MVP planning doc (`PLAN-MVP.md`)
 - [x] Clean up database structure (move migrations/schema into `db/` and update references)
-- [ ] Review jscpd duplicate-code findings (API handlers + UI pages) and decide on refactors
+- [x] Review jscpd duplicate-code findings (API handlers + UI pages) and decide on refactors
+- [ ] Deduplicate shared layout between `src/pages/Login.tsx` and `src/pages/Register.tsx`
+- [ ] Extract shared template list sections between `src/pages/Dashboard.tsx` and `src/pages/Templates.tsx`
+- [ ] Reduce duplication between `src/pages/ChecklistRun.tsx` and `src/components/checklist/*` + `src/components/shared/ContentRenderer.tsx`
 - [x] Add env validation with `@t3-oss/env-core` (Vite + Pages Functions)
 - [x] Add `pnpm run typecheck:env` for `.dev.vars` validation
 - [x] Add Drizzle schema/config + scripts (`db/schema/index.ts`, `db/drizzle.config.ts`, `db:generate`, `db:migrate`)
@@ -22,6 +25,6 @@
 - [x] Add asset warning/docs for imported templates referencing R2 files
 - [ ] Decide billing model + entitlements (Stripe or TBD) and document scope
 - [ ] Add auth hardening plan (rate limits, token storage strategy, reset/verification if needed)
-- [ ] Define security controls (CORS allowlist, upload MIME validation, import limits)
-- [ ] Decide import size/count guardrails (warn-only) and add UX warnings/limits
+- [x] Define security controls (CORS allowlist, upload MIME validation, import limits)
+- [x] Add import guardrail warnings (paid-only, max 5 templates per import, assets > 5MB)
 - [ ] Document D1 backup/restore + R2 lifecycle policies

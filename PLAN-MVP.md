@@ -80,7 +80,7 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] Audit legacy `db/schema.sql` vs migrations; remove or realign to avoid drift.
 - [x] Confirm JSON storage approach: keep `templates.items` and `checklist_runs.items` as JSON text + retain structured columns (`user_id`, `status`, `is_public`, `slug`, timestamps).
 - [x] Add server-side validation (Zod) for templates/runs payloads to prevent invalid JSON in D1.
-- [ ] Add guardrails for import size/count (warn-only).
+- [x] Add guardrails for import size/count (warn-only): paid-only import, max 5 templates per import, warn on assets > 5MB.
 - [x] Add partial failure reporting for imports (warn-only).
 
 ### Template import/export hardening
@@ -125,8 +125,8 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 
 ### Security & abuse controls
 - **Current**: CORS is `*`; uploads only validate size + bucket; public files are key-addressable.
-- [ ] Decide CORS policy for production (allow-list frontend origin).
-- [ ] Add server-side MIME/type allowlists per upload bucket.
+- [x] Decide CORS policy for production (allow-list frontend origin).
+- [x] Add server-side MIME/type allowlists per upload bucket.
 - [ ] Add import guardrails (max templates per import, per-user rate limits).
 
 ### Services & ops readiness
@@ -139,6 +139,13 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [ ] Update Tailwind/theme tokens to match serpui (as applicable in a Vite app).
 - [ ] Audit key screens (Login, Template Editor, Checklist Run) for UI parity.
 - [ ] Replace/adjust components where serpui differs (buttons, cards, tabs, etc.).
+
+## Phase 8 - Misc & things added as we go that dont belong other places
+
+
+---
+
+
 
 ## MVP acceptance checklist
 - [ ] `pnpm run lint`, `pnpm run typecheck`, `pnpm run test:run` all pass.

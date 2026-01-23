@@ -33,6 +33,7 @@ serp-checklists/
 - `functions/api/utils/jwt.ts`
 - `functions/api/utils/slug.ts`
 - `functions/api/utils/payloads.ts` (payload normalization + Zod validation)
+- `functions/api/utils/response.ts` (shared JSON response helpers)
 
 ## Data and migrations
 - `db/schema.sql` (schema snapshot; keep in sync with migrations)
