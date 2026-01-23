@@ -5,7 +5,7 @@
 - [x] Add MVP planning doc (`PLAN-MVP.md`)
 - [x] Clean up database structure (move migrations/schema into `db/` and update references)
 - [x] Review jscpd duplicate-code findings (API handlers + UI pages) and decide on refactors
-- [ ] Deduplicate shared layout between `src/pages/Login.tsx` and `src/pages/Register.tsx`
+- [x] Deduplicate shared layout between `src/pages/Login.tsx` and `src/pages/Register.tsx`
 - [ ] Extract shared template list sections between `src/pages/Dashboard.tsx` and `src/pages/Templates.tsx`
 - [ ] Reduce duplication between `src/pages/ChecklistRun.tsx` and `src/components/checklist/*` + `src/components/shared/ContentRenderer.tsx`
 - [x] Add env validation with `@t3-oss/env-core` (Vite + Pages Functions)
@@ -29,6 +29,6 @@
 - [x] Define security controls (CORS allowlist, upload MIME validation, import limits)
 - [x] Add import guardrail warnings (paid-only, max 5 templates per import, assets > 5MB)
 - [x] Add Stripe webhook event log (Stripe event idempotency + debugging)
-- [ ] Add entitlement admin override (manual comp/pro)
+- [x] Add entitlement admin override (manual comp/pro) (`docs/knowledge/entitlements-admin-override.md`)
 - [x] Add baseline Cloudflare Pages security headers (`_headers`)
 - [x] Document D1 backup/restore + R2 lifecycle policies

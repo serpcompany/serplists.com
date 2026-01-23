@@ -162,7 +162,7 @@ class ApiClient {
   }
 
   // Billing (Stripe)
-  async getBillingStatus(): Promise<{ plan: 'free' | 'pro'; subscription: null | { status: string } }> {
+  async getBillingStatus(): Promise<{ plan: 'free' | 'pro'; limits?: { maxTemplates: number | null; maxActiveRuns: number | null } }> {
     return this.request('/billing/status');
   }
 

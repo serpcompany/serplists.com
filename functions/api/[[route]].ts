@@ -13,6 +13,7 @@ import { handleChecklists } from './handlers/checklists';
 import { handleUploads } from './handlers/uploads';
 import { handleStripe } from './handlers/stripe';
 import { handleBilling } from './handlers/billing';
+import { handleAdmin } from './handlers/admin';
 import { jsonError } from './utils/response';
 
 export const onRequestGet = handleRequest;
@@ -117,6 +118,8 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       response = await handleStripe(request, env);
     } else if (path.startsWith('billing')) {
       response = await handleBilling(request, env);
+    } else if (path.startsWith('admin')) {
+      response = await handleAdmin(request, env);
     } else {
       response = new Response('Not Found', { status: 404 });
     }

@@ -1,9 +1,10 @@
 import { Env } from '../types';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { checklistPayloadSchema, normalizeSectionsPayload } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
+import { getEntitlementsForUser } from '../utils/entitlements';
 
 export async function handleChecklists(request: Request, env: Env): Promise<Response> {
   const userId = await getSessionUserId(request, env);
@@ -54,6 +55,23 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     const parsed = checklistPayloadSchema.safeParse(body);
     if (!parsed.success) {
       return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
+    }
+
+    const entitlements = await getEntitlementsForUser(env, userId);
+    if (entitlements.plan === 'free' && entitlements.limits.maxActiveRuns) {
+      const [row] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(checklist_runs)
+        .where(and(eq(checklist_runs.user_id, userId), eq(checklist_runs.status, 'in_progress')))
+        .limit(1);
+
+      const currentCount = Number((row as any)?.count ?? 0);
+      if (currentCount >= entitlements.limits.maxActiveRuns) {
+        return jsonError('Active run limit reached. Upgrade to Pro to create more checklist runs.', 403, {
+          code: 'limit_reached',
+          details: { limit: entitlements.limits.maxActiveRuns, current: currentCount, resource: 'active_runs' },
+        });
+      }
     }
 
     const { template_id, title, items, sections, status } = parsed.data;

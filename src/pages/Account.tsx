@@ -5,6 +5,7 @@ import { ProfileSection } from '@/components/account/ProfileSection';
 import { authClient } from '@/lib/auth-client';
 import { SecuritySection } from '@/components/account/SecuritySection';
 import { BillingSection } from '@/components/account/BillingSection';
+import { useSearchParams } from 'react-router-dom';
 
 interface ProfileData {
   email: string;
@@ -15,6 +16,7 @@ interface ProfileData {
 
 const Account = () => {
   const { user, refreshProfile } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [profileData, setProfileData] = useState<ProfileData>({
     email: user?.email || '',
@@ -28,6 +30,17 @@ const Account = () => {
       loadProfile();
     }
   }, [user]);
+
+  useEffect(() => {
+    const billing = searchParams.get('billing');
+    if (billing === 'success') {
+      toast.success('Upgrade complete.');
+      setSearchParams({});
+    } else if (billing === 'cancel') {
+      toast.message('Upgrade canceled.');
+      setSearchParams({});
+    }
+  }, [searchParams, setSearchParams]);
 
   const loadProfile = async () => {
     try {

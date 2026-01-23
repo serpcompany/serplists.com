@@ -119,6 +119,26 @@ describe('Templates Handlers', () => {
     expect(storedItems[0].items).toHaveLength(1);
   });
 
+  it('should enforce free plan template limit', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    // First limit() call is entitlements override lookup; second is template count.
+    dbMocks.selectChain.limit.mockResolvedValueOnce([]).mockResolvedValueOnce([{ count: 1 }]);
+
+    const request = new Request('http://localhost/api/templates', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: 'New Template',
+        items: [{ id: 'item-1', title: 'Item 1' }],
+      }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data.code).toBe('limit_reached');
+  });
+
   it('should reject invalid sections payloads on update', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
 

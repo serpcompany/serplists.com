@@ -12,6 +12,7 @@ Set these in Cloudflare Pages (production) or `.dev.vars` (local):
 - `STRIPE_SECRET_KEY` (required for paid/Pro)
 - `STRIPE_WEBHOOK_SECRET` (required for paid/Pro)
 - `STRIPE_PRO_PRICE_ID` (required for paid/Pro)
+- `ENTITLEMENTS_ADMIN_SECRET` (optional; enables `/api/admin/entitlements/override`)
 - `R2_PUBLIC_BASE_URL` (optional; used to generate public file URLs)
 - `FRONTEND_URL` (optional; when set, used as a CORS allowlist origin)
 - `CORS_ALLOWED_ORIGINS` (optional; comma-separated CORS allowlist origins)

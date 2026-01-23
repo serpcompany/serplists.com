@@ -32,6 +32,7 @@ createEnv({
     STRIPE_SECRET_KEY: z.string().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
     STRIPE_PRO_PRICE_ID: z.string().min(1).optional(),
+    ENTITLEMENTS_ADMIN_SECRET: z.string().min(8).optional(),
   },
   runtimeEnv,
   emptyStringAsUndefined: true,

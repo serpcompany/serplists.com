@@ -107,24 +107,24 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - **Current**: no Stripe SDK, no billing tables, no webhook endpoint, no entitlements in API/UI.
 - [x] Decide billing model (free/pro, trial, usage-based) and plan mapping (Stripe subscriptions; Free+Pro).
 - [x] Add Stripe integration: customer + subscription mapping, webhook handler with signature verification, idempotency, and retries.
-- [ ] Store entitlement state (D1 table or billing cache) and gate API/UI features accordingly.
+- [x] Store entitlement state (D1 table or billing cache) and gate API/UI features accordingly (basic template/run limits enforced).
 - [x] Add billing entry point in Account settings (manage subscription, invoices).
 - [x] Add webhook event log (Stripe event idempotency + debugging).
-- [ ] Add admin override path for entitlements (manual comp/pro).
+- [x] Add admin override path for entitlements (manual comp/pro).
 
 ### Auth & entitlements hardening
 - **Current**: Better Auth cookie sessions (httpOnly); rate limiting is basic; no email verification/reset.
 - [x] Decide token storage strategy (httpOnly cookies vs localStorage) and session revocation flow.
 - [x] Add rate limiting for `/api/auth/*` and sensitive write endpoints.
 - [ ] Add password reset + email verification (if in MVP scope).
-- [ ] Define entitlement checks per endpoint (e.g., template limits, export/import limits).
+- [x] Define entitlement checks per endpoint (e.g., template limits, export/import limits) (`docs/knowledge/entitlements-enforcement.md`).
 - [x] Add logout endpoint + session/token revocation.
 - [x] Add change-password endpoint + UI (requires current password).
 - [x] Add password policy guardrails (min length + reject common passwords).
 
 ### Payload validation & data hygiene
-- **Current**: API accepts unvalidated JSON for templates/runs; client-only validation on backup import.
-- [ ] Add server-side Zod validation for template + run payloads and return consistent 4xx errors.
+- **Current**: Templates/runs are server-validated (Zod); backup import validation is client-side.
+- [x] Add server-side Zod validation for template + run payloads and return consistent 4xx errors.
 - [ ] Enforce payload size limits for JSON bodies and import files.
 - [ ] Add schema versioning for template JSON to support future migrations.
 
@@ -132,7 +132,7 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - **Current**: CORS is `*`; uploads only validate size + bucket; public files are key-addressable.
 - [x] Decide CORS policy for production (allow-list frontend origin).
 - [x] Add server-side MIME/type allowlists per upload bucket.
-- [ ] Add import guardrails (max templates per import, per-user rate limits).
+- [x] Add import guardrails (max templates per import, per-user rate limits).
 - [x] Add baseline Cloudflare Pages security headers via `_headers` (CSP/frame/referrer/HSTS).
 - [x] Promote critical import limits from warn-only to enforced (max templates/import, max assets size, etc.).
 

@@ -88,6 +88,26 @@ describe('Checklists Handlers', () => {
     expect(storedItems[0].items).toHaveLength(1);
   });
 
+  it('should enforce free plan active run limit', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    // First limit() call is entitlements override lookup; second is active runs count.
+    dbMocks.selectChain.limit.mockResolvedValueOnce([]).mockResolvedValueOnce([{ count: 3 }]);
+
+    const request = new Request('http://localhost/api/checklists', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: 'Run',
+        items: [{ id: 'item-1', title: 'Item 1' }],
+      }),
+    });
+
+    const response = await handleChecklists(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data.code).toBe('limit_reached');
+  });
+
   it('should reject empty update payloads', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
 

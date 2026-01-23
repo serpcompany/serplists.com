@@ -5,3 +5,4 @@ export { checklist_runs } from "./checklistRuns";
 export { template_likes } from "./templateLikes";
 export { usage_analytics } from "./usageAnalytics";
 export { stripe_customers, stripe_subscriptions, stripe_webhook_events } from "./stripeBilling";
+export { entitlement_overrides } from "./entitlementOverrides";

@@ -13,6 +13,7 @@ export const getApiEnv = (env: Env) => {
       STRIPE_SECRET_KEY: z.string().min(1).optional(),
       STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
       STRIPE_PRO_PRICE_ID: z.string().min(1).optional(),
+      ENTITLEMENTS_ADMIN_SECRET: z.string().min(8).optional(),
     },
     runtimeEnv: {
       JWT_SECRET: env.JWT_SECRET,
@@ -23,6 +24,7 @@ export const getApiEnv = (env: Env) => {
       STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY,
       STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET,
       STRIPE_PRO_PRICE_ID: env.STRIPE_PRO_PRICE_ID,
+      ENTITLEMENTS_ADMIN_SECRET: env.ENTITLEMENTS_ADMIN_SECRET,
     },
     emptyStringAsUndefined: true,
   });

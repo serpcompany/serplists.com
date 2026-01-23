@@ -1,9 +1,10 @@
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { json, jsonError } from "../utils/response";
 import { assertStripeConfigured, stripePostForm } from "../utils/stripe";
 import { getSessionUserId } from "../utils/session";
+import { getEntitlementsForUser } from "../utils/entitlements";
 
 type StripeCustomer = { id: string };
 type StripeCheckoutSession = { id: string; url: string | null };
@@ -20,10 +21,6 @@ function getAppOrigin(request: Request, env: Env): string {
   return new URL(request.url).origin;
 }
 
-function isProStatus(status: string): boolean {
-  return status === "active" || status === "trialing";
-}
-
 export async function handleBilling(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const pathParts = url.pathname.split("/").filter(Boolean); // ["api", "billing", ...]
@@ -33,31 +30,12 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
   if (!userId) return jsonError("Unauthorized", 401);
 
   const db = createDb(env);
-  const { stripe_customers, stripe_subscriptions, users } = schema;
+  const { stripe_customers, users } = schema;
   const origin = getAppOrigin(request, env);
 
   if (request.method === "GET" && billingSubpath[0] === "status") {
-    const { proPriceId } = assertStripeConfigured(env);
-
-    const subs = await db
-      .select()
-      .from(stripe_subscriptions)
-      .where(and(eq(stripe_subscriptions.user_id, userId), eq(stripe_subscriptions.price_id, proPriceId)))
-      .orderBy(desc(stripe_subscriptions.updated_at));
-
-    const best = subs.find((s: any) => typeof s?.status === "string" && isProStatus(s.status)) ?? subs[0] ?? null;
-    const plan = best?.status && isProStatus(best.status) ? "pro" : "free";
-
-    return json({
-      plan,
-      subscription: best
-        ? {
-            status: best.status,
-            cancelAtPeriodEnd: Boolean(best.cancel_at_period_end),
-            currentPeriodEnd: best.current_period_end ?? null,
-          }
-        : null,
-    });
+    const entitlements = await getEntitlementsForUser(env, userId);
+    return json({ plan: entitlements.plan, limits: entitlements.limits });
   }
 
   if (request.method === "POST" && billingSubpath[0] === "checkout") {

@@ -1,10 +1,11 @@
 import { Env } from '../types';
 import { generateSlug } from '../utils/slug';
-import { and, desc, eq, ne, or } from 'drizzle-orm';
+import { and, desc, eq, ne, or, sql } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { normalizeSectionsPayload, normalizeStringArray, templatePayloadSchema } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
+import { getEntitlementsForUser } from '../utils/entitlements';
 
 async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
   const base = generateSlug(title || 'template') || 'template';
@@ -134,6 +135,23 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
   if (request.method === 'POST') {
     if (!userId) {
       return jsonError('Unauthorized', 401);
+    }
+
+    const entitlements = await getEntitlementsForUser(env, userId);
+    if (entitlements.plan === 'free' && entitlements.limits.maxTemplates) {
+      const [row] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(templates)
+        .where(eq(templates.user_id, userId))
+        .limit(1);
+
+      const currentCount = Number((row as any)?.count ?? 0);
+      if (currentCount >= entitlements.limits.maxTemplates) {
+        return jsonError('Template limit reached. Upgrade to Pro to create more templates.', 403, {
+          code: 'limit_reached',
+          details: { limit: entitlements.limits.maxTemplates, current: currentCount, resource: 'templates' },
+        });
+      }
     }
 
     let body: unknown;

@@ -4,10 +4,10 @@ import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, CheckCircle } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
+import { AuthPageShell } from "@/components/auth/AuthPageShell";
 const Register = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -45,56 +45,68 @@ const Register = () => {
       setIsSubmitting(false);
     }
   };
-  return <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <Link to="/" className="inline-flex items-center">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-white">
-              <CheckCircle className="h-6 w-6" />
-            </div>
-            <span className="ml-2 text-2xl font-bold text-gray-900">SERP Checklists</span>
+  return (
+    <AuthPageShell
+      title="Create your account"
+      description="Sign up with email and password"
+      footer={
+        <>
+          Or{" "}
+          <Link to="/login" className="font-medium text-primary hover:underline">
+            sign in to your account
           </Link>
-          
-          <p className="mt-2 text-sm text-gray-600">
-            Or{" "}
-            <Link to="/login" className="font-medium text-primary hover:underline">
-              sign in to your account
-            </Link>
-          </p>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="name">Name</Label>
+          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" required />
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Create your account</CardTitle>
-            <CardDescription>Sign up with email and password</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••••" required />
-              </div>
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating account...
-                  </> : "Create account"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </div>;
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="confirmPassword">Confirm Password</Label>
+          <Input
+            id="confirmPassword"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="••••••••"
+            required
+          />
+        </div>
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating account...
+            </>
+          ) : (
+            "Create account"
+          )}
+        </Button>
+      </form>
+    </AuthPageShell>
+  );
 };
 export default Register;
