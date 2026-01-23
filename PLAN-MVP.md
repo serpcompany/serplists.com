@@ -95,7 +95,7 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] Add Vitest coverage reporting (warn-only).
 - [x] Ensure unit tests cover critical flows (auth, templates, runs).
 - [x] Add minimal API smoke checks (health, auth, templates).
-- [ ] Decide on runtime logging/analytics sink (Sentry or equivalent).
+- [ ] Decide on runtime logging/analytics sink (Sentry or equivalent) or explicitly defer for MVP.
 
 ## Phase 5 - Hook migration (Lefthook)
 - [x] Remove Husky (`prepare` script) and add Lefthook (`lefthook.yml`).
@@ -109,6 +109,8 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [ ] Add Stripe integration: customer + subscription mapping, webhook handler with signature verification, idempotency, and retries.
 - [ ] Store entitlement state (D1 table or billing cache) and gate API/UI features accordingly.
 - [ ] Add billing entry point in Account settings (manage subscription, invoices).
+- [ ] Add webhook event log (Stripe event idempotency + debugging).
+- [ ] Add admin override path for entitlements (manual comp/pro).
 
 ### Auth & entitlements hardening
 - **Current**: custom JWT stored in `localStorage`, no refresh/revocation, no rate limiting, no email verification/reset.
@@ -116,6 +118,9 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [ ] Add rate limiting for `/api/auth/*` and sensitive write endpoints.
 - [ ] Add password reset + email verification (if in MVP scope).
 - [ ] Define entitlement checks per endpoint (e.g., template limits, export/import limits).
+- [ ] Add logout endpoint + session/token revocation.
+- [ ] Add change-password endpoint + UI (requires current password).
+- [ ] Add password policy guardrails (min length + reject common passwords).
 
 ### Payload validation & data hygiene
 - **Current**: API accepts unvalidated JSON for templates/runs; client-only validation on backup import.
@@ -128,11 +133,18 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] Decide CORS policy for production (allow-list frontend origin).
 - [x] Add server-side MIME/type allowlists per upload bucket.
 - [ ] Add import guardrails (max templates per import, per-user rate limits).
+- [x] Add baseline Cloudflare Pages security headers via `_headers` (CSP/frame/referrer/HSTS).
+- [x] Promote critical import limits from warn-only to enforced (max templates/import, max assets size, etc.).
 
 ### Services & ops readiness
 - **Current**: D1 + R2 only; no documented backup/restore or lifecycle policies.
 - [ ] Document D1 backup/restore and R2 lifecycle rules (Cloudflare settings).
 - [ ] Add runbook for incident response (what to check first, where logs live).
+
+#### docs
+
+- [ ] add markdownlint-cli2 + cspell + lychee to give our documents an opinionated structure and rules to follow and lint against
+
 
 ## Phase 7 - UI alignment with serp-boilerplate (serpui) (last)
 - [ ] Align shadcn style and base color (`new-york` + `neutral`) or document divergence.
@@ -141,6 +153,20 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [ ] Replace/adjust components where serpui differs (buttons, cards, tabs, etc.).
 
 ## Phase 8 - Misc & things added as we go that dont belong other places
+
+### decide on the feature list & tiers (free, pro)
+
+#### Free
+- 1 reusable checklist templates in account
+- up to 3 checklist runs "live"/"working" at the same time
+- (no) template import/export feature
+- (no) "add checklist template to account" from the template marketplace
+
+#### Pro
+- unlimited reusable checklist templates in account
+- unlimited checklist runs "live"/"working" at the same time
+- (yes) template import/export feature
+- (yes) "add checklist template to account" from the template marketplace
 
 
 ---
@@ -154,5 +180,5 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [ ] Drizzle schema/migrations established and documented.
 - [ ] UI aligned with serpui guidelines (or explicit divergence documented).
 - [ ] Pre-commit/pre-push hooks run via Lefthook.
-- [ ] Basic monitoring/alerting decision documented and stubbed in code.
+- [ ] Monitoring/logging approach documented (Cloudflare logs only is acceptable for MVP).
 - [ ] Billing/entitlements approach documented (even if “not in MVP”).

@@ -106,6 +106,17 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   };
   const handleConfirmImport = async () => {
     if (!importPreview || !user) return;
+
+    if (exceedsTemplateLimit) {
+      toast.error(`Import limited to ${MAX_TEMPLATES_PER_IMPORT} templates per file for now`);
+      return;
+    }
+
+    if (importOversizeAssets > 0) {
+      toast.error("Import blocked: one or more assets are over 5MB (compress or re-upload after import)");
+      return;
+    }
+
     setIsImporting(true);
     try {
       // The importPreview has already been validated by parseTemplatesFromJSON
@@ -392,14 +403,14 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                         <AlertCircle className="h-4 w-4 text-sky-600 mt-0.5" />
                         <div className="text-sm">
                           <p className="font-medium text-sky-800 dark:text-sky-200">
-                            Import Policy (warn-only)
+                            Import Policy (enforced)
                           </p>
                           <ul className="text-sky-700 dark:text-sky-300 mt-1 space-y-1">
                             {exceedsTemplateLimit && <li>
-                                • {importPreview.templates.length} templates selected; paid plan limit is {MAX_TEMPLATES_PER_IMPORT} per import
+                                • {importPreview.templates.length} templates selected; limit is {MAX_TEMPLATES_PER_IMPORT} per import
                               </li>}
                             {importOversizeAssets > 0 && <li>
-                                • {importOversizeAssets} asset{importOversizeAssets === 1 ? "" : "s"} over 5MB; compress or replace before publishing
+                                • {importOversizeAssets} asset{importOversizeAssets === 1 ? "" : "s"} over 5MB; compress or remove to import
                               </li>}
                           </ul>
                         </div>
@@ -419,16 +430,19 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                           <li>• Existing templates won&apos;t be affected</li>
                           <li>• Slugs will be regenerated to avoid conflicts</li>
                           <li>• Uploaded assets are not copied; re-upload if needed</li>
-                          <li>• Import is a paid-only feature (warn-only for now)</li>
-                          <li>• Paid plan target: max {MAX_TEMPLATES_PER_IMPORT} templates per import (warn-only)</li>
-                          <li>• Asset uploads should be <= 5MB each (warn-only)</li>
+                          <li>• Limit: max {MAX_TEMPLATES_PER_IMPORT} templates per import (enforced)</li>
+                          <li>• Limit: assets should be <= 5MB each (enforced when size is provided)</li>
                         </ul>
                       </div>
                     </div>
                   </div>
 
                   <div className="flex gap-2">
-                    <Button onClick={handleConfirmImport} disabled={isImporting} className="flex items-center gap-2">
+                    <Button
+                      onClick={handleConfirmImport}
+                      disabled={isImporting || exceedsTemplateLimit || importOversizeAssets > 0}
+                      className="flex items-center gap-2"
+                    >
                       <Upload className="h-4 w-4" />
                       {isImporting ? "Importing..." : "Confirm Import"}
                     </Button>

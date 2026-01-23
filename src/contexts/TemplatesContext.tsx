@@ -368,6 +368,35 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const importTemplatesMutation = useMutation({
     mutationFn: async ({ templatesData, options }: { templatesData: ChecklistTemplate[]; options?: TemplateImportOptions }): Promise<TemplateImportSummary> => {
       if (!user) throw new Error("User must be logged in to import templates");
+
+      const MAX_TEMPLATES_PER_IMPORT = 5;
+      const MAX_ASSET_BYTES = 5 * 1024 * 1024;
+
+      const countOversizedAssets = (templates: ChecklistTemplate[]): number => {
+        let count = 0;
+        templates.forEach((template) => {
+          template.sections.forEach((section) => {
+            section.items.forEach((item) => {
+              item.contents?.forEach((content) => {
+                if (content.type !== "image" && content.type !== "video" && content.type !== "file") return;
+                if (typeof content.fileSize === "number" && content.fileSize > MAX_ASSET_BYTES) {
+                  count += 1;
+                }
+              });
+            });
+          });
+        });
+        return count;
+      };
+
+      if (templatesData.length > MAX_TEMPLATES_PER_IMPORT) {
+        throw new Error(`Import limited to ${MAX_TEMPLATES_PER_IMPORT} templates per file for now`);
+      }
+
+      const oversizeAssets = countOversizedAssets(templatesData);
+      if (oversizeAssets > 0) {
+        throw new Error("Import blocked: one or more assets are over 5MB");
+      }
       
       const templatesToImport = prepareTemplatesForImport(templatesData, user.id, options);
       const summary: TemplateImportSummary = { imported: 0, failed: [] };
