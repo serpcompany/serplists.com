@@ -125,7 +125,7 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 ### Payload validation & data hygiene
 - **Current**: Templates/runs are server-validated (Zod); backup import validation is client-side.
 - [x] Add server-side Zod validation for template + run payloads and return consistent 4xx errors.
-- [ ] Enforce payload size limits for JSON bodies and import files.
+- [x] Enforce payload size limits for JSON bodies and import files.
 - [ ] Add schema versioning for template JSON to support future migrations.
 
 ### Security & abuse controls
@@ -174,11 +174,11 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 
 
 ## MVP acceptance checklist
-- [ ] `pnpm run lint`, `pnpm run typecheck`, `pnpm run test:run` all pass.
-- [ ] `sre:deps` and `sre:dup` produce actionable baseline reports.
+- [x] `pnpm run lint`, `pnpm run typecheck`, `pnpm run test:run` all pass.
+- [x] `sre:deps` and `sre:dup` produce actionable baseline reports.
 - [ ] Env validation in place and enforced in CI/hooks.
-- [ ] Drizzle schema/migrations established and documented.
+- [x] Drizzle schema/migrations established and documented.
 - [ ] UI aligned with serpui guidelines (or explicit divergence documented).
-- [ ] Pre-commit/pre-push hooks run via Lefthook.
-- [ ] Monitoring/logging approach documented (Cloudflare logs only is acceptable for MVP).
-- [ ] Billing/entitlements approach documented (even if “not in MVP”).
+- [x] Pre-commit/pre-push hooks run via Lefthook.
+- [x] Monitoring/logging approach documented (Cloudflare logs only is acceptable for MVP).
+- [x] Billing/entitlements approach documented (even if “not in MVP”).

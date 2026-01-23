@@ -21,6 +21,7 @@ interface TemplateBackupProps {
 
 const MAX_TEMPLATES_PER_IMPORT = 5;
 const MAX_ASSET_BYTES = 5 * 1024 * 1024;
+const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024; // 2MB
 
 const countOversizedAssets = (templates: ChecklistTemplate[]): number => {
   let count = 0;
@@ -89,6 +90,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     if (!file) return;
     if (file.type !== "application/json") {
       toast.error("Please select a JSON file");
+      return;
+    }
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      toast.error("Import file too large (max 2MB)");
       return;
     }
     setSelectedFile(file);
@@ -431,7 +436,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                           <li>• Slugs will be regenerated to avoid conflicts</li>
                           <li>• Uploaded assets are not copied; re-upload if needed</li>
                           <li>• Limit: max {MAX_TEMPLATES_PER_IMPORT} templates per import (enforced)</li>
-                          <li>• Limit: assets should be <= 5MB each (enforced when size is provided)</li>
+                          <li>• Limit: assets should be ≤ 5MB each (enforced when size is provided)</li>
                         </ul>
                       </div>
                     </div>

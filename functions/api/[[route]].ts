@@ -4,6 +4,7 @@ import { applyCorsHeaders, buildCorsPreflightResponse } from './utils/cors';
 import { getClientIp, log } from './utils/logger';
 import { checkRateLimit } from './utils/rate-limit';
 import { createBetterAuth } from './better-auth';
+import { isBodyWithinLimit } from './utils/body';
 import { 
   handleProfileByUsername, 
   handleProfileById
@@ -62,11 +63,21 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
   let response: Response;
   
   try {
-    if ((request.method === 'POST' || request.method === 'PUT') && request.headers.get('Content-Type')?.includes('application/json')) {
+    if (
+      (request.method === 'POST' || request.method === 'PUT') &&
+      request.headers.get('Content-Type')?.includes('application/json')
+    ) {
+      const maxBytes = 1024 * 1024;
       const contentLength = request.headers.get('Content-Length');
       if (contentLength) {
         const bytes = Number.parseInt(contentLength, 10);
-        if (Number.isFinite(bytes) && bytes > 1024 * 1024) {
+        if (Number.isFinite(bytes) && bytes > maxBytes) {
+          response = jsonError('Payload too large (max 1MB)', 413);
+          return finalize(response);
+        }
+      } else {
+        const ok = await isBodyWithinLimit(request.clone(), maxBytes);
+        if (!ok) {
           response = jsonError('Payload too large (max 1MB)', 413);
           return finalize(response);
         }

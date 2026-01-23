@@ -3,6 +3,10 @@ import { createDb, schema } from "../db";
 import { json, jsonError } from "../utils/response";
 import { eq } from "drizzle-orm";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function hasValidAdminSecret(request: Request, env: Env): boolean {
   if (!env.ENTITLEMENTS_ADMIN_SECRET) return false;
   const provided = request.headers.get("X-Admin-Secret");
@@ -21,18 +25,21 @@ export async function handleAdmin(request: Request, env: Env): Promise<Response>
 
   // POST /api/admin/entitlements/override
   if (request.method === "POST" && adminSubpath[0] === "entitlements" && adminSubpath[1] === "override") {
-    let body: any;
+    let body: unknown;
     try {
       body = await request.json();
     } catch {
       return jsonError("Invalid JSON payload", 400);
     }
 
-    const userId = typeof body?.userId === "string" ? body.userId : null;
-    const email = typeof body?.email === "string" ? body.email : null;
-    const plan = typeof body?.plan === "string" ? body.plan : "pro";
-    const expiresAt = typeof body?.expiresAt === "number" ? body.expiresAt : null; // unix seconds
-    const note = typeof body?.note === "string" ? body.note : null;
+    const input = isRecord(body) ? body : null;
+    if (!input) return jsonError("Invalid JSON payload", 400);
+
+    const userId = typeof input.userId === "string" ? input.userId : null;
+    const email = typeof input.email === "string" ? input.email : null;
+    const plan = typeof input.plan === "string" ? input.plan : "pro";
+    const expiresAt = typeof input.expiresAt === "number" ? input.expiresAt : null; // unix seconds
+    const note = typeof input.note === "string" ? input.note : null;
 
     if (!userId && !email) {
       return jsonError("userId or email required", 400);
@@ -87,4 +94,3 @@ export async function handleAdmin(request: Request, env: Env): Promise<Response>
 
   return jsonError("Not Found", 404);
 }
-

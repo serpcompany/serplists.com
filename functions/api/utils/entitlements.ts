@@ -50,14 +50,15 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
   }
 
   const { stripe_subscriptions } = schema;
+  type StripeSubscriptionRow = typeof stripe_subscriptions.$inferSelect;
 
-  const subs = await db
+  const subs: StripeSubscriptionRow[] = await db
     .select()
     .from(stripe_subscriptions)
     .where(and(eq(stripe_subscriptions.user_id, userId), eq(stripe_subscriptions.price_id, stripe.proPriceId)))
     .orderBy(desc(stripe_subscriptions.updated_at));
 
-  const best = subs.find((s: any) => typeof s?.status === "string" && isProSubscriptionStatus(s.status)) ?? subs[0] ?? null;
+  const best = subs.find((s) => isProSubscriptionStatus(s.status)) ?? subs[0] ?? null;
   const plan: Plan = best?.status && isProSubscriptionStatus(best.status) ? "pro" : "free";
 
   return plan === "pro"

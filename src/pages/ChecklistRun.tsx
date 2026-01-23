@@ -8,16 +8,14 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { ArrowLeft, Check, CheckCircle, Loader2, ChevronDown, ChevronUp, FileText, Image, Video, File, Code, ListCheck, Edit2 } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle, Loader2, ChevronDown, ChevronUp, Edit2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
-import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
-import remarkGfm from "remark-gfm";
 import { calculateSectionsProgress, isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
-import { safeUrl } from "@/lib/utils/safeUrl";
+import { ChecklistContent } from "@/components/checklist/ChecklistContent";
 
 const ChecklistRunPage = () => {
   const { id } = useParams();
@@ -240,59 +238,6 @@ const ChecklistRunPage = () => {
     return { completed, total };
   };
 
-  const renderVideoEmbed = (url: string) => {
-    // Simple YouTube embed
-    if (url.includes("youtube.com/") || url.includes("youtu.be/")) {
-      let videoId: string | null = null;
-      
-      if (url.includes("youtube.com/watch")) {
-        const urlParams = new URLSearchParams(new URL(url).search);
-        videoId = urlParams.get("v");
-      } else if (url.includes("youtu.be/")) {
-        videoId = url.split("youtu.be/")[1].split("?")[0];
-      }
-      
-      if (videoId) {
-        return (
-          <div className="relative overflow-hidden pt-[56.25%]">
-            <iframe
-              className="absolute left-0 top-0 h-full w-full"
-              src={`https://www.youtube.com/embed/${videoId}`}
-              title="YouTube video player"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
-        );
-      }
-    }
-    
-    // Vimeo embed
-    if (url.includes("vimeo.com/")) {
-      const vimeoId = url.split("vimeo.com/")[1].split("?")[0];
-      return (
-        <div className="relative overflow-hidden pt-[56.25%]">
-          <iframe
-            className="absolute left-0 top-0 h-full w-full"
-            src={`https://player.vimeo.com/video/${vimeoId}`}
-            title="Vimeo video player"
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
-      );
-    }
-    
-    // Fallback to just show the URL
-    return (
-      <div className="rounded-md border bg-gray-50 p-3">
-        <a href={url} target="_blank" rel="noopener noreferrer" className="text-primary underline">
-          {url}
-        </a>
-      </div>
-    );
-  };
-
   const getSelectedItem = () => {
     if (!run || !selectedItemId) return null;
     for (const section of run.sections) {
@@ -462,164 +407,32 @@ const ChecklistRunPage = () => {
 
           {/* Main Content Area */}
           <div className="lg:col-span-2">
-            {selectedData ? (
-              <Card>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <Checkbox
-                        checked={selectedData.item.isCompleted}
-                        onCheckedChange={() => {
-                          const { sectionIndex, itemIndex } = getItemPosition(selectedData.item.id);
-                          handleItemToggle(sectionIndex, itemIndex);
-                        }}
-                      />
-                      <div>
-                        <CardTitle className={selectedData.item.isCompleted ? "line-through text-muted-foreground" : ""}>
-                          {selectedData.item.title}
-                        </CardTitle>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          From section: {selectedData.section.title}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  {selectedData.item.description && (
-                    <p className={`text-muted-foreground ${selectedData.item.isCompleted ? "text-muted-foreground/60" : ""}`}>
-                      {selectedData.item.description}
-                    </p>
-                  )}
-                </CardHeader>
-                
-                <CardContent className="space-y-6">
-                  {selectedData.item.contents && selectedData.item.contents.length > 0 ? (
-                    selectedData.item.contents.map((content, contentIndex: number) => (
-                      <div key={contentIndex} className="space-y-3">
-                        {content.type === "text" && content.value && (
-                          <div className="prose prose-sm max-w-none">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeUrl}>
-                              {content.value}
-                            </ReactMarkdown>
-                          </div>
-                        )}
-                        
-                        {content.type === "image" && content.value && (
-                          <div className="rounded-lg border overflow-hidden">
-                            <img 
-                              src={safeUrl(content.value) || "https://placehold.co/400x200?text=Invalid+Image"} 
-                              alt="Task content" 
-                              className="w-full max-h-96 object-contain"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = "https://placehold.co/400x200?text=Invalid+Image";
-                              }}
-                            />
-                          </div>
-                        )}
-                        
-                        {content.type === "video" && content.value && (
-                          <div className="rounded-lg border overflow-hidden">
-                            {renderVideoEmbed(content.value)}
-                          </div>
-                        )}
-                        
-                        {content.type === "file" && content.value && (
-                          <div className="border rounded-lg p-4">
-                            <div className="flex items-center gap-3">
-                              <File className="h-8 w-8 text-muted-foreground" />
-                              <div>
-                                <p className="font-medium">{content.fileName || "File"}</p>
-                                <a 
-                                  href={safeUrl(content.value)} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="text-sm text-primary hover:underline"
-                                >
-                                  Download File
-                                </a>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {content.type === "embed" && content.value && (
-                          <div className="border rounded-lg p-4 bg-muted/20">
-                            {safeUrl(content.value) ? (
-                              <a 
-                                href={safeUrl(content.value)} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 text-primary hover:underline"
-                              >
-                                <Code className="h-4 w-4" />
-                                Open Embedded Content
-                              </a>
-                            ) : (
-                              <pre className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
-                                {content.value}
-                              </pre>
-                            )}
-                          </div>
-                        )}
-                        
-                        {content.type === "subItems" && content.subItems && (
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2">
-                              <ListCheck className="h-5 w-5 text-muted-foreground" />
-                              <h4 className="font-medium">Sub-tasks</h4>
-                            </div>
-                            <div className="space-y-2 pl-7">
-                              {content.subItems.map((subItem: { id: string; isCompleted?: boolean; title: string }, subItemIndex: number) => {
-                                const { sectionIndex, itemIndex } = getItemPosition(selectedData.item.id);
-                                return (
-                                  <div key={subItem.id} className="flex items-center gap-3">
-                                    <Checkbox
-                                      checked={subItem.isCompleted}
-                                      onCheckedChange={() => handleSubItemToggle(
-                                        sectionIndex,
-                                        itemIndex,
-                                        contentIndex,
-                                        subItemIndex
-                                      )}
-                                    />
-                                    <span className={subItem.isCompleted ? "line-through text-muted-foreground" : ""}>
-                                      {subItem.title}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                      <p>No additional content for this task</p>
-                    </div>
-                  )}
-                 </CardContent>
-                 <div className="p-4 border-t flex justify-end">
-                   <Button
-                     size="lg"
-                     variant={selectedData.item.isCompleted ? "outline" : "default"}
-                     onClick={() => {
-                       const { sectionIndex, itemIndex } = getItemPosition(selectedData.item.id);
-                       handleItemToggle(sectionIndex, itemIndex);
-                     }}
-                   >
-                     {selectedData.item.isCompleted ? "Mark as Incomplete" : "Mark as Complete"}
-                   </Button>
-                 </div>
-               </Card>
-             ) : (
-               <Card>
-                 <CardContent className="py-16 text-center">
-                   <CheckCircle className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-                   <p className="text-muted-foreground">Select a task from the sidebar to view details</p>
-                 </CardContent>
-               </Card>
-             )}
+            <ChecklistContent
+              selectedData={selectedData}
+              disabled={false}
+              onItemToggle={(itemId) => {
+                const { sectionIndex, itemIndex } = getItemPosition(itemId);
+                handleItemToggle(sectionIndex, itemIndex);
+              }}
+              onSubItemToggle={(itemId, contentIndex, subItemIndex) => {
+                const { sectionIndex, itemIndex } = getItemPosition(itemId);
+                handleSubItemToggle(sectionIndex, itemIndex, contentIndex, subItemIndex);
+              }}
+              actions={
+                selectedData ? (
+                  <Button
+                    size="lg"
+                    variant={selectedData.item.isCompleted ? "outline" : "default"}
+                    onClick={() => {
+                      const { sectionIndex, itemIndex } = getItemPosition(selectedData.item.id);
+                      handleItemToggle(sectionIndex, itemIndex);
+                    }}
+                  >
+                    {selectedData.item.isCompleted ? "Mark as Incomplete" : "Mark as Complete"}
+                  </Button>
+                ) : null
+              }
+            />
           </div>
         </div>
       </div>

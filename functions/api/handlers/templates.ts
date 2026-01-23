@@ -145,7 +145,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         .where(eq(templates.user_id, userId))
         .limit(1);
 
-      const currentCount = Number((row as any)?.count ?? 0);
+      const currentCount = row?.count ?? 0;
       if (currentCount >= entitlements.limits.maxTemplates) {
         return jsonError('Template limit reached. Upgrade to Pro to create more templates.', 403, {
           code: 'limit_reached',

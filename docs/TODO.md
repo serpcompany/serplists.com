@@ -6,8 +6,8 @@
 - [x] Clean up database structure (move migrations/schema into `db/` and update references)
 - [x] Review jscpd duplicate-code findings (API handlers + UI pages) and decide on refactors
 - [x] Deduplicate shared layout between `src/pages/Login.tsx` and `src/pages/Register.tsx`
-- [ ] Extract shared template list sections between `src/pages/Dashboard.tsx` and `src/pages/Templates.tsx`
-- [ ] Reduce duplication between `src/pages/ChecklistRun.tsx` and `src/components/checklist/*` + `src/components/shared/ContentRenderer.tsx`
+- [x] Extract shared template list sections between `src/pages/Dashboard.tsx` and `src/pages/Templates.tsx`
+- [x] Reduce duplication between `src/pages/ChecklistRun.tsx` and `src/components/checklist/*` + `src/components/shared/ContentRenderer.tsx`
 - [x] Add env validation with `@t3-oss/env-core` (Vite + Pages Functions)
 - [x] Add `pnpm run typecheck:env` for `.dev.vars` validation
 - [x] Add Drizzle schema/config + scripts (`db/schema/index.ts`, `db/drizzle.config.ts`, `db:generate`, `db:migrate`)

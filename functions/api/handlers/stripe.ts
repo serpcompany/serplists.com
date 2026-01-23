@@ -9,13 +9,28 @@ type StripeEvent = {
   type: string;
   created: number;
   livemode: boolean;
-  data: { object: any };
+  data: { object: unknown };
 };
 
-function getEventUserIdFallback(obj: any): string | null {
-  const fromMetadata = obj?.metadata?.userId;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function getEventUserIdFallback(obj: Record<string, unknown> | null): string | null {
+  const metadata = obj && isRecord(obj.metadata) ? obj.metadata : null;
+  const fromMetadata = metadata?.userId;
   if (typeof fromMetadata === "string" && fromMetadata.length > 0) return fromMetadata;
   return null;
+}
+
+function getSubscriptionPriceId(obj: Record<string, unknown> | null): string | null {
+  if (!obj) return null;
+  const items = isRecord(obj.items) ? obj.items : null;
+  const data = items && Array.isArray(items.data) ? items.data : null;
+  const first = data && data.length > 0 && isRecord(data[0]) ? data[0] : null;
+  const price = first && isRecord(first.price) ? first.price : null;
+  const priceId = price?.id;
+  return typeof priceId === "string" ? priceId : null;
 }
 
 export async function handleStripe(request: Request, env: Env): Promise<Response> {
@@ -67,7 +82,7 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
       return json({ received: true, duplicate: true });
     }
 
-    const object = event.data?.object;
+    const object = isRecord(event.data?.object) ? (event.data.object as Record<string, unknown>) : null;
 
     try {
       if (event.type === "checkout.session.completed") {
@@ -98,7 +113,7 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
         const stripeSubscriptionId = typeof object?.id === "string" ? object.id : null;
         const stripeCustomerId = typeof object?.customer === "string" ? object.customer : null;
         const status = typeof object?.status === "string" ? object.status : null;
-        const priceId = typeof object?.items?.data?.[0]?.price?.id === "string" ? object.items.data[0].price.id : null;
+        const priceId = getSubscriptionPriceId(object);
         const currentPeriodEnd = typeof object?.current_period_end === "number" ? object.current_period_end : null;
         const cancelAtPeriodEnd = Boolean(object?.cancel_at_period_end);
         const canceledAt = typeof object?.canceled_at === "number" ? object.canceled_at : null;

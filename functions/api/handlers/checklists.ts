@@ -65,7 +65,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         .where(and(eq(checklist_runs.user_id, userId), eq(checklist_runs.status, 'in_progress')))
         .limit(1);
 
-      const currentCount = Number((row as any)?.count ?? 0);
+      const currentCount = row?.count ?? 0;
       if (currentCount >= entitlements.limits.maxActiveRuns) {
         return jsonError('Active run limit reached. Upgrade to Pro to create more checklist runs.', 403, {
           code: 'limit_reached',
