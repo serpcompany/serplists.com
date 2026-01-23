@@ -9,6 +9,22 @@
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRO_PRICE_ID`
 
+## Bootstrap (create Product + Prices)
+If you want to create Stripe resources programmatically, use:
+
+```bash
+# Dry-run (no network calls)
+node scripts/stripe/bootstrap.mjs --mode both --currency usd --monthly 1900 --dry-run
+
+# Create in BOTH test + live (requires STRIPE_TEST_SECRET_KEY + STRIPE_LIVE_SECRET_KEY in .env)
+node scripts/stripe/bootstrap.mjs --mode both --currency usd --monthly 1900
+
+# Optional yearly price (example)
+node scripts/stripe/bootstrap.mjs --mode both --currency usd --monthly 1900 --yearly 19000
+```
+
+After creating prices, set `STRIPE_PRO_PRICE_ID` in Cloudflare Pages to the **live** monthly `price_...` id.
+
 ## Webhook configuration
 Webhook “Events from”: **Your account**
 
