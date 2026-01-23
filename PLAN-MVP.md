@@ -116,7 +116,7 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - **Current**: Better Auth cookie sessions (httpOnly); rate limiting is basic; no email verification/reset.
 - [x] Decide token storage strategy (httpOnly cookies vs localStorage) and session revocation flow.
 - [x] Add rate limiting for `/api/auth/*` and sensitive write endpoints.
-- [ ] Add password reset + email verification (if in MVP scope).
+- [x] Defer password reset + email verification (not in MVP).
 - [x] Define entitlement checks per endpoint (e.g., template limits, export/import limits) (`docs/knowledge/entitlements-enforcement.md`).
 - [x] Add logout endpoint + session/token revocation.
 - [x] Add change-password endpoint + UI (requires current password).
@@ -126,7 +126,7 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - **Current**: Templates/runs are server-validated (Zod); backup import validation is client-side.
 - [x] Add server-side Zod validation for template + run payloads and return consistent 4xx errors.
 - [x] Enforce payload size limits for JSON bodies and import files.
-- [ ] Add schema versioning for template JSON to support future migrations.
+- [x] Add schema versioning for template JSON to support future migrations (templates `version` + backup export/import).
 
 ### Security & abuse controls
 - **Current**: CORS is `*`; uploads only validate size + bucket; public files are key-addressable.

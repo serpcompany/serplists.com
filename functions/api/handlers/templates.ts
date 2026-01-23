@@ -6,6 +6,7 @@ import { normalizeSectionsPayload, normalizeStringArray, templatePayloadSchema }
 import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
 import { getEntitlementsForUser } from '../utils/entitlements';
+import { z } from 'zod';
 
 async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
   const base = generateSlug(title || 'template') || 'template';
@@ -53,13 +54,214 @@ function parseTemplateRow(template: Record<string, unknown>) {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+const templateBackupImportTemplateSchema = z.object({
+  title: z.string(),
+  description: z.string().optional(),
+  sections: z.unknown().optional(),
+  items: z.unknown().optional(),
+  isPublic: z.boolean().optional(),
+  is_public: z.boolean().optional(),
+  categories: z.union([z.array(z.string()), z.string()]).optional(),
+  category: z.string().optional(),
+  tags: z.union([z.array(z.string()), z.string()]).optional(),
+  slug: z.string().optional(),
+  version: z.number().int().optional(),
+});
+
+const templateBackupImportBodySchema = z.object({
+  templates: z.array(templateBackupImportTemplateSchema),
+  options: z
+    .object({
+      visibility: z.enum(['preserve', 'public', 'private']).optional(),
+    })
+    .optional(),
+});
+
+function hasOversizedAssets(sections: unknown[], maxAssetBytes: number): boolean {
+  for (const section of sections) {
+    if (!isRecord(section)) continue;
+    const items = section.items;
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      if (!isRecord(item)) continue;
+      const contents = item.contents;
+      if (!Array.isArray(contents)) continue;
+      for (const content of contents) {
+        if (!isRecord(content)) continue;
+        const type = content.type;
+        if (type !== 'image' && type !== 'video' && type !== 'file') continue;
+        const fileSize = content.fileSize;
+        if (typeof fileSize === 'number' && fileSize > maxAssetBytes) return true;
+      }
+    }
+  }
+  return false;
+}
+
 export async function handleTemplates(request: Request, env: Env): Promise<Response> {
   const userId = await getSessionUserId(request, env);
   const url = new URL(request.url);
   const pathParts = url.pathname.split('/').filter(Boolean); // ["api", "templates", ...]
   const templatesSubpath = pathParts.slice(2); // after /api/templates
   const db = createDb(env);
-  const { templates } = schema;
+  const { templates, users } = schema;
+
+  // Pro-only: export/import templates as JSON backup
+  // GET  /api/templates/backup?includePublic=1
+  // POST /api/templates/backup  { templates: [...], options?: { visibility } }
+  if (templatesSubpath[0] === 'backup') {
+    if (!userId) {
+      return jsonError('Unauthorized', 401);
+    }
+
+    const entitlements = await getEntitlementsForUser(env, userId);
+    if (entitlements.plan !== 'pro') {
+      return jsonError('Upgrade to Pro to use template import/export.', 403, { code: 'upgrade_required' });
+    }
+
+    if (request.method === 'GET') {
+      const includePublic = url.searchParams.get('includePublic') === '1';
+      const whereClause = includePublic
+        ? or(eq(templates.user_id, userId), eq(templates.is_public, true))
+        : eq(templates.user_id, userId);
+
+      const rows = await db
+        .select()
+        .from(templates)
+        .where(whereClause)
+        .orderBy(desc(templates.created_at));
+
+      const [userRow] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
+
+      const exportedTemplates = rows.map((row) => {
+        const parsed = parseTemplateRow(row as unknown as Record<string, unknown>);
+        return {
+          id: parsed.id,
+          title: parsed.title,
+          description: parsed.description || '',
+          sections: parsed.sections || [],
+          categories: parsed.categories || [],
+          tags: parsed.tags || [],
+          userId: parsed.user_id,
+          createdAt: parsed.created_at,
+          updatedAt: parsed.updated_at || parsed.created_at,
+          isPublic: Boolean(parsed.is_public),
+          slug: parsed.slug || '',
+          version: typeof parsed.version === 'number' ? parsed.version : 1,
+        };
+      });
+
+      const publicTemplates = exportedTemplates.filter((t) => t.isPublic);
+      const privateTemplates = exportedTemplates.filter((t) => !t.isPublic);
+
+      return json({
+        version: '1.0.0',
+        exportedAt: new Date().toISOString(),
+        exportedBy: userRow?.email,
+        templates: exportedTemplates,
+        metadata: {
+          totalTemplates: exportedTemplates.length,
+          publicTemplates: publicTemplates.length,
+          privateTemplates: privateTemplates.length,
+        },
+      });
+    }
+
+    if (request.method === 'POST') {
+      const MAX_TEMPLATES_PER_IMPORT = 5;
+      const MAX_ASSET_BYTES = 5 * 1024 * 1024;
+
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        return jsonError('Invalid JSON payload', 400);
+      }
+
+      const parsedBody = Array.isArray(body)
+        ? templateBackupImportBodySchema.safeParse({ templates: body })
+        : templateBackupImportBodySchema.safeParse(body);
+
+      if (!parsedBody.success) {
+        return jsonError(parsedBody.error.issues[0]?.message || 'Invalid template import payload', 400);
+      }
+
+      const { templates: incomingTemplates, options } = parsedBody.data;
+
+      if (incomingTemplates.length > MAX_TEMPLATES_PER_IMPORT) {
+        return jsonError(`Import limited to ${MAX_TEMPLATES_PER_IMPORT} templates per file for now`, 400, {
+          code: 'import_limit',
+          details: { limit: MAX_TEMPLATES_PER_IMPORT, current: incomingTemplates.length },
+        });
+      }
+
+      const visibility = options?.visibility ?? 'preserve';
+
+      const summary: { imported: number; failed: { title: string; reason: string }[] } = { imported: 0, failed: [] };
+
+      for (const template of incomingTemplates) {
+        const normalizedSections = normalizeSectionsPayload(template.sections ?? template.items);
+        if (normalizedSections.error) {
+          summary.failed.push({ title: template.title, reason: normalizedSections.error });
+          continue;
+        }
+
+        if (hasOversizedAssets(normalizedSections.sections, MAX_ASSET_BYTES)) {
+          summary.failed.push({ title: template.title, reason: 'Import blocked: one or more assets are over 5MB' });
+          continue;
+        }
+
+        const finalCategories = normalizeStringArray(template.categories ?? template.category);
+        const finalTags = normalizeStringArray(template.tags);
+        const sourceVisibility =
+          typeof template.is_public === 'boolean'
+            ? template.is_public
+            : typeof template.isPublic === 'boolean'
+              ? template.isPublic
+              : false;
+
+        const isPublic =
+          visibility === 'public' ? true : visibility === 'private' ? false : sourceVisibility;
+
+        const templateId = crypto.randomUUID();
+        const slug = await generateUniqueSlug(env, template.title || '', templateId);
+
+        try {
+          await db.insert(templates).values({
+            id: templateId,
+            user_id: userId,
+            title: template.title || '',
+            description: template.description || '',
+            items: JSON.stringify(normalizedSections.sections),
+            version: 1,
+            is_public: isPublic,
+            category: JSON.stringify(finalCategories),
+            tags: JSON.stringify(finalTags),
+            slug,
+            created_at: new Date().toISOString(),
+          });
+          summary.imported += 1;
+        } catch (err) {
+          summary.failed.push({
+            title: template.title,
+            reason: err instanceof Error ? err.message : 'Unknown error',
+          });
+        }
+      }
+
+      if (summary.imported === 0 && summary.failed.length > 0) {
+        return jsonError(summary.failed[0]?.reason || 'Template import failed', 400);
+      }
+
+      return json(summary);
+    }
+
+    return new Response('Method Not Allowed', { status: 405 });
+  }
 
   if (request.method === 'GET') {
     // GET /api/templates/public?userId=...
@@ -137,6 +339,57 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError('Unauthorized', 401);
     }
 
+    // POST /api/templates/:id/clone (Pro only)
+    if (templatesSubpath[0] && templatesSubpath[1] === 'clone') {
+      const sourceId = templatesSubpath[0];
+
+      const entitlements = await getEntitlementsForUser(env, userId);
+      if (entitlements.plan !== 'pro') {
+        return jsonError("Upgrade to Pro to save templates to your account.", 403, { code: 'upgrade_required' });
+      }
+
+      const [source] = await db
+        .select()
+        .from(templates)
+        .where(eq(templates.id, sourceId))
+        .limit(1);
+
+      if (!source || !source.is_public) {
+        return jsonError('Template not found', 404);
+      }
+
+      let visibility: 'preserve' | 'public' | 'private' = 'private';
+      try {
+        const raw = await request.json();
+        if (isRecord(raw) && (raw.visibility === 'preserve' || raw.visibility === 'public' || raw.visibility === 'private')) {
+          visibility = raw.visibility;
+        }
+      } catch {
+        // allow empty body
+      }
+
+      const isPublic = visibility === 'public' ? true : visibility === 'preserve' ? true : false;
+
+      const templateId = crypto.randomUUID();
+      const slug = await generateUniqueSlug(env, source.title || '', templateId);
+
+      await db.insert(templates).values({
+        id: templateId,
+        user_id: userId,
+        title: source.title || '',
+        description: source.description || '',
+        items: source.items,
+        version: typeof (source as Record<string, unknown>).version === 'number' ? (source as Record<string, unknown>).version : 1,
+        is_public: isPublic,
+        category: source.category,
+        tags: source.tags,
+        slug,
+        created_at: new Date().toISOString(),
+      });
+
+      return json({ id: templateId, slug });
+    }
+
     const entitlements = await getEntitlementsForUser(env, userId);
     if (entitlements.plan === 'free' && entitlements.limits.maxTemplates) {
       const [row] = await db
@@ -186,6 +439,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       title: title || '',
       description: description || '',
       items: JSON.stringify(normalizedSections.sections),
+      version: 1,
       is_public: isPublic,
       category: JSON.stringify(finalCategories),
       tags: JSON.stringify(finalTags),

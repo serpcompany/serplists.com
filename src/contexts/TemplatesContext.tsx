@@ -399,34 +399,10 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       
       const templatesToImport = prepareTemplatesForImport(templatesData, user.id, options);
-      const summary: TemplateImportSummary = { imported: 0, failed: [] };
-      
-      // Import templates one by one using the API
-      for (const template of templatesToImport) {
-        try {
-          // Pass the full sections structure to preserve all content
-          await api.createTemplate({
-            title: template.title,
-            description: template.description,
-            sections: template.sections, // Preserve descriptions, contents, subItems
-            is_public: template.isPublic,
-            categories: template.categories || [],
-            tags: template.tags || []
-          });
-          summary.imported += 1;
-        } catch (error) {
-          summary.failed.push({
-            title: template.title,
-            reason: error instanceof Error ? error.message : "Unknown error"
-          });
-        }
-      }
-      
-      if (summary.imported === 0 && summary.failed.length > 0) {
-        throw new Error(summary.failed[0]?.reason || "Template import failed");
-      }
-
-      return summary;
+      return api.importTemplateBackup({
+        templates: templatesToImport,
+        options: { visibility: options?.visibility ?? "preserve" },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });

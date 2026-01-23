@@ -35,8 +35,13 @@ vi.mock('@functions/api/utils/session', () => ({
   getSessionUserId: vi.fn(),
 }));
 
+vi.mock('@functions/api/utils/entitlements', () => ({
+  getEntitlementsForUser: vi.fn(),
+}));
+
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 
 describe('Templates Handlers', () => {
   let mockEnv: any;
@@ -57,6 +62,10 @@ describe('Templates Handlers', () => {
     };
 
     vi.mocked(getSessionUserId).mockResolvedValue(null);
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({
+      plan: 'free',
+      limits: { maxTemplates: 1, maxActiveRuns: 3 },
+    });
   });
 
   it('should list templates and normalize legacy items', async () => {
@@ -117,12 +126,12 @@ describe('Templates Handlers', () => {
     const storedItems = JSON.parse(inserted.items);
     expect(Array.isArray(storedItems)).toBe(true);
     expect(storedItems[0].items).toHaveLength(1);
+    expect(inserted.version).toBe(1);
   });
 
   it('should enforce free plan template limit', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    // First limit() call is entitlements override lookup; second is template count.
-    dbMocks.selectChain.limit.mockResolvedValueOnce([]).mockResolvedValueOnce([{ count: 1 }]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 1 }]);
 
     const request = new Request('http://localhost/api/templates', {
       method: 'POST',
@@ -152,5 +161,131 @@ describe('Templates Handlers', () => {
 
     expect(response.status).toBe(400);
     expect(data.error).toMatch(/sections\/items/i);
+  });
+
+  it('should reject template backup export for free users', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+
+    const request = new Request('http://localhost/api/templates/backup', { method: 'GET' });
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data.code).toBe('upgrade_required');
+  });
+
+  it('should export template backup for pro users', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({
+      plan: 'pro',
+      limits: { maxTemplates: null, maxActiveRuns: null },
+    });
+
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        title: 'Template',
+        description: '',
+        items: JSON.stringify([{ id: 's-1', title: 'Checklist', items: [{ id: 'i-1', title: 'Item' }] }]),
+        category: '["seo"]',
+        tags: '["tag-1"]',
+        user_id: 'user-123',
+        is_public: 0,
+        slug: 'template',
+        created_at: new Date().toISOString(),
+        updated_at: null,
+        version: 1,
+      },
+    ]);
+
+    const request = new Request('http://localhost/api/templates/backup', { method: 'GET' });
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.version).toBe('1.0.0');
+    expect(Array.isArray(data.templates)).toBe(true);
+    expect(data.templates[0].version).toBe(1);
+  });
+
+  it('should import templates from backup for pro users', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({
+      plan: 'pro',
+      limits: { maxTemplates: null, maxActiveRuns: null },
+    });
+    dbMocks.selectChain.limit.mockResolvedValue([]);
+
+    const request = new Request('http://localhost/api/templates/backup', {
+      method: 'POST',
+      body: JSON.stringify({
+        templates: [
+          {
+            title: 'Imported',
+            sections: [{ id: 's-1', title: 'Checklist', items: [{ id: 'i-1', title: 'Item' }] }],
+            isPublic: false,
+          },
+        ],
+        options: { visibility: 'private' },
+      }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.imported).toBe(1);
+    expect(data.failed).toEqual([]);
+  });
+
+  it('should reject cloning templates for free users', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+
+    const request = new Request('http://localhost/api/templates/template-1/clone', {
+      method: 'POST',
+      body: JSON.stringify({ visibility: 'private' }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data.code).toBe('upgrade_required');
+  });
+
+  it('should clone a public template for pro users', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({
+      plan: 'pro',
+      limits: { maxTemplates: null, maxActiveRuns: null },
+    });
+    // First limit() is source lookup; second limit() is slug collision check.
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        title: 'Public Template',
+        description: '',
+        items: JSON.stringify([]),
+        category: '[]',
+        tags: '[]',
+        user_id: 'other-user',
+        is_public: true,
+        slug: 'public-template',
+        created_at: new Date().toISOString(),
+        updated_at: null,
+        version: 1,
+      },
+    ]).mockResolvedValueOnce([]);
+
+    const request = new Request('http://localhost/api/templates/template-1/clone', {
+      method: 'POST',
+      body: JSON.stringify({ visibility: 'private' }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.id).toBeDefined();
   });
 });

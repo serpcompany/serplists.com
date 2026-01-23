@@ -97,6 +97,25 @@ class ApiClient {
     });
   }
 
+  async exportTemplateBackup(params?: { includePublic?: boolean }) {
+    const includePublic = params?.includePublic ? '?includePublic=1' : '';
+    return this.request(`/templates/backup${includePublic}`);
+  }
+
+  async importTemplateBackup(payload: {
+    templates: unknown[];
+    options?: { visibility?: 'preserve' | 'public' | 'private' };
+  }): Promise<{ imported: number; failed: { title: string; reason: string }[] }> {
+    return this.request('/templates/backup', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  async clonePublicTemplate(templateId: string, payload?: { visibility?: 'public' | 'private' | 'preserve' }): Promise<{ id: string; slug?: string }> {
+    return this.request(`/templates/${encodeURIComponent(templateId)}/clone`, {
+      method: 'POST',
+      body: JSON.stringify(payload ?? {}),
+    });
+  }
+
   // Checklists
   async getChecklists() {
     return this.request('/checklists');

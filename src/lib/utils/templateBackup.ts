@@ -87,6 +87,7 @@ const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTe
     createdAt: template.createdAt || now,
     updatedAt: template.updatedAt || now,
     isPublic: template.isPublic ?? false,
+    version: typeof template.version === "number" ? template.version : 1,
     slug: template.slug || "",
     categories: normalizeStringList(template.categories ?? template.category),
     tags: normalizeStringList(template.tags),

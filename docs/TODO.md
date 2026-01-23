@@ -32,3 +32,6 @@
 - [x] Add entitlement admin override (manual comp/pro) (`docs/knowledge/entitlements-admin-override.md`)
 - [x] Add baseline Cloudflare Pages security headers (`_headers`)
 - [x] Document D1 backup/restore + R2 lifecycle policies
+- [x] Add template JSON schema versioning (`templates.version` + backup export/import)
+- [x] Make template import/export Pro-only (server-enforced `/api/templates/backup`)
+- [x] Make “save template to account” Pro-only (`POST /api/templates/:id/clone`)

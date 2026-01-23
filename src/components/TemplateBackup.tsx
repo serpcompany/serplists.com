@@ -15,6 +15,9 @@ import { exportTemplatesToJSON, downloadBackupFile, parseTemplatesFromJSON } fro
 import type { TemplateImportResult } from "@/lib/utils/templateBackup";
 import type { ChecklistTemplate } from "@/lib/schemas/checklistSchema";
 import type { TemplateImportOptions } from "@/types/checklist";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+
 interface TemplateBackupProps {
   className?: string;
 }
@@ -51,6 +54,13 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const {
     user
   } = useAuth();
+  const billing = useQuery({
+    queryKey: ["billing", "status"],
+    queryFn: () => api.getBillingStatus(),
+    enabled: !!user,
+    retry: false
+  });
+  const plan = billing.data?.plan ?? "free";
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<TemplateImportResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -65,9 +75,23 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const importOversizeAssets = importPreview ? countOversizedAssets(importPreview.templates) : 0;
   const exceedsTemplateLimit = importPreview ? importPreview.templates.length > MAX_TEMPLATES_PER_IMPORT : false;
 
-  const handleExportAll = () => {
+  const handleUpgrade = async () => {
+    try {
+      const { url } = await api.createBillingCheckout();
+      window.location.href = url;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to start checkout");
+    }
+  };
+
+  const handleExportAll = async () => {
     if (!user) {
       toast.error("Log in to export your templates");
+      return;
+    }
+
+    if (plan !== "pro") {
+      toast.error("Upgrade to Pro to export templates");
       return;
     }
 
@@ -77,9 +101,14 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     }
 
     try {
-      const backup = exportTemplatesToJSON(templatesToExport, user?.email);
+      const backup = await api.exportTemplateBackup({
+        includePublic: includePublicTemplates
+      });
       downloadBackupFile(backup);
-      toast.success(`Exported ${templatesToExport.length} templates successfully`);
+      const count = Array.isArray((backup as { templates?: unknown }).templates) ? (backup as {
+        templates: unknown[];
+      }).templates.length : 0;
+      toast.success(`Exported ${count} templates successfully`);
     } catch (error) {
       toast.error("Failed to export templates");
       console.error("Export error:", error);
@@ -111,6 +140,11 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   };
   const handleConfirmImport = async () => {
     if (!importPreview || !user) return;
+
+    if (plan !== "pro") {
+      toast.error("Upgrade to Pro to import templates");
+      return;
+    }
 
     if (exceedsTemplateLimit) {
       toast.error(`Import limited to ${MAX_TEMPLATES_PER_IMPORT} templates per file for now`);
@@ -283,6 +317,21 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 	          </CardDescription>
 	        </CardHeader>
         <CardContent className="space-y-6">
+          {user && !billing.isLoading && plan !== "pro" ? (
+            <div className="rounded-lg border p-4 bg-muted/50">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-medium">Pro feature</div>
+                  <div className="text-sm text-muted-foreground">Template import/export is available on Pro.</div>
+                  <Button className="mt-2" onClick={handleUpgrade}>
+                    Upgrade to Pro
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {/* Current Templates Stats */}
           <div className="grid grid-cols-3 gap-4">
             <div className="text-center">
@@ -317,10 +366,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                   id="include-public-templates"
                   checked={includePublicTemplates}
                   onCheckedChange={setIncludePublicTemplates}
-                  disabled={!user}
+                  disabled={!user || billing.isLoading || plan !== "pro"}
                 />
               </div>
-	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={!user}>
+	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={!user || billing.isLoading || plan !== "pro"}>
 	              <Download className="h-4 w-4" />
 	              Export My Templates
 	            </Button>
@@ -349,7 +398,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
               </div>
 	            <div className="space-y-2">
 	              <Label htmlFor="template-file-input">Select a JSON template file</Label>
-	              <Input id="template-file-input" type="file" accept=".json" onChange={handleFileSelect} disabled={isImporting} />
+	              <Input id="template-file-input" type="file" accept=".json" onChange={handleFileSelect} disabled={isImporting || !user || billing.isLoading || plan !== "pro"} />
 	              <p className="text-sm text-muted-foreground">
 	                Need an example?{" "}
 	                <Button variant="link" className="p-0 h-auto text-primary" onClick={downloadSampleTemplate}>

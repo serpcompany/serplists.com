@@ -44,6 +44,7 @@ export const checklistTemplateSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   isPublic: z.boolean(),
+  version: z.number().int().optional(),
   slug: z.string().optional(),
   categories: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional()
@@ -60,6 +61,7 @@ export const checklistTemplateImportSchema = z.object({
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
   isPublic: z.boolean().optional(),
+  version: z.number().int().optional(),
   slug: z.string().optional(),
   categories: z.union([z.array(z.string()), z.string()]).optional(),
   category: z.string().optional(),

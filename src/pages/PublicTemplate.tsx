@@ -12,6 +12,7 @@ import { analytics } from "@/lib/analytics";
 import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
 import { api } from "@/lib/api";
 import type { ChecklistTemplate } from "@/types/checklist";
+import { useQuery } from "@tanstack/react-query";
 
 const PublicTemplate = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -19,9 +20,17 @@ const PublicTemplate = () => {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [isCreatingRun, setIsCreatingRun] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const { createRun } = useTemplates();
+  const billing = useQuery({
+    queryKey: ["billing", "status"],
+    queryFn: () => api.getBillingStatus(),
+    enabled: isAuthenticated,
+    retry: false,
+  });
+  const plan = billing.data?.plan ?? "free";
 
   useEffect(() => {
     const fetchTemplate = async () => {
@@ -99,6 +108,35 @@ const PublicTemplate = () => {
     }
   };
 
+  const handleSaveTemplate = async () => {
+    if (!template) return;
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    if (plan !== "pro") {
+      try {
+        const { url } = await api.createBillingCheckout();
+        window.location.href = url;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to start checkout");
+      }
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const { id } = await api.clonePublicTemplate(template.id, { visibility: "private" });
+      toast.success("Template saved to your account");
+      navigate(`/templates/${id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save template");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -156,8 +194,8 @@ const PublicTemplate = () => {
               <p className="text-xl text-muted-foreground mb-4">{template.description}</p>
             )}
             
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
                 <span className="text-sm text-muted-foreground">
                   Created on {new Date(template.createdAt).toLocaleDateString('en-US', {
                     year: 'numeric',
@@ -183,10 +221,25 @@ const PublicTemplate = () => {
                 )}
               </div>
               
-              <Button onClick={handleStartRun} disabled={isCreatingRun}>
-                <PlayCircle className="mr-2 h-4 w-4" />
-                {isCreatingRun ? "Starting..." : "Start Checklist"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={handleSaveTemplate}
+                  disabled={isSaving || (isAuthenticated && billing.isLoading)}
+                >
+                  {isSaving
+                    ? "Saving..."
+                    : !isAuthenticated
+                      ? "Log in to save"
+                      : plan === "pro"
+                        ? "Save to My Templates"
+                        : "Upgrade to Pro"}
+                </Button>
+                <Button onClick={handleStartRun} disabled={isCreatingRun}>
+                  <PlayCircle className="mr-2 h-4 w-4" />
+                  {isCreatingRun ? "Starting..." : "Start Checklist"}
+                </Button>
+              </div>
             </div>
           </header>
         </div>
