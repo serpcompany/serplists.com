@@ -33,3 +33,12 @@ Better Auth tables and user columns are added in `db/migrations/0008_better_auth
 - Migrates existing `users.password_hash` into `account` rows (provider `credential`)
 
 Local reset includes it via `pnpm run db:reset`.
+
+## Password policy
+Server-side:
+- Better Auth enforces length constraints (configured in `functions/api/better-auth.ts`).
+- Better Auth blocks compromised passwords via the `haveIBeenPwned` plugin.
+
+Client-side:
+- Registration UI validates password policy in `src/pages/Register.tsx`.
+- Account Security UI validates password policy before calling `authClient.changePassword()` in `src/components/account/SecuritySection.tsx`.

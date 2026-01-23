@@ -10,6 +10,9 @@ export const getApiEnv = (env: Env) => {
       R2_PUBLIC_BASE_URL: z.string().url().optional(),
       FRONTEND_URL: z.string().url().optional(),
       CORS_ALLOWED_ORIGINS: z.string().min(1).optional(),
+      STRIPE_SECRET_KEY: z.string().min(1).optional(),
+      STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+      STRIPE_PRO_PRICE_ID: z.string().min(1).optional(),
     },
     runtimeEnv: {
       JWT_SECRET: env.JWT_SECRET,
@@ -17,6 +20,9 @@ export const getApiEnv = (env: Env) => {
       R2_PUBLIC_BASE_URL: env.R2_PUBLIC_BASE_URL,
       FRONTEND_URL: env.FRONTEND_URL,
       CORS_ALLOWED_ORIGINS: env.CORS_ALLOWED_ORIGINS,
+      STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY,
+      STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET,
+      STRIPE_PRO_PRICE_ID: env.STRIPE_PRO_PRICE_ID,
     },
     emptyStringAsUndefined: true,
   });

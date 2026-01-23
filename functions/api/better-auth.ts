@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { username } from "better-auth/plugins";
+import { haveIBeenPwned, username } from "better-auth/plugins";
 import bcrypt from "bcryptjs";
 import type { Env } from "./types";
 import { createDb, schema } from "./db";
@@ -31,12 +31,21 @@ export function createBetterAuth(env: Env, request: Request) {
     }),
     emailAndPassword: {
       enabled: true,
+      requireEmailVerification: false,
+      minPasswordLength: 10,
+      maxPasswordLength: 128,
       password: {
         hash: async (password) => bcrypt.hash(password, 10),
         verify: async ({ hash, password }) => bcrypt.compare(password, hash),
       },
     },
-    plugins: [username()],
+    plugins: [
+      username(),
+      haveIBeenPwned({
+        customPasswordCompromisedMessage:
+          "Password is too common/compromised. Choose a stronger password.",
+      }),
+    ],
     user: {
       modelName: "users",
       fields: {

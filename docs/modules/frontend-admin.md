@@ -16,6 +16,7 @@ Authentication and account settings for the web app.
 - Profile update: `name`, `username`, `avatar_url`
 - Public profile lookup by username or user ID
 - Session is cookie-based (httpOnly). Logout is handled by Better Auth.
+- Change password + revoke other sessions are available via Better Auth.
 
 ## API surface
 - Better Auth endpoints are served under `/api/auth/*` (e.g. `POST /api/auth/sign-in/email`, `POST /api/auth/sign-up/email`).

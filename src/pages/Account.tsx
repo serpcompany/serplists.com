@@ -3,6 +3,8 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { toast } from 'sonner';
 import { ProfileSection } from '@/components/account/ProfileSection';
 import { authClient } from '@/lib/auth-client';
+import { SecuritySection } from '@/components/account/SecuritySection';
+import { BillingSection } from '@/components/account/BillingSection';
 
 interface ProfileData {
   email: string;
@@ -105,6 +107,10 @@ const Account = () => {
           onProfileUpdate={handleProfileUpdate}
           onAvatarUpdate={handleAvatarUpdate}
         />
+
+        <BillingSection />
+
+        <SecuritySection />
       </div>
     </div>
   );

@@ -160,6 +160,19 @@ class ApiClient {
   async deleteFromR2(key: string) {
     return this.request(`/uploads/file?key=${encodeURIComponent(key)}`, { method: 'DELETE' });
   }
+
+  // Billing (Stripe)
+  async getBillingStatus(): Promise<{ plan: 'free' | 'pro'; subscription: null | { status: string } }> {
+    return this.request('/billing/status');
+  }
+
+  async createBillingCheckout(): Promise<{ url: string }> {
+    return this.request('/billing/checkout', { method: 'POST', body: JSON.stringify({}) });
+  }
+
+  async createBillingPortal(): Promise<{ url: string }> {
+    return this.request('/billing/portal', { method: 'POST', body: JSON.stringify({}) });
+  }
 }
 
 export const api = new ApiClient();

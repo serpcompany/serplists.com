@@ -95,7 +95,7 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] Add Vitest coverage reporting (warn-only).
 - [x] Ensure unit tests cover critical flows (auth, templates, runs).
 - [x] Add minimal API smoke checks (health, auth, templates).
-- [ ] Decide on runtime logging/analytics sink (Sentry or equivalent) or explicitly defer for MVP.
+- [x] Decide on runtime logging/analytics sink (Sentry or equivalent) or explicitly defer for MVP (explicitly deferred; Cloudflare logs only for MVP).
 
 ## Phase 5 - Hook migration (Lefthook)
 - [x] Remove Husky (`prepare` script) and add Lefthook (`lefthook.yml`).
@@ -105,11 +105,11 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 ## Phase 6 - Product readiness (auth, entitlements, payments, security, services)
 ### Payments (Stripe)
 - **Current**: no Stripe SDK, no billing tables, no webhook endpoint, no entitlements in API/UI.
-- [ ] Decide billing model (free/pro, trial, usage-based) and plan mapping.
-- [ ] Add Stripe integration: customer + subscription mapping, webhook handler with signature verification, idempotency, and retries.
+- [x] Decide billing model (free/pro, trial, usage-based) and plan mapping (Stripe subscriptions; Free+Pro).
+- [x] Add Stripe integration: customer + subscription mapping, webhook handler with signature verification, idempotency, and retries.
 - [ ] Store entitlement state (D1 table or billing cache) and gate API/UI features accordingly.
-- [ ] Add billing entry point in Account settings (manage subscription, invoices).
-- [ ] Add webhook event log (Stripe event idempotency + debugging).
+- [x] Add billing entry point in Account settings (manage subscription, invoices).
+- [x] Add webhook event log (Stripe event idempotency + debugging).
 - [ ] Add admin override path for entitlements (manual comp/pro).
 
 ### Auth & entitlements hardening
@@ -118,9 +118,9 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] Add rate limiting for `/api/auth/*` and sensitive write endpoints.
 - [ ] Add password reset + email verification (if in MVP scope).
 - [ ] Define entitlement checks per endpoint (e.g., template limits, export/import limits).
-- [ ] Add logout endpoint + session/token revocation.
-- [ ] Add change-password endpoint + UI (requires current password).
-- [ ] Add password policy guardrails (min length + reject common passwords).
+- [x] Add logout endpoint + session/token revocation.
+- [x] Add change-password endpoint + UI (requires current password).
+- [x] Add password policy guardrails (min length + reject common passwords).
 
 ### Payload validation & data hygiene
 - **Current**: API accepts unvalidated JSON for templates/runs; client-only validation on backup import.
@@ -138,8 +138,8 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 
 ### Services & ops readiness
 - **Current**: D1 + R2 only; no documented backup/restore or lifecycle policies.
-- [ ] Document D1 backup/restore and R2 lifecycle rules (Cloudflare settings).
-- [ ] Add runbook for incident response (what to check first, where logs live).
+- [x] Document D1 backup/restore and R2 lifecycle rules (Cloudflare settings).
+- [x] Add runbook for incident response (what to check first, where logs live).
 
 #### docs
 

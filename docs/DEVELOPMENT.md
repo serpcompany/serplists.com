@@ -9,6 +9,10 @@ Local Pages Functions use `.dev.vars` for server-side variables.
 
 ```
 BETTER_AUTH_SECRET=local-dev-secret-key-not-for-production-use-at-least-32-chars
+# Required to test paid/Pro locally
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRO_PRICE_ID=price_...
 # Optional for uploads
 R2_PUBLIC_BASE_URL=https://your-public-domain
 # Optional for production CORS allowlisting

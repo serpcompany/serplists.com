@@ -56,9 +56,9 @@ Missing fields are auto-filled during import (ids, timestamps, userId).
 JSON exports **do not** include R2 assets. If a template references uploaded files
 (`image`/`video`/`file` contents with `uploadType: "upload"`), re-upload assets after import.
 
-### MVP import policy (warn-only)
-- Import is a paid-only feature (free users should not import yet).
-- Paid plan target: max 5 templates per import.
+### MVP import policy (decision + current behavior)
+- **Decision:** template import/export is a **Pro** feature (see `docs/knowledge/billing-entitlements.md`).
+- **Current behavior:** guardrails are enforced (max 5 templates/import; block assets > 5MB), but plan-based gating is not implemented yet.
 - Asset uploads should be <= 5MB each (compress before publishing).
 
 Note: `src/types/checklist.ts` includes optional fields like `seoTitle`, `seoDescription`, and `seoUrl`, but they are not required by the Zod schema.

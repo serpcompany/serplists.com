@@ -23,10 +23,12 @@
 - [x] Add server-side validation for template/run payloads (Zod)
 - [x] Harden template import/export (accept minimal JSON, legacy `items`, preserve visibility)
 - [x] Add asset warning/docs for imported templates referencing R2 files
-- [ ] Decide billing model + entitlements (Stripe or TBD) and document scope
-- [ ] Add auth hardening plan (logout/revocation, change password UI, password policy)
+- [x] Migrate auth to Better Auth (httpOnly cookie sessions)
+- [x] Decide billing model + entitlements (Stripe or TBD) and document scope (`docs/knowledge/billing-entitlements.md`)
+- [x] Add auth hardening plan (password reset/verification decision, CSRF review, session management UX) (`docs/knowledge/auth-hardening-plan.md`)
 - [x] Define security controls (CORS allowlist, upload MIME validation, import limits)
 - [x] Add import guardrail warnings (paid-only, max 5 templates per import, assets > 5MB)
-- [ ] Add Stripe webhook event log + entitlement admin override
+- [x] Add Stripe webhook event log (Stripe event idempotency + debugging)
+- [ ] Add entitlement admin override (manual comp/pro)
 - [x] Add baseline Cloudflare Pages security headers (`_headers`)
-- [ ] Document D1 backup/restore + R2 lifecycle policies
+- [x] Document D1 backup/restore + R2 lifecycle policies

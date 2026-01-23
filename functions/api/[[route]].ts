@@ -11,6 +11,8 @@ import {
 import { handleTemplates } from './handlers/templates';
 import { handleChecklists } from './handlers/checklists';
 import { handleUploads } from './handlers/uploads';
+import { handleStripe } from './handlers/stripe';
+import { handleBilling } from './handlers/billing';
 import { jsonError } from './utils/response';
 
 export const onRequestGet = handleRequest;
@@ -111,6 +113,10 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       response = await handleChecklists(request, env);
     } else if (path.startsWith('uploads')) {
       response = await handleUploads(request, env);
+    } else if (path.startsWith('stripe')) {
+      response = await handleStripe(request, env);
+    } else if (path.startsWith('billing')) {
+      response = await handleBilling(request, env);
     } else {
       response = new Response('Not Found', { status: 404 });
     }
