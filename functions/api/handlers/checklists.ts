@@ -1,13 +1,12 @@
 import { Env } from '../types';
-import { verifyJWT } from '../utils/jwt';
 import { and, desc, eq } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { checklistPayloadSchema, normalizeSectionsPayload } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
+import { getSessionUserId } from '../utils/session';
 
 export async function handleChecklists(request: Request, env: Env): Promise<Response> {
-  const authHeader = request.headers.get('Authorization');
-  const userId = authHeader ? await verifyJWT(authHeader.replace('Bearer ', ''), env.JWT_SECRET) : null;
+  const userId = await getSessionUserId(request, env);
   const url = new URL(request.url);
   const pathParts = url.pathname.split('/').filter(Boolean); // ["api", "checklists", ...]
   const checklistsSubpath = pathParts.slice(2); // after /api/checklists

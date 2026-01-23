@@ -5,6 +5,7 @@ The API applies CORS headers in `functions/api/[[route]].ts` via `functions/api/
 
 Behavior:
 - If no allowlist is configured, the API responds with `Access-Control-Allow-Origin: *` (dev-friendly default).
+- If an `Origin` header is present and no allowlist is configured, the API reflects the origin and sets `Access-Control-Allow-Credentials: true` (needed for cookie auth in local dev).
 - If `FRONTEND_URL` and/or `CORS_ALLOWED_ORIGINS` are set, the API only reflects matching request `Origin` values.
 - `OPTIONS` preflight requests return `403` when an allowlist is configured and the `Origin` is not allowed.
 - The API exposes `X-Request-Id` for client-side correlation.

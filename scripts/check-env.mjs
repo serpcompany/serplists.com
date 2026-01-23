@@ -24,7 +24,8 @@ const runtimeEnv = { ...process.env, ...fileEnv };
 
 createEnv({
   server: {
-    JWT_SECRET: z.string().min(1),
+    JWT_SECRET: z.string().min(1).optional(),
+    BETTER_AUTH_SECRET: z.string().min(32),
     R2_PUBLIC_BASE_URL: z.string().url().optional(),
     FRONTEND_URL: z.string().url().optional(),
     CORS_ALLOWED_ORIGINS: z.string().min(1).optional(),

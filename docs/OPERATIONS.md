@@ -8,7 +8,7 @@ npx wrangler pages deploy ./dist
 
 ## Secrets and environment
 Set these in Cloudflare Pages (production) or `.dev.vars` (local):
-- `JWT_SECRET` (required for auth)
+- `BETTER_AUTH_SECRET` (required for auth; 32+ chars)
 - `R2_PUBLIC_BASE_URL` (optional; used to generate public file URLs)
 - `FRONTEND_URL` (optional; when set, used as a CORS allowlist origin)
 - `CORS_ALLOWED_ORIGINS` (optional; comma-separated CORS allowlist origins)

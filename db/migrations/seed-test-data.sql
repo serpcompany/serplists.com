@@ -7,11 +7,18 @@ DELETE FROM users WHERE email LIKE '%@test.com';
 -- Insert test users
 -- Password for all test users is: "password123" (hashed with bcrypt)
 -- Hash: "$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa"
-INSERT INTO users (id, email, password_hash, name, username, avatar_url, created_at) VALUES
-  ('user-1', 'admin@test.com', '$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa', 'Admin User', 'admin', 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin', datetime('now')),
-  ('user-2', 'john@test.com', '$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa', 'John Doe', 'john', 'https://api.dicebear.com/7.x/avataaars/svg?seed=john', datetime('now')),
-  ('user-3', 'jane@test.com', '$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa', 'Jane Smith', 'jane', 'https://api.dicebear.com/7.x/avataaars/svg?seed=jane', datetime('now')),
-  ('user-4', 'bob@test.com', '$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa', 'Bob Builder', 'bob', 'https://api.dicebear.com/7.x/avataaars/svg?seed=bob', datetime('now'));
+INSERT INTO users (id, email, password_hash, name, username, display_username, avatar_url, email_verified, auth_created_at, auth_updated_at, created_at) VALUES
+  ('user-1', 'admin@test.com', '$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa', 'Admin User', 'admin', 'admin', 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin', 1, CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000, datetime('now')),
+  ('user-2', 'john@test.com', '$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa', 'John Doe', 'john', 'john', 'https://api.dicebear.com/7.x/avataaars/svg?seed=john', 1, CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000, datetime('now')),
+  ('user-3', 'jane@test.com', '$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa', 'Jane Smith', 'jane', 'jane', 'https://api.dicebear.com/7.x/avataaars/svg?seed=jane', 1, CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000, datetime('now')),
+  ('user-4', 'bob@test.com', '$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa', 'Bob Builder', 'bob', 'bob', 'https://api.dicebear.com/7.x/avataaars/svg?seed=bob', 1, CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000, datetime('now'));
+
+-- Better Auth credential accounts for the seeded users
+INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at) VALUES
+  (lower(hex(randomblob(16))), 'user-1', 'credential', 'user-1', '$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa', CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000),
+  (lower(hex(randomblob(16))), 'user-2', 'credential', 'user-2', '$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa', CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000),
+  (lower(hex(randomblob(16))), 'user-3', 'credential', 'user-3', '$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa', CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000),
+  (lower(hex(randomblob(16))), 'user-4', 'credential', 'user-4', '$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa', CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000);
 
 -- Insert test templates
 INSERT INTO templates (id, user_id, title, description, items, is_public, category, tags, slug, created_at) VALUES

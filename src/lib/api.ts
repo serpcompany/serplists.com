@@ -6,25 +6,16 @@ const API_BASE_URL = import.meta.env.DEV
   : env.VITE_API_URL ?? '/api';
 
 class ApiClient {
-  private token: string | null = null;
-
-  constructor() {
-    this.token = localStorage.getItem('auth_token');
-  }
-
   private async request(endpoint: string, options: RequestInit = {}) {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
-
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -38,14 +29,11 @@ class ApiClient {
   private async requestFormData(endpoint: string, formData: FormData) {
     const headers: HeadersInit = {};
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
-
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
       headers,
       body: formData,
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -54,38 +42,6 @@ class ApiClient {
     }
 
     return response.json();
-  }
-
-  setToken(token: string | null) {
-    this.token = token;
-    if (token) {
-      localStorage.setItem('auth_token', token);
-    } else {
-      localStorage.removeItem('auth_token');
-    }
-  }
-
-  // Auth endpoints
-  async register(email: string, password: string, name?: string) {
-    const data = await this.request('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, name }),
-    });
-    this.setToken(data.token);
-    return data;
-  }
-
-  async login(email: string, password: string) {
-    const data = await this.request('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
-    this.setToken(data.token);
-    return data;
-  }
-
-  logout() {
-    this.setToken(null);
   }
 
   // Templates
@@ -181,18 +137,6 @@ class ApiClient {
   async deleteChecklist(id: string) {
     return this.request(`/checklists/${id}`, {
       method: 'DELETE',
-    });
-  }
-
-  // User profile
-  async getProfile() {
-    return this.request('/auth/profile');
-  }
-
-  async updateProfile(updates: { name?: string; avatar_url?: string; username?: string }) {
-    return this.request('/auth/profile', {
-      method: 'PUT',
-      body: JSON.stringify(updates),
     });
   }
 

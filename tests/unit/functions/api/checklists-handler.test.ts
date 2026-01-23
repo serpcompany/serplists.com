@@ -31,12 +31,12 @@ vi.mock('drizzle-orm/d1', () => ({
   drizzle: vi.fn(() => dbMocks.db),
 }));
 
-vi.mock('@functions/api/utils/jwt', () => ({
-  verifyJWT: vi.fn(),
+vi.mock('@functions/api/utils/session', () => ({
+  getSessionUserId: vi.fn(),
 }));
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
-import { verifyJWT } from '@functions/api/utils/jwt';
+import { getSessionUserId } from '@functions/api/utils/session';
 
 describe('Checklists Handlers', () => {
   let mockEnv: any;
@@ -53,10 +53,10 @@ describe('Checklists Handlers', () => {
 
     mockEnv = {
       DB: {},
-      JWT_SECRET: 'test-secret',
+      BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
     };
 
-    vi.mocked(verifyJWT).mockResolvedValue(null);
+    vi.mocked(getSessionUserId).mockResolvedValue(null);
   });
 
   it('should reject unauthenticated access', async () => {
@@ -67,11 +67,10 @@ describe('Checklists Handlers', () => {
   });
 
   it('should create checklist runs from legacy items', async () => {
-    vi.mocked(verifyJWT).mockResolvedValue('user-123');
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
 
     const request = new Request('http://localhost/api/checklists', {
       method: 'POST',
-      headers: { Authorization: 'Bearer test-token' },
       body: JSON.stringify({
         title: 'Run',
         items: [{ id: 'item-1', title: 'Item 1' }],
@@ -90,11 +89,10 @@ describe('Checklists Handlers', () => {
   });
 
   it('should reject empty update payloads', async () => {
-    vi.mocked(verifyJWT).mockResolvedValue('user-123');
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
 
     const request = new Request('http://localhost/api/checklists/run-1', {
       method: 'PUT',
-      headers: { Authorization: 'Bearer test-token' },
       body: JSON.stringify({}),
     });
 

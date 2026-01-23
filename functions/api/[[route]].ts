@@ -3,10 +3,8 @@ import { getApiEnv } from './env';
 import { applyCorsHeaders, buildCorsPreflightResponse } from './utils/cors';
 import { getClientIp, log } from './utils/logger';
 import { checkRateLimit } from './utils/rate-limit';
+import { createBetterAuth } from './better-auth';
 import { 
-  handleRegister, 
-  handleLogin, 
-  handleProfile, 
   handleProfileByUsername, 
   handleProfileById
 } from './handlers/auth';
@@ -73,7 +71,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
     }
 
     if (ip) {
-      const isAuth = path === 'auth/login' || path === 'auth/register';
+      const isAuth = path.startsWith('auth/');
       const isSensitiveWrite =
         (request.method === 'POST' || request.method === 'PUT' || request.method === 'DELETE') &&
         (path.startsWith('templates') || path.startsWith('checklists') || path.startsWith('uploads'));
@@ -100,12 +98,9 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       response = new Response(JSON.stringify({ status: 'ok' }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } else if (path === 'auth/register') {
-      response = await handleRegister(request, env);
-    } else if (path === 'auth/login') {
-      response = await handleLogin(request, env);
-    } else if (path === 'auth/profile') {
-      response = await handleProfile(request, env);
+    } else if (path.startsWith('auth')) {
+      const auth = createBetterAuth(env, request);
+      response = await auth.handler(request);
     } else if (path === 'profiles/by-username') {
       response = await handleProfileByUsername(request, env);
     } else if (path === 'profiles/by-id') {

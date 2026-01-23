@@ -21,7 +21,7 @@ export const env = createEnv({
 ```
 
 ## Pages Functions env
-- Validate string bindings (`JWT_SECRET`, optional URLs) with `createEnv`.
+- Validate string bindings (`BETTER_AUTH_SECRET`, optional URLs) with `createEnv`.
 - Non-string bindings (D1 `DB`, R2 buckets) are not validated by t3-env.
 
 Example:
@@ -31,12 +31,12 @@ import { z } from "zod";
 
 export const getApiEnv = (env: Env) => createEnv({
   server: {
-    JWT_SECRET: z.string().min(1),
+    BETTER_AUTH_SECRET: z.string().min(32),
     R2_PUBLIC_BASE_URL: z.string().url().optional(),
     FRONTEND_URL: z.string().url().optional(),
   },
   runtimeEnv: {
-    JWT_SECRET: env.JWT_SECRET,
+    BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
     R2_PUBLIC_BASE_URL: env.R2_PUBLIC_BASE_URL,
     FRONTEND_URL: env.FRONTEND_URL,
   },

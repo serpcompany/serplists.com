@@ -3,7 +3,7 @@ import apiWorker from '../../functions/api/[[route]].ts';
 
 function buildEnv(overrides?: Record<string, unknown>) {
   return {
-    JWT_SECRET: 'test-jwt-secret',
+    BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
     ...overrides,
   } as any;
 }
@@ -73,4 +73,3 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(preflightAllowed.headers.get('Access-Control-Allow-Origin')).toBe('https://app.example.com');
   });
 });
-

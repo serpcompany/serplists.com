@@ -1,10 +1,10 @@
 import { Env } from '../types';
-import { verifyJWT } from '../utils/jwt';
 import { generateSlug } from '../utils/slug';
 import { and, desc, eq, ne, or } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { normalizeSectionsPayload, normalizeStringArray, templatePayloadSchema } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
+import { getSessionUserId } from '../utils/session';
 
 async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
   const base = generateSlug(title || 'template') || 'template';
@@ -53,8 +53,7 @@ function parseTemplateRow(template: Record<string, unknown>) {
 }
 
 export async function handleTemplates(request: Request, env: Env): Promise<Response> {
-  const authHeader = request.headers.get('Authorization');
-  const userId = authHeader ? await verifyJWT(authHeader.replace('Bearer ', ''), env.JWT_SECRET) : null;
+  const userId = await getSessionUserId(request, env);
   const url = new URL(request.url);
   const pathParts = url.pathname.split('/').filter(Boolean); // ["api", "templates", ...]
   const templatesSubpath = pathParts.slice(2); // after /api/templates

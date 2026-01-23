@@ -1,5 +1,5 @@
 import type { Env } from '../types';
-import { verifyJWT } from '../utils/jwt';
+import { getSessionUserId } from '../utils/session';
 
 type UploadBucket = 'avatars' | 'template-images' | 'template-videos' | 'template-files';
 
@@ -29,12 +29,6 @@ const allowedMimeTypesByBucket: Record<UploadBucket, Set<string>> = {
 function isAllowedUploadType(bucket: UploadBucket, file: File): boolean {
   if (!file.type) return true;
   return allowedMimeTypesByBucket[bucket].has(file.type);
-}
-
-function getAuthUserId(request: Request, env: Env): Promise<string | null> {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader) return Promise.resolve(null);
-  return verifyJWT(authHeader.replace('Bearer ', ''), env.JWT_SECRET);
 }
 
 function assertBucket(value: string | null): UploadBucket | null {
@@ -82,7 +76,7 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
 
   // Delete: DELETE /api/uploads/file?key=...
   if (request.method === 'DELETE' && uploadsSubpath[0] === 'file') {
-    const userId = await getAuthUserId(request, env);
+    const userId = await getSessionUserId(request, env);
     if (!userId) return json({ error: 'Unauthorized' }, 401);
 
     const key = url.searchParams.get('key');
@@ -99,7 +93,7 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
 
   // Upload: POST /api/uploads with multipart form-data { file, bucket }
   if (request.method === 'POST' && uploadsSubpath.length === 0) {
-    const userId = await getAuthUserId(request, env);
+    const userId = await getSessionUserId(request, env);
     if (!userId) return json({ error: 'Unauthorized' }, 401);
 
     const form = await request.formData();

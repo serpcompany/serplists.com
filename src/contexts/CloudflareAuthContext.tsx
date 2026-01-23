@@ -1,11 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { api } from '@/lib/api';
+import { authClient } from '@/lib/auth-client';
 
 interface User {
   id: string;
   email: string;
   name?: string;
-  avatar_url?: string;
+  image?: string | null;
+  username?: string;
 }
 
 interface AuthContextType {
@@ -29,26 +30,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAuthenticated = !!user;
 
   useEffect(() => {
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      setSession({ token }); // Mock session with token
-      api.getProfile()
-        .then(setUser)
-        .catch(() => {
-          localStorage.removeItem('auth_token');
+    authClient
+      .getSession()
+      .then((result) => {
+        if (result?.data?.user) {
+          setUser(result.data.user as unknown as User);
+          setSession(result.data);
+        } else {
+          setUser(null);
           setSession(null);
-        })
-        .finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
-    }
+        }
+      })
+      .catch(() => {
+        setUser(null);
+        setSession(null);
+      })
+      .finally(() => setIsLoading(false));
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const { user, token } = await api.login(email, password);
-      setUser(user);
-      setSession({ token });
+      const result = await authClient.signIn.email({ email, password });
+      if (result?.error) return false;
+
+      const nextSession = await authClient.getSession();
+      if (nextSession?.data?.user) {
+        setUser(nextSession.data.user as unknown as User);
+        setSession(nextSession.data);
+        return true;
+      }
       return true;
     } catch (error) {
       console.error('Login failed:', error);
@@ -58,9 +68,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (name: string, email: string, password: string): Promise<boolean> => {
     try {
-      const { user, token } = await api.register(email, password, name);
-      setUser(user);
-      setSession({ token });
+      const result = await authClient.signUp.email({ name, email, password });
+      if (result?.error) return false;
+
+      const nextSession = await authClient.getSession();
+      if (nextSession?.data?.user) {
+        setUser(nextSession.data.user as unknown as User);
+        setSession(nextSession.data);
+        return true;
+      }
       return true;
     } catch (error) {
       console.error('Registration failed:', error);
@@ -69,19 +85,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    api.logout();
-    setUser(null);
-    setSession(null);
+    authClient.signOut().finally(() => {
+      setUser(null);
+      setSession(null);
+    });
   };
 
   const refreshProfile = async () => {
-    if (session?.token) {
-      try {
-        const profile = await api.getProfile();
-        setUser(profile);
-      } catch (error) {
-        console.error('Failed to refresh profile:', error);
+    try {
+      const nextSession = await authClient.getSession();
+      if (nextSession?.data?.user) {
+        setUser(nextSession.data.user as unknown as User);
+        setSession(nextSession.data);
+      } else {
+        setUser(null);
+        setSession(null);
       }
+    } catch (error) {
+      console.error('Failed to refresh session:', error);
     }
   };
 

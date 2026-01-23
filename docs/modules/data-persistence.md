@@ -32,7 +32,7 @@ Source of truth: `db/migrations/*.sql`. Drizzle schema in `db/schema/index.ts` m
 
 ## API access
 Client requests go through `src/lib/api.ts`, which:
-- Sets `Authorization: Bearer <token>` when logged in
+- Uses Better Auth session cookies (httpOnly); client requests include cookies (dev uses `credentials: "include"`)
 - Uses `http://localhost:8788/api` in dev and `/api` in production
 
 Server handlers:

@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LogOut, Home, FileText, CheckSquare, Settings, ExternalLink } from "lucide-react";
-import { api } from "@/lib/api";
 interface LayoutProps {
   children: React.ReactNode;
 }
@@ -18,27 +17,6 @@ export const Layout: React.FC<LayoutProps> = ({
   } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [userProfile, setUserProfile] = useState<{
-    username: string | null;
-  }>({
-    username: null
-  });
-
-  // Fetch user's username for profile link
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (!user?.id) return;
-      try {
-        const profile = await api.getProfile();
-        if (profile) {
-          setUserProfile({ username: profile.username || null });
-        }
-      } catch (error) {
-        console.error('Error fetching user profile:', error);
-      }
-    };
-    fetchUserProfile();
-  }, [user?.id]);
   const handleLogout = () => {
     logout();
     navigate("/");
@@ -106,8 +84,8 @@ export const Layout: React.FC<LayoutProps> = ({
                     </Link>
                   </DropdownMenuItem>
                   
-                  {userProfile.username && <DropdownMenuItem asChild>
-                       <Link to={`/profile/${userProfile.username}`} target="_blank" rel="noopener noreferrer" className="w-full flex items-center gap-2 cursor-pointer">
+                  {user?.username && <DropdownMenuItem asChild>
+                       <Link to={`/profile/${user.username}`} target="_blank" rel="noopener noreferrer" className="w-full flex items-center gap-2 cursor-pointer">
                         <ExternalLink className="h-4 w-4" />
                         Public Profile
                       </Link>

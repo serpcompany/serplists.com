@@ -32,7 +32,10 @@ export function resolveCorsOrigin(request: Request, env: Env): string | null {
   const origin = request.headers.get('Origin');
   const allowed = parseAllowedOrigins(env);
 
-  if (allowed.size === 0) return '*';
+  if (allowed.size === 0) {
+    if (!origin) return '*';
+    return origin;
+  }
   if (!origin) return '*';
 
   return allowed.has(origin) ? origin : null;
@@ -44,11 +47,15 @@ export function applyCorsHeaders(response: Response, request: Request, env: Env)
 
   response.headers.set('Access-Control-Allow-Origin', origin);
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.headers.set(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Request-Id, X-CSRF-Token, X-Requested-With'
+  );
   response.headers.set('Access-Control-Expose-Headers', 'X-Request-Id');
 
   if (origin !== '*') {
     response.headers.append('Vary', 'Origin');
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
   }
 
   return response;

@@ -1,12 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { handleUploads } from '@functions/api/handlers/uploads';
-import { generateJWT } from '@functions/api/utils/jwt';
+
+vi.mock('@functions/api/utils/session', () => ({
+  getSessionUserId: vi.fn(),
+}));
+
+import { getSessionUserId } from '@functions/api/utils/session';
 
 describe('Uploads Handler', () => {
   it('rejects disallowed MIME types for avatars bucket', async () => {
-    const userId = 'user-123';
-    const JWT_SECRET = 'test-secret';
-    const token = await generateJWT(userId, JWT_SECRET);
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
 
     const form = new FormData();
     form.set('bucket', 'avatars');
@@ -14,12 +17,11 @@ describe('Uploads Handler', () => {
 
     const request = new Request('http://localhost/api/uploads', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
       body: form,
     });
 
     const env: any = {
-      JWT_SECRET,
+      BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
     };
 
@@ -31,4 +33,3 @@ describe('Uploads Handler', () => {
     expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
   });
 });
-

@@ -13,7 +13,7 @@ SERP Checklists is a single-page React app backed by Cloudflare Pages Functions.
 1. UI calls the API through `src/lib/api.ts`.
 2. `functions/api/[[route]].ts` routes requests to handler modules.
 3. Handlers read/write D1 or R2 and return JSON responses.
-4. `ApiClient` stores the JWT in `localStorage` and includes it in `Authorization` headers.
+4. Auth uses Better Auth session cookies (httpOnly). API requests include cookies (`credentials: "include"` in dev).
 
 ## Data model (D1)
 Source of truth: `db/migrations/*.sql`.
@@ -32,9 +32,9 @@ Source of truth: `db/migrations/*.sql`.
 - `checklist_runs.items` stores sections (or legacy flat items) plus completion state.
 
 ## Authentication
-- Email/password auth in `functions/api/handlers/auth.ts` using `bcryptjs`.
-- Custom JWT in `functions/api/utils/jwt.ts` with a 30-day expiry.
-- Client stores the token in `localStorage` under `auth_token` and attaches `Authorization: Bearer <token>`.
+- Better Auth is mounted under `/api/auth/*` in `functions/api/[[route]].ts`.
+- Email/password auth uses bcrypt (`bcryptjs`) and stores sessions in D1-backed tables (`account`, `session`, `verification`).
+- The client does not store tokens; it relies on httpOnly cookies set by the auth endpoints.
 
 ## File uploads
 - `POST /api/uploads` writes to R2 with a per-user key prefix.

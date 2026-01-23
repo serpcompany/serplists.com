@@ -12,16 +12,13 @@ Authentication and account settings for the web app.
 - `functions/api/utils/jwt.ts` - JWT signing/verifying
 
 ## Current scope
-- Email/password auth (register and login)
+- Email/password auth (Better Auth)
 - Profile update: `name`, `username`, `avatar_url`
 - Public profile lookup by username or user ID
-- Logout is client-only (clears `auth_token` from localStorage)
+- Session is cookie-based (httpOnly). Logout is handled by Better Auth.
 
 ## API surface
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /api/auth/profile`
-- `PUT /api/auth/profile`
+- Better Auth endpoints are served under `/api/auth/*` (e.g. `POST /api/auth/sign-in/email`, `POST /api/auth/sign-up/email`).
 - `GET /api/profiles/by-username?username=...`
 - `GET /api/profiles/by-id?userId=...`
 

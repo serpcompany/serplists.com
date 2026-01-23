@@ -22,7 +22,7 @@ describeIntegration('API Integration Tests', () => {
       local: true,
       persist: false,
       vars: {
-        JWT_SECRET: 'test-jwt-secret',
+        BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       },
     });
 

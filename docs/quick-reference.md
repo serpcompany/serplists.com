@@ -36,7 +36,7 @@ pnpm run db:query "SELECT * FROM templates LIMIT 5"
 - API base: `http://localhost:8788/api` in dev, `/api` in production
 
 ## Core API routes
-- Auth: `POST /api/auth/register`, `POST /api/auth/login`, `GET|PUT /api/auth/profile`
+- Auth (Better Auth): `POST /api/auth/sign-up/email`, `POST /api/auth/sign-in/email`, `POST /api/auth/sign-out`, `GET /api/auth/get-session`
 - Public profiles: `GET /api/profiles/by-username`, `GET /api/profiles/by-id`
 - Templates: `GET /api/templates`, `GET /api/templates/:id`, `GET /api/templates/slug/:slug`, `GET /api/templates/public?userId=...`, `POST /api/templates`, `PUT|DELETE /api/templates/:id`
 - Runs: `GET /api/checklists`, `GET /api/checklists/:id`, `POST /api/checklists`, `PUT|DELETE /api/checklists/:id`

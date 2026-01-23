@@ -25,8 +25,8 @@ This document lists the current stack as implemented in the repository. Sources 
 ## API and backend
 - Cloudflare Pages Functions in `functions/api`
 - Custom request router in `functions/api/[[route]].ts`
-- Custom JWT signing/verification in `functions/api/utils/jwt.ts`
-- `bcryptjs` for password hashing
+- Better Auth for cookie-based sessions (`functions/api/better-auth.ts`)
+- `bcryptjs` for password hashing/verification
 
 ## Storage and services
 - Cloudflare D1 (SQLite) for application data

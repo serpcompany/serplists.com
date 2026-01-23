@@ -24,7 +24,7 @@
 - [x] Harden template import/export (accept minimal JSON, legacy `items`, preserve visibility)
 - [x] Add asset warning/docs for imported templates referencing R2 files
 - [ ] Decide billing model + entitlements (Stripe or TBD) and document scope
-- [ ] Add auth hardening plan (token storage strategy, logout/revocation, change password, password policy)
+- [ ] Add auth hardening plan (logout/revocation, change password UI, password policy)
 - [x] Define security controls (CORS allowlist, upload MIME validation, import limits)
 - [x] Add import guardrail warnings (paid-only, max 5 templates per import, assets > 5MB)
 - [ ] Add Stripe webhook event log + entitlement admin override

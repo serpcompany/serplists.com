@@ -63,7 +63,7 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 ## Phase 2 - Env validation (second)
 - [x] Add `@t3-oss/env-core` (or `@t3-oss/env-nextjs` if applicable) and `zod` schema for env vars.
 - [x] Create separate client/server env schemas for Vite + Pages Functions.
-- [x] Validate `JWT_SECRET`, `R2_PUBLIC_BASE_URL`, and any Vite-exposed variables.
+- [x] Validate `BETTER_AUTH_SECRET`, `R2_PUBLIC_BASE_URL`, and any Vite-exposed variables.
 - [x] Add a `typecheck:env` script (hook wiring will be done in Phase 5).
 
 ## Phase 3 - Data layer alignment (third)
@@ -113,9 +113,9 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [ ] Add admin override path for entitlements (manual comp/pro).
 
 ### Auth & entitlements hardening
-- **Current**: custom JWT stored in `localStorage`, no refresh/revocation, no rate limiting, no email verification/reset.
-- [ ] Decide token storage strategy (httpOnly cookies vs localStorage) and session revocation flow.
-- [ ] Add rate limiting for `/api/auth/*` and sensitive write endpoints.
+- **Current**: Better Auth cookie sessions (httpOnly); rate limiting is basic; no email verification/reset.
+- [x] Decide token storage strategy (httpOnly cookies vs localStorage) and session revocation flow.
+- [x] Add rate limiting for `/api/auth/*` and sensitive write endpoints.
 - [ ] Add password reset + email verification (if in MVP scope).
 - [ ] Define entitlement checks per endpoint (e.g., template limits, export/import limits).
 - [ ] Add logout endpoint + session/token revocation.

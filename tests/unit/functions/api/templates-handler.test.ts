@@ -31,12 +31,12 @@ vi.mock('drizzle-orm/d1', () => ({
   drizzle: vi.fn(() => dbMocks.db),
 }));
 
-vi.mock('@functions/api/utils/jwt', () => ({
-  verifyJWT: vi.fn(),
+vi.mock('@functions/api/utils/session', () => ({
+  getSessionUserId: vi.fn(),
 }));
 
 import { handleTemplates } from '@functions/api/handlers/templates';
-import { verifyJWT } from '@functions/api/utils/jwt';
+import { getSessionUserId } from '@functions/api/utils/session';
 
 describe('Templates Handlers', () => {
   let mockEnv: any;
@@ -53,10 +53,10 @@ describe('Templates Handlers', () => {
 
     mockEnv = {
       DB: {},
-      JWT_SECRET: 'test-secret',
+      BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
     };
 
-    vi.mocked(verifyJWT).mockResolvedValue(null);
+    vi.mocked(getSessionUserId).mockResolvedValue(null);
   });
 
   it('should list templates and normalize legacy items', async () => {
@@ -94,12 +94,11 @@ describe('Templates Handlers', () => {
   });
 
   it('should create templates and store sections JSON', async () => {
-    vi.mocked(verifyJWT).mockResolvedValue('user-123');
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValue([]);
 
     const request = new Request('http://localhost/api/templates', {
       method: 'POST',
-      headers: { Authorization: 'Bearer test-token' },
       body: JSON.stringify({
         title: 'New Template',
         items: [{ id: 'item-1', title: 'Item 1' }],
@@ -121,11 +120,10 @@ describe('Templates Handlers', () => {
   });
 
   it('should reject invalid sections payloads on update', async () => {
-    vi.mocked(verifyJWT).mockResolvedValue('user-123');
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
 
     const request = new Request('http://localhost/api/templates/template-1', {
       method: 'PUT',
-      headers: { Authorization: 'Bearer test-token' },
       body: JSON.stringify({ sections: 'not-json' }),
     });
 

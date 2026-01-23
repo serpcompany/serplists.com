@@ -3,7 +3,7 @@
 This list reflects verified limitations and cleanup opportunities based on the current code.
 
 ## Security and auth
-- JWT tokens are stored in `localStorage` (`src/lib/api.ts`, `src/contexts/CloudflareAuthContext.tsx`). Consider moving to httpOnly cookies.
+- Auth is cookie-based (httpOnly) via Better Auth. Consider adding a dedicated password change UI and session management UI if needed.
 
 ## API and data
 - `TemplatesContext` has a stubbed `userTemplates` query that always returns an empty array. A user-specific endpoint could replace it.

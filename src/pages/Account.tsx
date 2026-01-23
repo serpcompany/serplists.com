@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { toast } from 'sonner';
 import { ProfileSection } from '@/components/account/ProfileSection';
+import { authClient } from '@/lib/auth-client';
 
 interface ProfileData {
   email: string;
@@ -15,9 +16,9 @@ const Account = () => {
   const [loading, setLoading] = useState(false);
   const [profileData, setProfileData] = useState<ProfileData>({
     email: user?.email || '',
-    fullName: '',
-    username: '',
-    avatar_url: ''
+    fullName: user?.name || '',
+    username: user?.username || '',
+    avatar_url: user?.image || ''
   });
 
   useEffect(() => {
@@ -28,15 +29,15 @@ const Account = () => {
 
   const loadProfile = async () => {
     try {
-      const { api } = await import('@/lib/api');
-      const data = await api.getProfile();
-      
+      const session = await authClient.getSession();
+      const data = session?.data?.user;
       if (data) {
         setProfileData(prev => ({
           ...prev,
+          email: data.email || prev.email,
           fullName: data.name || '',
-          username: data.username || '',
-          avatar_url: data.avatar_url || ''
+          username: (data as unknown as { username?: string }).username || '',
+          avatar_url: (data as unknown as { image?: string | null }).image || ''
         }));
       }
     } catch (error) {
@@ -59,23 +60,23 @@ const Account = () => {
     
     setLoading(true);
     try {
-      const { api } = await import('@/lib/api');
-      await api.updateProfile({
-        name: profileData.fullName,
-        avatar_url: profileData.avatar_url,
-        username: profileData.username
-      });
+      const updates: { name?: string; image?: string } = {};
+      if (profileData.fullName !== (user.name || '')) updates.name = profileData.fullName;
+      if (profileData.avatar_url !== (user.image || '')) updates.image = profileData.avatar_url;
 
-      // Refresh the profile in AuthContext so avatar updates
+      if (Object.keys(updates).length > 0) {
+        await authClient.updateUser(updates);
+      }
+
+      if (profileData.username !== (user.username || '')) {
+        await authClient.username.updateUser({ username: profileData.username || undefined });
+      }
+
       await refreshProfile();
       toast.success('Profile updated successfully');
     } catch (error) {
       console.error('Error updating profile:', error);
-      if (error instanceof Error && error.message.includes('Username is already taken')) {
-        toast.error('Username is already taken. Please choose a different one.');
-      } else {
-        toast.error('Failed to update profile');
-      }
+      toast.error('Failed to update profile');
     } finally {
       setLoading(false);
     }
