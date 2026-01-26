@@ -13,6 +13,8 @@ import { DevLoginBar } from "./components/DevLoginBar";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Templates from "./pages/Templates";
 import TemplateEditor from "./pages/TemplateEditor";
@@ -22,6 +24,7 @@ import ChecklistLibrary from "./pages/ChecklistLibrary";
 import Categories from "./pages/Categories";
 import Account from "./pages/Account";
 import UserProfile from "./pages/UserProfile";
+import Recipes from "./pages/Recipes";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,6 +49,8 @@ const App = () => {
             <Route path="/" element={<Layout><Index /></Layout>} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             
             {/* Public Content Routes */}
             <Route 
@@ -61,6 +66,14 @@ const App = () => {
               element={
                 <Layout>
                   <ChecklistLibrary />
+                </Layout>
+              } 
+            />
+            <Route 
+              path="/recipes" 
+              element={
+                <Layout>
+                  <Recipes />
                 </Layout>
               } 
             />

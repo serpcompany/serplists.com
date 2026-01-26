@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
-import { useTemplates, ChecklistTemplate, ChecklistRun } from "@/contexts/TemplatesContext";
+import { useTemplates, ChecklistRun } from "@/contexts/TemplatesContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -11,12 +11,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Progress } from "@/components/ui/progress";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { toast } from "sonner";
+import { UserTemplatesSection } from "@/components/templates/UserTemplatesSection";
 const Dashboard = () => {
   const {
     user
   } = useAuth();
+  const navigate = useNavigate();
   const {
     templates,
+    templatesLoading,
     runs,
     runsLoading,
     updateRun,
@@ -81,6 +84,8 @@ const Dashboard = () => {
     setEditingRunId(null);
     setEditTitle("");
   };
+
+  const userTemplates = templates.filter((t: { userId: unknown }) => t.userId === user?.id);
   return <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
@@ -252,6 +257,25 @@ const Dashboard = () => {
                 </div>
               </CardContent>
             </Card>}
+        </div>
+
+        <div className="mt-10">
+          <UserTemplatesSection
+            title="My Templates"
+            description="Quick access to your templates"
+            headingLevel="h2"
+            templates={userTemplates}
+            loading={templatesLoading}
+            maxItems={3}
+            onEditTemplate={(id) => navigate(`/templates/${id}/edit`)}
+          />
+          {userTemplates.length > 3 ? (
+            <div className="mt-4">
+              <Link to="/templates">
+                <Button variant="outline">View all templates</Button>
+              </Link>
+            </div>
+          ) : null}
         </div>
 
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

@@ -4,9 +4,9 @@ import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, CheckCircle, Info } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { AuthPageShell } from "@/components/auth/AuthPageShell";
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -52,107 +52,119 @@ const Login = () => {
     setEmail("admin");
     setPassword("demo");
   };
-  return <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <Link to="/" className="inline-flex items-center">
-            
-            
+  return (
+    <AuthPageShell
+      title="Sign in to your account"
+      description={
+        import.meta.env.DEV ? (
+          <span className="text-yellow-600 dark:text-yellow-400">🧪 Development Mode - Use quick login buttons below</span>
+        ) : undefined
+      }
+      footer={
+        <>
+          Or{" "}
+          <Link to="/register" className="font-medium text-primary hover:underline">
+            create a new account
           </Link>
-          
-          <p className="mt-2 text-sm text-gray-600">
-            Or{" "}
-            <Link to="/register" className="font-medium text-primary hover:underline">
-              create a new account
-            </Link>
-          </p>
+        </>
+      }
+    >
+      {import.meta.env.DEV && (
+        <div className="grid grid-cols-2 gap-2 rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setEmail("admin@test.com");
+              setPassword("password123");
+            }}
+            className="text-xs"
+          >
+            <div className="mr-1 h-2 w-2 rounded-full bg-red-500" />
+            Fill Admin
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setEmail("john@test.com");
+              setPassword("password123");
+            }}
+            className="text-xs"
+          >
+            <div className="mr-1 h-2 w-2 rounded-full bg-blue-500" />
+            Fill John
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setEmail("jane@test.com");
+              setPassword("password123");
+            }}
+            className="text-xs"
+          >
+            <div className="mr-1 h-2 w-2 rounded-full bg-purple-500" />
+            Fill Jane
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setEmail("bob@test.com");
+              setPassword("password123");
+            }}
+            className="text-xs"
+          >
+            <div className="mr-1 h-2 w-2 rounded-full bg-green-500" />
+            Fill Bob
+          </Button>
         </div>
+      )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Sign in to your account</CardTitle>
-            {import.meta.env.DEV && (
-              <CardDescription className="text-yellow-600 dark:text-yellow-400">
-                🧪 Development Mode - Use quick login buttons below
-              </CardDescription>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {import.meta.env.DEV && (
-              <div className="grid grid-cols-2 gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEmail('admin@test.com');
-                    setPassword('password123');
-                  }}
-                  className="text-xs"
-                >
-                  <div className="w-2 h-2 rounded-full bg-red-500 mr-1" />
-                  Fill Admin
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEmail('john@test.com');
-                    setPassword('password123');
-                  }}
-                  className="text-xs"
-                >
-                  <div className="w-2 h-2 rounded-full bg-blue-500 mr-1" />
-                  Fill John
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEmail('jane@test.com');
-                    setPassword('password123');
-                  }}
-                  className="text-xs"
-                >
-                  <div className="w-2 h-2 rounded-full bg-purple-500 mr-1" />
-                  Fill Jane
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEmail('bob@test.com');
-                    setPassword('password123');
-                  }}
-                  className="text-xs"
-                >
-                  <div className="w-2 h-2 rounded-full bg-green-500 mr-1" />
-                  Fill Bob
-                </Button>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="text" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
-              </div>
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in...
-                  </> : "Sign in with email"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </div>;
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="text"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            required
+          />
+          <div className="text-right">
+            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+              Forgot password?
+            </Link>
+          </div>
+        </div>
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in...
+            </>
+          ) : (
+            "Sign in with email"
+          )}
+        </Button>
+      </form>
+    </AuthPageShell>
+  );
 };
 export default Login;

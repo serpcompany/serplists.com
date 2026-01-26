@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useTemplates } from "@/contexts/TemplatesContext";
 import { getPredefinedCategories } from "@/utils/categories";
 
-export const useTemplateLibrary = (category?: string) => {
+export const useTemplateLibrary = (category?: string, templateType?: "checklist" | "recipe") => {
   const { templates: contextTemplates, templatesLoading } = useTemplates();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -11,8 +11,10 @@ export const useTemplateLibrary = (category?: string) => {
 
   // Filter to only public templates
   const templates = useMemo(() => {
-    return contextTemplates.filter(t => t.isPublic === true);
-  }, [contextTemplates]);
+    const publicTemplates = contextTemplates.filter(t => t.isPublic === true);
+    if (!templateType) return publicTemplates;
+    return publicTemplates.filter(t => t.type === templateType);
+  }, [contextTemplates, templateType]);
 
   useEffect(() => {
     // Extract all unique categories and combine with predefined ones

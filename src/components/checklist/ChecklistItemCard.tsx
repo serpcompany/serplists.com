@@ -15,7 +15,7 @@ interface ChecklistItemCardProps {
   onToggleExpand: () => void;
   onSelect: () => void;
   onItemToggle: (itemId: string, isCompleted: boolean) => void;
-  onSubItemToggle?: (itemId: string, subItemId: string, isCompleted: boolean) => void;
+  onSubItemToggle?: (itemId: string, contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
   showProgress?: boolean;
 }
 
@@ -76,8 +76,13 @@ export const ChecklistItemCard: React.FC<ChecklistItemCardProps> = ({
           <CollapsibleContent>
             <CardContent>
               <ContentRenderer 
-                contents={item.contents} 
+                contents={item.contents}
                 disabled={false}
+                onSubItemToggle={
+                  onSubItemToggle
+                    ? (contentIndex, subItemIndex, isCompleted) => onSubItemToggle(item.id, contentIndex, subItemIndex, isCompleted)
+                    : undefined
+                }
               />
             </CardContent>
           </CollapsibleContent>

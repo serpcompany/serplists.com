@@ -8,6 +8,8 @@ import {
   ChecklistTemplate, 
   ChecklistRun, 
   ChecklistSection,
+  TemplateImportOptions,
+  TemplateImportSummary,
   TemplatesContextProps 
 } from "@/types/checklist";
 
@@ -53,6 +55,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           id: template.id,
           title: template.title,
           description: template.description || '',
+          type: typeof template.type === 'string' ? template.type : 'checklist',
           sections: (() => {
             if (template.sections) return template.sections;
             if (template.items) {
@@ -169,6 +172,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const result = await api.createTemplate({
         title: templateData.title,
         description: templateData.description,
+        type: templateData.type,
         sections: templateData.sections,
         is_public: finalIsPublic,
         categories: templateData.categories || [],
@@ -179,6 +183,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         id: result.id,
         title: templateData.title,
         description: templateData.description || '',
+        type: templateData.type,
         sections: templateData.sections,
         categories: templateData.categories || [],
         tags: templateData.tags || [],
@@ -213,6 +218,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const result = await api.updateTemplate(template.id, {
         title: template.title,
         description: template.description,
+        type: template.type,
         sections: template.sections,
         categories: template.categories,
         tags: template.tags,
@@ -364,33 +370,47 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   const importTemplatesMutation = useMutation({
-    mutationFn: async (templatesData: ChecklistTemplate[]) => {
+    mutationFn: async ({ templatesData, options }: { templatesData: ChecklistTemplate[]; options?: TemplateImportOptions }): Promise<TemplateImportSummary> => {
       if (!user) throw new Error("User must be logged in to import templates");
-      
-      const templatesToImport = prepareTemplatesForImport(templatesData, user.id);
-      
-      // Import templates one by one using the API
-      for (const template of templatesToImport) {
-        // Pass the full sections structure to preserve all content
-        await api.createTemplate({
-          title: template.title,
-          description: template.description,
-          sections: template.sections, // Preserve descriptions, contents, subItems
-          is_public: template.isPublic,
-          categories: template.categories || [],
-          tags: template.tags || []
+
+      const MAX_TEMPLATES_PER_IMPORT = 5;
+      const MAX_ASSET_BYTES = 5 * 1024 * 1024;
+
+      const countOversizedAssets = (templates: ChecklistTemplate[]): number => {
+        let count = 0;
+        templates.forEach((template) => {
+          template.sections.forEach((section) => {
+            section.items.forEach((item) => {
+              item.contents?.forEach((content) => {
+                if (content.type !== "image" && content.type !== "video" && content.type !== "file") return;
+                if (typeof content.fileSize === "number" && content.fileSize > MAX_ASSET_BYTES) {
+                  count += 1;
+                }
+              });
+            });
+          });
         });
+        return count;
+      };
+
+      if (templatesData.length > MAX_TEMPLATES_PER_IMPORT) {
+        throw new Error(`Import limited to ${MAX_TEMPLATES_PER_IMPORT} templates per file for now`);
+      }
+
+      const oversizeAssets = countOversizedAssets(templatesData);
+      if (oversizeAssets > 0) {
+        throw new Error("Import blocked: one or more assets are over 5MB");
       }
       
-      return true;
+      const templatesToImport = prepareTemplatesForImport(templatesData, user.id, options);
+      return api.importTemplateBackup({
+        templates: templatesToImport,
+        options: { visibility: options?.visibility ?? "preserve" },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
       queryClient.invalidateQueries({ queryKey: ['user-templates'] });
-      toast.success("Templates imported successfully");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to import templates: ${error.message}`);
     }
   });
 
@@ -415,8 +435,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return allTemplates.find(template => template.slug === slug);
   };
 
-  const importTemplatesWrapper = async (templatesData: ChecklistTemplate[]): Promise<void> => {
-    await importTemplatesMutation.mutateAsync(templatesData);
+  const importTemplatesWrapper = async (templatesData: ChecklistTemplate[], options?: TemplateImportOptions): Promise<TemplateImportSummary> => {
+    return importTemplatesMutation.mutateAsync({ templatesData, options });
   };
 
   const value: TemplatesContextProps = {

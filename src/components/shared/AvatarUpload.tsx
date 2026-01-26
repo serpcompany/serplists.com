@@ -5,6 +5,7 @@ import { Camera, Upload, User } from "lucide-react";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { authClient } from "@/lib/auth-client";
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;
@@ -19,7 +20,7 @@ export const AvatarUpload = ({
   size = "md", 
   editable = true 
 }: AvatarUploadProps) => {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -53,7 +54,8 @@ export const AvatarUpload = ({
 
     try {
       const upload = await api.uploadToR2({ bucket: 'avatars', file });
-      await api.updateProfile({ avatar_url: upload.url });
+      await authClient.updateUser({ image: upload.url });
+      await refreshProfile();
       toast.success("Avatar updated successfully!");
       onAvatarUpdate?.(upload.url);
     } catch (error) {

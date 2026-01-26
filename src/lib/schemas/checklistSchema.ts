@@ -39,14 +39,35 @@ export const checklistTemplateSchema = z.object({
   id: z.string(),
   title: z.string(),
   description: z.string().optional(),
+  type: z.enum(["checklist", "recipe"]).optional(),
   sections: z.array(checklistSectionSchema),
   userId: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
   isPublic: z.boolean(),
+  version: z.number().int().optional(),
   slug: z.string().optional(),
   categories: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional()
+});
+
+// Lenient schema for imports (minimal fields, optional metadata)
+export const checklistTemplateImportSchema = z.object({
+  id: z.string().optional(),
+  title: z.string(),
+  description: z.string().optional(),
+  type: z.enum(["checklist", "recipe"]).optional(),
+  sections: z.union([z.array(z.unknown()), z.string()]).optional(),
+  items: z.union([z.array(z.unknown()), z.string()]).optional(),
+  userId: z.string().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  isPublic: z.boolean().optional(),
+  version: z.number().int().optional(),
+  slug: z.string().optional(),
+  categories: z.union([z.array(z.string()), z.string()]).optional(),
+  category: z.string().optional(),
+  tags: z.union([z.array(z.string()), z.string()]).optional()
 });
 
 // Schema for checklist runs
@@ -81,6 +102,7 @@ export type ChecklistItemContent = z.infer<typeof checklistItemContentSchema>;
 export type ChecklistItem = z.infer<typeof checklistItemSchema>;
 export type ChecklistSection = z.infer<typeof checklistSectionSchema>;
 export type ChecklistTemplate = z.infer<typeof checklistTemplateSchema>;
+export type ChecklistTemplateImport = z.infer<typeof checklistTemplateImportSchema>;
 export type ChecklistRun = z.infer<typeof checklistRunSchema>;
 export type TemplateBackup = z.infer<typeof templateBackupSchema>;
 
@@ -95,4 +117,8 @@ export const validateBackup = (data: unknown): TemplateBackup => {
 
 export const validateTemplateArray = (data: unknown): ChecklistTemplate[] => {
   return z.array(checklistTemplateSchema).parse(data);
+};
+
+export const validateTemplateImportArray = (data: unknown): ChecklistTemplateImport[] => {
+  return z.array(checklistTemplateImportSchema).parse(data);
 };

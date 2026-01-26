@@ -4,6 +4,9 @@ import { ChecklistTemplate } from "@/types/checklist";
 export const useTemplateEditorState = (initialTemplate?: ChecklistTemplate) => {
   const [title, setTitle] = useState(initialTemplate?.title || "");
   const [description, setDescription] = useState(initialTemplate?.description || "");
+  const [templateType, setTemplateType] = useState<"checklist" | "recipe">(
+    initialTemplate?.type || "checklist"
+  );
   const [seoTitle, setSeoTitle] = useState(initialTemplate?.seoTitle || "");
   const [seoDescription, setSeoDescription] = useState(initialTemplate?.seoDescription || "");
   const [seoUrl, setSeoUrl] = useState(initialTemplate?.seoUrl || "");
@@ -46,6 +49,8 @@ export const useTemplateEditorState = (initialTemplate?: ChecklistTemplate) => {
     setTitle,
     description,
     setDescription,
+    templateType,
+    setTemplateType,
     seoTitle,
     setSeoTitle,
     seoDescription,

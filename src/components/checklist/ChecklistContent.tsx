@@ -7,9 +7,19 @@ import { ChecklistItem, ChecklistSection } from '@/types/checklist';
 
 interface ChecklistContentProps {
   selectedData: { item: ChecklistItem; section: ChecklistSection } | null;
+  disabled?: boolean;
+  onItemToggle?: (itemId: string, isCompleted: boolean) => void;
+  onSubItemToggle?: (itemId: string, contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
+  actions?: React.ReactNode;
 }
 
-export const ChecklistContent: React.FC<ChecklistContentProps> = ({ selectedData }) => {
+export const ChecklistContent: React.FC<ChecklistContentProps> = ({
+  selectedData,
+  disabled = false,
+  onItemToggle,
+  onSubItemToggle,
+  actions,
+}) => {
   if (!selectedData) {
     return (
       <Card>
@@ -26,9 +36,16 @@ export const ChecklistContent: React.FC<ChecklistContentProps> = ({ selectedData
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <Checkbox disabled className="opacity-50" />
+            <Checkbox
+              checked={selectedData.item.isCompleted || false}
+              disabled={disabled || !onItemToggle}
+              className={disabled || !onItemToggle ? "opacity-50" : ""}
+              onCheckedChange={() => onItemToggle?.(selectedData.item.id, !selectedData.item.isCompleted)}
+            />
             <div>
-              <CardTitle>{selectedData.item.title}</CardTitle>
+              <CardTitle className={selectedData.item.isCompleted ? "line-through text-muted-foreground" : ""}>
+                {selectedData.item.title}
+              </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
                 From section: {selectedData.section.title}
               </p>
@@ -45,9 +62,14 @@ export const ChecklistContent: React.FC<ChecklistContentProps> = ({ selectedData
       <CardContent>
         <ContentRenderer 
           contents={selectedData.item.contents || []} 
-          disabled={true}
+          disabled={disabled}
+          onSubItemToggle={(contentIndex, subItemIndex, isCompleted) =>
+            onSubItemToggle?.(selectedData.item.id, contentIndex, subItemIndex, isCompleted)
+          }
         />
       </CardContent>
+
+      {actions ? <div className="border-t p-4 flex justify-end">{actions}</div> : null}
     </Card>
   );
 };

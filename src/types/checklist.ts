@@ -32,6 +32,7 @@ export type ChecklistTemplate = {
   id: string;
   title: string;
   description?: string;
+  type?: "checklist" | "recipe";
   sections: ChecklistSection[];
   userId: string;
   createdAt: string;
@@ -63,6 +64,15 @@ export type ChecklistRun = {
   templateVersion?: number;
 };
 
+export type TemplateImportOptions = {
+  visibility?: "preserve" | "public" | "private";
+};
+
+export type TemplateImportSummary = {
+  imported: number;
+  failed: { title: string; reason: string }[];
+};
+
 export interface TemplatesContextProps {
   templates: ChecklistTemplate[];
   allTemplates: ChecklistTemplate[];
@@ -80,5 +90,5 @@ export interface TemplatesContextProps {
   createRun: (params: { templateId: string; runName?: string }) => Promise<ChecklistRun | null>;
   updateRun: (run: ChecklistRun) => void;
   deleteRun: (id: string) => void;
-  importTemplates: (templates: ChecklistTemplate[]) => Promise<void>;
+  importTemplates: (templates: ChecklistTemplate[], options?: TemplateImportOptions) => Promise<TemplateImportSummary>;
 }

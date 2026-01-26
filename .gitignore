@@ -1,3 +1,4 @@
+.dev.vars*
 # Logs
 logs
 *.log
@@ -34,9 +35,6 @@ out
 .claude
 CLAUDE.md
 
-# Local development variables
-.dev.vars
-
 .wrangler
 .page-audit
 .git
@@ -46,3 +44,7 @@ __pycache__
 .env.local
 .next
 .github
+playwright-report
+test-results
+tests/test-results
+coverage

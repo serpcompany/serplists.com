@@ -1,4 +1,3 @@
-// Supabase removed - using Cloudflare API
 import { optimizeImage, isImageFile } from "@/lib/imageOptimization";
 import { api } from "@/lib/api";
 

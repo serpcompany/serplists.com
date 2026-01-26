@@ -10,11 +10,13 @@ import { safeUrl } from '@/lib/utils/safeUrl';
 interface ContentRendererProps {
   contents: ChecklistItemContent[];
   disabled?: boolean;
+  onSubItemToggle?: (contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
 }
 
 export const ContentRenderer: React.FC<ContentRendererProps> = ({ 
   contents, 
-  disabled = false 
+  disabled = false,
+  onSubItemToggle,
 }) => {
   if (!contents || contents.length === 0) {
     return (
@@ -102,10 +104,17 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
                 <h4 className="font-medium">Sub-tasks</h4>
               </div>
               <div className="space-y-2 pl-7">
-                {content.subItems.map((subItem: ChecklistSubItem) => (
+                {content.subItems.map((subItem: ChecklistSubItem, subItemIndex: number) => (
                   <div key={subItem.id} className="flex items-center gap-3">
-                    <Checkbox disabled={disabled} className={disabled ? "opacity-50" : ""} />
-                    <span>{subItem.title}</span>
+                    <Checkbox
+                      checked={!!subItem.isCompleted}
+                      disabled={disabled || !onSubItemToggle}
+                      className={disabled || !onSubItemToggle ? "opacity-50" : ""}
+                      onCheckedChange={() =>
+                        onSubItemToggle?.(contentIndex, subItemIndex, !subItem.isCompleted)
+                      }
+                    />
+                    <span className={subItem.isCompleted ? "line-through text-muted-foreground" : ""}>{subItem.title}</span>
                   </div>
                 ))}
               </div>

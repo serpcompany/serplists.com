@@ -1,0 +1,125 @@
+import type { Env } from "../types";
+
+export type StripeConfig = {
+  secretKey: string;
+  webhookSecret: string;
+  proPriceId: string;
+};
+
+export function getStripeConfig(env: Env): StripeConfig | null {
+  const secretKey = env.STRIPE_SECRET_KEY;
+  const webhookSecret = env.STRIPE_WEBHOOK_SECRET;
+  const proPriceId = env.STRIPE_PRO_PRICE_ID;
+  if (!secretKey || !webhookSecret || !proPriceId) return null;
+  return { secretKey, webhookSecret, proPriceId };
+}
+
+export function assertStripeConfigured(env: Env): StripeConfig {
+  const config = getStripeConfig(env);
+  if (!config) {
+    throw new Error(
+      "Stripe is not configured. Set STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and STRIPE_PRO_PRICE_ID."
+    );
+  }
+  return config;
+}
+
+function encodeForm(body: Record<string, string | number | boolean | undefined | null>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(body)) {
+    if (value === undefined || value === null) continue;
+    params.set(key, typeof value === "boolean" ? (value ? "true" : "false") : String(value));
+  }
+  return params.toString();
+}
+
+export async function stripePostForm<T>(
+  secretKey: string,
+  path: string,
+  body: Record<string, string | number | boolean | undefined | null>
+): Promise<T> {
+  const resp = await fetch(`https://api.stripe.com${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: encodeForm(body),
+  });
+
+  const text = await resp.text();
+  if (!resp.ok) {
+    throw new Error(`Stripe API error (${resp.status}): ${text}`);
+  }
+  return JSON.parse(text) as T;
+}
+
+function parseStripeSignatureHeader(header: string): { timestamp: number; v1: string[] } | null {
+  const parts = header.split(",").map((p) => p.trim());
+  let timestamp: number | null = null;
+  const v1: string[] = [];
+
+  for (const part of parts) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    const key = part.slice(0, idx);
+    const value = part.slice(idx + 1);
+    if (key === "t") {
+      const parsed = Number.parseInt(value, 10);
+      if (Number.isFinite(parsed)) timestamp = parsed;
+    } else if (key === "v1") {
+      v1.push(value);
+    }
+  }
+
+  if (!timestamp || v1.length === 0) return null;
+  return { timestamp, v1 };
+}
+
+async function hmacSha256Hex(secret: string, message: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
+export async function verifyStripeWebhookSignature(params: {
+  payload: string;
+  signatureHeader: string | null;
+  webhookSecret: string;
+  toleranceSeconds?: number;
+}): Promise<{ ok: true; timestamp: number } | { ok: false; error: string }> {
+  const toleranceSeconds = params.toleranceSeconds ?? 300;
+  if (!params.signatureHeader) return { ok: false, error: "Missing Stripe-Signature header" };
+
+  const parsed = parseStripeSignatureHeader(params.signatureHeader);
+  if (!parsed) return { ok: false, error: "Invalid Stripe-Signature header" };
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (Math.abs(nowSeconds - parsed.timestamp) > toleranceSeconds) {
+    return { ok: false, error: "Stripe-Signature timestamp outside tolerance" };
+  }
+
+  const expected = await hmacSha256Hex(params.webhookSecret, `${parsed.timestamp}.${params.payload}`);
+  const matched = parsed.v1.some((sig) => constantTimeEqual(sig, expected));
+
+  if (!matched) return { ok: false, error: "Invalid Stripe-Signature" };
+  return { ok: true, timestamp: parsed.timestamp };
+}
+

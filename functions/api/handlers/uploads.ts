@@ -1,5 +1,5 @@
 import type { Env } from '../types';
-import { verifyJWT } from '../utils/jwt';
+import { getSessionUserId } from '../utils/session';
 
 type UploadBucket = 'avatars' | 'template-images' | 'template-videos' | 'template-files';
 
@@ -10,10 +10,25 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
-function getAuthUserId(request: Request, env: Env): Promise<string | null> {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader) return Promise.resolve(null);
-  return verifyJWT(authHeader.replace('Bearer ', ''), env.JWT_SECRET);
+const allowedMimeTypesByBucket: Record<UploadBucket, Set<string>> = {
+  avatars: new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+  'template-images': new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+  'template-videos': new Set(['video/mp4', 'video/webm', 'video/quicktime']),
+  'template-files': new Set([
+    'application/pdf',
+    'application/zip',
+    'application/json',
+    'text/plain',
+    'text/markdown',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ]),
+};
+
+function isAllowedUploadType(bucket: UploadBucket, file: File): boolean {
+  if (!file.type) return true;
+  return allowedMimeTypesByBucket[bucket].has(file.type);
 }
 
 function assertBucket(value: string | null): UploadBucket | null {
@@ -61,7 +76,7 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
 
   // Delete: DELETE /api/uploads/file?key=...
   if (request.method === 'DELETE' && uploadsSubpath[0] === 'file') {
-    const userId = await getAuthUserId(request, env);
+    const userId = await getSessionUserId(request, env);
     if (!userId) return json({ error: 'Unauthorized' }, 401);
 
     const key = url.searchParams.get('key');
@@ -78,7 +93,7 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
 
   // Upload: POST /api/uploads with multipart form-data { file, bucket }
   if (request.method === 'POST' && uploadsSubpath.length === 0) {
-    const userId = await getAuthUserId(request, env);
+    const userId = await getSessionUserId(request, env);
     if (!userId) return json({ error: 'Unauthorized' }, 401);
 
     const form = await request.formData();
@@ -90,6 +105,18 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
 
     const maxBytes = 50 * 1024 * 1024;
     if (file.size > maxBytes) return json({ error: 'File too large (max 50MB)' }, 413);
+
+    if (!isAllowedUploadType(bucket, file)) {
+      return json(
+        {
+          error: 'Unsupported file type for bucket',
+          bucket,
+          contentType: file.type || null,
+          allowed: Array.from(allowedMimeTypesByBucket[bucket]),
+        },
+        415
+      );
+    }
 
     const filename = sanitizeFilename(file.name || 'upload');
     const ext = filename.includes('.') ? filename.split('.').pop() : '';
@@ -116,4 +143,3 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
 
   return json({ error: 'Not Found' }, 404);
 }
-

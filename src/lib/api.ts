@@ -1,27 +1,21 @@
-const API_BASE_URL = import.meta.env.DEV 
-  ? 'http://localhost:8788/api' 
-  : '/api';
+import { env } from "@/env";
+
+const DEV_API_BASE_URL = env.VITE_API_URL ?? 'http://localhost:8788/api';
+const API_BASE_URL = import.meta.env.DEV
+  ? DEV_API_BASE_URL
+  : env.VITE_API_URL ?? '/api';
 
 class ApiClient {
-  private token: string | null = null;
-
-  constructor() {
-    this.token = localStorage.getItem('auth_token');
-  }
-
   private async request(endpoint: string, options: RequestInit = {}) {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
-
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -35,14 +29,11 @@ class ApiClient {
   private async requestFormData(endpoint: string, formData: FormData) {
     const headers: HeadersInit = {};
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
-
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
       headers,
       body: formData,
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -51,38 +42,6 @@ class ApiClient {
     }
 
     return response.json();
-  }
-
-  setToken(token: string | null) {
-    this.token = token;
-    if (token) {
-      localStorage.setItem('auth_token', token);
-    } else {
-      localStorage.removeItem('auth_token');
-    }
-  }
-
-  // Auth endpoints
-  async register(email: string, password: string, name?: string) {
-    const data = await this.request('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, name }),
-    });
-    this.setToken(data.token);
-    return data;
-  }
-
-  async login(email: string, password: string) {
-    const data = await this.request('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
-    this.setToken(data.token);
-    return data;
-  }
-
-  logout() {
-    this.setToken(null);
   }
 
   // Templates
@@ -105,6 +64,7 @@ class ApiClient {
   async createTemplate(template: {
     title: string;
     description?: string;
+    type?: "checklist" | "recipe";
     sections?: unknown[];
     items?: unknown[];
     is_public?: boolean;
@@ -120,6 +80,7 @@ class ApiClient {
   async updateTemplate(id: string, updates: {
     title?: string;
     description?: string;
+    type?: "checklist" | "recipe";
     sections?: unknown[];
     categories?: string[];
     tags?: string[];
@@ -135,6 +96,25 @@ class ApiClient {
   async deleteTemplate(id: string) {
     return this.request(`/templates/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  async exportTemplateBackup(params?: { includePublic?: boolean }) {
+    const includePublic = params?.includePublic ? '?includePublic=1' : '';
+    return this.request(`/templates/backup${includePublic}`);
+  }
+
+  async importTemplateBackup(payload: {
+    templates: unknown[];
+    options?: { visibility?: 'preserve' | 'public' | 'private' };
+  }): Promise<{ imported: number; failed: { title: string; reason: string }[] }> {
+    return this.request('/templates/backup', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  async clonePublicTemplate(templateId: string, payload?: { visibility?: 'public' | 'private' | 'preserve' }): Promise<{ id: string; slug?: string }> {
+    return this.request(`/templates/${encodeURIComponent(templateId)}/clone`, {
+      method: 'POST',
+      body: JSON.stringify(payload ?? {}),
     });
   }
 
@@ -181,18 +161,6 @@ class ApiClient {
     });
   }
 
-  // User profile
-  async getProfile() {
-    return this.request('/auth/profile');
-  }
-
-  async updateProfile(updates: { name?: string; avatar_url?: string; username?: string }) {
-    return this.request('/auth/profile', {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
-  }
-
   // Public profiles
   async getProfileByUsername(username: string) {
     return this.request(`/profiles/by-username?username=${encodeURIComponent(username)}`);
@@ -212,6 +180,19 @@ class ApiClient {
 
   async deleteFromR2(key: string) {
     return this.request(`/uploads/file?key=${encodeURIComponent(key)}`, { method: 'DELETE' });
+  }
+
+  // Billing (Stripe)
+  async getBillingStatus(): Promise<{ plan: 'free' | 'pro'; limits?: { maxTemplates: number | null; maxActiveRuns: number | null } }> {
+    return this.request('/billing/status');
+  }
+
+  async createBillingCheckout(): Promise<{ url: string }> {
+    return this.request('/billing/checkout', { method: 'POST', body: JSON.stringify({}) });
+  }
+
+  async createBillingPortal(): Promise<{ url: string }> {
+    return this.request('/billing/portal', { method: 'POST', body: JSON.stringify({}) });
   }
 }
 

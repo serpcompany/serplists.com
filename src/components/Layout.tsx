@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LogOut, Home, FileText, CheckSquare, Settings, ExternalLink } from "lucide-react";
-import { api } from "@/lib/api";
-// Supabase removed - using Cloudflare API
 interface LayoutProps {
   children: React.ReactNode;
 }
@@ -19,27 +17,6 @@ export const Layout: React.FC<LayoutProps> = ({
   } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [userProfile, setUserProfile] = useState<{
-    username: string | null;
-  }>({
-    username: null
-  });
-
-  // Fetch user's username for profile link
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (!user?.id) return;
-      try {
-        const profile = await api.getProfile();
-        if (profile) {
-          setUserProfile({ username: profile.username || null });
-        }
-      } catch (error) {
-        console.error('Error fetching user profile:', error);
-      }
-    };
-    fetchUserProfile();
-  }, [user?.id]);
   const handleLogout = () => {
     logout();
     navigate("/");
@@ -56,6 +33,10 @@ export const Layout: React.FC<LayoutProps> = ({
     name: "Checklists",
     href: "/checklists",
     icon: CheckSquare
+  }, {
+    name: "Recipes",
+    href: "/recipes",
+    icon: CheckSquare
   }];
   const isActive = (href: string) => location.pathname === href;
   return <div className="min-h-screen bg-background flex flex-col">
@@ -67,7 +48,7 @@ export const Layout: React.FC<LayoutProps> = ({
             <div className="flex items-center">
               <Link to="/dashboard" className="flex items-center gap-2">
                 
-                <span className="text-xl font-bold">SERP Checklists</span>
+                <span className="text-xl font-bold">SERP Lists</span>
               </Link>
             </div>
 
@@ -84,44 +65,50 @@ export const Layout: React.FC<LayoutProps> = ({
 
             {/* User Menu */}
             <div className="flex items-center gap-4">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="p-0 h-auto hover:bg-transparent">
-                    <Avatar className="h-8 w-8 cursor-pointer transition-opacity hover:opacity-80">
-                      <AvatarFallback className="bg-primary text-primary-foreground text-sm font-medium">
-                        {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'U'}
-                      </AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-background border shadow-lg" sideOffset={8}>
-                  <div className="px-3 py-2 border-b">
-                    <p className="text-sm font-medium">{user?.name}</p>
-                    <p className="text-xs text-muted-foreground">{user?.email}</p>
-                  </div>
-                  
-                  <DropdownMenuItem asChild>
-                    <Link to="/account" className="w-full flex items-center gap-2 cursor-pointer">
-                      <Settings className="h-4 w-4" />
-                      Account Settings
-                    </Link>
-                  </DropdownMenuItem>
-                  
-                  {userProfile.username && <DropdownMenuItem asChild>
-                       <Link to={`/profile/${userProfile.username}`} target="_blank" rel="noopener noreferrer" className="w-full flex items-center gap-2 cursor-pointer">
-                        <ExternalLink className="h-4 w-4" />
-                        Public Profile
+              {user ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="p-0 h-auto hover:bg-transparent">
+                      <Avatar className="h-8 w-8 cursor-pointer transition-opacity hover:opacity-80">
+                        <AvatarFallback className="bg-primary text-primary-foreground text-sm font-medium">
+                          {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'U'}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56 bg-background border shadow-lg" sideOffset={8}>
+                    <div className="px-3 py-2 border-b">
+                      <p className="text-sm font-medium">{user?.name}</p>
+                      <p className="text-xs text-muted-foreground">{user?.email}</p>
+                    </div>
+                    
+                    <DropdownMenuItem asChild>
+                      <Link to="/account" className="w-full flex items-center gap-2 cursor-pointer">
+                        <Settings className="h-4 w-4" />
+                        Account Settings
                       </Link>
-                    </DropdownMenuItem>}
-                  
-                  <DropdownMenuSeparator />
-                  
-                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50">
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Sign Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    </DropdownMenuItem>
+                    
+                    {user?.username && <DropdownMenuItem asChild>
+                         <Link to={`/profile/${user.username}`} target="_blank" rel="noopener noreferrer" className="w-full flex items-center gap-2 cursor-pointer">
+                          <ExternalLink className="h-4 w-4" />
+                          Public Profile
+                        </Link>
+                      </DropdownMenuItem>}
+                    
+                    <DropdownMenuSeparator />
+                    
+                    <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50">
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Sign Out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Button asChild variant="outline">
+                  <Link to="/login">Sign In</Link>
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -162,6 +149,9 @@ export const Layout: React.FC<LayoutProps> = ({
               </Link>
               <Link to="/checklists" className="hover:text-foreground transition-colors">
                 Checklist Library
+              </Link>
+              <Link to="/recipes" className="hover:text-foreground transition-colors">
+                Recipes
               </Link>
             </div>
           </div>

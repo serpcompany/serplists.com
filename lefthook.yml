@@ -1,0 +1,27 @@
+pre-commit:
+  parallel: true
+  commands:
+    lint:
+      run: pnpm lint
+    typecheck:
+      run: pnpm typecheck
+    typecheck-env:
+      run: pnpm typecheck:env
+    unit-tests:
+      run: pnpm test:unit
+
+pre-push:
+  parallel: false
+  commands:
+    lint:
+      run: pnpm lint
+    typecheck:
+      run: pnpm typecheck
+    typecheck-env:
+      run: pnpm typecheck:env
+    unit-tests:
+      run: pnpm test:unit
+    smoke-tests:
+      run: pnpm test:smoke
+    e2e-tests:
+      run: pnpm test:e2e
