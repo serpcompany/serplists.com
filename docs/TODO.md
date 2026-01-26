@@ -41,3 +41,7 @@
 - [x] Add default for `users.created_at` so Better Auth inserts succeed
 - [x] Add GitHub Actions deploy to Cloudflare Pages on `main`
 - [x] Attach `serplists.com` custom domain to Pages project
+<<<<<<< HEAD
+=======
+- [x] Allow `.github/workflows` in git so Actions can run
+>>>>>>> 7fa6643 (asdf)

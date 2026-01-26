@@ -15,3 +15,7 @@ This repo deploys to Cloudflare Pages via `cloudflare/pages-action@v1` on pushes
 ## Notes
 - The workflow builds with `pnpm run build` and uploads the `dist` directory.
 - Update `node-version` in `.github/workflows/cloudflare-pages-deploy.yml` if a different Node version is required.
+<<<<<<< HEAD
+=======
+- Ensure `.github` is not gitignored; the workflow file must be committed to `main` for Actions to run.
+>>>>>>> 7fa6643 (asdf)

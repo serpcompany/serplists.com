@@ -44,6 +44,16 @@ __pycache__
 .env.local
 .next
 .github
+<<<<<<< Updated upstream
+=======
+!.github/
+!.github/workflows/
+!.github/workflows/**
+playwright-report
+test-results
+tests/test-results
+coverage
+>>>>>>> Stashed changes
 playwright-report
 test-results
 tests/test-results
