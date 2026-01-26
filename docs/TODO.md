@@ -39,3 +39,5 @@
 - [x] Add forgot-password + reset-password flow (Better Auth + Resend)
 - [x] Make `users.password_hash` nullable for Better Auth sign-up flow
 - [x] Add default for `users.created_at` so Better Auth inserts succeed
+- [x] Add GitHub Actions deploy to Cloudflare Pages on `main`
+- [x] Attach `serplists.com` custom domain to Pages project

@@ -6,6 +6,14 @@ pnpm run build
 npx wrangler pages deploy ./dist
 ```
 
+### Automated deploy (GitHub Actions)
+Pushes/merges to `main` trigger `cloudflare-pages-deploy.yml`, which builds with `pnpm run build` and deploys `dist` to Cloudflare Pages.
+
+Required GitHub secrets:
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_PAGES_PROJECT`
+
 ## Secrets and environment
 Set these in Cloudflare Pages (production) or `.dev.vars` (local):
 - `BETTER_AUTH_SECRET` (required for auth; 32+ chars)
