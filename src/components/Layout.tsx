@@ -4,7 +4,7 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { LogOut, Home, FileText, CheckSquare, Settings, ExternalLink } from "lucide-react";
+import { LogOut, Home, FileText, CheckSquare, Settings, ExternalLink, Sparkles, Tag, Info, Mail, BookOpen } from "lucide-react";
 interface LayoutProps {
   children: React.ReactNode;
 }
@@ -22,13 +22,13 @@ export const Layout: React.FC<LayoutProps> = ({
     navigate("/");
   };
   const navigation = [{
-    name: "Dashboard",
-    href: "/dashboard",
-    icon: Home
+    name: "Features",
+    href: "/features",
+    icon: Sparkles
   }, {
-    name: "My Templates",
-    href: "/templates",
-    icon: FileText
+    name: "Pricing",
+    href: "/pricing",
+    icon: Tag
   }, {
     name: "Checklists",
     href: "/checklists",
@@ -36,7 +36,15 @@ export const Layout: React.FC<LayoutProps> = ({
   }, {
     name: "Recipes",
     href: "/recipes",
-    icon: CheckSquare
+    icon: BookOpen
+  }, {
+    name: "About",
+    href: "/about",
+    icon: Info
+  }, {
+    name: "Contact",
+    href: "/contact",
+    icon: Mail
   }];
   const isActive = (href: string) => location.pathname === href;
   return <div className="min-h-screen bg-background flex flex-col">
@@ -82,6 +90,22 @@ export const Layout: React.FC<LayoutProps> = ({
                       <p className="text-xs text-muted-foreground">{user?.email}</p>
                     </div>
                     
+                    <DropdownMenuItem asChild>
+                      <Link to="/dashboard" className="w-full flex items-center gap-2 cursor-pointer">
+                        <Home className="h-4 w-4" />
+                        Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem asChild>
+                      <Link to="/templates" className="w-full flex items-center gap-2 cursor-pointer">
+                        <FileText className="h-4 w-4" />
+                        My Templates
+                      </Link>
+                    </DropdownMenuItem>
+
+                    <DropdownMenuSeparator />
+
                     <DropdownMenuItem asChild>
                       <Link to="/account" className="w-full flex items-center gap-2 cursor-pointer">
                         <Settings className="h-4 w-4" />
@@ -141,17 +165,23 @@ export const Layout: React.FC<LayoutProps> = ({
               <span>© SERP</span>
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <Link to="/dashboard" className="hover:text-foreground transition-colors">
-                Dashboard
+              <Link to="/features" className="hover:text-foreground transition-colors">
+                Features
               </Link>
-              <Link to="/templates" className="hover:text-foreground transition-colors">
-                Templates
+              <Link to="/pricing" className="hover:text-foreground transition-colors">
+                Pricing
               </Link>
               <Link to="/checklists" className="hover:text-foreground transition-colors">
                 Checklist Library
               </Link>
               <Link to="/recipes" className="hover:text-foreground transition-colors">
                 Recipes
+              </Link>
+              <Link to="/about" className="hover:text-foreground transition-colors">
+                About
+              </Link>
+              <Link to="/contact" className="hover:text-foreground transition-colors">
+                Contact
               </Link>
             </div>
           </div>

@@ -25,6 +25,10 @@ import Categories from "./pages/Categories";
 import Account from "./pages/Account";
 import UserProfile from "./pages/UserProfile";
 import Recipes from "./pages/Recipes";
+import Features from "./pages/Features";
+import Pricing from "./pages/Pricing";
+import About from "./pages/About";
+import Contact from "./pages/Contact";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +51,10 @@ const App = () => {
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Layout><Index /></Layout>} />
+            <Route path="/features" element={<Layout><Features /></Layout>} />
+            <Route path="/pricing" element={<Layout><Pricing /></Layout>} />
+            <Route path="/about" element={<Layout><About /></Layout>} />
+            <Route path="/contact" element={<Layout><Contact /></Layout>} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
