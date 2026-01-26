@@ -31,12 +31,12 @@ const Register = () => {
     }
     setIsSubmitting(true);
     try {
-      const success = await register(name, email, password);
-      if (success) {
+      const result = await register(name, email, password);
+      if (result.ok) {
         toast.success("Registration successful");
         navigate("/dashboard");
       } else {
-        toast.error("Registration failed. Email might already be in use.");
+        toast.error(result.error ?? "Registration failed.");
       }
     } catch (error) {
       toast.error("An error occurred during registration");

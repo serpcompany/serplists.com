@@ -5,6 +5,8 @@ pre-commit:
       run: pnpm lint
     typecheck:
       run: pnpm typecheck
+    typecheck-env:
+      run: pnpm typecheck:env
     unit-tests:
       run: pnpm test:unit
 
@@ -15,6 +17,8 @@ pre-push:
       run: pnpm lint
     typecheck:
       run: pnpm typecheck
+    typecheck-env:
+      run: pnpm typecheck:env
     unit-tests:
       run: pnpm test:unit
     smoke-tests:

@@ -17,6 +17,20 @@ import { handleBilling } from './handlers/billing';
 import { handleAdmin } from './handlers/admin';
 import { jsonError } from './utils/response';
 
+const blockedTestEmailDomains = new Set(['serplists.dev', 'serp-checklists.dev']);
+
+function isProductionHost(hostname: string): boolean {
+  return hostname === 'serplists.com' || hostname.endsWith('.serplists.com');
+}
+
+function isBlockedTestEmail(email: string): boolean {
+  const lower = email.trim().toLowerCase();
+  const atIndex = lower.lastIndexOf('@');
+  if (atIndex < 0) return false;
+  const domain = lower.slice(atIndex + 1);
+  return blockedTestEmailDomains.has(domain);
+}
+
 export const onRequestGet = handleRequest;
 export const onRequestPost = handleRequest;
 export const onRequestPut = handleRequest;
@@ -113,6 +127,32 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       response = new Response(JSON.stringify({ status: 'ok' }), {
         headers: { 'Content-Type': 'application/json' }
       });
+    } else if (path.startsWith('auth') && request.method === 'POST') {
+      let isProdRequest = isProductionHost(url.hostname);
+      if (!isProdRequest && env.FRONTEND_URL) {
+        try {
+          isProdRequest = isProductionHost(new URL(env.FRONTEND_URL).hostname);
+        } catch {
+          // Ignore malformed FRONTEND_URL.
+        }
+      }
+
+      if (isProdRequest && (path === 'auth/register' || path === 'auth/login')) {
+        try {
+          const body = await request.clone().json();
+          const email = typeof body?.email === 'string' ? body.email : '';
+          if (email && isBlockedTestEmail(email)) {
+            log('warn', 'blocked_test_user_auth', { email, path });
+            response = jsonError('Test accounts are disabled in production', 403);
+            return finalize(response);
+          }
+        } catch {
+          // Ignore parse errors; auth handler will validate payloads.
+        }
+      }
+
+      const auth = createBetterAuth(env, request);
+      response = await auth.handler(request);
     } else if (path.startsWith('auth')) {
       const auth = createBetterAuth(env, request);
       response = await auth.handler(request);

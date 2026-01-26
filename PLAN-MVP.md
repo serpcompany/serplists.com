@@ -141,44 +141,57 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] Document D1 backup/restore and R2 lifecycle rules (Cloudflare settings).
 - [x] Add runbook for incident response (what to check first, where logs live).
 
-#### docs
 
-- [ ] add markdownlint-cli2 + cspell + lychee to give our documents an opinionated structure and rules to follow and lint against
-
-
-## Phase 7 - UI alignment with serp-boilerplate (serpui) (last)
-- [ ] Align shadcn style and base color (`new-york` + `neutral`) or document divergence.
-- [ ] Update Tailwind/theme tokens to match serpui (as applicable in a Vite app).
-- [ ] Audit key screens (Login, Template Editor, Checklist Run) for UI parity.
-- [ ] Replace/adjust components where serpui differs (buttons, cards, tabs, etc.).
-
-## Phase 8 - Misc & things added as we go that dont belong other places
+## Phase 7 - Misc & things added as we go that dont belong other places
 
 ### decide on the feature list & tiers (free, pro)
+
+#### FEATURE LIST
+
+- {num} reusable checklists
+- {num} simultaneous/live checklist "runs"
+- template import/export
+- "add checklist template to account" from the template marketplace
+- make username/profile page private
 
 #### Free
 - 1 reusable checklist templates in account
 - up to 3 checklist runs "live"/"working" at the same time
 - (no) template import/export feature
 - (no) "add checklist template to account" from the template marketplace
+- (no) make username/profile page private
+
 
 #### Pro
 - unlimited reusable checklist templates in account
 - unlimited checklist runs "live"/"working" at the same time
 - (yes) template import/export feature
 - (yes) "add checklist template to account" from the template marketplace
+- (yes) make username/profile page private
+
+
+## MVP acceptance checklist + MISC
+- [x] `pnpm run lint`, `pnpm run typecheck`, `pnpm run test:run` all pass.
+- [x] `sre:deps` and `sre:dup` produce actionable baseline reports.
+- [x] Drizzle schema/migrations established and documented.
+- [x] Pre-commit/pre-push hooks run via Lefthook.
+- [x] Monitoring/logging approach documented (Cloudflare logs only is acceptable for MVP).
+- [x] Billing/entitlements approach documented (even if “not in MVP”).
+- [x] clean up the junk templates like "Updated Template Title" and "Test Template" .. debug why there are so many of them created and existing on the homepage and on the /checklists page 
+- [x] ensure integration tests reuse a fixed test user to avoid creating new test accounts
+- [ ] Env validation in place and enforced in CI/hooks.
+- [ ] add markdownlint-cli2 + cspell + lychee to give our documents an opinionated structure and rules to follow and lint against
+- [ ] turn on email verification and block login until the address is verified
+
 
 
 ---
 
+## Phase 8 - POST MVP + NEWBRANCH - UI alignment with serp-boilerplate (serpui) (last)
 
+this phase is about standardizing this project to our other project by using the same build stack (nextjs, ui.shadcn.com, etc.). we need step by step todos for what we need to do in order to convert this projct to nextjs with shadcn while preserving all the urls, logic, db, etc. and just getting it updated to the new tech stack and components
 
-## MVP acceptance checklist
-- [x] `pnpm run lint`, `pnpm run typecheck`, `pnpm run test:run` all pass.
-- [x] `sre:deps` and `sre:dup` produce actionable baseline reports.
-- [ ] Env validation in place and enforced in CI/hooks.
-- [x] Drizzle schema/migrations established and documented.
-- [ ] UI aligned with serpui guidelines (or explicit divergence documented).
-- [x] Pre-commit/pre-push hooks run via Lefthook.
-- [x] Monitoring/logging approach documented (Cloudflare logs only is acceptable for MVP).
-- [x] Billing/entitlements approach documented (even if “not in MVP”).
+- [ ] Align shadcn style and base color (`new-york` + `neutral`) or document divergence.
+- [ ] Update Tailwind/theme tokens to match serpui (as applicable in a Vite app).
+- [ ] Audit key screens (Login, Template Editor, Checklist Run) for UI parity.
+- [ ] Replace/adjust components where serpui differs (buttons, cards, tabs, etc.).

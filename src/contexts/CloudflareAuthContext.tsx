@@ -15,7 +15,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
-  register: (name: string, email: string, password: string) => Promise<boolean>;
+  register: (name: string, email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
 }
@@ -66,21 +66,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const register = async (name: string, email: string, password: string): Promise<boolean> => {
+  const register = async (name: string, email: string, password: string): Promise<{ ok: boolean; error?: string }> => {
     try {
       const result = await authClient.signUp.email({ name, email, password });
-      if (result?.error) return false;
+      if (result?.error) {
+        return { ok: false, error: result.error.message ?? "Registration failed" };
+      }
 
       const nextSession = await authClient.getSession();
       if (nextSession?.data?.user) {
         setUser(nextSession.data.user as unknown as User);
         setSession(nextSession.data);
-        return true;
+        return { ok: true };
       }
-      return true;
+      return { ok: true };
     } catch (error) {
       console.error('Registration failed:', error);
-      return false;
+      return { ok: false, error: "Registration failed" };
     }
   };
 

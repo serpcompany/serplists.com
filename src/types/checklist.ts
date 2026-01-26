@@ -32,6 +32,7 @@ export type ChecklistTemplate = {
   id: string;
   title: string;
   description?: string;
+  type?: "checklist" | "recipe";
   sections: ChecklistSection[];
   userId: string;
   createdAt: string;

@@ -8,6 +8,8 @@ import { getSessionUserId } from '../utils/session';
 import { getEntitlementsForUser } from '../utils/entitlements';
 import { z } from 'zod';
 
+const junkTemplateTitles = new Set(['Test Template', 'Updated Template Title']);
+
 async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
   const base = generateSlug(title || 'template') || 'template';
   const db = createDb(env);
@@ -50,7 +52,8 @@ function parseTemplateRow(template: Record<string, unknown>) {
     ...template,
     sections,
     categories: normalizeStringArray(template.category),
-    tags: normalizeStringArray(template.tags)
+    tags: normalizeStringArray(template.tags),
+    type: typeof template.type === 'string' ? template.type : 'checklist'
   };
 }
 
@@ -61,6 +64,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 const templateBackupImportTemplateSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
+  type: z.enum(['checklist', 'recipe']).optional(),
   sections: z.unknown().optional(),
   items: z.unknown().optional(),
   isPublic: z.boolean().optional(),
@@ -143,6 +147,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           id: parsed.id,
           title: parsed.title,
           description: parsed.description || '',
+          type: typeof parsed.type === 'string' ? parsed.type : 'checklist',
           sections: parsed.sections || [],
           categories: parsed.categories || [],
           tags: parsed.tags || [],
@@ -217,6 +222,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
         const finalCategories = normalizeStringArray(template.categories ?? template.category);
         const finalTags = normalizeStringArray(template.tags);
+        const finalType = template.type ?? 'checklist';
         const sourceVisibility =
           typeof template.is_public === 'boolean'
             ? template.is_public
@@ -236,6 +242,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             user_id: userId,
             title: template.title || '',
             description: template.description || '',
+            type: finalType,
             items: JSON.stringify(normalizedSections.sections),
             version: 1,
             is_public: isPublic,
@@ -378,6 +385,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         user_id: userId,
         title: source.title || '',
         description: source.description || '',
+        type: typeof (source as Record<string, unknown>).type === 'string' ? (source as Record<string, unknown>).type : 'checklist',
         items: source.items,
         version: typeof (source as Record<string, unknown>).version === 'number' ? (source as Record<string, unknown>).version : 1,
         is_public: isPublic,
@@ -419,7 +427,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
     }
 
-    const { title, description, is_public, categories, category, tags, sections, items: bodyItems } = parsed.data;
+    const { title, description, type, is_public, categories, category, tags, sections, items: bodyItems } = parsed.data;
 
     const normalizedSections = normalizeSectionsPayload(sections ?? bodyItems);
     if (normalizedSections.error) {
@@ -431,13 +439,19 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     const finalCategories = normalizeStringArray(categories ?? category);
     const finalTags = normalizeStringArray(tags);
+    const finalType = type ?? 'checklist';
     const isPublic = typeof is_public === 'boolean' ? is_public : false;
+
+    if (title && junkTemplateTitles.has(title)) {
+      console.warn('Junk template title created', { userId, title });
+    }
 
     await db.insert(templates).values({
       id: templateId,
       user_id: userId,
       title: title || '',
       description: description || '',
+      type: finalType,
       items: JSON.stringify(normalizedSections.sections),
       version: 1,
       is_public: isPublic,
@@ -473,7 +487,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
     }
 
-    const { title, description, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
+    const { title, description, type, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
     const rawBody = body as Record<string, unknown>;
 
     // Only update slug if explicitly provided (avoid breaking shared URLs on title edits).
@@ -501,6 +515,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     if (typeof description !== 'undefined') {
       updates.description = description || '';
     }
+    if (Object.prototype.hasOwnProperty.call(rawBody, 'type') && typeof type === 'string') {
+      updates.type = type;
+    }
     if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
       const normalizedSections = normalizeSectionsPayload(sections ?? bodyItems);
       if (normalizedSections.error) {
@@ -522,6 +539,10 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     if (nextSlug) {
       updates.slug = nextSlug;
+    }
+
+    if (typeof title === 'string' && junkTemplateTitles.has(title)) {
+      console.warn('Junk template title updated', { userId, templateId, title });
     }
 
     await db.update(templates)

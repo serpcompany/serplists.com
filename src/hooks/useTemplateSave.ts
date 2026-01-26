@@ -19,6 +19,7 @@ export const useTemplateSave = () => {
     seoTitle: string,
     seoDescription: string,
     seoUrl: string,
+    templateType: "checklist" | "recipe",
     categories: string[],
     tags: string[],
     isPublic: boolean = true
@@ -41,6 +42,7 @@ export const useTemplateSave = () => {
             seoTitle,
             seoDescription,
             seoUrl,
+            type: templateType,
             categories,
             tags,
             isPublic,
@@ -60,6 +62,7 @@ export const useTemplateSave = () => {
           seoTitle,
           seoDescription,
           seoUrl,
+          type: templateType,
           categories,
           tags,
           isPublic,

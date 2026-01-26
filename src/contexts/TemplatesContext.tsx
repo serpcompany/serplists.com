@@ -55,6 +55,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           id: template.id,
           title: template.title,
           description: template.description || '',
+          type: typeof template.type === 'string' ? template.type : 'checklist',
           sections: (() => {
             if (template.sections) return template.sections;
             if (template.items) {
@@ -171,6 +172,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const result = await api.createTemplate({
         title: templateData.title,
         description: templateData.description,
+        type: templateData.type,
         sections: templateData.sections,
         is_public: finalIsPublic,
         categories: templateData.categories || [],
@@ -181,6 +183,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         id: result.id,
         title: templateData.title,
         description: templateData.description || '',
+        type: templateData.type,
         sections: templateData.sections,
         categories: templateData.categories || [],
         tags: templateData.tags || [],
@@ -215,6 +218,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const result = await api.updateTemplate(template.id, {
         title: template.title,
         description: template.description,
+        type: template.type,
         sections: template.sections,
         categories: template.categories,
         tags: template.tags,

@@ -9,7 +9,13 @@ import { CategoryNavigation } from "@/components/checklist-library/CategoryNavig
 import { TemplateCard } from "@/components/checklist-library/TemplateCard";
 import { useTemplateLibrary } from "@/hooks/useTemplateLibrary";
 
-const ChecklistLibrary = () => {
+type ChecklistLibraryProps = {
+  templateType?: "checklist" | "recipe";
+  title?: string;
+  description?: string;
+};
+
+const ChecklistLibrary = ({ templateType, title, description }: ChecklistLibraryProps) => {
   const { category } = useParams();
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -23,7 +29,7 @@ const ChecklistLibrary = () => {
     selectedCategories,
     setSelectedCategories,
     allCategories,
-  } = useTemplateLibrary(category);
+  } = useTemplateLibrary(category, templateType);
 
   const handleCategoryClick = (categoryName: string) => {
     if (category === categoryName) {
@@ -71,13 +77,13 @@ const ChecklistLibrary = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight mb-2">
-            {category ? `${category} Checklists` : 'Checklists'}
+            {title ?? (category ? `${category} Checklists` : 'Checklists')}
           </h1>
           <p className="text-muted-foreground">
-            {category 
+            {description ?? (category 
               ? `Browse all ${category.toLowerCase()} checklists from the community`
               : 'Browse and discover checklists created by the community'
-            }
+            )}
           </p>
         </div>
 
@@ -115,13 +121,15 @@ const ChecklistLibrary = () => {
         {filteredTemplates.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground mb-4">
-              {category 
-                ? `No checklists found in the "${category}" category.`
-                : searchQuery 
+            {category 
+              ? `No checklists found in the "${category}" category.`
+              : searchQuery 
                   ? `No checklists found matching "${searchQuery}".`
-                  : 'No public checklists available yet.'
-              }
-            </p>
+                  : templateType === "recipe"
+                    ? 'No public recipes available yet.'
+                    : 'No public checklists available yet.'
+            }
+          </p>
             {category && (
               <Button variant="outline" onClick={() => navigate('/checklists')}>
                 Browse All Checklists

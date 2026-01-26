@@ -7,6 +7,7 @@ export const templates = sqliteTable("templates", {
   description: text("description"),
   items: text("items").notNull(),
   version: integer("version").notNull().default(1),
+  type: text("type").notNull().default("checklist"),
   is_public: integer("is_public", { mode: "boolean" }).default(false),
   category: text("category"),
   tags: text("tags"),

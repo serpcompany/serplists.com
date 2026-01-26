@@ -148,6 +148,11 @@ const Login = () => {
             placeholder="••••••••"
             required
           />
+          <div className="text-right">
+            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+              Forgot password?
+            </Link>
+          </div>
         </div>
         <Button type="submit" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? (

@@ -13,12 +13,14 @@ Set these in Cloudflare Pages (production) or `.dev.vars` (local):
 - `STRIPE_WEBHOOK_SECRET` (required for paid/Pro)
 - `STRIPE_PRO_PRICE_ID` (required for paid/Pro)
 - `ENTITLEMENTS_ADMIN_SECRET` (optional; enables `/api/admin/entitlements/override`)
+- `RESEND_API_KEY` (required for forgot-password emails)
+- `EMAIL_FROM` (required for forgot-password emails, e.g. `SERP Lists <support@serplists.com>`)
 - `R2_PUBLIC_BASE_URL` (optional; used to generate public file URLs)
 - `FRONTEND_URL` (optional; when set, used as a CORS allowlist origin)
 - `CORS_ALLOWED_ORIGINS` (optional; comma-separated CORS allowlist origins)
 
 ## Billing (Stripe)
-- Webhook URL: `https://serp-checklists.pages.dev/api/stripe/webhook`
+- Webhook URL: `https://serplists.com/api/stripe/webhook`
 - Billing endpoints (authenticated):
   - `POST /api/billing/checkout` (returns `{ url }` for Stripe Checkout)
   - `POST /api/billing/portal` (returns `{ url }` for Customer Portal)

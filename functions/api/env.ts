@@ -14,6 +14,8 @@ export const getApiEnv = (env: Env) => {
       STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
       STRIPE_PRO_PRICE_ID: z.string().min(1).optional(),
       ENTITLEMENTS_ADMIN_SECRET: z.string().min(8).optional(),
+      RESEND_API_KEY: z.string().min(1).optional(),
+      EMAIL_FROM: z.string().min(1).optional(),
     },
     runtimeEnv: {
       JWT_SECRET: env.JWT_SECRET,
@@ -25,6 +27,8 @@ export const getApiEnv = (env: Env) => {
       STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET,
       STRIPE_PRO_PRICE_ID: env.STRIPE_PRO_PRICE_ID,
       ENTITLEMENTS_ADMIN_SECRET: env.ENTITLEMENTS_ADMIN_SECRET,
+      RESEND_API_KEY: env.RESEND_API_KEY,
+      EMAIL_FROM: env.EMAIL_FROM,
     },
     emptyStringAsUndefined: true,
   });

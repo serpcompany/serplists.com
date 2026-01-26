@@ -1,7 +1,7 @@
 # Architecture
 
 ## System overview
-SERP Checklists is a single-page React app backed by Cloudflare Pages Functions. Data is stored in Cloudflare D1 (SQLite) and file uploads go to Cloudflare R2.
+SERP Lists is a single-page React app backed by Cloudflare Pages Functions. Data is stored in Cloudflare D1 (SQLite) and file uploads go to Cloudflare R2.
 
 ### High-level components
 - **Frontend**: React + Vite app in `src/`

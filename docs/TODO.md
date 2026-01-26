@@ -35,3 +35,7 @@
 - [x] Add template JSON schema versioning (`templates.version` + backup export/import)
 - [x] Make template import/export Pro-only (server-enforced `/api/templates/backup`)
 - [x] Make “save template to account” Pro-only (`POST /api/templates/:id/clone`)
+- [x] Document local Better Auth migration step when `account` table is missing
+- [x] Add forgot-password + reset-password flow (Better Auth + Resend)
+- [x] Make `users.password_hash` nullable for Better Auth sign-up flow
+- [x] Add default for `users.created_at` so Better Auth inserts succeed

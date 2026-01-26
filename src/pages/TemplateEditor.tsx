@@ -38,6 +38,8 @@ const TemplateEditor = () => {
     setSeoDescription,
     seoUrl,
     setSeoUrl,
+    templateType,
+    setTemplateType,
     categories,
     setCategories,
     tags,
@@ -86,6 +88,7 @@ const TemplateEditor = () => {
       seoUrl?: string;
       categories?: string[];
       tags?: string[];
+      type?: "checklist" | "recipe";
       isPublic: boolean;
       slug?: string;
       sections: unknown[];
@@ -95,6 +98,7 @@ const TemplateEditor = () => {
       setSeoTitle(template.seoTitle || "");
       setSeoDescription(template.seoDescription || "");
       setSeoUrl(template.seoUrl || "");
+      setTemplateType(template.type || "checklist");
       setCategories(template.categories || []);
       setTags(template.tags || []);
       setIsPublic(template.isPublic);
@@ -143,6 +147,7 @@ const TemplateEditor = () => {
           seoUrl: "",
           categories,
           tags: Array.isArray(fetched.tags) ? (fetched.tags as string[]) : [],
+          type: fetched.type === "recipe" ? "recipe" : "checklist",
           isPublic: Boolean((fetched as { is_public?: unknown }).is_public),
           slug: typeof fetched.slug === 'string' ? fetched.slug : "",
           sections: Array.isArray(fetched.sections) ? fetched.sections : [],
@@ -161,7 +166,7 @@ const TemplateEditor = () => {
     return () => {
       cancelled = true;
     };
-  }, [id, getTemplate, setSections, setTitle, setDescription, setSeoTitle, setSeoDescription, setSeoUrl, setCategories, setTags]);
+  }, [id, getTemplate, setSections, setTitle, setDescription, setSeoTitle, setSeoDescription, setSeoUrl, setTemplateType, setCategories, setTags]);
 
   const handleSave = async () => {
     const result = await saveTemplate(
@@ -172,6 +177,7 @@ const TemplateEditor = () => {
       seoTitle,
       seoDescription,
       seoUrl,
+      templateType,
       categories,
       tags,
       isPublic
@@ -306,11 +312,13 @@ const TemplateEditor = () => {
               <TemplateBasicInfo
                 title={title}
                 description={description}
+                templateType={templateType}
                 categories={categories}
                 tags={tags}
                 isPublic={isPublic}
                 onTitleChange={setTitle}
                 onDescriptionChange={setDescription}
+                onTemplateTypeChange={setTemplateType}
                 onCategoriesChange={setCategories}
                 onTagsChange={setTags}
                 onPublicChange={setIsPublic}

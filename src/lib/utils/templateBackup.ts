@@ -82,6 +82,7 @@ const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTe
     id: template.id || generateTempId("temp"),
     title: template.title,
     description: template.description || "",
+    type: template.type,
     sections,
     userId: template.userId || "unknown",
     createdAt: template.createdAt || now,

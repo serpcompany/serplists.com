@@ -12,7 +12,7 @@
 - CORS supports cookie auth in local dev by reflecting `Origin` and setting `Access-Control-Allow-Credentials: true`.
 
 ## MVP decisions
-- **Password reset:** Not in MVP (no email system shipped).
+- **Password reset:** Enabled via Better Auth + Resend (`/forgot-password` + `/reset-password`).
 - **Email verification:** Not in MVP (password-based only).
   - Implication: accounts are created immediately; we rely on rate limiting + password policy + Better Auth cookie security.
 
@@ -28,10 +28,6 @@
 - Optional post-MVP: show active sessions/devices.
   - Note: this likely requires Better Auth `multiSession` plugin for “device session list” UX.
 
-## Post-MVP options (when we add email)
+## Post-MVP options
 - Enable `emailAndPassword.requireEmailVerification`.
-- Implement `emailAndPassword.sendResetPassword` and decide delivery provider (Postmark/Resend/etc.).
-- Add UI flows:
-  - “Forgot password”
-  - “Verify email” / “Resend verification”
-
+- Add “Verify email” / “Resend verification” flow.

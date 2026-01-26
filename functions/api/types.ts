@@ -12,6 +12,8 @@ export interface Env {
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRO_PRICE_ID?: string;
   ENTITLEMENTS_ADMIN_SECRET?: string;
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
 
   // R2 uploads
   R2_UPLOADS: R2Bucket;

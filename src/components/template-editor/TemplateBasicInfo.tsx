@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { X, Plus, Lock, Globe, Check } from "lucide-react";
@@ -15,11 +16,13 @@ import { cn } from "@/lib/utils";
 interface TemplateBasicInfoProps {
   title: string;
   description: string;
+  templateType: "checklist" | "recipe";
   categories: string[];
   tags: string[];
   isPublic: boolean;
   onTitleChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
+  onTemplateTypeChange: (value: "checklist" | "recipe") => void;
   onCategoriesChange: (value: string[]) => void;
   onTagsChange: (value: string[]) => void;
   onPublicChange: (value: boolean) => void;
@@ -29,11 +32,13 @@ interface TemplateBasicInfoProps {
 export const TemplateBasicInfo = ({
   title,
   description,
+  templateType,
   categories,
   tags,
   isPublic,
   onTitleChange,
   onDescriptionChange,
+  onTemplateTypeChange,
   onCategoriesChange,
   onTagsChange,
   onPublicChange,
@@ -111,6 +116,22 @@ export const TemplateBasicInfo = ({
               className="mt-2"
               rows={3}
             />
+          </div>
+
+          <div>
+            <Label htmlFor="template-type" className="text-base font-medium">Template Type</Label>
+            <Select
+              value={templateType}
+              onValueChange={(value) => onTemplateTypeChange(value as "checklist" | "recipe")}
+            >
+              <SelectTrigger id="template-type" className="mt-2">
+                <SelectValue placeholder="Select a template type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="checklist">Checklist</SelectItem>
+                <SelectItem value="recipe">Recipe</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div>

@@ -3,6 +3,7 @@ import { z } from "zod";
 export const templatePayloadSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
+  type: z.enum(["checklist", "recipe"]).optional(),
   is_public: z.boolean().optional(),
   categories: z.union([z.array(z.string()), z.string()]).optional(),
   category: z.string().optional(),

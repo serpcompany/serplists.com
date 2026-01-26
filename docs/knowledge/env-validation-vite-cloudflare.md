@@ -23,6 +23,7 @@ export const env = createEnv({
 ## Pages Functions env
 - Validate string bindings (`BETTER_AUTH_SECRET`, optional URLs) with `createEnv`.
 - Non-string bindings (D1 `DB`, R2 buckets) are not validated by t3-env.
+- Local dev requires `BETTER_AUTH_SECRET` in `.dev.vars`; missing values cause `wrangler pages dev` to 500 on `/api/*`.
 
 Example:
 ```ts

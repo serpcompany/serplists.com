@@ -7,7 +7,7 @@ Set `ENTITLEMENTS_ADMIN_SECRET` in Cloudflare Pages env vars.
 
 ## Grant Pro
 ```bash
-curl -X POST "https://serp-checklists.pages.dev/api/admin/entitlements/override" \
+curl -X POST "https://serplists.com/api/admin/entitlements/override" \
   -H "Content-Type: application/json" \
   -H "X-Admin-Secret: $ENTITLEMENTS_ADMIN_SECRET" \
   -d '{"email":"admin@test.com","plan":"pro"}'
@@ -15,7 +15,7 @@ curl -X POST "https://serp-checklists.pages.dev/api/admin/entitlements/override"
 
 ## Revoke (force Free)
 ```bash
-curl -X POST "https://serp-checklists.pages.dev/api/admin/entitlements/override" \
+curl -X POST "https://serplists.com/api/admin/entitlements/override" \
   -H "Content-Type: application/json" \
   -H "X-Admin-Secret: $ENTITLEMENTS_ADMIN_SECRET" \
   -d '{"email":"admin@test.com","plan":"free"}'
@@ -23,7 +23,6 @@ curl -X POST "https://serp-checklists.pages.dev/api/admin/entitlements/override"
 
 ## Remove override
 ```bash
-curl -X DELETE "https://serp-checklists.pages.dev/api/admin/entitlements/override?userId=USER_ID" \
+curl -X DELETE "https://serplists.com/api/admin/entitlements/override?userId=USER_ID" \
   -H "X-Admin-Secret: $ENTITLEMENTS_ADMIN_SECRET"
 ```
-

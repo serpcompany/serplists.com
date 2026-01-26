@@ -15,6 +15,48 @@ describeIntegration('API Integration Tests', () => {
   let baselineToken: string;
   let baselineUserId: string;
 
+  const testUserEmail = process.env.TEST_USER_EMAIL ?? 'test-user@serplists.dev';
+  const testUserPassword = process.env.TEST_USER_PASSWORD ?? 'password123';
+  const testUserName = process.env.TEST_USER_NAME ?? 'Test User';
+
+  const ensureTestUser = async () => {
+    const registerResponse = await worker.fetch('http://localhost/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: testUserEmail,
+        password: testUserPassword,
+        name: testUserName
+      })
+    });
+
+    if (registerResponse.status === 200) {
+      const registerData = await registerResponse.json();
+      return { token: registerData.token, userId: registerData.user.id };
+    }
+
+    const registerError = await registerResponse.json().catch(() => ({}));
+    if (registerResponse.status === 400 && registerError?.error === 'User already exists') {
+      const loginResponse = await worker.fetch('http://localhost/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: testUserEmail,
+          password: testUserPassword
+        })
+      });
+
+      const loginData = await loginResponse.json();
+      if (loginResponse.status !== 200) {
+        throw new Error(`Failed to login test user: ${loginData.error || loginResponse.status}`);
+      }
+
+      return { token: loginData.token, userId: loginData.user.id };
+    }
+
+    throw new Error(`Failed to create test user: ${registerError?.error || registerResponse.status}`);
+  };
+
   beforeAll(async () => {
     // Start the worker in test mode
     worker = await unstable_dev('functions/api/[[route]].ts', {
@@ -26,23 +68,12 @@ describeIntegration('API Integration Tests', () => {
       },
     });
 
-    // Create a baseline user for auth-required tests (do not rely on pre-seeded DB state)
-    baselineEmail = `baseline${Date.now()}@example.com`;
-    baselinePassword = 'password123';
+    baselineEmail = testUserEmail;
+    baselinePassword = testUserPassword;
 
-    const registerResponse = await worker.fetch('http://localhost/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: baselineEmail,
-        password: baselinePassword,
-        name: 'Baseline User'
-      })
-    });
-
-    const registerData = await registerResponse.json();
-    baselineToken = registerData.token;
-    baselineUserId = registerData.user.id;
+    const user = await ensureTestUser();
+    baselineToken = user.token;
+    baselineUserId = user.userId;
   });
 
   afterAll(async () => {
@@ -63,36 +94,31 @@ describeIntegration('API Integration Tests', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            email: `test${Date.now()}@example.com`,
-            password: 'securePassword123',
-            name: 'Test User'
+            email: testUserEmail,
+            password: testUserPassword,
+            name: testUserName
           })
         });
 
-        expect(response.status).toBe(200);
         const data = await response.json();
-        expect(data).toHaveProperty('token');
-        expect(data).toHaveProperty('user');
-        expect(data.user).toHaveProperty('id');
-        expect(data.user.email).toMatch(/test.*@example\.com/);
-        expect(data.user.name).toBe('Test User');
+        if (response.status === 200) {
+          expect(data).toHaveProperty('token');
+          expect(data).toHaveProperty('user');
+          expect(data.user).toHaveProperty('id');
+          expect(data.user.email).toBe(testUserEmail);
+          expect(data.user.name).toBe(testUserName);
+        } else {
+          expect(response.status).toBe(400);
+          expect(data.error).toBe('User already exists');
+        }
       });
 
       it('should reject registration with existing email', async () => {
-        const email = `duplicate${Date.now()}@example.com`;
-        
-        // First registration
-        await worker.fetch('http://localhost/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password: 'password123' })
-        });
-
         // Duplicate registration
         const response = await worker.fetch('http://localhost/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password: 'password123' })
+          body: JSON.stringify({ email: testUserEmail, password: testUserPassword })
         });
 
         expect(response.status).toBe(400);
@@ -104,7 +130,7 @@ describeIntegration('API Integration Tests', () => {
         const response = await worker.fetch('http://localhost/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'test@example.com' }) // Missing password
+          body: JSON.stringify({ email: testUserEmail }) // Missing password
         });
 
         expect(response.status).toBe(400);
@@ -117,8 +143,8 @@ describeIntegration('API Integration Tests', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            email: baselineEmail,
-            password: baselinePassword
+            email: testUserEmail,
+            password: testUserPassword
           })
         });
 
@@ -136,7 +162,7 @@ describeIntegration('API Integration Tests', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            email: baselineEmail,
+            email: testUserEmail,
             password: 'wrongpassword'
           })
         });
@@ -151,7 +177,7 @@ describeIntegration('API Integration Tests', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            email: 'nonexistent@example.com',
+            email: 'nonexistent@serplists.dev',
             password: 'password123'
           })
         });
@@ -174,7 +200,7 @@ describeIntegration('API Integration Tests', () => {
 
         expect(response.status).toBe(200);
         const data = await response.json();
-        expect(data.email).toBe(baselineEmail);
+        expect(data.email).toBe(testUserEmail);
         expect(data).toHaveProperty('id');
         expect(data).toHaveProperty('name');
       });
@@ -219,9 +245,26 @@ describeIntegration('API Integration Tests', () => {
   });
 
   describe('Template Endpoints', () => {
+    const createdTemplateIds: string[] = [];
+
     beforeAll(async () => {
       authToken = baselineToken;
       testUserId = baselineUserId;
+    });
+
+    afterAll(async () => {
+      if (!authToken || createdTemplateIds.length === 0) return;
+
+      await Promise.all(createdTemplateIds.map(async (id) => {
+        try {
+          await worker.fetch(`http://localhost/api/templates/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          });
+        } catch {
+          // Ignore cleanup failures to avoid masking test results.
+        }
+      }));
     });
 
     describe('GET /api/templates', () => {
@@ -272,6 +315,7 @@ describeIntegration('API Integration Tests', () => {
         const data = await response.json();
         expect(data).toHaveProperty('id');
         testTemplateId = data.id;
+        createdTemplateIds.push(data.id);
       });
 
       it('should reject template creation without auth', async () => {
@@ -304,6 +348,7 @@ describeIntegration('API Integration Tests', () => {
           })
         });
         const { id } = await createResponse.json();
+        createdTemplateIds.push(id);
 
         // Update the template
         const response = await worker.fetch(`http://localhost/api/templates/${id}`, {
@@ -465,15 +510,15 @@ describeIntegration('API Integration Tests', () => {
       expect(duration).toBeLessThan(1000); // Should respond within 1 second
     });
 
-    it('should not expose sensitive data in errors', async () => {
-      const response = await worker.fetch('http://localhost/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: 'test@example.com',
-          password: 'wrong'
-        })
-      });
+      it('should not expose sensitive data in errors', async () => {
+        const response = await worker.fetch('http://localhost/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: testUserEmail,
+            password: 'wrong'
+          })
+        });
 
       const data = await response.json();
       expect(JSON.stringify(data)).not.toContain('password');

@@ -17,7 +17,7 @@ export function AuthPageShell(props: {
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-white">
               <CheckCircle className="h-6 w-6" />
             </div>
-            <span className="ml-2 text-2xl font-bold text-gray-900">SERP Checklists</span>
+            <span className="ml-2 text-2xl font-bold text-gray-900">SERP Lists</span>
           </Link>
 
           <p className="mt-2 text-sm text-gray-600">{props.footer}</p>

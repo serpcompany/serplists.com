@@ -1,8 +1,8 @@
 # Stripe billing setup (Pro subscriptions)
 
 ## URLs
-- Pages domain: `https://serp-checklists.pages.dev`
-- Webhook: `https://serp-checklists.pages.dev/api/stripe/webhook`
+- Pages domain: `https://serplists.com`
+- Webhook: `https://serplists.com/api/stripe/webhook`
 
 ## Required secrets (Cloudflare Pages)
 - `STRIPE_SECRET_KEY`

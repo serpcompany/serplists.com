@@ -119,8 +119,8 @@ async function ensureProProduct({ secretKey, dryRun }) {
     method: "POST",
     path: "/v1/products",
     form: {
-      name: "SERP Checklists Pro",
-      description: "Pro subscription for SERP Checklists",
+      name: "SERP Lists Pro",
+      description: "Pro subscription for SERP Lists",
       "metadata[app]": "serp-checklists",
       "metadata[tier]": "pro",
     },

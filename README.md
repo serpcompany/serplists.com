@@ -1,6 +1,6 @@
-# SERP Checklists
+# SERP Lists
 
-SERP Checklists is a web app for building checklist templates and running checklists with progress tracking. It supports public sharing and user profiles.
+SERP Lists is a web app for building checklist templates and running checklists with progress tracking. It supports public sharing and user profiles.
 
 ## Features
 - Create templates with sections, items, and rich content (markdown text, images, videos, files, embeds, sub-tasks)

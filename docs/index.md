@@ -1,4 +1,4 @@
-# SERP Checklists Documentation
+# SERP Lists Documentation
 
 ## Start here
 - `README.md`

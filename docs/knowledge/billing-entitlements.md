@@ -25,7 +25,7 @@
   - Return current plan/limits from a single place (so UI and API agree).
 
 ## Stripe mapping (when implemented)
-- One Stripe **Product** (“SERP Checklists Pro”)
+- One Stripe **Product** (“SERP Lists Pro”)
 - One Stripe **Price** (monthly; add annual later if needed)
 - Use Stripe **Customer Portal** for managing subscription/invoices.
 - Webhook-driven state:

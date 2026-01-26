@@ -64,6 +64,7 @@ class ApiClient {
   async createTemplate(template: {
     title: string;
     description?: string;
+    type?: "checklist" | "recipe";
     sections?: unknown[];
     items?: unknown[];
     is_public?: boolean;
@@ -79,6 +80,7 @@ class ApiClient {
   async updateTemplate(id: string, updates: {
     title?: string;
     description?: string;
+    type?: "checklist" | "recipe";
     sections?: unknown[];
     categories?: string[];
     tags?: string[];
