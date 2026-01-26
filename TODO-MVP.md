@@ -182,7 +182,13 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [ ] Env validation in place and enforced in CI/hooks.
 - [ ] add markdownlint-cli2 + cspell + lychee to give our documents an opinionated structure and rules to follow and lint against
 - [ ] turn on email verification and block login until the address is verified
-
+- [ ] make a pricing page
+- [ ] make a features page
+- [ ] make a more 'saas selling' homepage
+- [ ] make a contact page
+- [ ] make an about page
+- [ ] link all those ^ core pages in the footer
+- [ ] make a '/brands' page (in serpui shared) and link to all our other brands/apps
 
 
 ---
