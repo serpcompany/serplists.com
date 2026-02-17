@@ -25,9 +25,8 @@ const ForgotPassword = () => {
         toast.error(result.error.message || "Unable to send reset email");
       } else {
         setSubmitted(true);
+        toast.success("If an account exists, a reset link has been sent.");
       }
-
-      toast.success("If an account exists, a reset link has been sent.");
     } catch (error) {
       toast.error("Unable to send reset email");
     } finally {

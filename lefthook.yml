@@ -1,6 +1,8 @@
 pre-commit:
   parallel: true
   commands:
+    secret-scan:
+      run: pnpm secret:scan
     lint:
       run: pnpm lint
     typecheck:
@@ -13,6 +15,8 @@ pre-commit:
 pre-push:
   parallel: false
   commands:
+    secret-scan:
+      run: pnpm secret:scan
     lint:
       run: pnpm lint
     typecheck:

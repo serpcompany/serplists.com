@@ -19,6 +19,24 @@ const parseEnvFile = (path) => {
   return entries;
 };
 
+const hasNonCommentEnvEntries = (path) => {
+  if (!existsSync(path)) return false;
+  const contents = readFileSync(path, "utf8");
+  return contents
+    .split("\n")
+    .map((line) => line.trim())
+    .some((line) => line && !line.startsWith("#"));
+};
+
+const deprecatedEnvFiles = [".env", ".env.local"];
+for (const deprecatedFile of deprecatedEnvFiles) {
+  if (hasNonCommentEnvEntries(deprecatedFile)) {
+    throw new Error(
+      `${deprecatedFile} is deprecated. Use .dev.vars as the single local env file.`
+    );
+  }
+}
+
 const fileEnv = parseEnvFile(".dev.vars");
 const runtimeEnv = { ...process.env, ...fileEnv };
 
@@ -34,6 +52,7 @@ createEnv({
     STRIPE_PRO_PRICE_ID: z.string().min(1).optional(),
     ENTITLEMENTS_ADMIN_SECRET: z.string().min(8).optional(),
     RESEND_API_KEY: z.string().min(1).optional(),
+    USESEND_API_KEY: z.string().min(1).optional(),
     EMAIL_FROM: z.string().min(1).optional(),
   },
   runtimeEnv,

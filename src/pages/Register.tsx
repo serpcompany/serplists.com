@@ -33,8 +33,14 @@ const Register = () => {
     try {
       const result = await register(name, email, password);
       if (result.ok) {
-        toast.success("Registration successful");
-        navigate("/dashboard");
+        if (result.requiresEmailVerification) {
+          toast.success("Account created. Check your email to verify your address before signing in.");
+          const next = `/login?verify_email=1&email=${encodeURIComponent(email)}`;
+          navigate(next, { replace: true });
+        } else {
+          toast.success("Registration successful");
+          navigate("/dashboard");
+        }
       } else {
         toast.error(result.error ?? "Registration failed.");
       }

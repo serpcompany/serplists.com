@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
+import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +12,8 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const {
     login,
     isAuthenticated,
@@ -19,6 +22,23 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/account";
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const prefilledEmail = searchParams.get("email");
+    if (prefilledEmail) {
+      setEmail(prefilledEmail);
+      setUnverifiedEmail(prefilledEmail);
+    }
+
+    if (searchParams.get("verify_email") === "1") {
+      toast.info("Verify your email first, then sign in.");
+    }
+
+    if (searchParams.get("verified") === "1") {
+      toast.success("Email verified. You can sign in now.");
+    }
+  }, [location.search]);
 
   // Auto-redirect if already authenticated
   useEffect(() => {
@@ -32,20 +52,53 @@ const Login = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const success = await login(email, password);
-      if (success) {
+      const result = await login(email, password);
+      if (result.ok) {
         toast.success("Login successful");
+        setUnverifiedEmail(null);
         navigate(from, {
           replace: true
         });
       } else {
-        toast.error("Invalid email or password");
+        if (result.errorCode === "EMAIL_NOT_VERIFIED") {
+          setUnverifiedEmail(email);
+          toast.error("Email not verified. Check your inbox or resend verification.");
+        } else {
+          toast.error(result.error || "Invalid email or password");
+        }
       }
     } catch (error) {
       toast.error("An error occurred during login");
       console.error("Login error:", error);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    const targetEmail = (unverifiedEmail || email).trim();
+    if (!targetEmail) {
+      toast.error("Enter your email first.");
+      return;
+    }
+
+    setIsResendingVerification(true);
+    try {
+      const result = await authClient.sendVerificationEmail({
+        email: targetEmail,
+        callbackURL: "/login?verified=1",
+      });
+
+      if (result?.error) {
+        toast.error(result.error.message || "Unable to resend verification email");
+      } else {
+        toast.success("Verification email sent.");
+      }
+    } catch (error) {
+      toast.error("Unable to resend verification email");
+      console.error("Resend verification error:", error);
+    } finally {
+      setIsResendingVerification(false);
     }
   };
   const handleDemoLogin = () => {
@@ -163,6 +216,23 @@ const Login = () => {
             "Sign in with email"
           )}
         </Button>
+        {unverifiedEmail && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            disabled={isResendingVerification}
+            onClick={handleResendVerification}
+          >
+            {isResendingVerification ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resending verification...
+              </>
+            ) : (
+              "Resend verification email"
+            )}
+          </Button>
+        )}
       </form>
     </AuthPageShell>
   );

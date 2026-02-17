@@ -148,7 +148,13 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         }
       }
 
-      if (isProdRequest && (path === 'auth/register' || path === 'auth/login')) {
+      if (
+        isProdRequest &&
+        (path === 'auth/register' ||
+          path === 'auth/login' ||
+          path === 'auth/sign-up/email' ||
+          path === 'auth/sign-in/email')
+      ) {
         try {
           const body = await request.clone().json();
           const email = typeof body?.email === 'string' ? body.email : '';

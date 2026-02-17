@@ -9,13 +9,25 @@ interface User {
   username?: string;
 }
 
+type AuthErrorCode = "EMAIL_NOT_VERIFIED" | "UNKNOWN";
+
+interface AuthActionResult {
+  ok: boolean;
+  error?: string;
+  errorCode?: AuthErrorCode;
+}
+
+interface RegisterResult extends AuthActionResult {
+  requiresEmailVerification?: boolean;
+}
+
 interface AuthContextType {
   user: User | null;
   session: unknown | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  register: (name: string, email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<AuthActionResult>;
+  register: (name: string, email: string, password: string) => Promise<RegisterResult>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
 }
@@ -48,29 +60,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<AuthActionResult> => {
     try {
       const result = await authClient.signIn.email({ email, password });
-      if (result?.error) return false;
-
-      const nextSession = await authClient.getSession();
-      if (nextSession?.data?.user) {
-        setUser(nextSession.data.user as unknown as User);
-        setSession(nextSession.data);
-        return true;
-      }
-      return true;
-    } catch (error) {
-      console.error('Login failed:', error);
-      return false;
-    }
-  };
-
-  const register = async (name: string, email: string, password: string): Promise<{ ok: boolean; error?: string }> => {
-    try {
-      const result = await authClient.signUp.email({ name, email, password });
       if (result?.error) {
-        return { ok: false, error: result.error.message ?? "Registration failed" };
+        const message = result.error.message ?? "Login failed";
+        if (message.toLowerCase().includes("email not verified")) {
+          return { ok: false, error: message, errorCode: "EMAIL_NOT_VERIFIED" };
+        }
+        return { ok: false, error: message, errorCode: "UNKNOWN" };
       }
 
       const nextSession = await authClient.getSession();
@@ -81,8 +79,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return { ok: true };
     } catch (error) {
+      console.error('Login failed:', error);
+      return { ok: false, error: "Login failed", errorCode: "UNKNOWN" };
+    }
+  };
+
+  const register = async (name: string, email: string, password: string): Promise<RegisterResult> => {
+    try {
+      const callbackURL = "/login?verified=1";
+      const result = await authClient.signUp.email({ name, email, password, callbackURL });
+      if (result?.error) {
+        return { ok: false, error: result.error.message ?? "Registration failed", errorCode: "UNKNOWN" };
+      }
+
+      const nextSession = await authClient.getSession();
+      if (nextSession?.data?.user) {
+        setUser(nextSession.data.user as unknown as User);
+        setSession(nextSession.data);
+        return { ok: true, requiresEmailVerification: false };
+      }
+
+      return { ok: true, requiresEmailVerification: true };
+    } catch (error) {
       console.error('Registration failed:', error);
-      return { ok: false, error: "Registration failed" };
+      return { ok: false, error: "Registration failed", errorCode: "UNKNOWN" };
     }
   };
 

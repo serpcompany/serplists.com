@@ -43,12 +43,12 @@ export function DevLoginBar() {
   const handleQuickLogin = async (testUser: TestUser) => {
     setIsLoading(true);
     try {
-      const success = await login(testUser.email, testUser.password);
-      if (success) {
+      const result = await login(testUser.email, testUser.password);
+      if (result.ok) {
         toast.success(`Logged in as ${testUser.name}`);
         navigate('/dashboard');
       } else {
-        toast.error('Login failed - check if API is running');
+        toast.error(result.error ?? 'Login failed - check if API is running');
       }
     } catch (error) {
       toast.error('Login error - is the API running on port 8788?');

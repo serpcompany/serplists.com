@@ -23,7 +23,8 @@ export const env = createEnv({
 ## Pages Functions env
 - Validate string bindings (`BETTER_AUTH_SECRET`, optional URLs) with `createEnv`.
 - Non-string bindings (D1 `DB`, R2 buckets) are not validated by t3-env.
-- Local dev requires `BETTER_AUTH_SECRET` in `.dev.vars`; missing values cause `wrangler pages dev` to 500 on `/api/*`.
+- Local dev uses `.dev.vars` as the single env file. `.env` and `.env.local` are deprecated.
+- Auth secret contract: require at least one valid 32+ secret from `BETTER_AUTH_SECRET` (preferred) or legacy `JWT_SECRET`.
 
 Example:
 ```ts
@@ -32,12 +33,14 @@ import { z } from "zod";
 
 export const getApiEnv = (env: Env) => createEnv({
   server: {
-    BETTER_AUTH_SECRET: z.string().min(32),
+    BETTER_AUTH_SECRET: z.string().min(1).optional(),
+    JWT_SECRET: z.string().min(1).optional(),
     R2_PUBLIC_BASE_URL: z.string().url().optional(),
     FRONTEND_URL: z.string().url().optional(),
   },
   runtimeEnv: {
     BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
+    JWT_SECRET: env.JWT_SECRET,
     R2_PUBLIC_BASE_URL: env.R2_PUBLIC_BASE_URL,
     FRONTEND_URL: env.FRONTEND_URL,
   },

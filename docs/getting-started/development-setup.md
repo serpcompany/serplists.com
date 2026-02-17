@@ -5,7 +5,9 @@
 - Wrangler (via `npx wrangler` or the dev dependency)
 
 ## Environment
-Local Pages Functions use `.dev.vars` for server-side variables.
+Use `.dev.vars` as the single local env file for both Vite scripts and Pages Functions.
+
+Copy `.dev.vars.example` to `.dev.vars` and fill values.
 
 ```
 BETTER_AUTH_SECRET=local-dev-secret-key-not-for-production-use-at-least-32-chars
@@ -21,11 +23,13 @@ FRONTEND_URL=https://your-frontend-domain
 CORS_ALLOWED_ORIGINS=https://your-frontend-domain,https://www.your-frontend-domain
 # Deprecated (legacy auth only)
 JWT_SECRET=legacy-jwt-secret
+# Optional client override
+VITE_API_URL=http://localhost:8788/api
 ```
 
 Notes:
 - `src/lib/api.ts` defaults the dev API base to `http://localhost:8788/api` and supports `VITE_API_URL` overrides.
-- `.env.local` exists in the repo but is not read by the app today.
+- `.env` and `.env.local` are deprecated; keep local env values only in `.dev.vars`.
 - Client-side env validation lives in `src/env.ts` (Vite `VITE_` prefix). Optional: `VITE_API_URL` to override the API base.
 
 ## Run the app

@@ -6,20 +6,20 @@ import type { Env } from "./types";
 import { createDb, schema } from "./db";
 import { resolveAuthSecret } from "./utils/auth-secret";
 
-const sendPasswordResetEmail = async (env: Env, params: { to: string; url: string }) => {
-  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
-    console.warn("Password reset email skipped: missing RESEND_API_KEY or EMAIL_FROM");
-    return;
-  }
+const sendEmail = async (
+  env: Env,
+  params: { to: string; subject: string; text: string; tag: "password-reset" | "email-verification" }
+) => {
+  const from = env.EMAIL_FROM?.trim() || "noreply@mail.auth.serp.co";
 
   const payload = {
-    from: env.EMAIL_FROM,
+    from,
     to: params.to,
-    subject: "Reset your password",
-    text: `Reset your password: ${params.url}`,
+    subject: params.subject,
+    text: params.text,
   };
 
-  try {
+  if (env.RESEND_API_KEY) {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -31,14 +31,51 @@ const sendPasswordResetEmail = async (env: Env, params: { to: string; url: strin
 
     if (!response.ok) {
       const body = await response.text();
-      console.warn("Password reset email send failed", {
-        status: response.status,
-        body,
-      });
+      throw new Error(
+        `Resend auth email send failed (${response.status}) for ${params.tag}: ${body || "unknown error"}`
+      );
     }
-  } catch (error) {
-    console.warn("Failed to send password reset email", { error });
+    return;
   }
+
+  if (env.USESEND_API_KEY) {
+    const response = await fetch("https://app.usesend.com/api/v1/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.USESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(
+        `UseSend auth email send failed (${response.status}) for ${params.tag}: ${body || "unknown error"}`
+      );
+    }
+    return;
+  }
+
+  throw new Error("Auth email provider is not configured. Set RESEND_API_KEY or USESEND_API_KEY.");
+};
+
+const sendPasswordResetEmail = async (env: Env, params: { to: string; url: string }) => {
+  await sendEmail(env, {
+    to: params.to,
+    subject: "Reset your password",
+    text: `Reset your password: ${params.url}`,
+    tag: "password-reset",
+  });
+};
+
+const sendEmailVerificationEmail = async (env: Env, params: { to: string; url: string }) => {
+  await sendEmail(env, {
+    to: params.to,
+    subject: "Verify your email",
+    text: `Verify your email: ${params.url}`,
+    tag: "email-verification",
+  });
 };
 
 export function createBetterAuth(env: Env, request: Request) {
@@ -72,17 +109,23 @@ export function createBetterAuth(env: Env, request: Request) {
     emailAndPassword: {
       enabled: true,
       sendResetPassword: async ({ user, url }, request) => {
-        void sendPasswordResetEmail(env, { to: user.email, url });
+        await sendPasswordResetEmail(env, { to: user.email, url });
       },
       onPasswordReset: async ({ user }, request) => {
         console.info(`Password reset completed for ${user.email}`);
       },
-      requireEmailVerification: false,
+      requireEmailVerification: true,
       minPasswordLength: 10,
       maxPasswordLength: 128,
       password: {
         hash: async (password) => bcrypt.hash(password, 10),
         verify: async ({ hash, password }) => bcrypt.compare(password, hash),
+      },
+    },
+    emailVerification: {
+      sendOnSignUp: true,
+      sendVerificationEmail: async ({ user, url }, request) => {
+        await sendEmailVerificationEmail(env, { to: user.email, url });
       },
     },
     plugins: [
@@ -128,4 +171,4 @@ export function createBetterAuth(env: Env, request: Request) {
       },
     },
   });
-}
+};

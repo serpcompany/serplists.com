@@ -84,6 +84,43 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(response.headers.get('X-Request-Id')).toBeTruthy();
   });
 
+  it('blocks test emails for production sign-up endpoint', async () => {
+    const response = await apiWorker.fetch(
+      new Request("https://serplists.com/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "test-user@serplists.dev",
+          password: "password123456",
+          name: "Blocked User",
+        }),
+      }),
+      buildEnv()
+    );
+
+    expect(response.status).toBe(403);
+    const data = await response.json();
+    expect(data.error).toBe("Test accounts are disabled in production");
+  });
+
+  it('blocks test emails for production sign-in endpoint', async () => {
+    const response = await apiWorker.fetch(
+      new Request("https://serplists.com/api/auth/sign-in/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "test-user@serplists.dev",
+          password: "password123456",
+        }),
+      }),
+      buildEnv()
+    );
+
+    expect(response.status).toBe(403);
+    const data = await response.json();
+    expect(data.error).toBe("Test accounts are disabled in production");
+  });
+
   it('enforces CORS allowlist when configured', async () => {
     const env = buildEnv({ FRONTEND_URL: 'https://app.example.com' });
 

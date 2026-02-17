@@ -21,11 +21,15 @@ Set these in Cloudflare Pages (production) or `.dev.vars` (local):
 - `STRIPE_WEBHOOK_SECRET` (required for paid/Pro)
 - `STRIPE_PRO_PRICE_ID` (required for paid/Pro)
 - `ENTITLEMENTS_ADMIN_SECRET` (optional; enables `/api/admin/entitlements/override`)
-- `RESEND_API_KEY` (required for forgot-password emails)
-- `EMAIL_FROM` (required for forgot-password emails, e.g. `SERP Lists <support@serplists.com>`)
+- `RESEND_API_KEY` or `USESEND_API_KEY` (at least one required for password reset + email verification emails)
+- `EMAIL_FROM` (optional sender override for auth emails; defaults to `noreply@mail.auth.serp.co`)
 - `R2_PUBLIC_BASE_URL` (optional; used to generate public file URLs)
 - `FRONTEND_URL` (optional; when set, used as a CORS allowlist origin)
 - `CORS_ALLOWED_ORIGINS` (optional; comma-separated CORS allowlist origins)
+
+Local env policy:
+- Use `.dev.vars` as the single local env source.
+- `.env` and `.env.local` are deprecated and should not contain active values.
 
 ## Billing (Stripe)
 - Webhook URL: `https://serplists.com/api/stripe/webhook`

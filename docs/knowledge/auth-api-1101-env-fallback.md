@@ -35,4 +35,5 @@
 - Ensure production has at least one valid 32+ char secret:
   - `BETTER_AUTH_SECRET` (preferred), or
   - `JWT_SECRET` (legacy fallback).
-- Ensure `RESEND_API_KEY` and `EMAIL_FROM` are configured for real password reset email delivery.
+- Ensure at least one mail provider key is configured: `RESEND_API_KEY` or `USESEND_API_KEY`.
+- Optionally set `EMAIL_FROM` (defaults to `noreply@mail.auth.serp.co`).

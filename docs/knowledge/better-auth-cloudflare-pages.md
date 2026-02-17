@@ -13,7 +13,8 @@ Set in `.dev.vars` (local) and Pages secrets (prod):
 
 Optional:
 - `FRONTEND_URL` / `CORS_ALLOWED_ORIGINS` for CORS allowlisting
-- `RESEND_API_KEY` + `EMAIL_FROM` for password reset emails
+- `RESEND_API_KEY` or `USESEND_API_KEY` for password reset + email verification emails
+- `EMAIL_FROM` optional (defaults to `noreply@mail.auth.serp.co`)
 
 ## Wrangler config
 Better Auth requires `AsyncLocalStorage` support in the Workers runtime:
@@ -46,11 +47,13 @@ npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0008_b
 Server-side:
 - Better Auth enforces length constraints (configured in `functions/api/better-auth.ts`).
 - Better Auth blocks compromised passwords via the `haveIBeenPwned` plugin.
+- Better Auth requires verified email before sign-in (`requireEmailVerification`).
 
 Client-side:
 - Registration UI validates password policy in `src/pages/Register.tsx`.
 - Account Security UI validates password policy before calling `authClient.changePassword()` in `src/components/account/SecuritySection.tsx`.
 - Reset password UI validates password policy in `src/pages/ResetPassword.tsx`.
+- Login UI supports resend verification email when sign-in is blocked by unverified email.
 
 ## Troubleshooting
 - If sign-up fails with `displayUsername` missing in the users schema, ensure the Drizzle field name is `displayUsername` (mapped to column `display_username`) and Better Auth maps `displayUsername` to that field name.

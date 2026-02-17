@@ -16,7 +16,7 @@ If you want to create Stripe resources programmatically, use:
 # Dry-run (no network calls)
 node scripts/stripe/bootstrap.mjs --mode both --currency usd --monthly 1900 --dry-run
 
-# Create in BOTH test + live (requires STRIPE_TEST_SECRET_KEY + STRIPE_LIVE_SECRET_KEY in .env)
+# Create in BOTH test + live (configure keys in `.dev.vars` locally and Cloudflare Pages env in production)
 node scripts/stripe/bootstrap.mjs --mode both --currency usd --monthly 1900
 
 # Optional yearly price (example)

@@ -13,6 +13,7 @@ export interface Env {
   STRIPE_PRO_PRICE_ID?: string;
   ENTITLEMENTS_ADMIN_SECRET?: string;
   RESEND_API_KEY?: string;
+  USESEND_API_KEY?: string;
   EMAIL_FROM?: string;
 
   // R2 uploads

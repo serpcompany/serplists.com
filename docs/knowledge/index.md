@@ -4,6 +4,8 @@ Operational notes, debugging lessons, and implementation decisions.
 
 - [API 1101 auth env fallback](auth-api-1101-env-fallback.md)
 - [Auth hardening plan](auth-hardening-plan.md)
+- [Auth email verification MVP lock](auth-email-verification-mvp.md)
+- [Live auth registration/reset fix (2026-02-17)](auth-live-registration-reset-fix-2026-02-17.md)
 - [Better Auth on Cloudflare Pages](better-auth-cloudflare-pages.md)
 - [Billing and entitlements decision](billing-entitlements.md)
 - [Cloudflare Pages GitHub Actions](cloudflare-pages-github-actions.md)
@@ -14,6 +16,8 @@ Operational notes, debugging lessons, and implementation decisions.
 - [Entitlements enforcement](entitlements-enforcement.md)
 - [Environment validation](env-validation-vite-cloudflare.md)
 - [Incident response runbook](incident-response-runbook.md)
+- [SerpUI key-screen parity audit](serpui-key-screen-parity-audit.md)
+- [SerpUI style divergence](serpui-style-divergence.md)
 - [Stripe billing setup](stripe-billing-setup.md)
 - [Template JSON versioning](template-json-versioning.md)
 - [Junk template cleanup](template-junk-templates.md)

@@ -29,7 +29,7 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] Inventory current build, hooks, tests, and lint scripts in `package.json`.
 - [x] Compare with `serp-boilerplate` scripts and list deltas.
 - [x] Review serpui tokens/styles in `serp-boilerplate` (`components.json`, `globals.css`) and capture the UI deltas.
-- [ ] Decide which serpui parts to adopt: tokens only, components, or full styling alignment.
+- [x] Decide which serpui parts to adopt: tokens only, components, or full styling alignment. -> defer full decision to Phase 8 (post-MVP UI alignment track).
 - [x] Supabase + Vercel serverless/Postgres code removed; Cloudflare dev ignore added in .gitignore:1
 
 ### Phase 0 findings
@@ -57,8 +57,8 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - `sre:dup`: 33 clones (mostly in API handlers and UI pages); see `docs/TODO.md`.
 
 ### Optional (from serp-boilerplate)
-- [ ] Evaluate adding `react-scan` for render diagnostics (dev-only).
-- [ ] Evaluate `secretlint` for secret scanning in hooks.
+- [x] Evaluate adding `react-scan` for render diagnostics (dev-only). -> skipped for MVP; revisit post-MVP.
+- [x] Add `secretlint` for secret scanning in hooks/CI (MVP).
 
 ## Phase 2 - Env validation (second)
 - [x] Add `@t3-oss/env-core` (or `@t3-oss/env-nextjs` if applicable) and `zod` schema for env vars.
@@ -113,10 +113,10 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] Add admin override path for entitlements (manual comp/pro).
 
 ### Auth & entitlements hardening
-- **Current**: Better Auth cookie sessions (httpOnly); rate limiting is basic; no email verification/reset.
+- **Current**: Better Auth cookie sessions (httpOnly); rate limiting in place; password reset enabled; email verification required before sign-in.
 - [x] Decide token storage strategy (httpOnly cookies vs localStorage) and session revocation flow.
 - [x] Add rate limiting for `/api/auth/*` and sensitive write endpoints.
-- [x] Defer password reset + email verification (not in MVP).
+- [x] Re-scope decision: password reset + email verification are required for MVP.
 - [x] Define entitlement checks per endpoint (e.g., template limits, export/import limits) (`docs/knowledge/entitlements-enforcement.md`).
 - [x] Add logout endpoint + session/token revocation.
 - [x] Add change-password endpoint + UI (requires current password).
@@ -181,20 +181,16 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] clean up the junk templates like "Updated Template Title" and "Test Template" .. debug why there are so many of them created and existing on the homepage and on the /checklists page 
 - [x] ensure integration tests reuse a fixed test user to avoid creating new test accounts
 - [x] reorganize docs information architecture (grouped folders + section indexes) and convert root `README.md` into a docs pointer file
-- [ ] Env validation in place and enforced in CI/hooks.
-- [ ] consolidate `.dev.vars`, `.env`, and `.env.local` into a single env strategy (remove duplicate/unused files and document the standard)
+- [x] (Post-MVP) enforce env validation in CI/hooks using the T3 env workflow parity approach. (2026-02-17: `typecheck:env` now runs in Lefthook pre-commit/pre-push and GitHub deploy workflow)
+- [x] consolidate `.dev.vars`, `.env`, and `.env.local` into a single env strategy (remove duplicate/unused files and document the standard)
 - [x] harden API env bootstrap to prevent Cloudflare 1101 crashes (legacy auth secret fallback + guarded fail-closed env validation)
-- [ ] fix live-site account registration flow end-to-end (signup request, account creation, and post-signup session)
-- [ ] fix live-site password reset flow end-to-end (forgot password request, email delivery, reset link, and password update)
-- [ ] add markdownlint-cli2 + cspell + lychee to give our documents an opinionated structure and rules to follow and lint against
-- [ ] turn on email verification and block login until the address is verified
-- [ ] make a pricing page
-- [ ] make a features page
-- [ ] make a more 'saas selling' homepage
-- [ ] make a contact page
-- [ ] make an about page
-- [ ] link all those ^ core pages in the footer
-- [ ] make a '/brands' page (in serpui shared) and link to all our other brands/apps
+- [x] implement and lock account registration flow in code/tests/docs (email verification required, resend flow, regression tests, production verification checklist)
+- [x] implement and lock password reset flow in code/tests/docs (request flow hardened, email sender wiring tested, production verification checklist)
+- [x] verify account registration flow on the live site after deploying current branch to `main` (2026-02-17: `/register` -> `/login?verify_email=1...`, unverified sign-in blocked)
+- [x] verify password reset flow on the live site after deploying current branch to `main` (2026-02-17: `/forgot-password` submit shows confirmation and API returns success)
+- [x] add markdownlint-cli2 + cspell + lychee to give our documents an opinionated structure and rules to follow and lint against -> skipped for MVP; revisit post-MVP
+- [x] turn on email verification and block login until the address is verified (required for MVP), including resend verification flow + tests
+- [x] Moved post-MVP marketing/pages tasks to `_todo/MVP-1.md`.
 
 
 ---
@@ -203,7 +199,7 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 
 this phase is about standardizing this project to our other project by using the same build stack (nextjs, ui.shadcn.com, etc.). we need step by step todos for what we need to do in order to convert this projct to nextjs with shadcn while preserving all the urls, logic, db, etc. and just getting it updated to the new tech stack and components
 
-- [ ] Align shadcn style and base color (`new-york` + `neutral`) or document divergence.
+- [x] Align shadcn style and base color (`new-york` + `neutral`) or document divergence. (Documented divergence + phased migration plan: `docs/knowledge/serpui-style-divergence.md`)
 - [ ] Update Tailwind/theme tokens to match serpui (as applicable in a Vite app).
-- [ ] Audit key screens (Login, Template Editor, Checklist Run) for UI parity.
+- [x] Audit key screens (Login, Template Editor, Checklist Run) for UI parity. (`docs/knowledge/serpui-key-screen-parity-audit.md`)
 - [ ] Replace/adjust components where serpui differs (buttons, cards, tabs, etc.).

@@ -13,8 +13,10 @@
 
 ## MVP decisions
 - **Password reset:** Enabled via Better Auth + Resend (`/forgot-password` + `/reset-password`).
-- **Email verification:** Not in MVP (password-based only).
-  - Implication: accounts are created immediately; we rely on rate limiting + password policy + Better Auth cookie security.
+- **Email verification:** Required in MVP.
+  - Sign-up sends verification email.
+  - Sign-in is blocked until email is verified.
+  - Login UI provides resend verification flow.
 
 ## CSRF / origin review (what we rely on)
 - Better Auth CSRF/origin protections remain enabled (do not set `advanced.disableCSRFCheck` or `advanced.disableOriginCheck`).
@@ -29,5 +31,4 @@
   - Note: this likely requires Better Auth `multiSession` plugin for “device session list” UX.
 
 ## Post-MVP options
-- Enable `emailAndPassword.requireEmailVerification`.
-- Add “Verify email” / “Resend verification” flow.
+- Add richer verification UX (pending-verification page, status polling, branded email templates).
