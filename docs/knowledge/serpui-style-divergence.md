@@ -3,19 +3,19 @@
 ## Current state
 - `components.json` uses:
   - `style: "default"`
-  - `baseColor: "neutral"`
+  - `baseColor: "slate"`
 - Serp boilerplate target uses:
   - `style: "new-york"`
   - `baseColor: "neutral"`
 
 ## Decision
-- Keep `style: "default"` for now.
-- Move color tokens/base color to neutral now.
-- Treat full `new-york` style parity as part of the planned Phase 8 UI migration pass.
+- Keep the current style/color settings for now.
+- Do not force a broad token/component restyle in the current MVP-hardening stream.
+- Treat this as part of the planned Phase 8 UI migration and parity pass.
 
 ## Why
 - Current auth/billing hardening work is now stable and verified on production.
-- A full component-style restyle can cause broad visual regressions across existing pages.
+- A theme-wide restyle can cause broad visual regressions across existing pages.
 - Phase 8 already scopes a dedicated parity pass for Login, Template Editor, and Checklist Run.
 
 ## Follow-up checklist (Phase 8)
