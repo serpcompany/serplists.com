@@ -177,9 +177,15 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] Pre-commit/pre-push hooks run via Lefthook.
 - [x] Monitoring/logging approach documented (Cloudflare logs only is acceptable for MVP).
 - [x] Billing/entitlements approach documented (even if “not in MVP”).
+- [x] create the full `Free / Basic / Pro` implementation TODO at `docs/roadmap/free-basic-pro-implementation-todo.md` and link it from docs indexes
 - [x] clean up the junk templates like "Updated Template Title" and "Test Template" .. debug why there are so many of them created and existing on the homepage and on the /checklists page 
 - [x] ensure integration tests reuse a fixed test user to avoid creating new test accounts
+- [x] reorganize docs information architecture (grouped folders + section indexes) and convert root `README.md` into a docs pointer file
 - [ ] Env validation in place and enforced in CI/hooks.
+- [ ] consolidate `.dev.vars`, `.env`, and `.env.local` into a single env strategy (remove duplicate/unused files and document the standard)
+- [x] harden API env bootstrap to prevent Cloudflare 1101 crashes (legacy auth secret fallback + guarded fail-closed env validation)
+- [ ] fix live-site account registration flow end-to-end (signup request, account creation, and post-signup session)
+- [ ] fix live-site password reset flow end-to-end (forgot password request, email delivery, reset link, and password update)
 - [ ] add markdownlint-cli2 + cspell + lychee to give our documents an opinionated structure and rules to follow and lint against
 - [ ] turn on email verification and block login until the address is verified
 - [ ] make a pricing page

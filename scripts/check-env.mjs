@@ -25,7 +25,7 @@ const runtimeEnv = { ...process.env, ...fileEnv };
 createEnv({
   server: {
     JWT_SECRET: z.string().min(1).optional(),
-    BETTER_AUTH_SECRET: z.string().min(32),
+    BETTER_AUTH_SECRET: z.string().min(1).optional(),
     R2_PUBLIC_BASE_URL: z.string().url().optional(),
     FRONTEND_URL: z.string().url().optional(),
     CORS_ALLOWED_ORIGINS: z.string().min(1).optional(),
@@ -39,5 +39,21 @@ createEnv({
   runtimeEnv,
   emptyStringAsUndefined: true,
 });
+
+const normalizeSecret = (value) => {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  return trimmed.length ? trimmed : null;
+};
+
+const betterAuthSecret = normalizeSecret(runtimeEnv.BETTER_AUTH_SECRET);
+const jwtSecret = normalizeSecret(runtimeEnv.JWT_SECRET);
+
+const hasValidBetterAuthSecret = betterAuthSecret && betterAuthSecret.length >= 32;
+const hasValidJwtSecret = jwtSecret && jwtSecret.length >= 32;
+
+if (!hasValidBetterAuthSecret && !hasValidJwtSecret) {
+  throw new Error("A 32+ char BETTER_AUTH_SECRET (or legacy JWT_SECRET) is required");
+}
 
 console.log("env ok");

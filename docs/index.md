@@ -1,31 +1,34 @@
 # SERP Lists Documentation
 
+This docs hub is the source of truth for setup, architecture, operations, implementation patterns, and runbooks.
+
 ## Start here
-- `README.md`
-- `docs/TECH-STACK.md`
-- `docs/ARCHITECTURE.md`
-- `docs/DEVELOPMENT.md`
-- `docs/OPERATIONS.md`
-- `docs/quick-reference.md`
-- `docs/file-inventory.md`
-- `docs/schema/README.md`
+- [Getting started index](getting-started/index.md)
+- [Development setup](getting-started/development-setup.md)
+- [Quick reference](getting-started/quick-reference.md)
 
-## Modules
-- `docs/modules/frontend-admin.md`
-- `docs/modules/data-persistence.md`
-- `docs/modules/logging-system.md`
+## System docs
+- [Architecture](architecture/system-overview.md)
+- [Reference index](reference/index.md)
+- [Tech stack](reference/tech-stack.md)
+- [File inventory](reference/file-inventory.md)
+- [Code standards](reference/code-standards.md)
 
-## Patterns
-- `docs/patterns/data-service-pattern.md`
-- `docs/patterns/component-pattern.md`
-- `docs/patterns/message-handler-pattern.md`
-- `docs/patterns/tab-creation-pattern.md`
+## Implementation guides
+- [Modules index](modules/index.md)
+- [Patterns index](patterns/index.md)
+- [Recipes index](recipes/index.md)
 
-## Recipes
-- `docs/recipes/add-data-type.md`
-- `docs/recipes/add-dropdown.md`
-- `docs/recipes/add-new-tab.md`
-- `docs/recipes/add-message-handler.md`
+## Operations and incidents
+- [Operations index](operations/index.md)
+- [Operations playbook](operations/operations-playbook.md)
+- [Knowledge base index](knowledge/index.md)
 
-## Backlog and known limitations
-- `docs/enhancements.md`
+## Data schema and examples
+- [Schema index](schema/index.md)
+- [Template schema reference](schema/README.md)
+
+## Backlog and improvements
+- [Roadmap index](roadmap/index.md)
+- [Enhancements backlog](roadmap/enhancements-backlog.md)
+- [Free/Basic/Pro implementation TODO](roadmap/free-basic-pro-implementation-todo.md)

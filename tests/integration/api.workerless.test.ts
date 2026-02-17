@@ -20,6 +20,42 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(data.status).toBe('ok');
   });
 
+  it('GET /api/health works with legacy JWT_SECRET when BETTER_AUTH_SECRET is missing', async () => {
+    const response = await apiWorker.fetch(
+      new Request('http://localhost/api/health'),
+      buildEnv({
+        BETTER_AUTH_SECRET: undefined,
+        JWT_SECRET: 'legacy-fallback-secret-32-chars-minimum!!',
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.status).toBe('ok');
+  });
+
+  it('GET /api/health fails closed when FRONTEND_URL is malformed', async () => {
+    const response = await apiWorker.fetch(
+      new Request('http://localhost/api/health'),
+      buildEnv({ FRONTEND_URL: 'serplists.com' })
+    );
+
+    expect(response.status).toBe(500);
+    const data = await response.json();
+    expect(data.error).toBe('Server configuration error');
+  });
+
+  it('GET /api/health fails closed when R2_PUBLIC_BASE_URL is malformed', async () => {
+    const response = await apiWorker.fetch(
+      new Request('http://localhost/api/health'),
+      buildEnv({ R2_PUBLIC_BASE_URL: 'serplists.com' })
+    );
+
+    expect(response.status).toBe(500);
+    const data = await response.json();
+    expect(data.error).toBe('Server configuration error');
+  });
+
   it('OPTIONS preflight returns CORS headers', async () => {
     const response = await apiWorker.fetch(
       new Request('http://localhost/api/auth/login', { method: 'OPTIONS' }),

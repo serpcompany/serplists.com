@@ -3,7 +3,7 @@
 export interface Env {
   DB: D1Database;
   JWT_SECRET?: string;
-  BETTER_AUTH_SECRET: string;
+  BETTER_AUTH_SECRET?: string;
   FRONTEND_URL?: string;
   CORS_ALLOWED_ORIGINS?: string;
 

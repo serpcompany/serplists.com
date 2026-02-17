@@ -4,6 +4,7 @@ import { haveIBeenPwned, username } from "better-auth/plugins";
 import bcrypt from "bcryptjs";
 import type { Env } from "./types";
 import { createDb, schema } from "./db";
+import { resolveAuthSecret } from "./utils/auth-secret";
 
 const sendPasswordResetEmail = async (env: Env, params: { to: string; url: string }) => {
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
@@ -19,7 +20,7 @@ const sendPasswordResetEmail = async (env: Env, params: { to: string; url: strin
   };
 
   try {
-    await fetch("https://api.resend.com/emails", {
+    const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${env.RESEND_API_KEY}`,
@@ -27,21 +28,33 @@ const sendPasswordResetEmail = async (env: Env, params: { to: string; url: strin
       },
       body: JSON.stringify(payload),
     });
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.warn("Password reset email send failed", {
+        status: response.status,
+        body,
+      });
+    }
   } catch (error) {
     console.warn("Failed to send password reset email", { error });
   }
 };
 
 export function createBetterAuth(env: Env, request: Request) {
-  if (!env.BETTER_AUTH_SECRET) {
-    throw new Error("BETTER_AUTH_SECRET is required for cookie sessions");
-  }
+  const authSecret = resolveAuthSecret(env);
 
   const origin = new URL(request.url).origin;
 
   const trustedOrigins = new Set<string>();
   trustedOrigins.add(origin);
-  if (env.FRONTEND_URL) trustedOrigins.add(new URL(env.FRONTEND_URL).origin);
+  if (env.FRONTEND_URL) {
+    try {
+      trustedOrigins.add(new URL(env.FRONTEND_URL).origin);
+    } catch {
+      console.warn("Ignoring invalid FRONTEND_URL for trustedOrigins", { value: env.FRONTEND_URL });
+    }
+  }
   trustedOrigins.add("http://localhost:8080");
   trustedOrigins.add("http://localhost:8788");
 
@@ -50,7 +63,7 @@ export function createBetterAuth(env: Env, request: Request) {
   const db = createDb(env);
 
   return betterAuth({
-    secret: env.BETTER_AUTH_SECRET,
+    secret: authSecret,
     trustedOrigins: Array.from(trustedOrigins),
     database: drizzleAdapter(db, {
       provider: "sqlite",

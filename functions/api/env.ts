@@ -1,12 +1,13 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 import type { Env } from "./types";
+import { resolveAuthSecret } from "./utils/auth-secret";
 
 export const getApiEnv = (env: Env) => {
-  return createEnv({
+  const parsedEnv = createEnv({
     server: {
       JWT_SECRET: z.string().min(1).optional(),
-      BETTER_AUTH_SECRET: z.string().min(32),
+      BETTER_AUTH_SECRET: z.string().min(1).optional(),
       R2_PUBLIC_BASE_URL: z.string().url().optional(),
       FRONTEND_URL: z.string().url().optional(),
       CORS_ALLOWED_ORIGINS: z.string().min(1).optional(),
@@ -32,4 +33,12 @@ export const getApiEnv = (env: Env) => {
     },
     emptyStringAsUndefined: true,
   });
+
+  // Fail fast if neither the current nor legacy auth secret is usable.
+  resolveAuthSecret({
+    BETTER_AUTH_SECRET: parsedEnv.BETTER_AUTH_SECRET,
+    JWT_SECRET: parsedEnv.JWT_SECRET,
+  });
+
+  return parsedEnv;
 };

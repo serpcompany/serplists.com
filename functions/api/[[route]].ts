@@ -53,7 +53,6 @@ async function handleCORS(context: { request: Request; env: Env }): Promise<Resp
 
 async function handleRequest(context: { request: Request; env: Env }): Promise<Response> {
   const { request, env } = context;
-  getApiEnv(env);
   const url = new URL(request.url);
   const path = url.pathname.replace('/api/', '');
   const requestId = crypto.randomUUID();
@@ -77,6 +76,18 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
   let response: Response;
   
   try {
+    try {
+      getApiEnv(env);
+    } catch (error) {
+      log('error', 'env_validation_error', {
+        requestId,
+        path,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      response = jsonError('Server configuration error', 500);
+      return finalize(response);
+    }
+
     if (
       (request.method === 'POST' || request.method === 'PUT') &&
       request.headers.get('Content-Type')?.includes('application/json')
