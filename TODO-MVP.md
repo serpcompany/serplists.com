@@ -200,6 +200,6 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 this phase is about standardizing this project to our other project by using the same build stack (nextjs, ui.shadcn.com, etc.). we need step by step todos for what we need to do in order to convert this projct to nextjs with shadcn while preserving all the urls, logic, db, etc. and just getting it updated to the new tech stack and components
 
 - [x] Align shadcn style and base color (`new-york` + `neutral`) or document divergence. (Documented divergence + phased migration plan: `docs/knowledge/serpui-style-divergence.md`)
-- [ ] Update Tailwind/theme tokens to match serpui (as applicable in a Vite app).
+- [x] Update Tailwind/theme tokens to match serpui (as applicable in a Vite app). (`src/index.css` neutral token baseline + `components.json` baseColor set to `neutral`)
 - [x] Audit key screens (Login, Template Editor, Checklist Run) for UI parity. (`docs/knowledge/serpui-key-screen-parity-audit.md`)
 - [ ] Replace/adjust components where serpui differs (buttons, cards, tabs, etc.).
