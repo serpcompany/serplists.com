@@ -24,6 +24,11 @@
   - Each share action now generates a new share token for the current run and updates that same run's share attachment instead of reusing template-level shares.
   - Guests can open a run share URL without logging in and complete the checklist.
   - Shared runs remain read-only for title editing and destructive actions while still allowing progress updates.
+  - This is the current product version of the older "temporary checklist" idea:
+    - users create a one-off run from a template
+    - users share that run to a guest
+    - the guest completes the shared run without needing an account
+  - Current gating is plan-limit based through active-run limits, not a separate premium-only guest-share flag.
 
 ## Non-edit template detail view
 
