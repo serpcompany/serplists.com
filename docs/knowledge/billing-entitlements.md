@@ -1,27 +1,24 @@
 # Billing + entitlements decision (MVP)
 
-## Decision summary
-- **Billing provider (when we add billing):** Stripe subscriptions.
-- **Plans:** Free + Pro (single Pro tier to start).
-- **MVP launch:** can ship with **Free-only** (no Stripe yet). Entitlements default to Free for all users until Stripe is implemented.
+Canonical launch plan matrix: `docs/product/plans.md`
 
-## Entitlements (what each plan can do)
+## Decision summary
+- **Billing provider:** Stripe subscriptions.
+- **Plans:** Free + Pro.
+- **Launch approach:** keep the plan split intentionally small and add more gated features over time only when needed.
+
+## Launch-gated feature
 ### Free
-- **Reusable templates in account:** 1
-- **Checklist runs “in progress” at once:** 3
-- **Template import/export:** not available
-- **Add marketplace template to account:** not available
+- Can use the core product unless a feature is explicitly gated in `docs/product/plans.md`.
 
 ### Pro
-- **Reusable templates in account:** unlimited
-- **Checklist runs “in progress” at once:** unlimited
-- **Template import/export:** available
-- **Add marketplace template to account:** available
+- Includes everything in Free.
+- `Copy templates into your account`
 
 ## Enforcement approach (when implemented)
 - **API is source of truth** for entitlements (UI gating is additive only).
 - Recommended behavior:
-  - Block paid-only actions with a consistent error shape (e.g. `403` + `{ code: "paid_required" }`).
+  - Block paid-only actions with a consistent error shape (for example `403` + `{ code: "paid_required" }`).
   - Return current plan/limits from a single place (so UI and API agree).
 
 ## Stripe mapping (when implemented)
@@ -33,5 +30,4 @@
   - Keep an event log for idempotency/debugging (Stripe event id).
 
 ## Current state note
-Some import guardrails already exist (max templates/import and asset size checks), but plan-based gating is not implemented yet.
-
+Earlier notes in this file listed broader entitlement ideas. For launch, defer to `docs/product/plans.md` and keep the actual paid split minimal.

@@ -28,7 +28,10 @@ This docs hub is the source of truth for setup, architecture, operations, implem
 - [Schema index](schema/index.md)
 - [Template schema reference](schema/README.md)
 
+## Product docs
+- [Plans](product/plans.md)
+
 ## Backlog and improvements
 - [Roadmap index](roadmap/index.md)
 - [Enhancements backlog](roadmap/enhancements-backlog.md)
-- [Free/Basic/Pro implementation TODO](roadmap/free-basic-pro-implementation-todo.md)
+- [Free/Pro launch TODO](roadmap/free-basic-pro-implementation-todo.md)

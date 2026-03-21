@@ -11,6 +11,9 @@ This list reflects verified limitations and cleanup opportunities based on the c
 ## Logging and analytics
 - `src/lib/analytics.ts` stores events in memory and only logs to the console. There is no persistence or backend sink.
 
+## Pricing and plans
+- Defer `basic` tier work until after MVP launch. Launch scope is `Free` + `Pro`, with broader multi-tier billing architecture tracked separately from the launch checklist.
+
 ## Code cleanup
 - `src/lib/api/client.ts` is unused by the app.
 - Keep `db/schema.sql` aligned with `db/migrations/` to avoid drift.
