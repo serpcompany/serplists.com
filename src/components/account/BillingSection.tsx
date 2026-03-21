@@ -12,8 +12,13 @@ export function BillingSection() {
   });
 
   const plan = billing.data?.plan ?? "free";
+  const billingEnabled = billing.data?.billingEnabled ?? true;
 
   const handleUpgrade = async () => {
+    if (!billingEnabled) {
+      toast.error("Billing is temporarily unavailable. Please contact support.");
+      return;
+    }
     try {
       const { url } = await api.createBillingCheckout();
       window.location.href = url;
@@ -44,16 +49,20 @@ export function BillingSection() {
         {billing.isError ? (
           <div className="text-sm text-muted-foreground">Billing status unavailable.</div>
         ) : null}
+        {!billing.isError && !billingEnabled ? (
+          <div className="text-sm text-muted-foreground">Billing checkout is currently unavailable.</div>
+        ) : null}
 
         {plan === "pro" ? (
-          <Button onClick={handleManage} variant="secondary">
+          <Button onClick={handleManage} variant="secondary" disabled={!billingEnabled}>
             Manage subscription
           </Button>
         ) : (
-          <Button onClick={handleUpgrade}>Upgrade to Pro</Button>
+          <Button onClick={handleUpgrade} disabled={!billingEnabled}>
+            {billingEnabled ? "Upgrade to Pro" : "Upgrade unavailable"}
+          </Button>
         )}
       </CardContent>
     </Card>
   );
 }
-

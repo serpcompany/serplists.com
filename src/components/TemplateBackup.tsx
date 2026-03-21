@@ -61,6 +61,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     retry: false
   });
   const plan = billing.data?.plan ?? "free";
+  const billingEnabled = billing.data?.billingEnabled ?? true;
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<TemplateImportResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -76,6 +77,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const exceedsTemplateLimit = importPreview ? importPreview.templates.length > MAX_TEMPLATES_PER_IMPORT : false;
 
   const handleUpgrade = async () => {
+    if (!billingEnabled) {
+      toast.error("Billing is temporarily unavailable. Please contact support.");
+      return;
+    }
     try {
       const { url } = await api.createBillingCheckout();
       window.location.href = url;
@@ -323,9 +328,13 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                 <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5" />
                 <div className="space-y-1">
                   <div className="font-medium">Pro feature</div>
-                  <div className="text-sm text-muted-foreground">Template import/export is available on Pro.</div>
-                  <Button className="mt-2" onClick={handleUpgrade}>
-                    Upgrade to Pro
+                  <div className="text-sm text-muted-foreground">
+                    {billingEnabled
+                      ? "Template import/export is available on Pro."
+                      : "Billing is temporarily unavailable. Please contact support."}
+                  </div>
+                  <Button className="mt-2" onClick={handleUpgrade} disabled={!billingEnabled}>
+                    {billingEnabled ? "Upgrade to Pro" : "Upgrade unavailable"}
                   </Button>
                 </div>
               </div>
@@ -366,10 +375,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                   id="include-public-templates"
                   checked={includePublicTemplates}
                   onCheckedChange={setIncludePublicTemplates}
-                  disabled={!user || billing.isLoading || plan !== "pro"}
+                  disabled={!user || billing.isLoading || plan !== "pro" || !billingEnabled}
                 />
               </div>
-	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={!user || billing.isLoading || plan !== "pro"}>
+	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={!user || billing.isLoading || plan !== "pro" || !billingEnabled}>
 	              <Download className="h-4 w-4" />
 	              Export My Templates
 	            </Button>
@@ -398,7 +407,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
               </div>
 	            <div className="space-y-2">
 	              <Label htmlFor="template-file-input">Select a JSON template file</Label>
-	              <Input id="template-file-input" type="file" accept=".json" onChange={handleFileSelect} disabled={isImporting || !user || billing.isLoading || plan !== "pro"} />
+	              <Input id="template-file-input" type="file" accept=".json" onChange={handleFileSelect} disabled={isImporting || !user || billing.isLoading || plan !== "pro" || !billingEnabled} />
 	              <p className="text-sm text-muted-foreground">
 	                Need an example?{" "}
 	                <Button variant="link" className="p-0 h-auto text-primary" onClick={downloadSampleTemplate}>

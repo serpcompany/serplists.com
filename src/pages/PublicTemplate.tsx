@@ -31,6 +31,7 @@ const PublicTemplate = () => {
     retry: false,
   });
   const plan = billing.data?.plan ?? "free";
+  const billingEnabled = billing.data?.billingEnabled ?? true;
 
   useEffect(() => {
     const fetchTemplate = async () => {
@@ -116,6 +117,10 @@ const PublicTemplate = () => {
     }
 
     if (plan !== "pro") {
+      if (!billingEnabled) {
+        toast.error("Billing is temporarily unavailable. Please contact support.");
+        return;
+      }
       try {
         const { url } = await api.createBillingCheckout();
         window.location.href = url;
@@ -225,12 +230,14 @@ const PublicTemplate = () => {
                 <Button
                   variant="secondary"
                   onClick={handleSaveTemplate}
-                  disabled={isSaving || (isAuthenticated && billing.isLoading)}
+                  disabled={isSaving || (isAuthenticated && (billing.isLoading || !billingEnabled))}
                 >
                   {isSaving
                     ? "Saving..."
                     : !isAuthenticated
                       ? "Log in to save"
+                      : !billingEnabled
+                        ? "Upgrade unavailable"
                       : plan === "pro"
                         ? "Save to My Templates"
                         : "Upgrade to Pro"}

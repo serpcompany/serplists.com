@@ -6,6 +6,13 @@ pnpm run build
 npx wrangler pages deploy ./dist
 ```
 
+## One-command release verification
+Run this before deploying (or immediately after a hotfix):
+```bash
+pnpm run verify:release
+```
+This runs lint, typecheck, unit/integration tests, and Playwright smoke checks.
+
 ### Automated deploy (GitHub Actions)
 Pushes/merges to `main` trigger `cloudflare-pages-deploy.yml`, which builds with `pnpm run build` and deploys `dist` to Cloudflare Pages.
 
@@ -36,7 +43,7 @@ Local env policy:
 - Billing endpoints (authenticated):
   - `POST /api/billing/checkout` (returns `{ url }` for Stripe Checkout)
   - `POST /api/billing/portal` (returns `{ url }` for Customer Portal)
-  - `GET /api/billing/status` (returns `{ plan }`)
+  - `GET /api/billing/status` (returns `{ plan, billingEnabled }`)
 
 ## Logs
 MVP assumes Cloudflare runtime logs only (no external sink/alerts). View request logs in the Cloudflare dashboard for the Pages project (and locally in `pnpm run dev:api` output).

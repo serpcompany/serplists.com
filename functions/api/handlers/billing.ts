@@ -2,7 +2,7 @@ import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { eq } from "drizzle-orm";
 import { json, jsonError } from "../utils/response";
-import { assertStripeConfigured, stripePostForm } from "../utils/stripe";
+import { getStripeConfig, stripePostForm } from "../utils/stripe";
 import { getSessionUserId } from "../utils/session";
 import { getEntitlementsForUser } from "../utils/entitlements";
 
@@ -29,18 +29,28 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
   const userId = await getSessionUserId(request, env);
   if (!userId) return jsonError("Unauthorized", 401);
 
-  const db = createDb(env);
-  const { stripe_customers, users } = schema;
   const origin = getAppOrigin(request, env);
 
   if (request.method === "GET" && billingSubpath[0] === "status") {
     const entitlements = await getEntitlementsForUser(env, userId);
-    return json({ plan: entitlements.plan, limits: entitlements.limits });
+    return json({
+      plan: entitlements.plan,
+      limits: entitlements.limits,
+      billingEnabled: Boolean(getStripeConfig(env)),
+    });
   }
 
   if (request.method === "POST" && billingSubpath[0] === "checkout") {
-    const { secretKey, proPriceId } = assertStripeConfigured(env);
+    const stripe = getStripeConfig(env);
+    if (!stripe) {
+      return jsonError("Billing is temporarily unavailable. Please contact support.", 503, {
+        code: "billing_unavailable",
+      });
+    }
+    const { secretKey, proPriceId } = stripe;
     const nowIso = new Date().toISOString();
+    const db = createDb(env);
+    const { stripe_customers, users } = schema;
 
     const [existingCustomer] = await db
       .select()
@@ -97,7 +107,15 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
   }
 
   if (request.method === "POST" && billingSubpath[0] === "portal") {
-    const { secretKey } = assertStripeConfigured(env);
+    const stripe = getStripeConfig(env);
+    if (!stripe) {
+      return jsonError("Billing is temporarily unavailable. Please contact support.", 503, {
+        code: "billing_unavailable",
+      });
+    }
+    const { secretKey } = stripe;
+    const db = createDb(env);
+    const { stripe_customers } = schema;
 
     const [existingCustomer] = await db
       .select()
