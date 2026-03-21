@@ -1,7 +1,7 @@
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
-import { getStripeConfig } from "./stripe";
+import { getStripeBillingConfig } from "./stripe";
 
 export type Plan = "free" | "pro";
 
@@ -20,7 +20,7 @@ function isProSubscriptionStatus(status: string): boolean {
 }
 
 export async function getEntitlementsForUser(env: Env, userId: string): Promise<Entitlements> {
-  const stripe = getStripeConfig(env);
+  const stripe = getStripeBillingConfig(env);
   const db = createDb(env);
   const { entitlement_overrides, users } = schema;
   const nowSeconds = Math.floor(Date.now() / 1000);

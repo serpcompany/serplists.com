@@ -1,7 +1,7 @@
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { json, jsonError } from "../utils/response";
-import { assertStripeConfigured, verifyStripeWebhookSignature } from "../utils/stripe";
+import { assertStripeWebhookConfigured, verifyStripeWebhookSignature } from "../utils/stripe";
 import { eq } from "drizzle-orm";
 
 type StripeEvent = {
@@ -40,7 +40,7 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
 
   // Webhook: POST /api/stripe/webhook
   if (request.method === "POST" && stripeSubpath[0] === "webhook") {
-    const { webhookSecret } = assertStripeConfigured(env);
+    const { webhookSecret } = assertStripeWebhookConfigured(env);
     const payload = await request.text();
 
     const verification = await verifyStripeWebhookSignature({

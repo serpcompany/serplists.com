@@ -6,12 +6,49 @@ export type StripeConfig = {
   proPriceId: string;
 };
 
-export function getStripeConfig(env: Env): StripeConfig | null {
+export type StripeBillingConfig = {
+  secretKey: string;
+  proPriceId: string;
+};
+
+export type StripeWebhookConfig = {
+  webhookSecret: string;
+};
+
+export function getStripeBillingConfig(env: Env): StripeBillingConfig | null {
   const secretKey = env.STRIPE_SECRET_KEY;
-  const webhookSecret = env.STRIPE_WEBHOOK_SECRET;
   const proPriceId = env.STRIPE_PRO_PRICE_ID;
-  if (!secretKey || !webhookSecret || !proPriceId) return null;
-  return { secretKey, webhookSecret, proPriceId };
+  if (!secretKey || !proPriceId) return null;
+  return { secretKey, proPriceId };
+}
+
+export function getStripeWebhookConfig(env: Env): StripeWebhookConfig | null {
+  const webhookSecret = env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) return null;
+  return { webhookSecret };
+}
+
+export function getStripeConfig(env: Env): StripeConfig | null {
+  const billing = getStripeBillingConfig(env);
+  const webhook = getStripeWebhookConfig(env);
+  if (!billing || !webhook) return null;
+  return { ...billing, ...webhook };
+}
+
+export function assertStripeBillingConfigured(env: Env): StripeBillingConfig {
+  const config = getStripeBillingConfig(env);
+  if (!config) {
+    throw new Error("Stripe billing is not configured. Set STRIPE_SECRET_KEY and STRIPE_PRO_PRICE_ID.");
+  }
+  return config;
+}
+
+export function assertStripeWebhookConfigured(env: Env): StripeWebhookConfig {
+  const config = getStripeWebhookConfig(env);
+  if (!config) {
+    throw new Error("Stripe webhook is not configured. Set STRIPE_WEBHOOK_SECRET.");
+  }
+  return config;
 }
 
 export function assertStripeConfigured(env: Env): StripeConfig {
@@ -122,4 +159,3 @@ export async function verifyStripeWebhookSignature(params: {
   if (!matched) return { ok: false, error: "Invalid Stripe-Signature" };
   return { ok: true, timestamp: parsed.timestamp };
 }
-

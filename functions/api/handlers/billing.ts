@@ -2,7 +2,7 @@ import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { eq } from "drizzle-orm";
 import { json, jsonError } from "../utils/response";
-import { getStripeConfig, stripePostForm } from "../utils/stripe";
+import { getStripeBillingConfig, stripePostForm } from "../utils/stripe";
 import { getSessionUserId } from "../utils/session";
 import { getEntitlementsForUser } from "../utils/entitlements";
 
@@ -36,12 +36,12 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
     return json({
       plan: entitlements.plan,
       limits: entitlements.limits,
-      billingEnabled: Boolean(getStripeConfig(env)),
+      billingEnabled: Boolean(getStripeBillingConfig(env)),
     });
   }
 
   if (request.method === "POST" && billingSubpath[0] === "checkout") {
-    const stripe = getStripeConfig(env);
+    const stripe = getStripeBillingConfig(env);
     if (!stripe) {
       return jsonError("Billing is temporarily unavailable. Please contact support.", 503, {
         code: "billing_unavailable",
@@ -107,7 +107,7 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
   }
 
   if (request.method === "POST" && billingSubpath[0] === "portal") {
-    const stripe = getStripeConfig(env);
+    const stripe = getStripeBillingConfig(env);
     if (!stripe) {
       return jsonError("Billing is temporarily unavailable. Please contact support.", 503, {
         code: "billing_unavailable",

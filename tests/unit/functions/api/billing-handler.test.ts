@@ -42,6 +42,20 @@ describe("Billing handler", () => {
     expect(data.billingEnabled).toBe(false);
   });
 
+  it("GET /api/billing/status reports billing enabled when checkout config exists without webhook config", async () => {
+    const request = new Request("http://localhost/api/billing/status");
+    const response = await handleBilling(request, {
+      ...mockEnv,
+      STRIPE_SECRET_KEY: "sk_live_example",
+      STRIPE_PRO_PRICE_ID: "price_live_example",
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.plan).toBe("free");
+    expect(data.billingEnabled).toBe(true);
+  });
+
   it("POST /api/billing/checkout returns 503 when Stripe is not configured", async () => {
     const request = new Request("http://localhost/api/billing/checkout", {
       method: "POST",
