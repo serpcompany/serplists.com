@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useTemplates } from "@/contexts/TemplatesContext";
 import { api } from "@/lib/api";
 import { handleAccessFailure, navigateToLoginWithReturnPath, startBillingCheckout } from "@/lib/access-flow";
+import { getBillingStatusQueryKey } from "@/lib/billing";
 import { RunNameDialog } from "@/components/ui/run-name-dialog";
 import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
 import { Button } from "@/components/ui/button";
@@ -78,13 +79,14 @@ const TemplateDetail = () => {
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const billing = useQuery({
-    queryKey: ["billing", "status"],
+    queryKey: getBillingStatusQueryKey(user?.id),
     queryFn: () => api.getBillingStatus(),
     enabled: !!user,
     retry: false,
   });
   const billingEnabled = billing.data?.billingEnabled ?? true;
   const isProUser = billing.data?.plan === "pro";
+  const isBillingLoading = !!user && billing.isLoading;
   const isOwner = user?.id === template?.userId;
 
   useEffect(() => {
@@ -197,6 +199,10 @@ const TemplateDetail = () => {
     if (!template) return;
     if (!user) {
       navigateToLoginWithReturnPath(navigate, location);
+      return;
+    }
+
+    if (isBillingLoading) {
       return;
     }
 
@@ -319,14 +325,16 @@ const TemplateDetail = () => {
                 <Button
                   variant="outline"
                   onClick={handleCloneTemplate}
-                  disabled={isCloningTemplate}
+                  disabled={isCloningTemplate || isBillingLoading}
                 >
                   <Copy className="mr-2 h-4 w-4" />
                   {isCloningTemplate
                     ? "Copying..."
-                    : !isProUser
-                      ? "Upgrade to copy template"
-                      : "Copy to My Templates"}
+                    : isBillingLoading
+                      ? "Checking plan..."
+                      : !isProUser
+                        ? "Upgrade to copy template"
+                        : "Copy to My Templates"}
                 </Button>
               ) : (
                 <Button asChild variant="outline">

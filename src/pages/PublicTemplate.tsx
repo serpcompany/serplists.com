@@ -9,6 +9,7 @@ import { useTemplates } from "@/contexts/TemplatesContext";
 import { toast } from "sonner";
 import { SEOHead } from "@/components/shared/SEOHead";
 import { analytics } from "@/lib/analytics";
+import { getBillingStatusQueryKey } from "@/lib/billing";
 import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
 import { api } from "@/lib/api";
 import { handleAccessFailure, navigateToLoginWithReturnPath, startBillingCheckout } from "@/lib/access-flow";
@@ -28,13 +29,14 @@ const PublicTemplate = () => {
   const { createRun } = useTemplates();
   const queryClient = useQueryClient();
   const billing = useQuery({
-    queryKey: ["billing", "status"],
+    queryKey: getBillingStatusQueryKey(user?.id),
     queryFn: () => api.getBillingStatus(),
     enabled: isAuthenticated,
     retry: false,
   });
   const billingEnabled = billing.data?.billingEnabled ?? true;
   const isProUser = billing.data?.plan === "pro";
+  const isBillingLoading = isAuthenticated && billing.isLoading;
 
   useEffect(() => {
     const fetchTemplate = async () => {
@@ -121,6 +123,10 @@ const PublicTemplate = () => {
     if (!template) return;
     if (!isAuthenticated) {
       navigateToLoginWithReturnPath(navigate, location);
+      return;
+    }
+
+    if (isBillingLoading) {
       return;
     }
 
@@ -236,16 +242,18 @@ const PublicTemplate = () => {
                 <Button
                   variant="secondary"
                   onClick={handleSaveTemplate}
-                  disabled={isSaving}
+                  disabled={isSaving || isBillingLoading}
                 >
                   <Copy className="mr-2 h-4 w-4" />
                   {isSaving
                     ? "Copying..."
                     : !isAuthenticated
                       ? "Log in to copy template"
-                      : !isProUser
-                        ? "Upgrade to copy template"
-                        : "Copy to My Templates"}
+                      : isBillingLoading
+                        ? "Checking plan..."
+                        : !isProUser
+                          ? "Upgrade to copy template"
+                          : "Copy to My Templates"}
                 </Button>
                 <Button onClick={handleStartRun} disabled={isCreatingRun}>
                   <PlayCircle className="mr-2 h-4 w-4" />

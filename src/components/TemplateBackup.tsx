@@ -18,6 +18,7 @@ import type { TemplateImportOptions } from "@/types/checklist";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
+import { getBillingStatusQueryKey } from "@/lib/billing";
 
 interface TemplateBackupProps {
   className?: string;
@@ -56,7 +57,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     user
   } = useAuth();
   const billing = useQuery({
-    queryKey: ["billing", "status"],
+    queryKey: getBillingStatusQueryKey(user?.id),
     queryFn: () => api.getBillingStatus(),
     enabled: !!user,
     retry: false

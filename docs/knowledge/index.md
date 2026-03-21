@@ -8,6 +8,7 @@ Operational notes, debugging lessons, and implementation decisions.
 - [Live auth registration/reset fix (2026-02-17)](auth-live-registration-reset-fix-2026-02-17.md)
 - [Better Auth on Cloudflare Pages](better-auth-cloudflare-pages.md)
 - [Billing and entitlements decision](billing-entitlements.md)
+- [Billing query cache must be scoped by user (2026-03-21)](billing-query-cache-by-user-2026-03-21.md)
 - [Cloudflare Pages GitHub Actions](cloudflare-pages-github-actions.md)
 - [Checklist share run: fresh token + deactivation](checklist-share-run-fresh-token-2026-03-21.md)
 - [CORS and rate limits](cors-rate-limits-pages-functions.md)

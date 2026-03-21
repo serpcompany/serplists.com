@@ -1,17 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useAuth } from "@/contexts/CloudflareAuthContext";
+import { getBillingPlanLabel, getBillingStatusQueryKey } from "@/lib/billing";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 
 export function BillingSection() {
+  const { user } = useAuth();
   const billing = useQuery({
-    queryKey: ["billing", "status"],
+    queryKey: getBillingStatusQueryKey(user?.id),
     queryFn: () => api.getBillingStatus(),
+    enabled: !!user,
     retry: false,
   });
 
-  const plan = billing.data?.plan ?? "free";
+  const plan = billing.data?.plan;
+  const planLabel = getBillingPlanLabel(plan);
   const billingEnabled = billing.data?.billingEnabled ?? true;
 
   const handleUpgrade = async () => {
@@ -43,7 +48,7 @@ export function BillingSection() {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="text-sm text-muted-foreground">
-          Current plan: <span className="font-medium text-foreground">{plan === "pro" ? "Pro" : "Free"}</span>
+          Current plan: <span className="font-medium text-foreground">{planLabel ?? "Checking..."}</span>
         </div>
 
         {billing.isError ? (
@@ -58,8 +63,8 @@ export function BillingSection() {
             Manage subscription
           </Button>
         ) : (
-          <Button onClick={handleUpgrade} disabled={!billingEnabled}>
-            {billingEnabled ? "Upgrade to Pro" : "Upgrade unavailable"}
+          <Button onClick={handleUpgrade} disabled={billing.isLoading || !billingEnabled}>
+            {billing.isLoading ? "Checking plan..." : billingEnabled ? "Upgrade to Pro" : "Upgrade unavailable"}
           </Button>
         )}
       </CardContent>
