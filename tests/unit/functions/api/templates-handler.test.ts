@@ -163,6 +163,35 @@ describe('Templates Handlers', () => {
     expect(data.error).toMatch(/sections\/items/i);
   });
 
+  it('should update related checklist runs when template sections change', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+
+    const request = new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({
+        sections: [
+          {
+            id: 'section-1',
+            title: 'Checklist',
+            items: [{
+              id: 'item-1',
+              title: 'Start with your project',
+              isCompleted: false,
+              contents: [],
+            }],
+          },
+        ],
+      }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(dbMocks.updateChain.set).toHaveBeenCalledTimes(2);
+  });
+
   it('should reject template backup export for free users', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
 

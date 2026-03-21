@@ -17,6 +17,16 @@ export const Layout: React.FC<LayoutProps> = ({
   } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const loggedInNavigation = [{
+    name: "Templates",
+    href: "/templates",
+    icon: FileText
+  }, {
+    name: "Runs",
+    href: "/dashboard",
+    icon: CheckSquare
+  }];
   const handleLogout = () => {
     logout();
     navigate("/");
@@ -136,6 +146,25 @@ export const Layout: React.FC<LayoutProps> = ({
             </div>
           </div>
         </div>
+
+        {user ? <div className="border-t bg-muted/40">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <nav className="flex h-10 items-center gap-1 overflow-x-auto">
+                {loggedInNavigation.map((item: {
+            icon: unknown;
+            name: unknown;
+            href: unknown;
+          }) => {
+                  const Icon = item.icon;
+                  return <Link key={item.name} to={item.href} className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-1 rounded-md text-xs font-medium transition-colors ${isActive(item.href) ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
+                      
+                      <Icon className="h-3 w-3" />
+                      {item.name}
+                    </Link>;
+                })}
+              </nav>
+            </div>
+          </div> : null}
 
         {/* Mobile Navigation */}
         <div className="md:hidden border-t px-4 py-2">

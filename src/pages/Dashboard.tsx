@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, CheckCircle, ArrowRight, Trash2, Edit2 } from "lucide-react";
+import { PlusCircle, CheckCircle, ArrowRight, Trash2, Edit2, Play } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -89,16 +89,21 @@ const Dashboard = () => {
   return <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            
-            
+          <div />
+          <div className="flex flex-wrap gap-2">
+            <Link to="/templates/new">
+              <Button>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                New Template
+              </Button>
+            </Link>
+            <Link to="/templates">
+              <Button variant="outline">
+                <Play className="mr-2 h-4 w-4" />
+                New Run
+              </Button>
+            </Link>
           </div>
-          <Link to="/templates/new">
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              New Template
-            </Button>
-          </Link>
         </div>
 
         <div className="mb-10">

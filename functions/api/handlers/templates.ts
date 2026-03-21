@@ -112,7 +112,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
   const pathParts = url.pathname.split('/').filter(Boolean); // ["api", "templates", ...]
   const templatesSubpath = pathParts.slice(2); // after /api/templates
   const db = createDb(env);
-  const { templates, users } = schema;
+  const { templates, users, checklist_runs } = schema;
 
   // Pro-only: export/import templates as JSON backup
   // GET  /api/templates/backup?includePublic=1
@@ -508,6 +508,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     const updates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
+    let syncedItems: string | null = null;
 
     if (typeof title !== 'undefined') {
       updates.title = title || '';
@@ -523,7 +524,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       if (normalizedSections.error) {
         return jsonError(normalizedSections.error, 400);
       }
-      updates.items = JSON.stringify(normalizedSections.sections);
+      const nextItems = JSON.stringify(normalizedSections.sections);
+      updates.items = nextItems;
+      syncedItems = nextItems;
     }
     if (Object.prototype.hasOwnProperty.call(rawBody, 'is_public') && typeof is_public === 'boolean') {
       updates.is_public = is_public;
@@ -548,6 +551,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     await db.update(templates)
       .set(updates)
       .where(and(eq(templates.id, templateId), eq(templates.user_id, userId)));
+
+    if (syncedItems !== null) {
+      await db.update(checklist_runs)
+        .set({ items: syncedItems, updated_at: new Date().toISOString() })
+        .where(and(eq(checklist_runs.template_id, templateId), eq(checklist_runs.user_id, userId)));
+    }
 
     return json({ success: true });
   }
