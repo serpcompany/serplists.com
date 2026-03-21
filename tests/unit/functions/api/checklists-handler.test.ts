@@ -148,6 +148,31 @@ describe('Checklists Handlers', () => {
     expect(typeof inserted.share_token).toBe('string');
   });
 
+  it('should deactivate any existing shared runs before creating a new shared run', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ count: 0 }])
+      .mockResolvedValueOnce([{ id: 'template-2', title: 'Template 2', items: '[{"id":"item-1","title":"Item 1"}]', is_public: 1, user_id: 'user-123' }]);
+
+    const request = new Request('http://localhost/api/checklists/template-2/share', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+
+    const response = await handleChecklists(request, mockEnv);
+
+    expect(response.status).toBe(200);
+    expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        is_public: false,
+        share_expires_at: expect.any(String),
+        status: 'completed',
+      })
+    );
+    expect(dbMocks.updateChain.where).toHaveBeenCalled();
+  });
+
   it('should serve shared checklist runs without authentication', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue(null);
     dbMocks.selectChain.limit.mockResolvedValueOnce([

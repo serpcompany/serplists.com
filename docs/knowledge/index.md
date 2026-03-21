@@ -9,6 +9,7 @@ Operational notes, debugging lessons, and implementation decisions.
 - [Better Auth on Cloudflare Pages](better-auth-cloudflare-pages.md)
 - [Billing and entitlements decision](billing-entitlements.md)
 - [Cloudflare Pages GitHub Actions](cloudflare-pages-github-actions.md)
+- [Checklist share run: fresh token + deactivation](checklist-share-run-fresh-token-2026-03-21.md)
 - [CORS and rate limits](cors-rate-limits-pages-functions.md)
 - [D1 backup/restore and R2 lifecycle](d1-backup-restore-r2-lifecycle.md)
 - [Drizzle with D1 on Pages Functions](drizzle-d1-pages-functions.md)
