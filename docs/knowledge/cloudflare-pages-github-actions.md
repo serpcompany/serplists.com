@@ -17,5 +17,6 @@ This repo deploys to Cloudflare Pages via `wrangler pages deploy` in GitHub Acti
 - That schema check is a read-only gate against production D1. If required tables or columns are missing, the workflow fails before Pages deploy.
 - The workflow builds with `pnpm run build` and deploys `dist` with `npx wrangler pages deploy`.
 - The workflow also runs `pnpm run typecheck:env` before build. Because the real auth secret lives in Cloudflare Pages runtime settings, the workflow injects a build-only placeholder `BETTER_AUTH_SECRET` so env validation can pass in GitHub Actions without copying the production secret into GitHub.
+- Keep `actions/checkout` and `actions/setup-node` on `v5` or newer so the workflow does not fall back to the deprecated Node 20 action runtime.
 - Update `node-version` in `.github/workflows/cloudflare-pages-deploy.yml` if a different Node version is required.
 - Ensure `.github` is not gitignored; the workflow file must be committed to `main` for Actions to run.
