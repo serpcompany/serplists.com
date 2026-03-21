@@ -147,6 +147,13 @@ class ApiClient {
     });
   }
 
+  async createChecklistRunShare(runId: string) {
+    return this.request(`/checklists/run/${encodeURIComponent(runId)}/share`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
   async getSharedChecklist(shareToken: string) {
     return this.request(`/checklists/shared/${encodeURIComponent(shareToken)}`);
   }

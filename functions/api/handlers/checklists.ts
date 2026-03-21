@@ -1,5 +1,5 @@
 import { Env } from '../types';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { checklistPayloadSchema, normalizeSectionsPayload, parseJsonArray } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
@@ -132,8 +132,8 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
     }
 
-    const isSharedRunRequest = checklistsSubpath[1] === 'share';
-    if (isSharedRunRequest) {
+    const isTemplateShareRequest = checklistsSubpath.length === 2 && checklistsSubpath[1] === 'share' && checklistsSubpath[0] !== 'run';
+    if (isTemplateShareRequest) {
       const templateId = checklistsSubpath[0];
       if (!templateId || templateId === 'checklists') {
         return jsonError('Template ID required', 400);
@@ -142,23 +142,6 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       const shareBody = z.object({ runName: z.string().optional() }).safeParse(parsed.data);
       if (!shareBody.success) {
         return jsonError(shareBody.error.issues[0]?.message || 'Invalid share payload', 400);
-      }
-
-      const entitlements = await getEntitlementsForUser(env, userId);
-      if (entitlements.plan === 'free' && entitlements.limits.maxActiveRuns) {
-        const [row] = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(checklist_runs)
-          .where(and(eq(checklist_runs.user_id, userId), eq(checklist_runs.status, 'in_progress')))
-          .limit(1);
-
-        const currentCount = row?.count ?? 0;
-        if (currentCount >= entitlements.limits.maxActiveRuns) {
-          return jsonError('Active run limit reached. Upgrade to Pro to create more checklist runs.', 403, {
-            code: 'limit_reached',
-            details: { limit: entitlements.limits.maxActiveRuns, current: currentCount, resource: 'active_runs' },
-          });
-        }
       }
 
       const [sourceTemplate] = await db
@@ -171,6 +154,48 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         return jsonError('Template not found', 404);
       }
 
+      const now = new Date().toISOString();
+
+      await db
+        .update(checklist_runs)
+        .set({
+          status: 'completed',
+          completed_at: now,
+          is_public: false,
+          share_expires_at: now,
+          share_used_at: now,
+        })
+        .where(
+          and(
+            eq(checklist_runs.user_id, userId),
+            eq(checklist_runs.template_id, templateId),
+            eq(checklist_runs.is_public, true)
+          )
+        );
+
+      const entitlements = await getEntitlementsForUser(env, userId);
+      if (entitlements.plan === 'free' && entitlements.limits.maxActiveRuns) {
+        const [row] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(checklist_runs)
+          .where(
+            and(
+              eq(checklist_runs.user_id, userId),
+              eq(checklist_runs.status, 'in_progress'),
+              or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public))
+            )
+          )
+          .limit(1);
+
+        const currentCount = row?.count ?? 0;
+        if (currentCount >= entitlements.limits.maxActiveRuns) {
+          return jsonError('Active run limit reached. Upgrade to Pro to create more checklist runs.', 403, {
+            code: 'limit_reached',
+            details: { limit: entitlements.limits.maxActiveRuns, current: currentCount, resource: 'active_runs' },
+          });
+        }
+      }
+
       const sourceItems = parseJsonArray(sourceTemplate.items) ?? [];
       const normalizedSections = normalizeSectionsPayload(sourceItems);
       if (normalizedSections.error) {
@@ -179,7 +204,6 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
 
       const shareToken = crypto.randomUUID();
       const checklistId = crypto.randomUUID();
-      const now = new Date().toISOString();
       const runName = shareBody.data.runName?.trim() || sourceTemplate.title;
 
       await db.insert(checklist_runs).values({
@@ -197,6 +221,53 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
 
       return json({
         id: checklistId,
+        shareToken,
+        sharePath: `/run/shared/${shareToken}`,
+      });
+    }
+
+    const isRunShareRequest = checklistsSubpath.length === 3 && checklistsSubpath[0] === 'run' && checklistsSubpath[2] === 'share';
+    if (isRunShareRequest) {
+      const runId = checklistsSubpath[1];
+      if (!runId || runId === 'run') {
+        return jsonError('Checklist run ID required', 400);
+      }
+
+      const [run] = await db
+        .select()
+        .from(checklist_runs)
+        .where(and(eq(checklist_runs.id, runId), eq(checklist_runs.user_id, userId)))
+        .limit(1);
+
+      if (!run) {
+        return jsonError('Checklist run not found', 404);
+      }
+
+      const now = new Date().toISOString();
+      const shareToken = crypto.randomUUID();
+
+      await db
+        .update(checklist_runs)
+        .set({
+          is_public: false,
+          share_token: null,
+          share_expires_at: null,
+          share_used_at: null,
+        })
+        .where(and(eq(checklist_runs.id, runId), eq(checklist_runs.user_id, userId), eq(checklist_runs.is_public, true)));
+
+      await db
+        .update(checklist_runs)
+        .set({
+          is_public: true,
+          share_token: shareToken,
+          share_expires_at: now,
+          share_used_at: null,
+        })
+        .where(and(eq(checklist_runs.id, runId), eq(checklist_runs.user_id, userId)));
+
+      return json({
+        id: runId,
         shareToken,
         sharePath: `/run/shared/${shareToken}`,
       });

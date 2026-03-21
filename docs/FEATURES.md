@@ -18,8 +18,9 @@
 
 ## Guest checklist sharing
 
-- **Template share link for checklist runs**
-  - The Templates page now includes a **Share** action for each template.
-  - Share creates a public run record tied to the template owner and returns a share URL of the form `/run/shared/:token`.
-  - Guests can open the share URL without logging in and complete the checklist.
-  - Shared runs are persisted to the owner account while being read-only for destructive/template-edit actions (run title updates are not enabled for shared links).
+- **Run-level checklist sharing**
+  - The Templates page now uses a **Run** action to immediately create a checklist run.
+  - New runs can be shared from the run page using the **Share** button, which creates a public `/run/shared/:token` link for that specific run.
+  - Each share action now generates a new share token for the current run and updates that same run's share attachment instead of reusing template-level shares.
+  - Guests can open a run share URL without logging in and complete the checklist.
+  - Shared runs remain read-only for title editing and destructive actions while still allowing progress updates.

@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { ArrowLeft, Check, CheckCircle, Edit2, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle, Edit2, Loader2, Share2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,6 +26,7 @@ const ChecklistRunPage = () => {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState("");
+  const [isCreatingShare, setIsCreatingShare] = useState(false);
 
   const mapChecklistToRun = (checklist: Record<string, unknown>, fallbackId: string): RunType => {
     const rawItemsValue = checklist.items;
@@ -242,6 +243,23 @@ const ChecklistRunPage = () => {
 
   const handleBack = () => navigate(isSharedRun ? "/checklists" : "/dashboard");
 
+  const handleCreateShare = async () => {
+    if (!run) return;
+
+    setIsCreatingShare(true);
+    try {
+      const { shareToken } = await api.createChecklistRunShare(run.id);
+      const shareUrl = `${window.location.origin}/run/shared/${shareToken}`;
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("Share link copied to clipboard");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create share link for this run.";
+      toast.error(message || "Failed to create share link for this run.");
+    } finally {
+      setIsCreatingShare(false);
+    }
+  };
+
   const handleCompleteRun = async () => {
     if (!run) return;
 
@@ -397,6 +415,17 @@ const ChecklistRunPage = () => {
                 <div className="text-sm text-muted-foreground">{completed}/{total} items</div>
                 <div className="text-lg font-medium">{progress}%</div>
               </div>
+              {!isSharedRun ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isCreatingShare}
+                  onClick={handleCreateShare}
+                >
+                  <Share2 className="mr-2 h-4 w-4" />
+                  {isCreatingShare ? "Creating link..." : "Share"}
+                </Button>
+              ) : null}
               <Progress value={progress} className="h-2 w-32" />
             </div>
           </div>
