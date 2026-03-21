@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Archive, Pencil, PlayCircle, Share2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useTemplates } from "@/contexts/TemplatesContext";
 import { api } from "@/lib/api";
+import { handleAccessFailure, navigateToLoginWithReturnPath, startBillingCheckout } from "@/lib/access-flow";
 import { RunNameDialog } from "@/components/ui/run-name-dialog";
 import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,7 @@ const normalizeTemplate = (rawTemplate: Record<string, unknown>): ChecklistTempl
 const TemplateDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { getTemplate, createRun, deleteTemplate } = useTemplates();
   const queryClient = useQueryClient();
@@ -194,24 +196,13 @@ const TemplateDetail = () => {
   const handleCloneTemplate = async () => {
     if (!template) return;
     if (!user) {
-      navigate("/login");
+      navigateToLoginWithReturnPath(navigate, location);
       return;
     }
 
     if (!isProUser) {
-      if (!billingEnabled) {
-        toast.error("Upgrade to Pro to copy templates. Billing checkout is currently unavailable.");
-        return;
-      }
-
-      try {
-        const { url } = await api.createBillingCheckout();
-        window.location.href = url;
-        return;
-      } catch (checkoutErr) {
-        toast.error(checkoutErr instanceof Error ? checkoutErr.message : "Failed to start checkout");
-        return;
-      }
+      await startBillingCheckout(billingEnabled);
+      return;
     }
 
     setIsCloningTemplate(true);
@@ -229,22 +220,12 @@ const TemplateDetail = () => {
         navigate("/templates");
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to copy template";
-      const isUpgradeBlocked = errorMessage.toLowerCase().includes("upgrade")
-        || errorMessage.toLowerCase().includes("limit");
-
-      if (isUpgradeBlocked) {
-        try {
-          const { url } = await api.createBillingCheckout();
-          window.location.href = url;
-          return;
-        } catch (checkoutErr) {
-          toast.error(checkoutErr instanceof Error ? checkoutErr.message : "Failed to start checkout");
-          return;
-        }
-      }
-
-      toast.error(errorMessage);
+      await handleAccessFailure(err, {
+        billingEnabled,
+        fallbackMessage: "Failed to copy template",
+        navigate,
+        location,
+      });
     } finally {
       setIsCloningTemplate(false);
     }
@@ -349,7 +330,7 @@ const TemplateDetail = () => {
                 </Button>
               ) : (
                 <Button asChild variant="outline">
-                  <Link to="/login">
+                  <Link to="/login" state={{ from: location }}>
                     Log in to copy template
                   </Link>
                 </Button>

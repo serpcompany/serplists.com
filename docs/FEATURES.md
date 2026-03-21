@@ -70,7 +70,12 @@
 - **Plan enforcement stays app-specific**
   - Unauthenticated access returns `401 Unauthorized`.
   - Logged-in Free users who hit Pro-only or plan-limited actions receive `403` responses with product-specific upgrade or limit messaging such as `upgrade_required` or `limit_reached`.
-  - UI upgrade prompts mirror those API outcomes on premium surfaces like template copy and import/export.
+  - Logged-in users only see one auth/upgrade contract on premium surfaces:
+    - `401` sends them to `/login` and preserves the page they were trying to use.
+    - `403 upgrade_required` or `403 limit_reached` sends them into the Pro checkout flow.
+    - `503 billing_unavailable` shows an explicit billing-unavailable message instead of a generic failure.
+  - Public template copy (`/checklists/:slug`), template detail copy (`/templates/:id` for non-owners), and template import/export all use that same contract.
+  - The client now preserves API `status`, `code`, and `details` instead of guessing behavior from error-message text.
 
 ## MVP navigation scope
 

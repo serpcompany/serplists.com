@@ -1,15 +1,15 @@
 
-import React from "react";
-import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
-import { AuthProvider, useAuth } from "./contexts/CloudflareAuthContext";
+import { AuthProvider } from "./contexts/CloudflareAuthContext";
 import { TemplatesProvider } from "./contexts/TemplatesContext";
 import { Layout } from "./components/Layout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DevLoginBar } from "./components/DevLoginBar";
+import RequireAuth from "@/components/RequireAuth";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -115,51 +115,51 @@ const App = () => {
             <Route
               path="/dashboard"
               element={
-                <PrivateRoute>
+                <RequireAuth>
                   <Layout>
                     <Dashboard />
                   </Layout>
-                </PrivateRoute>
+                </RequireAuth>
               }
             />
             <Route
               path="/templates"
               element={
-                <PrivateRoute>
+                <RequireAuth>
                   <Layout>
                     <Templates />
                   </Layout>
-                </PrivateRoute>
+                </RequireAuth>
               }
             />
             <Route
               path="/templates/new"
               element={
-                <PrivateRoute>
+                <RequireAuth>
                   <Layout>
                     <TemplateEditor />
                   </Layout>
-                </PrivateRoute>
+                </RequireAuth>
               }
             />
             <Route
               path="/templates/:id"
               element={
-                <PrivateRoute>
+                <RequireAuth>
                   <Layout>
                     <TemplateDetail />
                   </Layout>
-                </PrivateRoute>
+                </RequireAuth>
               }
             />
             <Route
               path="/templates/:id/edit"
               element={
-                <PrivateRoute>
+                <RequireAuth>
                   <Layout>
                     <TemplateEditor />
                   </Layout>
-                </PrivateRoute>
+                </RequireAuth>
               }
             />
             <Route
@@ -173,21 +173,21 @@ const App = () => {
             <Route
               path="/run/:id"
               element={
-                <PrivateRoute>
+                <RequireAuth>
                   <Layout>
                     <ChecklistRun />
                   </Layout>
-                </PrivateRoute>
+                </RequireAuth>
               }
             />
             <Route
               path="/account"
               element={
-                <PrivateRoute>
+                <RequireAuth>
                   <Layout>
                     <Account />
                   </Layout>
-                </PrivateRoute>
+                </RequireAuth>
               }
             />
                   </Routes>
@@ -201,17 +201,6 @@ const App = () => {
       </HelmetProvider>
     </QueryClientProvider>
   );
-};
-
-const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading } = useAuth();
-  const location = useLocation();
-
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
-
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" state={{ from: location }} replace />;
 };
 
 export default App;

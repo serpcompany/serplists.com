@@ -1,4 +1,5 @@
 import { env } from "@/env";
+import { createApiError } from "@/lib/api-errors";
 
 const DEV_API_BASE_URL = env.VITE_API_URL ?? 'http://localhost:8788/api';
 const API_BASE_URL = import.meta.env.DEV
@@ -19,8 +20,8 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(error.error || `HTTP ${response.status}`);
+      const error = await response.json().catch(() => undefined);
+      throw createApiError(response.status, error);
     }
 
     return response.json();
@@ -37,8 +38,8 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(error.error || `HTTP ${response.status}`);
+      const error = await response.json().catch(() => undefined);
+      throw createApiError(response.status, error);
     }
 
     return response.json();

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { SEOHead } from "@/components/shared/SEOHead";
 import { analytics } from "@/lib/analytics";
 import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
 import { api } from "@/lib/api";
+import { handleAccessFailure, navigateToLoginWithReturnPath, startBillingCheckout } from "@/lib/access-flow";
 import type { ChecklistTemplate } from "@/types/checklist";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -22,6 +23,7 @@ const PublicTemplate = () => {
   const [isCreatingRun, setIsCreatingRun] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, isAuthenticated } = useAuth();
   const { createRun } = useTemplates();
   const queryClient = useQueryClient();
@@ -87,7 +89,7 @@ const PublicTemplate = () => {
     if (!template) return;
     
     if (!isAuthenticated) {
-      navigate('/login');
+      navigateToLoginWithReturnPath(navigate, location);
       return;
     }
 
@@ -104,7 +106,12 @@ const PublicTemplate = () => {
       }
     } catch (error) {
       console.error('Error creating run:', error);
-      toast.error("Failed to start template run");
+      await handleAccessFailure(error, {
+        billingEnabled,
+        fallbackMessage: "Failed to start template run",
+        navigate,
+        location,
+      });
     } finally {
       setIsCreatingRun(false);
     }
@@ -113,24 +120,13 @@ const PublicTemplate = () => {
   const handleSaveTemplate = async () => {
     if (!template) return;
     if (!isAuthenticated) {
-      navigate("/login");
+      navigateToLoginWithReturnPath(navigate, location);
       return;
     }
 
     if (!isProUser) {
-      if (!billingEnabled) {
-        toast.error("Upgrade to Pro to copy templates. Billing checkout is currently unavailable.");
-        return;
-      }
-
-      try {
-        const { url } = await api.createBillingCheckout();
-        window.location.href = url;
-        return;
-      } catch (checkoutErr) {
-        toast.error(checkoutErr instanceof Error ? checkoutErr.message : "Failed to start checkout");
-        return;
-      }
+      await startBillingCheckout(billingEnabled);
+      return;
     }
 
     setIsSaving(true);
@@ -141,27 +137,12 @@ const PublicTemplate = () => {
       await queryClient.invalidateQueries({ queryKey: ["user-templates", user?.id] });
       navigate("/templates");
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to save template";
-      const isUpgradeBlocked = errorMessage.toLowerCase().includes("upgrade")
-        || errorMessage.toLowerCase().includes("limit");
-
-      if (isUpgradeBlocked) {
-        if (!billingEnabled) {
-          toast.error("Upgrade required to copy more templates. Billing checkout is currently unavailable.");
-          return;
-        }
-
-        try {
-          const { url } = await api.createBillingCheckout();
-          window.location.href = url;
-          return;
-        } catch (checkoutErr) {
-          toast.error(checkoutErr instanceof Error ? checkoutErr.message : "Failed to start checkout");
-          return;
-        }
-      }
-
-      toast.error(errorMessage);
+      await handleAccessFailure(err, {
+        billingEnabled,
+        fallbackMessage: "Failed to save template",
+        navigate,
+        location,
+      });
     } finally {
       setIsSaving(false);
     }

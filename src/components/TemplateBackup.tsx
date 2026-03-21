@@ -17,6 +17,7 @@ import type { ChecklistTemplate } from "@/lib/schemas/checklistSchema";
 import type { TemplateImportOptions } from "@/types/checklist";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
 
 interface TemplateBackupProps {
   className?: string;
@@ -77,16 +78,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const exceedsTemplateLimit = importPreview ? importPreview.templates.length > MAX_TEMPLATES_PER_IMPORT : false;
 
   const handleUpgrade = async () => {
-    if (!billingEnabled) {
-      toast.error("Billing is temporarily unavailable. Please contact support.");
-      return;
-    }
-    try {
-      const { url } = await api.createBillingCheckout();
-      window.location.href = url;
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to start checkout");
-    }
+    await startBillingCheckout(billingEnabled);
   };
 
   const handleExportAll = async () => {
@@ -96,7 +88,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     }
 
     if (plan !== "pro") {
-      toast.error("Upgrade to Pro to export templates");
+      await startBillingCheckout(billingEnabled);
       return;
     }
 
@@ -115,8 +107,11 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       }).templates.length : 0;
       toast.success(`Exported ${count} templates successfully`);
     } catch (error) {
-      toast.error("Failed to export templates");
       console.error("Export error:", error);
+      await handleAccessFailure(error, {
+        billingEnabled,
+        fallbackMessage: "Failed to export templates",
+      });
     }
   };
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -147,7 +142,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     if (!importPreview || !user) return;
 
     if (plan !== "pro") {
-      toast.error("Upgrade to Pro to import templates");
+      await startBillingCheckout(billingEnabled);
       return;
     }
 
@@ -178,7 +173,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       const fileInput = document.getElementById('template-file-input') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
     } catch (error) {
-      toast.error(`Failed to import templates: ${(error as Error).message}`);
+      await handleAccessFailure(error, {
+        billingEnabled,
+        fallbackMessage: "Failed to import templates",
+      });
     } finally {
       setIsImporting(false);
     }
