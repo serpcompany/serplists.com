@@ -1,19 +1,19 @@
 # Cloudflare Pages deploys from GitHub Actions
 
-This repo deploys to Cloudflare Pages via `cloudflare/pages-action@v1` on pushes to `main`.
+This repo deploys to Cloudflare Pages via `wrangler pages deploy` in GitHub Actions on pushes to `main`.
 
 ## Required GitHub secrets
-- `CLOUDFLARE_API_TOKEN` (Cloudflare Pages - Edit permission)
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_PAGES_PROJECT` (Pages project name)
+- `CLOUDFLARE_EMAIL`
+- `CLOUDFLARE_API_KEY`
 
-## Token setup (Cloudflare dashboard)
-1. Profile menu -> My Profile -> API Tokens -> Create Token.
-2. Create a Custom Token with **Account / Cloudflare Pages / Edit** permission.
-3. Save the token and add it to GitHub secrets as `CLOUDFLARE_API_TOKEN`.
+## Why the workflow uses email + global key
+- The legacy `CLOUDFLARE_API_TOKEN` available to this repo verified as active, but Cloudflare returned an authentication error when the workflow tried to read the `serp-checklists` Pages project on the `SERP` account.
+- The same project was readable and deployable with `CLOUDFLARE_EMAIL` + `CLOUDFLARE_API_KEY`, so the workflow now uses Wrangler directly with that auth path.
 
 ## Notes
-- The workflow builds with `pnpm run build` and uploads the `dist` directory.
+- The workflow builds with `pnpm run build` and deploys `dist` with `npx wrangler pages deploy`.
 - The workflow also runs `pnpm run typecheck:env` before build. Because the real auth secret lives in Cloudflare Pages runtime settings, the workflow injects a build-only placeholder `BETTER_AUTH_SECRET` so env validation can pass in GitHub Actions without copying the production secret into GitHub.
 - Update `node-version` in `.github/workflows/cloudflare-pages-deploy.yml` if a different Node version is required.
 - Ensure `.github` is not gitignored; the workflow file must be committed to `main` for Actions to run.
