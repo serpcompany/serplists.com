@@ -31,6 +31,10 @@ This docs hub is the source of truth for setup, architecture, operations, implem
 ## Product docs
 - [Plans](product/plans.md)
 
+## QA
+- [QA index](qa/index.md)
+- [MVP launch sign-off checklist](qa/mvp-launch-signoff.md)
+
 ## Backlog and improvements
 - [Roadmap index](roadmap/index.md)
 - [Enhancements backlog](roadmap/enhancements-backlog.md)
