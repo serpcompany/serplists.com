@@ -6,6 +6,7 @@ import { authClient } from '@/lib/auth-client';
 import { SecuritySection } from '@/components/account/SecuritySection';
 import { BillingSection } from '@/components/account/BillingSection';
 import { useSearchParams } from 'react-router-dom';
+import { buildAccountUpdatePayload } from './accountProfileUpdates';
 
 interface ProfileData {
   email: string;
@@ -75,19 +76,21 @@ const Account = () => {
     
     setLoading(true);
     try {
-      const updates: { name?: string; image?: string } = {};
-      if (profileData.fullName !== (user.name || '')) updates.name = profileData.fullName;
-      if (profileData.avatar_url !== (user.image || '')) updates.image = profileData.avatar_url;
+      const updates = buildAccountUpdatePayload(profileData, user);
 
-      if (Object.keys(updates).length > 0) {
-        await authClient.updateUser(updates);
+      if (Object.keys(updates).length === 0) {
+        toast.message('No profile changes to save');
+        return;
       }
 
-      if (profileData.username !== (user.username || '')) {
-        await authClient.username.updateUser({ username: profileData.username || undefined });
+      const result = await authClient.updateUser(updates);
+      if (result?.error) {
+        toast.error(result.error.message || 'Failed to update profile');
+        return;
       }
 
       await refreshProfile();
+      await loadProfile();
       toast.success('Profile updated successfully');
     } catch (error) {
       console.error('Error updating profile:', error);
