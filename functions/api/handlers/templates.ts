@@ -9,6 +9,7 @@ import { getEntitlementsForUser } from '../utils/entitlements';
 import { z } from 'zod';
 
 const junkTemplateTitles = new Set(['Test Template', 'Updated Template Title']);
+const PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION = '2.0.0';
 
 async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
   const base = generateSlug(title || 'template') || 'template';
@@ -74,6 +75,14 @@ const templateBackupImportTemplateSchema = z.object({
   tags: z.union([z.array(z.string()), z.string()]).optional(),
   slug: z.string().optional(),
   version: z.number().int().optional(),
+  visibility: z.enum(['public', 'private']).optional(),
+  rules: z.array(z.object({
+    id: z.string(),
+    type: z.string(),
+    path: z.string(),
+    value: z.unknown().optional(),
+    severity: z.enum(['error', 'warning']).optional(),
+  })).optional(),
 });
 
 const templateBackupImportBodySchema = z.object({
@@ -83,6 +92,15 @@ const templateBackupImportBodySchema = z.object({
       visibility: z.enum(['preserve', 'public', 'private']).optional(),
     })
     .optional(),
+});
+
+const portableTemplatePackImportSchema = z.object({
+  kind: z.literal('serplists-template-pack'),
+  schemaVersion: z.string(),
+  exportedAt: z.string().optional(),
+  exportedBy: z.string().optional(),
+  templates: z.array(templateBackupImportTemplateSchema),
+  manifest: z.record(z.string(), z.unknown()).optional(),
 });
 
 function hasOversizedAssets(sections: unknown[], maxAssetBytes: number): boolean {
@@ -104,6 +122,32 @@ function hasOversizedAssets(sections: unknown[], maxAssetBytes: number): boolean
     }
   }
   return false;
+}
+
+function countReferencedUploads(sections: unknown[]): number {
+  let count = 0;
+
+  for (const section of sections) {
+    if (!isRecord(section)) continue;
+    const items = section.items;
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      if (!isRecord(item)) continue;
+      const contents = item.contents;
+      if (!Array.isArray(contents)) continue;
+      for (const content of contents) {
+        if (!isRecord(content)) continue;
+        const type = content.type;
+        const value = typeof content.value === 'string' ? content.value : '';
+        const isUpload = content.uploadType === 'upload' || value.includes('/api/uploads/file') || value.includes('uploads/file?key=');
+        if ((type === 'image' || type === 'video' || type === 'file') && isUpload) {
+          count += 1;
+        }
+      }
+    }
+  }
+
+  return count;
 }
 
 export async function handleTemplates(request: Request, env: Env): Promise<Response> {
@@ -128,6 +172,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     }
 
     if (request.method === 'GET') {
+      const exportFormat = url.searchParams.get('format') === 'backup' ? 'backup' : 'portable';
       const includePublic = url.searchParams.get('includePublic') === '1';
       const whereClause = includePublic
         ? or(eq(templates.user_id, userId), eq(templates.is_public, true))
@@ -163,6 +208,32 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       const publicTemplates = exportedTemplates.filter((t) => t.isPublic);
       const privateTemplates = exportedTemplates.filter((t) => !t.isPublic);
 
+      if (exportFormat === 'portable') {
+        return json({
+          kind: 'serplists-template-pack',
+          schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
+          exportedAt: new Date().toISOString(),
+          exportedBy: userRow?.email,
+          templates: exportedTemplates.map((template) => ({
+            title: template.title,
+            description: template.description || '',
+            type: typeof template.type === 'string' ? template.type : 'checklist',
+            sections: template.sections || [],
+            categories: template.categories || [],
+            tags: template.tags || [],
+            visibility: template.isPublic ? 'public' : 'private',
+            slug: template.slug || undefined,
+          })),
+          manifest: {
+            totalTemplates: exportedTemplates.length,
+            format: 'portable',
+            includesVisibility: exportedTemplates.length > 0,
+            includesRules: false,
+            assetWarnings: exportedTemplates.reduce((total, template) => total + countReferencedUploads(template.sections || []), 0),
+          },
+        });
+      }
+
       return json({
         version: '1.0.0',
         exportedAt: new Date().toISOString(),
@@ -185,6 +256,20 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         body = await request.json();
       } catch {
         return jsonError('Invalid JSON payload', 400);
+      }
+
+      if (isRecord(body) && body.kind === 'serplists-template-pack') {
+        const portableBody = portableTemplatePackImportSchema.safeParse(body);
+        if (!portableBody.success) {
+          return jsonError(portableBody.error.issues[0]?.message || 'Invalid portable template pack payload', 400);
+        }
+        if (portableBody.data.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
+          return jsonError(`Unsupported portable template schema version: ${portableBody.data.schemaVersion}`, 400, {
+            code: 'unsupported_portable_schema_version',
+          });
+        }
+
+        body = { templates: portableBody.data.templates };
       }
 
       const parsedBody = Array.isArray(body)
@@ -224,7 +309,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         const finalTags = normalizeStringArray(template.tags);
         const finalType = template.type ?? 'checklist';
         const sourceVisibility =
-          typeof template.is_public === 'boolean'
+          template.visibility === 'public'
+            ? true
+            : template.visibility === 'private'
+              ? false
+              : typeof template.is_public === 'boolean'
             ? template.is_public
             : typeof template.isPublic === 'boolean'
               ? template.isPublic

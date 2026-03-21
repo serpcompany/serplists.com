@@ -1,26 +1,42 @@
 import { z } from "zod";
 
+const boundedOptionalString = (max: number) => z.string().trim().max(max).optional();
+const boundedRequiredString = (max: number) => z.string().trim().min(1).max(max);
+const stringListField = (maxItems: number, maxLength: number) =>
+  z
+    .union([
+      z.array(z.string().trim().min(1).max(maxLength)).max(maxItems),
+      z.string().trim().min(1).max(maxLength),
+    ])
+    .optional();
+
 export const templatePayloadSchema = z.object({
-  title: z.string().optional(),
-  description: z.string().optional(),
+  title: boundedRequiredString(160).optional(),
+  description: boundedOptionalString(5000),
   type: z.enum(["checklist", "recipe"]).optional(),
   is_public: z.boolean().optional(),
-  categories: z.union([z.array(z.string()), z.string()]).optional(),
-  category: z.string().optional(),
-  tags: z.union([z.array(z.string()), z.string()]).optional(),
+  categories: stringListField(20, 80),
+  category: boundedOptionalString(80),
+  tags: stringListField(20, 80),
   sections: z.unknown().optional(),
   items: z.unknown().optional(),
-  slug: z.string().optional(),
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(160)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, numbers, and hyphens only")
+    .optional(),
 });
 
 export const checklistPayloadSchema = z.object({
-  template_id: z.string().nullable().optional(),
-  title: z.string().optional(),
+  template_id: z.string().trim().min(1).nullable().optional(),
+  title: boundedRequiredString(160).optional(),
   sections: z.unknown().optional(),
   items: z.unknown().optional(),
-  status: z.string().optional(),
-  progress: z.number().optional(),
-  completed_at: z.string().nullable().optional(),
+  status: z.enum(["in_progress", "completed"]).optional(),
+  progress: z.number().min(0).max(100).optional(),
+  completed_at: z.string().datetime().nullable().optional(),
 });
 
 export function parseJsonArray(value: unknown): unknown[] | null {

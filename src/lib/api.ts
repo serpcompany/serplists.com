@@ -100,9 +100,12 @@ class ApiClient {
     });
   }
 
-  async exportTemplateBackup(params?: { includePublic?: boolean }) {
-    const includePublic = params?.includePublic ? '?includePublic=1' : '';
-    return this.request(`/templates/backup${includePublic}`);
+  async exportTemplateBackup(params?: { includePublic?: boolean; format?: 'backup' | 'portable' }) {
+    const search = new URLSearchParams();
+    if (params?.includePublic) search.set('includePublic', '1');
+    search.set('format', params?.format ?? 'portable');
+    const query = search.toString();
+    return this.request(`/templates/backup${query ? `?${query}` : ''}`);
   }
 
   async importTemplateBackup(payload: {

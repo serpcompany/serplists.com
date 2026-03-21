@@ -14,6 +14,10 @@ Configuration:
 - `FRONTEND_URL`: a single frontend URL (origin is extracted and allowlisted).
 - `CORS_ALLOWED_ORIGINS`: comma-separated list of allowed origins (each entry must be a valid URL).
 
+### Local verification gotcha
+- If Vite cannot bind to `http://localhost:8080` and falls back to another port like `8081`, cookie-authenticated API calls to `http://localhost:8788` will fail CORS when `.dev.vars` still has `FRONTEND_URL=http://localhost:8080`.
+- For browser verification, either free up `8080` or update the allowlist before testing from the fallback frontend port.
+
 ## Rate limiting
 Basic, best-effort rate limiting is applied in `functions/api/[[route]].ts`:
 - `POST /api/auth/register` and `POST /api/auth/login`: 30 requests per 5 minutes per IP.

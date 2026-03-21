@@ -11,7 +11,7 @@ import { Download, Upload, FileText, AlertCircle, CheckCircle } from "lucide-rea
 import { useTemplates } from "@/contexts/TemplatesContext";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
-import { exportTemplatesToJSON, downloadBackupFile, parseTemplatesFromJSON } from "@/lib/utils/templateBackup";
+import { downloadBackupFile, exportPortableTemplatesToJSON, parseTemplatesFromJSON } from "@/lib/utils/templateBackup";
 import type { TemplateImportResult } from "@/lib/utils/templateBackup";
 import type { ChecklistTemplate } from "@/lib/schemas/checklistSchema";
 import type { TemplateImportOptions } from "@/types/checklist";
@@ -302,9 +302,9 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
         }]
       }]
     };
-    const sampleBackup = exportTemplatesToJSON([sampleTemplate], "Sample Export");
-    downloadBackupFile(sampleBackup, "sample-moving-checklist.json");
-    toast.success("Sample template downloaded! You can now import this file to see how it works.");
+    const sampleBackup = exportPortableTemplatesToJSON([sampleTemplate], "Sample Export");
+    downloadBackupFile(sampleBackup, "sample-moving-checklist-portable.json");
+    toast.success("Sample portable template pack downloaded. You can import it to preview the new JSON format.");
   };
   const publicTemplateCount = ownedTemplates.filter(t => t.isPublic).length;
   const privateTemplateCount = ownedTemplates.filter(t => !t.isPublic).length;
@@ -313,10 +313,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 	        <CardHeader>
 	          <CardTitle className="flex items-center gap-2">
 	            <FileText className="h-5 w-5" />
-	            Template Backup & Import
+	            Template JSON Import & Export
 	          </CardTitle>
 	          <CardDescription>
-	            Export your templates to backup files or import templates from JSON files
+	            Export portable template packs or import compatible JSON files
 	          </CardDescription>
 	        </CardHeader>
         <CardContent className="space-y-6">
@@ -366,7 +366,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                     Include public community templates
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Exports your templates plus any public templates you can see.
+                    Exports your templates plus any public templates you can see into the portable pack format.
                   </p>
                 </div>
                 <Switch
@@ -378,7 +378,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
               </div>
 	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={!user || billing.isLoading || plan !== "pro" || !billingEnabled}>
 	              <Download className="h-4 w-4" />
-	              Export My Templates
+	              Export Portable Pack
 	            </Button>
 	          </div>
 
@@ -409,7 +409,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 	              <p className="text-sm text-muted-foreground">
 	                Need an example?{" "}
 	                <Button variant="link" className="p-0 h-auto text-primary" onClick={downloadSampleTemplate}>
-	                  Download sample template file
+	                  Download sample portable pack
 	                </Button>
 	              </p>
 	            </div>

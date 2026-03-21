@@ -68,6 +68,8 @@ export type TemplateImportOptions = {
   visibility?: "preserve" | "public" | "private";
 };
 
+export type TemplateExportFormat = "backup" | "portable";
+
 export type TemplateImportSummary = {
   imported: number;
   failed: { title: string; reason: string }[];

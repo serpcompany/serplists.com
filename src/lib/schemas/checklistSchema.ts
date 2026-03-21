@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION = "2.0.0" as const;
+
 // Base schema for checklist sub-items
 export const checklistSubItemSchema = z.object({
   id: z.string(),
@@ -96,6 +98,88 @@ export const templateBackupSchema = z.object({
   }).optional()
 });
 
+export const portableTemplateRuleSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  path: z.string(),
+  value: z.unknown().optional(),
+  severity: z.enum(["error", "warning"]).default("error"),
+});
+
+export const portableChecklistSubItemSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1),
+});
+
+export const portableChecklistItemContentSchema = z.object({
+  id: z.string().optional(),
+  type: z.enum(["text", "image", "video", "file", "embed", "subItems"]),
+  value: z.string().optional().default(""),
+  uploadType: z.enum(["url", "upload"]).optional(),
+  fileName: z.string().optional(),
+  fileSize: z.number().optional(),
+  subItems: z.array(portableChecklistSubItemSchema).optional(),
+}).superRefine((content, ctx) => {
+  if (content.type === "subItems") {
+    if (!content.subItems || content.subItems.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "subItems content requires at least one sub-item",
+        path: ["subItems"],
+      });
+    }
+    return;
+  }
+
+  if ((content.type === "image" || content.type === "video" || content.type === "file" || content.type === "embed") && !content.value.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `${content.type} content requires a value`,
+      path: ["value"],
+    });
+  }
+});
+
+export const portableChecklistItemSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  contents: z.array(portableChecklistItemContentSchema).optional(),
+});
+
+export const portableChecklistSectionSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1),
+  items: z.array(portableChecklistItemSchema).min(1),
+});
+
+export const portableChecklistTemplateSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  type: z.enum(["checklist", "recipe"]).optional(),
+  slug: z.string().optional(),
+  visibility: z.enum(["public", "private"]).optional(),
+  categories: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  sections: z.array(portableChecklistSectionSchema).min(1),
+  rules: z.array(portableTemplateRuleSchema).optional(),
+});
+
+export const portableTemplatePackSchema = z.object({
+  kind: z.literal("serplists-template-pack"),
+  schemaVersion: z.string(),
+  exportedAt: z.string(),
+  exportedBy: z.string().optional(),
+  templates: z.array(portableChecklistTemplateSchema),
+  manifest: z.object({
+    totalTemplates: z.number().int().nonnegative(),
+    format: z.literal("portable").optional(),
+    includesVisibility: z.boolean().optional(),
+    includesRules: z.boolean().optional(),
+    assetWarnings: z.number().int().nonnegative().optional(),
+  }).optional(),
+});
+
 // Type exports
 export type ChecklistSubItem = z.infer<typeof checklistSubItemSchema>;
 export type ChecklistItemContent = z.infer<typeof checklistItemContentSchema>;
@@ -105,6 +189,8 @@ export type ChecklistTemplate = z.infer<typeof checklistTemplateSchema>;
 export type ChecklistTemplateImport = z.infer<typeof checklistTemplateImportSchema>;
 export type ChecklistRun = z.infer<typeof checklistRunSchema>;
 export type TemplateBackup = z.infer<typeof templateBackupSchema>;
+export type PortableChecklistTemplate = z.infer<typeof portableChecklistTemplateSchema>;
+export type PortableTemplatePack = z.infer<typeof portableTemplatePackSchema>;
 
 // Validation functions
 export const validateTemplate = (data: unknown): ChecklistTemplate => {
@@ -121,4 +207,8 @@ export const validateTemplateArray = (data: unknown): ChecklistTemplate[] => {
 
 export const validateTemplateImportArray = (data: unknown): ChecklistTemplateImport[] => {
   return z.array(checklistTemplateImportSchema).parse(data);
+};
+
+export const validatePortableTemplatePack = (data: unknown): PortableTemplatePack => {
+  return portableTemplatePackSchema.parse(data);
 };

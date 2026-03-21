@@ -1,11 +1,15 @@
 import { 
   validateBackup, 
-  validateTemplateImportArray
+  validatePortableTemplatePack,
+  validateTemplateImportArray,
+  PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION
 } from "@/lib/schemas/checklistSchema";
 import type { 
   ChecklistTemplate, 
   ChecklistTemplateImport,
   ChecklistSection,
+  PortableChecklistTemplate,
+  PortableTemplatePack,
   TemplateBackup
 } from "@/lib/schemas/checklistSchema";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
@@ -95,6 +99,30 @@ const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTe
   };
 };
 
+const normalizePortableTemplate = (template: PortableChecklistTemplate): ChecklistTemplate => {
+  const now = new Date().toISOString();
+  const sections = coerceSections(template.sections);
+  if (!sections) {
+    throw new Error(`Template "${template.title}" has invalid sections`);
+  }
+
+  return {
+    id: generateTempId("portable"),
+    title: template.title,
+    description: template.description || "",
+    type: template.type,
+    sections,
+    userId: "portable-import",
+    createdAt: now,
+    updatedAt: now,
+    isPublic: template.visibility === "public",
+    version: 1,
+    slug: template.slug || "",
+    categories: normalizeStringList(template.categories),
+    tags: normalizeStringList(template.tags),
+  };
+};
+
 const collectAssetWarnings = (templates: ChecklistTemplate[]): TemplateImportWarning[] => {
   const warnings: TemplateImportWarning[] = [];
 
@@ -152,17 +180,55 @@ export const exportTemplatesToJSON = (
   return backup;
 };
 
+export const exportPortableTemplatesToJSON = (
+  templates: ChecklistTemplate[],
+  exportedBy?: string
+): PortableTemplatePack => {
+  const warnings = collectAssetWarnings(templates);
+
+  return {
+    kind: "serplists-template-pack",
+    schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    exportedBy,
+    templates: templates.map((template) => ({
+      title: template.title,
+      description: template.description || "",
+      type: template.type,
+      slug: template.slug || undefined,
+      visibility: template.isPublic ? "public" : "private",
+      categories: normalizeStringList(template.categories),
+      tags: normalizeStringList(template.tags),
+      sections: template.sections,
+    })),
+    manifest: {
+      totalTemplates: templates.length,
+      format: "portable",
+      includesVisibility: true,
+      includesRules: false,
+      assetWarnings: warnings.length,
+    },
+  };
+};
+
 /**
  * Download backup as JSON file
  */
-export const downloadBackupFile = (backup: TemplateBackup, filename?: string): void => {
+export const downloadBackupFile = (
+  backup: TemplateBackup | PortableTemplatePack,
+  filename?: string
+): void => {
   const jsonString = JSON.stringify(backup, null, 2);
   const blob = new Blob([jsonString], { type: "application/json" });
   const url = URL.createObjectURL(blob);
+  const defaultFilename =
+    "kind" in backup && backup.kind === "serplists-template-pack"
+      ? `serplists-template-pack-${new Date().toISOString().split('T')[0]}.json`
+      : `checklist-templates-backup-${new Date().toISOString().split('T')[0]}.json`;
   
   const link = document.createElement("a");
   link.href = url;
-  link.download = filename || `checklist-templates-backup-${new Date().toISOString().split('T')[0]}.json`;
+  link.download = filename || defaultFilename;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -214,9 +280,17 @@ export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImport
     const data = JSON.parse(jsonString);
 
     let rawTemplates: ChecklistTemplateImport[] = [];
+    let normalizedTemplates: ChecklistTemplate[] = [];
 
     if (Array.isArray(data)) {
       rawTemplates = validateTemplateImportArray(data);
+      normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template));
+    } else if (data && typeof data === "object" && "kind" in data && (data as { kind?: unknown }).kind === "serplists-template-pack") {
+      const portablePack = validatePortableTemplatePack(data);
+      if (portablePack.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
+        throw new Error(`Unsupported portable template schema version: ${portablePack.schemaVersion}`);
+      }
+      normalizedTemplates = portablePack.templates.map((template) => normalizePortableTemplate(template));
     } else if (data && typeof data === "object" && "templates" in data) {
       try {
         const backup = validateBackup(data);
@@ -224,12 +298,11 @@ export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImport
       } catch {
         rawTemplates = validateTemplateImportArray((data as { templates: unknown }).templates);
       }
+      normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template));
     } else {
       throw new Error("Unsupported JSON format (expected backup or template array)");
     }
 
-    // Normalize into full templates for preview/import
-    const normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template));
     const warnings = collectAssetWarnings(normalizedTemplates);
 
     return { templates: normalizedTemplates, warnings };
