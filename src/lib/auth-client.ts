@@ -20,5 +20,16 @@ export const authClient = createAuthClient({
   },
 });
 
-export type Session = typeof authClient.$Infer.Session;
+export async function getAuthStatus(): Promise<{ emailAuthAvailable: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/auth/status`, {
+    credentials: "include",
+  });
 
+  if (!response.ok) {
+    throw new Error(`Failed to load auth status: ${response.status}`);
+  }
+
+  return (await response.json()) as { emailAuthAvailable: boolean };
+}
+
+export type Session = typeof authClient.$Infer.Session;

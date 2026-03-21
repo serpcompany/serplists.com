@@ -39,6 +39,18 @@ function isBlockedTestEmail(email: string): boolean {
   return blockedTestEmailDomains.has(domain);
 }
 
+function isAuthEmailConfigured(env: Env): boolean {
+  return Boolean(env.RESEND_API_KEY || env.USESEND_API_KEY);
+}
+
+function requiresAuthEmailProvider(path: string): boolean {
+  return (
+    path === 'auth/sign-up/email' ||
+    path === 'auth/request-password-reset' ||
+    path === 'auth/send-verification-email'
+  );
+}
+
 export const onRequestGet = handleRequest;
 export const onRequestPost = handleRequest;
 export const onRequestPut = handleRequest;
@@ -148,6 +160,15 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       response = new Response(JSON.stringify({ status: 'ok' }), {
         headers: { 'Content-Type': 'application/json' }
       });
+    } else if (path === 'auth/status' && request.method === 'GET') {
+      response = new Response(
+        JSON.stringify({
+          emailAuthAvailable: isAuthEmailConfigured(env),
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
     } else if (path.startsWith('auth') && request.method === 'POST') {
       let isProdRequest = isProductionHost(url.hostname);
       if (!isProdRequest && env.FRONTEND_URL) {
@@ -176,6 +197,13 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         } catch {
           // Ignore parse errors; auth handler will validate payloads.
         }
+      }
+
+      if (requiresAuthEmailProvider(path) && !isAuthEmailConfigured(env)) {
+        response = jsonError('Auth email is temporarily unavailable. Please contact support.', 503, {
+          code: 'auth_email_unavailable',
+        });
+        return finalize(response);
       }
 
       const auth = createBetterAuth(env, request);

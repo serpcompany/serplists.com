@@ -55,6 +55,23 @@
   - `John (Free)` and `Bob (Free)` remain Free.
   - The local seed data now inserts entitlement overrides for the two Pro personas.
 
+## Auth, session, and entitlement behavior
+
+- **Better Auth is the canonical auth/session layer**
+  - Email sign-in, sign-up, sign-out, cookie session lookup, password changes, session revocation, password reset, and email verification are all handled through Better Auth.
+  - The app treats the Better Auth cookie session as the only supported login state for normal user flows.
+- **Protected routes preserve the requested destination**
+  - If a logged-out user opens a protected route like `/templates`, `/dashboard`, `/run/:id`, or `/account`, they are redirected to `/login`.
+  - After successful sign-in, they are returned to the original protected route they asked for instead of being dropped on a generic default page.
+- **Email verification and password reset fail clearly when email delivery is unavailable**
+  - Sign-up requires email verification before the user can sign in.
+  - Password reset and resend-verification flows depend on a configured auth email provider (`RESEND_API_KEY` or `USESEND_API_KEY`).
+  - If auth email delivery is not configured, the API now returns an explicit `503 auth_email_unavailable` response instead of surfacing a generic server failure.
+- **Plan enforcement stays app-specific**
+  - Unauthenticated access returns `401 Unauthorized`.
+  - Logged-in Free users who hit Pro-only or plan-limited actions receive `403` responses with product-specific upgrade or limit messaging such as `upgrade_required` or `limit_reached`.
+  - UI upgrade prompts mirror those API outcomes on premium surfaces like template copy and import/export.
+
 ## MVP navigation scope
 
 - **Recipes hidden from navigation for now**

@@ -121,6 +121,78 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(data.error).toBe("Test accounts are disabled in production");
   });
 
+  it('fails sign-up email flow explicitly when auth email provider is not configured', async () => {
+    const response = await apiWorker.fetch(
+      new Request("http://localhost/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "new-user@example.com",
+          password: "password123456",
+          name: "New User",
+        }),
+      }),
+      buildEnv({
+        RESEND_API_KEY: undefined,
+        USESEND_API_KEY: undefined,
+      })
+    );
+
+    expect(response.status).toBe(503);
+    const data = await response.json();
+    expect(data.error).toBe("Auth email is temporarily unavailable. Please contact support.");
+    expect(data.code).toBe("auth_email_unavailable");
+  });
+
+  it('fails password reset flow explicitly when auth email provider is not configured', async () => {
+    const response = await apiWorker.fetch(
+      new Request("http://localhost/api/auth/request-password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "existing-user@example.com",
+          redirectTo: "http://localhost:8080/reset-password",
+        }),
+      }),
+      buildEnv({
+        RESEND_API_KEY: undefined,
+        USESEND_API_KEY: undefined,
+      })
+    );
+
+    expect(response.status).toBe(503);
+    const data = await response.json();
+    expect(data.error).toBe("Auth email is temporarily unavailable. Please contact support.");
+    expect(data.code).toBe("auth_email_unavailable");
+  });
+
+  it('reports auth email unavailable in auth status when no provider is configured', async () => {
+    const response = await apiWorker.fetch(
+      new Request('http://localhost/api/auth/status'),
+      buildEnv({
+        RESEND_API_KEY: undefined,
+        USESEND_API_KEY: undefined,
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.emailAuthAvailable).toBe(false);
+  });
+
+  it('reports auth email available in auth status when a provider is configured', async () => {
+    const response = await apiWorker.fetch(
+      new Request('http://localhost/api/auth/status'),
+      buildEnv({
+        RESEND_API_KEY: 're_test_123',
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.emailAuthAvailable).toBe(true);
+  });
+
   it('enforces CORS allowlist when configured', async () => {
     const env = buildEnv({ FRONTEND_URL: 'https://app.example.com' });
 

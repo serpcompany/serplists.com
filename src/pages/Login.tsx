@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
-import { authClient } from "@/lib/auth-client";
+import { authClient, getAuthStatus } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -81,6 +81,12 @@ const Login = () => {
 
     setIsResendingVerification(true);
     try {
+      const authStatus = await getAuthStatus();
+      if (!authStatus.emailAuthAvailable) {
+        toast.error("Verification email is temporarily unavailable. Please contact support.");
+        return;
+      }
+
       const result = await authClient.sendVerificationEmail({
         email: targetEmail,
         callbackURL: "/login?verified=1",

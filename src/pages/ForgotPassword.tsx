@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
-import { authClient } from "@/lib/auth-client";
+import { authClient, getAuthStatus } from "@/lib/auth-client";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -18,6 +18,12 @@ const ForgotPassword = () => {
     setIsSubmitting(true);
 
     try {
+      const authStatus = await getAuthStatus();
+      if (!authStatus.emailAuthAvailable) {
+        toast.error("Password reset email is temporarily unavailable. Please contact support.");
+        return;
+      }
+
       const redirectTo = `${window.location.origin}/reset-password`;
       const result = await authClient.requestPasswordReset({ email, redirectTo });
 

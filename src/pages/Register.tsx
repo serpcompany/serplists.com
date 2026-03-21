@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
+import { getAuthStatus } from "@/lib/auth-client";
 const Register = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -31,6 +32,12 @@ const Register = () => {
     }
     setIsSubmitting(true);
     try {
+      const authStatus = await getAuthStatus();
+      if (!authStatus.emailAuthAvailable) {
+        toast.error("Account email verification is temporarily unavailable. Please contact support.");
+        return;
+      }
+
       const result = await register(name, email, password);
       if (result.ok) {
         if (result.requiresEmailVerification) {
