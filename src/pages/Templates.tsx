@@ -6,6 +6,7 @@ import { useTemplates } from "@/contexts/TemplatesContext";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
 import { UserTemplatesSection } from "@/components/templates/UserTemplatesSection";
+import { api } from "@/lib/api";
 const Templates = () => {
   const {
     templates,
@@ -25,6 +26,7 @@ const Templates = () => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [selectedTemplate, setSelectedTemplate] = useState<unknown>(null);
   const [isCreatingRun, setIsCreatingRun] = useState(false);
+  const [isCreatingShareRun, setIsCreatingShareRun] = useState(false);
   const handleCreateTemplate = () => {
     navigate("/templates/new");
   };
@@ -73,6 +75,22 @@ const Templates = () => {
       setIsCreatingRun(false);
     }
   };
+
+  const handleShareTemplate = async (templateId: string) => {
+    setIsCreatingShareRun(true);
+
+    try {
+      const { shareToken } = await api.createChecklistShare(templateId);
+      const shareUrl = `${window.location.origin}/run/shared/${shareToken}`;
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("Share link copied to clipboard");
+    } catch (error) {
+      console.error("Failed to create share run:", error);
+      toast.error("Failed to create a share link for this template.");
+    } finally {
+      setIsCreatingShareRun(false);
+    }
+  };
   return <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-6xl px-4 py-8">
         <UserTemplatesSection
@@ -84,6 +102,7 @@ const Templates = () => {
           onBrowsePublicTemplates={handleBrowsePublicTemplates}
           onEditTemplate={handleEditTemplate}
           onDeleteTemplate={handleDeleteTemplate}
+          onShareTemplate={isCreatingShareRun ? undefined : handleShareTemplate}
           onStartRun={handleStartRun}
         />
 

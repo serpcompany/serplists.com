@@ -122,4 +122,75 @@ describe('Checklists Handlers', () => {
     expect(response.status).toBe(400);
     expect(data.error).toMatch(/No fields to update/i);
   });
+
+  it('should create a public shared checklist run', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ count: 0 }])
+      .mockResolvedValueOnce([{ id: 'template-2', title: 'Template 2', items: '[{"id":"item-1","title":"Item 1"}]', is_public: 1, user_id: 'user-123' }]);
+
+    const request = new Request('http://localhost/api/checklists/template-2/share', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+
+    const response = await handleChecklists(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(typeof data.id).toBe('string');
+    expect(typeof data.shareToken).toBe('string');
+    expect(data.sharePath).toMatch(/^\/run\/shared\//);
+
+    const inserted = dbMocks.insertChain.values.mock.calls[0][0];
+    expect(inserted.is_public).toBe(true);
+    expect(typeof inserted.share_token).toBe('string');
+  });
+
+  it('should serve shared checklist runs without authentication', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue(null);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'shared-run',
+        template_id: 'template-2',
+        title: 'Shared Run',
+        status: 'in_progress',
+        items: '[{"id":"item-1","title":"Item 1","isCompleted":false}]',
+        started_at: '2026-01-01T00:00:00.000Z',
+        completed_at: null,
+        user_id: 'owner-123',
+      },
+    ]);
+
+    const request = new Request('http://localhost/api/checklists/shared/shared-run', {
+      method: 'GET',
+    });
+
+    const response = await handleChecklists(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.id).toBe('shared-run');
+    expect(data.title).toBe('Shared Run');
+  });
+
+  it('should update shared checklist runs', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue(null);
+
+    const request = new Request('http://localhost/api/checklists/shared/shared-run', {
+      method: 'PUT',
+      body: JSON.stringify({
+        sections: [{ id: '1', title: 'Checklist', items: [] }],
+        status: 'completed',
+      }),
+    });
+
+    const response = await handleChecklists(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(dbMocks.updateChain.set).toHaveBeenCalled();
+  });
 });

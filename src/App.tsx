@@ -162,6 +162,14 @@ const App = () => {
               }
             />
             <Route
+              path="/run/shared/:shareToken"
+              element={
+                <Layout>
+                  <ChecklistRun />
+                </Layout>
+              }
+            />
+            <Route
               path="/run/:id"
               element={
                 <PrivateRoute>

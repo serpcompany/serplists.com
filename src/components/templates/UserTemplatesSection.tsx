@@ -12,7 +12,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { PlusCircle, Trash2 } from "lucide-react";
+import { PlusCircle, Share2, Trash2 } from "lucide-react";
 import type { ChecklistTemplate } from "@/types/checklist";
 
 type HeadingLevel = "h1" | "h2";
@@ -30,6 +30,7 @@ type Props = {
   onEditTemplate?: (id: string) => void;
   onDeleteTemplate?: (id: string) => Promise<void> | void;
   onStartRun?: (templateId: string) => void;
+  onShareTemplate?: (templateId: string) => void;
   emptyStateLabel?: string;
 };
 
@@ -143,6 +144,13 @@ export function UserTemplatesSection(props: Props) {
                     {props.onStartRun ? (
                       <Button size="sm" onClick={() => props.onStartRun?.(template.id)}>
                         Start
+                      </Button>
+                    ) : null}
+
+                    {props.onShareTemplate ? (
+                      <Button variant="outline" size="sm" onClick={() => props.onShareTemplate?.(template.id)}>
+                        <Share2 className="mr-2 h-4 w-4" />
+                        Share
                       </Button>
                     ) : null}
                   </div>

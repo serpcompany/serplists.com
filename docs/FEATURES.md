@@ -15,3 +15,11 @@
     - `Runs` (`/dashboard`)
   - The Dashboard page now includes a **New Run** action so users can start a run flow without hunting through extra navigation.
   - Dashboard still preserves the existing **New Template** action and now gives immediate access to template-backed run creation from `/templates`.
+
+## Guest checklist sharing
+
+- **Template share link for checklist runs**
+  - The Templates page now includes a **Share** action for each template.
+  - Share creates a public run record tied to the template owner and returns a share URL of the form `/run/shared/:token`.
+  - Guests can open the share URL without logging in and complete the checklist.
+  - Shared runs are persisted to the owner account while being read-only for destructive/template-edit actions (run title updates are not enabled for shared links).

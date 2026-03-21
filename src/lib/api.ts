@@ -140,6 +140,35 @@ class ApiClient {
     });
   }
 
+  async createChecklistShare(templateId: string, runName?: string) {
+    return this.request(`/checklists/${encodeURIComponent(templateId)}/share`, {
+      method: 'POST',
+      body: JSON.stringify(runName ? { runName } : {}),
+    });
+  }
+
+  async getSharedChecklist(shareToken: string) {
+    return this.request(`/checklists/shared/${encodeURIComponent(shareToken)}`);
+  }
+
+  async updateSharedChecklist(
+    shareToken: string,
+    updates: {
+      template_id?: string;
+      title?: string;
+      items?: unknown[];
+      sections?: unknown[];
+      status?: string;
+      progress?: number;
+      completed_at?: string;
+    }
+  ) {
+    return this.request(`/checklists/shared/${encodeURIComponent(shareToken)}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
   async updateChecklist(id: string, updates: {
     template_id?: string;
     title?: string;
@@ -183,7 +212,11 @@ class ApiClient {
   }
 
   // Billing (Stripe)
-  async getBillingStatus(): Promise<{ plan: 'free' | 'pro'; limits?: { maxTemplates: number | null; maxActiveRuns: number | null } }> {
+  async getBillingStatus(): Promise<{
+    plan: 'free' | 'pro';
+    limits?: { maxTemplates: number | null; maxActiveRuns: number | null };
+    billingEnabled?: boolean;
+  }> {
     return this.request('/billing/status');
   }
 

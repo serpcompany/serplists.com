@@ -1,44 +1,73 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useTemplates, ChecklistRun as RunType, ChecklistSection, ChecklistItem } from "@/contexts/TemplatesContext";
+import { useTemplates, ChecklistRun as RunType } from "@/contexts/TemplatesContext";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { ArrowLeft, Check, CheckCircle, Loader2, ChevronDown, ChevronUp, Edit2 } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle, Edit2, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
 import { api } from "@/lib/api";
 import { calculateSectionsProgress, isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
 import { ChecklistContent } from "@/components/checklist/ChecklistContent";
 
 const ChecklistRunPage = () => {
-  const { id } = useParams();
+  const { id, shareToken } = useParams<{ id?: string; shareToken?: string }>();
+  const isSharedRun = Boolean(shareToken);
   const navigate = useNavigate();
   const { getRun, updateRun } = useTemplates();
   const [run, setRun] = useState<RunType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState("");
+
+  const mapChecklistToRun = (checklist: Record<string, unknown>, fallbackId: string): RunType => {
+    const rawItemsValue = checklist.items;
+    const rawItems = typeof rawItemsValue === 'string'
+      ? JSON.parse(rawItemsValue)
+      : (rawItemsValue || []);
+
+    const rawSections = isSectionsShape(rawItems)
+      ? rawItems
+      : [{ id: '1', title: 'Checklist', items: rawItems }];
+
+    const sections = normalizeSections(rawSections);
+    const computedProgress = calculateSectionsProgress(sections);
+
+    return {
+      id: typeof checklist.id === 'string' ? checklist.id : fallbackId,
+      templateId: typeof checklist.template_id === 'string' ? checklist.template_id : '',
+      title: typeof checklist.title === 'string' ? checklist.title : 'Checklist Run',
+      status: (typeof checklist.status === 'string' ? checklist.status : 'in_progress') as "in_progress" | "completed",
+      progress: computedProgress,
+      sections,
+      startedAt:
+        (typeof checklist.started_at === 'string' && checklist.started_at)
+          ? checklist.started_at
+          : (typeof checklist.created_at === 'string' ? checklist.created_at : new Date().toISOString()),
+      completedAt: typeof checklist.completed_at === 'string' ? checklist.completed_at : undefined,
+      userId: typeof checklist.user_id === 'string' ? checklist.user_id : '',
+      templateVersion: typeof checklist.template_version === 'number' ? checklist.template_version : 1,
+    };
+  };
 
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
-      if (!id) return;
+      const activeRunId = id ?? shareToken;
+      if (!activeRunId) return;
 
       setIsLoading(true);
       setRun(null);
 
-      const foundRun = getRun(id);
+      const foundRun = id ? getRun(id) : null;
       if (foundRun) {
         setRun(foundRun);
         setIsLoading(false);
@@ -46,41 +75,20 @@ const ChecklistRunPage = () => {
       }
 
       try {
-        const checklist = (await api.getChecklistById(id)) as Record<string, unknown>;
+        const checklist = isSharedRun
+          ? (await api.getSharedChecklist(shareToken)) as Record<string, unknown>
+          : (await api.getChecklistById(activeRunId)) as Record<string, unknown>;
         if (cancelled) return;
 
-        const rawItemsValue = checklist.items;
-        const rawItems = typeof rawItemsValue === 'string'
-          ? JSON.parse(rawItemsValue)
-          : (rawItemsValue || []);
-
-        const rawSections = isSectionsShape(rawItems)
-          ? rawItems
-          : [{ id: '1', title: 'Checklist', items: rawItems }];
-
-        const sections = normalizeSections(rawSections);
-
-        const computedProgress = calculateSectionsProgress(sections);
-
-        setRun({
-          id: typeof checklist.id === 'string' ? checklist.id : id,
-          templateId: typeof checklist.template_id === 'string' ? checklist.template_id : '',
-          title: typeof checklist.title === 'string' ? checklist.title : 'Checklist Run',
-          status: (typeof checklist.status === 'string' ? checklist.status : 'in_progress') as "in_progress" | "completed",
-          progress: computedProgress,
-          sections,
-          startedAt:
-            (typeof checklist.started_at === 'string' && checklist.started_at)
-              ? checklist.started_at
-              : (typeof checklist.created_at === 'string' ? checklist.created_at : new Date().toISOString()),
-          completedAt: typeof checklist.completed_at === 'string' ? checklist.completed_at : undefined,
-          userId: typeof checklist.user_id === 'string' ? checklist.user_id : '',
-          templateVersion: typeof checklist.template_version === 'number' ? checklist.template_version : 1,
-        });
+        setRun(mapChecklistToRun(checklist, activeRunId));
       } catch (error) {
         if (cancelled) return;
         toast.error("Run not found");
-        navigate("/dashboard");
+        if (isSharedRun) {
+          navigate("/checklists");
+        } else {
+          navigate("/dashboard");
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -91,7 +99,7 @@ const ChecklistRunPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [id, getRun, navigate]);
+  }, [id, shareToken, isSharedRun, getRun, navigate]);
 
   useEffect(() => {
     if (!run || selectedItemId) return;
@@ -110,7 +118,26 @@ const ChecklistRunPage = () => {
     }
   }, [run, selectedItemId]);
 
-  const handleItemToggle = (sectionIndex: number, itemIndex: number) => {
+  const persistRun = async (updatedRun: RunType) => {
+    const progress = calculateSectionsProgress(updatedRun.sections);
+    if (isSharedRun) {
+      if (!shareToken) throw new Error("Share token is required");
+      await api.updateSharedChecklist(shareToken, {
+        sections: updatedRun.sections,
+        status: updatedRun.status,
+        progress,
+        completed_at: updatedRun.completedAt,
+      });
+      return;
+    }
+
+    updateRun({
+      ...updatedRun,
+      progress,
+    });
+  };
+
+  const handleItemToggle = async (sectionIndex: number, itemIndex: number) => {
     if (!run) return;
     
     const updatedRun = { ...run };
@@ -128,9 +155,14 @@ const ChecklistRunPage = () => {
         }
       });
     }
-    
-    updateRun(updatedRun);
-    setRun(updatedRun);
+
+    try {
+      await persistRun(updatedRun);
+      setRun(updatedRun);
+    } catch (error) {
+      console.error("Failed to update run:", error);
+      toast.error("Unable to save your progress. Please try again.");
+    }
     
     // If this was the last item, check if run is now complete
     const allCompleted = updatedRun.sections.every(section =>
@@ -142,7 +174,7 @@ const ChecklistRunPage = () => {
     }
   };
 
-  const handleSubItemToggle = (sectionIndex: number, itemIndex: number, contentIndex: number, subItemIndex: number) => {
+  const handleSubItemToggle = async (sectionIndex: number, itemIndex: number, contentIndex: number, subItemIndex: number) => {
     if (!run) return;
     
     const updatedRun = { ...run };
@@ -166,9 +198,13 @@ const ChecklistRunPage = () => {
         // If not all sub-items are completed but item is marked as completed, update it
         item.isCompleted = false;
       }
-      
-      updateRun(updatedRun);
-      setRun(updatedRun);
+      try {
+        await persistRun(updatedRun);
+        setRun(updatedRun);
+      } catch (error) {
+        console.error("Failed to update run:", error);
+        toast.error("Unable to save your progress. Please try again.");
+      }
       
       // Check if the entire run is now complete
       const allCompleted = updatedRun.sections.every(section =>
@@ -181,20 +217,15 @@ const ChecklistRunPage = () => {
     }
   };
 
-  const toggleItemExpand = (itemId: string) => {
-    setExpandedItems((prev) => ({
-      ...prev,
-      [itemId]: !prev[itemId]
-    }));
-  };
-
   const handleTitleEdit = () => {
+    if (isSharedRun) return;
     if (!run) return;
     setEditTitle(run.title);
     setIsEditingTitle(true);
   };
 
   const handleTitleSave = () => {
+    if (isSharedRun) return;
     if (!run || !editTitle.trim()) return;
     
     const updatedRun = { ...run, title: editTitle.trim() };
@@ -207,6 +238,31 @@ const ChecklistRunPage = () => {
   const handleTitleCancel = () => {
     setIsEditingTitle(false);
     setEditTitle("");
+  };
+
+  const handleBack = () => navigate(isSharedRun ? "/checklists" : "/dashboard");
+
+  const handleCompleteRun = async () => {
+    if (!run) return;
+
+    const completedRun = {
+      ...run,
+      status: "completed" as const,
+      completedAt: new Date().toISOString(),
+      progress: 100,
+    };
+
+    try {
+      await persistRun(completedRun);
+      setRun(completedRun);
+      toast.success("Checklist completed! 🎉");
+    } catch (error) {
+      console.error("Failed to complete run:", error);
+      toast.error("Unable to save completion. Please try again.");
+    }
+
+    setIsCompleteDialogOpen(false);
+    handleBack();
   };
 
   const countCompletedItems = () => {
@@ -274,8 +330,8 @@ const ChecklistRunPage = () => {
     return (
       <div className="text-center">
         <h2 className="text-xl font-semibold">Run not found</h2>
-        <Button className="mt-4" onClick={() => navigate("/dashboard")}>
-          Back to Dashboard
+        <Button className="mt-4" onClick={handleBack}>
+          Back
         </Button>
       </div>
     );
@@ -290,7 +346,7 @@ const ChecklistRunPage = () => {
       <div className="mx-auto max-w-7xl px-4 py-8">
         {/* Header */}
         <div className="mb-6 flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
+          <Button variant="ghost" size="icon" onClick={handleBack}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex flex-grow flex-wrap items-center justify-between gap-4">
@@ -311,18 +367,23 @@ const ChecklistRunPage = () => {
                   <Button size="sm" variant="outline" onClick={handleTitleCancel}>Cancel</Button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 group">
-                  <h1 className="text-2xl font-bold cursor-pointer" onClick={handleTitleEdit}>
-                    {run.title}
-                  </h1>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                <div className={`flex items-center gap-2 ${isSharedRun ? "" : "group"}`}>
+                  <h1
+                    className={isSharedRun ? "text-2xl font-bold" : "text-2xl font-bold cursor-pointer"}
                     onClick={handleTitleEdit}
                   >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
+                    {run.title}
+                  </h1>
+                  {!isSharedRun && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={handleTitleEdit}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               )}
               <div className="flex items-center gap-2 mt-1">
@@ -451,23 +512,9 @@ const ChecklistRunPage = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => {
-              if (run) {
-                const completedRun = { 
-                  ...run, 
-                  status: "completed" as const, 
-                  completedAt: new Date().toISOString(),
-                  progress: 100
-                };
-                updateRun(completedRun);
-                setRun(completedRun);
-                toast.success("Checklist completed! 🎉");
-              }
-              setIsCompleteDialogOpen(false);
-              navigate("/dashboard");
-            }}>
+            <Button onClick={handleCompleteRun}>
               <Check className="mr-2 h-4 w-4" />
-              Return to Dashboard
+              {isSharedRun ? "Return to Public Runs" : "Return to Dashboard"}
             </Button>
           </DialogFooter>
         </DialogContent>
