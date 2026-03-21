@@ -13,10 +13,10 @@ interface TestUser {
 }
 
 const testUsers: TestUser[] = [
-  { email: 'admin@test.com', password: 'password123', name: 'Admin', color: 'bg-red-500' },
-  { email: 'john@test.com', password: 'password123', name: 'John', color: 'bg-blue-500' },
-  { email: 'jane@test.com', password: 'password123', name: 'Jane', color: 'bg-purple-500' },
-  { email: 'bob@test.com', password: 'password123', name: 'Bob', color: 'bg-green-500' },
+  { email: 'admin@test.com', password: 'password123', name: 'Admin (Pro)', color: 'bg-red-500' },
+  { email: 'john@test.com', password: 'password123', name: 'John (Free)', color: 'bg-blue-500' },
+  { email: 'jane@test.com', password: 'password123', name: 'Jane (Pro)', color: 'bg-purple-500' },
+  { email: 'bob@test.com', password: 'password123', name: 'Bob (Free)', color: 'bg-green-500' },
 ];
 
 export function DevLoginBar() {

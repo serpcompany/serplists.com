@@ -351,8 +351,20 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       const sourceId = templatesSubpath[0];
 
       const entitlements = await getEntitlementsForUser(env, userId);
-      if (entitlements.plan !== 'pro') {
-        return jsonError("Upgrade to Pro to save templates to your account.", 403, { code: 'upgrade_required' });
+      if (entitlements.limits.maxTemplates !== null) {
+        const [existingCount] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(templates)
+          .where(eq(templates.user_id, userId))
+          .limit(1);
+
+        const currentCount = existingCount?.count ?? 0;
+        if (currentCount >= entitlements.limits.maxTemplates) {
+          return jsonError("Template limit reached. Upgrade to Pro to save more templates.", 403, {
+            code: 'limit_reached',
+            details: { limit: entitlements.limits.maxTemplates, current: currentCount, resource: 'templates' },
+          });
+        }
       }
 
       const [source] = await db

@@ -23,6 +23,14 @@ function isProductionHost(hostname: string): boolean {
   return hostname === 'serplists.com' || hostname.endsWith('.serplists.com');
 }
 
+function isLocalRequest(url: URL): boolean {
+  return (
+    url.hostname === 'localhost' ||
+    url.hostname === '127.0.0.1' ||
+    url.port === '8788'
+  );
+}
+
 function isBlockedTestEmail(email: string): boolean {
   const lower = email.trim().toLowerCase();
   const atIndex = lower.lastIndexOf('@');
@@ -117,7 +125,9 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         (path.startsWith('templates') || path.startsWith('checklists') || path.startsWith('uploads'));
 
       if (isAuth) {
-        const limit = checkRateLimit(`auth:${ip}`, { windowMs: 5 * 60 * 1000, max: 30 });
+        const limit = isLocalRequest(url)
+          ? checkRateLimit(`auth:${ip}`, { windowMs: 60 * 60 * 1000, max: 300 })
+          : checkRateLimit(`auth:${ip}`, { windowMs: 5 * 60 * 1000, max: 30 });
         if (!limit.allowed) {
           response = jsonError('Too many requests', 429);
           response.headers.set('Retry-After', String(limit.retryAfterSeconds));

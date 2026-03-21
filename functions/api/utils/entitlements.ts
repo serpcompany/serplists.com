@@ -13,6 +13,8 @@ export type Entitlements = {
   };
 };
 
+const devProTestEmails = new Set(["admin@test.com", "jane@test.com"]);
+
 function isProSubscriptionStatus(status: string): boolean {
   return status === "active" || status === "trialing";
 }
@@ -20,7 +22,7 @@ function isProSubscriptionStatus(status: string): boolean {
 export async function getEntitlementsForUser(env: Env, userId: string): Promise<Entitlements> {
   const stripe = getStripeConfig(env);
   const db = createDb(env);
-  const { entitlement_overrides } = schema;
+  const { entitlement_overrides, users } = schema;
   const nowSeconds = Math.floor(Date.now() / 1000);
 
   // Manual override takes priority (for comp/revoke / support).
@@ -40,6 +42,17 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
     return plan === "pro"
       ? { plan, limits: { maxTemplates: null, maxActiveRuns: null } }
       : { plan, limits: { maxTemplates: 1, maxActiveRuns: 3 } };
+  }
+
+  // Keep local seeded personas aligned with their visible labels before a reseed.
+  const [user] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (user?.email && devProTestEmails.has(user.email.toLowerCase())) {
+    return { plan: "pro", limits: { maxTemplates: null, maxActiveRuns: null } };
   }
 
   if (!stripe) {

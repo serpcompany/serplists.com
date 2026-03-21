@@ -272,7 +272,7 @@ const Dashboard = () => {
             templates={userTemplates}
             loading={templatesLoading}
             maxItems={3}
-            onEditTemplate={(id) => navigate(`/templates/${id}/edit`)}
+            onViewTemplate={(id) => navigate(`/templates/${id}`)}
           />
           {userTemplates.length > 3 ? (
             <div className="mt-4">

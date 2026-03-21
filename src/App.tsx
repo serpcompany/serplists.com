@@ -18,6 +18,7 @@ import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Templates from "./pages/Templates";
 import TemplateEditor from "./pages/TemplateEditor";
+import TemplateDetail from "./pages/TemplateDetail";
 import ChecklistRun from "./pages/ChecklistRun";
 import PublicTemplate from "./pages/PublicTemplate";
 import ChecklistLibrary from "./pages/ChecklistLibrary";
@@ -146,7 +147,7 @@ const App = () => {
               element={
                 <PrivateRoute>
                   <Layout>
-                    <TemplateEditor />
+                    <TemplateDetail />
                   </Layout>
                 </PrivateRoute>
               }

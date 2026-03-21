@@ -71,13 +71,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, error: message, errorCode: "UNKNOWN" };
       }
 
+      const immediateUser = result?.data?.user;
+      if (immediateUser) {
+        setUser(immediateUser as unknown as User);
+        setSession(result.data);
+        return { ok: true };
+      }
+
       const nextSession = await authClient.getSession();
       if (nextSession?.data?.user) {
         setUser(nextSession.data.user as unknown as User);
         setSession(nextSession.data);
         return { ok: true };
       }
-      return { ok: true };
+      setUser(null);
+      setSession(null);
+      return { ok: false, error: "Unable to establish session", errorCode: "UNKNOWN" };
     } catch (error) {
       console.error('Login failed:', error);
       return { ok: false, error: "Login failed", errorCode: "UNKNOWN" };

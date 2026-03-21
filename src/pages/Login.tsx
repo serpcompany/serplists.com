@@ -56,9 +56,6 @@ const Login = () => {
       if (result.ok) {
         toast.success("Login successful");
         setUnverifiedEmail(null);
-        navigate(from, {
-          replace: true
-        });
       } else {
         if (result.errorCode === "EMAIL_NOT_VERIFIED") {
           setUnverifiedEmail(email);

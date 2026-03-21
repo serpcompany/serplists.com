@@ -27,6 +27,7 @@ type Props = {
   createLabel?: string;
   onCreateTemplate?: () => void;
   onBrowsePublicTemplates?: () => void;
+  onViewTemplate?: (id: string) => void;
   onEditTemplate?: (id: string) => void;
   onDeleteTemplate?: (id: string) => Promise<void> | void;
   onStartRun?: (templateId: string) => void;
@@ -91,9 +92,9 @@ export function UserTemplatesSection(props: Props) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-4">
                       <div className="flex-1">
-                        {props.onEditTemplate ? (
+                        {(props.onViewTemplate || props.onEditTemplate) ? (
                           <button
-                            onClick={() => props.onEditTemplate?.(template.id)}
+                            onClick={() => props.onViewTemplate?.(template.id) ?? props.onEditTemplate?.(template.id)}
                             className="cursor-pointer text-left transition-colors hover:text-primary"
                           >
                             <h3 className="line-clamp-1 text-lg font-semibold">{template.title}</h3>
@@ -113,6 +114,12 @@ export function UserTemplatesSection(props: Props) {
                     {props.onEditTemplate ? (
                       <Button variant="outline" size="sm" onClick={() => props.onEditTemplate?.(template.id)}>
                         Edit
+                      </Button>
+                    ) : null}
+
+                    {props.onViewTemplate ? (
+                      <Button variant="secondary" size="sm" onClick={() => props.onViewTemplate?.(template.id)}>
+                        View
                       </Button>
                     ) : null}
 

@@ -31,8 +31,8 @@ const Templates = () => {
   const handleBrowsePublicTemplates = () => {
     navigate("/checklists");
   };
-  const handleEditTemplate = (id: string) => {
-    navigate(`/templates/${id}/edit`);
+  const handleViewTemplate = (id: string) => {
+    navigate(`/templates/${id}`);
   };
   const handleStartRun = (templateId: string) => {
     const template = templates.find(t => t.id === templateId);
@@ -83,7 +83,7 @@ const Templates = () => {
           loading={templatesLoading}
           onCreateTemplate={handleCreateTemplate}
           onBrowsePublicTemplates={handleBrowsePublicTemplates}
-          onEditTemplate={handleEditTemplate}
+          onViewTemplate={handleViewTemplate}
           onDeleteTemplate={handleDeleteTemplate}
           onStartRun={handleStartRun}
         />

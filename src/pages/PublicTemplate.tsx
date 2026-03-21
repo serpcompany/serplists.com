@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, PlayCircle } from "lucide-react";
+import { ArrowLeft, Copy, PlayCircle } from "lucide-react";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useTemplates } from "@/contexts/TemplatesContext";
 import { toast } from "sonner";
@@ -12,7 +12,7 @@ import { analytics } from "@/lib/analytics";
 import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
 import { api } from "@/lib/api";
 import type { ChecklistTemplate } from "@/types/checklist";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const PublicTemplate = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -24,14 +24,15 @@ const PublicTemplate = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const { createRun } = useTemplates();
+  const queryClient = useQueryClient();
   const billing = useQuery({
     queryKey: ["billing", "status"],
     queryFn: () => api.getBillingStatus(),
     enabled: isAuthenticated,
     retry: false,
   });
-  const plan = billing.data?.plan ?? "free";
   const billingEnabled = billing.data?.billingEnabled ?? true;
+  const isProUser = billing.data?.plan === "pro";
 
   useEffect(() => {
     const fetchTemplate = async () => {
@@ -116,27 +117,51 @@ const PublicTemplate = () => {
       return;
     }
 
-    if (plan !== "pro") {
+    if (!isProUser) {
       if (!billingEnabled) {
-        toast.error("Billing is temporarily unavailable. Please contact support.");
+        toast.error("Upgrade to Pro to copy templates. Billing checkout is currently unavailable.");
         return;
       }
+
       try {
         const { url } = await api.createBillingCheckout();
         window.location.href = url;
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to start checkout");
+        return;
+      } catch (checkoutErr) {
+        toast.error(checkoutErr instanceof Error ? checkoutErr.message : "Failed to start checkout");
+        return;
       }
-      return;
     }
 
     setIsSaving(true);
     try {
-      const { id } = await api.clonePublicTemplate(template.id, { visibility: "private" });
+      await api.clonePublicTemplate(template.id, { visibility: "private" });
       toast.success("Template saved to your account");
-      navigate(`/templates/${id}`);
+      await queryClient.invalidateQueries({ queryKey: ["templates", user?.id] });
+      await queryClient.invalidateQueries({ queryKey: ["user-templates", user?.id] });
+      navigate("/templates");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save template");
+      const errorMessage = err instanceof Error ? err.message : "Failed to save template";
+      const isUpgradeBlocked = errorMessage.toLowerCase().includes("upgrade")
+        || errorMessage.toLowerCase().includes("limit");
+
+      if (isUpgradeBlocked) {
+        if (!billingEnabled) {
+          toast.error("Upgrade required to copy more templates. Billing checkout is currently unavailable.");
+          return;
+        }
+
+        try {
+          const { url } = await api.createBillingCheckout();
+          window.location.href = url;
+          return;
+        } catch (checkoutErr) {
+          toast.error(checkoutErr instanceof Error ? checkoutErr.message : "Failed to start checkout");
+          return;
+        }
+      }
+
+      toast.error(errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -230,17 +255,16 @@ const PublicTemplate = () => {
                 <Button
                   variant="secondary"
                   onClick={handleSaveTemplate}
-                  disabled={isSaving || (isAuthenticated && (billing.isLoading || !billingEnabled))}
+                  disabled={isSaving}
                 >
+                  <Copy className="mr-2 h-4 w-4" />
                   {isSaving
-                    ? "Saving..."
+                    ? "Copying..."
                     : !isAuthenticated
-                      ? "Log in to save"
-                      : !billingEnabled
-                        ? "Upgrade unavailable"
-                      : plan === "pro"
-                        ? "Save to My Templates"
-                        : "Upgrade to Pro"}
+                      ? "Log in to copy template"
+                      : !isProUser
+                        ? "Upgrade to copy template"
+                        : "Copy to My Templates"}
                 </Button>
                 <Button onClick={handleStartRun} disabled={isCreatingRun}>
                   <PlayCircle className="mr-2 h-4 w-4" />

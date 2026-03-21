@@ -267,8 +267,59 @@ describe('Templates Handlers', () => {
     expect(data.failed).toEqual([]);
   });
 
-  it('should reject cloning templates for free users', async () => {
+  it('should allow cloning templates for free users within template limit', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        {
+          id: 'template-1',
+          title: 'Public Template',
+          description: '',
+          items: JSON.stringify([]),
+          category: '[]',
+          tags: '[]',
+          user_id: 'other-user',
+          is_public: true,
+          slug: 'public-template',
+          created_at: new Date().toISOString(),
+          updated_at: null,
+          version: 1,
+        },
+      ])
+      .mockResolvedValueOnce([{ count: 0 }]);
+
+    const request = new Request('http://localhost/api/templates/template-1/clone', {
+      method: 'POST',
+      body: JSON.stringify({ visibility: 'private' }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.id).toBeDefined();
+  });
+
+  it('should reject cloning templates when free user reaches template limit', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        {
+          id: 'template-1',
+          title: 'Public Template',
+          description: '',
+          items: JSON.stringify([]),
+          category: '[]',
+          tags: '[]',
+          user_id: 'other-user',
+          is_public: true,
+          slug: 'public-template',
+          created_at: new Date().toISOString(),
+          updated_at: null,
+          version: 1,
+        },
+      ])
+      .mockResolvedValueOnce([{ count: 1 }]);
 
     const request = new Request('http://localhost/api/templates/template-1/clone', {
       method: 'POST',
@@ -279,7 +330,7 @@ describe('Templates Handlers', () => {
     const data = await response.json();
 
     expect(response.status).toBe(403);
-    expect(data.code).toBe('upgrade_required');
+    expect(data.code).toBe('limit_reached');
   });
 
   it('should clone a public template for pro users', async () => {
@@ -288,7 +339,7 @@ describe('Templates Handlers', () => {
       plan: 'pro',
       limits: { maxTemplates: null, maxActiveRuns: null },
     });
-    // First limit() is source lookup; second limit() is slug collision check.
+    // limit() order: source lookup, template count check, base slug collision check.
     dbMocks.selectChain.limit.mockResolvedValueOnce([
       {
         id: 'template-1',
