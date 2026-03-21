@@ -188,6 +188,9 @@ This plan focuses on stack alignment, quality gates, and operational readiness n
 - [x] implement and lock password reset flow in code/tests/docs (request flow hardened, email sender wiring tested, production verification checklist)
 - [x] verify account registration flow on the live site after deploying current branch to `main` (2026-02-17: `/register` -> `/login?verify_email=1...`, unverified sign-in blocked)
 - [x] verify password reset flow on the live site after deploying current branch to `main` (2026-02-17: `/forgot-password` submit shows confirmation and API returns success)
+- [x] re-verify live password reset end-to-end using otp relay evidence (2026-02-21: reset email received, token redirect valid, reset POST returns `{"status":true}`)
+- [x] fix account username save regression (`authClient.username.updateUser` -> `authClient.updateUser({ username })`) and add regression unit test (`tests/unit/pages/accountProfileUpdates.test.ts`) (2026-02-22)
+- [x] add one-command release verification (`pnpm run verify:release`) to run lint + typecheck + tests + Playwright smoke before/after deploys (2026-02-22)
 - [x] add markdownlint-cli2 + cspell + lychee to give our documents an opinionated structure and rules to follow and lint against -> skipped for MVP; revisit post-MVP
 - [x] turn on email verification and block login until the address is verified (required for MVP), including resend verification flow + tests
 - [x] Moved post-MVP marketing/pages tasks to `_todo/MVP-1.md`.
