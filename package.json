@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "typecheck:env": "node scripts/check-env.mjs",
+    "check:prod:d1-schema": "node scripts/check-production-d1-schema.mjs",
     "preview": "dotenv -e .dev.vars -- vite preview",
     "test": "vitest",
     "test:run": "vitest run",

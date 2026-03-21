@@ -14,11 +14,17 @@ pnpm run verify:release
 This runs lint, typecheck, unit/integration tests, and Playwright smoke checks.
 
 ### Automated deploy (GitHub Actions)
-Pushes/merges to `main` trigger `cloudflare-pages-deploy.yml`, which builds with `pnpm run build` and deploys `dist` to Cloudflare Pages.
+Pushes/merges to `main` trigger `cloudflare-pages-deploy.yml`, which:
+
+- validates env
+- verifies the live production D1 schema with `pnpm run check:prod:d1-schema`
+- builds with `pnpm run build`
+- deploys `dist` to Cloudflare Pages
 
 Required GitHub secrets:
-- `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_EMAIL`
+- `CLOUDFLARE_API_KEY`
 - `CLOUDFLARE_PAGES_PROJECT`
 
 ## Secrets and environment
@@ -73,6 +79,13 @@ Drizzle Kit config lives at `db/drizzle.config.ts` and expects these env vars:
 pnpm run db:generate
 pnpm run db:migrate
 ```
+
+Production schema gate:
+```bash
+pnpm run check:prod:d1-schema
+```
+
+If this fails, production D1 is missing one or more required tables/columns for the deployed API. Apply the checked-in migration files before shipping the frontend deploy.
 
 ### D1 backup and restore
 **Backups (recommended):** use `wrangler d1 export` to generate a `.sql` file containing schema + data.

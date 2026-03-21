@@ -50,6 +50,7 @@ Deferred work:
 - [x] Add/update the canonical plans doc with the launch feature matrix.
 - [ ] Update technical docs for launch entitlement enforcement.
 - [ ] Update billing setup docs with launch-safe instructions.
+- [x] Add a production D1 schema-drift check to the release flow.
 - [ ] Prepare a short launch-day verification and rollback checklist.
 - [ ] Add post-implementation notes in `docs/knowledge/` after launch verification.
 

@@ -41,6 +41,13 @@ jobs:
       - name: Validate environment contract
         run: pnpm run typecheck:env
 
+      - name: Verify production D1 schema
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+        run: pnpm run check:prod:d1-schema
+
       - name: Build site
         run: pnpm run build
 

@@ -17,3 +17,6 @@ This list reflects verified limitations and cleanup opportunities based on the c
 ## Code cleanup
 - `src/lib/api/client.ts` is unused by the app.
 - Keep `db/schema.sql` aligned with `db/migrations/` to avoid drift.
+
+## Operations and release safety
+- Add a post-deploy authenticated smoke check for core write paths like create template and copy template.
