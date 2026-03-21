@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
+import { DEV_TEST_USER_DEFAULT_PASSWORD, DEV_TEST_USER_PASSWORD_RESET_COMMAND } from "@/lib/auth/devUsers";
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -126,59 +127,64 @@ const Login = () => {
       }
     >
       {import.meta.env.DEV && (
-        <div className="grid grid-cols-2 gap-2 rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setEmail("admin@test.com");
-              setPassword("password123");
-            }}
-            className="text-xs"
-          >
-            <div className="mr-1 h-2 w-2 rounded-full bg-red-500" />
-            Fill Admin
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setEmail("john@test.com");
-              setPassword("password123");
-            }}
-            className="text-xs"
-          >
-            <div className="mr-1 h-2 w-2 rounded-full bg-blue-500" />
-            Fill John
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setEmail("jane@test.com");
-              setPassword("password123");
-            }}
-            className="text-xs"
-          >
-            <div className="mr-1 h-2 w-2 rounded-full bg-purple-500" />
-            Fill Jane
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setEmail("bob@test.com");
-              setPassword("password123");
-            }}
-            className="text-xs"
-          >
-            <div className="mr-1 h-2 w-2 rounded-full bg-green-500" />
-            Fill Bob
-          </Button>
+        <div className="space-y-3 rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setEmail("admin@test.com");
+                setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
+              }}
+              className="text-xs"
+            >
+              <div className="mr-1 h-2 w-2 rounded-full bg-red-500" />
+              Fill Admin
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setEmail("john@test.com");
+                setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
+              }}
+              className="text-xs"
+            >
+              <div className="mr-1 h-2 w-2 rounded-full bg-blue-500" />
+              Fill John
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setEmail("jane@test.com");
+                setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
+              }}
+              className="text-xs"
+            >
+              <div className="mr-1 h-2 w-2 rounded-full bg-purple-500" />
+              Fill Jane
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setEmail("bob@test.com");
+                setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
+              }}
+              className="text-xs"
+            >
+              <div className="mr-1 h-2 w-2 rounded-full bg-green-500" />
+              Fill Bob
+            </Button>
+          </div>
+          <p className="text-xs text-yellow-700 dark:text-yellow-300">
+            Default local seed password: <code>{DEV_TEST_USER_DEFAULT_PASSWORD}</code>. If you changed a persona password, run <code>{DEV_TEST_USER_PASSWORD_RESET_COMMAND}</code>.
+          </p>
         </div>
       )}
 

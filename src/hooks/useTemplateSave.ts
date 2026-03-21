@@ -42,6 +42,7 @@ export const useTemplateSave = () => {
             seoTitle,
             seoDescription,
             seoUrl,
+            slug: seoUrl,
             type: templateType,
             categories,
             tags,

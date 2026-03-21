@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { X, Plus, Lock, Globe, Check } from "lucide-react";
 import { PREDEFINED_CATEGORIES } from "@/utils/categories";
 import { cn } from "@/lib/utils";
@@ -161,29 +161,29 @@ export const TemplateBasicInfo = ({
             <div className="flex gap-2 mt-2">
               <div className="flex-1 relative">
                 <Popover open={categoryPopoverOpen} onOpenChange={setCategoryPopoverOpen}>
-                  <PopoverTrigger asChild>
-                     <Input
-                       id="categories"
-                       value={categoryInput}
-                       onChange={(e) => {
-                         setCategoryInput(e.target.value);
-                         // Open popover when typing
-                         if (e.target.value.length > 0 && !categoryPopoverOpen) {
-                           setCategoryPopoverOpen(true);
-                         }
-                       }}
-                       onKeyDown={handleCategoryInputKeyDown}
-                       placeholder="Type a category and press Enter or click + to add"
-                       className="w-full"
-                       onFocus={() => {
-                         // Only open popover on focus if there's already content in the input
-                         if (categoryInput.length > 0) {
-                           setCategoryPopoverOpen(true);
-                         }
-                       }}
-                     />
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <PopoverAnchor asChild>
+                    <div className="w-full">
+                      <Input
+                        id="categories"
+                        value={categoryInput}
+                        onChange={(e) => {
+                          setCategoryInput(e.target.value);
+                          if (e.target.value.length > 0 && !categoryPopoverOpen) {
+                            setCategoryPopoverOpen(true);
+                          }
+                        }}
+                        onKeyDown={handleCategoryInputKeyDown}
+                        placeholder="Type a category and press Enter or click + to add"
+                        className="w-full"
+                        onFocus={() => {
+                          if (categoryInput.length > 0) {
+                            setCategoryPopoverOpen(true);
+                          }
+                        }}
+                      />
+                    </div>
+                  </PopoverAnchor>
+                  <PopoverContent className="w-80 max-w-[calc(100vw-2rem)] p-0" align="start">
                     <Command>
                       <CommandList>
                         {filteredCategories.length > 0 ? (
@@ -254,7 +254,7 @@ export const TemplateBasicInfo = ({
                 id="tags"
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
-                onKeyPress={(e) => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
                     addTag();

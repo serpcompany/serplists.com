@@ -54,6 +54,8 @@ function parseTemplateRow(template: Record<string, unknown>) {
     sections,
     categories: normalizeStringArray(template.category),
     tags: normalizeStringArray(template.tags),
+    seoTitle: typeof template.seo_title === 'string' ? template.seo_title : '',
+    seoDescription: typeof template.seo_description === 'string' ? template.seo_description : '',
     type: typeof template.type === 'string' ? template.type : 'checklist'
   };
 }
@@ -66,6 +68,8 @@ const templateBackupImportTemplateSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
   type: z.enum(['checklist', 'recipe']).optional(),
+  seoTitle: z.string().optional(),
+  seoDescription: z.string().optional(),
   sections: z.unknown().optional(),
   items: z.unknown().optional(),
   isPublic: z.boolean().optional(),
@@ -193,6 +197,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           title: parsed.title,
           description: parsed.description || '',
           type: typeof parsed.type === 'string' ? parsed.type : 'checklist',
+          seoTitle: typeof parsed.seoTitle === 'string' ? parsed.seoTitle : '',
+          seoDescription: typeof parsed.seoDescription === 'string' ? parsed.seoDescription : '',
           sections: parsed.sections || [],
           categories: parsed.categories || [],
           tags: parsed.tags || [],
@@ -218,6 +224,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             title: template.title,
             description: template.description || '',
             type: typeof template.type === 'string' ? template.type : 'checklist',
+            seoTitle: template.seoTitle || '',
+            seoDescription: template.seoDescription || '',
             sections: template.sections || [],
             categories: template.categories || [],
             tags: template.tags || [],
@@ -332,6 +340,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             title: template.title || '',
             description: template.description || '',
             type: finalType,
+            seo_title: template.seoTitle || '',
+            seo_description: template.seoDescription || '',
             items: JSON.stringify(normalizedSections.sections),
             version: 1,
             is_public: isPublic,
@@ -487,6 +497,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         title: source.title || '',
         description: source.description || '',
         type: typeof (source as Record<string, unknown>).type === 'string' ? (source as Record<string, unknown>).type : 'checklist',
+        seo_title: typeof (source as Record<string, unknown>).seo_title === 'string' ? (source as Record<string, unknown>).seo_title : '',
+        seo_description: typeof (source as Record<string, unknown>).seo_description === 'string' ? (source as Record<string, unknown>).seo_description : '',
         items: source.items,
         version: typeof (source as Record<string, unknown>).version === 'number' ? (source as Record<string, unknown>).version : 1,
         is_public: isPublic,
@@ -528,7 +540,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
     }
 
-    const { title, description, type, is_public, categories, category, tags, sections, items: bodyItems } = parsed.data;
+    const { title, description, type, seoTitle, seoDescription, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
 
     const normalizedSections = normalizeSectionsPayload(sections ?? bodyItems);
     if (normalizedSections.error) {
@@ -536,7 +548,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     }
 
     const templateId = crypto.randomUUID();
-    const slug = await generateUniqueSlug(env, title || '', templateId);
+    const slugSource = typeof requestedSlug === 'string' && requestedSlug.trim() ? requestedSlug.trim() : title || '';
+    const slug = await generateUniqueSlug(env, slugSource, templateId);
 
     const finalCategories = normalizeStringArray(categories ?? category);
     const finalTags = normalizeStringArray(tags);
@@ -553,6 +566,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       title: title || '',
       description: description || '',
       type: finalType,
+      seo_title: seoTitle || '',
+      seo_description: seoDescription || '',
       items: JSON.stringify(normalizedSections.sections),
       version: 1,
       is_public: isPublic,
@@ -588,7 +603,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
     }
 
-    const { title, description, type, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
+    const { title, description, type, seoTitle, seoDescription, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
     const rawBody = body as Record<string, unknown>;
 
     // Only update slug if explicitly provided (avoid breaking shared URLs on title edits).
@@ -619,6 +634,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     }
     if (Object.prototype.hasOwnProperty.call(rawBody, 'type') && typeof type === 'string') {
       updates.type = type;
+    }
+    if (Object.prototype.hasOwnProperty.call(rawBody, 'seoTitle')) {
+      updates.seo_title = seoTitle || '';
+    }
+    if (Object.prototype.hasOwnProperty.call(rawBody, 'seoDescription')) {
+      updates.seo_description = seoDescription || '';
     }
     if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
       const normalizedSections = normalizeSectionsPayload(sections ?? bodyItems);
@@ -659,7 +680,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         .where(and(eq(checklist_runs.template_id, templateId), eq(checklist_runs.user_id, userId)));
     }
 
-    return json({ success: true });
+    return json({ success: true, slug: typeof updates.slug === 'string' ? updates.slug : undefined });
   }
 
   if (request.method === 'DELETE') {

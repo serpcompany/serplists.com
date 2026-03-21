@@ -56,6 +56,9 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           title: template.title,
           description: template.description || '',
           type: typeof template.type === 'string' ? template.type : 'checklist',
+          seoTitle: typeof template.seoTitle === 'string' ? template.seoTitle : '',
+          seoDescription: typeof template.seoDescription === 'string' ? template.seoDescription : '',
+          seoUrl: typeof template.slug === 'string' ? template.slug : '',
           sections: (() => {
             if (template.sections) return template.sections;
             if (template.items) {
@@ -173,6 +176,9 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         title: templateData.title,
         description: templateData.description,
         type: templateData.type,
+        seoTitle: templateData.seoTitle,
+        seoDescription: templateData.seoDescription,
+        slug: templateData.seoUrl?.trim() || undefined,
         sections: templateData.sections,
         is_public: finalIsPublic,
         categories: templateData.categories || [],
@@ -184,6 +190,9 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         title: templateData.title,
         description: templateData.description || '',
         type: templateData.type,
+        seoTitle: templateData.seoTitle || '',
+        seoDescription: templateData.seoDescription || '',
+        seoUrl: result.slug || templateData.seoUrl || generateSlug(templateData.title),
         sections: templateData.sections,
         categories: templateData.categories || [],
         tags: templateData.tags || [],
@@ -219,11 +228,13 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         title: template.title,
         description: template.description,
         type: template.type,
+        seoTitle: template.seoTitle,
+        seoDescription: template.seoDescription,
         sections: template.sections,
         categories: template.categories,
         tags: template.tags,
         is_public: template.isPublic,
-        slug: template.slug
+        slug: template.seoUrl?.trim() || template.slug?.trim() || undefined
       });
       
       if (!result) throw new Error('Failed to update template');

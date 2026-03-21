@@ -4,20 +4,7 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Users, X } from 'lucide-react';
-
-interface TestUser {
-  email: string;
-  password: string;
-  name: string;
-  color: string;
-}
-
-const testUsers: TestUser[] = [
-  { email: 'admin@test.com', password: 'password123', name: 'Admin (Pro)', color: 'bg-red-500' },
-  { email: 'john@test.com', password: 'password123', name: 'John (Free)', color: 'bg-blue-500' },
-  { email: 'jane@test.com', password: 'password123', name: 'Jane (Pro)', color: 'bg-purple-500' },
-  { email: 'bob@test.com', password: 'password123', name: 'Bob (Free)', color: 'bg-green-500' },
-];
+import { DEV_TEST_USERS, DEV_TEST_USER_PASSWORD_RESET_COMMAND, getDevTestUserPasswordHelp, type DevTestUser } from '@/lib/auth/devUsers';
 
 export function DevLoginBar() {
   const { login, logout, user } = useAuth();
@@ -40,7 +27,7 @@ export function DevLoginBar() {
     );
   }
 
-  const handleQuickLogin = async (testUser: TestUser) => {
+  const handleQuickLogin = async (testUser: DevTestUser) => {
     setIsLoading(true);
     try {
       const result = await login(testUser.email, testUser.password);
@@ -48,7 +35,7 @@ export function DevLoginBar() {
         toast.success(`Logged in as ${testUser.name}`);
         navigate('/dashboard');
       } else {
-        toast.error(result.error ?? 'Login failed - check if API is running');
+        toast.error(result.error ?? `Login failed. If this dev password was changed locally, run ${DEV_TEST_USER_PASSWORD_RESET_COMMAND}.`);
       }
     } catch (error) {
       toast.error('Login error - is the API running on port 8788?');
@@ -79,7 +66,7 @@ export function DevLoginBar() {
           </div>
           
           <div className="flex gap-2">
-            {testUsers.map((testUser: { email: unknown; color: unknown; name: unknown }) => (
+            {DEV_TEST_USERS.map((testUser: DevTestUser) => (
               <Button
                 key={testUser.email}
                 size="sm"
@@ -120,7 +107,7 @@ export function DevLoginBar() {
       
       <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-2 text-center">
         API: http://localhost:8788 | Frontend: http://localhost:{window.location.port} | 
-        <span className="ml-1">Password for all: <code className="bg-yellow-200 dark:bg-yellow-800 px-1 rounded">password123</code></span>
+        <span className="ml-1">{getDevTestUserPasswordHelp()}</span>
       </div>
     </div>
   );

@@ -97,7 +97,7 @@ const TemplateEditor = () => {
       setDescription(template.description || "");
       setSeoTitle(template.seoTitle || "");
       setSeoDescription(template.seoDescription || "");
-      setSeoUrl(template.seoUrl || "");
+      setSeoUrl(template.seoUrl || template.slug || "");
       setTemplateType(template.type || "checklist");
       setCategories(template.categories || []);
       setTags(template.tags || []);
@@ -142,9 +142,9 @@ const TemplateEditor = () => {
         applyTemplate({
           title: typeof fetched.title === 'string' ? fetched.title : "",
           description: typeof fetched.description === 'string' ? fetched.description : "",
-          seoTitle: "",
-          seoDescription: "",
-          seoUrl: "",
+          seoTitle: typeof fetched.seoTitle === 'string' ? fetched.seoTitle : "",
+          seoDescription: typeof fetched.seoDescription === 'string' ? fetched.seoDescription : "",
+          seoUrl: typeof fetched.slug === 'string' ? fetched.slug : "",
           categories,
           tags: Array.isArray(fetched.tags) ? (fetched.tags as string[]) : [],
           type: fetched.type === "recipe" ? "recipe" : "checklist",
@@ -182,6 +182,9 @@ const TemplateEditor = () => {
       tags,
       isPublic
     );
+    if (result.success) {
+      setTemplateSlug(seoUrl || templateSlug);
+    }
     setErrors(result.errors);
   };
 

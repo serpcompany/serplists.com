@@ -7,11 +7,17 @@ describe('payload schemas', () => {
       title: 'Content Refresh Checklist',
       description: 'Refresh top pages',
       slug: 'content-refresh-checklist',
+      seoTitle: 'SEO title',
+      seoDescription: 'SEO description',
       categories: ['seo', 'content'],
       tags: ['refresh'],
     });
 
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.seoTitle).toBe('SEO title');
+      expect(result.data.seoDescription).toBe('SEO description');
+    }
   });
 
   it('rejects invalid template slugs', () => {

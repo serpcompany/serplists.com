@@ -46,6 +46,7 @@ pnpm run dev:all    # Runs both in parallel
 ```bash
 pnpm run db:seed
 pnpm run db:reset
+pnpm run db:reset:test-user-passwords
 pnpm run db:query "SELECT * FROM templates LIMIT 5"
 ```
 
@@ -67,6 +68,12 @@ Credentials:
 - bob@test.com
 
 Password for all: `password123`
+
+If you changed a seeded persona password locally and want the quick-login helpers to work again, run:
+
+```bash
+pnpm run db:reset:test-user-passwords
+```
 
 If login fails, verify:
 1. `pnpm run dev:api` is running on port 8788

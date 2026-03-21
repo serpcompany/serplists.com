@@ -130,6 +130,31 @@ describe('Templates Handlers', () => {
     expect(inserted.version).toBe(1);
   });
 
+  it('should persist requested SEO metadata and slug on template creation', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValue([]);
+
+    const request = new Request('http://localhost/api/templates', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: 'SEO Template',
+        seoTitle: 'SEO Title',
+        seoDescription: 'Search-ready description',
+        slug: 'custom-seo-template',
+        sections: [{ id: 'section-1', title: 'Checklist', items: [] }],
+      }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+
+    expect(response.status).toBe(200);
+
+    const inserted = dbMocks.insertChain.values.mock.calls[0][0];
+    expect(inserted.slug).toBe('custom-seo-template');
+    expect(inserted.seo_title).toBe('SEO Title');
+    expect(inserted.seo_description).toBe('Search-ready description');
+  });
+
   it('should enforce free plan template limit', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 1 }]);
@@ -164,6 +189,32 @@ describe('Templates Handlers', () => {
     expect(data.error).toMatch(/sections\/items/i);
   });
 
+  it('should update SEO metadata and requested slug on template update', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+
+    const request = new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({
+        seoTitle: 'Updated SEO Title',
+        seoDescription: 'Updated SEO Description',
+        slug: 'updated-template-slug',
+      }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        seo_title: 'Updated SEO Title',
+        seo_description: 'Updated SEO Description',
+        slug: 'updated-template-slug',
+      }),
+    );
+  });
+
   it('should update related checklist runs when template sections change', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
 
@@ -191,6 +242,34 @@ describe('Templates Handlers', () => {
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
     expect(dbMocks.updateChain.set).toHaveBeenCalledTimes(2);
+  });
+
+  it('should return saved SEO metadata in template responses', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        title: 'SEO Template',
+        description: 'Stored template',
+        items: JSON.stringify([{ id: 'section-1', title: 'Checklist', items: [] }]),
+        category: '["seo"]',
+        tags: '["content"]',
+        user_id: 'user-1',
+        is_public: 1,
+        slug: 'seo-template',
+        seo_title: 'Stored SEO Title',
+        seo_description: 'Stored SEO description',
+        type: 'checklist',
+      },
+    ]);
+
+    const request = new Request('http://localhost/api/templates/template-1', { method: 'GET' });
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.slug).toBe('seo-template');
+    expect(data.seoTitle).toBe('Stored SEO Title');
+    expect(data.seoDescription).toBe('Stored SEO description');
   });
 
   it('should reject template backup export for free users', async () => {

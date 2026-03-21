@@ -25,6 +25,7 @@ pnpm run sre:deps
 ```bash
 pnpm run db:seed
 pnpm run db:reset
+pnpm run db:reset:test-user-passwords
 pnpm run db:generate
 pnpm run db:migrate
 pnpm run db:query "SELECT * FROM templates LIMIT 5"
@@ -46,4 +47,5 @@ pnpm run db:query "SELECT * FROM templates LIMIT 5"
 - Visible only in dev mode.
 - Seed users via `pnpm run db:seed` or `pnpm run db:reset`.
 - Emails: admin@test.com, john@test.com, jane@test.com, bob@test.com
-- Password: password123
+- Default password: `password123`
+- Restore changed local test-user passwords: `pnpm run db:reset:test-user-passwords`

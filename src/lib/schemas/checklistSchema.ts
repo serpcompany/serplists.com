@@ -49,6 +49,8 @@ export const checklistTemplateSchema = z.object({
   isPublic: z.boolean(),
   version: z.number().int().optional(),
   slug: z.string().optional(),
+  seoTitle: z.string().optional(),
+  seoDescription: z.string().optional(),
   categories: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional()
 });
@@ -67,6 +69,8 @@ export const checklistTemplateImportSchema = z.object({
   isPublic: z.boolean().optional(),
   version: z.number().int().optional(),
   slug: z.string().optional(),
+  seoTitle: z.string().optional(),
+  seoDescription: z.string().optional(),
   categories: z.union([z.array(z.string()), z.string()]).optional(),
   category: z.string().optional(),
   tags: z.union([z.array(z.string()), z.string()]).optional()
@@ -158,6 +162,8 @@ export const portableChecklistTemplateSchema = z.object({
   description: z.string().optional(),
   type: z.enum(["checklist", "recipe"]).optional(),
   slug: z.string().optional(),
+  seoTitle: z.string().optional(),
+  seoDescription: z.string().optional(),
   visibility: z.enum(["public", "private"]).optional(),
   categories: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),

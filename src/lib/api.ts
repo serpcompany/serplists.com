@@ -66,6 +66,9 @@ class ApiClient {
     title: string;
     description?: string;
     type?: "checklist" | "recipe";
+    seoTitle?: string;
+    seoDescription?: string;
+    slug?: string;
     sections?: unknown[];
     items?: unknown[];
     is_public?: boolean;
@@ -82,6 +85,8 @@ class ApiClient {
     title?: string;
     description?: string;
     type?: "checklist" | "recipe";
+    seoTitle?: string;
+    seoDescription?: string;
     sections?: unknown[];
     categories?: string[];
     tags?: string[];

@@ -14,6 +14,8 @@ export const templatePayloadSchema = z.object({
   title: boundedRequiredString(160).optional(),
   description: boundedOptionalString(5000),
   type: z.enum(["checklist", "recipe"]).optional(),
+  seoTitle: boundedOptionalString(160),
+  seoDescription: boundedOptionalString(320),
   is_public: z.boolean().optional(),
   categories: stringListField(20, 80),
   category: boundedOptionalString(80),

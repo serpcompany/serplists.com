@@ -6,6 +6,7 @@ This document describes the JSON format used for template export/import and the 
 - `templates.items` stores the full sections JSON today's UI uses (array of sections with nested items/contents).
 - `checklist_runs.items` stores the same sections JSON with completion state.
 - `templates.category` and `templates.tags` store JSON arrays as text.
+- `templates.seo_title` and `templates.seo_description` store template SEO metadata.
 - Structured columns (`user_id`, `is_public`, `slug`, timestamps) remain relational for filtering and indexing.
 
 ## Portable template pack format
@@ -33,6 +34,7 @@ Portable template fields are intentionally cleaner than app row exports:
 - no `userId`
 - no created/updated timestamps
 - visibility is represented as `visibility: "public" | "private"`
+- optional SEO metadata is represented as `seoTitle` / `seoDescription`
 - sections/items/content IDs may be present, but import should not depend on them
 
 ## Backup/export format
@@ -65,6 +67,8 @@ export const checklistTemplateSchema = z.object({
   updatedAt: z.string(),
   isPublic: z.boolean(),
   slug: z.string().optional(),
+  seoTitle: z.string().optional(),
+  seoDescription: z.string().optional(),
   categories: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
 });
@@ -79,7 +83,7 @@ We accept:
 Minimal template fields:
 - `title` (required)
 - `sections` **or** legacy `items` (required; JSON array, can be a stringified array)
-- Optional: `description`, `categories`/`category`, `tags`, `isPublic`, `slug`
+- Optional: `description`, `categories`/`category`, `tags`, `isPublic`, `slug`, `seoTitle`, `seoDescription`
 
 Missing fields are auto-filled during import (ids, timestamps, userId).
 
@@ -98,7 +102,7 @@ JSON exports **do not** include R2 assets. If a template references uploaded fil
 - Guardrails are enforced (max 5 templates/import; block assets > 5MB).
 - Asset uploads should be <= 5MB each (compress before publishing).
 
-Note: `src/types/checklist.ts` includes optional fields like `seoTitle`, `seoDescription`, and `seoUrl`, but they are not required by the Zod schema.
+`seoUrl` is represented by the stored `slug` field and mapped back into the editor's `Custom URL Slug` input.
 
 ## Sections and items
 ```ts
