@@ -4,7 +4,7 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { LogOut, Home, FileText, CheckSquare, Settings, ExternalLink, Sparkles, Tag, Info, Mail, BookOpen } from "lucide-react";
+import { LogOut, Home, FileText, CheckSquare, Settings, ExternalLink, Sparkles, Tag, Info, Mail } from "lucide-react";
 interface LayoutProps {
   children: React.ReactNode;
 }
@@ -43,10 +43,6 @@ export const Layout: React.FC<LayoutProps> = ({
     name: "Checklists",
     href: "/checklists",
     icon: CheckSquare
-  }, {
-    name: "Recipes",
-    href: "/recipes",
-    icon: BookOpen
   }, {
     name: "About",
     href: "/about",
@@ -202,9 +198,6 @@ export const Layout: React.FC<LayoutProps> = ({
               </Link>
               <Link to="/checklists" className="hover:text-foreground transition-colors">
                 Checklist Library
-              </Link>
-              <Link to="/recipes" className="hover:text-foreground transition-colors">
-                Recipes
               </Link>
               <Link to="/about" className="hover:text-foreground transition-colors">
                 About

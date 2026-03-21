@@ -54,3 +54,9 @@
   - `Admin (Pro)` and `Jane (Pro)` are treated as Pro in local development.
   - `John (Free)` and `Bob (Free)` remain Free.
   - The local seed data now inserts entitlement overrides for the two Pro personas.
+
+## MVP navigation scope
+
+- **Recipes hidden from navigation for now**
+  - The `/recipes` route remains in the app, but Recipes is temporarily hidden from the header, mobile nav, and footer while it is out of MVP scope.
+  - This keeps navigation focused on active MVP areas like templates, runs, pricing, and public checklists.
