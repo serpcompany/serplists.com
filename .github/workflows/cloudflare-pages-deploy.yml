@@ -15,6 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      # Runtime auth secrets live in Cloudflare Pages. CI only needs a valid
+      # placeholder so `pnpm run typecheck:env` can validate the contract
+      # without duplicating the production secret into GitHub Actions.
+      BETTER_AUTH_SECRET: ci-build-placeholder-secret-32-chars-minimum
     steps:
       - name: Checkout
         uses: actions/checkout@v4
