@@ -47,6 +47,7 @@ describe('Templates Handlers', () => {
   let mockEnv: any;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
@@ -203,7 +204,7 @@ describe('Templates Handlers', () => {
     expect(data.code).toBe('upgrade_required');
   });
 
-  it('should export template backup for pro users', async () => {
+  it('should export backup format for pro users when requested', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     vi.mocked(getEntitlementsForUser).mockResolvedValue({
       plan: 'pro',
@@ -227,7 +228,7 @@ describe('Templates Handlers', () => {
       },
     ]);
 
-    const request = new Request('http://localhost/api/templates/backup', { method: 'GET' });
+    const request = new Request('http://localhost/api/templates/backup?format=backup', { method: 'GET' });
     const response = await handleTemplates(request, mockEnv);
     const data = await response.json();
 
@@ -270,6 +271,7 @@ describe('Templates Handlers', () => {
   it('should allow cloning templates for free users within template limit', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit
+      .mockResolvedValueOnce([{ count: 0 }])
       .mockResolvedValueOnce([
         {
           id: 'template-1',
@@ -285,8 +287,7 @@ describe('Templates Handlers', () => {
           updated_at: null,
           version: 1,
         },
-      ])
-      .mockResolvedValueOnce([{ count: 0 }]);
+      ]);
 
     const request = new Request('http://localhost/api/templates/template-1/clone', {
       method: 'POST',
@@ -302,24 +303,7 @@ describe('Templates Handlers', () => {
 
   it('should reject cloning templates when free user reaches template limit', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        {
-          id: 'template-1',
-          title: 'Public Template',
-          description: '',
-          items: JSON.stringify([]),
-          category: '[]',
-          tags: '[]',
-          user_id: 'other-user',
-          is_public: true,
-          slug: 'public-template',
-          created_at: new Date().toISOString(),
-          updated_at: null,
-          version: 1,
-        },
-      ])
-      .mockResolvedValueOnce([{ count: 1 }]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 1 }]);
 
     const request = new Request('http://localhost/api/templates/template-1/clone', {
       method: 'POST',

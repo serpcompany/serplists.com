@@ -35,13 +35,19 @@ vi.mock('@functions/api/utils/session', () => ({
   getSessionUserId: vi.fn(),
 }));
 
+vi.mock('@functions/api/utils/entitlements', () => ({
+  getEntitlementsForUser: vi.fn(),
+}));
+
 import { handleChecklists } from '@functions/api/handlers/checklists';
+import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 
 describe('Checklists Handlers', () => {
   let mockEnv: any;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
@@ -57,6 +63,10 @@ describe('Checklists Handlers', () => {
     };
 
     vi.mocked(getSessionUserId).mockResolvedValue(null);
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({
+      plan: 'free',
+      limits: { maxTemplates: 1, maxActiveRuns: 3 },
+    });
   });
 
   it('should reject unauthenticated access', async () => {
@@ -90,8 +100,7 @@ describe('Checklists Handlers', () => {
 
   it('should enforce free plan active run limit', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    // First limit() call is entitlements override lookup; second is active runs count.
-    dbMocks.selectChain.limit.mockResolvedValueOnce([]).mockResolvedValueOnce([{ count: 3 }]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 3 }]);
 
     const request = new Request('http://localhost/api/checklists', {
       method: 'POST',
@@ -126,9 +135,8 @@ describe('Checklists Handlers', () => {
   it('should create a public shared checklist run', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ count: 0 }])
-      .mockResolvedValueOnce([{ id: 'template-2', title: 'Template 2', items: '[{"id":"item-1","title":"Item 1"}]', is_public: 1, user_id: 'user-123' }]);
+      .mockResolvedValueOnce([{ id: 'template-2', title: 'Template 2', items: '[{"id":"item-1","title":"Item 1"}]', is_public: 1, user_id: 'user-123' }])
+      .mockResolvedValueOnce([{ count: 0 }]);
 
     const request = new Request('http://localhost/api/checklists/template-2/share', {
       method: 'POST',
@@ -151,9 +159,8 @@ describe('Checklists Handlers', () => {
   it('should deactivate any existing shared runs before creating a new shared run', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ count: 0 }])
-      .mockResolvedValueOnce([{ id: 'template-2', title: 'Template 2', items: '[{"id":"item-1","title":"Item 1"}]', is_public: 1, user_id: 'user-123' }]);
+      .mockResolvedValueOnce([{ id: 'template-2', title: 'Template 2', items: '[{"id":"item-1","title":"Item 1"}]', is_public: 1, user_id: 'user-123' }])
+      .mockResolvedValueOnce([{ count: 0 }]);
 
     const request = new Request('http://localhost/api/checklists/template-2/share', {
       method: 'POST',
@@ -185,6 +192,8 @@ describe('Checklists Handlers', () => {
         started_at: '2026-01-01T00:00:00.000Z',
         completed_at: null,
         user_id: 'owner-123',
+        share_token: 'shared-run',
+        is_public: true,
       },
     ]);
 

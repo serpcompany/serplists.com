@@ -18,6 +18,7 @@ Operational notes, debugging lessons, and implementation decisions.
 - [Entitlements enforcement](entitlements-enforcement.md)
 - [Environment validation](env-validation-vite-cloudflare.md)
 - [Incident response runbook](incident-response-runbook.md)
+- [Release verification handler-test drift (2026-03-21)](release-verification-handler-test-drift-2026-03-21.md)
 - [SerpUI key-screen parity audit](serpui-key-screen-parity-audit.md)
 - [SerpUI style divergence](serpui-style-divergence.md)
 - [Stripe billing setup](stripe-billing-setup.md)
