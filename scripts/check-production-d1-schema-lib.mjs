@@ -59,6 +59,7 @@ export const REQUIRED_D1_SCHEMA = Object.freeze({
     "type",
     "seo_title",
     "seo_description",
+    "rules",
     "is_public",
     "category",
     "tags",

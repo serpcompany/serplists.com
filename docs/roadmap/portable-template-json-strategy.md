@@ -187,6 +187,7 @@ That gives immediate value without introducing sync conflicts, OAuth scope compl
 
 - [x] Split export modes: `portable` and `backup`
 - [x] Normalize all accepted input formats into the canonical internal shape
+- [x] Preserve portable SEO metadata and `rules` through import/export/reload paths
 - [ ] Improve partial-failure reporting per template
 - [x] Add asset manifest and warnings
 - [x] Add tests for import/export edge cases and backward compatibility
@@ -201,11 +202,17 @@ That gives immediate value without introducing sync conflicts, OAuth scope compl
 
 ### Phase 4: repo-ready GitHub workflow
 
+- [x] Load public templates from repo JSON packs in the app runtime
 - [ ] Add repo-ready export pack format
 - [ ] Add import from repo file or raw URL
 - [ ] Define manifest and pack layout
 - [ ] Document team workflow for PR-reviewed template packs
 - [ ] Decide whether full GitHub App sync is worth building
+
+Current runtime baseline:
+- Public repo-backed templates live in `src/data/public-template-packs/*.json`
+- The app loads those portable JSON packs directly and merges them with D1 public templates
+- If a repo template and D1 template share a public slug, the repo-backed template wins for the public catalog so JSON remains the primary source
 
 ## Acceptance criteria
 

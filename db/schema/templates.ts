@@ -10,6 +10,7 @@ export const templates = sqliteTable("templates", {
   type: text("type").notNull().default("checklist"),
   seo_title: text("seo_title"),
   seo_description: text("seo_description"),
+  rules: text("rules"),
   is_public: integer("is_public", { mode: "boolean" }).default(false),
   category: text("category"),
   tags: text("tags"),

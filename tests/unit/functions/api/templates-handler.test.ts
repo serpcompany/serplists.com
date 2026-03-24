@@ -140,6 +140,15 @@ describe('Templates Handlers', () => {
         title: 'SEO Template',
         seoTitle: 'SEO Title',
         seoDescription: 'Search-ready description',
+        rules: [
+          {
+            id: 'rule-1',
+            type: 'required-field',
+            path: 'sections[].items[].title',
+            value: 'Every item needs a title',
+            severity: 'error',
+          },
+        ],
         slug: 'custom-seo-template',
         sections: [{ id: 'section-1', title: 'Checklist', items: [] }],
       }),
@@ -153,6 +162,7 @@ describe('Templates Handlers', () => {
     expect(inserted.slug).toBe('custom-seo-template');
     expect(inserted.seo_title).toBe('SEO Title');
     expect(inserted.seo_description).toBe('Search-ready description');
+    expect(inserted.rules).toContain('required-field');
   });
 
   it('should enforce free plan template limit', async () => {
@@ -197,6 +207,15 @@ describe('Templates Handlers', () => {
       body: JSON.stringify({
         seoTitle: 'Updated SEO Title',
         seoDescription: 'Updated SEO Description',
+        rules: [
+          {
+            id: 'rule-2',
+            type: 'required-field',
+            path: 'sections[].items[].title',
+            value: 'Updated rule',
+            severity: 'warning',
+          },
+        ],
         slug: 'updated-template-slug',
       }),
     });
@@ -210,6 +229,7 @@ describe('Templates Handlers', () => {
       expect.objectContaining({
         seo_title: 'Updated SEO Title',
         seo_description: 'Updated SEO Description',
+        rules: expect.stringContaining('Updated rule'),
         slug: 'updated-template-slug',
       }),
     );
@@ -258,6 +278,15 @@ describe('Templates Handlers', () => {
         slug: 'seo-template',
         seo_title: 'Stored SEO Title',
         seo_description: 'Stored SEO description',
+        rules: JSON.stringify([
+          {
+            id: 'rule-1',
+            type: 'required-field',
+            path: 'sections[].items[].title',
+            value: 'Every item needs a title',
+            severity: 'error',
+          },
+        ]),
         type: 'checklist',
       },
     ]);
@@ -270,6 +299,7 @@ describe('Templates Handlers', () => {
     expect(data.slug).toBe('seo-template');
     expect(data.seoTitle).toBe('Stored SEO Title');
     expect(data.seoDescription).toBe('Stored SEO description');
+    expect(data.rules).toHaveLength(1);
   });
 
   it('should reject template backup export for free users', async () => {

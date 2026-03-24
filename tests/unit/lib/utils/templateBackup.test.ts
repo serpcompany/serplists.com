@@ -191,6 +191,47 @@ describe('Template Backup Utilities', () => {
       expect(result.templates[1].title).toBe('Second Template');
     });
 
+    it('should preserve seo metadata and rules from portable imports', async () => {
+      const portablePack = {
+        kind: 'serplists-template-pack',
+        schemaVersion: '2.0.0',
+        exportedAt: '2026-03-24T00:00:00.000Z',
+        templates: [
+          {
+            title: 'Portable Template',
+            seoTitle: 'Portable SEO Title',
+            seoDescription: 'Portable SEO Description',
+            visibility: 'private',
+            rules: [
+              {
+                id: 'rule-1',
+                type: 'required-field',
+                path: 'sections[].items[].title',
+                value: 'Every item needs a title',
+                severity: 'error',
+              },
+            ],
+            sections: [
+              {
+                title: 'Checklist',
+                items: [{ title: 'Item' }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const file = new File([JSON.stringify(portablePack)], 'portable.json', {
+        type: 'application/json'
+      });
+
+      const result = await parseTemplatesFromJSON(file);
+
+      expect(result.templates[0].seoTitle).toBe('Portable SEO Title');
+      expect(result.templates[0].seoDescription).toBe('Portable SEO Description');
+      expect(result.templates[0].rules).toHaveLength(1);
+    });
+
     it('should surface warnings for uploaded assets', async () => {
       const templates = [
         createMockTemplate({
@@ -406,6 +447,30 @@ describe('Template Backup Utilities', () => {
       expect(result).toHaveLength(3);
       expect(new Set(result.map(t => t.id)).size).toBe(3); // All IDs unique
       expect(result.every(t => t.userId === 'user-123')).toBe(true);
+    });
+
+    it('should preserve seo metadata and rules while preparing templates for import', () => {
+      const templates = [
+        createMockTemplate({
+          seoTitle: 'SEO Title',
+          seoDescription: 'SEO Description',
+          rules: [
+            {
+              id: 'rule-1',
+              type: 'required-field',
+              path: 'sections[].items[].title',
+              value: 'Every item needs a title',
+              severity: 'error',
+            },
+          ],
+        }),
+      ];
+
+      const result = prepareTemplatesForImport(templates, 'user-123');
+
+      expect(result[0].seoTitle).toBe('SEO Title');
+      expect(result[0].seoDescription).toBe('SEO Description');
+      expect(result[0].rules).toHaveLength(1);
     });
   });
 

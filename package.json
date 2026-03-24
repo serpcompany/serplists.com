@@ -13,6 +13,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:env": "node scripts/check-env.mjs",
     "check:prod:d1-schema": "node scripts/check-production-d1-schema.mjs",
+    "schema:portable:generate": "tsx scripts/generate-portable-template-json-schema.ts",
+    "schema:portable:check": "tsx scripts/generate-portable-template-json-schema.ts --check",
     "preview": "dotenv -e .dev.vars -- vite preview",
     "test": "vitest",
     "test:run": "vitest run",
@@ -26,7 +28,7 @@
     "sre:deps": "depcruise --no-config --exclude \"node_modules|dist|coverage|playwright-report|test-results|\\\\.wrangler|\\\\.turbo|db/migrations\" src functions || true",
     "secret:scan": "secretlint $(git ls-files)",
     "db:seed": "npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/seed-test-data.sql",
-    "db:reset": "node -e \"require('fs').rmSync('.wrangler/state/v3/d1/miniflare-D1DatabaseObject', { recursive: true, force: true });\" && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0001_initial_schema.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0002_add_slug_to_templates.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0002_add_username_and_profiles.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0003_unique_template_slugs.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0004_remove_affiliate_and_pages.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0005_backfill_template_slugs.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0007_add_checklist_run_progress.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0008_better_auth.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0009_stripe_billing.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0010_entitlement_overrides.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0011_add_template_version.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0012_cleanup_junk_templates.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0013_add_template_type.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0014_make_users_password_hash_nullable.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0015_add_users_created_at_default.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0016_users_password_hash_nullable_live_safe.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0017_add_checklist_run_sharing_fields.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0018_rename_test_users.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0019_add_template_seo_fields.sql && npm run db:seed",
+    "db:reset": "node -e \"require('fs').rmSync('.wrangler/state/v3/d1/miniflare-D1DatabaseObject', { recursive: true, force: true });\" && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0001_initial_schema.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0002_add_slug_to_templates.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0002_add_username_and_profiles.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0003_unique_template_slugs.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0004_remove_affiliate_and_pages.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0005_backfill_template_slugs.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0007_add_checklist_run_progress.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0008_better_auth.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0009_stripe_billing.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0010_entitlement_overrides.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0011_add_template_version.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0012_cleanup_junk_templates.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0013_add_template_type.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0014_make_users_password_hash_nullable.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0015_add_users_created_at_default.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0016_users_password_hash_nullable_live_safe.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0017_add_checklist_run_sharing_fields.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0018_rename_test_users.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0019_add_template_seo_fields.sql && npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0020_add_template_rules.sql && npm run db:seed",
     "db:migrate:sharing:local": "npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/0017_add_checklist_run_sharing_fields.sql",
     "db:migrate:sharing:remote": "npx wrangler d1 execute serp-checklists-db --remote --file=./db/migrations/0017_add_checklist_run_sharing_fields.sql",
     "db:reset:test-user-passwords": "npx wrangler d1 execute serp-checklists-db --local --file=./db/migrations/reset-test-user-passwords.sql",
@@ -132,10 +134,12 @@
     "postcss": "^8.4.47",
     "secretlint": "^11.3.1",
     "tailwindcss": "^3.4.11",
+    "tsx": "^4.21.0",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",
     "vite": "^5.4.1",
     "vitest": "^3.2.4",
-    "wrangler": "^4.54.0"
+    "wrangler": "^4.54.0",
+    "zod-to-json-schema": "^3.25.1"
   }
 }

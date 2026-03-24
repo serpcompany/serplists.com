@@ -50,6 +50,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 }) => {
   type ImportVisibility = NonNullable<TemplateImportOptions["visibility"]>;
   const {
+    allTemplates,
     templates,
     importTemplates
   } = useTemplates();
@@ -70,7 +71,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const [includePublicTemplates, setIncludePublicTemplates] = useState(false);
   const [importVisibility, setImportVisibility] = useState<ImportVisibility>("preserve");
 
-  const ownedTemplates = user ? templates.filter(t => t.userId === user.id) : [];
+  const ownedTemplates = user ? allTemplates.filter(t => t.userId === user.id) : [];
   const communityTemplates = templates.filter(t => t.isPublic && t.userId !== user?.id);
   const templatesToExport = includePublicTemplates
     ? [...ownedTemplates, ...communityTemplates]

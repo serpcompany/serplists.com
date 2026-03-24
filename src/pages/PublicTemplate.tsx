@@ -15,6 +15,11 @@ import { api } from "@/lib/api";
 import { handleAccessFailure, navigateToLoginWithReturnPath, startBillingCheckout } from "@/lib/access-flow";
 import type { ChecklistTemplate } from "@/types/checklist";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  buildRepoTemplateCreatePayload,
+  findPublicTemplateByIdentifier,
+  isRepoTemplate,
+} from "@/lib/repoTemplateCatalog";
 
 const PublicTemplate = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -26,7 +31,7 @@ const PublicTemplate = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
-  const { createRun } = useTemplates();
+  const { createRun, createTemplate, templates } = useTemplates();
   const queryClient = useQueryClient();
   const billing = useQuery({
     queryKey: getBillingStatusQueryKey(user?.id),
@@ -47,6 +52,16 @@ const PublicTemplate = () => {
       }
 
       setLoading(true);
+
+      const cachedTemplate = findPublicTemplateByIdentifier(templates, slug);
+
+      if (cachedTemplate?.isPublic) {
+        setTemplate(cachedTemplate);
+        setNotFound(false);
+        analytics.trackTemplateView(cachedTemplate.id, cachedTemplate.title);
+        setLoading(false);
+        return;
+      }
       
       try {
         // Check if slug looks like a UUID (ID)
@@ -60,6 +75,10 @@ const PublicTemplate = () => {
           id: foundTemplate.id,
           title: foundTemplate.title,
           description: foundTemplate.description || '',
+          type: typeof foundTemplate.type === 'string' ? foundTemplate.type : 'checklist',
+          seoTitle: typeof foundTemplate.seoTitle === 'string' ? foundTemplate.seoTitle : '',
+          seoDescription: typeof foundTemplate.seoDescription === 'string' ? foundTemplate.seoDescription : '',
+          rules: Array.isArray(foundTemplate.rules) ? foundTemplate.rules : undefined,
           sections: foundTemplate.sections || [],
           categories: foundTemplate.categories || [],
           tags: foundTemplate.tags || [],
@@ -85,7 +104,7 @@ const PublicTemplate = () => {
     };
 
     fetchTemplate();
-  }, [slug]);
+  }, [slug, templates]);
 
   const handleStartRun = async () => {
     if (!template) return;
@@ -137,6 +156,12 @@ const PublicTemplate = () => {
 
     setIsSaving(true);
     try {
+      if (isRepoTemplate(template)) {
+        const createdTemplate = await createTemplate(buildRepoTemplateCreatePayload(template));
+        navigate(`/templates/${createdTemplate.slug || createdTemplate.id}`);
+        return;
+      }
+
       await api.clonePublicTemplate(template.id, { visibility: "private" });
       toast.success("Template saved to your account");
       await queryClient.invalidateQueries({ queryKey: ["templates", user?.id] });

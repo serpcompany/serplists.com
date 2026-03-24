@@ -35,6 +35,7 @@ Portable template fields are intentionally cleaner than app row exports:
 - no created/updated timestamps
 - visibility is represented as `visibility: "public" | "private"`
 - optional SEO metadata is represented as `seoTitle` / `seoDescription`
+- optional portable rules are represented as `rules`
 - sections/items/content IDs may be present, but import should not depend on them
 
 ## Backup/export format
@@ -83,9 +84,14 @@ We accept:
 Minimal template fields:
 - `title` (required)
 - `sections` **or** legacy `items` (required; JSON array, can be a stringified array)
-- Optional: `description`, `categories`/`category`, `tags`, `isPublic`, `slug`, `seoTitle`, `seoDescription`
+- Optional: `description`, `categories`/`category`, `tags`, `isPublic`, `slug`, `seoTitle`, `seoDescription`, `rules`
 
 Missing fields are auto-filled during import (ids, timestamps, userId).
+
+### Rules
+- Portable template packs can include an optional `rules` array on each template.
+- Import/export preserves `rules` and validates their payload shape.
+- Current runtime support is structural persistence only; rule execution and UI surfacing remain separate work.
 
 ### Visibility defaults
 - If `isPublic` is present, it is preserved by default.

@@ -36,6 +36,14 @@ export const checklistSectionSchema = z.object({
   items: z.array(checklistItemSchema)
 });
 
+export const portableTemplateRuleSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  path: z.string(),
+  value: z.unknown().optional(),
+  severity: z.enum(["error", "warning"]).default("error"),
+});
+
 // Schema for complete checklist templates
 export const checklistTemplateSchema = z.object({
   id: z.string(),
@@ -51,6 +59,7 @@ export const checklistTemplateSchema = z.object({
   slug: z.string().optional(),
   seoTitle: z.string().optional(),
   seoDescription: z.string().optional(),
+  rules: z.array(portableTemplateRuleSchema).optional(),
   categories: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional()
 });
@@ -71,6 +80,7 @@ export const checklistTemplateImportSchema = z.object({
   slug: z.string().optional(),
   seoTitle: z.string().optional(),
   seoDescription: z.string().optional(),
+  rules: z.array(portableTemplateRuleSchema).optional(),
   categories: z.union([z.array(z.string()), z.string()]).optional(),
   category: z.string().optional(),
   tags: z.union([z.array(z.string()), z.string()]).optional()
@@ -100,14 +110,6 @@ export const templateBackupSchema = z.object({
     publicTemplates: z.number(),
     privateTemplates: z.number()
   }).optional()
-});
-
-export const portableTemplateRuleSchema = z.object({
-  id: z.string(),
-  type: z.string(),
-  path: z.string(),
-  value: z.unknown().optional(),
-  severity: z.enum(["error", "warning"]).default("error"),
 });
 
 export const portableChecklistSubItemSchema = z.object({
@@ -171,7 +173,7 @@ export const portableChecklistTemplateSchema = z.object({
   rules: z.array(portableTemplateRuleSchema).optional(),
 });
 
-export const portableTemplatePackSchema = z.object({
+export const portableTemplatePackEnvelopeSchema = z.object({
   kind: z.literal("serplists-template-pack"),
   schemaVersion: z.string(),
   exportedAt: z.string(),
@@ -186,6 +188,10 @@ export const portableTemplatePackSchema = z.object({
   }).optional(),
 });
 
+export const portableTemplatePackSchema = portableTemplatePackEnvelopeSchema.extend({
+  schemaVersion: z.literal(PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION),
+});
+
 // Type exports
 export type ChecklistSubItem = z.infer<typeof checklistSubItemSchema>;
 export type ChecklistItemContent = z.infer<typeof checklistItemContentSchema>;
@@ -195,7 +201,9 @@ export type ChecklistTemplate = z.infer<typeof checklistTemplateSchema>;
 export type ChecklistTemplateImport = z.infer<typeof checklistTemplateImportSchema>;
 export type ChecklistRun = z.infer<typeof checklistRunSchema>;
 export type TemplateBackup = z.infer<typeof templateBackupSchema>;
+export type PortableTemplateRule = z.infer<typeof portableTemplateRuleSchema>;
 export type PortableChecklistTemplate = z.infer<typeof portableChecklistTemplateSchema>;
+export type PortableTemplatePackEnvelope = z.infer<typeof portableTemplatePackEnvelopeSchema>;
 export type PortableTemplatePack = z.infer<typeof portableTemplatePackSchema>;
 
 // Validation functions
@@ -213,6 +221,10 @@ export const validateTemplateArray = (data: unknown): ChecklistTemplate[] => {
 
 export const validateTemplateImportArray = (data: unknown): ChecklistTemplateImport[] => {
   return z.array(checklistTemplateImportSchema).parse(data);
+};
+
+export const validatePortableTemplatePackEnvelope = (data: unknown): PortableTemplatePackEnvelope => {
+  return portableTemplatePackEnvelopeSchema.parse(data);
 };
 
 export const validatePortableTemplatePack = (data: unknown): PortableTemplatePack => {

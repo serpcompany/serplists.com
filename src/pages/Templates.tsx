@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { UserTemplatesSection } from "@/components/templates/UserTemplatesSection";
 const Templates = () => {
   const {
-    templates,
+    allTemplates,
     templatesLoading,
     createRun,
     deleteTemplate
@@ -19,7 +19,7 @@ const Templates = () => {
   } = useAuth();
   
   // Filter templates to only show user's own templates
-  const userTemplates = templates.filter(t => t.userId === user?.id);
+  const userTemplates = allTemplates.filter(t => t.userId === user?.id);
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
@@ -35,7 +35,7 @@ const Templates = () => {
     navigate(`/templates/${id}`);
   };
   const handleStartRun = (templateId: string) => {
-    const template = templates.find(t => t.id === templateId);
+    const template = allTemplates.find(t => t.id === templateId);
     if (template) {
       setSelectedTemplateId(templateId);
       setSelectedTemplate(template);

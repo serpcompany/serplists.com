@@ -76,6 +76,9 @@ CREATE TABLE templates (
   items TEXT NOT NULL, -- JSON array of sections/items
   version INTEGER NOT NULL DEFAULT 1,
   type TEXT NOT NULL DEFAULT 'checklist',
+  seo_title TEXT,
+  seo_description TEXT,
+  rules TEXT, -- JSON array of template rules
   is_public INTEGER DEFAULT 0,
   category TEXT,
   tags TEXT, -- JSON array of tags

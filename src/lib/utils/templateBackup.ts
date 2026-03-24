@@ -1,5 +1,6 @@
 import { 
   validateBackup, 
+  validatePortableTemplatePackEnvelope,
   validatePortableTemplatePack,
   validateTemplateImportArray,
   PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION
@@ -94,6 +95,9 @@ const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTe
     isPublic: template.isPublic ?? false,
     version: typeof template.version === "number" ? template.version : 1,
     slug: template.slug || "",
+    seoTitle: template.seoTitle || "",
+    seoDescription: template.seoDescription || "",
+    rules: template.rules,
     categories: normalizeStringList(template.categories ?? template.category),
     tags: normalizeStringList(template.tags),
   };
@@ -118,6 +122,9 @@ const normalizePortableTemplate = (template: PortableChecklistTemplate): Checkli
     isPublic: template.visibility === "public",
     version: 1,
     slug: template.slug || "",
+    seoTitle: template.seoTitle || "",
+    seoDescription: template.seoDescription || "",
+    rules: template.rules,
     categories: normalizeStringList(template.categories),
     tags: normalizeStringList(template.tags),
   };
@@ -196,16 +203,19 @@ export const exportPortableTemplatesToJSON = (
       description: template.description || "",
       type: template.type,
       slug: template.slug || undefined,
+      seoTitle: template.seoTitle || undefined,
+      seoDescription: template.seoDescription || undefined,
       visibility: template.isPublic ? "public" : "private",
       categories: normalizeStringList(template.categories),
       tags: normalizeStringList(template.tags),
       sections: template.sections,
+      rules: template.rules,
     })),
     manifest: {
       totalTemplates: templates.length,
       format: "portable",
       includesVisibility: true,
-      includesRules: false,
+      includesRules: templates.some((template) => Array.isArray(template.rules) && template.rules.length > 0),
       assetWarnings: warnings.length,
     },
   };
@@ -265,20 +275,8 @@ export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
   });
 };
 
-/**
- * Parse templates from various JSON formats (backup or simple array)
- */
-export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImportResult> => {
-  const jsonString = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (event: Event) => resolve(event.target?.result as string);
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsText(file);
-  });
-
+export const parseTemplatesFromData = (data: unknown): TemplateImportResult => {
   try {
-    const data = JSON.parse(jsonString);
-
     let rawTemplates: ChecklistTemplateImport[] = [];
     let normalizedTemplates: ChecklistTemplate[] = [];
 
@@ -286,10 +284,11 @@ export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImport
       rawTemplates = validateTemplateImportArray(data);
       normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template));
     } else if (data && typeof data === "object" && "kind" in data && (data as { kind?: unknown }).kind === "serplists-template-pack") {
-      const portablePack = validatePortableTemplatePack(data);
-      if (portablePack.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
-        throw new Error(`Unsupported portable template schema version: ${portablePack.schemaVersion}`);
+      const portablePackEnvelope = validatePortableTemplatePackEnvelope(data);
+      if (portablePackEnvelope.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
+        throw new Error(`Unsupported portable template schema version: ${portablePackEnvelope.schemaVersion}`);
       }
+      const portablePack = validatePortableTemplatePack(data);
       normalizedTemplates = portablePack.templates.map((template) => normalizePortableTemplate(template));
     } else if (data && typeof data === "object" && "templates" in data) {
       try {
@@ -307,11 +306,29 @@ export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImport
 
     return { templates: normalizedTemplates, warnings };
   } catch (error) {
+    throw new Error(`Template validation failed: ${(error as Error).message}`);
+  }
+};
+
+/**
+ * Parse templates from various JSON formats (backup or simple array)
+ */
+export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImportResult> => {
+  const jsonString = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event: Event) => resolve(event.target?.result as string);
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsText(file);
+  });
+
+  try {
+    const data = JSON.parse(jsonString);
+    return parseTemplatesFromData(data);
+  } catch (error) {
     if (error instanceof SyntaxError) {
       throw new Error("Invalid JSON file format");
-    } else {
-      throw new Error(`Template validation failed: ${(error as Error).message}`);
     }
+    throw error;
   }
 };
 

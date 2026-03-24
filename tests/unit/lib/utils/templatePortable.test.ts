@@ -32,8 +32,19 @@ const createTemplate = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTe
   updatedAt: '2026-03-21T00:00:00.000Z',
   isPublic: false,
   slug: 'portable-template',
+  seoTitle: 'Portable SEO Title',
+  seoDescription: 'Portable SEO Description',
   categories: ['seo'],
   tags: ['content'],
+  rules: [
+    {
+      id: 'rule-1',
+      type: 'required-field',
+      path: 'sections[].items[].title',
+      value: 'Every item needs a title',
+      severity: 'error',
+    },
+  ],
   version: 1,
   ...overrides,
 });
@@ -46,6 +57,10 @@ describe('portable template utilities', () => {
     expect(result.schemaVersion).toBe(PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION);
     expect(result.templates[0]).not.toHaveProperty('userId');
     expect(result.templates[0].visibility).toBe('private');
+    expect(result.templates[0].seoTitle).toBe('Portable SEO Title');
+    expect(result.templates[0].seoDescription).toBe('Portable SEO Description');
+    expect(result.templates[0].rules).toHaveLength(1);
+    expect(result.manifest?.includesRules).toBe(true);
   });
 
   it('parses a portable template pack into normalized templates', async () => {
@@ -57,8 +72,19 @@ describe('portable template utilities', () => {
         {
           title: 'Imported Portable Template',
           visibility: 'public',
+          seoTitle: 'Imported SEO Title',
+          seoDescription: 'Imported SEO Description',
           categories: ['seo'],
           tags: ['content'],
+          rules: [
+            {
+              id: 'rule-1',
+              type: 'required-field',
+              path: 'sections[].items[].title',
+              value: 'Every item needs a title',
+              severity: 'error',
+            },
+          ],
           sections: [
             {
               title: 'Prep',
@@ -80,6 +106,9 @@ describe('portable template utilities', () => {
     expect(result.templates).toHaveLength(1);
     expect(result.templates[0].title).toBe('Imported Portable Template');
     expect(result.templates[0].isPublic).toBe(true);
+    expect(result.templates[0].seoTitle).toBe('Imported SEO Title');
+    expect(result.templates[0].seoDescription).toBe('Imported SEO Description');
+    expect(result.templates[0].rules).toHaveLength(1);
     expect(result.warnings).toEqual([]);
   });
 

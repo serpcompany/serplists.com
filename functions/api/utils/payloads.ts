@@ -9,6 +9,13 @@ const stringListField = (maxItems: number, maxLength: number) =>
       z.string().trim().min(1).max(maxLength),
     ])
     .optional();
+const templateRuleSchema = z.object({
+  id: z.string().trim().min(1),
+  type: z.string().trim().min(1),
+  path: z.string().trim().min(1),
+  value: z.unknown().optional(),
+  severity: z.enum(["error", "warning"]).optional(),
+});
 
 export const templatePayloadSchema = z.object({
   title: boundedRequiredString(160).optional(),
@@ -16,6 +23,7 @@ export const templatePayloadSchema = z.object({
   type: z.enum(["checklist", "recipe"]).optional(),
   seoTitle: boundedOptionalString(160),
   seoDescription: boundedOptionalString(320),
+  rules: z.array(templateRuleSchema).optional(),
   is_public: z.boolean().optional(),
   categories: stringListField(20, 80),
   category: boundedOptionalString(80),

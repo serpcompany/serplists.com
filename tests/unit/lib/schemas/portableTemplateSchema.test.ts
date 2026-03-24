@@ -91,4 +91,26 @@ describe('portableTemplatePackSchema', () => {
 
     expect(() => validatePortableTemplatePack(data)).toThrow();
   });
+
+  it('rejects unsupported schema versions at the canonical contract layer', () => {
+    const data = {
+      kind: 'serplists-template-pack',
+      schemaVersion: '9.9.9',
+      exportedAt: '2026-03-21T00:00:00.000Z',
+      templates: [
+        {
+          title: 'Future Template',
+          sections: [
+            {
+              title: 'Prep',
+              items: [{ title: 'Review top pages' }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = portableTemplatePackSchema.safeParse(data);
+    expect(result.success).toBe(false);
+  });
 });

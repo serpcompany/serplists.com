@@ -28,6 +28,14 @@ export type ChecklistSection = {
   items: ChecklistItem[];
 };
 
+export type TemplateRule = {
+  id: string;
+  type: string;
+  path: string;
+  value?: unknown;
+  severity?: "error" | "warning";
+};
+
 export type ChecklistTemplate = {
   id: string;
   title: string;
@@ -42,6 +50,7 @@ export type ChecklistTemplate = {
   seoTitle?: string;
   seoDescription?: string;
   seoUrl?: string;
+  rules?: TemplateRule[];
   categories?: string[];
   tags?: string[];
   version?: number;

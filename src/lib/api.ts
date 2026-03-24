@@ -68,6 +68,7 @@ class ApiClient {
     type?: "checklist" | "recipe";
     seoTitle?: string;
     seoDescription?: string;
+    rules?: unknown[];
     slug?: string;
     sections?: unknown[];
     items?: unknown[];
@@ -87,6 +88,7 @@ class ApiClient {
     type?: "checklist" | "recipe";
     seoTitle?: string;
     seoDescription?: string;
+    rules?: unknown[];
     sections?: unknown[];
     categories?: string[];
     tags?: string[];

@@ -61,11 +61,22 @@ describe('portable template import/export API', () => {
         title: 'Template',
         description: '',
         items: JSON.stringify([{ id: 's-1', title: 'Checklist', items: [{ id: 'i-1', title: 'Item' }] }]),
+        rules: JSON.stringify([
+          {
+            id: 'rule-1',
+            type: 'required-field',
+            path: 'sections[].items[].title',
+            value: 'Every item needs a title',
+            severity: 'error',
+          },
+        ]),
         category: '["seo"]',
         tags: '["tag-1"]',
         user_id: 'user-123',
         is_public: 1,
         slug: 'template',
+        seo_title: 'SEO Title',
+        seo_description: 'SEO Description',
         created_at: new Date().toISOString(),
         updated_at: null,
         version: 1,
@@ -80,6 +91,10 @@ describe('portable template import/export API', () => {
     expect(data.kind).toBe('serplists-template-pack');
     expect(data.schemaVersion).toBe('2.0.0');
     expect(data.templates[0].visibility).toBe('public');
+    expect(data.templates[0].seoTitle).toBe('SEO Title');
+    expect(data.templates[0].seoDescription).toBe('SEO Description');
+    expect(data.templates[0].rules).toHaveLength(1);
+    expect(data.manifest.includesRules).toBe(true);
   });
 
   it('imports portable template packs', async () => {
@@ -95,6 +110,17 @@ describe('portable template import/export API', () => {
           {
             title: 'Imported Portable Template',
             visibility: 'public',
+            seoTitle: 'Imported SEO Title',
+            seoDescription: 'Imported SEO Description',
+            rules: [
+              {
+                id: 'rule-1',
+                type: 'required-field',
+                path: 'sections[].items[].title',
+                value: 'Every item needs a title',
+                severity: 'error',
+              },
+            ],
             sections: [{ title: 'Checklist', items: [{ title: 'Item' }] }],
           },
         ],
@@ -109,6 +135,9 @@ describe('portable template import/export API', () => {
 
     const inserted = dbMocks.insertChain.values.mock.calls[0][0];
     expect(inserted.is_public).toBe(true);
+    expect(inserted.seo_title).toBe('Imported SEO Title');
+    expect(inserted.seo_description).toBe('Imported SEO Description');
+    expect(inserted.rules).toContain('required-field');
   });
 
   it('rejects unsupported portable schema versions', async () => {

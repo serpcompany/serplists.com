@@ -25,6 +25,11 @@ export type {
 
 import { generateSlug } from "@/utils/urlHelpers";
 import { calculateSectionsProgress, isSectionsShape, normalizeSections, resetSectionsCompletion } from "@/lib/utils/checklistSections";
+import {
+  mergeAccountTemplateCollections,
+  mergePublicTemplateCollections,
+  repoTemplates,
+} from "@/lib/repoTemplateCatalog";
 
 
 const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
@@ -58,6 +63,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           type: typeof template.type === 'string' ? template.type : 'checklist',
           seoTitle: typeof template.seoTitle === 'string' ? template.seoTitle : '',
           seoDescription: typeof template.seoDescription === 'string' ? template.seoDescription : '',
+          rules: Array.isArray(template.rules) ? template.rules : undefined,
           seoUrl: typeof template.slug === 'string' ? template.slug : '',
           sections: (() => {
             if (template.sections) return template.sections;
@@ -162,8 +168,10 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     staleTime: 5 * 60 * 1000,
   });
 
+  const publicTemplates = mergePublicTemplateCollections(repoTemplates, templates);
+
   // Combine public templates with user's own templates (both public and private)
-  const allTemplates = [...templates, ...userTemplates];
+  const allTemplates = mergeAccountTemplateCollections(publicTemplates, templates, user?.id);
 
   // Mutations
   const createTemplateMutation = useMutation({
@@ -178,6 +186,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         type: templateData.type,
         seoTitle: templateData.seoTitle,
         seoDescription: templateData.seoDescription,
+        rules: templateData.rules,
         slug: templateData.seoUrl?.trim() || undefined,
         sections: templateData.sections,
         is_public: finalIsPublic,
@@ -192,6 +201,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         type: templateData.type,
         seoTitle: templateData.seoTitle || '',
         seoDescription: templateData.seoDescription || '',
+        rules: templateData.rules,
         seoUrl: result.slug || templateData.seoUrl || generateSlug(templateData.title),
         sections: templateData.sections,
         categories: templateData.categories || [],
@@ -230,6 +240,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         type: template.type,
         seoTitle: template.seoTitle,
         seoDescription: template.seoDescription,
+        rules: template.rules,
         sections: template.sections,
         categories: template.categories,
         tags: template.tags,
@@ -439,7 +450,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const getAllPublicTemplates = (): ChecklistTemplate[] => {
-    return templates;
+    return publicTemplates;
   };
 
   const getTemplateBySlug = (slug: string): ChecklistTemplate | undefined => {
@@ -451,7 +462,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const value: TemplatesContextProps = {
-    templates,
+    templates: publicTemplates,
     allTemplates,
     templatesLoading,
     runs,

@@ -7,9 +7,13 @@ import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
 import { getEntitlementsForUser } from '../utils/entitlements';
 import { z } from 'zod';
+import {
+  PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
+  portableTemplatePackEnvelopeSchema,
+  portableTemplateRuleSchema,
+} from '../../../src/lib/schemas/checklistSchema';
 
 const junkTemplateTitles = new Set(['Test Template', 'Updated Template Title']);
-const PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION = '2.0.0';
 
 async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
   const base = generateSlug(title || 'template') || 'template';
@@ -49,9 +53,23 @@ function parseTemplateRow(template: Record<string, unknown>) {
     }
   }
 
+  let rules: unknown[] | undefined;
+  if (typeof template.rules !== 'undefined' && template.rules !== null) {
+    try {
+      const parsedRules = typeof template.rules === 'string' ? JSON.parse(template.rules) : template.rules;
+      const validatedRules = z.array(portableTemplateRuleSchema).safeParse(parsedRules);
+      if (validatedRules.success) {
+        rules = validatedRules.data;
+      }
+    } catch {
+      console.warn('Failed to parse template rules JSON', { templateId: template.id });
+    }
+  }
+
   return {
     ...template,
     sections,
+    rules,
     categories: normalizeStringArray(template.category),
     tags: normalizeStringArray(template.tags),
     seoTitle: typeof template.seo_title === 'string' ? template.seo_title : '',
@@ -96,15 +114,6 @@ const templateBackupImportBodySchema = z.object({
       visibility: z.enum(['preserve', 'public', 'private']).optional(),
     })
     .optional(),
-});
-
-const portableTemplatePackImportSchema = z.object({
-  kind: z.literal('serplists-template-pack'),
-  schemaVersion: z.string(),
-  exportedAt: z.string().optional(),
-  exportedBy: z.string().optional(),
-  templates: z.array(templateBackupImportTemplateSchema),
-  manifest: z.record(z.string(), z.unknown()).optional(),
 });
 
 function hasOversizedAssets(sections: unknown[], maxAssetBytes: number): boolean {
@@ -199,6 +208,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           type: typeof parsed.type === 'string' ? parsed.type : 'checklist',
           seoTitle: typeof parsed.seoTitle === 'string' ? parsed.seoTitle : '',
           seoDescription: typeof parsed.seoDescription === 'string' ? parsed.seoDescription : '',
+          rules: Array.isArray(parsed.rules) ? parsed.rules : undefined,
           sections: parsed.sections || [],
           categories: parsed.categories || [],
           tags: parsed.tags || [],
@@ -226,6 +236,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             type: typeof template.type === 'string' ? template.type : 'checklist',
             seoTitle: template.seoTitle || '',
             seoDescription: template.seoDescription || '',
+            rules: template.rules,
             sections: template.sections || [],
             categories: template.categories || [],
             tags: template.tags || [],
@@ -236,7 +247,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             totalTemplates: exportedTemplates.length,
             format: 'portable',
             includesVisibility: exportedTemplates.length > 0,
-            includesRules: false,
+            includesRules: exportedTemplates.some((template) => Array.isArray(template.rules) && template.rules.length > 0),
             assetWarnings: exportedTemplates.reduce((total, template) => total + countReferencedUploads(template.sections || []), 0),
           },
         });
@@ -267,7 +278,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       }
 
       if (isRecord(body) && body.kind === 'serplists-template-pack') {
-        const portableBody = portableTemplatePackImportSchema.safeParse(body);
+        const portableBody = portableTemplatePackEnvelopeSchema.safeParse(body);
         if (!portableBody.success) {
           return jsonError(portableBody.error.issues[0]?.message || 'Invalid portable template pack payload', 400);
         }
@@ -342,6 +353,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             type: finalType,
             seo_title: template.seoTitle || '',
             seo_description: template.seoDescription || '',
+            rules: Array.isArray(template.rules) && template.rules.length > 0 ? JSON.stringify(template.rules) : null,
             items: JSON.stringify(normalizedSections.sections),
             version: 1,
             is_public: isPublic,
@@ -499,6 +511,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         type: typeof (source as Record<string, unknown>).type === 'string' ? (source as Record<string, unknown>).type : 'checklist',
         seo_title: typeof (source as Record<string, unknown>).seo_title === 'string' ? (source as Record<string, unknown>).seo_title : '',
         seo_description: typeof (source as Record<string, unknown>).seo_description === 'string' ? (source as Record<string, unknown>).seo_description : '',
+        rules: typeof (source as Record<string, unknown>).rules === 'string' ? (source as Record<string, unknown>).rules : null,
         items: source.items,
         version: typeof (source as Record<string, unknown>).version === 'number' ? (source as Record<string, unknown>).version : 1,
         is_public: isPublic,
@@ -540,7 +553,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
     }
 
-    const { title, description, type, seoTitle, seoDescription, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
+    const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
 
     const normalizedSections = normalizeSectionsPayload(sections ?? bodyItems);
     if (normalizedSections.error) {
@@ -568,6 +581,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       type: finalType,
       seo_title: seoTitle || '',
       seo_description: seoDescription || '',
+      rules: Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null,
       items: JSON.stringify(normalizedSections.sections),
       version: 1,
       is_public: isPublic,
@@ -603,7 +617,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
     }
 
-    const { title, description, type, seoTitle, seoDescription, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
+    const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
     const rawBody = body as Record<string, unknown>;
 
     // Only update slug if explicitly provided (avoid breaking shared URLs on title edits).
@@ -640,6 +654,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     }
     if (Object.prototype.hasOwnProperty.call(rawBody, 'seoDescription')) {
       updates.seo_description = seoDescription || '';
+    }
+    if (Object.prototype.hasOwnProperty.call(rawBody, 'rules')) {
+      updates.rules = Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null;
     }
     if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
       const normalizedSections = normalizeSectionsPayload(sections ?? bodyItems);
