@@ -3,6 +3,7 @@
 Operational notes, debugging lessons, and implementation decisions.
 
 - [API 1101 auth env fallback](auth-api-1101-env-fallback.md)
+- [Apify-inspired shell redesign (2026-03-24)](apify-shell-redesign-2026-03-24.md)
 - [Auth hardening plan](auth-hardening-plan.md)
 - [Auth email verification MVP lock](auth-email-verification-mvp.md)
 - [Live auth registration/reset fix (2026-02-17)](auth-live-registration-reset-fix-2026-02-17.md)
@@ -19,8 +20,12 @@ Operational notes, debugging lessons, and implementation decisions.
 - [Entitlements admin override in production (2026-03-21)](entitlements-admin-override-production-2026-03-21.md)
 - [Entitlements enforcement](entitlements-enforcement.md)
 - [Environment validation](env-validation-vite-cloudflare.md)
+- [Figma design lock (2026-03-24)](figma-design-lock-2026-03-24.md)
+- [Flat console docs shell (2026-03-24)](flat-console-docs-shell-2026-03-24.md)
 - [Incident response runbook](incident-response-runbook.md)
 - [Production schema drift broke save/copy flows (2026-03-21)](production-schema-drift-save-copy-fix-2026-03-21.md)
+- [Public/private route model (2026-03-24)](public-private-route-model-2026-03-24.md)
+- [Template import summary and schema snapshot policy (2026-03-24)](template-import-summary-and-schema-snapshot-2026-03-24.md)
 - [Repo-backed template catalog (2026-03-22)](repo-template-catalog-2026-03-22.md)
 - [Release verification handler-test drift (2026-03-21)](release-verification-handler-test-drift-2026-03-21.md)
 - [SerpUI key-screen parity audit](serpui-key-screen-parity-audit.md)

@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTemplates } from "@/contexts/TemplatesContext";
-import { useAuth } from "@/contexts/CloudflareAuthContext";
-import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, Loader2, Plus } from "lucide-react";
+import { AlertCircle, FilePenLine, Loader2, SearchCheck } from "lucide-react";
 import { useTemplateEditor } from "@/hooks/useTemplateEditor";
 import { useTemplateEditorState } from "@/hooks/useTemplateEditorState";
 import { useTemplateSave } from "@/hooks/useTemplateSave";
@@ -16,12 +14,13 @@ import { SectionSidebar } from "@/components/template-editor/SectionSidebar";
 import { SectionEditor } from "@/components/template-editor/SectionEditor";
 import { ItemEditor } from "@/components/template-editor/ItemEditor";
 import { api } from "@/lib/api";
+import { buildConsoleTemplatesPath } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 
 const TemplateEditor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { getTemplate } = useTemplates();
-  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isPublic, setIsPublic] = useState(true);
@@ -205,7 +204,7 @@ const TemplateEditor = () => {
           <AlertDescription>{loadError}</AlertDescription>
         </Alert>
         <div className="mt-4">
-          <Button variant="outline" onClick={() => navigate("/templates")}>
+          <Button variant="outline" onClick={() => navigate(buildConsoleTemplatesPath())}>
             Back to Templates
           </Button>
         </div>
@@ -215,6 +214,22 @@ const TemplateEditor = () => {
 
   const selectedSection = sections[selectedSectionIndex];
   const selectedItem = selectedItemIndex !== null && selectedSection?.items[selectedItemIndex];
+  const sectionLabel =
+    selectedSection?.title || `Section ${selectedSectionIndex + 1}`;
+  const editorHeading = showingTemplateInfo
+    ? "Template input"
+    : showingSEO
+      ? "Search presentation"
+      : selectedItem
+        ? selectedItem.title || `Task ${selectedItemIndex + 1}`
+        : sectionLabel;
+  const editorDescription = showingTemplateInfo
+    ? "Set the title, visibility, categories, and structure before you start filling in detailed task content."
+    : showingSEO
+      ? "Keep the SEO fields concise so the public version reads more like a clear docs page than a landing page."
+      : selectedItem
+        ? "Write the instructions, supporting content, and subtasks for the selected item."
+        : "Keep section names concise so the left rail stays easy to scan.";
 
   return (
     <div className="min-h-screen bg-background">
@@ -222,14 +237,14 @@ const TemplateEditor = () => {
         isEditing={!!id}
         isSaving={isSaving}
         templateSlug={templateSlug}
-        onCancel={() => navigate("/templates")}
+        onCancel={() => navigate(buildConsoleTemplatesPath())}
         onSave={handleSave}
       />
 
       {/* Error Alert */}
       {errors.length > 0 && (
         <div className="mx-auto max-w-7xl px-4 py-4">
-          <Alert variant="destructive">
+          <Alert variant="destructive" className="docs-panel border-destructive/30 shadow-none">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>
@@ -243,56 +258,73 @@ const TemplateEditor = () => {
         </div>
       )}
 
-      {/* Three Column Layout with Fixed Heights */}
       <div className="mx-auto max-w-7xl px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Sidebar - Template Info, SEO & Tasks */}
-          <div className="lg:col-span-1 space-y-4">
-            {/* Template Basic Info Section */}
-            <Card 
-              className={`cursor-pointer transition-colors ${showingTemplateInfo ? 'ring-2 ring-primary' : 'hover:bg-muted/50'}`}
-              onClick={handleSelectTemplateInfo}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium">Template Info</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {title || description || categories.length > 0 || tags.length > 0
-                        ? 'Configured' 
-                        : 'Click to configure'
-                      }
-                    </p>
-                  </div>
-                  <div className="text-muted-foreground">
-                    {title || description || categories.length > 0 || tags.length > 0 ? '✓' : '→'}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+        <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+          <div className="space-y-4">
+            <div className="docs-panel overflow-hidden">
+              {[
+                {
+                  active: showingTemplateInfo,
+                  configured:
+                    Boolean(title) ||
+                    Boolean(description) ||
+                    categories.length > 0 ||
+                    tags.length > 0,
+                  icon: FilePenLine,
+                  label: "Template info",
+                  detail: "Title, tags, visibility, and type",
+                  onClick: handleSelectTemplateInfo,
+                },
+                {
+                  active: showingSEO,
+                  configured:
+                    Boolean(seoTitle) ||
+                    Boolean(seoDescription) ||
+                    Boolean(seoUrl),
+                  icon: SearchCheck,
+                  label: "SEO & sharing",
+                  detail: "Slug, preview title, and meta description",
+                  onClick: handleSelectSEO,
+                },
+              ].map((entry, index) => {
+                const Icon = entry.icon;
 
-            {/* SEO Meta Section */}
-            <Card 
-              className={`cursor-pointer transition-colors ${showingSEO ? 'ring-2 ring-primary' : 'hover:bg-muted/50'}`}
-              onClick={handleSelectSEO}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium">SEO & Meta</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {seoTitle || seoDescription || seoUrl 
-                        ? 'Configured' 
-                        : 'Click to configure'
-                      }
-                    </p>
-                  </div>
-                  <div className="text-muted-foreground">
-                    {seoTitle || seoDescription || seoUrl ? '✓' : '→'}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                return (
+                  <button
+                    key={entry.label}
+                    type="button"
+                    onClick={entry.onClick}
+                    className={cn(
+                      "flex w-full items-start gap-3 px-4 py-4 text-left transition",
+                      index > 0 && "border-t border-border/70",
+                      entry.active ? "bg-muted/45" : "hover:bg-muted/30",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "mt-0.5 rounded-lg border border-border/70 p-2",
+                        entry.active ? "bg-background text-primary" : "bg-card text-muted-foreground",
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-medium text-foreground">
+                          {entry.label}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {entry.configured ? "Ready" : "Setup"}
+                        </span>
+                      </span>
+                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                        {entry.detail}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
             <SectionSidebar
               sections={sections}
@@ -309,73 +341,85 @@ const TemplateEditor = () => {
             />
           </div>
 
-          {/* Right Content - SEO/Section/Item Editor */}
-          <div className="lg:col-span-2">
-            {showingTemplateInfo ? (
-              <TemplateBasicInfo
-                title={title}
-                description={description}
-                templateType={templateType}
-                categories={categories}
-                tags={tags}
-                isPublic={isPublic}
-                onTitleChange={setTitle}
-                onDescriptionChange={setDescription}
-                onTemplateTypeChange={setTemplateType}
-                onCategoriesChange={setCategories}
-                onTagsChange={setTags}
-                onPublicChange={setIsPublic}
-                errors={errors}
-              />
-            ) : showingSEO ? (
-              <SEOMetaEditor
-                seoTitle={seoTitle}
-                seoDescription={seoDescription}
-                seoUrl={seoUrl}
-                onSeoTitleChange={setSeoTitle}
-                onSeoDescriptionChange={setSeoDescription}
-                onSeoUrlChange={setSeoUrl}
-              />
-            ) : selectedSection ? (
-              <div className="space-y-6">
-                {selectedItemIndex === null ? (
-                  <SectionEditor
-                    section={selectedSection}
-                    sectionIndex={selectedSectionIndex}
-                    onUpdateSection={updateSection}
-                    errors={errors}
-                  />
-                ) : selectedItem ? (
-                  <ItemEditor
-                    item={selectedItem}
-                    sectionIndex={selectedSectionIndex}
-                    itemIndex={selectedItemIndex}
-                    onUpdateItem={updateItem}
-                    onAddItemContent={addItemContent}
-                    onUpdateItemContent={updateItemContent}
-                    onUpdateItemContentMeta={updateItemContentMeta}
-                    onRemoveItemContent={removeItemContent}
-                    onAddSubItem={addSubItem}
-                    onUpdateSubItem={updateSubItem}
-                    onRemoveSubItem={removeSubItem}
-                    errors={errors}
-                  />
-                ) : null}
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <h3 className="text-lg font-medium mb-2">No tasks yet</h3>
-                    <p className="text-muted-foreground mb-4">Create your first task to get started</p>
-                    <Button onClick={addSection}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Task
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+          <div className="docs-panel overflow-hidden">
+            <div className="border-b border-border/70 bg-muted/30 px-6 py-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-muted-foreground">
+                Input workspace
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-foreground">
+                {editorHeading}
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+                {editorDescription}
+              </p>
+            </div>
+
+            <div className="px-6 py-6">
+              {showingTemplateInfo ? (
+                <TemplateBasicInfo
+                  title={title}
+                  description={description}
+                  templateType={templateType}
+                  categories={categories}
+                  tags={tags}
+                  isPublic={isPublic}
+                  onTitleChange={setTitle}
+                  onDescriptionChange={setDescription}
+                  onTemplateTypeChange={setTemplateType}
+                  onCategoriesChange={setCategories}
+                  onTagsChange={setTags}
+                  onPublicChange={setIsPublic}
+                  errors={errors}
+                />
+              ) : showingSEO ? (
+                <SEOMetaEditor
+                  seoTitle={seoTitle}
+                  seoDescription={seoDescription}
+                  seoUrl={seoUrl}
+                  onSeoTitleChange={setSeoTitle}
+                  onSeoDescriptionChange={setSeoDescription}
+                  onSeoUrlChange={setSeoUrl}
+                />
+              ) : selectedSection ? (
+                <div className="space-y-6">
+                  {selectedItemIndex === null ? (
+                    <SectionEditor
+                      section={selectedSection}
+                      sectionIndex={selectedSectionIndex}
+                      onUpdateSection={updateSection}
+                      errors={errors}
+                    />
+                  ) : selectedItem ? (
+                    <ItemEditor
+                      item={selectedItem}
+                      sectionIndex={selectedSectionIndex}
+                      itemIndex={selectedItemIndex}
+                      onUpdateItem={updateItem}
+                      onAddItemContent={addItemContent}
+                      onUpdateItemContent={updateItemContent}
+                      onUpdateItemContentMeta={updateItemContentMeta}
+                      onRemoveItemContent={removeItemContent}
+                      onAddSubItem={addSubItem}
+                      onUpdateSubItem={updateSubItem}
+                      onRemoveSubItem={removeSubItem}
+                      errors={errors}
+                    />
+                  ) : (
+                    <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-6 text-center">
+                      <p className="max-w-md text-sm leading-6 text-muted-foreground">
+                        Select a task from the outline to edit its instructions and attached content.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-6 text-center">
+                  <p className="max-w-md text-sm leading-6 text-muted-foreground">
+                    Add a section from the outline to start building this template.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

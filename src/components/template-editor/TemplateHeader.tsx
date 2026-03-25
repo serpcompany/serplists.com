@@ -1,5 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Save, Loader2, ExternalLink } from "lucide-react";
+import { Save, Loader2, ExternalLink, ChevronRight } from "lucide-react";
+import { useAuth } from "@/contexts/CloudflareAuthContext";
+import { buildPublicTemplatePath } from "@/lib/routes";
 
 interface TemplateHeaderProps {
   isEditing: boolean;
@@ -16,38 +18,60 @@ export const TemplateHeader = ({
   onCancel,
   onSave
 }: TemplateHeaderProps) => {
-  const publicUrl = templateSlug ? `${window.location.origin}/checklists/${templateSlug}` : null;
+  const { user } = useAuth();
+  const publicUrl =
+    templateSlug && user?.username
+      ? `${window.location.origin}${buildPublicTemplatePath(user.username, templateSlug)}`
+      : null;
   return (
-    <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto max-w-7xl px-4 py-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={onCancel}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold">
-              {isEditing ? "Edit Template" : "Create Template"}
-            </h1>
-            <p className="text-muted-foreground">
-              {isEditing ? "Update your checklist template" : "Define a new checklist template"}
-            </p>
+    <div className="border-b border-border/80 bg-background/92 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+      <div className="mx-auto max-w-7xl px-4 py-5">
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <Button
+                variant="ghost"
+                onClick={onCancel}
+                className="h-auto px-0 text-sm font-medium text-foreground hover:bg-transparent hover:text-foreground/80"
+              >
+                All templates
+              </Button>
+              <ChevronRight className="h-4 w-4" />
+              <span>Input</span>
+              <ChevronRight className="h-4 w-4" />
+              <span>Versions</span>
+            </div>
+            <div className="text-xs font-medium uppercase tracking-[0.26em] text-muted-foreground">
+              {isEditing ? "Editor workspace" : "Draft workspace"}
+            </div>
           </div>
-          <div className="flex gap-2">
+
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <h1 className="text-3xl font-semibold tracking-tight">
+                {isEditing ? "Refine your checklist pack" : "Create a new checklist pack"}
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Keep the left rail for structure and use this editor like a docs workspace instead of stacked setup cards.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
             {publicUrl && (
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => window.open(publicUrl, '_blank')}
-                className="hidden sm:flex"
+                className="hidden rounded-lg border-border/80 bg-card/80 sm:flex"
               >
                 <ExternalLink className="mr-2 h-4 w-4" />
                 View Public
               </Button>
             )}
-            <Button variant="outline" onClick={onCancel}>
+            <Button variant="outline" onClick={onCancel} className="rounded-lg border-border/80 bg-card/80">
               Cancel
             </Button>
-            <Button onClick={onSave} disabled={isSaving}>
+            <Button onClick={onSave} disabled={isSaving} className="rounded-lg">
               {isSaving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -59,7 +83,8 @@ export const TemplateHeader = ({
                   Save
                 </>
               )}
-            </Button>
+              </Button>
+            </div>
           </div>
         </div>
       </div>

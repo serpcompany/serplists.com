@@ -1,29 +1,53 @@
-import { useState, useEffect } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "@/contexts/CloudflareAuthContext";
-import { useTemplates, ChecklistRun } from "@/contexts/TemplatesContext";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, CheckCircle, ArrowRight, Trash2, Edit2, Play } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Progress } from "@/components/ui/progress";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { toast } from "sonner";
-import { UserTemplatesSection } from "@/components/templates/UserTemplatesSection";
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from 'react-router-dom';
+import {
+  ArrowRight,
+  CheckCircle2,
+  Layers3,
+  Play,
+  PlusCircle,
+  Trash2,
+} from 'lucide-react';
+import { toast } from 'sonner';
+
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { UserTemplatesSection } from '@/components/templates/UserTemplatesSection';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { useTemplates, type ChecklistRun } from '@/contexts/TemplatesContext';
+import {
+  buildConsoleRunPath,
+  buildConsoleTemplateCreatePath,
+  buildConsoleTemplatePath,
+  buildConsoleTemplatesPath,
+} from '@/lib/routes';
+
 const Dashboard = () => {
-  const {
-    user
-  } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
   const {
     templates,
     templatesLoading,
     runs,
     runsLoading,
     updateRun,
-    deleteRun
+    deleteRun,
   } = useTemplates();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeRuns, setActiveRuns] = useState<ChecklistRun[]>([]);
@@ -31,277 +55,367 @@ const Dashboard = () => {
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingRunId, setEditingRunId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
+  const [editTitle, setEditTitle] = useState('');
 
-  // Handle checkout redirect (legacy)
+  const isRunsRoute = location.pathname.startsWith('/console/runs');
+
   useEffect(() => {
     const checkout = searchParams.get('checkout');
     if (checkout === 'success') {
       toast.success('Checkout complete.');
-      // Clear the URL parameter
       setSearchParams({});
     }
   }, [searchParams, setSearchParams]);
+
   useEffect(() => {
-    if (runs) {
-      setActiveRuns(runs.filter(run => run.status === "in_progress"));
-      setCompletedRuns(runs.filter(run => run.status === "completed").sort((a, b) => new Date(b.completedAt || "").getTime() - new Date(a.completedAt || "").getTime()));
-    }
+    setActiveRuns(runs.filter((run) => run.status === 'in_progress'));
+    setCompletedRuns(
+      runs
+        .filter((run) => run.status === 'completed')
+        .sort(
+          (left, right) =>
+            new Date(right.completedAt || '').getTime() -
+            new Date(left.completedAt || '').getTime(),
+        ),
+    );
   }, [runs]);
-  const getTemplate = (templateId: string) => {
-    return templates.find((t: { id: unknown }) => t.id === templateId);
-  };
-  const getTemplateName = (templateId: string) => {
-    const template = getTemplate(templateId);
-    return template ? template.title : "Unknown Template";
-  };
+
+  const templateLookup = useMemo(
+    () => new Map(templates.map((template) => [template.id, template])),
+    [templates],
+  );
+  const userTemplates = useMemo(
+    () => templates.filter((template) => template.userId === user?.id),
+    [templates, user?.id],
+  );
+
+  const activeRunAverage =
+    activeRuns.length > 0
+      ? Math.round(
+          activeRuns.reduce((total, run) => total + run.progress, 0) /
+            activeRuns.length,
+        )
+      : 0;
+
   const handleDeleteRun = () => {
-    if (runToDelete) {
-      deleteRun(runToDelete);
-      setRunToDelete(null);
-      setIsDeleteDialogOpen(false);
+    if (!runToDelete) {
+      return;
     }
+
+    deleteRun(runToDelete);
+    setRunToDelete(null);
+    setIsDeleteDialogOpen(false);
   };
+
   const handleTitleEdit = (run: ChecklistRun) => {
     setEditingRunId(run.id);
     setEditTitle(run.title);
   };
+
   const handleTitleSave = (runId: string) => {
-    if (!editTitle.trim()) return;
-    const runToUpdate = runs.find((r: { id: unknown }) => r.id === runId);
-    if (runToUpdate) {
-      const updatedRun = {
-        ...runToUpdate,
-        title: editTitle.trim()
-      };
-      updateRun(updatedRun);
-      toast.success("Run title updated");
+    if (!editTitle.trim()) {
+      return;
     }
+
+    const runToUpdate = runs.find((run) => run.id === runId);
+    if (!runToUpdate) {
+      return;
+    }
+
+    updateRun({
+      ...runToUpdate,
+      title: editTitle.trim(),
+    });
+    toast.success('Run title updated');
     setEditingRunId(null);
-    setEditTitle("");
-  };
-  const handleTitleCancel = () => {
-    setEditingRunId(null);
-    setEditTitle("");
+    setEditTitle('');
   };
 
-  const userTemplates = templates.filter((t: { userId: unknown }) => t.userId === user?.id);
-  return <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div />
+  const renderRunCard = (run: ChecklistRun, tone: 'active' | 'completed') => {
+    const template = templateLookup.get(run.templateId);
+    const templateTitle = template?.title || 'Unknown Template';
+    const isCompleted = tone === 'completed';
+
+    return (
+      <div
+        key={run.id}
+        className="rounded-xl border border-border/80 bg-card/96 p-5"
+      >
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-border bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-secondary-foreground">
+                {isCompleted ? 'Completed run' : 'Active run'}
+              </span>
+              {!isCompleted ? (
+                <span className="text-sm text-muted-foreground">
+                  {run.progress}% complete
+                </span>
+              ) : null}
+            </div>
+
+            <div className="mt-4">
+              {editingRunId === run.id ? (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    value={editTitle}
+                    onChange={(event) => setEditTitle(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        handleTitleSave(run.id);
+                      }
+                      if (event.key === 'Escape') {
+                        setEditingRunId(null);
+                        setEditTitle('');
+                      }
+                    }}
+                    autoFocus
+                    className="rounded-2xl"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      onClick={() => handleTitleSave(run.id)}
+                      className="rounded-2xl"
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingRunId(null);
+                        setEditTitle('');
+                      }}
+                      className="rounded-2xl"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleTitleEdit(run)}
+                  className="text-left text-2xl font-semibold text-foreground transition hover:text-foreground/80"
+                >
+                  {run.title}
+                </button>
+              )}
+            </div>
+
+            <div className="mt-2 text-sm text-muted-foreground">
+              From template:{' '}
+              <Link
+                to={buildConsoleTemplatePath(run.templateId)}
+                className="font-medium text-foreground hover:text-foreground/80"
+              >
+                {templateTitle}
+              </Link>
+            </div>
+
+            {!isCompleted ? (
+              <div className="mt-4 space-y-3">
+                <Progress value={run.progress} className="h-2" />
+                <div className="text-sm text-muted-foreground">
+                  Keep going from where you left off.
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 text-sm text-muted-foreground">
+                Completed{' '}
+                {run.completedAt
+                  ? new Date(run.completedAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })
+                  : 'recently'}
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-wrap gap-2">
-            <Link to="/templates/new">
-              <Button>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                New Template
-              </Button>
-            </Link>
-            <Link to="/templates">
-              <Button variant="outline">
-                <Play className="mr-2 h-4 w-4" />
-                New Run
-              </Button>
-            </Link>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setRunToDelete(run.id);
+                setIsDeleteDialogOpen(true);
+              }}
+              className="rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+            <Button asChild className="rounded-xl">
+              <Link to={buildConsoleRunPath(run.id)}>
+                {isCompleted ? 'View details' : 'Continue'}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
           </div>
         </div>
+      </div>
+    );
+  };
 
-        <div className="mb-10">
-          <h2 className="mb-4 text-xl font-semibold">Runs</h2>
-          {runsLoading ? (
-            <Card className="bg-gray-50">
-              <CardContent className="py-8">
-                <LoadingSpinner message="Loading runs..." />
-              </CardContent>
-            </Card>
-          ) : activeRuns.length > 0 ? <div className="space-y-2">
-              {activeRuns.map((run: { id: unknown; title: unknown; templateId: unknown; progress: unknown }) => <Card key={run.id} className="overflow-hidden">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-4">
-                          <div className="flex-1">
-                            {editingRunId === run.id ? <div className="flex items-center gap-2">
-                                <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} onKeyDown={(e) => {
-                          if (e.key === "Enter") handleTitleSave(run.id);
-                          if (e.key === "Escape") handleTitleCancel();
-                        }} className="text-lg font-semibold border-none p-0 h-auto bg-transparent focus-visible:ring-0" autoFocus />
-                                <Button size="sm" onClick={() => handleTitleSave(run.id)}>Save</Button>
-                                <Button size="sm" variant="outline" onClick={handleTitleCancel}>Cancel</Button>
-                              </div> : <div className="flex items-center gap-2 group">
-                                <Link to={`/run/${run.id}`} className="text-foreground hover:text-primary transition-colors cursor-pointer">
-                                  <h3 className="font-semibold text-lg line-clamp-1">{run.title}</h3>
-                                </Link>
-                                <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleTitleEdit(run)}>
-                                  <Edit2 className="h-3 w-3" />
-                                </Button>
-                              </div>}
-                            <p className="text-sm text-muted-foreground line-clamp-1 mt-1">
-                              From template: <Link to={`/templates/${run.templateId}`} className="text-primary hover:underline">
-                                {getTemplateName(run.templateId)}
-                              </Link>
-                            </p>
-                            <div className="flex items-center gap-2 mt-2">
-                              <Badge variant="secondary">In Progress</Badge>
-                              <span className="text-sm text-muted-foreground">{run.progress}%</span>
-                            </div>
-                            <Progress value={run.progress} className="h-2 mt-2" />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 ml-4">
-                        <Button variant="destructive" size="sm" onClick={() => {
-                    setRunToDelete(run.id);
-                    setIsDeleteDialogOpen(true);
-                  }}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" asChild>
-                          <Link to={`/run/${run.id}`}>
-                            Continue <ArrowRight className="ml-1.5 h-4 w-4" />
-                          </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>)}
-            </div> : <Card className="bg-gray-50">
-              <CardContent className="py-8">
-                <div className="flex flex-col items-center justify-center text-center">
-                  <div className="mb-3 rounded-full bg-gray-100 p-3">
-                    <CheckCircle className="h-6 w-6 text-gray-400" />
-                  </div>
-                  <h3 className="text-lg font-medium">No active runs</h3>
-                  <p className="mt-1 max-w-md text-sm text-gray-500">
-                    Start a new run from one of your templates to track your progress
-                  </p>
-                  <Link to="/templates" className="mt-4">
-                    <Button variant="outline">
-                      View My Templates
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>}
+  return (
+    <div className="space-y-8">
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="console-card">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground">
+            <CheckCircle2 className="h-4 w-4" />
+            {isRunsRoute ? 'Run management' : 'Operational home'}
+          </div>
+          <h1 className="mt-6 text-4xl font-semibold text-foreground">
+            {isRunsRoute
+              ? 'Track active checklist runs'
+              : 'Keep work moving from the console'}
+          </h1>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-foreground">
+            {isRunsRoute
+              ? 'Review in-progress work, rename runs as they evolve, and reopen completed work when you need the details.'
+              : 'The console keeps private templates and active runs in one operational surface so teams can scan, update, and continue execution quickly.'}
+          </p>
         </div>
 
-        <div>
-          <h2 className="mb-4 text-xl font-semibold">Completed</h2>
-          {runsLoading ? (
-            <Card className="bg-gray-50">
-              <CardContent className="py-8">
-                <LoadingSpinner message="Loading completed runs..." />
-              </CardContent>
-            </Card>
-          ) : completedRuns.length > 0 ? <div className="space-y-2">
-              {completedRuns.slice(0, 6).map((run: { id: unknown; title: unknown; templateId: unknown; completedAt: unknown }) => <Card key={run.id} className="overflow-hidden">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-4">
-                          <div className="flex-1">
-                            {editingRunId === run.id ? <div className="flex items-center gap-2">
-                                <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} onKeyDown={(e) => {
-                          if (e.key === "Enter") handleTitleSave(run.id);
-                          if (e.key === "Escape") handleTitleCancel();
-                        }} className="text-lg font-semibold border-none p-0 h-auto bg-transparent focus-visible:ring-0" autoFocus />
-                                <Button size="sm" onClick={() => handleTitleSave(run.id)}>Save</Button>
-                                <Button size="sm" variant="outline" onClick={handleTitleCancel}>Cancel</Button>
-                              </div> : <div className="flex items-center gap-2 group">
-                                <Link to={`/run/${run.id}`} className="text-foreground hover:text-primary transition-colors cursor-pointer">
-                                  <h3 className="font-semibold text-lg line-clamp-1">{run.title}</h3>
-                                </Link>
-                                <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleTitleEdit(run)}>
-                                  <Edit2 className="h-3 w-3" />
-                                </Button>
-                              </div>}
-                            <p className="text-sm text-muted-foreground line-clamp-1 mt-1">
-                              From template: <Link to={`/templates/${run.templateId}`} className="text-primary hover:underline">
-                                {getTemplateName(run.templateId)}
-                              </Link>
-                            </p>
-                            <div className="flex items-center gap-2 mt-2">
-                              <Badge variant="success">
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                                Completed
-                              </Badge>
-                              <span className="text-sm text-muted-foreground">
-                                {new Date(run.completedAt || "").toLocaleDateString()}
-                              </span>
-                            </div>
-                          </div>
-                          <CheckCircle className="h-5 w-5 text-green-500" />
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 ml-4">
-                        <Button variant="destructive" size="sm" onClick={() => {
-                    setRunToDelete(run.id);
-                    setIsDeleteDialogOpen(true);
-                  }}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="sm" asChild>
-                          <Link to={`/run/${run.id}`}>
-                            View Details
-                          </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>)}
-            </div> : <Card className="bg-gray-50">
-              <CardContent className="py-8">
-                <div className="flex flex-col items-center justify-center text-center">
-                  <div className="mb-3 rounded-full bg-gray-100 p-3">
-                    <CheckCircle className="h-6 w-6 text-gray-400" />
-                  </div>
-                  <h3 className="text-lg font-medium">No completed runs yet</h3>
-                  <p className="mt-1 max-w-md text-sm text-gray-500">
-                    Complete your active runs and they will appear here
-                  </p>
-                </div>
-              </CardContent>
-            </Card>}
+        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
+          <div className="marketing-metric">
+            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Active runs
+            </div>
+            <div className="mt-4 text-3xl font-semibold text-foreground">
+              {activeRuns.length}
+            </div>
+          </div>
+          <div className="marketing-metric">
+            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Completed runs
+            </div>
+            <div className="mt-4 text-3xl font-semibold text-foreground">
+              {completedRuns.length}
+            </div>
+          </div>
+          <div className="marketing-metric">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              <Layers3 className="h-4 w-4" />
+              Avg progress
+            </div>
+            <div className="mt-4 text-3xl font-semibold text-foreground">
+              {activeRunAverage}%
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="flex flex-wrap gap-3">
+        <Button asChild className="rounded-xl">
+          <Link to={buildConsoleTemplateCreatePath()}>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            New template
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="rounded-2xl">
+          <Link to={buildConsoleTemplatesPath()}>
+            <Play className="mr-2 h-4 w-4" />
+            Start a new run
+          </Link>
+        </Button>
+      </div>
+
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-semibold text-foreground">
+            Active runs
+          </h2>
         </div>
 
-        <div className="mt-10">
+        {runsLoading ? (
+          <div className="console-card">
+            <LoadingSpinner message="Loading runs..." />
+          </div>
+        ) : activeRuns.length > 0 ? (
+          <div className="space-y-4">
+            {activeRuns.map((run) => renderRunCard(run, 'active'))}
+          </div>
+        ) : (
+          <div className="console-card text-center">
+            <h3 className="text-xl font-semibold text-foreground">
+              No active runs
+            </h3>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground">
+              Start a run from one of your templates and it will appear here.
+            </p>
+            <Button asChild variant="outline" className="mt-6 rounded-xl">
+              <Link to={buildConsoleTemplatesPath()}>Open templates</Link>
+            </Button>
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold text-foreground">
+          Completed runs
+        </h2>
+        {runsLoading ? (
+          <div className="console-card">
+            <LoadingSpinner message="Loading completed runs..." />
+          </div>
+        ) : completedRuns.length > 0 ? (
+          <div className="space-y-4">
+            {completedRuns.map((run) => renderRunCard(run, 'completed'))}
+          </div>
+        ) : (
+          <div className="console-card text-center">
+            <h3 className="text-xl font-semibold text-foreground">
+              No completed runs yet
+            </h3>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground">
+              Completed work will appear here once you finish an active run.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {!isRunsRoute ? (
+        <section>
           <UserTemplatesSection
-            title="My Templates"
-            description="Quick access to your templates"
+            title="Recent templates"
+            description="Quick access to your newest checklist packs."
             headingLevel="h2"
             templates={userTemplates}
             loading={templatesLoading}
             maxItems={3}
-            onViewTemplate={(id) => navigate(`/templates/${id}`)}
+            onViewTemplate={(id) => navigate(buildConsoleTemplatePath(id))}
           />
-          {userTemplates.length > 3 ? (
-            <div className="mt-4">
-              <Link to="/templates">
-                <Button variant="outline">View all templates</Button>
-              </Link>
-            </div>
-          ) : null}
-        </div>
+        </section>
+      ) : null}
 
-        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Delete Run</DialogTitle>
-              <DialogDescription>
-                Are you sure you want to delete this run? This action cannot be undone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={handleDeleteRun}>
-                Delete
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </div>;
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete run</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this run? This action cannot be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteRun}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 };
+
 export default Dashboard;

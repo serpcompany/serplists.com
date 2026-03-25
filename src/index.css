@@ -1,66 +1,48 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
+    --background: 210 33% 98%;
+    --foreground: 220 36% 15%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
+    --card-foreground: 220 36% 15%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 250 95% 65%;
+    --popover-foreground: 220 36% 15%;
+    --primary: 221 48% 16%;
     --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 250 95% 90%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
+    --secondary: 210 28% 95.5%;
+    --secondary-foreground: 220 36% 15%;
+    --muted: 210 25% 96.5%;
+    --muted-foreground: 217 15% 42%;
+    --accent: 210 25% 96.5%;
+    --accent-foreground: 220 36% 15%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 250 95% 65%;
-
-    --radius: 0.5rem;
+    --border: 214 23% 88%;
+    --input: 214 23% 88%;
+    --ring: 220 76% 56%;
+    --radius: 0.625rem;
   }
 
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-
     --card: 222.2 84% 4.9%;
     --card-foreground: 210 40% 98%;
-
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-
-    --primary: 250 95% 65%;
-    --primary-foreground: 210 40% 98%;
-
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
-
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 250 95% 25%;
+    --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
-
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
@@ -73,28 +55,69 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    background-image: linear-gradient(
+      180deg,
+      hsl(var(--muted) / 0.55) 0,
+      hsl(var(--background)) 220px
+    );
+    text-rendering: optimizeLegibility;
   }
 }
 
-/* Custom checkbox styles */
-.checklist-item input[type="checkbox"] {
-  @apply h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary;
+@layer components {
+  .public-dot-grid {
+    background-image: radial-gradient(
+      hsl(var(--foreground) / 0.06) 1px,
+      transparent 1px
+    );
+    background-size: 18px 18px;
+    background-position: center top;
+  }
+
+  .glass-panel {
+    @apply rounded-xl border border-border/80 shadow-[0_16px_36px_-30px_rgba(15,23,42,0.14)] backdrop-blur;
+    background-color: hsl(var(--card) / 0.92);
+  }
+
+  .marketing-metric {
+    @apply rounded-xl border border-border/80 p-5 shadow-[0_14px_32px_-30px_rgba(15,23,42,0.12)];
+    background-color: hsl(var(--card) / 0.88);
+  }
+
+  .console-card {
+    @apply rounded-xl border border-border/80 p-6 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.14)];
+    background-color: hsl(var(--card) / 0.94);
+  }
+
+  .docs-panel {
+    @apply rounded-xl border border-border/80 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.12)];
+    background-color: hsl(var(--card) / 0.96);
+  }
 }
 
-/* Progress bar */
+.checklist-item input[type='checkbox'] {
+  @apply h-5 w-5 rounded border-input text-primary focus:ring-primary;
+}
+
 .progress-bar {
-  @apply h-2 rounded-full bg-gray-200;
+  @apply h-2 rounded-full bg-muted;
 }
 
 .progress-bar-fill {
   @apply h-full rounded-full bg-primary transition-all duration-300 ease-in-out;
 }
 
-/* Animations */
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-in {
@@ -102,13 +125,13 @@
 }
 
 .section-card {
-  @apply p-4 border rounded-lg mb-4 bg-white shadow-sm hover:shadow-md transition-shadow;
+  @apply mb-4 rounded-xl border border-border/80 bg-card p-4 shadow-[0_10px_28px_-26px_rgba(15,23,42,0.18)] transition-shadow hover:shadow-[0_12px_32px_-24px_rgba(15,23,42,0.16)];
 }
 
 .template-card {
-  @apply p-6 border rounded-lg mb-4 bg-white shadow-sm hover:shadow-md transition-shadow;
+  @apply mb-4 rounded-xl border border-border/80 bg-card p-6 shadow-[0_10px_28px_-26px_rgba(15,23,42,0.18)] transition-shadow hover:shadow-[0_12px_32px_-24px_rgba(15,23,42,0.16)];
 }
 
 .checklist-item {
-  @apply flex items-start gap-3 p-3 border-b last:border-0 transition-colors hover:bg-gray-50;
+  @apply flex items-start gap-3 border-b border-border/70 p-3 last:border-0 transition-colors hover:bg-muted/40;
 }

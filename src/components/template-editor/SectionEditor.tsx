@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ChecklistSection } from "@/types/checklist";
@@ -14,31 +13,32 @@ export const SectionEditor = ({
   section,
   sectionIndex,
   onUpdateSection,
-  errors
+  errors: _errors
 }: SectionEditorProps) => {
   return (
-    <div>
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-4">Edit Section</h2>
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="section-title" className="text-base">Section Title (optional)</Label>
-            <Input
-              id="section-title"
-              value={section.title}
-              onChange={(e) => onUpdateSection(sectionIndex, "title", e.target.value)}
-              placeholder={`Section ${sectionIndex + 1} title (optional)`}
-              className="mt-1"
-            />
-          </div>
-          
-          <div className="pt-4">
-            <p className="text-sm text-muted-foreground">
-              This section contains {section.items.length} task{section.items.length !== 1 ? 's' : ''}. 
-              Select a task from the left to edit its details, or click "Add Task" to create a new one.
-            </p>
-          </div>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold">Section details</h3>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Keep section names short enough that the outline reads like a clean table of contents.
+        </p>
+      </div>
+
+      <div>
+        <Label htmlFor="section-title" className="text-base">Section Title (optional)</Label>
+        <Input
+          id="section-title"
+          value={section.title}
+          onChange={(e) => onUpdateSection(sectionIndex, "title", e.target.value)}
+          placeholder={`Section ${sectionIndex + 1} title (optional)`}
+          className="mt-2"
+        />
+      </div>
+
+      <div className="rounded-xl border border-border/80 bg-muted/20 p-4">
+        <p className="text-sm leading-6 text-muted-foreground">
+          This section contains {section.items.length} task{section.items.length !== 1 ? 's' : ''}. Select a task from the outline to edit its details, or add another task to keep building.
+        </p>
       </div>
     </div>
   );

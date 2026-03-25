@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Plus, Trash2 } from "lucide-react";
 import { ChecklistSection } from "@/types/checklist";
+import { cn } from "@/lib/utils";
 
 interface SectionSidebarProps {
   sections: ChecklistSection[];
@@ -74,18 +74,29 @@ export const SectionSidebar = ({
   };
 
   return (
-    <div className="sticky top-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Sections</h2>
-        <Button onClick={onAddSection} size="sm" variant="outline">
+    <div className="docs-panel sticky top-24 overflow-hidden">
+      <div className="flex items-center justify-between border-b border-border/70 px-4 py-4">
+        <div>
+          <h2 className="text-base font-semibold">Sections</h2>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Keep the outline flat and readable.
+          </p>
+        </div>
+        <Button onClick={onAddSection} size="sm" variant="outline" className="rounded-lg">
           <Plus className="h-4 w-4" />
         </Button>
       </div>
-      
-      <div className="space-y-2">
+
+      <div>
         {sections.map((section: { id: string; title: string; items: unknown[] }, sectionIndex: number) => (
-          <Card key={section.id} className={`cursor-pointer transition-colors ${selectedSectionIndex === sectionIndex ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
-            <CardContent className="p-4">
+          <div
+            key={section.id}
+            className={cn(
+              "border-b border-border/70 last:border-b-0",
+              selectedSectionIndex === sectionIndex && "bg-muted/35",
+            )}
+          >
+            <div className="p-4">
               <div className="flex items-center justify-between" onClick={() => {
                 onSelectSection(sectionIndex);
               }}>
@@ -96,7 +107,7 @@ export const SectionSidebar = ({
                       onChange={(e) => setEditingValue(e.target.value)}
                       onBlur={() => handleSectionSave(sectionIndex)}
                       onKeyDown={(e) => handleKeyPress(e, 'section', sectionIndex)}
-                      className="text-sm font-medium h-6 px-1"
+                      className="h-7 border-border/70 bg-background px-2 text-sm font-medium"
                       autoFocus
                       onClick={(e) => e.stopPropagation()}
                     />
@@ -115,7 +126,7 @@ export const SectionSidebar = ({
                     {section.items.length} task{section.items.length !== 1 ? 's' : ''}
                   </p>
                 </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={(e) => {
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-lg" onClick={(e) => {
                   e.stopPropagation();
                   onRemoveSection(sectionIndex);
                 }}>
@@ -123,15 +134,14 @@ export const SectionSidebar = ({
                 </Button>
               </div>
               
-              {/* Items in this section */}
-              <div className="mt-3 space-y-2">
+              <div className="mt-3 space-y-1">
                 {section.items.map((item: { id: string; title: string }, itemIndex: number) => (
                   <div 
                     key={item.id} 
-                    className={`text-sm p-3 rounded-md cursor-pointer transition-all duration-200 ${
+                    className={`cursor-pointer rounded-lg border-l-2 px-3 py-2.5 text-sm transition-all duration-200 ${
                       selectedSectionIndex === sectionIndex && selectedItemIndex === itemIndex 
-                        ? 'bg-primary text-primary-foreground shadow-sm' 
-                        : 'bg-muted/50 hover:bg-muted border border-transparent hover:border-border'
+                        ? 'border-primary bg-background text-foreground'
+                        : 'border-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground'
                     }`} 
                     onClick={(e) => {
                       e.stopPropagation();
@@ -145,7 +155,7 @@ export const SectionSidebar = ({
                           onChange={(e) => setEditingValue(e.target.value)}
                           onBlur={() => handleItemSave(sectionIndex, itemIndex)}
                           onKeyDown={(e) => handleKeyPress(e, 'item', sectionIndex, itemIndex)}
-                          className="text-sm font-medium h-6 px-1 flex-1"
+                          className="h-7 flex-1 border-border/70 bg-background px-2 text-sm font-medium"
                           autoFocus
                           onClick={(e) => e.stopPropagation()}
                         />
@@ -160,14 +170,14 @@ export const SectionSidebar = ({
                           {item.title || `Task ${itemIndex + 1}`}
                         </span>
                       )}
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className={`h-6 w-6 shrink-0 ${
-                          selectedSectionIndex === sectionIndex && selectedItemIndex === itemIndex 
-                            ? 'opacity-70 hover:opacity-100 text-primary-foreground' 
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-6 w-6 shrink-0 rounded-lg ${
+                          selectedSectionIndex === sectionIndex && selectedItemIndex === itemIndex
+                            ? 'opacity-70 hover:opacity-100'
                             : 'opacity-60 hover:opacity-100'
-                        }`} 
+                        }`}
                         onClick={(e) => {
                           e.stopPropagation();
                           onRemoveItem(sectionIndex, itemIndex);
@@ -178,7 +188,7 @@ export const SectionSidebar = ({
                     </div>
                   </div>
                 ))}
-                <Button variant="ghost" size="sm" className="w-full text-sm h-9 mt-2 border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50" onClick={(e) => {
+                <Button variant="ghost" size="sm" className="mt-2 h-9 w-full rounded-lg border border-dashed border-border/80 text-sm hover:border-border hover:bg-muted/30" onClick={(e) => {
                   e.stopPropagation();
                   onAddItem(sectionIndex);
                 }}>
@@ -186,8 +196,8 @@ export const SectionSidebar = ({
                   Add Task
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
     </div>

@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,35 +31,39 @@ export const ItemEditor = ({
   onAddSubItem,
   onUpdateSubItem,
   onRemoveSubItem,
-  errors
+  errors: _errors
 }: ItemEditorProps) => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold mb-4">Edit Task</h2>
+        <h3 className="text-lg font-semibold">Task details</h3>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Write the task like a docs step. The title should be scannable and the body should explain the exact action to take.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <Label htmlFor="item-title" className="text-base">Task Title</Label>
+          <Input
+            id="item-title"
+            value={item.title}
+            onChange={(e) => onUpdateItem(sectionIndex, itemIndex, "title", e.target.value)}
+            placeholder={`Task ${itemIndex + 1} title`}
+            className="mt-2"
+          />
+        </div>
+
         <div className="space-y-4">
-          <div>
-            <Label htmlFor="item-title" className="text-base">Task Title</Label>
-            <Input
-              id="item-title"
-              value={item.title}
-              onChange={(e) => onUpdateItem(sectionIndex, itemIndex, "title", e.target.value)}
-              placeholder={`Task ${itemIndex + 1} title`}
-              className="mt-1"
-            />
-          </div>
-          
-          <div>
-            <Label htmlFor="item-description" className="text-base">Description (optional)</Label>
-            <Textarea
-              id="item-description"
-              value={item.description || ""}
-              onChange={(e) => onUpdateItem(sectionIndex, itemIndex, "description", e.target.value)}
-              placeholder="Optional description or instructions"
-              rows={3}
-              className="mt-1"
-            />
-          </div>
+          <Label htmlFor="item-description" className="text-base">Description (optional)</Label>
+          <Textarea
+            id="item-description"
+            value={item.description || ""}
+            onChange={(e) => onUpdateItem(sectionIndex, itemIndex, "description", e.target.value)}
+            placeholder="Optional description or instructions"
+            rows={4}
+            className="mt-2"
+          />
         </div>
       </div>
 

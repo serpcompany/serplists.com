@@ -106,11 +106,11 @@ export const ContentEditor = ({
         
         <div className="space-y-4">
           {contents.map((content, contentIndex: number) => (
-            <div key={`content-${contentIndex}`} className="relative rounded-md border p-4">
+            <div key={`content-${contentIndex}`} className="relative rounded-xl border border-border/80 bg-muted/20 p-4">
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute right-2 top-2"
+                className="absolute right-2 top-2 rounded-lg"
                 onClick={() => onRemoveItemContent(sectionIndex, itemIndex, contentIndex)}
               >
                 <Trash2 className="h-4 w-4" />
@@ -121,7 +121,7 @@ export const ContentEditor = ({
           ))}
           
           {contents.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 py-8 text-center text-muted-foreground">
               <p>No content added yet.</p>
               <p className="text-sm">Use the "Add Content" button above to add text, images, videos, files, embeds, or sub-tasks.</p>
             </div>

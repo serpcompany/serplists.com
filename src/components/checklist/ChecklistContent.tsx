@@ -1,5 +1,4 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CheckCircle } from 'lucide-react';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
@@ -22,18 +21,16 @@ export const ChecklistContent: React.FC<ChecklistContentProps> = ({
 }) => {
   if (!selectedData) {
     return (
-      <Card>
-        <CardContent className="py-16 text-center">
+      <div className="docs-panel px-6 py-16 text-center">
           <CheckCircle className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
           <p className="text-muted-foreground">Select a task from the sidebar to view details</p>
-        </CardContent>
-      </Card>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <div className="docs-panel overflow-hidden">
+      <div className="border-b border-border/70 bg-muted/25 px-6 py-6">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <Checkbox
@@ -43,9 +40,9 @@ export const ChecklistContent: React.FC<ChecklistContentProps> = ({
               onCheckedChange={() => onItemToggle?.(selectedData.item.id, !selectedData.item.isCompleted)}
             />
             <div>
-              <CardTitle className={selectedData.item.isCompleted ? "line-through text-muted-foreground" : ""}>
+              <h2 className={`text-2xl font-semibold ${selectedData.item.isCompleted ? "line-through text-muted-foreground" : ""}`}>
                 {selectedData.item.title}
-              </CardTitle>
+              </h2>
               <p className="text-sm text-muted-foreground mt-1">
                 From section: {selectedData.section.title}
               </p>
@@ -57,9 +54,9 @@ export const ChecklistContent: React.FC<ChecklistContentProps> = ({
             {selectedData.item.description}
           </p>
         )}
-      </CardHeader>
+      </div>
       
-      <CardContent>
+      <div className="px-6 py-6">
         <ContentRenderer 
           contents={selectedData.item.contents || []} 
           disabled={disabled}
@@ -67,9 +64,9 @@ export const ChecklistContent: React.FC<ChecklistContentProps> = ({
             onSubItemToggle?.(selectedData.item.id, contentIndex, subItemIndex, isCompleted)
           }
         />
-      </CardContent>
+      </div>
 
-      {actions ? <div className="border-t p-4 flex justify-end">{actions}</div> : null}
-    </Card>
+      {actions ? <div className="flex justify-end border-t border-border/70 bg-muted/20 px-6 py-4">{actions}</div> : null}
+    </div>
   );
 };

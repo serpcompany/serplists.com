@@ -4,7 +4,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -85,14 +84,16 @@ export const TemplateBasicInfo = ({
   };
 
   return (
-    <Card>
-      <CardContent className="p-6 space-y-6">
-        <div>
-          <h2 className="text-lg font-semibold mb-4">Template Information</h2>
-          <p className="text-sm text-muted-foreground mb-6">Basic information about your template</p>
-        </div>
-        
-        <div className="space-y-6">
+    <div className="space-y-8">
+      <div>
+        <h3 className="text-lg font-semibold">Template information</h3>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Keep this concise. The title and summary should scan cleanly in both the console and the public library.
+        </p>
+      </div>
+
+      <div className="space-y-8">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
           <div>
             <Label htmlFor="title" className="text-base font-medium">Template Title</Label>
             <Input
@@ -117,7 +118,9 @@ export const TemplateBasicInfo = ({
               rows={3}
             />
           </div>
+        </div>
 
+        <div className="grid gap-6 lg:grid-cols-2">
           <div>
             <Label htmlFor="template-type" className="text-base font-medium">Template Type</Label>
             <Select
@@ -220,8 +223,9 @@ export const TemplateBasicInfo = ({
               </Button>
             </div>
           </div>
+        </div>
 
-          {/* Tags Section */}
+        <div className="border-t border-border/70 pt-8">
           <div>
             <Label htmlFor="tags" className="text-base font-medium">Tags</Label>
             <p className="text-sm text-muted-foreground mt-1 mb-2">
@@ -275,13 +279,14 @@ export const TemplateBasicInfo = ({
             </div>
             <p className="text-sm text-muted-foreground mt-1">Type a tag and press Enter or click + to add</p>
           </div>
+        </div>
 
-          {/* Privacy Settings */}
+        <div className="border-t border-border/70 pt-8">
           <div>
             <Label className="text-base font-medium">Privacy Settings</Label>
 
             <div className="mt-2 space-y-3">
-              <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div className="flex items-center justify-between rounded-xl border border-border/80 bg-muted/20 p-4">
                 <div className="flex items-center gap-3">
                   {isPublic ? (
                     <Globe className="h-5 w-5 text-green-600" />
@@ -307,7 +312,7 @@ export const TemplateBasicInfo = ({
             </div>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 };

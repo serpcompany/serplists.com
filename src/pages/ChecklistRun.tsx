@@ -8,12 +8,18 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { ArrowLeft, Check, CheckCircle, Edit2, Loader2, Share2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { api } from "@/lib/api";
 import { calculateSectionsProgress, isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
 import { ChecklistContent } from "@/components/checklist/ChecklistContent";
+import { SEOHead } from "@/components/shared/SEOHead";
+import {
+  buildConsoleHomePath,
+  buildConsoleRunsPath,
+  buildPublicTemplatesPath,
+  buildSharePath,
+} from "@/lib/routes";
 
 const ChecklistRunPage = () => {
   const { id, shareToken } = useParams<{ id?: string; shareToken?: string }>();
@@ -86,9 +92,9 @@ const ChecklistRunPage = () => {
         if (cancelled) return;
         toast.error("Run not found");
         if (isSharedRun) {
-          navigate("/checklists");
+          navigate(buildPublicTemplatesPath());
         } else {
-          navigate("/dashboard");
+          navigate(buildConsoleHomePath());
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -241,7 +247,7 @@ const ChecklistRunPage = () => {
     setEditTitle("");
   };
 
-  const handleBack = () => navigate(isSharedRun ? "/checklists" : "/dashboard");
+  const handleBack = () => navigate(isSharedRun ? buildPublicTemplatesPath() : buildConsoleRunsPath());
 
   const handleCreateShare = async () => {
     if (!run) return;
@@ -249,7 +255,7 @@ const ChecklistRunPage = () => {
     setIsCreatingShare(true);
     try {
       const { shareToken } = await api.createChecklistRunShare(run.id);
-      const shareUrl = `${window.location.origin}/run/shared/${shareToken}`;
+      const shareUrl = `${window.location.origin}${buildSharePath(shareToken)}`;
       await navigator.clipboard.writeText(shareUrl);
       toast.success("Share link copied to clipboard");
     } catch (error) {
@@ -361,9 +367,16 @@ const ChecklistRunPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {isSharedRun ? (
+        <SEOHead
+          title={run.title}
+          description={`Shared checklist run for ${run.title}`}
+          keywords={["shared checklist", "checklist run"]}
+          robots="noindex, nofollow"
+        />
+      ) : null}
       <div className="mx-auto max-w-7xl px-4 py-8">
-        {/* Header */}
-        <div className="mb-6 flex items-center gap-4">
+        <div className="mb-8 flex items-center gap-4 border-b border-border/70 pb-6">
           <Button variant="ghost" size="icon" onClick={handleBack}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -431,18 +444,19 @@ const ChecklistRunPage = () => {
           </div>
         </div>
 
-        {/* Two Column Layout */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Sidebar - Task List */}
-          <div className="lg:col-span-1">
-            <Card className="sticky top-4 max-h-[calc(100vh-8rem)] overflow-auto">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Tasks</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1 p-0">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="xl:col-span-1">
+            <div className="docs-panel sticky top-24 max-h-[calc(100vh-8rem)] overflow-auto">
+              <div className="border-b border-border/70 px-4 py-4">
+                <h2 className="text-lg font-semibold">Tasks</h2>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Work through the run like a docs outline instead of a nested checklist app.
+                </p>
+              </div>
+              <div className="space-y-1 p-0">
                 {run.sections.map((section: { id: unknown; title: unknown; items: unknown }) => (
                   <div key={section.id}>
-                    <div className="px-4 py-2 text-sm font-medium text-muted-foreground bg-muted/30">
+                    <div className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                       {section.title}
                     </div>
                     {section.items.map((item: { id: unknown; isCompleted: unknown; title: unknown; contents: unknown }) => {
@@ -461,9 +475,9 @@ const ChecklistRunPage = () => {
                           }}
                           role="button"
                           tabIndex={0}
-                          className={`w-full text-left px-4 py-3 border-l-2 transition-colors hover:bg-muted/50 ${
-                            isSelected 
-                              ? 'border-l-primary bg-muted/70 text-primary' 
+                          className={`w-full border-l-2 px-4 py-3 text-left transition-colors hover:bg-muted/35 ${
+                            isSelected
+                              ? 'border-l-primary bg-background text-primary'
                               : 'border-l-transparent'
                           }`}
                         >
@@ -491,12 +505,11 @@ const ChecklistRunPage = () => {
                     })}
                   </div>
                 ))}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
-          {/* Main Content Area */}
-          <div className="lg:col-span-2">
+          <div className="xl:col-span-1">
             <ChecklistContent
               selectedData={selectedData}
               disabled={false}

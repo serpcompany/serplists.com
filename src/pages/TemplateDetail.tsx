@@ -25,6 +25,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import type { ChecklistTemplate } from "@/types/checklist";
+import {
+  buildCanonicalPublicTemplatePath,
+  buildConsoleRunPath,
+  buildConsoleTemplateEditPath,
+  buildConsoleTemplatePath,
+  buildConsoleTemplatesPath,
+} from "@/lib/routes";
 
 const normalizeTemplate = (rawTemplate: Record<string, unknown>): ChecklistTemplate => {
   const categories = Array.isArray(rawTemplate.categories)
@@ -60,6 +67,13 @@ const normalizeTemplate = (rawTemplate: Record<string, unknown>): ChecklistTempl
     version: typeof rawTemplate.version === "number" ? rawTemplate.version : 1,
     categories,
     tags: Array.isArray(rawTemplate.tags) ? (rawTemplate.tags as string[]) : [],
+    ownerProfile:
+      typeof rawTemplate.owner_username === "string" || typeof rawTemplate.owner_full_name === "string"
+        ? {
+            username: typeof rawTemplate.owner_username === "string" ? rawTemplate.owner_username : undefined,
+            full_name: typeof rawTemplate.owner_full_name === "string" ? rawTemplate.owner_full_name : undefined,
+          }
+        : undefined,
   };
 };
 
@@ -88,6 +102,15 @@ const TemplateDetail = () => {
   const isProUser = billing.data?.plan === "pro";
   const isBillingLoading = !!user && billing.isLoading;
   const isOwner = user?.id === template?.userId;
+  const publicTemplatePath = template
+    ? buildCanonicalPublicTemplatePath({
+        ...template,
+        ownerProfile: {
+          ...template.ownerProfile,
+          username: template.ownerProfile?.username ?? user?.username,
+        },
+      })
+    : null;
 
   useEffect(() => {
     const loadTemplate = async () => {
@@ -154,7 +177,7 @@ const TemplateDetail = () => {
       if (newRun) {
         toast.success("Checklist run created");
         setRunDialogOpen(false);
-        navigate(`/run/${newRun.id}`);
+        navigate(buildConsoleRunPath(newRun.id));
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to create checklist run";
@@ -178,13 +201,17 @@ const TemplateDetail = () => {
         });
       }
 
-      const shareIdentifier = template.slug || template.id;
-      const shareUrl = `${window.location.origin}/checklists/${encodeURIComponent(shareIdentifier)}`;
+      const shareUrl = publicTemplatePath
+        ? `${window.location.origin}${publicTemplatePath}`
+        : null;
 
       setTemplate((prev) => prev ? ({
         ...prev,
         isPublic: true
       }) : prev);
+      if (!shareUrl) {
+        throw new Error("Set a username on your account before sharing templates with the canonical public URL.");
+      }
       await navigator.clipboard.writeText(shareUrl);
       toast.success("Template share link copied. They can now copy it into their account.");
     } catch (error) {
@@ -221,9 +248,9 @@ const TemplateDetail = () => {
       await queryClient.invalidateQueries({ queryKey: ["templates", user?.id] });
       await queryClient.invalidateQueries({ queryKey: ["user-templates", user?.id] });
       if (clonedTemplate?.slug || clonedTemplate?.id) {
-        navigate(`/templates/${clonedTemplate.slug || clonedTemplate.id}`);
+        navigate(buildConsoleTemplatePath(clonedTemplate.id));
       } else {
-        navigate("/templates");
+        navigate(buildConsoleTemplatesPath());
       }
     } catch (err) {
       await handleAccessFailure(err, {
@@ -244,7 +271,7 @@ const TemplateDetail = () => {
     try {
       await deleteTemplate(template.id);
       toast.success("Template archived");
-      navigate("/templates");
+      navigate(buildConsoleTemplatesPath());
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to archive template";
       toast.error(message);
@@ -269,7 +296,7 @@ const TemplateDetail = () => {
             This template does not exist or you don't have access to it.
           </p>
           <Button asChild>
-            <Link to="/templates">
+            <Link to={buildConsoleTemplatesPath()}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Templates
             </Link>
@@ -283,13 +310,13 @@ const TemplateDetail = () => {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-5xl px-4 py-8">
         <Button asChild variant="ghost" className="mb-4">
-          <Link to="/templates">
+          <Link to={buildConsoleTemplatesPath()}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Templates
           </Link>
         </Button>
 
-        <div className="mb-8 space-y-6">
+        <div className="mb-8 border-b border-border/70 pb-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h1 className="text-4xl font-bold">{template.title}</h1>
@@ -307,7 +334,7 @@ const TemplateDetail = () => {
                 <>
                   <Button
                     variant="outline"
-                    onClick={() => navigate(`/templates/${template.id}/edit`)}
+                    onClick={() => navigate(buildConsoleTemplateEditPath(template.id))}
                   >
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
