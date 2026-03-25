@@ -1,15 +1,23 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { UserInfo } from "@/components/shared/UserInfo";
-import type { ChecklistTemplate } from "@/types/checklist";
+import React from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowRight, ArrowUpRight, BadgeCheck } from 'lucide-react';
+
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { PublicPill } from '@/components/shared/PublicPill';
+import { UserInfo } from '@/components/shared/UserInfo';
+import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
+import { buildPublicCategoryPath, buildPublicProfilePath } from '@/lib/routes';
+import type { ChecklistTemplate } from '@/types/checklist';
 
 interface TemplateCardProps {
   template: ChecklistTemplate;
-  viewMode: "grid" | "list";
+  viewMode: 'grid' | 'list';
   onTemplateClick: (template: ChecklistTemplate) => void;
 }
+
+const countTemplateItems = (template: ChecklistTemplate) =>
+  template.sections.reduce((total, section) => total + section.items.length, 0);
 
 export const TemplateCard: React.FC<TemplateCardProps> = ({
   template,
@@ -18,53 +26,94 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
 }) => {
   const navigate = useNavigate();
 
-  const handleCategoryClick = (e: React.MouseEvent, category: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    navigate(`/checklists/category/${encodeURIComponent(category)}`);
+  const handleCategoryClick = (event: React.MouseEvent, category: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    navigate(buildPublicCategoryPath(category));
   };
 
-  const totalItems = template.sections.reduce((count: number, section) => count + section.items.length, 0);
+  const totalItems = countTemplateItems(template);
   const categories = template.categories || [];
+  const ownerLabel =
+    template.ownerProfile?.full_name || template.ownerProfile?.username;
+  const ownerProfilePath = template.ownerProfile?.username
+    ? buildPublicProfilePath(template.ownerProfile.username)
+    : null;
+  const isOfficial =
+    template.userId === REPO_TEMPLATE_USER_ID ||
+    template.id.startsWith('repo:');
 
-  if (viewMode === "list") {
+  if (viewMode === 'list') {
     return (
-      <Card 
-        className="cursor-pointer hover:shadow-md transition-shadow overflow-hidden"
+      <Card
+        className="group overflow-hidden rounded-2xl border-border bg-card shadow-[0_18px_48px_-34px_rgba(15,23,42,0.18)] transition hover:-translate-y-0.5 hover:border-primary hover:shadow-[0_24px_60px_-36px_rgba(15,23,42,0.24)]"
         onClick={() => onTemplateClick(template)}
       >
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-lg line-clamp-1 mb-1">{template.title}</h3>
-              <p className="text-sm text-muted-foreground line-clamp-1 mb-2">
-                {template.description || "No description provided"}
-              </p>
-              {categories.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {categories.slice(0, 4).map((cat) => (
-                    <a
-                      key={cat}
-                      href={`/checklists/category/${encodeURIComponent(cat)}`}
-                      onClick={(e) => handleCategoryClick(e, cat)}
-                      className="hover:opacity-80 transition-opacity"
-                    >
-                      <Badge variant="secondary" className="text-xs cursor-pointer">
-                        {cat}
-                      </Badge>
-                    </a>
-                  ))}
-                  {categories.length > 4 && (
-                    <Badge variant="secondary" className="text-xs">
-                      +{categories.length - 4}
-                    </Badge>
-                  )}
-                </div>
+        <CardContent className="flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              {isOfficial ? (
+                <Badge className="rounded-full border border-border bg-secondary px-3 text-secondary-foreground hover:bg-secondary">
+                  <BadgeCheck className="mr-1 h-3.5 w-3.5" />
+                  Official
+                </Badge>
+              ) : null}
+              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                Public template
+              </span>
+            </div>
+
+            <h3 className="mt-3 text-2xl font-semibold text-foreground">
+              {template.title}
+            </h3>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
+              {template.description ||
+                'Reusable checklist pack ready to clone or run.'}
+            </p>
+
+            <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+              <span>{template.sections.length} sections</span>
+              <span>{totalItems} items</span>
+              {ownerLabel ? (
+                ownerProfilePath ? (
+                  <Link
+                    to={ownerProfilePath}
+                    onClick={(event) => event.stopPropagation()}
+                    className="inline-flex items-center gap-1 hover:text-foreground"
+                  >
+                    by {ownerLabel}
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                ) : (
+                  <span>by {ownerLabel}</span>
+                )
+              ) : (
+                <UserInfo userId={template.userId} />
               )}
             </div>
-            <div className="text-right text-sm text-muted-foreground ml-4">
-              <div>{template.sections.length} sections</div>
-              <div>{totalItems} items</div>
+
+            {categories.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {categories.slice(0, 4).map((category) => (
+                  <PublicPill key={category} asChild>
+                    <a
+                      href={buildPublicCategoryPath(category)}
+                      onClick={(event) => handleCategoryClick(event, category)}
+                    >
+                      {category}
+                    </a>
+                  </PublicPill>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-3">
+            <div className="rounded-full border border-border bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground">
+              View checklist
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground transition group-hover:translate-x-0.5">
+              <ArrowRight className="h-4 w-4" />
             </div>
           </div>
         </CardContent>
@@ -73,45 +122,79 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
   }
 
   return (
-    <Card 
-      className="cursor-pointer hover:shadow-md transition-shadow"
+    <Card
+      className="group h-full cursor-pointer overflow-hidden rounded-2xl border-border bg-card shadow-[0_18px_48px_-34px_rgba(15,23,42,0.18)] transition hover:-translate-y-1 hover:border-primary hover:shadow-[0_24px_60px_-36px_rgba(15,23,42,0.24)]"
       onClick={() => onTemplateClick(template)}
     >
-      <CardHeader>
-        <CardTitle className="line-clamp-2">{template.title}</CardTitle>
-        <CardDescription className="line-clamp-3">
-          {template.description || "No description provided"}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
+      <CardContent className="flex h-full flex-col p-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {isOfficial ? (
+              <Badge className="rounded-full border border-border bg-secondary px-3 text-secondary-foreground hover:bg-secondary">
+                <BadgeCheck className="mr-1 h-3.5 w-3.5" />
+                Official
+              </Badge>
+            ) : null}
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Template pack
+            </span>
+          </div>
+          <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground" />
+        </div>
+
+        <div className="mt-5 flex-1">
+          <h3 className="line-clamp-2 text-2xl font-semibold text-foreground">
+            {template.title}
+          </h3>
+          <p className="mt-3 line-clamp-4 text-sm leading-7 text-muted-foreground">
+            {template.description ||
+              'Reusable checklist pack ready to clone or run.'}
+          </p>
+        </div>
+
+        <div className="mt-6 rounded-xl bg-secondary p-4">
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span>{template.sections.length} sections</span>
             <span>{totalItems} items</span>
           </div>
-          <UserInfo userId={template.userId} />
-          {categories.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {categories.slice(0, 3).map((cat) => (
-                <a
-                  key={cat}
-                  href={`/checklists/category/${encodeURIComponent(cat)}`}
-                  onClick={(e) => handleCategoryClick(e, cat)}
-                  className="hover:opacity-80 transition-opacity"
+
+          <div className="mt-4 text-sm text-muted-foreground">
+            {ownerLabel ? (
+              ownerProfilePath ? (
+                <Link
+                  to={ownerProfilePath}
+                  onClick={(event) => event.stopPropagation()}
+                  className="inline-flex items-center gap-1 hover:text-foreground"
                 >
-                  <Badge variant="secondary" className="text-xs cursor-pointer">
-                    {cat}
-                  </Badge>
-                </a>
-              ))}
-              {categories.length > 3 && (
-                <Badge variant="secondary" className="text-xs">
-                  +{categories.length - 3}
-                </Badge>
-              )}
-            </div>
-          )}
+                  by {ownerLabel}
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+              ) : (
+                <span>by {ownerLabel}</span>
+              )
+            ) : (
+              <UserInfo userId={template.userId} />
+            )}
+          </div>
         </div>
+
+        {categories.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {categories.slice(0, 3).map((category) => (
+              <PublicPill key={category} asChild>
+                <a
+                  href={buildPublicCategoryPath(category)}
+                  onClick={(event) => handleCategoryClick(event, category)}
+                >
+                  {category}
+                </a>
+              </PublicPill>
+            ))}
+            {categories.length > 3 ? (
+              <PublicPill>+{categories.length - 3}</PublicPill>
+            ) : null}
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

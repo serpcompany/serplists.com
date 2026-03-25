@@ -1,7 +1,9 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
+import { PublicPill } from "@/components/shared/PublicPill";
 import { ArrowRight } from "lucide-react";
+import { buildPublicCategoryPath, buildPublicCategoriesPath, buildPublicTemplatesPath } from "@/lib/routes";
 
 interface Template {
   id: string;
@@ -40,10 +42,10 @@ export const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
           </div>
           <div className="flex items-center gap-3">
             <a
-              href="/categories"
+              href={buildPublicCategoriesPath()}
               onClick={(e) => {
                 e.preventDefault();
-                navigate('/categories');
+                navigate(buildPublicCategoriesPath());
               }}
               className="text-sm text-primary hover:underline flex items-center gap-1"
             >
@@ -51,10 +53,10 @@ export const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
               <ArrowRight className="h-3 w-3" />
             </a>
             <a
-              href="/checklists"
+              href={buildPublicTemplatesPath()}
               onClick={(e) => {
                 e.preventDefault();
-                navigate('/checklists');
+                navigate(buildPublicTemplatesPath());
               }}
               className="text-sm text-muted-foreground hover:text-foreground"
             >
@@ -71,10 +73,10 @@ export const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-semibold">Browse by Category</h2>
         <a
-          href="/categories"
+          href={buildPublicCategoriesPath()}
           onClick={(e) => {
             e.preventDefault();
-            navigate('/categories');
+            navigate(buildPublicCategoriesPath());
           }}
           className="text-sm text-primary hover:underline flex items-center gap-1"
         >
@@ -84,14 +86,15 @@ export const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
       </div>
       <div className="flex flex-wrap gap-2">
         <a
-          href="/checklists"
-          className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-secondary text-secondary-foreground hover:bg-secondary/80"
+          href={buildPublicTemplatesPath()}
           onClick={(e) => {
             e.preventDefault();
-            navigate('/checklists');
+            navigate(buildPublicTemplatesPath());
           }}
         >
-          All Categories ({templates.length})
+          <PublicPill tone="active" className="text-sm">
+            All Categories ({templates.length})
+          </PublicPill>
         </a>
         {allCategories
           .filter((cat) => {
@@ -100,18 +103,19 @@ export const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
           })
           .map((cat) => {
             const count = templates.filter(t => t.categories.includes(cat)).length;
-            const categoryUrl = `/checklists/category/${encodeURIComponent(cat)}`;
+            const categoryUrl = buildPublicCategoryPath(cat);
             return (
               <a
                 key={cat}
                 href={categoryUrl}
-                className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-secondary text-secondary-foreground hover:bg-secondary/80"
                 onClick={(e) => {
                   e.preventDefault();
                   onCategoryClick(cat);
                 }}
               >
-                {cat} ({count})
+                <PublicPill tone="active" className="text-sm">
+                  {cat} ({count})
+                </PublicPill>
               </a>
             );
           })}

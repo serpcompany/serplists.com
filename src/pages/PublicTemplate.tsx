@@ -1,28 +1,45 @@
-import { useEffect, useState } from "react";
-import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Copy, PlayCircle } from "lucide-react";
-import { useAuth } from "@/contexts/CloudflareAuthContext";
-import { useTemplates } from "@/contexts/TemplatesContext";
-import { toast } from "sonner";
-import { SEOHead } from "@/components/shared/SEOHead";
-import { analytics } from "@/lib/analytics";
-import { getBillingStatusQueryKey } from "@/lib/billing";
-import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
-import { api } from "@/lib/api";
-import { handleAccessFailure, navigateToLoginWithReturnPath, startBillingCheckout } from "@/lib/access-flow";
-import type { ChecklistTemplate } from "@/types/checklist";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+
+import { PublicTemplateView } from '@/components/template/PublicTemplateView';
+import { SEOHead } from '@/components/shared/SEOHead';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { useTemplates } from '@/contexts/TemplatesContext';
+import { analytics } from '@/lib/analytics';
+import { api } from '@/lib/api';
+import {
+  handleAccessFailure,
+  navigateToLoginWithReturnPath,
+  startBillingCheckout,
+} from '@/lib/access-flow';
+import { getBillingStatusQueryKey } from '@/lib/billing';
 import {
   buildRepoTemplateCreatePayload,
   findPublicTemplateByIdentifier,
   isRepoTemplate,
-} from "@/lib/repoTemplateCatalog";
+} from '@/lib/repoTemplateCatalog';
+import {
+  buildConsoleRunPath,
+  buildConsoleTemplatePath,
+  buildConsoleTemplatesPath,
+  buildPublicProfilePath,
+  buildPublicTemplatesPath,
+  resolvePublicTemplateOwnerSlug,
+} from '@/lib/routes';
+import type { ChecklistTemplate } from '@/types/checklist';
+
+const countTemplateItems = (template: ChecklistTemplate) =>
+  template.sections.reduce((total, section) => total + section.items.length, 0);
 
 const PublicTemplate = () => {
-  const { slug } = useParams<{ slug: string }>();
+  const { username, templateSlug } = useParams<{
+    username: string;
+    templateSlug: string;
+  }>();
   const [template, setTemplate] = useState<ChecklistTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -40,12 +57,12 @@ const PublicTemplate = () => {
     retry: false,
   });
   const billingEnabled = billing.data?.billingEnabled ?? true;
-  const isProUser = billing.data?.plan === "pro";
+  const isProUser = billing.data?.plan === 'pro';
   const isBillingLoading = isAuthenticated && billing.isLoading;
 
   useEffect(() => {
     const fetchTemplate = async () => {
-      if (!slug) {
+      if (!username || !templateSlug) {
         setNotFound(true);
         setLoading(false);
         return;
@@ -53,32 +70,50 @@ const PublicTemplate = () => {
 
       setLoading(true);
 
-      const cachedTemplate = findPublicTemplateByIdentifier(templates, slug);
+      const cachedTemplate = findPublicTemplateByIdentifier(
+        templates,
+        templateSlug,
+      );
 
       if (cachedTemplate?.isPublic) {
-        setTemplate(cachedTemplate);
-        setNotFound(false);
-        analytics.trackTemplateView(cachedTemplate.id, cachedTemplate.title);
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        // Check if slug looks like a UUID (ID)
-        const isUuid = slug.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-        const foundTemplate = isUuid
-          ? await api.getTemplateById(slug)
-          : await api.getTemplateBySlug(slug);
+        const cachedOwnerSlug = resolvePublicTemplateOwnerSlug(cachedTemplate);
 
-        // If the API returns DB-shaped fields, normalize to ChecklistTemplate shape.
+        if (cachedOwnerSlug?.toLowerCase() === username.toLowerCase()) {
+          setTemplate(cachedTemplate);
+          setNotFound(false);
+          analytics.trackTemplateView(cachedTemplate.id, cachedTemplate.title);
+          setLoading(false);
+          return;
+        }
+      }
+
+      try {
+        const isUuid = templateSlug.match(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+        );
+        const foundTemplate = isUuid
+          ? await api.getTemplateById(templateSlug)
+          : await api.getTemplateBySlug(templateSlug);
+
         const normalized: ChecklistTemplate = {
           id: foundTemplate.id,
           title: foundTemplate.title,
           description: foundTemplate.description || '',
-          type: typeof foundTemplate.type === 'string' ? foundTemplate.type : 'checklist',
-          seoTitle: typeof foundTemplate.seoTitle === 'string' ? foundTemplate.seoTitle : '',
-          seoDescription: typeof foundTemplate.seoDescription === 'string' ? foundTemplate.seoDescription : '',
-          rules: Array.isArray(foundTemplate.rules) ? foundTemplate.rules : undefined,
+          type:
+            typeof foundTemplate.type === 'string'
+              ? foundTemplate.type
+              : 'checklist',
+          seoTitle:
+            typeof foundTemplate.seoTitle === 'string'
+              ? foundTemplate.seoTitle
+              : '',
+          seoDescription:
+            typeof foundTemplate.seoDescription === 'string'
+              ? foundTemplate.seoDescription
+              : '',
+          rules: Array.isArray(foundTemplate.rules)
+            ? foundTemplate.rules
+            : undefined,
           sections: foundTemplate.sections || [],
           categories: foundTemplate.categories || [],
           tags: foundTemplate.tags || [],
@@ -86,29 +121,65 @@ const PublicTemplate = () => {
           createdAt: foundTemplate.created_at,
           updatedAt: foundTemplate.updated_at || foundTemplate.created_at,
           isPublic: Boolean(foundTemplate.is_public),
-          slug: foundTemplate.slug || slug,
+          slug: foundTemplate.slug || templateSlug,
           version: foundTemplate.version || 1,
+          ownerProfile:
+            typeof foundTemplate.owner_username === 'string' ||
+            typeof foundTemplate.owner_full_name === 'string'
+              ? {
+                  username:
+                    typeof foundTemplate.owner_username === 'string'
+                      ? foundTemplate.owner_username
+                      : undefined,
+                  full_name:
+                    typeof foundTemplate.owner_full_name === 'string'
+                      ? foundTemplate.owner_full_name
+                      : undefined,
+                }
+              : undefined,
         };
 
-        if (!normalized.isPublic) {
+        let ownerSlug = resolvePublicTemplateOwnerSlug(normalized);
+
+        if (!ownerSlug && normalized.userId) {
+          try {
+            const profile = await api.getProfileById(normalized.userId);
+            ownerSlug =
+              typeof profile.username === 'string' ? profile.username : null;
+            normalized.ownerProfile = {
+              username: ownerSlug ?? undefined,
+              full_name:
+                typeof profile.full_name === 'string'
+                  ? profile.full_name
+                  : undefined,
+            };
+          } catch {
+            ownerSlug = null;
+          }
+        }
+
+        if (
+          !normalized.isPublic ||
+          ownerSlug?.toLowerCase() !== username.toLowerCase()
+        ) {
           setNotFound(true);
         } else {
           setTemplate(normalized);
           analytics.trackTemplateView(normalized.id, normalized.title);
         }
-      } catch (error) {
+      } catch {
         setNotFound(true);
       }
-      
+
       setLoading(false);
     };
 
-    fetchTemplate();
-  }, [slug, templates]);
+    void fetchTemplate();
+  }, [templateSlug, templates, username]);
 
   const handleStartRun = async () => {
     if (!template) return;
-    
+
     if (!isAuthenticated) {
       navigateToLoginWithReturnPath(navigate, location);
       return;
@@ -118,18 +189,18 @@ const PublicTemplate = () => {
     try {
       const newRun = await createRun({
         templateId: template.id,
-        runName: `${template.title} - ${new Date().toLocaleDateString()}`
+        runName: `${template.title} - ${new Date().toLocaleDateString()}`,
       });
-      
+
       if (newRun) {
-        toast.success("Template run started!");
-        navigate(`/run/${newRun.id}`);
+        toast.success('Template run started!');
+        navigate(buildConsoleRunPath(newRun.id));
       }
     } catch (error) {
       console.error('Error creating run:', error);
       await handleAccessFailure(error, {
         billingEnabled,
-        fallbackMessage: "Failed to start template run",
+        fallbackMessage: 'Failed to start template run',
         navigate,
         location,
       });
@@ -157,20 +228,26 @@ const PublicTemplate = () => {
     setIsSaving(true);
     try {
       if (isRepoTemplate(template)) {
-        const createdTemplate = await createTemplate(buildRepoTemplateCreatePayload(template));
-        navigate(`/templates/${createdTemplate.slug || createdTemplate.id}`);
+        const createdTemplate = await createTemplate(
+          buildRepoTemplateCreatePayload(template),
+        );
+        navigate(buildConsoleTemplatePath(createdTemplate.id));
         return;
       }
 
-      await api.clonePublicTemplate(template.id, { visibility: "private" });
-      toast.success("Template saved to your account");
-      await queryClient.invalidateQueries({ queryKey: ["templates", user?.id] });
-      await queryClient.invalidateQueries({ queryKey: ["user-templates", user?.id] });
-      navigate("/templates");
-    } catch (err) {
-      await handleAccessFailure(err, {
+      await api.clonePublicTemplate(template.id, { visibility: 'private' });
+      toast.success('Template saved to your account');
+      await queryClient.invalidateQueries({
+        queryKey: ['templates', user?.id],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['user-templates', user?.id],
+      });
+      navigate(buildConsoleTemplatesPath());
+    } catch (error) {
+      await handleAccessFailure(error, {
         billingEnabled,
-        fallbackMessage: "Failed to save template",
+        fallbackMessage: 'Failed to save template',
         navigate,
         location,
       });
@@ -179,12 +256,21 @@ const PublicTemplate = () => {
     }
   };
 
+  const ownerSlug = template ? resolvePublicTemplateOwnerSlug(template) : null;
+  const ownerPath = ownerSlug ? buildPublicProfilePath(ownerSlug) : null;
+  const totalItems = useMemo(
+    () => (template ? countTemplateItems(template) : 0),
+    [template],
+  );
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading template...</p>
+      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="glass-panel p-10 text-center">
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-border border-t-primary" />
+          <p className="mt-4 text-sm text-muted-foreground">
+            Loading template…
+          </p>
         </div>
       </div>
     );
@@ -192,16 +278,19 @@ const PublicTemplate = () => {
 
   if (notFound || !template) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold mb-4">Template Not Found</h1>
-          <p className="text-muted-foreground mb-6">
-            The template you're looking for doesn't exist or isn't publicly available.
+      <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="glass-panel p-10 text-center">
+          <h1 className="text-4xl font-semibold text-foreground">
+            Template not found
+          </h1>
+          <p className="mt-4 text-base leading-7 text-muted-foreground">
+            The checklist you are looking for does not exist or is no longer
+            public.
           </p>
-          <Button asChild>
-            <Link to="/checklists">
+          <Button asChild className="mt-6">
+            <Link to={buildPublicTemplatesPath()}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Browse Checklists
+              Browse templates
             </Link>
           </Button>
         </div>
@@ -210,90 +299,30 @@ const PublicTemplate = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="pb-24">
       <SEOHead
-        title={template?.title}
-        description={template?.description || `${template?.title} - Interactive checklist template`}
-        keywords={template?.categories || ['checklist', 'template']}
+        title={template.title}
+        description={
+          template.description ||
+          `${template.title} - Interactive checklist template`
+        }
+        keywords={template.categories || ['checklist', 'template']}
         type="article"
-        publishedTime={template?.createdAt}
+        publishedTime={template.createdAt}
       />
-      <div className="container max-w-4xl mx-auto px-4 py-8">
-        <div className="mb-8">
-          <Button variant="ghost" asChild className="mb-4">
-            <Link to="/checklists">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Checklists
-            </Link>
-          </Button>
-          
-          <header className="mb-8">
-            <div className="flex items-start justify-between mb-4">
-              <h1 className="text-4xl font-bold">{template.title}</h1>
-            </div>
-            
-            {template.description && (
-              <p className="text-xl text-muted-foreground mb-4">{template.description}</p>
-            )}
-            
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                <span className="text-sm text-muted-foreground">
-                  Created on {new Date(template.createdAt).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
-                </span>
-                
-                {template.categories && template.categories.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {template.categories.map((category) => (
-                      <Link
-                        key={category}
-                        to={`/checklists/category/${encodeURIComponent(category)}`}
-                        className="inline-block"
-                      >
-                        <Badge variant="outline" className="text-xs hover:bg-secondary cursor-pointer transition-colors">
-                          {category}
-                        </Badge>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={handleSaveTemplate}
-                  disabled={isSaving || isBillingLoading}
-                >
-                  <Copy className="mr-2 h-4 w-4" />
-                  {isSaving
-                    ? "Copying..."
-                    : !isAuthenticated
-                      ? "Log in to copy template"
-                      : isBillingLoading
-                        ? "Checking plan..."
-                        : !isProUser
-                          ? "Upgrade to copy template"
-                          : "Copy to My Templates"}
-                </Button>
-                <Button onClick={handleStartRun} disabled={isCreatingRun}>
-                  <PlayCircle className="mr-2 h-4 w-4" />
-                  {isCreatingRun ? "Starting..." : "Start Checklist"}
-                </Button>
-              </div>
-            </div>
-          </header>
-        </div>
-
-        <div className="space-y-6">
-          <h2 className="text-2xl font-semibold">Template Content</h2>
-          <PublicTemplateContent sections={template.sections || []} />
-        </div>
-      </div>
+      <PublicTemplateView
+        template={template}
+        totalItems={totalItems}
+        ownerSlug={ownerSlug}
+        ownerPath={ownerPath}
+        isAuthenticated={isAuthenticated}
+        isBillingLoading={isBillingLoading}
+        isProUser={isProUser}
+        isCreatingRun={isCreatingRun}
+        isSaving={isSaving}
+        onStartRun={handleStartRun}
+        onSaveTemplate={handleSaveTemplate}
+      />
     </div>
   );
 };

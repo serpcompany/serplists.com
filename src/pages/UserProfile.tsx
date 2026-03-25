@@ -1,333 +1,497 @@
-import { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
-import { CheckCircle, Calendar, User, ArrowLeft, ExternalLink, Star, Clock, Grid, List } from "lucide-react";
-import { ChecklistTemplate } from "@/types/checklist";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { EmptyState } from "@/components/shared/EmptyState";
-import { AvatarUpload } from "@/components/shared/AvatarUpload";
-import { api } from "@/lib/api";
-interface UserProfile {
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import {
+  ArrowUpRight,
+  CalendarDays,
+  Copy,
+  ListChecks,
+  Sparkles,
+} from 'lucide-react';
+import { toast } from 'sonner';
+
+import {
+  PublicPageBackLink,
+  PublicPageContainer,
+  PublicPageSplitLayout,
+  PublicSidebarSection,
+} from '@/components/layout/PublicPageLayout';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { PublicPill } from '@/components/shared/PublicPill';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { api } from '@/lib/api';
+import {
+  REPO_TEMPLATE_OWNER_NAME,
+  REPO_TEMPLATE_OWNER_SLUG,
+  REPO_TEMPLATE_USER_ID,
+  repoTemplates,
+} from '@/lib/repoTemplateCatalog';
+import {
+  buildCanonicalPublicTemplatePath,
+  buildPublicCategoryPath,
+  buildPublicTemplatesPath,
+} from '@/lib/routes';
+import { normalizeSections } from '@/lib/utils/checklistSections';
+import type { ChecklistTemplate } from '@/types/checklist';
+
+type UserProfileRecord = {
   id: string;
   full_name: string | null;
   username: string;
   avatar_url: string | null;
   created_at: string;
-}
-interface UserStats {
-  totalTemplates: number;
-  totalItems: number;
-  categoriesUsed: string[];
+};
+
+type UserStats = {
   averageItemsPerTemplate: number;
-  mostRecentTemplate: string | null;
-}
-const UserProfile = () => {
-  const {
-    username
-  } = useParams<{
-    username: string;
-  }>();
-	  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-	  const calculateStats = (templatesData: ChecklistTemplate[]): UserStats => {
-	    const totalItems = templatesData.reduce((total, template) => total + template.sections.reduce((sectionTotal, section) => sectionTotal + section.items.length, 0), 0);
-	    const allCategories = templatesData.flatMap(template => template.categories || []);
-	    const categoriesUsed = [...new Set(allCategories)];
-	    const averageItemsPerTemplate = templatesData.length > 0 ? Math.round(totalItems / templatesData.length) : 0;
-	    const mostRecentTemplate = templatesData.length > 0 ? [...templatesData].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0].title : null;
-	    return {
-	      totalTemplates: templatesData.length,
-	      totalItems,
-	      categoriesUsed,
-	      averageItemsPerTemplate,
-      mostRecentTemplate
-    };
+  categoriesUsed: string[];
+  totalItems: number;
+  totalTemplates: number;
+};
+
+const countTemplateItems = (template: ChecklistTemplate) =>
+  template.sections.reduce((total, section) => total + section.items.length, 0);
+
+const formatJoinedDate = (value: string): string =>
+  new Date(value).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  });
+
+const getProfileDisplayName = (profile: UserProfileRecord): string =>
+  profile.full_name?.trim() || `@${profile.username}`;
+
+const getProfileInitials = (profile: UserProfileRecord): string => {
+  const source = profile.full_name?.trim() || profile.username.trim();
+  const initials = source
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+
+  return initials || 'SL';
+};
+
+const buildProfileSummary = (
+  profile: UserProfileRecord,
+  stats: UserStats,
+): string => {
+  if (stats.categoriesUsed.length) {
+    return `Public checklist templates from @${profile.username} covering ${stats.categoriesUsed
+      .slice(0, 3)
+      .join(', ')}.`;
+  }
+
+  return `Public checklist templates and repeatable workflow packs published by @${profile.username}.`;
+};
+
+const mapApiTemplate = (
+  template: Record<string, unknown>,
+): ChecklistTemplate => {
+  const sections = Array.isArray(template.sections)
+    ? template.sections
+    : Array.isArray(template.items)
+      ? [
+          {
+            id: '1',
+            title: 'Checklist',
+            items: template.items,
+          },
+        ]
+      : [];
+
+  return {
+    id: String(template.id),
+    title: String(template.title),
+    description:
+      typeof template.description === 'string' ? template.description : '',
+    sections: normalizeSections(sections),
+    userId: String(template.user_id),
+    createdAt: String(template.created_at),
+    updatedAt:
+      typeof template.updated_at === 'string'
+        ? template.updated_at
+        : String(template.created_at),
+    isPublic: Boolean(template.is_public ?? true),
+    slug: typeof template.slug === 'string' ? template.slug : '',
+    categories: Array.isArray(template.categories)
+      ? (template.categories as string[])
+      : [],
+    tags: Array.isArray(template.tags) ? (template.tags as string[]) : [],
+    version: typeof template.version === 'number' ? template.version : 1,
+    ownerProfile:
+      typeof template.owner_username === 'string' ||
+      typeof template.owner_full_name === 'string'
+        ? {
+            username:
+              typeof template.owner_username === 'string'
+                ? template.owner_username
+                : undefined,
+            full_name:
+              typeof template.owner_full_name === 'string'
+                ? template.owner_full_name
+                : undefined,
+          }
+        : undefined,
   };
+};
+
+const mergeProfileTemplates = (
+  username: string,
+  apiTemplates: ChecklistTemplate[],
+): ChecklistTemplate[] => {
+  const merged = new Map<string, ChecklistTemplate>();
+  const sources =
+    username.toLowerCase() === REPO_TEMPLATE_OWNER_SLUG
+      ? [...repoTemplates, ...apiTemplates]
+      : apiTemplates;
+
+  sources.forEach((template) => {
+    const key = template.slug?.trim() || template.id;
+    if (!merged.has(key)) {
+      merged.set(key, template);
+    }
+  });
+
+  return Array.from(merged.values()).sort((left, right) =>
+    right.createdAt.localeCompare(left.createdAt),
+  );
+};
+
+const calculateStats = (templates: ChecklistTemplate[]): UserStats => {
+  const totalItems = templates.reduce(
+    (total, template) => total + countTemplateItems(template),
+    0,
+  );
+  const categoriesUsed = Array.from(
+    new Set(templates.flatMap((template) => template.categories || [])),
+  );
+
+  return {
+    totalTemplates: templates.length,
+    totalItems,
+    categoriesUsed,
+    averageItemsPerTemplate:
+      templates.length > 0 ? Math.round(totalItems / templates.length) : 0,
+  };
+};
+
+const UserProfile = () => {
+  const { username } = useParams<{ username: string }>();
+  const [profile, setProfile] = useState<UserProfileRecord | null>(null);
+  const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    const fetchUserProfile = async () => {
+    const fetchProfile = async () => {
       try {
         if (!username) {
-          setError("No username provided");
-          setIsLoading(false);
+          setError('No username provided');
+          setLoading(false);
           return;
         }
 
-        const profileData = await api.getProfileByUsername(username);
+        const profileData = (await api.getProfileByUsername(
+          username,
+        )) as UserProfileRecord;
+        const publicTemplates = (await api.getPublicTemplatesForUser(
+          profileData.id,
+        )) as Array<Record<string, unknown>>;
+
         setProfile(profileData);
+        setTemplates(
+          mergeProfileTemplates(
+            profileData.username,
+            publicTemplates.map(mapApiTemplate),
+          ),
+        );
+      } catch (caughtError) {
+        console.error('Error fetching public profile:', caughtError);
 
-        const templatesData = await api.getPublicTemplatesForUser(profileData.id);
-        const formattedTemplates: ChecklistTemplate[] = templatesData.map((template: Record<string, unknown>) => ({
-          id: String(template.id),
-          title: String(template.title),
-          description: typeof template.description === 'string' ? template.description : '',
-          sections: Array.isArray(template.sections) ? (template.sections as unknown as ChecklistTemplate["sections"]) : [],
-          userId: String(template.user_id),
-          createdAt: String(template.created_at),
-          updatedAt: typeof template.updated_at === 'string' ? template.updated_at : String(template.created_at),
-          isPublic: true,
-          slug: typeof template.slug === 'string' ? template.slug : '',
-          categories: Array.isArray(template.categories) ? (template.categories as string[]) : [],
-          tags: Array.isArray(template.tags) ? (template.tags as string[]) : [],
-          version: typeof template.version === 'number' ? template.version : 1,
-        }));
+        if (username?.toLowerCase() === REPO_TEMPLATE_OWNER_SLUG) {
+          setProfile({
+            id: REPO_TEMPLATE_USER_ID,
+            full_name: REPO_TEMPLATE_OWNER_NAME,
+            username: REPO_TEMPLATE_OWNER_SLUG,
+            avatar_url: null,
+            created_at: new Date().toISOString(),
+          });
+          setTemplates(repoTemplates);
+          return;
+        }
 
-        setTemplates(formattedTemplates);
-        setStats(calculateStats(formattedTemplates));
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-        setError("Failed to load user data");
+        setError('User not found');
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
-    fetchUserProfile();
+
+    void fetchProfile();
   }, [username]);
-	  const getTotalItems = (template: ChecklistTemplate) => {
-	    return template.sections.reduce((total, section) => total + section.items.length, 0);
-	  };
-	  const getFeaturedTemplates = () => {
-	    return [...templates].sort((a, b) => getTotalItems(b) - getTotalItems(a)).slice(0, 3);
-	  };
-	  const getRecentTemplates = () => {
-	    return [...templates].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 6);
-	  };
-	  if (isLoading) {
-	    return <LoadingSpinner message="Loading profile..." />;
-	  }
-  if (error || !profile) {
-    return <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
-          <div className="mb-6">
-            <Link to="/">
-              <Button variant="ghost">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Home
-              </Button>
-            </Link>
-          </div>
-          <EmptyState title={error === "User not found" ? "User Not Found" : "Error"} description={error || "Something went wrong"} icon={User} />
+
+  const stats = useMemo(() => calculateStats(templates), [templates]);
+
+  const handleCopyProfileLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success('Profile link copied');
+    } catch {
+      toast.error('Unable to copy profile link');
+    }
+  };
+
+  if (loading) {
+    return (
+      <PublicPageContainer className="py-14">
+        <div className="glass-panel p-8">
+          <LoadingSpinner message="Loading profile..." />
         </div>
-      </div>;
+      </PublicPageContainer>
+    );
   }
-  return <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        {/* Back Button */}
+
+  if (error || !profile) {
+    return (
+      <PublicPageContainer className="py-14">
         <div className="mb-6">
-          <Link to="/">
-            <Button variant="ghost" className="gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Home
-            </Button>
-          </Link>
+          <PublicPageBackLink to={buildPublicTemplatesPath()}>
+            Back to templates
+          </PublicPageBackLink>
         </div>
 
-        {/* Profile Header */}
-        <div className="mb-8">
-          <Card className="overflow-hidden">
-            {/* Cover Area */}
-            <div className="h-32 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/5" />
-            
-            {/* Profile Info */}
-            <CardContent className="relative -mt-16 pt-16">
-              <div className="flex flex-col md:flex-row gap-6 items-start">
-                {/* Avatar */}
-                <div className="relative">
-                  <AvatarUpload currentAvatarUrl={profile.avatar_url} size="lg" editable={false} />
-                </div>
-                
-                {/* User Details */}
-                <div className="flex-1 space-y-4">
-                  <div>
-                    <h1 className="text-3xl font-bold">
-                      @{profile.username}
-                    </h1>
-                    
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                      <Calendar className="h-4 w-4" />
-                      Joined {new Date(profile.created_at).toLocaleDateString('en-US', {
-                      month: 'long',
-                      year: 'numeric'
-                    })}
-                    </div>
-                  </div>
-                  
-                  {/* Stats Cards */}
-                  {stats && <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <div className="text-2xl font-bold text-primary">{stats.totalTemplates}</div>
-                        <div className="text-xs text-muted-foreground">Templates</div>
-                      </div>
-                      <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <div className="text-2xl font-bold text-primary">{stats.totalItems}</div>
-                        <div className="text-xs text-muted-foreground">Total Items</div>
-                      </div>
-                      <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <div className="text-2xl font-bold text-primary">{stats.categoriesUsed.length}</div>
-                        <div className="text-xs text-muted-foreground">Categories</div>
-                      </div>
-                      <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <div className="text-2xl font-bold text-primary">{stats.averageItemsPerTemplate}</div>
-                        <div className="text-xs text-muted-foreground">Avg Items</div>
-                      </div>
-                    </div>}
-                  
-                  {/* Categories */}
-                  {stats && stats.categoriesUsed.length > 0 && <div>
-                      <h3 className="text-sm font-medium mb-2">Specializes in:</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {stats.categoriesUsed.slice(0, 8).map(category => <Link key={category} to={`/checklists/category/${encodeURIComponent(category)}`}>
-                            <Badge variant="secondary" className="text-xs hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer">
-                              {category}
-                            </Badge>
-                          </Link>)}
-                        {stats.categoriesUsed.length > 8 && <Badge variant="secondary" className="text-xs">
-                            +{stats.categoriesUsed.length - 8} more
-                          </Badge>}
-                      </div>
-                    </div>}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <EmptyState
+          title={error === 'User not found' ? 'User not found' : 'Error'}
+          description={error || 'Unable to load this public profile.'}
+          icon={Sparkles}
+          className="min-h-0"
+        />
+      </PublicPageContainer>
+    );
+  }
 
-        {/* Main Content */}
-        {templates.length === 0 ? <EmptyState title="No Public Checklists" description={`@${profile.username} hasn't published any public checklists yet.`} icon={CheckCircle} /> : <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="templates">All Templates</TabsTrigger>
-            </TabsList>
-
-            {/* Overview Tab */}
-            <TabsContent value="overview" className="space-y-6">
-              {/* Featured Templates */}
-              {getFeaturedTemplates().length > 0 && <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <Star className="h-5 w-5 text-primary" />
-                    <h2 className="text-xl font-semibold">Featured Templates</h2>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {getFeaturedTemplates().map((template: { id: unknown; title: unknown; description: unknown; sections: unknown; slug: unknown }) => <Card key={template.id} className="hover:shadow-md transition-shadow">
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-base line-clamp-2">{template.title}</CardTitle>
-                          {template.description && <p className="text-sm text-muted-foreground line-clamp-2">
-                              {template.description}
-                            </p>}
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                          <div className="flex items-center justify-between text-sm text-muted-foreground mb-3">
-                            <span>{template.sections.length} sections</span>
-                            <span>{getTotalItems(template)} items</span>
-                          </div>
-	                          <Link to={`/checklists/${template.slug || template.id}`}>
-                            <Button variant="outline" size="sm" className="w-full">
-                              <ExternalLink className="mr-2 h-3 w-3" />
-                              View Template
-                            </Button>
-                          </Link>
-                        </CardContent>
-                      </Card>)}
-                  </div>
-                </div>}
-
-              <Separator />
-
-              {/* Recent Templates */}
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Clock className="h-5 w-5 text-primary" />
-                  <h2 className="text-xl font-semibold">Recent Templates</h2>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {getRecentTemplates().map((template: { id: unknown; title: unknown; createdAt: unknown; sections: unknown; slug: unknown }) => <Card key={template.id} className="hover:shadow-md transition-shadow">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm line-clamp-2">{template.title}</CardTitle>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(template.createdAt).toLocaleDateString()}
-                        </p>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-                          <span>{template.sections.length} sections</span>
-                          <span>{getTotalItems(template)} items</span>
-                        </div>
-	                        <Link to={`/checklists/${template.slug || template.id}`}>
-                          <Button variant="outline" size="sm" className="w-full text-xs">
-                            View Template
-                          </Button>
-                        </Link>
-                      </CardContent>
-                    </Card>)}
-                </div>
-              </div>
-            </TabsContent>
-
-            {/* All Templates Tab */}
-            <TabsContent value="templates" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold">All Templates ({templates.length})</h2>
-                <div className="flex items-center gap-2">
-                  <Button variant={viewMode === 'grid' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('grid')}>
-                    <Grid className="h-4 w-4" />
-                  </Button>
-                  <Button variant={viewMode === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('list')}>
-                    <List className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-3"}>
-                {templates.map((template: { id: unknown; title: unknown; description: unknown; sections: unknown; categories: unknown; createdAt: unknown; slug: unknown }) => <Card key={template.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader>
-                      <CardTitle className={viewMode === 'grid' ? "line-clamp-2" : ""}>{template.title}</CardTitle>
-                      {template.description && <p className={`text-sm text-muted-foreground ${viewMode === 'grid' ? 'line-clamp-3' : ''}`}>
-                          {template.description}
-                        </p>}
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between text-sm text-muted-foreground">
-                          <span>{template.sections.length} sections</span>
-                          <span>{getTotalItems(template)} items</span>
-                        </div>
-
-                        {template.categories && template.categories.length > 0 && <div className="flex flex-wrap gap-1">
-                            {template.categories.slice(0, 3).map(category => <Link key={category} to={`/checklists/category/${encodeURIComponent(category)}`}>
-                                <Badge variant="secondary" className="text-xs hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer">
-                                  {category}
-                                </Badge>
-                              </Link>)}
-                            {template.categories.length > 3 && <Badge variant="secondary" className="text-xs">
-                                +{template.categories.length - 3}
-                              </Badge>}
-                          </div>}
-
-                        <div className="text-xs text-muted-foreground">
-                          Created {new Date(template.createdAt).toLocaleDateString()}
-                        </div>
-
-	                        <Link to={`/checklists/${template.slug || template.id}`}>
-                          <Button variant="outline" className="w-full">
-                            <ExternalLink className="mr-2 h-4 w-4" />
-                            View Template
-                          </Button>
-                        </Link>
-                      </div>
-                    </CardContent>
-                  </Card>)}
-              </div>
-            </TabsContent>
-
-          </Tabs>}
+  return (
+    <PublicPageContainer className="pb-16 pt-6">
+      <div className="mb-4">
+        <PublicPageBackLink to={buildPublicTemplatesPath()}>
+          Back to templates
+        </PublicPageBackLink>
       </div>
-    </div>;
+
+      <PublicPageSplitLayout
+        asidePosition="start"
+        className="lg:items-start lg:gap-10"
+        asideClassName="lg:sticky lg:top-24 lg:self-start"
+        aside={
+          <>
+            <div className="flex flex-col gap-5">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full border border-border bg-muted p-1.5">
+                <Avatar className="h-full w-full rounded-full">
+                  <AvatarImage src={profile.avatar_url || undefined} />
+                  <AvatarFallback className="rounded-full bg-muted text-2xl font-medium text-foreground">
+                    {getProfileInitials(profile)}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                  Public profile
+                </p>
+                <h1 className="mt-3 text-[2rem] font-semibold tracking-tight text-foreground">
+                  {getProfileDisplayName(profile)}
+                </h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  @{profile.username}
+                </p>
+              </div>
+
+              <p className="text-sm leading-6 text-muted-foreground">
+                {buildProfileSummary(profile, stats)}
+              </p>
+
+              {stats.categoriesUsed.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {stats.categoriesUsed.slice(0, 6).map((category) => (
+                    <PublicPill key={category} asChild tone="subtle">
+                      <Link to={buildPublicCategoryPath(category)}>
+                        {category}
+                      </Link>
+                    </PublicPill>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <PublicSidebarSection divider title="Member since">
+              <div className="flex items-start gap-3 text-sm">
+                <CalendarDays className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                <div className="text-muted-foreground">
+                  {formatJoinedDate(profile.created_at)}
+                </div>
+              </div>
+            </PublicSidebarSection>
+
+            <PublicSidebarSection divider title="Profile stats">
+              <dl className="space-y-3 text-sm">
+                {[
+                  { label: 'Public templates', value: stats.totalTemplates },
+                  { label: 'Documented steps', value: stats.totalItems },
+                  {
+                    label: 'Average items',
+                    value: stats.averageItemsPerTemplate,
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className="flex items-center justify-between gap-4"
+                  >
+                    <dt className="text-muted-foreground">{item.label}</dt>
+                    <dd className="font-medium text-foreground">
+                      {item.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </PublicSidebarSection>
+
+            <PublicSidebarSection divider title="Actions">
+              <div className="flex flex-col items-start gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyProfileLink}
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Share profile
+                </Button>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to={buildPublicTemplatesPath()}>Browse templates</Link>
+                </Button>
+              </div>
+            </PublicSidebarSection>
+          </>
+        }
+        main={
+          <section className="min-w-0 lg:max-w-[820px]">
+            <div className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                  Public templates
+                </p>
+                <h2 className="mt-1.5 text-3xl font-semibold tracking-tight text-foreground">
+                  Public templates
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Browse every public checklist published from this profile.
+                </p>
+              </div>
+              <Badge
+                variant="secondary"
+                className="h-8 rounded-md px-2.5 text-xs font-medium text-secondary-foreground"
+              >
+                {stats.totalTemplates} live templates
+              </Badge>
+            </div>
+
+            {templates.length === 0 ? (
+              <div className="mt-6">
+                <EmptyState
+                  title="No public templates"
+                  description={`@${profile.username} has not published any public templates yet.`}
+                  icon={Sparkles}
+                  className="min-h-0 rounded-lg border border-dashed"
+                />
+              </div>
+            ) : (
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                {templates.map((template) => {
+                  const templatePath =
+                    buildCanonicalPublicTemplatePath(template) ||
+                    buildPublicTemplatesPath();
+                  const templateSlug = template.slug?.trim() || template.id;
+
+                  return (
+                    <Card
+                      key={template.id}
+                      className="h-full rounded-lg border-border/80 shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-sm"
+                    >
+                      <Link
+                        to={templatePath}
+                        className="group flex h-full min-h-[208px] flex-col"
+                      >
+                        <CardHeader className="space-y-2.5 px-4 pb-2.5 pt-4">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-secondary text-foreground">
+                              <ListChecks className="h-4 w-4" />
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <CardTitle className="line-clamp-2 text-base leading-snug">
+                                    {template.title}
+                                  </CardTitle>
+                                  <CardDescription className="mt-1 truncate text-[11px]">
+                                    {profile.username}/
+                                    {templateSlug.replace(/^repo:/, '')}
+                                  </CardDescription>
+                                </div>
+                                <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-foreground" />
+                              </div>
+                            </div>
+                          </div>
+                        </CardHeader>
+
+                        <CardContent className="flex flex-1 flex-col px-4 pb-4 pt-0">
+                          <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">
+                            {template.description ||
+                              'Public checklist pack published in this creator profile.'}
+                          </p>
+
+                          {(template.categories || []).length ? (
+                            <div className="mt-4 flex flex-wrap gap-1.5">
+                              {(template.categories || [])
+                                .slice(0, 3)
+                                .map((category) => (
+                                  <PublicPill key={category} tone="subtle">
+                                    {category}
+                                  </PublicPill>
+                                ))}
+                            </div>
+                          ) : null}
+
+                          <Separator className="mt-auto" />
+
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-3 text-[11px] text-muted-foreground">
+                            <span>@{profile.username}</span>
+                            <span>{template.sections.length} sections</span>
+                            <span>{countTemplateItems(template)} items</span>
+                          </div>
+                        </CardContent>
+                      </Link>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        }
+      />
+    </PublicPageContainer>
+  );
 };
+
 export default UserProfile;

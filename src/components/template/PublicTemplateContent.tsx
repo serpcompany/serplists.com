@@ -11,6 +11,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { Checkbox } from '@/components/ui/checkbox';
+import { buildPublicTemplateSectionId } from '@/components/template/publicTemplateSectionId';
 import { cn } from '@/lib/utils';
 import { safeUrl } from '@/lib/utils/safeUrl';
 import type {
@@ -41,7 +42,7 @@ export function PublicTemplateContent({
     switch (content.type) {
       case 'text':
         return content.value ? (
-          <div className="mt-3 rounded-xl border border-border/80 bg-muted/25 p-4">
+          <div className="mt-3 border-l-2 border-border/70 pl-4">
             <div className="prose prose-sm max-w-none">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -56,7 +57,7 @@ export function PublicTemplateContent({
 
       case 'video':
         return content.value ? (
-          <div className="mt-3 rounded-xl border border-border/80 bg-muted/25 p-4 text-sm text-muted-foreground">
+          <div className="mt-3 border-l-2 border-border/70 pl-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Video className="h-4 w-4" />
               Video content attached
@@ -66,7 +67,7 @@ export function PublicTemplateContent({
 
       case 'image':
         return content.value ? (
-          <div className="mt-3 rounded-xl border border-border/80 bg-muted/25 p-4 text-sm text-muted-foreground">
+          <div className="mt-3 border-l-2 border-border/70 pl-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Image className="h-4 w-4" />
               Image content attached
@@ -76,7 +77,7 @@ export function PublicTemplateContent({
 
       case 'embed':
         return content.value ? (
-          <div className="mt-3 rounded-xl border border-border/80 bg-muted/25 p-4 text-sm text-muted-foreground">
+          <div className="mt-3 border-l-2 border-border/70 pl-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Link2 className="h-4 w-4" />
               {safeUrl(content.value) ? (
@@ -97,7 +98,7 @@ export function PublicTemplateContent({
 
       case 'subItems':
         return content.subItems?.length ? (
-          <div className="mt-4 space-y-2 rounded-xl border border-border/80 bg-muted/25 p-4">
+          <div className="mt-4 space-y-2 border-l-2 border-border/70 pl-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <ListTodo className="h-4 w-4" />
               Sub-steps
@@ -131,19 +132,16 @@ export function PublicTemplateContent({
     const isExpandable = Boolean(hasContent || hasDescription);
 
     return (
-      <div
-        key={item.id || itemIndex}
-        className="py-4 first:pt-0 last:pb-0"
-      >
+      <div key={item.id || itemIndex} className="py-4 first:pt-0 last:pb-0">
         <div className="flex items-start gap-3">
-          <Checkbox disabled className="mt-1 h-5 w-5" />
+          <Checkbox disabled className="mt-1 h-4 w-4 rounded-sm" />
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-2">
               {isExpandable ? (
                 <button
                   type="button"
                   onClick={() => toggleItem(itemKey)}
-                  className="mt-1 rounded-full p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                  className="mt-1 rounded-md p-0.5 text-muted-foreground transition hover:bg-muted/40 hover:text-foreground"
                 >
                   {isExpanded ? (
                     <ChevronDown className="h-4 w-4" />
@@ -160,7 +158,7 @@ export function PublicTemplateContent({
                   type="button"
                   onClick={() => isExpandable && toggleItem(itemKey)}
                   className={cn(
-                    'text-left text-lg font-medium text-foreground',
+                    'text-left text-base font-medium leading-6 text-foreground',
                     isExpandable && 'transition hover:text-foreground/80',
                   )}
                 >
@@ -168,15 +166,15 @@ export function PublicTemplateContent({
                 </button>
 
                 {isExpanded ? (
-                  <>
+                  <div className="mt-3 space-y-3">
                     {hasDescription ? (
-                      <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                      <p className="text-sm leading-7 text-muted-foreground">
                         {item.description}
                       </p>
                     ) : null}
 
                     {hasContent ? (
-                      <div className="mt-2 space-y-2">
+                      <div className="space-y-2">
                         {item.contents?.map((content, contentIndex) => (
                           <div key={content.id || contentIndex}>
                             {renderContent(content)}
@@ -184,7 +182,7 @@ export function PublicTemplateContent({
                         ))}
                       </div>
                     ) : null}
-                  </>
+                  </div>
                 ) : null}
               </div>
             </div>
@@ -196,36 +194,42 @@ export function PublicTemplateContent({
 
   if (!sections.length) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="py-6 text-sm text-muted-foreground">
         No sections are available for this template yet.
       </p>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="divide-y divide-border/70">
       {sections.map((section, sectionIndex) => (
         <section
           key={section.id || sectionIndex}
-          className="docs-panel overflow-hidden"
+          id={buildPublicTemplateSectionId(section, sectionIndex)}
+          className="py-6 first:pt-6 last:pb-6 scroll-mt-28"
         >
-          <div className="border-b border-border/70 bg-muted/25 px-5 py-4 sm:px-6">
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Section {sectionIndex + 1}
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Section {sectionIndex + 1}
+              </div>
+              <h3 className="mt-2 text-xl font-semibold text-foreground">
+                {section.title}
+              </h3>
             </div>
-            <h3 className="mt-2 text-2xl font-semibold text-foreground">
-              {section.title}
-            </h3>
+            <div className="text-sm text-muted-foreground">
+              {section.items?.length ?? 0} tasks
+            </div>
           </div>
 
           {section.items?.length ? (
-            <div className="divide-y divide-border/70 px-5 sm:px-6">
+            <div className="mt-4 divide-y divide-border/60">
               {section.items.map((item, itemIndex) =>
                 renderItem(item, sectionIndex, itemIndex),
               )}
             </div>
           ) : (
-            <p className="px-5 py-5 text-sm text-muted-foreground sm:px-6">
+            <p className="mt-4 text-sm text-muted-foreground">
               This section does not have any items yet.
             </p>
           )}

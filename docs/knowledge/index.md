@@ -25,6 +25,7 @@ Operational notes, debugging lessons, and implementation decisions.
 - [Incident response runbook](incident-response-runbook.md)
 - [Production schema drift broke save/copy flows (2026-03-21)](production-schema-drift-save-copy-fix-2026-03-21.md)
 - [Public/private route model (2026-03-24)](public-private-route-model-2026-03-24.md)
+- [Public template docs layout (2026-03-24)](public-template-docs-layout-2026-03-24.md)
 - [Template import summary and schema snapshot policy (2026-03-24)](template-import-summary-and-schema-snapshot-2026-03-24.md)
 - [Repo-backed template catalog (2026-03-22)](repo-template-catalog-2026-03-22.md)
 - [Release verification handler-test drift (2026-03-21)](release-verification-handler-test-drift-2026-03-21.md)
