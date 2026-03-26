@@ -11,7 +11,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 }));
 
 describe('TemplateHeader', () => {
-  it('renders the actor-style workspace navigation for editing', () => {
+  it('renders a stripped template editor header instead of the old pseudo-wizard chrome', () => {
     const html = renderToStaticMarkup(
       <TemplateHeader
         isEditing
@@ -22,8 +22,9 @@ describe('TemplateHeader', () => {
       />,
     );
 
-    expect(html).toContain('All templates');
-    expect(html).toContain('Input');
-    expect(html).toContain('Versions');
+    expect(html).toContain('Template editor');
+    expect(html).toContain('Editing');
+    expect(html).toContain('Templates');
+    expect(html).not.toContain('Versions');
   });
 });

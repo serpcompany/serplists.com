@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
+import { PageContainer } from '@/components/layout/page-shell';
 import { cn } from '@/lib/utils';
 
 interface PublicPageContainerProps {
@@ -36,9 +37,9 @@ export function PublicPageContainer({
   className,
 }: PublicPageContainerProps) {
   return (
-    <div className={cn('mx-auto max-w-[1160px] px-4 sm:px-6 lg:px-8', className)}>
+    <PageContainer className={className} width="content">
       {children}
-    </div>
+    </PageContainer>
   );
 }
 
@@ -74,10 +75,10 @@ export function PublicPageSplitLayout({
   return (
     <div
       className={cn(
-        'grid gap-8',
+        'grid gap-6',
         isStartRail
-          ? 'lg:grid-cols-[248px_minmax(0,1fr)]'
-          : 'lg:grid-cols-[minmax(0,1fr)_280px]',
+          ? 'lg:grid-cols-[232px_minmax(0,1fr)]'
+          : 'lg:grid-cols-[minmax(0,1fr)_256px]',
         className,
       )}
     >
@@ -86,7 +87,7 @@ export function PublicPageSplitLayout({
           {aside ? (
             <aside
               className={cn(
-                'space-y-6 lg:border-r lg:border-border/70 lg:pr-6',
+                'space-y-5 lg:border-r lg:border-border/70 lg:pr-5',
                 asideClassName,
               )}
             >
@@ -101,7 +102,7 @@ export function PublicPageSplitLayout({
           {aside ? (
             <aside
               className={cn(
-                'space-y-6 lg:border-l lg:border-border/70 lg:pl-6',
+                'space-y-5 lg:border-l lg:border-border/70 lg:pl-5',
                 asideClassName,
               )}
             >

@@ -36,7 +36,7 @@ serp-checklists/
 - `functions/api/utils/response.ts` (shared JSON response helpers)
 
 ## Data and migrations
-- `db/schema.sql` (schema snapshot; keep in sync with migrations)
+- `db/schema.sql` (maintained snapshot for reference; `db/migrations/` is the source of truth)
 - `db/schema/` (Drizzle schema used by API handlers; entry `db/schema/index.ts`)
 - `db/types/` (Drizzle model types)
 - `db/drizzle.config.ts` (Drizzle Kit config)

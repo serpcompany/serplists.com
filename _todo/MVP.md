@@ -1,4 +1,23 @@
 
+- fix: public IA alignment
+
+- [x] make `/checklists` and `/dashboard` the canonical user-facing routes while preserving legacy redirects from `/templates` and `/console`
+- [x] render public header, mobile nav, and footer from one shared route config and trim duplicate footer navigation
+- [x] tighten auth, public library, and public template detail layouts so content starts higher and repeated summary chrome is removed
+- [x] add regression coverage for route canonicals and public layout density cleanup
+- [x] document the public IA cleanup in `docs/knowledge`
+
+---
+
+- feat: centralized style system
+
+- [x] add shared page shell and surface tokens so pages stop defining their own containers and card treatments
+- [x] migrate the most divergent public, auth, error, and console pages onto shared layout primitives
+- [x] add regression coverage for shared layout and surface variants
+- [x] document the style-system cleanup in `docs/knowledge`
+
+---
+
 - bug: template update bug
 
 logged in with `john`

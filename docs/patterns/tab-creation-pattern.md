@@ -3,13 +3,14 @@
 Tabs use the shadcn/ui wrapper around Radix Tabs in `src/components/ui/tabs.tsx`.
 
 ## Related files
+
 - `src/components/ui/tabs.tsx`
-- `src/pages/UserProfile.tsx`
 - `src/components/template-editor/content-types/TextContentEditor.tsx`
 
 ## Example
+
 ```tsx
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 <Tabs defaultValue="overview" className="space-y-6">
   <TabsList>
@@ -17,11 +18,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
     <TabsTrigger value="details">Details</TabsTrigger>
   </TabsList>
 
-  <TabsContent value="overview">
-    Overview content
-  </TabsContent>
-  <TabsContent value="details">
-    Details content
-  </TabsContent>
-</Tabs>
+  <TabsContent value="overview">Overview content</TabsContent>
+  <TabsContent value="details">Details content</TabsContent>
+</Tabs>;
 ```

@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { toast } from 'sonner';
 import { navigateToLoginWithReturnPath } from '@/lib/access-flow';
+import { buildConsoleRunPath, buildConsoleTemplatePath } from '@/lib/routes';
 
 export const useTemplateActions = (templateId: string) => {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ export const useTemplateActions = (templateId: string) => {
     try {
       const run = await createRun({ templateId });
       if (run) {
-        navigate(`/run/${run.id}`);
+        navigate(buildConsoleRunPath(run.id));
       }
     } catch (error) {
       console.error('Failed to create run:', error);
@@ -28,7 +29,7 @@ export const useTemplateActions = (templateId: string) => {
   };
 
   const handleEditTemplate = () => {
-    navigate(`/templates/${templateId}`);
+    navigate(buildConsoleTemplatePath(templateId));
   };
 
   return {

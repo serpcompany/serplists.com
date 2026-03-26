@@ -24,6 +24,14 @@
     --input: 214 23% 88%;
     --ring: 220 76% 56%;
     --radius: 0.625rem;
+    --layout-shell-max: 80rem;
+    --layout-content-max: 72.5rem;
+    --layout-narrow-max: 56rem;
+    --layout-wide-max: 90rem;
+    --layout-docs-max: 64rem;
+    --shadow-panel-soft: 0 14px 32px -30px rgba(15, 23, 42, 0.12);
+    --shadow-panel-quiet: 0 18px 40px -34px rgba(15, 23, 42, 0.12);
+    --shadow-panel-strong: 0 18px 40px -34px rgba(15, 23, 42, 0.14);
   }
 
   .dark {
@@ -56,11 +64,6 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    background-image: linear-gradient(
-      180deg,
-      hsl(var(--muted) / 0.55) 0,
-      hsl(var(--background)) 220px
-    );
     text-rendering: optimizeLegibility;
   }
 }
@@ -76,23 +79,27 @@
   }
 
   .glass-panel {
-    @apply rounded-xl border border-border/80 shadow-[0_16px_36px_-30px_rgba(15,23,42,0.14)] backdrop-blur;
-    background-color: hsl(var(--card) / 0.92);
+    @apply rounded-[calc(var(--radius)+0.25rem)] border border-border/80 backdrop-blur;
+    background-color: hsl(var(--card) / 0.94);
+    box-shadow: none;
   }
 
   .marketing-metric {
-    @apply rounded-xl border border-border/80 p-5 shadow-[0_14px_32px_-30px_rgba(15,23,42,0.12)];
-    background-color: hsl(var(--card) / 0.88);
+    @apply rounded-[calc(var(--radius)+0.25rem)] border border-border/80 p-5;
+    background-color: hsl(var(--card));
+    box-shadow: none;
   }
 
   .console-card {
-    @apply rounded-xl border border-border/80 p-6 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.14)];
+    @apply rounded-[calc(var(--radius)+0.25rem)] border border-border/80 p-6;
     background-color: hsl(var(--card) / 0.94);
+    box-shadow: var(--shadow-panel-strong);
   }
 
   .docs-panel {
-    @apply rounded-xl border border-border/80 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.12)];
+    @apply rounded-[calc(var(--radius)+0.25rem)] border border-border/80;
     background-color: hsl(var(--card) / 0.96);
+    box-shadow: none;
   }
 }
 
@@ -125,11 +132,13 @@
 }
 
 .section-card {
-  @apply mb-4 rounded-xl border border-border/80 bg-card p-4 shadow-[0_10px_28px_-26px_rgba(15,23,42,0.18)] transition-shadow hover:shadow-[0_12px_32px_-24px_rgba(15,23,42,0.16)];
+  @apply mb-4 rounded-[calc(var(--radius)+0.25rem)] border border-border/80 bg-card p-4 transition-shadow hover:shadow-[0_12px_32px_-24px_rgba(15,23,42,0.16)];
+  box-shadow: var(--shadow-panel-soft);
 }
 
 .template-card {
-  @apply mb-4 rounded-xl border border-border/80 bg-card p-6 shadow-[0_10px_28px_-26px_rgba(15,23,42,0.18)] transition-shadow hover:shadow-[0_12px_32px_-24px_rgba(15,23,42,0.16)];
+  @apply mb-4 rounded-[calc(var(--radius)+0.25rem)] border border-border/80 bg-card p-6 transition-shadow hover:shadow-[0_12px_32px_-24px_rgba(15,23,42,0.16)];
+  box-shadow: var(--shadow-panel-soft);
 }
 
 .checklist-item {

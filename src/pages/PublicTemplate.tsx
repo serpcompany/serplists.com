@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
+import { PageContainer, Surface } from '@/components/layout/page-shell';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
@@ -265,21 +266,21 @@ const PublicTemplate = () => {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="glass-panel p-10 text-center">
+      <PageContainer className="py-16" width="shell">
+        <Surface className="text-center" padding="xl" tone="glass">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-border border-t-primary" />
           <p className="mt-4 text-sm text-muted-foreground">
             Loading template…
           </p>
-        </div>
-      </div>
+        </Surface>
+      </PageContainer>
     );
   }
 
   if (notFound || !template) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="glass-panel p-10 text-center">
+      <PageContainer className="py-16" width="narrow">
+        <Surface className="text-center" padding="xl" tone="glass">
           <h1 className="text-4xl font-semibold text-foreground">
             Template not found
           </h1>
@@ -290,11 +291,11 @@ const PublicTemplate = () => {
           <Button asChild className="mt-6">
             <Link to={buildPublicTemplatesPath()}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Browse templates
+              Browse checklists
             </Link>
           </Button>
-        </div>
-      </div>
+        </Surface>
+      </PageContainer>
     );
   }
 

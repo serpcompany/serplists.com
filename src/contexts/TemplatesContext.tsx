@@ -92,7 +92,13 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           isPublic: Boolean(template.is_public),
           slug: template.slug || '',
           version: template.version || 1,
-          ownerProfile: undefined
+          ownerProfile:
+            typeof template.owner_username === "string" || typeof template.owner_full_name === "string"
+              ? {
+                  username: typeof template.owner_username === "string" ? template.owner_username : undefined,
+                  full_name: typeof template.owner_full_name === "string" ? template.owner_full_name : undefined,
+                }
+              : undefined,
         }));
 
         return transformedTemplates.map((t: Record<string, unknown>) => ({

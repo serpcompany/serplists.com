@@ -267,7 +267,7 @@ const UserProfile = () => {
       <PublicPageContainer className="py-14">
         <div className="mb-6">
           <PublicPageBackLink to={buildPublicTemplatesPath()}>
-            Back to templates
+            Back to checklists
           </PublicPageBackLink>
         </div>
 
@@ -285,7 +285,7 @@ const UserProfile = () => {
     <PublicPageContainer className="pb-16 pt-6">
       <div className="mb-4">
         <PublicPageBackLink to={buildPublicTemplatesPath()}>
-          Back to templates
+          Back to checklists
         </PublicPageBackLink>
       </div>
 
@@ -378,7 +378,7 @@ const UserProfile = () => {
                   Share profile
                 </Button>
                 <Button variant="ghost" size="sm" asChild>
-                  <Link to={buildPublicTemplatesPath()}>Browse templates</Link>
+                  <Link to={buildPublicTemplatesPath()}>Browse checklists</Link>
                 </Button>
               </div>
             </PublicSidebarSection>
@@ -388,11 +388,8 @@ const UserProfile = () => {
           <section className="min-w-0 lg:max-w-[820px]">
             <div className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                  Public templates
-                </p>
                 <h2 className="mt-1.5 text-3xl font-semibold tracking-tight text-foreground">
-                  Public templates
+                  Public checklists
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Browse every public checklist published from this profile.
@@ -400,9 +397,9 @@ const UserProfile = () => {
               </div>
               <Badge
                 variant="secondary"
-                className="h-8 rounded-md px-2.5 text-xs font-medium text-secondary-foreground"
+              className="h-8 rounded-md px-2.5 text-xs font-medium text-secondary-foreground"
               >
-                {stats.totalTemplates} live templates
+                {stats.totalTemplates} live checklists
               </Badge>
             </div>
 

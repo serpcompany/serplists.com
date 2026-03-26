@@ -1,9 +1,17 @@
-import React, { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Folder, Tag } from "lucide-react";
-import { useTemplates } from "@/contexts/TemplatesContext";
+import React, { useMemo } from 'react';
+import { ArrowRight, Folder, Tag } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+import {
+  IconBadge,
+  PageHero,
+  PageSection,
+  Surface,
+} from '@/components/layout/page-shell';
+import { Badge } from '@/components/ui/badge';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useTemplates } from '@/contexts/TemplatesContext';
+import { buildPublicCategoryPath } from '@/lib/routes';
 
 interface CategoryData {
   name: string;
@@ -12,7 +20,6 @@ interface CategoryData {
 }
 
 const Categories = () => {
-  const navigate = useNavigate();
   const { templates, templatesLoading } = useTemplates();
 
   const categories = useMemo((): CategoryData[] => {
@@ -37,21 +44,26 @@ const Categories = () => {
 
   const getCategoryDescription = (categoryName: string): string => {
     const descriptions: Record<string, string> = {
-      wedding: "Complete wedding planning checklists to ensure your special day goes perfectly",
-      moving: "Comprehensive moving checklists to help you relocate smoothly and efficiently", 
-      camping: "Essential camping checklists for outdoor adventures and camping trips",
-      packing: "Detailed packing lists for travel, moving, and various occasions",
-      "morning routine": "Daily morning routine checklists to start your day productively",
-      "home inspection": "Professional home inspection checklists for buyers and sellers",
-      cooking: "Step-by-step cooking and recipe checklists for delicious meals"
+      wedding:
+        'Complete wedding planning checklists to ensure your special day goes perfectly',
+      moving:
+        'Comprehensive moving checklists to help you relocate smoothly and efficiently',
+      camping:
+        'Essential camping checklists for outdoor adventures and camping trips',
+      packing:
+        'Detailed packing lists for travel, moving, and various occasions',
+      'morning routine':
+        'Daily morning routine checklists to start your day productively',
+      'home inspection':
+        'Professional home inspection checklists for buyers and sellers',
+      cooking: 'Step-by-step cooking and recipe checklists for delicious meals',
     };
     return descriptions[categoryName.toLowerCase()] || `Discover ${categoryName} checklists and templates`;
   };
 
   if (templatesLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="mx-auto max-w-6xl px-4 py-8">
+      <PageSection width="wide">
           <div className="animate-pulse space-y-6">
             <div className="h-8 bg-muted rounded w-64"></div>
             <div className="h-4 bg-muted rounded w-96"></div>
@@ -61,72 +73,80 @@ const Categories = () => {
               ))}
             </div>
           </div>
-        </div>
-      </div>
+      </PageSection>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-6xl px-4 py-8">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold tracking-tight mb-4">Browse Categories</h1>
-          <p className="text-xl text-muted-foreground mb-6">
-            Explore checklists organized by category to find exactly what you need
-          </p>
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Tag className="h-4 w-4" />
-            <span>{categories.length} categories available</span>
-          </div>
+    <>
+      <PageSection spacing="hero" width="wide">
+        <PageHero
+          align="center"
+          eyebrow="Categories"
+          description="Explore checklists organized by category to find exactly what you need."
+          title="Browse the checklist library by category."
+        />
+        <div className="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Tag className="h-4 w-4" />
+          <span>{categories.length} categories available</span>
         </div>
+      </PageSection>
 
-        {/* Categories Grid */}
+      <PageSection className="pt-0" spacing="spacious" width="wide">
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {categories.map((category: { name: unknown; count: unknown }) => (
-            <Card 
+          {categories.map((category) => (
+            <Link
               key={category.name}
-              className="cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-[1.02]"
-              onClick={() => navigate(`/checklists/category/${encodeURIComponent(category.name)}`)}
+              to={buildPublicCategoryPath(category.name)}
             >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    <Folder className="h-5 w-5 text-primary" />
-                    <CardTitle className="text-lg capitalize">{category.name}</CardTitle>
+              <Surface
+                as="article"
+                className="h-full transition-transform duration-200 hover:-translate-y-0.5"
+                tone="docs"
+              >
+                <CardHeader className="space-y-4 pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <IconBadge size="sm">
+                        <Folder className="h-5 w-5" />
+                      </IconBadge>
+                      <CardTitle className="text-lg capitalize">
+                        {category.name}
+                      </CardTitle>
+                    </div>
+                    <Badge className="ml-2" variant="secondary">
+                      {category.count}
+                    </Badge>
                   </div>
-                  <Badge variant="secondary" className="ml-2">
-                    {category.count}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="mb-4 line-clamp-2">
-                  {getCategoryDescription(category.name)}
-                </CardDescription>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    {category.count} {category.count === 1 ? 'checklist' : 'checklists'}
-                  </span>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                </div>
-              </CardContent>
-            </Card>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription className="mb-4 line-clamp-2">
+                    {getCategoryDescription(category.name)}
+                  </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      {category.count}{' '}
+                      {category.count === 1 ? 'checklist' : 'checklists'}
+                    </span>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Surface>
+            </Link>
           ))}
         </div>
 
-        {/* Empty State */}
-        {categories.length === 0 && (
-          <div className="text-center py-12">
-            <Folder className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No categories found</h3>
-            <p className="text-muted-foreground">
+        {categories.length === 0 ? (
+          <Surface className="text-center" padding="xl" tone="glass">
+            <Folder className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+            <h3 className="text-lg font-semibold">No categories found</h3>
+            <p className="mt-2 text-muted-foreground">
               Categories will appear here as checklists are created.
             </p>
-          </div>
-        )}
-      </div>
-    </div>
+          </Surface>
+        ) : null}
+      </PageSection>
+    </>
   );
 };
 

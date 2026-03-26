@@ -11,16 +11,16 @@
 
 - **Quick access to templates and runs**
   - Logged-in users now get a secondary nav under the main header with direct links to:
-    - `Templates` (`/templates`)
-    - `Runs` (`/dashboard`)
+    - `Templates` (`/console/templates`)
+    - `Runs` (`/console/runs`)
   - The Dashboard page now includes a **New Run** action so users can start a run flow without hunting through extra navigation.
-  - Dashboard still preserves the existing **New Template** action and now gives immediate access to template-backed run creation from `/templates`.
+  - The Console still preserves the existing **New Template** action and now gives immediate access to template-backed run creation from `/console/templates`.
 
 ## Guest checklist sharing
 
 - **Run-level checklist sharing**
   - The Templates page now uses a **Run** action to immediately create a checklist run.
-  - New runs can be shared from the run page using the **Share** button, which creates a public `/run/shared/:token` link for that specific run.
+  - New runs can be shared from the run page using the **Share** button, which creates a public `/share/:token` link for that specific run.
   - Each share action now generates a new share token for the current run and updates that same run's share attachment instead of reusing template-level shares.
   - Guests can open a run share URL without logging in and complete the checklist.
   - Shared runs remain read-only for title editing and destructive actions while still allowing progress updates.
@@ -32,26 +32,26 @@
 
 ## Non-edit template detail view
 
-- **Template preview page at `/templates/:id`**
-  - `/templates/:id` now resolves to a read-only template detail view instead of the editor.
-  - `/templates/:id/edit` remains the editor route.
+- **Console template preview page**
+  - `/console/templates/:id` resolves to a read-only template detail view instead of the editor.
+  - `/console/templates/:id/edit` remains the editor route.
   - Template cards and dashboard template links now open the detail view first.
   - The detail page renders template content and provides actions for:
-    - **Edit** (navigates to `/templates/:id/edit`)
-    - **Share** (copies a public `/checklists/{slug-or-id}` template URL and marks the template as public if needed)
-    - **Start Run** (creates a checklist run and opens `/run/:id`)
-    - **Archive** (deletes the template and returns to `/templates`)
-  - Guests or other users can copy the shared template into their account from `/checklists/:slug` using **Copy to My Templates**.
+    - **Edit** (navigates to `/console/templates/:id/edit`)
+    - **Share** (copies a public `/profile/{username}/{templateSlug}` template URL and marks the template as public if needed)
+    - **Start Run** (creates a checklist run and opens `/console/runs/:id`)
+    - **Archive** (deletes the template and returns to `/console/templates`)
+  - Guests or other users can copy the shared template into their account from `/profile/{username}/{templateSlug}` using **Copy to My Templates**.
   - If they hit plan limits, they are prompted to upgrade to continue saving templates.
 
 ## Shared template copying
 
 - **Public shared templates now expose the copy CTA**
-  - All users opening a public shared template at `/checklists/:slug` now see a copy CTA.
+  - All users opening a public shared template at `/profile/{username}/{templateSlug}` now see a copy CTA.
   - Guests are prompted to log in before they can copy a shared template.
   - Logged-in Free users are prompted to upgrade to Pro before they can copy a shared template.
   - Logged-in Pro users can copy the shared template into their account.
-  - The `/templates/:id` detail view uses the same copy gating for non-owners so the public and private detail routes stay consistent.
+  - The `/console/templates/:id` detail view uses the same copy gating for non-owners so the public and private detail routes stay consistent.
 
 ## Dev test-user plans
 
@@ -66,7 +66,7 @@
   - Email sign-in, sign-up, sign-out, cookie session lookup, password changes, session revocation, password reset, and email verification are all handled through Better Auth.
   - The app treats the Better Auth cookie session as the only supported login state for normal user flows.
 - **Protected routes preserve the requested destination**
-  - If a logged-out user opens a protected route like `/templates`, `/dashboard`, `/run/:id`, or `/account`, they are redirected to `/login`.
+  - If a logged-out user opens a protected route like `/console/templates`, `/console`, `/console/runs/:id`, or `/account`, they are redirected to `/login`.
   - After successful sign-in, they are returned to the original protected route they asked for instead of being dropped on a generic default page.
 - **Email verification and password reset fail clearly when email delivery is unavailable**
   - Sign-up requires email verification before the user can sign in.
@@ -79,11 +79,5 @@
     - `401` sends them to `/login` and preserves the page they were trying to use.
     - `403 upgrade_required` or `403 limit_reached` sends them into the Pro checkout flow.
     - `503 billing_unavailable` shows an explicit billing-unavailable message instead of a generic failure.
-  - Public template copy (`/checklists/:slug`), template detail copy (`/templates/:id` for non-owners), and template import/export all use that same contract.
+  - Public template copy (`/profile/{username}/{templateSlug}`), template detail copy (`/console/templates/:id` for non-owners), and template import/export all use that same contract.
   - The client now preserves API `status`, `code`, and `details` instead of guessing behavior from error-message text.
-
-## MVP navigation scope
-
-- **Recipes hidden from navigation for now**
-  - The `/recipes` route remains in the app, but Recipes is temporarily hidden from the header, mobile nav, and footer while it is out of MVP scope.
-  - This keeps navigation focused on active MVP areas like templates, runs, pricing, and public checklists.

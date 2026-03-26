@@ -46,10 +46,10 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
   if (viewMode === 'list') {
     return (
       <Card
-        className="group overflow-hidden rounded-2xl border-border bg-card shadow-[0_18px_48px_-34px_rgba(15,23,42,0.18)] transition hover:-translate-y-0.5 hover:border-primary hover:shadow-[0_24px_60px_-36px_rgba(15,23,42,0.24)]"
+        className="group overflow-hidden rounded-xl border-border/80 bg-card shadow-[0_12px_30px_-24px_rgba(15,23,42,0.14)] transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[0_18px_36px_-28px_rgba(15,23,42,0.16)]"
         onClick={() => onTemplateClick(template)}
       >
-        <CardContent className="flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
+        <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               {isOfficial ? (
@@ -66,12 +66,12 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             <h3 className="mt-3 text-2xl font-semibold text-foreground">
               {template.title}
             </h3>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
               {template.description ||
                 'Reusable checklist pack ready to clone or run.'}
             </p>
 
-            <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
               <span>{template.sections.length} sections</span>
               <span>{totalItems} items</span>
               {ownerLabel ? (
@@ -93,7 +93,7 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             </div>
 
             {categories.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 {categories.slice(0, 4).map((category) => (
                   <PublicPill key={category} asChild>
                     <a
@@ -109,10 +109,10 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
-            <div className="rounded-full border border-border bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground">
+            <div className="rounded-full border border-border/80 bg-background px-4 py-2 text-sm font-medium text-foreground">
               View checklist
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground transition group-hover:translate-x-0.5">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full border border-border/80 bg-secondary text-foreground transition group-hover:translate-x-0.5">
               <ArrowRight className="h-4 w-4" />
             </div>
           </div>
@@ -123,10 +123,10 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
 
   return (
     <Card
-      className="group h-full cursor-pointer overflow-hidden rounded-2xl border-border bg-card shadow-[0_18px_48px_-34px_rgba(15,23,42,0.18)] transition hover:-translate-y-1 hover:border-primary hover:shadow-[0_24px_60px_-36px_rgba(15,23,42,0.24)]"
+      className="group h-full cursor-pointer overflow-hidden rounded-xl border-border/80 bg-card shadow-[0_12px_30px_-24px_rgba(15,23,42,0.14)] transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[0_18px_36px_-28px_rgba(15,23,42,0.16)]"
       onClick={() => onTemplateClick(template)}
     >
-      <CardContent className="flex h-full flex-col p-6">
+      <CardContent className="flex h-full flex-col p-5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             {isOfficial ? (
@@ -142,40 +142,35 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
           <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground" />
         </div>
 
-        <div className="mt-5 flex-1">
-          <h3 className="line-clamp-2 text-2xl font-semibold text-foreground">
+        <div className="mt-4 flex-1">
+          <h3 className="line-clamp-2 text-xl font-semibold text-foreground">
             {template.title}
           </h3>
-          <p className="mt-3 line-clamp-4 text-sm leading-7 text-muted-foreground">
+          <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">
             {template.description ||
               'Reusable checklist pack ready to clone or run.'}
           </p>
         </div>
 
-        <div className="mt-6 rounded-xl bg-secondary p-4">
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>{template.sections.length} sections</span>
-            <span>{totalItems} items</span>
-          </div>
-
-          <div className="mt-4 text-sm text-muted-foreground">
-            {ownerLabel ? (
-              ownerProfilePath ? (
-                <Link
-                  to={ownerProfilePath}
-                  onClick={(event) => event.stopPropagation()}
-                  className="inline-flex items-center gap-1 hover:text-foreground"
-                >
-                  by {ownerLabel}
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
-              ) : (
-                <span>by {ownerLabel}</span>
-              )
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+          <span>{template.sections.length} sections</span>
+          <span>{totalItems} items</span>
+          {ownerLabel ? (
+            ownerProfilePath ? (
+              <Link
+                to={ownerProfilePath}
+                onClick={(event) => event.stopPropagation()}
+                className="inline-flex items-center gap-1 hover:text-foreground"
+              >
+                by {ownerLabel}
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
             ) : (
-              <UserInfo userId={template.userId} />
-            )}
-          </div>
+              <span>by {ownerLabel}</span>
+            )
+          ) : (
+            <UserInfo userId={template.userId} />
+          )}
         </div>
 
         {categories.length > 0 ? (
@@ -195,6 +190,11 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             ) : null}
           </div>
         ) : null}
+
+        <div className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-foreground">
+          <span>View checklist</span>
+          <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+        </div>
       </CardContent>
     </Card>
   );

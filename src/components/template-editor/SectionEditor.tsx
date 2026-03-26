@@ -1,45 +1,63 @@
+import { useFormContext, useWatch } from "react-hook-form";
+
+import {
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ChecklistSection } from "@/types/checklist";
+import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 interface SectionEditorProps {
-  section: ChecklistSection;
   sectionIndex: number;
-  onUpdateSection: (index: number, field: string, value: string) => void;
-  errors: { type: string; message: string }[];
 }
 
-export const SectionEditor = ({
-  section,
+export function SectionEditor({
   sectionIndex,
-  onUpdateSection,
-  errors: _errors
-}: SectionEditorProps) => {
+}: SectionEditorProps): JSX.Element {
+  const { control } = useFormContext<TemplateEditorFormValues>();
+  const section = useWatch({
+    control,
+    name: `sections.${sectionIndex}` as const,
+  });
+
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold">Section details</h3>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Keep section names short enough that the outline reads like a clean table of contents.
+          Keep section names short enough that the outline reads like a clean
+          table of contents.
         </p>
       </div>
 
-      <div>
-        <Label htmlFor="section-title" className="text-base">Section Title (optional)</Label>
-        <Input
-          id="section-title"
-          value={section.title}
-          onChange={(e) => onUpdateSection(sectionIndex, "title", e.target.value)}
-          placeholder={`Section ${sectionIndex + 1} title (optional)`}
-          className="mt-2"
-        />
-      </div>
+      <FormField
+        control={control}
+        name={`sections.${sectionIndex}.title` as const}
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel className="text-base">Section Title (optional)</FormLabel>
+            <FormControl>
+              <Input
+                className="mt-2"
+                placeholder={`Section ${sectionIndex + 1} title (optional)`}
+                {...field}
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
 
       <div className="rounded-xl border border-border/80 bg-muted/20 p-4">
         <p className="text-sm leading-6 text-muted-foreground">
-          This section contains {section.items.length} task{section.items.length !== 1 ? 's' : ''}. Select a task from the outline to edit its details, or add another task to keep building.
+          This section contains {section?.items.length ?? 0} task
+          {section?.items.length === 1 ? "" : "s"}. Select a task from the
+          outline to edit its details, or add another task to keep building.
         </p>
       </div>
     </div>
   );
-};
+}

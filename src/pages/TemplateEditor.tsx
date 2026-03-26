@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useTemplates } from "@/contexts/TemplatesContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, FilePenLine, Loader2, SearchCheck } from "lucide-react";
-import { useTemplateEditor } from "@/hooks/useTemplateEditor";
 import { useTemplateEditorState } from "@/hooks/useTemplateEditorState";
 import { useTemplateSave } from "@/hooks/useTemplateSave";
 import { TemplateHeader } from "@/components/template-editor/TemplateHeader";
@@ -13,9 +14,17 @@ import { SEOMetaEditor } from "@/components/template-editor/SEOMetaEditor";
 import { SectionSidebar } from "@/components/template-editor/SectionSidebar";
 import { SectionEditor } from "@/components/template-editor/SectionEditor";
 import { ItemEditor } from "@/components/template-editor/ItemEditor";
+import { PageContainer } from "@/components/layout/page-shell";
 import { api } from "@/lib/api";
 import { buildConsoleTemplatesPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
+import {
+  buildTemplateEditorFormValues,
+  normalizeTemplateEditorFormForSave,
+  templateEditorFormSchema,
+  type TemplateEditorFormValues,
+} from "@/lib/forms/templateEditorForm";
+import { Form } from "@/components/ui/form";
 
 const TemplateEditor = () => {
   const { id } = useParams();
@@ -23,26 +32,9 @@ const TemplateEditor = () => {
   const { getTemplate } = useTemplates();
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [isPublic, setIsPublic] = useState(true);
   const [templateSlug, setTemplateSlug] = useState<string | undefined>();
   
   const {
-    title,
-    setTitle,
-    description,
-    setDescription,
-    seoTitle,
-    setSeoTitle,
-    seoDescription,
-    setSeoDescription,
-    seoUrl,
-    setSeoUrl,
-    templateType,
-    setTemplateType,
-    categories,
-    setCategories,
-    tags,
-    setTags,
     selectedSectionIndex,
     selectedItemIndex,
     showingSEO,
@@ -54,24 +46,12 @@ const TemplateEditor = () => {
     handleSelectSEO,
     handleSelectTemplateInfo
   } = useTemplateEditorState();
-
-  const {
-    sections,
-    setSections,
-    addSection,
-    updateSection,
-    removeSection,
-    addItem,
-    updateItem,
-    removeItem,
-    addItemContent,
-    updateItemContent,
-    updateItemContentMeta,
-    removeItemContent,
-    addSubItem,
-    updateSubItem,
-    removeSubItem
-  } = useTemplateEditor();
+  const templateForm = useForm<TemplateEditorFormValues>({
+    resolver: zodResolver(templateEditorFormSchema),
+    defaultValues: buildTemplateEditorFormValues(),
+  });
+  const formValues = templateForm.watch();
+  const sections = formValues.sections;
 
   const { saveTemplate, isSaving } = useTemplateSave();
 
@@ -92,32 +72,29 @@ const TemplateEditor = () => {
       slug?: string;
       sections: unknown[];
     }) => {
-      setTitle(template.title);
-      setDescription(template.description || "");
-      setSeoTitle(template.seoTitle || "");
-      setSeoDescription(template.seoDescription || "");
-      setSeoUrl(template.seoUrl || template.slug || "");
-      setTemplateType(template.type || "checklist");
-      setCategories(template.categories || []);
-      setTags(template.tags || []);
-      setIsPublic(template.isPublic);
+      templateForm.reset(
+        buildTemplateEditorFormValues({
+          categories: template.categories,
+          description: template.description,
+          isPublic: template.isPublic,
+          sections: template.sections as TemplateEditorFormValues["sections"],
+          seoDescription: template.seoDescription,
+          seoTitle: template.seoTitle,
+          seoUrl: template.seoUrl,
+          slug: template.slug,
+          tags: template.tags,
+          title: template.title,
+          type: template.type,
+        }),
+      );
       setTemplateSlug(template.slug);
-      setSections(JSON.parse(JSON.stringify(template.sections)));
     };
 
     const load = async () => {
       setLoadError(null);
 
       if (!id) {
-        // New template - initialize with one empty section
-        setSections([
-          {
-            id: `section_${Date.now()}`,
-            title: "",
-            items: [],
-          },
-        ]);
-        setIsPublic(true);
+        templateForm.reset(buildTemplateEditorFormValues());
         setIsLoading(false);
         return;
       }
@@ -149,7 +126,7 @@ const TemplateEditor = () => {
           type: fetched.type === "recipe" ? "recipe" : "checklist",
           isPublic: Boolean((fetched as { is_public?: unknown }).is_public),
           slug: typeof fetched.slug === 'string' ? fetched.slug : "",
-          sections: Array.isArray(fetched.sections) ? fetched.sections : [],
+      sections: Array.isArray(fetched.sections) ? fetched.sections : [],
         });
       } catch (error) {
         if (cancelled) return;
@@ -165,24 +142,32 @@ const TemplateEditor = () => {
     return () => {
       cancelled = true;
     };
-  }, [id, getTemplate, setSections, setTitle, setDescription, setSeoTitle, setSeoDescription, setSeoUrl, setTemplateType, setCategories, setTags]);
+  }, [templateForm, id, getTemplate]);
 
   const handleSave = async () => {
+    const isValid = await templateForm.trigger();
+    if (!isValid) {
+      return;
+    }
+
+    const normalizedForm = normalizeTemplateEditorFormForSave(
+      templateForm.getValues(),
+    );
     const result = await saveTemplate(
       id,
-      title,
-      description,
-      sections,
-      seoTitle,
-      seoDescription,
-      seoUrl,
-      templateType,
-      categories,
-      tags,
-      isPublic
+      normalizedForm.title,
+      normalizedForm.description,
+      normalizedForm.sections,
+      normalizedForm.seoTitle,
+      normalizedForm.seoDescription,
+      normalizedForm.seoUrl,
+      normalizedForm.templateType,
+      normalizedForm.categories,
+      normalizedForm.tags,
+      normalizedForm.isPublic
     );
     if (result.success) {
-      setTemplateSlug(seoUrl || templateSlug);
+      setTemplateSlug(normalizedForm.seoUrl || templateSlug);
     }
     setErrors(result.errors);
   };
@@ -217,16 +202,16 @@ const TemplateEditor = () => {
   const sectionLabel =
     selectedSection?.title || `Section ${selectedSectionIndex + 1}`;
   const editorHeading = showingTemplateInfo
-    ? "Template input"
+    ? "Template form"
     : showingSEO
-      ? "Search presentation"
+      ? "Search preview"
       : selectedItem
         ? selectedItem.title || `Task ${selectedItemIndex + 1}`
         : sectionLabel;
   const editorDescription = showingTemplateInfo
-    ? "Set the title, visibility, categories, and structure before you start filling in detailed task content."
+    ? "Name the SOP, define the outcome, and set access plus organization fields before detailing the steps."
     : showingSEO
-      ? "Keep the SEO fields concise so the public version reads more like a clear docs page than a landing page."
+      ? "Keep the public title, slug, and description tight so the template reads cleanly outside the editor."
       : selectedItem
         ? "Write the instructions, supporting content, and subtasks for the selected item."
         : "Keep section names concise so the left rail stays easy to scan.";
@@ -243,7 +228,7 @@ const TemplateEditor = () => {
 
       {/* Error Alert */}
       {errors.length > 0 && (
-        <div className="mx-auto max-w-7xl px-4 py-4">
+        <PageContainer className="py-4" width="shell">
           <Alert variant="destructive" className="docs-panel border-destructive/30 shadow-none">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
@@ -255,35 +240,36 @@ const TemplateEditor = () => {
               </ul>
             </AlertDescription>
           </Alert>
-        </div>
+        </PageContainer>
       )}
 
-      <div className="mx-auto max-w-7xl px-4 py-6">
-        <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+      <Form {...templateForm}>
+      <PageContainer className="py-4" width="shell">
+        <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
           <div className="space-y-4">
             <div className="docs-panel overflow-hidden">
               {[
                 {
                   active: showingTemplateInfo,
                   configured:
-                    Boolean(title) ||
-                    Boolean(description) ||
-                    categories.length > 0 ||
-                    tags.length > 0,
+                    Boolean(formValues.title) ||
+                    Boolean(formValues.description) ||
+                    formValues.categories.length > 0 ||
+                    formValues.tags.length > 0,
                   icon: FilePenLine,
-                  label: "Template info",
-                  detail: "Title, tags, visibility, and type",
+                  label: "Template form",
+                  detail: "Identity, access, and organization",
                   onClick: handleSelectTemplateInfo,
                 },
                 {
                   active: showingSEO,
                   configured:
-                    Boolean(seoTitle) ||
-                    Boolean(seoDescription) ||
-                    Boolean(seoUrl),
+                    Boolean(formValues.seoTitle) ||
+                    Boolean(formValues.seoDescription) ||
+                    Boolean(formValues.seoUrl),
                   icon: SearchCheck,
-                  label: "SEO & sharing",
-                  detail: "Slug, preview title, and meta description",
+                  label: "Search preview",
+                  detail: "Slug, title, and description",
                   onClick: handleSelectSEO,
                 },
               ].map((entry, index) => {
@@ -295,14 +281,14 @@ const TemplateEditor = () => {
                     type="button"
                     onClick={entry.onClick}
                     className={cn(
-                      "flex w-full items-start gap-3 px-4 py-4 text-left transition",
+                      "flex w-full items-start gap-3 px-4 py-3.5 text-left transition",
                       index > 0 && "border-t border-border/70",
                       entry.active ? "bg-muted/45" : "hover:bg-muted/30",
                     )}
                   >
                     <span
                       className={cn(
-                        "mt-0.5 rounded-lg border border-border/70 p-2",
+                        "mt-0.5 rounded-md border border-border/70 p-2",
                         entry.active ? "bg-background text-primary" : "bg-card text-muted-foreground",
                       )}
                     >
@@ -327,85 +313,49 @@ const TemplateEditor = () => {
             </div>
 
             <SectionSidebar
-              sections={sections}
               selectedSectionIndex={selectedSectionIndex}
               selectedItemIndex={selectedItemIndex}
               onSelectSection={handleSelectSection}
               onSelectItem={handleSelectItem}
-              onAddSection={addSection}
-              onRemoveSection={removeSection}
-              onAddItem={addItem}
-              onRemoveItem={removeItem}
-              onUpdateSection={updateSection}
-              onUpdateItem={updateItem}
             />
           </div>
 
           <div className="docs-panel overflow-hidden">
-            <div className="border-b border-border/70 bg-muted/30 px-6 py-5">
+            <div className="flex flex-col gap-3 border-b border-border/70 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-muted-foreground">
-                Input workspace
+                Editing panel
               </p>
-              <h2 className="mt-2 text-2xl font-semibold text-foreground">
+              <h2 className="mt-1 text-xl font-semibold text-foreground">
                 {editorHeading}
               </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
                 {editorDescription}
               </p>
+              </div>
+              {!showingTemplateInfo && !showingSEO ? (
+                <div className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
+                  {selectedItem ? "Task details" : "Section details"}
+                </div>
+              ) : null}
             </div>
 
-            <div className="px-6 py-6">
+            <div className="px-5 py-5">
               {showingTemplateInfo ? (
-                <TemplateBasicInfo
-                  title={title}
-                  description={description}
-                  templateType={templateType}
-                  categories={categories}
-                  tags={tags}
-                  isPublic={isPublic}
-                  onTitleChange={setTitle}
-                  onDescriptionChange={setDescription}
-                  onTemplateTypeChange={setTemplateType}
-                  onCategoriesChange={setCategories}
-                  onTagsChange={setTags}
-                  onPublicChange={setIsPublic}
-                  errors={errors}
-                />
+                <TemplateBasicInfo />
               ) : showingSEO ? (
-                <SEOMetaEditor
-                  seoTitle={seoTitle}
-                  seoDescription={seoDescription}
-                  seoUrl={seoUrl}
-                  onSeoTitleChange={setSeoTitle}
-                  onSeoDescriptionChange={setSeoDescription}
-                  onSeoUrlChange={setSeoUrl}
-                />
+                <SEOMetaEditor />
               ) : selectedSection ? (
                 <div className="space-y-6">
                   {selectedItemIndex === null ? (
-                    <SectionEditor
-                      section={selectedSection}
-                      sectionIndex={selectedSectionIndex}
-                      onUpdateSection={updateSection}
-                      errors={errors}
-                    />
+                    <SectionEditor sectionIndex={selectedSectionIndex} />
                   ) : selectedItem ? (
                     <ItemEditor
-                      item={selectedItem}
-                      sectionIndex={selectedSectionIndex}
                       itemIndex={selectedItemIndex}
-                      onUpdateItem={updateItem}
-                      onAddItemContent={addItemContent}
-                      onUpdateItemContent={updateItemContent}
-                      onUpdateItemContentMeta={updateItemContentMeta}
-                      onRemoveItemContent={removeItemContent}
-                      onAddSubItem={addSubItem}
-                      onUpdateSubItem={updateSubItem}
-                      onRemoveSubItem={removeSubItem}
-                      errors={errors}
+                      sectionIndex={selectedSectionIndex}
                     />
                   ) : (
-                    <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-6 text-center">
+                    <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed border-border/80 bg-muted/20 px-6 text-center">
                       <p className="max-w-md text-sm leading-6 text-muted-foreground">
                         Select a task from the outline to edit its instructions and attached content.
                       </p>
@@ -413,7 +363,7 @@ const TemplateEditor = () => {
                   )}
                 </div>
               ) : (
-                <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-6 text-center">
+                <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed border-border/80 bg-muted/20 px-6 text-center">
                   <p className="max-w-md text-sm leading-6 text-muted-foreground">
                     Add a section from the outline to start building this template.
                   </p>
@@ -422,7 +372,8 @@ const TemplateEditor = () => {
             </div>
           </div>
         </div>
-      </div>
+      </PageContainer>
+      </Form>
     </div>
   );
 };

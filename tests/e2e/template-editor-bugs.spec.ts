@@ -38,7 +38,7 @@ test.describe("template editor regressions", () => {
     let createdTemplateId: string | null = null;
 
     await signInAsAdmin(page);
-    await page.goto("/templates/new");
+    await page.goto("/dashboard/templates/new");
 
     await page.getByLabel("Template Title").fill(templateTitle);
     await page.getByPlaceholder("Add a tag...").fill(tagName);
@@ -54,7 +54,7 @@ test.describe("template editor regressions", () => {
     await expect(page.getByText(categoryName, { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/templates$/);
+    await expect(page).toHaveURL(/\/console\/templates$/);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -78,7 +78,7 @@ test.describe("template editor regressions", () => {
     let createdTemplateId: string | null = null;
 
     await signInAsAdmin(page);
-    await page.goto("/templates/new");
+    await page.goto("/dashboard/templates/new");
 
     await page.getByLabel("Template Title").fill(templateTitle);
     await page.getByText("SEO & Meta").click();
@@ -87,7 +87,7 @@ test.describe("template editor regressions", () => {
     await page.getByLabel("SEO Meta Description").fill(seoDescription);
 
     await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/templates$/);
+    await expect(page).toHaveURL(/\/console\/templates$/);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -102,7 +102,7 @@ test.describe("template editor regressions", () => {
       throw new Error("Template ID missing after save");
     }
 
-    await page.goto(`/templates/${createdTemplateId}/edit`);
+    await page.goto(`/dashboard/templates/${createdTemplateId}/edit`);
     await page.getByText("SEO & Meta").click();
 
     await expect(page.getByLabel("SEO Title")).toHaveValue(seoTitle);

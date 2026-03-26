@@ -53,4 +53,29 @@ describe('Layout console shell', () => {
     expect(html).toContain('Search templates');
     expect(html).not.toContain('Operate your checklist system');
   });
+
+  it('keeps the public footer lean instead of repeating header links', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/pricing']}>
+        <Routes>
+          <Route
+            path="*"
+            element={
+              <Layout>
+                <div>Public child</div>
+              </Layout>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Checklists');
+    expect(html).not.toContain('Explore');
+    expect(html).not.toContain('Outside the app');
+    expect(html).toContain('Company');
+    expect(html).toContain('Support');
+    expect(html).toContain('Network');
+    expect(html).toContain('SERP DR');
+  });
 });

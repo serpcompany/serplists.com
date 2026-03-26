@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
     from: vi.fn(),
+    leftJoin: vi.fn(),
     where: vi.fn(),
     orderBy: vi.fn(),
     limit: vi.fn(),
@@ -49,6 +50,7 @@ describe('Templates Handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
+    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
     dbMocks.selectChain.limit.mockResolvedValue([]);
@@ -79,6 +81,8 @@ describe('Templates Handlers', () => {
         tags: '["tag-1"]',
         user_id: 'user-1',
         is_public: 1,
+        owner_username: 'alice',
+        owner_full_name: 'Alice Example',
       },
     ]);
 
@@ -91,6 +95,10 @@ describe('Templates Handlers', () => {
     expect(data[0].sections[0].items).toHaveLength(1);
     expect(data[0].categories).toEqual(['seo']);
     expect(data[0].tags).toEqual(['tag-1']);
+    expect(data[0].ownerProfile).toEqual({
+      username: 'alice',
+      full_name: 'Alice Example',
+    });
   });
 
   it('should reject unauthenticated template creation', async () => {
@@ -373,8 +381,99 @@ describe('Templates Handlers', () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
+    expect(data.total).toBe(1);
     expect(data.imported).toBe(1);
     expect(data.failed).toEqual([]);
+    expect(data.successes).toEqual([
+      expect.objectContaining({
+        index: 0,
+        title: 'Imported',
+        visibility: 'private',
+      }),
+    ]);
+  });
+
+  it('should return per-template partial import results when some templates fail', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({
+      plan: 'pro',
+      limits: { maxTemplates: null, maxActiveRuns: null },
+    });
+    dbMocks.selectChain.limit.mockResolvedValue([]);
+
+    const request = new Request('http://localhost/api/templates/backup', {
+      method: 'POST',
+      body: JSON.stringify({
+        templates: [
+          {
+            title: 'Imported',
+            sections: [{ id: 's-1', title: 'Checklist', items: [{ id: 'i-1', title: 'Item' }] }],
+            isPublic: false,
+          },
+          {
+            title: 'Broken Template',
+            sections: 'not-json',
+            isPublic: false,
+          },
+        ],
+        options: { visibility: 'private' },
+      }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.total).toBe(2);
+    expect(data.imported).toBe(1);
+    expect(data.successes).toHaveLength(1);
+    expect(data.failed).toEqual([
+      expect.objectContaining({
+        index: 1,
+        title: 'Broken Template',
+        code: 'invalid_sections',
+      }),
+    ]);
+  });
+
+  it('should return structured failure details when all imported templates fail', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({
+      plan: 'pro',
+      limits: { maxTemplates: null, maxActiveRuns: null },
+    });
+
+    const request = new Request('http://localhost/api/templates/backup', {
+      method: 'POST',
+      body: JSON.stringify({
+        templates: [
+          {
+            title: 'Broken Template A',
+            sections: 'not-json',
+          },
+          {
+            title: 'Broken Template B',
+            sections: 'still-not-json',
+          },
+        ],
+      }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.code).toBe('template_import_failed');
+    expect(data.details).toEqual(
+      expect.objectContaining({
+        total: 2,
+        imported: 0,
+        failed: [
+          expect.objectContaining({ title: 'Broken Template A', code: 'invalid_sections' }),
+          expect.objectContaining({ title: 'Broken Template B', code: 'invalid_sections' }),
+        ],
+      }),
+    );
   });
 
   it('should allow cloning templates for free users within template limit', async () => {

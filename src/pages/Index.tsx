@@ -1,173 +1,264 @@
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/CloudflareAuthContext";
-import { CheckCircle, ArrowRight, ListChecks, BookOpen } from "lucide-react";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTemplates } from "@/contexts/TemplatesContext";
-import { useMemo } from "react";
-import { UserInfo } from "@/components/shared/UserInfo";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  ArrowRight,
+  Compass,
+  FilePenLine,
+  PlaySquare,
+  Share2,
+} from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { useTemplates } from '@/contexts/TemplatesContext';
+import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
+import {
+  buildCanonicalPublicTemplatePath,
+  buildConsoleTemplatesPath,
+  buildPublicTemplatesPath,
+} from '@/lib/routes';
+import { PageSection } from '@/components/layout/page-shell';
+
+const countTemplateItems = (sectionCountable: {
+  sections: Array<{ items: unknown[] }>;
+}) =>
+  sectionCountable.sections.reduce(
+    (total, section) => total + section.items.length,
+    0,
+  );
+
 const Index = () => {
-  const {
-    user
-  } = useAuth();
-  const {
-    templates,
-    templatesLoading
-  } = useTemplates();
+  const { user } = useAuth();
+  const { templates, templatesLoading } = useTemplates();
 
-  const publicTemplates = useMemo(() => {
-    return templates.filter((t) => t.isPublic === true && t.userId !== "system");
-  }, [templates]);
+  const publicTemplates = useMemo(
+    () =>
+      templates.filter(
+        (template) =>
+          template.isPublic &&
+          template.userId !== 'system' &&
+          !isRepoTemplate(template),
+      ),
+    [templates],
+  );
 
-  const featuredTemplates = useMemo(() => {
-    return templates.filter((t) => t.isPublic === true && t.userId === "system");
-  }, [templates]);
+  const featuredTemplates = useMemo(
+    () =>
+      templates.filter(
+        (template) =>
+          template.isPublic &&
+          (template.userId === 'system' || isRepoTemplate(template)),
+      ),
+    [templates],
+  );
 
-  return <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-16">
-        <div className="mb-16 text-center">
-          <h1 className="mb-4 text-4xl font-bold md:text-5xl">
-            Create and Run Checklists for Your Processes
-          </h1>
-          <p className="mx-auto mb-8 max-w-2xl text-lg text-muted-foreground">
-            Build standardized checklists for your team, manage consistent
-            processes, and track completion across your organization.
-          </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            {user ? <Link to="/templates">
-                <Button className="text-md px-6 py-2">
-                  My Templates
+  const templateStats = useMemo(() => {
+    const creatorIds = new Set(
+      [...featuredTemplates, ...publicTemplates]
+        .map((template) => template.userId)
+        .filter(Boolean),
+    );
+
+    return [
+      {
+        label: 'Public templates',
+        value: String(featuredTemplates.length + publicTemplates.length),
+      },
+      {
+        label: 'Documented steps',
+        value: String(
+          [...featuredTemplates, ...publicTemplates].reduce(
+            (total, template) => total + countTemplateItems(template),
+            0,
+          ),
+        ),
+      },
+      {
+        label: 'Template creators',
+        value: String(creatorIds.size),
+      },
+    ];
+  }, [featuredTemplates, publicTemplates]);
+  const showcaseTemplates = useMemo(
+    () => [...featuredTemplates, ...publicTemplates].slice(0, 6),
+    [featuredTemplates, publicTemplates],
+  );
+
+  return (
+    <div className="pb-16">
+      <PageSection spacing="hero" width="shell">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+          <div className="docs-panel p-6 sm:p-8">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/60 px-3 py-1.5 text-sm font-medium text-muted-foreground">
+              <Compass className="h-4 w-4" />
+              SOP workspace
+            </div>
+
+            <div className="mt-5 max-w-3xl space-y-4">
+              <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+                Build the template once. Run it every time.
+              </h1>
+              <p className="max-w-2xl text-base leading-7 text-muted-foreground">
+                Serplists should feel like a fast form system for SOPs, process
+                templates, and repeatable runs. Start with the structure, keep
+                the inputs dense, and publish later if the workflow deserves a
+                public page.
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button asChild>
+                <Link
+                  to={
+                    user
+                      ? buildConsoleTemplatesPath()
+                      : buildPublicTemplatesPath()
+                  }
+                >
+                  {user ? 'Open template workspace' : 'Browse templates'}
                   <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              {!user ? (
+                <Button asChild variant="outline">
+                  <Link to="/register">Create an account</Link>
                 </Button>
-              </Link> : <Link to="/register">
-                <Button className="text-md px-6 py-2">
-                  Get Started
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>}
+              ) : null}
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              {templateStats.map((item) => (
+                <div key={item.label} className="rounded-lg border border-border/80 bg-card px-4 py-4">
+                  <div className="text-2xl font-semibold text-foreground">
+                    {item.value}
+                  </div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    {item.label}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {featuredTemplates.length > 0 && <div className="py-12">
-            <h2 className="mb-4 text-center text-3xl font-bold">Featured Checklists</h2>
-            <p className="mb-8 text-center text-muted-foreground">
-              Try these example checklists - no login required!
+          <div className="docs-panel p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+              Start here
             </p>
-            <div className="grid gap-6 sm:grid-cols-2">
-              {featuredTemplates.map((template: { id: unknown; title: unknown; description: unknown; sections: unknown; slug: unknown }) => <Card key={template.id} className="overflow-hidden border-2 border-primary/20 transition-all hover:shadow-md">
-                  <CardHeader className="bg-primary/5">
-                    <CardTitle className="text-2xl">{template.title}</CardTitle>
-                    <CardDescription className="text-base">
-                      {template.description}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-6">
-                    <div className="text-sm text-muted-foreground">
-                      <div className="mb-2 flex items-center">
-                        <ListChecks className="mr-2 h-4 w-4" />
-                        <span>
-                          {template.sections.reduce((total, section) => total + section.items.length, 0)}{" "}
-                          items in {template.sections.length} sections
-                        </span>
+            <div className="mt-4 space-y-3">
+              {[
+                {
+                  title: 'Template editing',
+                  description:
+                    'Define the JSON-backed SOP structure, metadata, and step content.',
+                  icon: FilePenLine,
+                },
+                {
+                  title: 'Run execution',
+                  description:
+                    'Launch a concrete run for a human or AI operator and track progress separately from the source template.',
+                  icon: PlaySquare,
+                },
+                {
+                  title: 'Public publishing',
+                  description:
+                    'Share the SOP only after the workflow is solid enough to be a reusable public asset.',
+                  icon: Share2,
+                },
+              ].map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <div
+                    key={item.title}
+                    className="rounded-lg border border-border/80 bg-card px-4 py-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-md border border-border/80 bg-muted/50 p-2 text-foreground">
+                        <Icon className="h-4 w-4" />
                       </div>
-                      <div className="flex items-center">
-                        <BookOpen className="mr-2 h-4 w-4" />
-                        <span>Example Process</span>
+                      <div>
+                        <h2 className="text-sm font-semibold text-foreground">
+                          {item.title}
+                        </h2>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                          {item.description}
+                        </p>
                       </div>
                     </div>
-                  </CardContent>
-                  <CardFooter>
-                    <Link to={`/checklists/${template.slug}`} className="w-full">
-                      <Button variant="default" className="w-full">
-                        View Checklist
-                      </Button>
-                    </Link>
-                  </CardFooter>
-                </Card>)}
+                  </div>
+                );
+              })}
             </div>
-          </div>}
+          </div>
+        </div>
+      </PageSection>
 
-        <div className="py-12">
-          <h2 className="mb-8 text-center text-2xl font-bold">Community Checklists</h2>
-          {templatesLoading ? (
-            <div className="mx-auto max-w-md">
-              <LoadingSpinner message="Loading checklists..." />
+      <PageSection className="pt-0" width="shell">
+        <div className="docs-panel overflow-hidden">
+          <div className="flex flex-col gap-4 border-b border-border/70 px-5 py-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                Template library
+              </p>
+              <h2 className="mt-1 text-2xl font-semibold text-foreground">
+                Start from a template or open an existing run.
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                The product should lead users toward structure and execution, not padded marketing sections.
+              </p>
             </div>
-          ) : publicTemplates.length > 0 ? (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {publicTemplates.map((template: { id: unknown; title: unknown; description: unknown; sections: unknown; userId: unknown; slug: unknown }) => <Card key={template.id} className="overflow-hidden">
-                  <CardHeader>
-                    <CardTitle className="text-xl">{template.title}</CardTitle>
-                    <CardDescription>
-                      {template.description || "No description"}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="text-sm text-muted-foreground">
-                        <div className="flex items-center">
-                          <ListChecks className="mr-2 h-4 w-4" />
-                          <span>
-                            {template.sections.reduce((total, section) => total + section.items.length, 0)}{" "}
-                            items in {template.sections.length} sections
-                          </span>
+            <Button asChild variant="outline">
+              <Link to={buildPublicTemplatesPath()}>Open the library</Link>
+            </Button>
+          </div>
+
+          <div className="divide-y divide-border/70">
+            {templatesLoading ? (
+              <div className="px-5 py-5 text-sm text-muted-foreground">
+                Loading templates…
+              </div>
+            ) : showcaseTemplates.length > 0 ? (
+              showcaseTemplates.map((template, index) => {
+                const templatePath =
+                  buildCanonicalPublicTemplatePath(template);
+
+                return (
+                  <Link
+                    key={template.id}
+                    to={templatePath ?? buildPublicTemplatesPath()}
+                    className="block px-5 py-4 transition hover:bg-muted/20"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          {index < featuredTemplates.length ? 'Official template' : 'Community template'}
                         </div>
+                        <h3 className="mt-1 truncate text-lg font-semibold text-foreground">
+                          {template.title}
+                        </h3>
+                        <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                          {template.description ||
+                            'Reusable workflow template ready to copy into your account.'}
+                        </p>
                       </div>
-                      <UserInfo userId={template.userId} />
+                      <div className="shrink-0 text-right text-xs text-muted-foreground">
+                        <div>{template.sections.length} sections</div>
+                        <div className="mt-1">{countTemplateItems(template)} items</div>
+                      </div>
                     </div>
-                  </CardContent>
-                  <CardFooter>
-                    <Link to={`/checklists/${template.slug}`} className="w-full">
-                      <Button variant="outline" className="w-full">
-                        View Checklist
-                      </Button>
-                    </Link>
-                  </CardFooter>
-                </Card>)}
-            </div>
-          ) : (
-            <div className="text-center text-muted-foreground">
-              No public checklists yet.
-            </div>
-          )}
-        </div>
-
-        <div className="mt-16 grid gap-8 md:grid-cols-3">
-          <div className="rounded-lg border bg-card p-6 shadow-sm">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <CheckCircle className="h-6 w-6" />
-            </div>
-            <h3 className="mb-2 text-xl font-semibold">Create Templates</h3>
-            <p className="text-muted-foreground">
-              Build reusable checklist templates with sections, items, and detailed
-              instructions for your team to follow.
-            </p>
-          </div>
-          <div className="rounded-lg border bg-card p-6 shadow-sm">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <ListChecks className="h-6 w-6" />
-            </div>
-            <h3 className="mb-2 text-xl font-semibold">Run Checklists</h3>
-            <p className="text-muted-foreground">
-              Create runs from templates to track progress through each item and
-              ensure consistent process execution.
-            </p>
-          </div>
-          <div className="rounded-lg border bg-card p-6 shadow-sm">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <BookOpen className="h-6 w-6" />
-            </div>
-            <h3 className="mb-2 text-xl font-semibold">Share Publicly</h3>
-            <p className="text-muted-foreground">
-              Share your checklists publicly with anyone, allowing them to view and use
-              your process workflows.
-            </p>
+                  </Link>
+                );
+              })
+            ) : (
+              <div className="px-5 py-5 text-sm text-muted-foreground">
+                No public templates yet.
+              </div>
+            )}
           </div>
         </div>
-
-        
-      </div>
-    </div>;
+      </PageSection>
+    </div>
+  );
 };
+
 export default Index;

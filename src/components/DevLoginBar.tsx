@@ -1,19 +1,39 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
-import { useAuth } from '@/contexts/CloudflareAuthContext';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 import { Users, X } from 'lucide-react';
-import { DEV_TEST_USERS, DEV_TEST_USER_PASSWORD_RESET_COMMAND, getDevTestUserPasswordHelp, type DevTestUser } from '@/lib/auth/devUsers';
 
-export function DevLoginBar() {
+import { Button } from '@/components/ui/button';
+import { PageContainer } from '@/components/layout/page-shell';
+import { useAuth } from '@/contexts/CloudflareAuthContext';
+import {
+  DEV_TEST_USERS,
+  DEV_TEST_USER_PASSWORD_RESET_COMMAND,
+  getDevTestUserPasswordHelp,
+  type DevTestUser,
+} from '@/lib/auth/devUsers';
+import {
+  buildConsoleHomePath,
+  isBlankTemplateEditorRoute,
+} from '@/lib/routes';
+import { toast } from 'sonner';
+import { useLocation, useNavigate } from 'react-router-dom';
+
+function resolveFrontendPort(): string {
+  return typeof window === 'undefined' ? '' : window.location.port;
+}
+
+export function DevLoginBar(): JSX.Element | null {
   const { login, logout, user } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const [isVisible, setIsVisible] = React.useState(true);
   const [isLoading, setIsLoading] = React.useState(false);
 
   // Only show in development
   if (!import.meta.env.DEV) return null;
+
+  if (isBlankTemplateEditorRoute(location.pathname)) {
+    return null;
+  }
 
   if (!isVisible) {
     return (
@@ -33,7 +53,7 @@ export function DevLoginBar() {
       const result = await login(testUser.email, testUser.password);
       if (result.ok) {
         toast.success(`Logged in as ${testUser.name}`);
-        navigate('/dashboard');
+        navigate(buildConsoleHomePath());
       } else {
         toast.error(result.error ?? `Login failed. If this dev password was changed locally, run ${DEV_TEST_USER_PASSWORD_RESET_COMMAND}.`);
       }
@@ -52,7 +72,7 @@ export function DevLoginBar() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 bg-yellow-100 dark:bg-yellow-900 border-t-4 border-yellow-500 p-3 shadow-lg">
-      <div className="flex items-center justify-between max-w-7xl mx-auto">
+      <PageContainer className="flex items-center justify-between px-0 sm:px-0 lg:px-0" width="shell">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-yellow-800 dark:text-yellow-200">
@@ -103,10 +123,10 @@ export function DevLoginBar() {
         >
           <X className="h-4 w-4" />
         </button>
-      </div>
+      </PageContainer>
       
       <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-2 text-center">
-        API: http://localhost:8788 | Frontend: http://localhost:{window.location.port} | 
+        API: http://localhost:8788 | Frontend: http://localhost:{resolveFrontendPort()} | 
         <span className="ml-1">{getDevTestUserPasswordHelp()}</span>
       </div>
     </div>

@@ -12,7 +12,7 @@
 - Why this matters:
   - Prevents accidental reuse of guest link state.
   - Keeps older shared links from staying active/in-progress and affecting active-run limit accounting.
-- Update (2026-03-21): Sharing was moved to run-level flow in UI so users now click **Run** on a template to create a run, then click **Share** from the run page to create `/run/shared/:token`.
+- Update (2026-03-21, revised route contract on 2026-03-24): Sharing is run-level in the UI, and the public guest URL is `/share/:token`.
 - Update (2026-03-20): `/api/checklists/run/:runId/share` now enables sharing the current run directly and always mints a new token for that run on each request.
 - Follow-up:
   - If a share action still fails with “Failed to create a share link,” check API log for 403 (`limit_reached`) vs schema errors on missing sharing columns.

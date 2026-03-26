@@ -1,133 +1,161 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { Trash2 } from "lucide-react";
-import { ChecklistItemContent } from "@/types/checklist";
-import { ContentAddPanel } from "./ContentAddPanel";
-import { TextContentEditor } from "./content-types/TextContentEditor";
-import { MediaContentEditor } from "./content-types/MediaContentEditor";
-import { EmbedContentEditor } from "./content-types/EmbedContentEditor";
-import { SubItemsEditor } from "./content-types/SubItemsEditor";
+
+import { ContentAddPanel } from "@/components/template-editor/ContentAddPanel";
+import { EmbedContentEditor } from "@/components/template-editor/content-types/EmbedContentEditor";
+import { MediaContentEditor } from "@/components/template-editor/content-types/MediaContentEditor";
+import { SubItemsEditor } from "@/components/template-editor/content-types/SubItemsEditor";
+import { TextContentEditor } from "@/components/template-editor/content-types/TextContentEditor";
+import { Button } from "@/components/ui/button";
+import {
+  createTemplateEditorContent,
+  type TemplateEditorContentType,
+  type TemplateEditorFormValues,
+} from "@/lib/forms/templateEditorForm";
 
 interface ContentEditorProps {
-  contents: ChecklistItemContent[];
-  sectionIndex: number;
   itemIndex: number;
-  onAddItemContent: (sectionIndex: number, itemIndex: number, contentType: "text" | "image" | "video" | "file" | "embed" | "subItems") => void;
-  onUpdateItemContent: (sectionIndex: number, itemIndex: number, contentIndex: number, value: string) => void;
-  onUpdateItemContentMeta: (sectionIndex: number, itemIndex: number, contentIndex: number, updates: unknown) => void;
-  onRemoveItemContent: (sectionIndex: number, itemIndex: number, contentIndex: number) => void;
-  onAddSubItem: (sectionIndex: number, itemIndex: number, contentIndex: number) => void;
-  onUpdateSubItem: (sectionIndex: number, itemIndex: number, contentIndex: number, subItemIndex: number, title: string) => void;
-  onRemoveSubItem: (sectionIndex: number, itemIndex: number, contentIndex: number, subItemIndex: number) => void;
+  sectionIndex: number;
 }
 
-export const ContentEditor = ({
-  contents,
-  sectionIndex,
+export function ContentEditor({
   itemIndex,
-  onAddItemContent,
-  onUpdateItemContent,
-  onUpdateItemContentMeta,
-  onRemoveItemContent,
-  onAddSubItem,
-  onUpdateSubItem,
-  onRemoveSubItem
-}: ContentEditorProps) => {
+  sectionIndex,
+}: ContentEditorProps): JSX.Element {
+  const { control, setValue } = useFormContext<TemplateEditorFormValues>();
   const [showAddPanel, setShowAddPanel] = useState(false);
+  const contentsFieldArray = useFieldArray({
+    control,
+    keyName: "fieldId",
+    name: `sections.${sectionIndex}.items.${itemIndex}.contents` as const,
+  });
+  const contents =
+    useWatch({
+      control,
+      name: `sections.${sectionIndex}.items.${itemIndex}.contents` as const,
+    }) ?? [];
 
-  const handleAddContent = (contentType: "text" | "image" | "video" | "file" | "embed" | "subItems") => {
-    onAddItemContent(sectionIndex, itemIndex, contentType);
-  };
+  function handleAddContent(type: TemplateEditorContentType): void {
+    contentsFieldArray.append(createTemplateEditorContent(type));
+    setShowAddPanel(false);
+  }
 
-  const renderContentEditor = (content: ChecklistItemContent, contentIndex: number) => {
-    const commonProps = {
-      key: `content-${contentIndex}`,
-      value: content.value,
-      onValueChange: (value: string) => onUpdateItemContent(sectionIndex, itemIndex, contentIndex, value),
-      onUpdateMeta: (updates: unknown[]) => onUpdateItemContentMeta(sectionIndex, itemIndex, contentIndex, updates)
-    };
+  function handleContentValueChange(contentIndex: number, value: string): void {
+    setValue(
+      `sections.${sectionIndex}.items.${itemIndex}.contents.${contentIndex}.value`,
+      value,
+      { shouldDirty: true },
+    );
+  }
+
+  function handleContentMetaChange(
+    contentIndex: number,
+    updates: Partial<TemplateEditorFormValues["sections"][number]["items"][number]["contents"][number]>,
+  ): void {
+    const currentContent = contents[contentIndex];
+    if (!currentContent) {
+      return;
+    }
+
+    setValue(
+      `sections.${sectionIndex}.items.${itemIndex}.contents.${contentIndex}`,
+      {
+        ...currentContent,
+        ...updates,
+      },
+      { shouldDirty: true },
+    );
+  }
+
+  function renderContentEditor(contentIndex: number): JSX.Element | null {
+    const content = contents[contentIndex];
+    if (!content) {
+      return null;
+    }
 
     switch (content.type) {
       case "text":
         return (
           <TextContentEditor
+            onChange={(value) => handleContentValueChange(contentIndex, value)}
             value={content.value}
-            onChange={(value: unknown) => onUpdateItemContent(sectionIndex, itemIndex, contentIndex, value)}
           />
         );
-
       case "image":
       case "video":
       case "file":
         return (
           <MediaContentEditor
+            fileName={content.fileName}
+            onFileInfoChange={(fileName, fileSize) =>
+              handleContentMetaChange(contentIndex, { fileName, fileSize })
+            }
+            onValueChange={(value) => handleContentValueChange(contentIndex, value)}
             type={content.type}
             value={content.value}
-            fileName={content.fileName}
-            onValueChange={(value: unknown) => onUpdateItemContent(sectionIndex, itemIndex, contentIndex, value)}
-            onFileInfoChange={(fileName: string, fileSize: number) => onUpdateItemContentMeta(sectionIndex, itemIndex, contentIndex, { fileName, fileSize })}
           />
         );
-
       case "embed":
         return (
           <EmbedContentEditor
+            onValueChange={(value) => handleContentValueChange(contentIndex, value)}
             value={content.value}
-            onValueChange={(value: unknown) => onUpdateItemContent(sectionIndex, itemIndex, contentIndex, value)}
           />
         );
-
       case "subItems":
         return (
           <SubItemsEditor
-            subItems={content.subItems || []}
-            sectionIndex={sectionIndex}
-            itemIndex={itemIndex}
             contentIndex={contentIndex}
-            onAddSubItem={onAddSubItem}
-            onUpdateSubItem={onUpdateSubItem}
-            onRemoveSubItem={onRemoveSubItem}
+            itemIndex={itemIndex}
+            sectionIndex={sectionIndex}
           />
         );
-
       default:
         return null;
     }
-  };
+  }
 
   return (
     <div className="flex gap-6">
       <div className="flex-1 transition-all duration-200">
         <ContentAddPanel
-          showAddPanel={showAddPanel}
-          onTogglePanel={() => setShowAddPanel(!showAddPanel)}
           onAddContent={handleAddContent}
+          onTogglePanel={() => setShowAddPanel((value) => !value)}
+          showAddPanel={showAddPanel}
         />
-        
+
         <div className="space-y-4">
-          {contents.map((content, contentIndex: number) => (
-            <div key={`content-${contentIndex}`} className="relative rounded-xl border border-border/80 bg-muted/20 p-4">
+          {contentsFieldArray.fields.map((contentField, contentIndex) => (
+            <div
+              className="relative rounded-xl border border-border/80 bg-muted/20 p-4"
+              key={contentField.fieldId}
+            >
               <Button
-                variant="ghost"
-                size="icon"
                 className="absolute right-2 top-2 rounded-lg"
-                onClick={() => onRemoveItemContent(sectionIndex, itemIndex, contentIndex)}
+                onClick={() => contentsFieldArray.remove(contentIndex)}
+                size="icon"
+                type="button"
+                variant="ghost"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
-              
-              {renderContentEditor(content, contentIndex)}
+
+              {renderContentEditor(contentIndex)}
             </div>
           ))}
-          
-          {contents.length === 0 && (
+
+          {!contents.length ? (
             <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 py-8 text-center text-muted-foreground">
               <p>No content added yet.</p>
-              <p className="text-sm">Use the "Add Content" button above to add text, images, videos, files, embeds, or sub-tasks.</p>
+              <p className="text-sm">
+                Use the "Add Content" button above to add text, images, videos,
+                files, embeds, or sub-tasks.
+              </p>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
   );
-};
+}

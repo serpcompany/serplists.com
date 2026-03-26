@@ -4,9 +4,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { User, ExternalLink } from 'lucide-react';
+import { ExternalLink, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AvatarUpload } from '@/components/shared/AvatarUpload';
+import { buildPublicProfilePath } from '@/lib/routes';
 
 interface ProfileData {
   email: string;
@@ -28,7 +29,7 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
   loading,
   onProfileDataChange,
   onProfileUpdate,
-  onAvatarUpdate
+  onAvatarUpdate,
 }) => {
   return (
     <Card>
@@ -42,25 +43,25 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
         {/* Avatar Upload Section */}
         <div className="flex flex-col items-center space-y-2">
           <Label>Profile Picture</Label>
-          <AvatarUpload 
+          <AvatarUpload
             currentAvatarUrl={profileData.avatar_url}
             onAvatarUpdate={onAvatarUpdate}
             size="lg"
             editable={true}
           />
         </div>
-        
+
         <Separator />
-        
+
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <Label htmlFor="email">Email</Label>
-            <Input 
-              id="email" 
-              type="email" 
-              value={profileData.email} 
-              disabled 
-              className="bg-muted" 
+            <Input
+              id="email"
+              type="email"
+              value={profileData.email}
+              disabled
+              className="bg-muted"
             />
             <p className="text-xs text-muted-foreground mt-1">
               Email cannot be changed
@@ -68,49 +69,56 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
           </div>
           <div>
             <Label htmlFor="fullName">Full Name</Label>
-            <Input 
-              id="fullName" 
-              value={profileData.fullName} 
-              onChange={(e) => onProfileDataChange({
-                ...profileData,
-                fullName: e.target.value
-              })} 
-              placeholder="Enter your full name" 
+            <Input
+              id="fullName"
+              value={profileData.fullName}
+              onChange={(e) =>
+                onProfileDataChange({
+                  ...profileData,
+                  fullName: e.target.value,
+                })
+              }
+              placeholder="Enter your full name"
             />
           </div>
         </div>
-        
+
         <div>
           <Label htmlFor="username">Username</Label>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">@</span>
-            <Input 
-              id="username" 
-              value={profileData.username} 
-              onChange={(e) => onProfileDataChange({
-                ...profileData,
-                username: e.target.value.replace(/[^a-zA-Z0-9]/g, '')
-              })} 
-              placeholder="Enter your username" 
-              className="flex-1" 
+            <Input
+              id="username"
+              value={profileData.username}
+              onChange={(e) =>
+                onProfileDataChange({
+                  ...profileData,
+                  username: e.target.value.replace(/[^a-zA-Z0-9]/g, ''),
+                })
+              }
+              placeholder="Enter your username"
+              className="flex-1"
             />
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            This will be your public profile URL: {profileData.username && (
-              <Link 
-                to={`/profile/${profileData.username}`} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-primary hover:underline inline-flex items-center gap-1"
+            Public profile URL:{' '}
+            {profileData.username ? (
+              <Link
+                to={buildPublicProfilePath(profileData.username)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-primary hover:underline"
               >
-                {window.location.origin}/profile/{profileData.username}
+                {window.location.origin}
+                {buildPublicProfilePath(profileData.username)}
                 <ExternalLink className="h-3 w-3" />
               </Link>
+            ) : (
+              `${window.location.origin}/profile/username`
             )}
-            {!profileData.username && `${window.location.origin}/profile/username`}
           </p>
         </div>
-        
+
         <Button onClick={onProfileUpdate} disabled={loading}>
           {loading ? 'Updating...' : 'Update Profile'}
         </Button>

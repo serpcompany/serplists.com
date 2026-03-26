@@ -1,7 +1,7 @@
 # Junk public templates cleanup
 
 ## Symptoms
-- Public templates titled "Test Template" and "Updated Template Title" show up on the homepage and `/checklists`.
+- Public templates titled "Test Template" and "Updated Template Title" show up on the homepage and `/templates`.
 
 ## Likely cause
 - The integration API tests create public templates with these titles and do not delete them.

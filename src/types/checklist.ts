@@ -79,9 +79,26 @@ export type TemplateImportOptions = {
 
 export type TemplateExportFormat = "backup" | "portable";
 
+export type TemplateImportFailure = {
+  index: number;
+  title: string;
+  reason: string;
+  code: "invalid_sections" | "oversized_asset" | "insert_failed";
+};
+
+export type TemplateImportSuccess = {
+  index: number;
+  title: string;
+  id: string;
+  slug: string;
+  visibility: "public" | "private";
+};
+
 export type TemplateImportSummary = {
+  total: number;
   imported: number;
-  failed: { title: string; reason: string }[];
+  failed: TemplateImportFailure[];
+  successes: TemplateImportSuccess[];
 };
 
 export interface TemplatesContextProps {

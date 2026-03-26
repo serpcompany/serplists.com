@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { User } from "lucide-react";
-import { api } from "@/lib/api";
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { User } from 'lucide-react';
+import { api } from '@/lib/api';
+import { buildPublicProfilePath } from '@/lib/routes';
 
 interface UserInfoProps {
   userId: string;
@@ -14,7 +15,11 @@ interface UserProfile {
   username: string | null;
 }
 
-export const UserInfo = ({ userId, showAvatar = true, className = "" }: UserInfoProps) => {
+export const UserInfo = ({
+  userId,
+  showAvatar = true,
+  className = '',
+}: UserInfoProps) => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -43,16 +48,26 @@ export const UserInfo = ({ userId, showAvatar = true, className = "" }: UserInfo
   }, [userId]);
 
   if (isLoading) {
-    return <div className={`text-sm text-muted-foreground ${className}`}>Loading...</div>;
+    return (
+      <div className={`text-sm text-muted-foreground ${className}`}>
+        Loading...
+      </div>
+    );
   }
 
   if (!profile?.username && !profile?.full_name) {
-    return <div className={`text-sm text-muted-foreground ${className}`}>Unknown user</div>;
+    return (
+      <div className={`text-sm text-muted-foreground ${className}`}>
+        Unknown user
+      </div>
+    );
   }
 
   if (!profile?.username) {
     return (
-      <div className={`flex items-center gap-2 text-sm text-muted-foreground ${className}`}>
+      <div
+        className={`flex items-center gap-2 text-sm text-muted-foreground ${className}`}
+      >
         {showAvatar && (
           <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center">
             <User className="h-3 w-3" />
@@ -64,9 +79,9 @@ export const UserInfo = ({ userId, showAvatar = true, className = "" }: UserInfo
   }
 
   return (
-    <Link 
-      to={`/profile/${profile.username}`}
-      className={`flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors ${className}`}
+    <Link
+      to={buildPublicProfilePath(profile.username)}
+      className={`flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground ${className}`}
     >
       {showAvatar && (
         <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center">
@@ -74,7 +89,9 @@ export const UserInfo = ({ userId, showAvatar = true, className = "" }: UserInfo
         </div>
       )}
       <span>
-        by {profile.full_name || `@${profile.username}`}
+        by{' '}
+        {profile.full_name ||
+          (profile.username ? `@${profile.username}` : 'Unknown user')}
       </span>
     </Link>
   );

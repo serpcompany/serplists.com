@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { api } from "@/lib/api";
 import { calculateSectionsProgress, isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
 import { ChecklistContent } from "@/components/checklist/ChecklistContent";
+import { PageContainer } from "@/components/layout/page-shell";
 import { SEOHead } from "@/components/shared/SEOHead";
 import {
   buildConsoleHomePath,
@@ -375,7 +376,7 @@ const ChecklistRunPage = () => {
           robots="noindex, nofollow"
         />
       ) : null}
-      <div className="mx-auto max-w-7xl px-4 py-8">
+      <PageContainer className="py-8" width="shell">
         <div className="mb-8 flex items-center gap-4 border-b border-border/70 pb-6">
           <Button variant="ghost" size="icon" onClick={handleBack}>
             <ArrowLeft className="h-5 w-5" />
@@ -538,7 +539,7 @@ const ChecklistRunPage = () => {
             />
           </div>
         </div>
-      </div>
+      </PageContainer>
 
       <Dialog open={isCompleteDialogOpen} onOpenChange={setIsCompleteDialogOpen}>
         <DialogContent>

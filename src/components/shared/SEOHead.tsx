@@ -10,6 +10,7 @@ interface SEOHeadProps {
   type?: 'website' | 'article';
   publishedTime?: string;
   author?: string;
+  robots?: string;
 }
 
 export const SEOHead: React.FC<SEOHeadProps> = ({
@@ -20,7 +21,8 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
   url = window.location.href,
   type = 'website',
   publishedTime,
-  author
+  author,
+  robots = 'index, follow',
 }) => {
   const fullTitle = title.includes('Checklist App') ? title : `${title} | Checklist App`;
   const fullImageUrl = image.startsWith('http') ? image : `${window.location.origin}${image}`;
@@ -48,7 +50,7 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
       
       {/* Additional Meta Tags */}
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <meta name="robots" content="index, follow" />
+      <meta name="robots" content={robots} />
       <link rel="canonical" href={url} />
       
       {/* Article specific meta tags */}

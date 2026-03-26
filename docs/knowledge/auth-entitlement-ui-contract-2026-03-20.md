@@ -24,23 +24,23 @@
 
 ## Surfaces normalized
 
-- Public template copy on `/checklists/:slug`
-- Template detail copy on `/templates/:id`
+- Public template copy on `/profile/{username}/{templateSlug}`
+- Console template detail copy/open flows under `/console/templates/{id}`
 - Template import/export in account backup UI
 - Shared login redirect behavior from protected routes and manual action prompts
 
 ## Verification run
 
 - Protected route:
-  - open `/templates` while logged out
+  - open `/console/templates` while logged out
   - redirect to `/login`
   - sign in as `john@test.com`
-  - return to `/templates`
+  - return to `/console/templates`
 - Public template copy:
   - guest sees `Log in to copy template`
-  - guest login returns to the same `/checklists/content-refresh-checklist` URL
+  - guest login returns to the same `/profile/devinschumacher/content-refresh-checklist` URL
   - `john@test.com` sees `Upgrade to copy template`
   - clicking it redirects to Stripe Checkout
 - Pro copy:
   - `admin@test.com` sees `Copy to My Templates`
-  - clicking it returns to `/templates`
+  - clicking it returns to `/console/templates`

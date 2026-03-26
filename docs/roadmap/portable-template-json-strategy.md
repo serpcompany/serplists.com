@@ -179,7 +179,7 @@ That gives immediate value without introducing sync conflicts, OAuth scope compl
 
 - [x] Define `portable-template` schema v2
 - [x] Define migration rules from current import/export shapes
-- [ ] Generate JSON Schema from the canonical Zod schema
+- [x] Generate JSON Schema from the canonical Zod schema
 - [x] Document the canonical format and examples
 - [x] Add tests for valid, invalid, and migrated payloads
 
@@ -188,7 +188,7 @@ That gives immediate value without introducing sync conflicts, OAuth scope compl
 - [x] Split export modes: `portable` and `backup`
 - [x] Normalize all accepted input formats into the canonical internal shape
 - [x] Preserve portable SEO metadata and `rules` through import/export/reload paths
-- [ ] Improve partial-failure reporting per template
+- [x] Improve partial-failure reporting per template
 - [x] Add asset manifest and warnings
 - [x] Add tests for import/export edge cases and backward compatibility
 

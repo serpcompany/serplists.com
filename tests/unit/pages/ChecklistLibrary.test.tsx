@@ -1,69 +1,76 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-interface Template {
-  id: string;
-  slug?: string;
-  title: string;
-}
+import {
+  REPO_TEMPLATE_OWNER_SLUG,
+  REPO_TEMPLATE_USER_ID,
+} from '@/lib/repoTemplateCatalog';
+import {
+  buildCanonicalPublicTemplatePath,
+  buildPublicCategoryPath,
+  buildPublicTemplatesPath,
+} from '@/lib/routes';
+import type { ChecklistTemplate } from '@/types/checklist';
 
-describe('ChecklistLibrary', () => {
-  describe('Template Navigation', () => {
-    it('should navigate using slug when available', () => {
-      const mockNavigate = vi.fn();
-      const template = {
-        id: 'abc123',
-        slug: 'ultimate-camping-checklist',
-        title: 'Ultimate Camping Checklist'
-      };
+const baseTemplate: ChecklistTemplate = {
+  id: 'template-1',
+  title: 'Template',
+  sections: [],
+  userId: 'user-1',
+  createdAt: '2026-03-24T00:00:00.000Z',
+  updatedAt: '2026-03-24T00:00:00.000Z',
+  isPublic: true,
+};
 
-      // Simulate the handleTemplateClick function
-      const handleTemplateClick = (template: Template) => {
-        const identifier = template.slug || template.id;
-        mockNavigate(`/checklists/${identifier}`);
-      };
+describe('ChecklistLibrary route behavior', () => {
+  it('navigates to the owner/template path when the owner username is known', () => {
+    const mockNavigate = vi.fn();
+    const template: ChecklistTemplate = {
+      ...baseTemplate,
+      slug: 'ultimate-camping-checklist',
+      ownerProfile: { username: 'alice' },
+    };
 
-      handleTemplateClick(template);
-      
-      expect(mockNavigate).toHaveBeenCalledWith('/checklists/ultimate-camping-checklist');
-      expect(mockNavigate).not.toHaveBeenCalledWith('/checklists/abc123');
-    });
+    const path = buildCanonicalPublicTemplatePath(template);
+    mockNavigate(path ?? buildPublicTemplatesPath());
 
-    it('should fallback to ID when slug is null', () => {
-      const mockNavigate = vi.fn();
-      const template = {
-        id: 'xyz789',
-        slug: null,
-        title: 'Legacy Template'
-      };
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/profile/alice/ultimate-camping-checklist',
+    );
+  });
 
-      const handleTemplateClick = (template: Template) => {
-        const identifier = template.slug || template.id;
-        mockNavigate(`/checklists/${identifier}`);
-      };
+  it('uses the official owner slug for repo-backed public templates', () => {
+    const mockNavigate = vi.fn();
+    const template: ChecklistTemplate = {
+      ...baseTemplate,
+      id: 'repo:starter-template',
+      slug: 'starter-template',
+      userId: REPO_TEMPLATE_USER_ID,
+    };
 
-      handleTemplateClick(template);
-      
-      expect(mockNavigate).toHaveBeenCalledWith('/checklists/xyz789');
-    });
+    const path = buildCanonicalPublicTemplatePath(template);
+    mockNavigate(path ?? buildPublicTemplatesPath());
 
-    it('should generate SEO-friendly URLs', () => {
-      const templates = [
-        { slug: 'wedding-planning-checklist-123', title: 'Wedding Planning Checklist' },
-        { slug: 'camping-gear-list-456', title: 'Camping Gear List' },
-        { slug: 'home-inspection-guide-789', title: 'Home Inspection Guide' }
-      ];
+    expect(mockNavigate).toHaveBeenCalledWith(
+      `/profile/${REPO_TEMPLATE_OWNER_SLUG}/starter-template`,
+    );
+  });
 
-      templates.forEach(template => {
-        const url = `/checklists/${template.slug}`;
-        
-        // URL should contain meaningful keywords from title
-        const keywords = template.title.toLowerCase().split(' ');
-        keywords.forEach(keyword => {
-          if (keyword.length > 3) { // Skip small words
-            expect(url.toLowerCase()).toContain(keyword);
-          }
-        });
-      });
-    });
+  it('falls back to the public library when a template cannot produce a canonical owner URL', () => {
+    const mockNavigate = vi.fn();
+    const template: ChecklistTemplate = {
+      ...baseTemplate,
+      slug: 'missing-owner',
+    };
+
+    const path = buildCanonicalPublicTemplatePath(template);
+    mockNavigate(path ?? buildPublicTemplatesPath());
+
+    expect(mockNavigate).toHaveBeenCalledWith('/templates');
+  });
+
+  it('builds category filters as category detail routes', () => {
+    expect(buildPublicCategoryPath('technical seo')).toBe(
+      '/categories/technical-seo',
+    );
   });
 });

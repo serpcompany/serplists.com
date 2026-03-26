@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION } from "@/lib/schemas/checklistSchema";
 import {
   REPO_TEMPLATE_OWNER_NAME,
+  REPO_TEMPLATE_OWNER_SLUG,
   REPO_TEMPLATE_USER_ID,
   buildRepoTemplateCreatePayload,
   findPublicTemplateByIdentifier,
@@ -49,7 +50,10 @@ describe("repo template catalog", () => {
       slug: "ultimate-camping-checklist",
       isPublic: true,
       userId: REPO_TEMPLATE_USER_ID,
-      ownerProfile: { full_name: REPO_TEMPLATE_OWNER_NAME },
+      ownerProfile: {
+        full_name: REPO_TEMPLATE_OWNER_NAME,
+        username: REPO_TEMPLATE_OWNER_SLUG,
+      },
     });
     expect(isRepoTemplate(templates[0])).toBe(true);
   });
@@ -198,7 +202,10 @@ describe("repo template catalog", () => {
         categories: [],
         tags: [],
         version: 1,
-        ownerProfile: { full_name: REPO_TEMPLATE_OWNER_NAME },
+        ownerProfile: {
+          full_name: REPO_TEMPLATE_OWNER_NAME,
+          username: REPO_TEMPLATE_OWNER_SLUG,
+        },
       },
     ], []);
 
@@ -226,7 +233,10 @@ describe("repo template catalog", () => {
           categories: [],
           tags: [],
           version: 1,
-          ownerProfile: { full_name: REPO_TEMPLATE_OWNER_NAME },
+          ownerProfile: {
+            full_name: REPO_TEMPLATE_OWNER_NAME,
+            username: REPO_TEMPLATE_OWNER_SLUG,
+          },
         },
       ],
       [

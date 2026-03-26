@@ -110,7 +110,7 @@ export function PublicTemplateView({
       <PublicPageContainer className="pb-10 pt-8">
         <div className="mb-5 flex items-center justify-between gap-4">
           <PublicPageBackLink to={buildPublicTemplatesPath()}>
-            Back to templates
+            Back to checklists
           </PublicPageBackLink>
 
           <div className="hidden items-center gap-3 lg:flex">
@@ -136,7 +136,7 @@ export function PublicTemplateView({
           </div>
         </div>
 
-        <div className="border-b border-border/70 pb-6">
+        <div className="border-b border-border/70 pb-5">
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             {ownerPath ? (
               <Link
@@ -146,7 +146,7 @@ export function PublicTemplateView({
                 @{ownerSlug}
               </Link>
             ) : (
-              <span>Template library</span>
+              <span>Checklist library</span>
             )}
             <span className="text-muted-foreground/60">/</span>
             <span className="font-medium text-foreground">
@@ -187,50 +187,54 @@ export function PublicTemplateView({
             <span>Version {template.version ?? 1}</span>
           </div>
 
-          {template.categories?.length ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {template.categories.map((category) => (
-                <PublicPill key={category} asChild>
-                  <Link to={buildPublicCategoryPath(category)}>{category}</Link>
-                </PublicPill>
-              ))}
+          <details className="mt-4 rounded-xl border border-border/70 bg-muted/10 p-4 text-sm text-muted-foreground lg:hidden">
+            <summary className="cursor-pointer list-none font-medium text-foreground">
+              More details
+            </summary>
+            <div className="mt-4 space-y-3">
+              {ownerPath ? (
+                <div className="flex items-center justify-between gap-3">
+                  <span>Creator</span>
+                  <Link
+                    to={ownerPath}
+                    className="inline-flex items-center gap-1 font-medium text-foreground"
+                  >
+                    @{ownerSlug}
+                    <ArrowUpRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              ) : null}
+              {template.categories?.length ? (
+                <div>
+                  <div className="mb-2 font-medium text-foreground">
+                    Categories
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {template.categories.map((category) => (
+                      <PublicPill key={category} asChild>
+                        <Link to={buildPublicCategoryPath(category)}>
+                          {category}
+                        </Link>
+                      </PublicPill>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          </details>
         </div>
 
         <PublicPageSplitLayout
-          className="mt-8"
+          className="mt-6"
           main={
             <section className="overflow-hidden rounded-xl border border-border/70 bg-background shadow-none">
-              <div className="border-b border-border/70 px-5 pt-4 sm:px-6">
-                <div className="flex items-center gap-6 text-sm">
-                  <span className="border-b-2 border-foreground pb-3 font-medium text-foreground">
-                    Overview
-                  </span>
-                  <span className="pb-3 text-muted-foreground">
-                    {template.sections.length} sections
-                  </span>
-                  <span className="pb-3 text-muted-foreground">
-                    {totalItems} tasks
-                  </span>
-                </div>
-              </div>
-              <div className="border-b border-border/70 bg-muted/20 px-5 py-4 sm:px-6">
-                <h2 className="text-xl font-semibold text-foreground">
-                  Checklist preview
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Browse the template in a docs-style layout before you copy or
-                  run it.
-                </p>
-              </div>
               <div className="px-5 py-2 sm:px-6">
                 <PublicTemplateContent sections={template.sections || []} />
               </div>
             </section>
           }
           aside={
-            <>
+            <div className="hidden lg:block">
               {sectionLinks.length ? (
                 <PublicSidebarSection title="On this page">
                   <div className="space-y-2 text-sm">
@@ -305,7 +309,7 @@ export function PublicTemplateView({
                   </div>
                 </PublicSidebarSection>
               ) : null}
-            </>
+            </div>
           }
         />
       </PublicPageContainer>

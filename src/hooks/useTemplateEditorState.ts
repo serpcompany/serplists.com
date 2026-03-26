@@ -1,21 +1,10 @@
 import { useState } from "react";
-import { ChecklistTemplate } from "@/types/checklist";
 
-export const useTemplateEditorState = (initialTemplate?: ChecklistTemplate) => {
-  const [title, setTitle] = useState(initialTemplate?.title || "");
-  const [description, setDescription] = useState(initialTemplate?.description || "");
-  const [templateType, setTemplateType] = useState<"checklist" | "recipe">(
-    initialTemplate?.type || "checklist"
-  );
-  const [seoTitle, setSeoTitle] = useState(initialTemplate?.seoTitle || "");
-  const [seoDescription, setSeoDescription] = useState(initialTemplate?.seoDescription || "");
-  const [seoUrl, setSeoUrl] = useState(initialTemplate?.seoUrl || "");
-  const [categories, setCategories] = useState<string[]>(initialTemplate?.categories || []);
-  const [tags, setTags] = useState<string[]>(initialTemplate?.tags || []);
+export const useTemplateEditorState = () => {
   const [selectedSectionIndex, setSelectedSectionIndex] = useState<number>(0);
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
   const [showingSEO, setShowingSEO] = useState(false);
-  const [showingTemplateInfo, setShowingTemplateInfo] = useState(!initialTemplate); // Show template info by default for new templates
+  const [showingTemplateInfo, setShowingTemplateInfo] = useState(true);
   const [errors, setErrors] = useState<{ type: string; message: string }[]>([]);
 
   const handleSelectSection = (sectionIndex: number) => {
@@ -45,22 +34,6 @@ export const useTemplateEditorState = (initialTemplate?: ChecklistTemplate) => {
   };
 
   return {
-    title,
-    setTitle,
-    description,
-    setDescription,
-    templateType,
-    setTemplateType,
-    seoTitle,
-    setSeoTitle,
-    seoDescription,
-    setSeoDescription,
-    seoUrl,
-    setSeoUrl,
-    categories,
-    setCategories,
-    tags,
-    setTags,
     selectedSectionIndex,
     selectedItemIndex,
     showingSEO,

@@ -1,0 +1,89 @@
+{
+  "kind": "serplists-template-pack",
+  "schemaVersion": "2.0.0",
+  "exportedAt": "2026-03-22T00:00:00.000Z",
+  "exportedBy": "SERP Lists repo catalog",
+  "templates": [
+    {
+      "title": "Ultimate Camping Checklist",
+      "description": "A practical camping packing checklist for shelter, cooking, and safety essentials.",
+      "type": "checklist",
+      "slug": "ultimate-camping-checklist",
+      "visibility": "public",
+      "categories": ["outdoor", "travel", "recreation"],
+      "tags": ["camping", "packing", "gear"],
+      "sections": [
+        {
+          "title": "Shelter And Sleeping",
+          "items": [
+            {
+              "title": "Pack the tent setup",
+              "description": "Bring the tent, stakes, rainfly, and footprint."
+            },
+            {
+              "title": "Pack sleeping gear",
+              "description": "Include sleeping bags, pads, and pillows for each camper."
+            }
+          ]
+        },
+        {
+          "title": "Cooking And Safety",
+          "items": [
+            {
+              "title": "Bring stove, fuel, and water",
+              "description": "Check fuel levels and water supply before leaving."
+            },
+            {
+              "title": "Pack first-aid and light sources",
+              "description": "Bring a stocked first-aid kit, flashlights, and extra batteries."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Complete Wedding Planning Checklist",
+      "description": "A wedding planning checklist organized around budget, venue, and guest milestones.",
+      "type": "checklist",
+      "slug": "complete-wedding-planning-checklist",
+      "visibility": "public",
+      "categories": ["wedding", "events", "planning"],
+      "tags": ["timeline", "budget", "guests"],
+      "sections": [
+        {
+          "title": "Early Planning",
+          "items": [
+            {
+              "title": "Set the budget and guest count",
+              "description": "Decide your target budget and rough guest list before booking vendors."
+            },
+            {
+              "title": "Choose a date and venue",
+              "description": "Lock the date once your venue is confirmed."
+            }
+          ]
+        },
+        {
+          "title": "Final Coordination",
+          "items": [
+            {
+              "title": "Send invitations and track RSVPs",
+              "description": "Make sure guest responses are collected early enough for final headcount."
+            },
+            {
+              "title": "Confirm vendors and day-of timeline",
+              "description": "Reconfirm arrival times, payments, and responsibilities for the wedding week."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "manifest": {
+    "totalTemplates": 2,
+    "format": "portable",
+    "includesVisibility": true,
+    "includesRules": false,
+    "assetWarnings": 0
+  }
+}

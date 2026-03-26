@@ -1,5 +1,6 @@
 import { env } from "@/env";
 import { createApiError } from "@/lib/api-errors";
+import type { TemplateImportSummary } from "@/types/checklist";
 
 const DEV_API_BASE_URL = env.VITE_API_URL ?? 'http://localhost:8788/api';
 const API_BASE_URL = import.meta.env.DEV
@@ -118,7 +119,7 @@ class ApiClient {
   async importTemplateBackup(payload: {
     templates: unknown[];
     options?: { visibility?: 'preserve' | 'public' | 'private' };
-  }): Promise<{ imported: number; failed: { title: string; reason: string }[] }> {
+  }): Promise<TemplateImportSummary> {
     return this.request('/templates/backup', { method: 'POST', body: JSON.stringify(payload) });
   }
 

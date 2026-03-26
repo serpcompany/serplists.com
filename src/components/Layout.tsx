@@ -32,20 +32,22 @@ import {
 } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
-import { footerLinks } from '@/components/layout/footerLinks';
+import {
+  publicFooterGroups,
+  publicHeaderLinks,
+} from '@/components/layout/publicSiteLinks';
 import { cn } from '@/lib/utils';
 import {
   buildConsoleHomePath,
   buildConsoleRunsPath,
   buildConsoleTemplatesPath,
-  buildPublicCategoriesPath,
-  buildPublicFeaturePath,
   buildPublicProfilePath,
   buildPublicTemplatesPath,
   resolveConsoleSection,
   resolvePublicRouteTier,
   resolveRouteShell,
 } from '@/lib/routes';
+import { PageContainer } from '@/components/layout/page-shell';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -57,15 +59,6 @@ type NavigationItem = {
   label: string;
   description?: string;
 };
-
-const publicNavigation: NavigationItem[] = [
-  { href: buildPublicTemplatesPath(), label: 'Templates' },
-  { href: buildPublicCategoriesPath(), label: 'Categories' },
-  { href: buildPublicFeaturePath('template-builder'), label: 'Features' },
-  { href: '/pricing', label: 'Pricing' },
-  { href: '/about', label: 'About' },
-  { href: '/contact', label: 'Contact' },
-];
 
 const consoleNavigation: NavigationItem[] = [
   {
@@ -91,25 +84,6 @@ const consoleNavigation: NavigationItem[] = [
     icon: Settings,
     label: 'Account',
     description: 'Profile, access, and billing settings',
-  },
-];
-
-const publicFooterColumns: Array<{ title: string; items: NavigationItem[] }> = [
-  {
-    title: 'Explore',
-    items: [
-      { href: buildPublicTemplatesPath(), label: 'Template Library' },
-      { href: buildPublicCategoriesPath(), label: 'Categories' },
-      { href: buildPublicFeaturePath('template-builder'), label: 'Features' },
-    ],
-  },
-  {
-    title: 'Company',
-    items: [
-      { href: '/pricing', label: 'Pricing' },
-      { href: '/about', label: 'About' },
-      { href: '/contact', label: 'Contact' },
-    ],
   },
 ];
 
@@ -205,7 +179,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to={buildConsoleHomePath()} className="cursor-pointer rounded-md">
-            Console
+            Dashboard
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
@@ -327,7 +301,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             >
               <Link to={buildPublicTemplatesPath()}>
                 <BookOpen className="mr-2 h-4 w-4" />
-                Browse public templates
+                Browse checklists
               </Link>
             </Button>
           </div>
@@ -335,7 +309,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         <div className="lg:pl-72">
           <header className="sticky top-0 z-30 border-b border-border/80 bg-background/82 backdrop-blur">
-            <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-10">
+            <PageContainer
+              className="flex items-center justify-between gap-4 py-4 lg:px-10"
+              width="shell"
+            >
               <div className="flex items-center gap-3">
                 <Sheet>
                   <SheetTrigger asChild>
@@ -423,16 +400,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 >
                   <Link to={buildPublicTemplatesPath()}>
                     <BookOpen className="mr-2 h-4 w-4" />
-                    Public library
+                    Public checklists
                   </Link>
                 </Button>
                 {accountMenu}
               </div>
-            </div>
+            </PageContainer>
           </header>
 
           <main className="min-h-screen px-4 py-8 sm:px-6 lg:px-10">
-            <div className="mx-auto max-w-7xl">{children}</div>
+            <PageContainer className="px-0 sm:px-0 lg:px-0" width="shell">
+              {children}
+            </PageContainer>
           </main>
         </div>
       </div>
@@ -442,11 +421,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 border-b border-border/80 bg-background/92 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-4 sm:px-6 lg:px-8">
+        <PageContainer
+          className="flex items-center justify-between gap-6 py-4"
+          width="shell"
+        >
           <BrandLink to="/" />
 
           <nav className="hidden items-center gap-5 md:flex">
-            {publicNavigation.map((item) => (
+            {publicHeaderLinks.map((item) => (
               <Link
                 key={item.href}
                 to={item.href}
@@ -471,7 +453,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 >
                   <Link to={buildConsoleHomePath()}>
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Console
+                    Dashboard
                   </Link>
                 </Button>
                 {accountMenu}
@@ -491,23 +473,28 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               </>
             )}
           </div>
-        </div>
+        </PageContainer>
 
         <div className="border-t border-border/80 bg-background/92 md:hidden">
-          <nav className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 py-3 sm:px-6">
-            {publicNavigation.map((item) => (
-              <Link
-                key={item.href}
-                to={item.href}
-                className={cn(
-                  'whitespace-nowrap rounded-full border border-border/80 px-3 py-1.5 text-sm text-muted-foreground transition',
-                  isPathActive(location.pathname, item.href) &&
-                    'border-foreground/20 bg-card text-foreground',
-                )}
-              >
-                {item.label}
-              </Link>
-            ))}
+          <nav>
+            <PageContainer
+              className="flex gap-2 overflow-x-auto py-3"
+              width="shell"
+            >
+              {publicHeaderLinks.map((item) => (
+                <Link
+                  key={item.href}
+                  to={item.href}
+                  className={cn(
+                    'whitespace-nowrap rounded-full border border-border/80 px-3 py-1.5 text-sm text-muted-foreground transition',
+                    isPathActive(location.pathname, item.href) &&
+                      'border-foreground/20 bg-card text-foreground',
+                  )}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </PageContainer>
           </nav>
         </div>
       </header>
@@ -523,63 +510,49 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </main>
 
       <footer className="border-t border-border bg-background">
-        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1.1fr_0.8fr_0.8fr_0.8fr] lg:px-8">
+        <PageContainer
+          className="grid gap-10 py-12 lg:grid-cols-[1.2fr_repeat(3,minmax(0,0.72fr))]"
+          width="shell"
+        >
           <div className="space-y-4">
             <BrandLink to="/" />
             <p className="max-w-sm text-sm leading-6 text-muted-foreground">
-              Build repeatable checklists, publish them like products, and run
-              them like operations.
+              Build repeatable checklists, publish them cleanly, and run them
+              like operations.
             </p>
           </div>
 
-          {publicFooterColumns.map((column) => (
+          {publicFooterGroups.map((column) => (
             <div key={column.title}>
               <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                 {column.title}
               </h3>
               <div className="mt-4 space-y-3">
-                {column.items.map((item) => (
-                  <Link
-                    key={item.href}
-                    to={item.href}
-                    className="block text-sm text-muted-foreground transition hover:text-foreground"
-                  >
-                    {item.label}
-                  </Link>
-                ))}
+                {column.items.map((item) =>
+                  item.external ? (
+                    <a
+                      key={item.label}
+                      href={item.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-sm text-muted-foreground transition hover:text-foreground"
+                    >
+                      {item.label}
+                    </a>
+                  ) : (
+                    <Link
+                      key={item.label}
+                      to={item.href}
+                      className="block text-sm text-muted-foreground transition hover:text-foreground"
+                    >
+                      {item.label}
+                    </Link>
+                  ),
+                )}
               </div>
             </div>
           ))}
-
-          <div>
-            <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Outside the app
-            </h3>
-            <div className="mt-4 space-y-3">
-              {footerLinks.map((item) =>
-                item.external ? (
-                  <a
-                    key={item.label}
-                    href={item.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-sm text-muted-foreground transition hover:text-foreground"
-                  >
-                    {item.label}
-                  </a>
-                ) : (
-                  <Link
-                    key={item.label}
-                    to={item.href}
-                    className="block text-sm text-muted-foreground transition hover:text-foreground"
-                  >
-                    {item.label}
-                  </Link>
-                ),
-              )}
-            </div>
-          </div>
-        </div>
+        </PageContainer>
       </footer>
     </div>
   );

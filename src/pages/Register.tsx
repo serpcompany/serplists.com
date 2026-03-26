@@ -9,6 +9,7 @@ import { Loader2 } from "lucide-react";
 import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { getAuthStatus } from "@/lib/auth-client";
+import { buildConsoleHomePath } from "@/lib/routes";
 const Register = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -46,7 +47,7 @@ const Register = () => {
           navigate(next, { replace: true });
         } else {
           toast.success("Registration successful");
-          navigate("/dashboard");
+          navigate(buildConsoleHomePath());
         }
       } else {
         toast.error(result.error ?? "Registration failed.");

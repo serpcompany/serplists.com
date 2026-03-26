@@ -1,8 +1,8 @@
 # Public template copy and dev entitlements
 
 ## Problem observed
-- Logged-in non-owners opening a shared public template at `/checklists/:slug` did not see a copy/add CTA.
-- The same template opened at `/templates/:id` did show `Copy to My Templates`.
+- Logged-in non-owners opening a shared public template at `/profile/{username}/{templateSlug}` did not see a copy/add CTA.
+- The same template opened from the signed-in console detail flow did show `Copy to My Templates`.
 - Local test personas labeled `Admin (Pro)` and `Jane (Pro)` were still resolving as Free.
 
 ## Root cause

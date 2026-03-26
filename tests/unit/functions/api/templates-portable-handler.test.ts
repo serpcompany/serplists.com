@@ -131,7 +131,15 @@ describe('portable template import/export API', () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
+    expect(data.total).toBe(1);
     expect(data.imported).toBe(1);
+    expect(data.successes).toEqual([
+      expect.objectContaining({
+        index: 0,
+        title: 'Imported Portable Template',
+        visibility: 'public',
+      }),
+    ]);
 
     const inserted = dbMocks.insertChain.values.mock.calls[0][0];
     expect(inserted.is_public).toBe(true);

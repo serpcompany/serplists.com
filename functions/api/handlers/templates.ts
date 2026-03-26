@@ -74,8 +74,44 @@ function parseTemplateRow(template: Record<string, unknown>) {
     tags: normalizeStringArray(template.tags),
     seoTitle: typeof template.seo_title === 'string' ? template.seo_title : '',
     seoDescription: typeof template.seo_description === 'string' ? template.seo_description : '',
-    type: typeof template.type === 'string' ? template.type : 'checklist'
+    type: typeof template.type === 'string' ? template.type : 'checklist',
+    ownerProfile:
+      typeof template.owner_username === 'string' || typeof template.owner_full_name === 'string'
+        ? {
+            username: typeof template.owner_username === 'string' ? template.owner_username : undefined,
+            full_name: typeof template.owner_full_name === 'string' ? template.owner_full_name : undefined,
+          }
+        : undefined,
   };
+}
+
+function selectTemplatesWithOwner(env: Env) {
+  const db = createDb(env);
+  const { templates, users } = schema;
+
+  return db
+    .select({
+      id: templates.id,
+      user_id: templates.user_id,
+      title: templates.title,
+      description: templates.description,
+      items: templates.items,
+      version: templates.version,
+      type: templates.type,
+      seo_title: templates.seo_title,
+      seo_description: templates.seo_description,
+      rules: templates.rules,
+      is_public: templates.is_public,
+      category: templates.category,
+      tags: templates.tags,
+      slug: templates.slug,
+      created_at: templates.created_at,
+      updated_at: templates.updated_at,
+      owner_username: users.username,
+      owner_full_name: users.name,
+    })
+    .from(templates)
+    .leftJoin(users, eq(users.id, templates.user_id));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -115,6 +151,30 @@ const templateBackupImportBodySchema = z.object({
     })
     .optional(),
 });
+
+type TemplateImportFailureCode = 'invalid_sections' | 'oversized_asset' | 'insert_failed';
+
+type TemplateImportFailure = {
+  index: number;
+  title: string;
+  reason: string;
+  code: TemplateImportFailureCode;
+};
+
+type TemplateImportSuccess = {
+  index: number;
+  title: string;
+  id: string;
+  slug: string;
+  visibility: 'public' | 'private';
+};
+
+type TemplateImportSummary = {
+  total: number;
+  imported: number;
+  failed: TemplateImportFailure[];
+  successes: TemplateImportSuccess[];
+};
 
 function hasOversizedAssets(sections: unknown[], maxAssetBytes: number): boolean {
   for (const section of sections) {
@@ -310,17 +370,32 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
       const visibility = options?.visibility ?? 'preserve';
 
-      const summary: { imported: number; failed: { title: string; reason: string }[] } = { imported: 0, failed: [] };
+      const summary: TemplateImportSummary = {
+        total: incomingTemplates.length,
+        imported: 0,
+        failed: [],
+        successes: [],
+      };
 
-      for (const template of incomingTemplates) {
+      for (const [index, template] of incomingTemplates.entries()) {
         const normalizedSections = normalizeSectionsPayload(template.sections ?? template.items);
         if (normalizedSections.error) {
-          summary.failed.push({ title: template.title, reason: normalizedSections.error });
+          summary.failed.push({
+            index,
+            title: template.title,
+            reason: normalizedSections.error,
+            code: 'invalid_sections',
+          });
           continue;
         }
 
         if (hasOversizedAssets(normalizedSections.sections, MAX_ASSET_BYTES)) {
-          summary.failed.push({ title: template.title, reason: 'Import blocked: one or more assets are over 5MB' });
+          summary.failed.push({
+            index,
+            title: template.title,
+            reason: 'Import blocked: one or more assets are over 5MB',
+            code: 'oversized_asset',
+          });
           continue;
         }
 
@@ -363,16 +438,28 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             created_at: new Date().toISOString(),
           });
           summary.imported += 1;
+          summary.successes.push({
+            index,
+            title: template.title,
+            id: templateId,
+            slug,
+            visibility: isPublic ? 'public' : 'private',
+          });
         } catch (err) {
           summary.failed.push({
+            index,
             title: template.title,
             reason: err instanceof Error ? err.message : 'Unknown error',
+            code: 'insert_failed',
           });
         }
       }
 
       if (summary.imported === 0 && summary.failed.length > 0) {
-        return jsonError(summary.failed[0]?.reason || 'Template import failed', 400);
+        return jsonError('Template import failed', 400, {
+          code: 'template_import_failed',
+          details: summary,
+        });
       }
 
       return json(summary);
@@ -389,9 +476,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         return jsonError('userId required', 400);
       }
 
-      const rows = await db
-        .select()
-        .from(templates)
+      const rows = await selectTemplatesWithOwner(env)
         .where(and(eq(templates.is_public, true), eq(templates.user_id, targetUserId)))
         .orderBy(desc(templates.created_at));
 
@@ -405,9 +490,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         ? and(eq(templates.slug, slug), or(eq(templates.is_public, true), eq(templates.user_id, userId)))
         : and(eq(templates.slug, slug), eq(templates.is_public, true));
 
-      const [template] = await db
-        .select()
-        .from(templates)
+      const [template] = await selectTemplatesWithOwner(env)
         .where(whereClause)
         .limit(1);
 
@@ -425,9 +508,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         ? and(eq(templates.id, templateId), or(eq(templates.is_public, true), eq(templates.user_id, userId)))
         : and(eq(templates.id, templateId), eq(templates.is_public, true));
 
-      const [template] = await db
-        .select()
-        .from(templates)
+      const [template] = await selectTemplatesWithOwner(env)
         .where(whereClause)
         .limit(1);
 
@@ -443,9 +524,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       ? or(eq(templates.is_public, true), eq(templates.user_id, userId))
       : eq(templates.is_public, true);
 
-    const rows = await db
-      .select()
-      .from(templates)
+    const rows = await selectTemplatesWithOwner(env)
       .where(whereClause)
       .orderBy(desc(templates.created_at));
 

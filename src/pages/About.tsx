@@ -1,7 +1,14 @@
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Target, Users, ShieldCheck } from "lucide-react";
+import { ShieldCheck, Target, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+import {
+  IconBadge,
+  PageHero,
+  PageSection,
+  Surface,
+} from '@/components/layout/page-shell';
+import { Button } from '@/components/ui/button';
+import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const VALUES = [
   {
@@ -23,42 +30,48 @@ const VALUES = [
 
 const About = () => {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-16">
-        <div className="mb-12 text-center">
-          <h1 className="mb-4 text-4xl font-bold md:text-5xl">About SERP Lists</h1>
-          <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-            SERP Lists helps teams and solo operators turn repeatable work into checklists that are easy to run,
-            track, and share.
-          </p>
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <Button asChild>
-              <Link to="/features">Explore Features</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link to="/contact">Contact Us</Link>
-            </Button>
-          </div>
-        </div>
+    <>
+      <PageSection spacing="hero">
+        <PageHero
+          actions={
+            <>
+              <Button asChild>
+                <Link to="/features">Explore Features</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/contact">Contact Us</Link>
+              </Button>
+            </>
+          }
+          align="center"
+          eyebrow="About"
+          description="SERP Lists helps teams and solo operators turn repeatable work into checklists that are easy to run, track, and share."
+          title="Build repeatable work that feels easy to discover and execute."
+        />
+      </PageSection>
 
+      <PageSection className="pt-0" spacing="spacious">
         <div className="grid gap-6 md:grid-cols-3">
           {VALUES.map((value) => {
             const Icon = value.icon;
+
             return (
-              <Card key={value.title} className="border bg-card">
-                <CardHeader>
-                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Surface key={value.title} as="article" tone="docs">
+                <CardHeader className="space-y-4">
+                  <IconBadge>
                     <Icon className="h-6 w-6" />
+                  </IconBadge>
+                  <div className="space-y-2">
+                    <CardTitle>{value.title}</CardTitle>
+                    <CardDescription>{value.description}</CardDescription>
                   </div>
-                  <CardTitle>{value.title}</CardTitle>
-                  <CardDescription>{value.description}</CardDescription>
                 </CardHeader>
-              </Card>
+              </Surface>
             );
           })}
         </div>
-      </div>
-    </div>
+      </PageSection>
+    </>
   );
 };
 

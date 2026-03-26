@@ -1,28 +1,36 @@
-import { Link } from "react-router-dom";
-import { useAuth } from "@/contexts/CloudflareAuthContext";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Check } from "lucide-react";
+import { Check } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+import { PageHero, PageSection, Surface } from '@/components/layout/page-shell';
+import { Button } from '@/components/ui/button';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '@/contexts/CloudflareAuthContext';
 
 const Pricing = () => {
   const { user } = useAuth();
-  const primaryCta = user ? { label: "Manage Plan", href: "/account" } : { label: "Get Started", href: "/register" };
+  const primaryCta = user
+    ? { label: 'Manage Plan', href: '/account' }
+    : { label: 'Get Started', href: '/register' };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-16">
-        <div className="mb-12 text-center">
-          <h1 className="mb-4 text-4xl font-bold md:text-5xl">Simple pricing for checklist workflows</h1>
-          <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-            Start with the free plan and upgrade when you need advanced template management.
-          </p>
-        </div>
+    <>
+      <PageSection spacing="hero">
+        <PageHero
+          align="center"
+          eyebrow="Pricing"
+          description="Start with the free plan and upgrade when you need advanced template management."
+          title="Simple pricing for checklist workflows."
+        />
+      </PageSection>
 
+      <PageSection className="pt-0" spacing="spacious">
         <div className="grid gap-6 md:grid-cols-2">
-          <Card className="border bg-card">
-            <CardHeader>
+          <Surface as="article" tone="docs">
+            <CardHeader className="space-y-2">
               <CardTitle>Free</CardTitle>
-              <CardDescription>Core checklist building and runs.</CardDescription>
+              <CardDescription>
+                Core checklist building and runs.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <ul className="space-y-3 text-sm text-muted-foreground">
@@ -45,12 +53,14 @@ const Pricing = () => {
                 </Button>
               </div>
             </CardContent>
-          </Card>
+          </Surface>
 
-          <Card className="border bg-card">
-            <CardHeader>
+          <Surface as="article" tone="glass">
+            <CardHeader className="space-y-2">
               <CardTitle>Pro</CardTitle>
-              <CardDescription>Advanced template portability and account tools.</CardDescription>
+              <CardDescription>
+                Advanced template portability and account tools.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <ul className="space-y-3 text-sm text-muted-foreground">
@@ -73,14 +83,14 @@ const Pricing = () => {
                 </Button>
               </div>
             </CardContent>
-          </Card>
+          </Surface>
         </div>
 
-        <div className="mt-10 text-center text-sm text-muted-foreground">
+        <p className="mt-10 text-center text-sm text-muted-foreground">
           Billing details and current pricing are shown during checkout.
-        </div>
-      </div>
-    </div>
+        </p>
+      </PageSection>
+    </>
   );
 };
 

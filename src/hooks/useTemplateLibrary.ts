@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useTemplates } from "@/contexts/TemplatesContext";
+import { buildCategorySlug } from "@/lib/routes";
 import { getPredefinedCategories } from "@/utils/categories";
 
 export const useTemplateLibrary = (category?: string, templateType?: "checklist" | "recipe") => {
@@ -7,7 +8,6 @@ export const useTemplateLibrary = (category?: string, templateType?: "checklist"
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
-  const loading = templatesLoading ?? false;
 
   // Filter to only public templates
   const templates = useMemo(() => {
@@ -15,6 +15,8 @@ export const useTemplateLibrary = (category?: string, templateType?: "checklist"
     if (!templateType) return publicTemplates;
     return publicTemplates.filter(t => t.type === templateType);
   }, [contextTemplates, templateType]);
+
+  const loading = (templatesLoading ?? false) && templates.length === 0;
 
   useEffect(() => {
     // Extract all unique categories and combine with predefined ones
@@ -44,8 +46,8 @@ export const useTemplateLibrary = (category?: string, templateType?: "checklist"
 
     // Filter by category if specified in URL
     if (category) {
-      filtered = filtered.filter(template => 
-        template.categories?.includes(category)
+      filtered = filtered.filter((template) =>
+        template.categories?.some((templateCategory) => buildCategorySlug(templateCategory) === category),
       );
     }
 

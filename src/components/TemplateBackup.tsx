@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { downloadBackupFile, exportPortableTemplatesToJSON, parseTemplatesFromJSON } from "@/lib/utils/templateBackup";
 import type { TemplateImportResult } from "@/lib/utils/templateBackup";
 import type { ChecklistTemplate } from "@/lib/schemas/checklistSchema";
-import type { TemplateImportOptions } from "@/types/checklist";
+import type { TemplateImportOptions, TemplateImportSummary } from "@/types/checklist";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
@@ -67,6 +67,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const billingEnabled = billing.data?.billingEnabled ?? true;
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<TemplateImportResult | null>(null);
+  const [lastImportSummary, setLastImportSummary] = useState<TemplateImportSummary | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [includePublicTemplates, setIncludePublicTemplates] = useState(false);
   const [importVisibility, setImportVisibility] = useState<ImportVisibility>("preserve");
@@ -128,6 +129,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       return;
     }
     setSelectedFile(file);
+    setLastImportSummary(null);
     setIsImporting(true);
     try {
       const parsedTemplates = await parseTemplatesFromJSON(file);
@@ -164,10 +166,17 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       const result = await importTemplates(importPreview.templates, {
         visibility: importVisibility
       });
+      setLastImportSummary(result);
       if (result.failed.length > 0) {
-        toast.error(`Imported ${result.imported} templates. ${result.failed.length} failed.`);
+        const failedTitles = result.failed
+          .slice(0, 2)
+          .map((failure) => failure.title)
+          .join(", ");
+        const overflowLabel =
+          result.failed.length > 2 ? ` +${result.failed.length - 2} more` : "";
+        toast.error(`Imported ${result.imported}/${result.total}. Failed: ${failedTitles}${overflowLabel}`);
       } else {
-        toast.success(`Successfully imported ${result.imported} templates`);
+        toast.success(`Successfully imported ${result.imported}/${result.total} templates`);
       }
       setImportPreview(null);
       setSelectedFile(null);
@@ -513,6 +522,50 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                       Cancel
                     </Button>
                   </div>
+                </CardContent>
+              </Card>}
+
+            {lastImportSummary && <Card className="border-dashed">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    {lastImportSummary.failed.length > 0 ? <AlertCircle className="h-4 w-4 text-amber-600" /> : <CheckCircle className="h-4 w-4 text-green-600" />}
+                    Last Import Result
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <Badge variant="secondary">{lastImportSummary.total} attempted</Badge>
+                    <Badge variant="outline">{lastImportSummary.imported} imported</Badge>
+                    {lastImportSummary.failed.length > 0 ? <Badge variant="destructive">{lastImportSummary.failed.length} failed</Badge> : null}
+                  </div>
+
+                  {lastImportSummary.successes.length > 0 ? <div className="space-y-2">
+                      <h4 className="font-medium">Imported:</h4>
+                      <div className="max-h-32 overflow-y-auto space-y-1">
+                        {lastImportSummary.successes.map((success) => <div key={success.id} className="text-sm p-2 bg-muted rounded">
+                            <div className="font-medium">{success.title}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {success.visibility} • /{success.slug}
+                            </div>
+                          </div>)}
+                      </div>
+                    </div> : null}
+
+                  {lastImportSummary.failed.length > 0 ? <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="font-medium text-amber-800 dark:text-amber-200">
+                            Failed Templates
+                          </p>
+                          <ul className="text-amber-700 dark:text-amber-300 mt-1 space-y-1">
+                            {lastImportSummary.failed.map((failure) => <li key={`${failure.index}-${failure.title}`}>
+                                • {failure.title}: {failure.reason}
+                              </li>)}
+                          </ul>
+                        </div>
+                      </div>
+                    </div> : null}
                 </CardContent>
               </Card>}
           </div>

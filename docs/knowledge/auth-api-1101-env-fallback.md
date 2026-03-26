@@ -28,7 +28,7 @@
   - `JWT_SECRET=<32+ chars> node scripts/check-env.mjs` passes without `BETTER_AUTH_SECRET`.
   - Script fails when neither secret is valid.
 - Browser E2E (local):
-  - `/register` successfully creates account and lands on `/dashboard`.
+  - `/register` successfully creates account and lands on `/console`.
   - `/forgot-password` successfully posts to `/api/auth/request-password-reset` and shows confirmation state.
 
 ## Deployment follow-up

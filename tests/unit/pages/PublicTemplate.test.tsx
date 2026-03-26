@@ -1,114 +1,120 @@
-import { describe, it, expect, vi } from 'vitest';
-import { ChecklistTemplate } from '@/contexts/TemplatesContext';
+import { describe, expect, it } from 'vitest';
 
-describe('PublicTemplate', () => {
-  describe('Template Lookup Logic', () => {
-    const mockTemplates: ChecklistTemplate[] = [
-      { 
-        id: '1', 
-        slug: 'camping-checklist', 
-        title: 'Camping Checklist',
-        isPublic: true,
-        sections: [],
-        userId: 'user1',
-        createdAt: '2024-01-01',
-        description: '',
-        categories: [],
-        tags: [],
-        updatedAt: '',
-        version: 1
-      },
-      { 
-        id: '2', 
-        slug: 'wedding-checklist', 
-        title: 'Wedding Checklist',
-        isPublic: true,
-        sections: [],
-        userId: 'user2',
-        createdAt: '2024-01-02',
-        description: '',
-        categories: [],
-        tags: [],
-        updatedAt: '',
-        version: 1
-      },
-      { 
-        id: '3', 
-        slug: undefined, 
-        title: 'Legacy Template',
-        isPublic: true,
-        sections: [],
-        userId: 'user3',
-        createdAt: '2024-01-03',
-        description: '',
-        categories: [],
-        tags: [],
-        updatedAt: '',
-        version: 1
-      },
-      { 
-        id: '4', 
-        slug: 'private-checklist', 
-        title: 'Private Template',
-        isPublic: false,
-        sections: [],
-        userId: 'user4',
-        createdAt: '2024-01-04',
-        description: '',
-        categories: [],
-        tags: [],
-        updatedAt: '',
-        version: 1
-      }
-    ];
+import {
+  REPO_TEMPLATE_OWNER_SLUG,
+  REPO_TEMPLATE_USER_ID,
+} from '@/lib/repoTemplateCatalog';
+import { resolvePublicTemplateOwnerSlug } from '@/lib/routes';
+import type { ChecklistTemplate } from '@/types/checklist';
 
-    it('should find template by slug', () => {
-      const findBySlug = (slug: string) => 
-        mockTemplates.find(t => t.slug === slug && t.isPublic);
-      
-      const found = findBySlug('camping-checklist');
-      expect(found).toBeDefined();
-      expect(found?.id).toBe('1');
-      expect(found?.title).toBe('Camping Checklist');
-    });
+const mockTemplates: ChecklistTemplate[] = [
+  {
+    id: 'template-1',
+    slug: 'camping-checklist',
+    title: 'Camping Checklist',
+    isPublic: true,
+    sections: [],
+    userId: 'user-1',
+    ownerProfile: { username: 'alice' },
+    createdAt: '2026-03-24T00:00:00.000Z',
+    description: '',
+    categories: [],
+    tags: [],
+    updatedAt: '2026-03-24T00:00:00.000Z',
+    version: 1,
+  },
+  {
+    id: 'legacy-template',
+    title: 'Legacy Template',
+    isPublic: true,
+    sections: [],
+    userId: 'user-1',
+    ownerProfile: { username: 'alice' },
+    createdAt: '2026-03-24T00:00:00.000Z',
+    description: '',
+    categories: [],
+    tags: [],
+    updatedAt: '2026-03-24T00:00:00.000Z',
+    version: 1,
+  },
+  {
+    id: 'repo:ultimate-camping-checklist',
+    slug: 'ultimate-camping-checklist',
+    title: 'Ultimate Camping Checklist',
+    isPublic: true,
+    sections: [],
+    userId: REPO_TEMPLATE_USER_ID,
+    createdAt: '2026-03-24T00:00:00.000Z',
+    description: '',
+    categories: [],
+    tags: [],
+    updatedAt: '2026-03-24T00:00:00.000Z',
+    version: 1,
+  },
+  {
+    id: 'template-4',
+    slug: 'private-checklist',
+    title: 'Private Template',
+    isPublic: false,
+    sections: [],
+    userId: 'user-4',
+    ownerProfile: { username: 'alice' },
+    createdAt: '2026-03-24T00:00:00.000Z',
+    description: '',
+    categories: [],
+    tags: [],
+    updatedAt: '2026-03-24T00:00:00.000Z',
+    version: 1,
+  },
+];
 
-    it('should find template by ID when slug not found', () => {
-      const findBySlugOrId = (identifier: string) => {
-        // Try slug first
-        let found = mockTemplates.find(t => t.slug === identifier && t.isPublic);
-        // Fallback to ID
-        if (!found) {
-          found = mockTemplates.find(t => t.id === identifier && t.isPublic);
-        }
-        return found;
-      };
+const resolveTemplateForRoute = (username: string, templateSlug: string) =>
+  mockTemplates.find((template) => {
+    if (!template.isPublic) {
+      return false;
+    }
 
-      // Find by slug
-      expect(findBySlugOrId('wedding-checklist')?.id).toBe('2');
-      
-      // Find by ID (for legacy templates without slug)
-      expect(findBySlugOrId('3')?.title).toBe('Legacy Template');
-      
-      // Should not find non-existent
-      expect(findBySlugOrId('nonexistent')).toBeUndefined();
-    });
+    const ownerSlug = resolvePublicTemplateOwnerSlug(template);
 
-    it('should not return private templates', () => {
-      const findPublicBySlug = (slug: string) => 
-        mockTemplates.find(t => t.slug === slug && t.isPublic);
-      
-      expect(findPublicBySlug('private-checklist')).toBeUndefined();
-      expect(findPublicBySlug('camping-checklist')).toBeDefined();
-    });
+    if (!ownerSlug || ownerSlug.toLowerCase() !== username.toLowerCase()) {
+      return false;
+    }
 
-    it('should handle UUID format detection', () => {
-      const isUUID = (str: string) => {
-        return str.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-      };
+    return (
+      template.slug === templateSlug ||
+      (!template.slug && template.id === templateSlug)
+    );
+  });
 
-      expect(isUUID('d2f53738-b5b7-4d5e-a26f-ddbc3b23edf6')).toBeTruthy();
-      expect(isUUID('camping-checklist')).toBeFalsy();
-      expect(isUUID('wedding-checklist-123')).toBeFalsy();
-    });
+describe('PublicTemplate route lookup', () => {
+  it('matches a public template when both owner slug and template slug match', () => {
+    expect(resolveTemplateForRoute('alice', 'camping-checklist')?.id).toBe(
+      'template-1',
+    );
+  });
+
+  it('falls back to template id for public templates that do not have a slug', () => {
+    expect(resolveTemplateForRoute('alice', 'legacy-template')?.title).toBe(
+      'Legacy Template',
+    );
+  });
+
+  it('does not resolve a template when the owner segment does not match', () => {
+    expect(resolveTemplateForRoute('bob', 'camping-checklist')).toBeUndefined();
+  });
+
+  it('maps repo-backed templates onto the official public owner slug', () => {
+    expect(
+      resolveTemplateForRoute(
+        REPO_TEMPLATE_OWNER_SLUG,
+        'ultimate-camping-checklist',
+      )?.id,
+    ).toBe('repo:ultimate-camping-checklist');
+  });
+
+  it('never resolves private templates on public owner/template routes', () => {
+    expect(
+      resolveTemplateForRoute('alice', 'private-checklist'),
+    ).toBeUndefined();
   });
 });

@@ -37,7 +37,7 @@ const template: ChecklistTemplate = {
 };
 
 describe('PublicTemplateView', () => {
-  it('renders a repo-style layout without the old stacked callout cards', () => {
+  it('starts checklist content without the extra overview framing bands', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <PublicTemplateView
@@ -56,13 +56,14 @@ describe('PublicTemplateView', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Checklist preview');
     expect(html).toContain('On this page');
     expect(html).toContain('Template details');
     expect(html).toContain('Start checklist');
     expect(html).toContain('Log in to copy template');
     expect(html).toContain('text-3xl');
     expect(html).toContain('text-base');
+    expect(html).not.toContain('Checklist preview');
+    expect(html).not.toContain('Overview');
     expect(html).not.toContain('Action rail');
     expect(html).not.toContain('At a glance');
     expect(html).not.toContain('Template walkthrough');

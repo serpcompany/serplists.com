@@ -1,51 +1,72 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Mail, MessageCircle } from "lucide-react";
+import { Mail, MessageCircle } from 'lucide-react';
+
+import {
+  IconBadge,
+  PageHero,
+  PageSection,
+  Surface,
+} from '@/components/layout/page-shell';
+import { Button } from '@/components/ui/button';
+import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const Contact = () => {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-16">
-        <div className="mb-12 text-center">
-          <h1 className="mb-4 text-4xl font-bold md:text-5xl">Contact</h1>
-          <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-            Questions, feedback, or support requests? Reach out and we will respond as soon as possible.
-          </p>
-        </div>
+    <>
+      <PageSection spacing="hero">
+        <PageHero
+          align="center"
+          eyebrow="Contact"
+          description="Questions, feedback, or support requests? Reach out and we will respond as soon as possible."
+          title="Talk to the team behind SERP Lists."
+        />
+      </PageSection>
 
+      <PageSection className="pt-0" spacing="spacious">
         <div className="grid gap-6 md:grid-cols-2">
-          <Card className="border bg-card">
-            <CardHeader>
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Surface as="article" tone="docs">
+            <CardHeader className="space-y-4">
+              <IconBadge>
                 <Mail className="h-6 w-6" />
+              </IconBadge>
+              <div className="space-y-2">
+                <CardTitle>Email support</CardTitle>
+                <CardDescription>
+                  Send details about your issue, plus the account email if
+                  relevant.
+                </CardDescription>
               </div>
-              <CardTitle>Email support</CardTitle>
-              <CardDescription>Send details about your issue, plus the account email if relevant.</CardDescription>
-              <div className="pt-4">
+              <div className="pt-2">
                 <Button asChild>
                   <a href="mailto:support@serplists.com">support@serplists.com</a>
                 </Button>
               </div>
             </CardHeader>
-          </Card>
+          </Surface>
 
-          <Card className="border bg-card">
-            <CardHeader>
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Surface as="article" tone="docs">
+            <CardHeader className="space-y-4">
+              <IconBadge>
                 <MessageCircle className="h-6 w-6" />
+              </IconBadge>
+              <div className="space-y-2">
+                <CardTitle>Product feedback</CardTitle>
+                <CardDescription>
+                  Tell us what would make SERP Lists more useful for your
+                  workflow.
+                </CardDescription>
               </div>
-              <CardTitle>Product feedback</CardTitle>
-              <CardDescription>Tell us what would make SERP Lists more useful for your workflow.</CardDescription>
-              <div className="pt-4">
+              <div className="pt-2">
                 <Button asChild variant="outline">
-                  <a href="mailto:support@serplists.com?subject=SERP%20Lists%20feedback">Share feedback</a>
+                  <a href="mailto:support@serplists.com?subject=SERP%20Lists%20feedback">
+                    Share feedback
+                  </a>
                 </Button>
               </div>
             </CardHeader>
-          </Card>
+          </Surface>
         </div>
-      </div>
-    </div>
+      </PageSection>
+    </>
   );
 };
 

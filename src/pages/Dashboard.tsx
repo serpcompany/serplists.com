@@ -31,6 +31,7 @@ import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates, type ChecklistRun } from '@/contexts/TemplatesContext';
 import {
+  resolveConsoleSection,
   buildConsoleRunPath,
   buildConsoleTemplateCreatePath,
   buildConsoleTemplatePath,
@@ -57,7 +58,7 @@ const Dashboard = () => {
   const [editingRunId, setEditingRunId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
 
-  const isRunsRoute = location.pathname.startsWith('/console/runs');
+  const isRunsRoute = resolveConsoleSection(location.pathname) === 'runs';
 
   useEffect(() => {
     const checkout = searchParams.get('checkout');

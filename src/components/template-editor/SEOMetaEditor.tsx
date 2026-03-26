@@ -1,66 +1,105 @@
+import { useFormContext } from "react-hook-form";
+
+import {
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import type { TemplateEditorDetailsFormValues } from "@/lib/forms/templateEditorDetailsForm";
 
-interface SEOMetaEditorProps {
-  seoTitle: string;
-  seoDescription: string;
-  seoUrl: string;
-  onSeoTitleChange: (value: string) => void;
-  onSeoDescriptionChange: (value: string) => void;
-  onSeoUrlChange: (value: string) => void;
-}
+export const SEOMetaEditor = (): JSX.Element => {
+  const { control } = useFormContext<TemplateEditorDetailsFormValues>();
 
-export const SEOMetaEditor = ({
-  seoTitle,
-  seoDescription,
-  seoUrl,
-  onSeoTitleChange,
-  onSeoDescriptionChange,
-  onSeoUrlChange
-}: SEOMetaEditorProps) => {
   return (
-    <div className="space-y-8">
-      <div>
-        <h3 className="text-lg font-semibold">SEO meta information</h3>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          These fields shape how the public template reads in search, social previews, and copied library links.
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <h3 className="text-lg font-semibold">Search preview</h3>
+        <p className="text-sm leading-6 text-muted-foreground">
+          Keep this tight. These fields shape how the template reads in search, shared links,
+          and public library previews.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <div>
-          <Label htmlFor="seoTitle" className="text-base font-medium">SEO Title</Label>
-          <Input
-            id="seoTitle"
-            value={seoTitle}
-            onChange={(e) => onSeoTitleChange(e.target.value)}
-            placeholder="SEO-optimized title for search engines"
-            className="mt-2"
+      <section className="rounded-lg border border-border/80 bg-card px-5 py-5">
+        <div className="mb-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+            Search preview
+          </p>
+          <h4 className="mt-2 text-base font-semibold text-foreground">
+            Control the title, slug, and description shown outside the editor.
+          </h4>
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          <FormField
+            control={control}
+            name="seoTitle"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium">Search title</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="Technical SEO audit SOP"
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Keep it readable first. Only optimize after the wording is clear.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name="seoUrl"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium">
+                  URL slug
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="technical-seo-audit-sop"
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Short, stable, and predictable beats clever.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name="seoDescription"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel className="text-sm font-medium">
+                  Search description
+                </FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="Explain what the SOP covers and who it helps."
+                    rows={4}
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Write one compact summary that will still make sense when copied into a search or social preview.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
           />
         </div>
-        <div>
-          <Label htmlFor="seoUrl" className="text-base font-medium">Custom URL Slug</Label>
-          <Input
-            id="seoUrl"
-            value={seoUrl}
-            onChange={(e) => onSeoUrlChange(e.target.value)}
-            placeholder="custom-url-slug"
-            className="mt-2"
-          />
-        </div>
-        <div className="md:col-span-2">
-          <Label htmlFor="seoDescription" className="text-base font-medium">SEO Meta Description</Label>
-          <Textarea
-            id="seoDescription"
-            value={seoDescription}
-            onChange={(e) => onSeoDescriptionChange(e.target.value)}
-            placeholder="Brief description for search engines (150-160 characters recommended)"
-            className="mt-2"
-            rows={3}
-          />
-        </div>
-      </div>
+      </section>
     </div>
   );
 };

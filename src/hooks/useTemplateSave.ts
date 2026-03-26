@@ -4,6 +4,7 @@ import { useTemplates } from "@/contexts/TemplatesContext";
 import { useTemplateValidation } from "@/hooks/useTemplateValidation";
 import { ChecklistTemplate, ChecklistSection } from "@/types/checklist";
 import { toast } from "sonner";
+import { buildConsoleTemplatesPath } from "@/lib/routes";
 
 export const useTemplateSave = () => {
   const navigate = useNavigate();
@@ -70,7 +71,7 @@ export const useTemplateSave = () => {
         });
         
         toast.success("Template created successfully");
-        navigate("/templates");
+        navigate(buildConsoleTemplatesPath());
       }
       
       return { success: true, errors: [] };

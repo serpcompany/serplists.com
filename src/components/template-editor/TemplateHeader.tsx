@@ -1,7 +1,9 @@
-import { Button } from "@/components/ui/button";
-import { Save, Loader2, ExternalLink, ChevronRight } from "lucide-react";
-import { useAuth } from "@/contexts/CloudflareAuthContext";
-import { buildPublicTemplatePath } from "@/lib/routes";
+import { ChevronRight, ExternalLink, Loader2, Save } from 'lucide-react';
+
+import { PageContainer } from '@/components/layout/page-shell';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { buildPublicTemplatePath } from '@/lib/routes';
 
 interface TemplateHeaderProps {
   isEditing: boolean;
@@ -16,62 +18,61 @@ export const TemplateHeader = ({
   isSaving,
   templateSlug,
   onCancel,
-  onSave
-}: TemplateHeaderProps) => {
+  onSave,
+}: TemplateHeaderProps): JSX.Element => {
   const { user } = useAuth();
   const publicUrl =
     templateSlug && user?.username
       ? `${window.location.origin}${buildPublicTemplatePath(user.username, templateSlug)}`
       : null;
   return (
-    <div className="border-b border-border/80 bg-background/92 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      <div className="mx-auto max-w-7xl px-4 py-5">
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="border-b border-border/80 bg-background">
+      <PageContainer className="py-4" width="shell">
+        <div className="docs-panel flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <Button
                 variant="ghost"
                 onClick={onCancel}
                 className="h-auto px-0 text-sm font-medium text-foreground hover:bg-transparent hover:text-foreground/80"
               >
-                All templates
+                Templates
               </Button>
               <ChevronRight className="h-4 w-4" />
-              <span>Input</span>
-              <ChevronRight className="h-4 w-4" />
-              <span>Versions</span>
+              <span>{isEditing ? 'Editing' : 'Draft'}</span>
             </div>
-            <div className="text-xs font-medium uppercase tracking-[0.26em] text-muted-foreground">
-              {isEditing ? "Editor workspace" : "Draft workspace"}
+
+            <div className="max-w-3xl">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                Template editor
+              </h1>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Keep the workflow dense: define the metadata, shape the steps,
+                and save the SOP without extra landing-page chrome.
+              </p>
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <h1 className="text-3xl font-semibold tracking-tight">
-                {isEditing ? "Refine your checklist pack" : "Create a new checklist pack"}
-              </h1>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Keep the left rail for structure and use this editor like a docs workspace instead of stacked setup cards.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-            {publicUrl && (
-              <Button 
-                variant="outline" 
-                size="sm"
+          <div className="flex flex-wrap gap-2">
+            {publicUrl ? (
+              <Button
+                className="hidden rounded-lg sm:flex"
                 onClick={() => window.open(publicUrl, '_blank')}
-                className="hidden rounded-lg border-border/80 bg-card/80 sm:flex"
+                size="sm"
+                variant="outline"
               >
                 <ExternalLink className="mr-2 h-4 w-4" />
-                View Public
+                View public
               </Button>
-            )}
-            <Button variant="outline" onClick={onCancel} className="rounded-lg border-border/80 bg-card/80">
+            ) : null}
+            <Button
+              className="rounded-lg"
+              onClick={onCancel}
+              variant="outline"
+            >
               Cancel
             </Button>
-            <Button onClick={onSave} disabled={isSaving} className="rounded-lg">
+            <Button className="rounded-lg" disabled={isSaving} onClick={onSave}>
               {isSaving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -83,11 +84,10 @@ export const TemplateHeader = ({
                   Save
                 </>
               )}
-              </Button>
-            </div>
+            </Button>
           </div>
         </div>
-      </div>
+      </PageContainer>
     </div>
   );
 };

@@ -1,0 +1,111 @@
+import { cva, type VariantProps } from 'class-variance-authority';
+
+export const pageContainerVariants = cva(
+  'mx-auto w-full px-4 sm:px-6 lg:px-8',
+  {
+    variants: {
+      width: {
+        shell: 'max-w-[var(--layout-shell-max)]',
+        content: 'max-w-[var(--layout-content-max)]',
+        narrow: 'max-w-[var(--layout-narrow-max)]',
+        wide: 'max-w-[var(--layout-wide-max)]',
+        docs: 'max-w-[var(--layout-docs-max)]',
+      },
+    },
+    defaultVariants: {
+      width: 'content',
+    },
+  },
+);
+
+export const pageSectionVariants = cva('', {
+  variants: {
+    spacing: {
+      compact: 'py-6 sm:py-8',
+      default: 'py-8 sm:py-10',
+      spacious: 'py-12 sm:py-16',
+      hero: 'pb-8 pt-10 sm:pb-10 sm:pt-12',
+    },
+  },
+  defaultVariants: {
+    spacing: 'default',
+  },
+});
+
+export const pageHeroVariants = cva('space-y-4', {
+  variants: {
+    align: {
+      left: 'text-left',
+      center: 'text-center',
+    },
+  },
+  defaultVariants: {
+    align: 'left',
+  },
+});
+
+export const surfaceVariants = cva(
+  'rounded-[calc(var(--radius)+0.25rem)] border border-border/80 text-card-foreground',
+  {
+    variants: {
+      tone: {
+        default: 'bg-card shadow-none',
+        glass: 'bg-card/94 shadow-none',
+        metric: 'bg-card shadow-none',
+        console: 'bg-card/96 shadow-none',
+        docs: 'bg-card/96 shadow-none',
+        flat: 'bg-card/96',
+      },
+      padding: {
+        none: '',
+        sm: 'p-4 sm:p-5',
+        md: 'p-6',
+        lg: 'p-8',
+        xl: 'p-10',
+      },
+    },
+    defaultVariants: {
+      tone: 'default',
+      padding: 'md',
+    },
+  },
+);
+
+export const iconBadgeVariants = cva(
+  'inline-flex items-center justify-center rounded-full border border-primary/10 bg-primary/10 text-primary',
+  {
+    variants: {
+      size: {
+        sm: 'h-10 w-10',
+        md: 'h-12 w-12',
+        lg: 'h-14 w-14',
+      },
+    },
+    defaultVariants: {
+      size: 'md',
+    },
+  },
+);
+
+export const pageEyebrowClassName =
+  'text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground';
+
+export const pageTitleClassName =
+  'text-3xl font-semibold tracking-tight text-foreground sm:text-4xl';
+
+export const pageDescriptionClassName =
+  'text-sm leading-6 text-muted-foreground sm:text-base sm:leading-7';
+
+export const sectionTitleClassName =
+  'text-2xl font-semibold tracking-tight text-foreground';
+
+export type PageContainerWidth = VariantProps<
+  typeof pageContainerVariants
+>['width'];
+export type PageSectionSpacing = VariantProps<
+  typeof pageSectionVariants
+>['spacing'];
+export type PageHeroAlign = VariantProps<typeof pageHeroVariants>['align'];
+export type SurfaceTone = VariantProps<typeof surfaceVariants>['tone'];
+export type SurfacePadding = VariantProps<typeof surfaceVariants>['padding'];
+export type IconBadgeSize = VariantProps<typeof iconBadgeVariants>['size'];

@@ -11,11 +11,11 @@ import {
 } from '@/components/layout/PublicPageLayout';
 
 describe('PublicPageLayout', () => {
-  it('renders a reusable public detail-page frame with a shared sidebar rail', () => {
+  it('renders a reusable public detail-page frame with a tighter docs-style sidebar rail', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <PublicPageContainer>
-          <PublicPageBackLink to="/templates">Back to templates</PublicPageBackLink>
+          <PublicPageBackLink to="/checklists">Back to checklists</PublicPageBackLink>
           <PublicPageSplitLayout
             asidePosition="end"
             main={<div>Main content</div>}
@@ -29,9 +29,9 @@ describe('PublicPageLayout', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Back to templates');
+    expect(html).toContain('Back to checklists');
     expect(html).toContain('Main content');
     expect(html).toContain('Template details');
-    expect(html).toContain('lg:grid-cols-[minmax(0,1fr)_280px]');
+    expect(html).toContain('lg:grid-cols-[minmax(0,1fr)_256px]');
   });
 });

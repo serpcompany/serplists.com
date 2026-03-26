@@ -1,4 +1,5 @@
--- Schema snapshot (aligned with db/migrations/*.sql)
+-- Schema snapshot for reference and local inspection.
+-- `db/migrations/*.sql` remains the source of truth for schema changes.
 
 -- Users table
 CREATE TABLE users (

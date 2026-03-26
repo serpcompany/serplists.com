@@ -149,7 +149,7 @@ describe('Checklists Handlers', () => {
     expect(response.status).toBe(200);
     expect(typeof data.id).toBe('string');
     expect(typeof data.shareToken).toBe('string');
-    expect(data.sharePath).toMatch(/^\/run\/shared\//);
+    expect(data.sharePath).toMatch(/^\/share\//);
 
     const inserted = dbMocks.insertChain.values.mock.calls[0][0];
     expect(inserted.is_public).toBe(true);
