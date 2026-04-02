@@ -10,12 +10,12 @@ export type AppShell = 'public' | 'console';
 export type PublicRouteTier = 'marketing' | 'core' | 'secondary' | 'minimal';
 export type ConsoleSection = 'home' | 'templates' | 'runs' | 'account';
 
-export const LEGACY_PUBLIC_TEMPLATES_PATH = '/templates';
+export const LEGACY_PUBLIC_LIBRARY_PATH = '/checklists';
 export const LEGACY_CONSOLE_HOME_PATH = '/console';
 export const LEGACY_CONSOLE_TEMPLATES_PATH = '/console/templates';
 export const LEGACY_CONSOLE_RUNS_PATH = '/console/runs';
 
-export const buildPublicTemplatesPath = (): string => '/checklists';
+export const buildPublicTemplatesPath = (): string => '/templates';
 
 export const buildCategorySlug = (categoryName: string): string =>
   generateSlug(categoryName.trim());
@@ -125,7 +125,7 @@ export const resolvePublicRouteTier = (pathname: string): PublicRouteTier => {
 
   if (
     normalizedPath === buildPublicTemplatesPath() ||
-    normalizedPath === LEGACY_PUBLIC_TEMPLATES_PATH ||
+    normalizedPath === LEGACY_PUBLIC_LIBRARY_PATH ||
     normalizedPath.startsWith('/profile/') ||
     isPublicTemplateDetailPath
   ) {

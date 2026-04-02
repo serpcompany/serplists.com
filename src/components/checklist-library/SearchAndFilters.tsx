@@ -33,8 +33,8 @@ export const SearchAndFilters: React.FC<SearchAndFiltersProps> = ({
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            aria-label="Search checklists"
-            placeholder="Search checklist packs, workflows, and process templates…"
+            aria-label="Search templates"
+            placeholder="Search template packs, workflows, and process templates..."
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             className="h-11 rounded-lg border-border bg-background pl-11 text-sm shadow-none"

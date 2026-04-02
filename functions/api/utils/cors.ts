@@ -1,6 +1,6 @@
 import type { Env } from '../types';
 
-function normalizeOrigin(value: string): string | null {
+export function normalizeOrigin(value: string): string | null {
   try {
     return new URL(value).origin;
   } catch {
@@ -8,7 +8,7 @@ function normalizeOrigin(value: string): string | null {
   }
 }
 
-function parseAllowedOrigins(env: Env): Set<string> {
+export function resolveConfiguredCorsOrigins(env: Env): string[] {
   const allowed = new Set<string>();
 
   if (env.FRONTEND_URL) {
@@ -25,12 +25,12 @@ function parseAllowedOrigins(env: Env): Set<string> {
     }
   }
 
-  return allowed;
+  return Array.from(allowed);
 }
 
 export function resolveCorsOrigin(request: Request, env: Env): string | null {
   const origin = request.headers.get('Origin');
-  const allowed = parseAllowedOrigins(env);
+  const allowed = new Set(resolveConfiguredCorsOrigins(env));
 
   if (allowed.size === 0) {
     if (!origin) return '*';

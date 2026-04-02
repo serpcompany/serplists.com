@@ -17,7 +17,7 @@ export type PublicSiteLink = {
 export const publicSiteLinks = [
   {
     href: buildPublicTemplatesPath(),
-    label: 'Checklists',
+    label: 'Templates',
     placements: ['header'],
   },
   {

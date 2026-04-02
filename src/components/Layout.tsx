@@ -301,7 +301,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             >
               <Link to={buildPublicTemplatesPath()}>
                 <BookOpen className="mr-2 h-4 w-4" />
-                Browse checklists
+                Browse templates
               </Link>
             </Button>
           </div>
@@ -400,7 +400,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 >
                   <Link to={buildPublicTemplatesPath()}>
                     <BookOpen className="mr-2 h-4 w-4" />
-                    Public checklists
+                    Public templates
                   </Link>
                 </Button>
                 {accountMenu}
