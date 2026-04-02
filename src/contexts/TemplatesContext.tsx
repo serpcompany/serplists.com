@@ -8,6 +8,7 @@ import {
   ChecklistTemplate, 
   ChecklistRun, 
   ChecklistSection,
+  TemplateSavePayload,
   TemplateImportOptions,
   TemplateImportSummary,
   TemplatesContextProps 
@@ -231,15 +232,9 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   const updateTemplateMutation = useMutation({
-    mutationFn: async (template: ChecklistTemplate) => {
+    mutationFn: async (template: TemplateSavePayload) => {
       if (!user) throw new Error("User must be logged in to update a template");
-      
-      console.log('Mutation - About to update template with:', {
-        categories: template.categories,
-        tags: template.tags,
-        isPublic: template.isPublic
-      });
-      
+
       const result = await api.updateTemplate(template.id, {
         title: template.title,
         description: template.description,
@@ -255,13 +250,12 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       });
       
       if (!result) throw new Error('Failed to update template');
-      return true;
+      return undefined;
     },
-    onSuccess: () => {
-      console.log('Update successful, invalidating queries...');
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-      queryClient.invalidateQueries({ queryKey: ['user-templates'] });
-      queryClient.invalidateQueries({ queryKey: ['runs'] }); // Also invalidate runs since they get updated
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['templates'] });
+      await queryClient.invalidateQueries({ queryKey: ['user-templates'] });
+      await queryClient.invalidateQueries({ queryKey: ['runs'] });
       toast.success("Template updated successfully - all related runs have been updated");
     },
     onError: (error: Error) => {
@@ -479,7 +473,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     getRunsForTemplate,
     getAllPublicTemplates,
     createTemplate: createTemplateMutation.mutateAsync,
-    updateTemplate: updateTemplateMutation.mutate,
+    updateTemplate: updateTemplateMutation.mutateAsync,
     deleteTemplate: deleteTemplateMutation.mutate,
     createRun: createRunMutation.mutateAsync,
     updateRun: updateRunMutation.mutate,
