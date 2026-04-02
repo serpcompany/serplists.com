@@ -45,14 +45,20 @@ pnpm run dev:all    # Runs both in parallel
 ## Local database (D1)
 ```bash
 pnpm run db:seed
+pnpm run db:seed:official:local
 pnpm run db:reset
 pnpm run db:reset:test-user-passwords
 pnpm run db:query "SELECT * FROM templates LIMIT 5"
 ```
 
-Local D1 state lives under `.wrangler/state/...`. The `db:reset` script clears that local state and replays migrations.
+Local D1 state lives under `.wrangler/state/...`. The `db:reset` script clears that local state, replays migrations, seeds the local test users, and re-adds the official `serp` publisher/templates.
 
 Drizzle schema lives in `db/schema/` (entry: `db/schema/index.ts`); Drizzle Kit config in `db/drizzle.config.ts`.
+
+The official local publisher seed creates:
+- username `serp`
+- display name `SERP`
+- a small set of official public templates owned by that account
 
 ## Dev login (local dummy users)
 In development mode (`import.meta.env.DEV`), two helpers are available:
@@ -62,6 +68,7 @@ In development mode (`import.meta.env.DEV`), two helpers are available:
 These helpers use the test users seeded by `db/migrations/seed-test-data.sql`.
 
 Credentials:
+- checklists@serp.co
 - admin@test.com
 - john@test.com
 - jane@test.com

@@ -2,7 +2,7 @@
 
 ## Top-level structure
 ```
-serp-checklists/
+serplists.com/
 ├── src/                 # React app
 ├── functions/           # Cloudflare Pages Functions API
 ├── db/                  # D1 schema + migrations + seed data

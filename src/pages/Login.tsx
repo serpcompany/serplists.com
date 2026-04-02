@@ -134,6 +134,19 @@ const Login = () => {
               variant="outline"
               size="sm"
               onClick={() => {
+                setEmail("checklists@serp.co");
+                setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
+              }}
+              className="text-xs"
+            >
+              <div className="mr-1 h-2 w-2 rounded-full bg-amber-500" />
+              Fill SERP
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
                 setEmail("admin@test.com");
                 setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
               }}

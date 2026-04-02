@@ -38,6 +38,47 @@ Portable template fields are intentionally cleaner than app row exports:
 - optional portable rules are represented as `rules`
 - sections/items/content IDs may be present, but import should not depend on them
 
+## Practical authoring workflow
+
+The portable JSON pack is the canonical authoring format for template work outside the editor UI.
+
+Current proven workflow:
+
+1. Create or edit a portable JSON pack in VS Code.
+2. Optionally generate a Markdown preview for human review.
+3. Import the JSON through the template backup/import backend.
+4. Verify the imported template on the public site.
+
+This has now been verified end-to-end against the real site for the official `serp` publisher account.
+
+Recommended local file shape:
+
+```text
+tmp/local-templates/{template-slug}/
+  template.json
+  README.md
+```
+
+Recommended usage:
+
+- `template.json` is canonical
+- `README.md` is a generated preview, not source of truth
+
+Example live-tested payload:
+
+- [camping-checklist.json](/Users/devin/dev/repos/serplists.com/docs/schema/camping-checklist.json)
+
+Live-tested authoring examples created in this repo:
+
+- [template.json](/Users/devin/dev/repos/serplists.com/tmp/local-templates/campsite-breakdown-checklist/template.json)
+- [README.md](/Users/devin/dev/repos/serplists.com/tmp/local-templates/campsite-breakdown-checklist/README.md)
+
+Current live import note:
+
+- The portable import backend works for public templates.
+- The current Templates UI can still block the file picker if `billingEnabled` is false, even when the signed-in user is already `pro`.
+- If that happens, import can still be performed by posting the same portable JSON pack to `POST /api/templates/backup` with an authenticated Pro session.
+
 ## Backup/export format
 
 Backup export remains supported for compatibility and restore-style workflows.
@@ -107,6 +148,7 @@ JSON exports **do not** include R2 assets. If a template references uploaded fil
 - Backup export is still available for compatibility.
 - Guardrails are enforced (max 5 templates/import; block assets > 5MB).
 - Asset uploads should be <= 5MB each (compress before publishing).
+- For live public-library publishing today, the imported template should be owned by the intended public publisher account before import, because author username is resolved from DB ownership, not from the portable JSON file.
 
 `seoUrl` is represented by the stored `slug` field and mapped back into the editor's `Custom URL Slug` input.
 
