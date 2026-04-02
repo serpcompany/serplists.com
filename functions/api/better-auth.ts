@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import type { Env } from "./types";
 import { createDb, schema } from "./db";
 import { resolveAuthSecret } from "./utils/auth-secret";
+import { resolveConfiguredCorsOrigins } from "./utils/cors";
 
 const sendEmail = async (
   env: Env,
@@ -85,15 +86,9 @@ export function createBetterAuth(env: Env, request: Request) {
 
   const trustedOrigins = new Set<string>();
   trustedOrigins.add(origin);
-  if (env.FRONTEND_URL) {
-    try {
-      trustedOrigins.add(new URL(env.FRONTEND_URL).origin);
-    } catch {
-      console.warn("Ignoring invalid FRONTEND_URL for trustedOrigins", { value: env.FRONTEND_URL });
-    }
+  for (const configuredOrigin of resolveConfiguredCorsOrigins(env)) {
+    trustedOrigins.add(configuredOrigin);
   }
-  trustedOrigins.add("http://localhost:8080");
-  trustedOrigins.add("http://localhost:8788");
 
   const isSecure = origin.startsWith("https://");
 

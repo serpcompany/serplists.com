@@ -7,7 +7,7 @@ The public IA was realigned to match the audited live site and to stop the repo 
 ### Public discovery and sharing
 
 - `/`
-- `/checklists`
+- `/templates`
 - `/categories`
 - `/categories/{categorySlug}`
 - `/profile/{username}/{templateSlug}`
@@ -35,7 +35,7 @@ The public IA was realigned to match the audited live site and to stop the repo 
 
 ## Compatibility redirects
 
-- `/templates` redirects to `/checklists`
+- `/checklists` redirects to `/templates`
 - `/console` redirects to `/dashboard`
 - Legacy console deep links under `/console/templates/*` and `/console/runs/*` still resolve to the dashboard shell while canonical links should be emitted under `/dashboard/*`
 
@@ -49,7 +49,7 @@ The public IA was realigned to match the audited live site and to stop the repo 
 ## Important rules
 
 - Public template URLs stay under `/profile/{username}/{templateSlug}`.
-- `/checklists` is the canonical public library path.
+- `/templates` is the canonical public library path.
 - `/dashboard` is the canonical signed-in workspace path.
 - Public header, mobile nav, and footer links now come from one shared config in `src/components/layout/publicSiteLinks.ts`.
 - The footer intentionally stays lean: `Company`, `Support`, and `Network`.
@@ -58,13 +58,12 @@ The public IA was realigned to match the audited live site and to stop the repo 
 
 ## Verification used
 
-- `pnpm vitest run tests/unit/lib/routes.test.ts tests/unit/components/Layout.test.ts tests/unit/components/LayoutShell.test.tsx tests/unit/components/AuthPageShell.test.tsx tests/unit/pages/ChecklistLibraryLayout.test.tsx tests/unit/components/PublicTemplateView.test.tsx`
-- `pnpm lint`
-- `pnpm typecheck`
-- `pnpm playwright test tests/e2e/route-structure.spec.ts`
-- Manual browser verification with `agent-browser` on:
-  - `/checklists`
+- `pnpm exec vitest run tests/unit/lib/routes.test.ts tests/unit/components/Layout.test.ts tests/unit/components/PublicPageLayout.test.tsx tests/unit/pages/ChecklistLibrary.test.tsx tests/unit/pages/ChecklistLibraryLayout.test.tsx`
+- `pnpm run typecheck`
+- Targeted eslint on changed route, page, and test files
+- `pnpm exec playwright test tests/e2e/route-structure.spec.ts` currently hits a stale service on `localhost:8080`, so it does not yet verify this migration reliably in the current local environment
+- Manual browser verification is still required against an isolated local dev server for:
   - `/templates`
-  - `/login`
-  - `/profile/devinschumacher/complete-wedding-planning-checklist`
+  - `/checklists`
+  - `/templates/new`
   - `/console`

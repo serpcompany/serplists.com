@@ -383,7 +383,7 @@ const Dashboard = () => {
         <section>
           <UserTemplatesSection
             title="Recent templates"
-            description="Quick access to your newest checklist packs."
+            description="Quick access to your newest template packs."
             headingLevel="h2"
             templates={userTemplates}
             loading={templatesLoading}

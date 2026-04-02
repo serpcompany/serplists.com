@@ -51,6 +51,39 @@ describe("createBetterAuth config", () => {
     expect(typeof options.emailVerification.sendVerificationEmail).toBe("function");
   });
 
+  it("trusts only the request origin when no frontend origins are configured", () => {
+    createBetterAuth(
+      buildEnv({
+        FRONTEND_URL: undefined,
+        CORS_ALLOWED_ORIGINS: undefined,
+      }),
+      new Request("https://api.serplists.com/api/auth/sign-in/email")
+    );
+
+    const options = betterAuthMock.mock.calls[0]?.[0];
+
+    expect(options.trustedOrigins).toEqual(["https://api.serplists.com"]);
+  });
+
+  it("includes configured frontend and CORS origins in trusted origins", () => {
+    createBetterAuth(
+      buildEnv({
+        FRONTEND_URL: "http://localhost:8080",
+        CORS_ALLOWED_ORIGINS: "http://127.0.0.1:4173, https://preview.serplists.com",
+      }),
+      new Request("http://localhost:8788/api/auth/sign-in/email")
+    );
+
+    const options = betterAuthMock.mock.calls[0]?.[0];
+
+    expect(options.trustedOrigins).toEqual([
+      "http://localhost:8788",
+      "http://localhost:8080",
+      "http://127.0.0.1:4173",
+      "https://preview.serplists.com",
+    ]);
+  });
+
   it("sends verification emails through Resend", async () => {
     const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);

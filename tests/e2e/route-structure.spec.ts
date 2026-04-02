@@ -13,10 +13,10 @@ test.describe('route structure', () => {
   test('canonical feature, library, and category detail routes render', async ({
     page,
   }) => {
-    await page.goto('/checklists');
+    await page.goto('/templates');
     await expect(
       page.getByRole('heading', {
-        name: 'Find the checklist pack that already solved it',
+        name: 'Find the template pack that already solved it',
       }),
     ).toBeVisible();
 
@@ -27,7 +27,7 @@ test.describe('route structure', () => {
 
     await page.goto('/categories/outdoor');
     await expect(
-      page.getByRole('heading', { name: 'outdoor checklist packs' }),
+      page.getByRole('heading', { name: 'outdoor template packs' }),
     ).toBeVisible();
     await expect(
       page.getByRole('heading', { name: 'Ultimate Camping Checklist' }),
@@ -37,11 +37,11 @@ test.describe('route structure', () => {
   test('legacy public routes redirect to the live canonical library path', async ({
     page,
   }) => {
-    await page.goto('/checklists');
-    await expect(page).toHaveURL(/\/checklists$/);
-
     await page.goto('/templates');
-    await expect(page).toHaveURL(/\/checklists$/);
+    await expect(page).toHaveURL(/\/templates$/);
+
+    await page.goto('/checklists');
+    await expect(page).toHaveURL(/\/templates$/);
   });
 
   test('legacy console routes redirect to the live canonical dashboard path', async ({
@@ -54,6 +54,16 @@ test.describe('route structure', () => {
 
   test('removed mixed-surface routes still return not found', async ({ page }) => {
     await page.goto('/templates/new');
+    await expect(
+      page.getByRole('heading', { name: 'That page does not exist' }),
+    ).toBeVisible();
+
+    await page.goto('/templates/template-1');
+    await expect(
+      page.getByRole('heading', { name: 'That page does not exist' }),
+    ).toBeVisible();
+
+    await page.goto('/templates/template-1/edit');
     await expect(
       page.getByRole('heading', { name: 'That page does not exist' }),
     ).toBeVisible();

@@ -5,8 +5,8 @@ import { publicSiteLinks } from '@/components/layout/publicSiteLinks';
 describe('public site links', () => {
   it('models header and footer placement from one shared config', () => {
     expect(publicSiteLinks).toContainEqual({
-      href: '/checklists',
-      label: 'Checklists',
+      href: '/templates',
+      label: 'Templates',
       placements: ['header'],
     });
 
