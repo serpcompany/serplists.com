@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Minimal Checklist</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4f1ea;
+        --surface: #fffdf8;
+        --surface-strong: #f0ebe0;
+        --ink: #1f1d1a;
+        --muted: #6c655d;
+        --line: #ddd2be;
+        --accent: #b96b2f;
+        --accent-soft: #f7e4d4;
+        --shadow: 0 14px 30px rgba(71, 55, 34, 0.08);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        background: linear-gradient(180deg, #f8f5ee 0%, var(--bg) 100%);
+        color: var(--ink);
+      }
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 48px 20px 72px;
+      }
+      .hero, .section-card, .item-card, .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+      }
+      .hero {
+        border-radius: 28px;
+        padding: 32px;
+        margin-bottom: 24px;
+      }
+      .eyebrow {
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font: 600 12px/1.2 Arial, sans-serif;
+        color: var(--accent);
+      }
+      h1, h2, h3 { margin: 0; }
+      h1 { font-size: clamp(2.2rem, 4vw, 3.6rem); margin-top: 10px; }
+      .hero p, .item-header p, .meta-row { color: var(--muted); }
+      .meta-row { margin-top: 14px; font: 500 14px/1.5 Arial, sans-serif; }
+      .sections { display: grid; gap: 22px; }
+      .section-card {
+        border-radius: 24px;
+        padding: 24px;
+      }
+      .section-card h2 {
+        font-size: 1.55rem;
+        margin-bottom: 18px;
+      }
+      .section-card h2::before {
+        content: "";
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        margin-right: 10px;
+        border-radius: 999px;
+        background: var(--accent);
+      }
+      .item-card {
+        border-radius: 20px;
+        padding: 20px;
+        margin-top: 16px;
+      }
+      .item-header {
+        display: grid;
+        grid-template-columns: 22px 1fr;
+        gap: 14px;
+        align-items: start;
+      }
+      .item-checkbox, .checkbox {
+        width: 18px;
+        height: 18px;
+        border: 2px solid var(--accent);
+        border-radius: 6px;
+        display: inline-block;
+        flex: 0 0 auto;
+      }
+      .item-content {
+        display: grid;
+        gap: 14px;
+        margin-top: 16px;
+      }
+      .content-block.card {
+        border-radius: 18px;
+        padding: 16px;
+      }
+      .card-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font: 600 12px/1 Arial, sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--accent);
+        background: var(--accent-soft);
+        border-radius: 999px;
+        padding: 7px 10px;
+        margin-bottom: 12px;
+      }
+      .media-card img {
+        width: 100%;
+        max-height: 260px;
+        object-fit: cover;
+        border-radius: 14px;
+        display: block;
+        border: 1px solid var(--line);
+      }
+      .media-placeholder {
+        border-radius: 14px;
+        min-height: 160px;
+        display: grid;
+        place-items: center;
+        background: var(--surface-strong);
+        color: var(--muted);
+        font: 600 14px/1 Arial, sans-serif;
+        border: 1px dashed var(--line);
+      }
+      .card-meta, .embed-url, .file-name {
+        font: 500 14px/1.5 Arial, sans-serif;
+      }
+      .card-meta, .embed-url { margin-top: 12px; color: var(--muted); }
+      .subitem-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 10px;
+      }
+      .subitem-list li {
+        display: grid;
+        grid-template-columns: 18px 1fr;
+        gap: 10px;
+        align-items: start;
+      }
+      .text-block pre {
+        margin: 0;
+        white-space: pre-wrap;
+        font: 500 14px/1.6 "SFMono-Regular", Consolas, monospace;
+        color: #2f2922;
+        background: var(--surface-strong);
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        padding: 14px;
+      }
+      a { color: var(--accent); }
+      @media (max-width: 720px) {
+        main { padding: 20px 14px 40px; }
+        .hero, .section-card, .item-card { padding: 18px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="hero">
+        <div class="eyebrow">checklist</div>
+        <h1>Minimal Checklist</h1>
+        
+        
+      </header>
+      <div class="sections">
+        <section class="section-card"><h2>Checklist</h2><article class="item-card"><div class="item-header"><span class="item-checkbox" aria-hidden="true"></span><div><h3>Do the thing</h3></div></div><div class="item-content"><div class="content-block text-block"><div class="card-label">Text</div><div class="text-markdown"><pre>Write the first draft.</pre></div></div></div></article></section>
+      </div>
+    </main>
+  </body>
+</html>

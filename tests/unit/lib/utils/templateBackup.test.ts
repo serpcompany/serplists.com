@@ -3,6 +3,7 @@ import {
   exportTemplatesToJSON,
   downloadBackupFile,
   parseBackupFile,
+  parseTemplatesFromFile,
   parseTemplatesFromJSON,
   generateUniqueIds,
   prepareTemplatesForImport
@@ -287,6 +288,75 @@ describe('Template Backup Utilities', () => {
       });
       
       await expect(parseTemplatesFromJSON(file)).rejects.toThrow('Template validation failed');
+    });
+  });
+
+  describe('parseTemplatesFromFile', () => {
+    it('should parse strict markdown template files', async () => {
+      const markdown = [
+        '---',
+        'title: Markdown Template',
+        'visibility: public',
+        'categories:',
+        '  - ops',
+        'tags:',
+        '  - markdown',
+        '---',
+        '# Markdown Template',
+        '',
+        'Top-level description.',
+        '',
+        '## Prep',
+        '',
+        '### Review content',
+        '',
+        'Item description.',
+        '',
+        '```serplists:text',
+        'This is **markdown** content.',
+        '```',
+        '',
+        '```serplists:subItems',
+        '- Step one',
+        '- Step two',
+        '```',
+      ].join('\n');
+
+      const file = new File([markdown], 'template.md', {
+        type: 'text/markdown',
+      });
+
+      const result = await parseTemplatesFromFile(file);
+
+      expect(result.templates).toHaveLength(1);
+      expect(result.templates[0].title).toBe('Markdown Template');
+      expect(result.templates[0].isPublic).toBe(true);
+      expect(result.templates[0].sections[0].items[0].contents).toHaveLength(2);
+    });
+
+    it('should parse single-template YAML files', async () => {
+      const source = [
+        'title: YAML Template',
+        'visibility: private',
+        'sections:',
+        '  - title: Prep',
+        '    items:',
+        '      - title: Review content',
+        '        description: Item description',
+        '        contents:',
+        '          - type: text',
+        '            value: Plain text content',
+      ].join('\n');
+
+      const file = new File([source], 'template.yaml', {
+        type: 'application/x-yaml',
+      });
+
+      const result = await parseTemplatesFromFile(file);
+
+      expect(result.templates).toHaveLength(1);
+      expect(result.templates[0].title).toBe('YAML Template');
+      expect(result.templates[0].isPublic).toBe(false);
     });
   });
 

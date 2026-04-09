@@ -1,0 +1,8 @@
+title: Minimal Checklist
+sections:
+  - title: Checklist
+    items:
+      - title: Do the thing
+        contents:
+          - type: text
+            value: Write the first draft.

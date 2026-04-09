@@ -1,6 +1,8 @@
 # Checklist Template JSON Schema
 
-This document describes the JSON format used for template export/import and the content structures stored in D1. Source of truth: `src/lib/schemas/checklistSchema.ts`.
+This document describes the portable template contract used for template export/import and the content structures stored in D1. Structural validation source of truth: `src/lib/schemas/checklistSchema.ts`.
+
+User-facing examples live in [examples/README.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/README.md).
 
 ## Storage strategy (D1)
 - `templates.items` stores the full sections JSON today's UI uses (array of sections with nested items/contents).
@@ -40,14 +42,22 @@ Portable template fields are intentionally cleaner than app row exports:
 
 ## Practical authoring workflow
 
-The portable JSON pack is the canonical authoring format for template work outside the editor UI.
+For human authoring, the recommended workflow is now YAML-first.
 
 Current proven workflow:
 
-1. Create or edit a portable JSON pack in VS Code.
-2. Optionally generate a Markdown preview for human review.
-3. Import the JSON through the template backup/import backend.
-4. Verify the imported template on the public site.
+1. Create or edit `template.yaml`.
+2. Generate `template.json`, `README.md`, `preview.html`, and optional `template.md` from it.
+3. Run `pnpm templates:check` to verify the generated artifacts are in sync.
+4. Import the generated `template.json` or the original `template.yaml` through the template import flow.
+5. Verify the imported template on the public site.
+
+Commands:
+
+```bash
+pnpm templates:generate path/to/template.yaml
+pnpm templates:check
+```
 
 This has now been verified end-to-end against the real site for the official `serp` publisher account.
 
@@ -55,14 +65,35 @@ Recommended local file shape:
 
 ```text
 tmp/local-templates/{template-slug}/
+  template.yaml
   template.json
+  template.md
   README.md
+  preview.html
 ```
 
 Recommended usage:
 
-- `template.json` is canonical
-- `README.md` is a generated preview, not source of truth
+- `template.yaml` is the primary user-authored source
+- `template.json` is the generated normalized machine artifact
+- `README.md` is the generated readable checklist preview
+- `preview.html` is the generated richer card-style preview
+- `template.md` is an optional generated strict Markdown compatibility artifact
+
+Generated artifacts should not be edited by hand; regenerate them from `template.yaml`.
+
+Copy-pasteable example assets:
+
+- [minimal/template.json](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/template.json)
+- [minimal/README.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/README.md)
+- [minimal/preview.html](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/preview.html)
+- [minimal/template.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/template.md)
+- [minimal/template.yaml](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/template.yaml)
+- [full/template.json](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/template.json)
+- [full/README.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/README.md)
+- [full/preview.html](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/preview.html)
+- [full/template.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/template.md)
+- [full/template.yaml](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/template.yaml)
 
 Example live-tested payload:
 
@@ -121,6 +152,8 @@ We accept:
 - portable template packs
 - backup exports
 - simple arrays of templates
+- strict single-template Markdown files (`.md`, `.markdown`)
+- strict single-template YAML files (`.yaml`, `.yml`)
 
 Minimal template fields:
 - `title` (required)
@@ -128,6 +161,40 @@ Minimal template fields:
 - Optional: `description`, `categories`/`category`, `tags`, `isPublic`, `slug`, `seoTitle`, `seoDescription`, `rules`
 
 Missing fields are auto-filled during import (ids, timestamps, userId).
+
+## Strict Markdown template format
+
+The strict Markdown dialect is still supported for compatibility and lintable round-trips, but it is no longer the recommended primary authoring format.
+
+Rules:
+
+- YAML frontmatter is required and must include at least `title`
+- The `#` heading must match the frontmatter `title`
+- `##` headings define sections
+- `###` headings define items
+- item description text can appear between the `###` heading and the first fenced content block
+- structured content uses fenced blocks:
+  - ```` ```serplists:text ````
+  - ```` ```serplists:image ````
+  - ```` ```serplists:video ````
+  - ```` ```serplists:file ````
+  - ```` ```serplists:embed ````
+  - ```` ```serplists:subItems ````
+- `subItems` blocks must contain a YAML array
+- JSON and Markdown siblings named `template.json` and `template.md` can be checked for drift with `pnpm templates:check`
+
+The example assets in `docs/schema/examples/` are the intended copy/paste starting point.
+
+## Generated preview outputs
+
+Generated outputs from `template.yaml` serve different purposes:
+
+- `template.json` preserves the normalized portable machine format
+- `README.md` is the readable checklist-style preview
+- `preview.html` is the richer preview for image/video/file/embed cards
+
+`README.md` is for readability and documentation, not perfect UI fidelity.
+`preview.html` is the preview intended to approximate app content cards without depending on the app runtime.
 
 ### Rules
 - Portable template packs can include an optional `rules` array on each template.

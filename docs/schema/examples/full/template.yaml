@@ -1,0 +1,61 @@
+title: Launch Checklist
+description: Checklist for preparing and shipping a release.
+type: checklist
+slug: launch-checklist
+visibility: public
+seoTitle: Launch Checklist
+seoDescription: Checklist for preparing and shipping a release.
+categories:
+  - ops
+  - release
+tags:
+  - launch
+  - qa
+rules:
+  - id: rule-1
+    type: required-field
+    path: sections[].items[].title
+    severity: error
+sections:
+  - title: Preparation
+    items:
+      - title: Review release notes
+        description: Confirm the final copy is approved.
+        contents:
+          - type: text
+            value: Publish the final **release notes** and confirm all links work.
+      - title: Final asset check
+        description: Make sure the hero image is production-ready.
+        contents:
+          - type: image
+            value: https://example.com/assets/launch-hero.png
+            uploadType: url
+            fileName: launch-hero.png
+      - title: Record launch walkthrough
+        description: Share a short internal video before the release window.
+        contents:
+          - type: video
+            value: https://example.com/assets/launch-walkthrough.mp4
+            uploadType: url
+            fileName: launch-walkthrough.mp4
+      - title: QA pass
+        contents:
+          - type: subItems
+            value: ""
+            subItems:
+              - title: Smoke test homepage
+              - title: Smoke test signup flow
+              - title: Verify analytics events
+  - title: Launch Day
+    items:
+      - title: Publish release
+        contents:
+          - type: text
+            value: Deploy production and monitor logs for the first 15 minutes.
+          - type: file
+            value: https://example.com/assets/release-runbook.pdf
+            uploadType: url
+            fileName: release-runbook.pdf
+            fileSize: 245760
+          - type: embed
+            value: https://status.example.com
