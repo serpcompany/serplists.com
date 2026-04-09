@@ -11,7 +11,7 @@ import { Download, Upload, FileText, AlertCircle, CheckCircle } from "lucide-rea
 import { useTemplates } from "@/contexts/TemplatesContext";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
-import { downloadBackupFile, exportPortableTemplatesToJSON, parseTemplatesFromJSON } from "@/lib/utils/templateBackup";
+import { downloadBackupFile, exportPortableTemplatesToJSON, parseTemplatesFromFile } from "@/lib/utils/templateBackup";
 import type { TemplateImportResult } from "@/lib/utils/templateBackup";
 import type { ChecklistTemplate } from "@/lib/schemas/checklistSchema";
 import type { TemplateImportOptions, TemplateImportSummary } from "@/types/checklist";
@@ -27,6 +27,7 @@ interface TemplateBackupProps {
 const MAX_TEMPLATES_PER_IMPORT = 5;
 const MAX_ASSET_BYTES = 5 * 1024 * 1024;
 const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024; // 2MB
+const SUPPORTED_IMPORT_EXTENSIONS = [".json", ".md", ".markdown", ".yaml", ".yml"];
 
 const countOversizedAssets = (templates: ChecklistTemplate[]): number => {
   let count = 0;
@@ -120,8 +121,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (file.type !== "application/json") {
-      toast.error("Please select a JSON file");
+    const lowerName = file.name.toLowerCase();
+    const isSupported = SUPPORTED_IMPORT_EXTENSIONS.some((extension) => lowerName.endsWith(extension));
+    if (!isSupported) {
+      toast.error("Please select a JSON, Markdown, or YAML template file");
       return;
     }
     if (file.size > MAX_IMPORT_FILE_BYTES) {
@@ -132,7 +135,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     setLastImportSummary(null);
     setIsImporting(true);
     try {
-      const parsedTemplates = await parseTemplatesFromJSON(file);
+      const parsedTemplates = await parseTemplatesFromFile(file);
       setImportPreview(parsedTemplates);
       toast.success(`Preview: ${parsedTemplates.templates.length} templates ready to import`);
     } catch (error) {
@@ -415,8 +418,8 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                 </p>
               </div>
 	            <div className="space-y-2">
-	              <Label htmlFor="template-file-input">Select a JSON template file</Label>
-	              <Input id="template-file-input" type="file" accept=".json" onChange={handleFileSelect} disabled={isImporting || !user || billing.isLoading || plan !== "pro" || !billingEnabled} />
+	              <Label htmlFor="template-file-input">Select a YAML, JSON, or Markdown template file</Label>
+	              <Input id="template-file-input" type="file" accept=".json,.md,.markdown,.yaml,.yml" onChange={handleFileSelect} disabled={isImporting || !user || billing.isLoading || plan !== "pro" || !billingEnabled} />
 	              <p className="text-sm text-muted-foreground">
 	                Need an example?{" "}
 	                <Button variant="link" className="p-0 h-auto text-primary" onClick={downloadSampleTemplate}>

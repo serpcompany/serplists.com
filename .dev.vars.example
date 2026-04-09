@@ -4,8 +4,11 @@ BETTER_AUTH_SECRET=replace-with-32-char-secret
 JWT_SECRET=replace-with-32-char-secret
 
 # Optional frontend/CORS config
+# `pnpm dev`, `pnpm dev:api`, and `pnpm dev:all` start from these defaults.
+# If the default pair is busy, the launcher moves both ports together and rewires
+# FRONTEND_URL / CORS_ALLOWED_ORIGINS / VITE_API_URL to match.
 FRONTEND_URL=http://localhost:8080
-CORS_ALLOWED_ORIGINS=http://localhost:8080
+CORS_ALLOWED_ORIGINS=http://localhost:8080,http://localhost:4173
 
 # Optional uploads config
 R2_PUBLIC_BASE_URL=https://files.example.com

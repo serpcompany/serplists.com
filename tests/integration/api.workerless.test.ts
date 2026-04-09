@@ -217,4 +217,22 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(preflightAllowed.status).toBe(200);
     expect(preflightAllowed.headers.get('Access-Control-Allow-Origin')).toBe('https://app.example.com');
   });
+
+  it('allows preflight origins listed in CORS_ALLOWED_ORIGINS', async () => {
+    const env = buildEnv({
+      FRONTEND_URL: 'https://app.example.com',
+      CORS_ALLOWED_ORIGINS: 'http://127.0.0.1:4173, https://preview.serplists.com',
+    });
+
+    const preflightAllowed = await apiWorker.fetch(
+      new Request('http://localhost/api/health', {
+        method: 'OPTIONS',
+        headers: { Origin: 'http://127.0.0.1:4173' },
+      }),
+      env
+    );
+
+    expect(preflightAllowed.status).toBe(200);
+    expect(preflightAllowed.headers.get('Access-Control-Allow-Origin')).toBe('http://127.0.0.1:4173');
+  });
 });

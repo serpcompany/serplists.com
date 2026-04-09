@@ -110,7 +110,7 @@ export function PublicTemplateView({
       <PublicPageContainer className="pb-10 pt-8">
         <div className="mb-5 flex items-center justify-between gap-4">
           <PublicPageBackLink to={buildPublicTemplatesPath()}>
-            Back to checklists
+            Back to templates
           </PublicPageBackLink>
 
           <div className="hidden items-center gap-3 lg:flex">
@@ -146,7 +146,7 @@ export function PublicTemplateView({
                 @{ownerSlug}
               </Link>
             ) : (
-              <span>Checklist library</span>
+              <span>Template library</span>
             )}
             <span className="text-muted-foreground/60">/</span>
             <span className="font-medium text-foreground">

@@ -267,7 +267,7 @@ const UserProfile = () => {
       <PublicPageContainer className="py-14">
         <div className="mb-6">
           <PublicPageBackLink to={buildPublicTemplatesPath()}>
-            Back to checklists
+            Back to templates
           </PublicPageBackLink>
         </div>
 
@@ -285,7 +285,7 @@ const UserProfile = () => {
     <PublicPageContainer className="pb-16 pt-6">
       <div className="mb-4">
         <PublicPageBackLink to={buildPublicTemplatesPath()}>
-          Back to checklists
+          Back to templates
         </PublicPageBackLink>
       </div>
 
@@ -378,7 +378,7 @@ const UserProfile = () => {
                   Share profile
                 </Button>
                 <Button variant="ghost" size="sm" asChild>
-                  <Link to={buildPublicTemplatesPath()}>Browse checklists</Link>
+                  <Link to={buildPublicTemplatesPath()}>Browse templates</Link>
                 </Button>
               </div>
             </PublicSidebarSection>
@@ -389,17 +389,17 @@ const UserProfile = () => {
             <div className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 className="mt-1.5 text-3xl font-semibold tracking-tight text-foreground">
-                  Public checklists
+                  Public templates
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Browse every public checklist published from this profile.
+                  Browse every public template published from this profile.
                 </p>
               </div>
               <Badge
                 variant="secondary"
               className="h-8 rounded-md px-2.5 text-xs font-medium text-secondary-foreground"
               >
-                {stats.totalTemplates} live checklists
+                {stats.totalTemplates} live templates
               </Badge>
             </div>
 
@@ -455,7 +455,7 @@ const UserProfile = () => {
                         <CardContent className="flex flex-1 flex-col px-4 pb-4 pt-0">
                           <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">
                             {template.description ||
-                              'Public checklist pack published in this creator profile.'}
+                              'Public template pack published in this creator profile.'}
                           </p>
 
                           {(template.categories || []).length ? (

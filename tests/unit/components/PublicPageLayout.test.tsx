@@ -15,7 +15,7 @@ describe('PublicPageLayout', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <PublicPageContainer>
-          <PublicPageBackLink to="/checklists">Back to checklists</PublicPageBackLink>
+          <PublicPageBackLink to="/templates">Back to templates</PublicPageBackLink>
           <PublicPageSplitLayout
             asidePosition="end"
             main={<div>Main content</div>}
@@ -29,7 +29,7 @@ describe('PublicPageLayout', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Back to checklists');
+    expect(html).toContain('Back to templates');
     expect(html).toContain('Main content');
     expect(html).toContain('Template details');
     expect(html).toContain('lg:grid-cols-[minmax(0,1fr)_256px]');

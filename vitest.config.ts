@@ -9,6 +9,7 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
+      '**/tmp/**',
       '**/playwright-report/**',
       '**/test-results/**',
       'tests/e2e/**',
@@ -21,6 +22,7 @@ export default defineConfig({
       exclude: [
         '**/node_modules/**',
         '**/dist/**',
+        '**/tmp/**',
         '**/tests/**',
         '**/*.d.ts',
         'tests/e2e/**',

@@ -35,9 +35,9 @@ export const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold capitalize">{category} Checklists</h2>
+            <h2 className="text-lg font-semibold capitalize">{category} Templates</h2>
             <Badge variant="secondary">
-              {filteredCount} {filteredCount === 1 ? 'checklist' : 'checklists'}
+              {filteredCount} {filteredCount === 1 ? 'template' : 'templates'}
             </Badge>
           </div>
           <div className="flex items-center gap-3">
@@ -60,7 +60,7 @@ export const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
               }}
               className="text-sm text-muted-foreground hover:text-foreground"
             >
-              ← Back to All Checklists
+              ← Back to All Templates
             </a>
           </div>
         </div>

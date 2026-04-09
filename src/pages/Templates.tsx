@@ -133,7 +133,7 @@ const Templates = () => {
 
       <UserTemplatesSection
         title="My Templates"
-        description="Manage the checklist packs inside your private workspace."
+        description="Manage the template packs inside your private workspace."
         templates={userTemplates}
         loading={templatesLoading}
         onCreateTemplate={handleCreateTemplate}
@@ -150,7 +150,7 @@ const Templates = () => {
               Portable import and export
             </h2>
             <p className="mt-2 text-sm leading-7 text-muted-foreground">
-              Move checklist packs between environments or bootstrap your
+              Move template packs between environments or bootstrap your
               workspace from a known sample.
             </p>
           </div>

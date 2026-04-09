@@ -285,13 +285,13 @@ const PublicTemplate = () => {
             Template not found
           </h1>
           <p className="mt-4 text-base leading-7 text-muted-foreground">
-            The checklist you are looking for does not exist or is no longer
+            The template you are looking for does not exist or is no longer
             public.
           </p>
           <Button asChild className="mt-6">
             <Link to={buildPublicTemplatesPath()}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Browse checklists
+              Browse templates
             </Link>
           </Button>
         </Surface>

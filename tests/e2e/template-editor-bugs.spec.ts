@@ -3,10 +3,9 @@ import { expect, test, type Page } from "@playwright/test";
 const DEV_API_BASE_URL = "http://localhost:8788/api";
 
 async function signInAsAdmin(page: Page) {
-  await page.goto("/login");
-  await page.getByRole("button", { name: /fill admin/i }).click();
-  await page.getByRole("button", { name: /sign in with email/i }).click();
-  await expect(page).toHaveURL(/\/account/);
+  await page.goto("/");
+  await page.getByRole("button", { name: /admin \(pro\)/i }).click();
+  await expect(page).toHaveURL(/\/dashboard/);
 }
 
 async function findTemplateByTitle(page: Page, title: string) {
@@ -40,17 +39,13 @@ test.describe("template editor regressions", () => {
     await signInAsAdmin(page);
     await page.goto("/dashboard/templates/new");
 
-    await page.getByLabel("Template Title").fill(templateTitle);
-    await page.getByPlaceholder("Add a tag...").fill(tagName);
-    await page.getByPlaceholder("Add a tag...").press("Enter");
+    await page.getByLabel("Template name").fill(templateTitle);
+    await page.getByLabel("Tags").fill(tagName);
+    await page.getByLabel("Tags").press("Enter");
     await expect(page.getByText(tagName, { exact: true })).toBeVisible();
 
-    await page
-      .getByPlaceholder("Type a category and press Enter or click + to add")
-      .fill(categoryName);
-    await page
-      .getByPlaceholder("Type a category and press Enter or click + to add")
-      .press("Enter");
+    await page.getByLabel("Categories").fill(categoryName);
+    await page.getByLabel("Categories").press("Enter");
     await expect(page.getByText(categoryName, { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Save" }).click();
@@ -80,11 +75,11 @@ test.describe("template editor regressions", () => {
     await signInAsAdmin(page);
     await page.goto("/dashboard/templates/new");
 
-    await page.getByLabel("Template Title").fill(templateTitle);
-    await page.getByText("SEO & Meta").click();
-    await page.getByLabel("SEO Title").fill(seoTitle);
-    await page.getByLabel("Custom URL Slug").fill(seoSlug);
-    await page.getByLabel("SEO Meta Description").fill(seoDescription);
+    await page.getByLabel("Template name").fill(templateTitle);
+    await page.getByRole("button", { name: /search preview/i }).click();
+    await page.getByLabel("Search title").fill(seoTitle);
+    await page.getByLabel("URL slug").fill(seoSlug);
+    await page.getByLabel("Search description").fill(seoDescription);
 
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page).toHaveURL(/\/console\/templates$/);
@@ -103,11 +98,11 @@ test.describe("template editor regressions", () => {
     }
 
     await page.goto(`/dashboard/templates/${createdTemplateId}/edit`);
-    await page.getByText("SEO & Meta").click();
+    await page.getByRole("button", { name: /search preview/i }).click();
 
-    await expect(page.getByLabel("SEO Title")).toHaveValue(seoTitle);
-    await expect(page.getByLabel("Custom URL Slug")).toHaveValue(seoSlug);
-    await expect(page.getByLabel("SEO Meta Description")).toHaveValue(seoDescription);
+    await expect(page.getByLabel("Search title")).toHaveValue(seoTitle);
+    await expect(page.getByLabel("URL slug")).toHaveValue(seoSlug);
+    await expect(page.getByLabel("Search description")).toHaveValue(seoDescription);
 
     await deleteTemplate(page, createdTemplateId);
   });

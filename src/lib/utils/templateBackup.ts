@@ -14,6 +14,13 @@ import type {
   TemplateBackup
 } from "@/lib/schemas/checklistSchema";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
+import {
+  detectTemplateSourceExtension,
+  isMarkdownTemplateExtension,
+  isYamlTemplateExtension,
+  parseTemplateMarkdown,
+  parseTemplateYaml,
+} from "@/lib/templates/templateMarkdown";
 import type { TemplateImportOptions } from "@/types/checklist";
 
 export type TemplateImportWarning = {
@@ -128,6 +135,14 @@ const normalizePortableTemplate = (template: PortableChecklistTemplate): Checkli
     categories: normalizeStringList(template.categories),
     tags: normalizeStringList(template.tags),
   };
+};
+
+const normalizePortableData = (data: PortableChecklistTemplate | PortableTemplatePack): TemplateImportResult => {
+  const normalizedTemplates = ("kind" in data ? data.templates : [data]).map((template) =>
+    normalizePortableTemplate(template)
+  );
+  const warnings = collectAssetWarnings(normalizedTemplates);
+  return { templates: normalizedTemplates, warnings };
 };
 
 const collectAssetWarnings = (templates: ChecklistTemplate[]): TemplateImportWarning[] => {
@@ -329,6 +344,37 @@ export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImport
       throw new Error("Invalid JSON file format");
     }
     throw error;
+  }
+};
+
+export const parseTemplatesFromFile = async (file: File): Promise<TemplateImportResult> => {
+  const sourceString = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event: Event) => resolve(event.target?.result as string);
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsText(file);
+  });
+
+  const extension = detectTemplateSourceExtension(file.name);
+  if (!extension) {
+    throw new Error("Unsupported template file type");
+  }
+
+  try {
+    if (isMarkdownTemplateExtension(extension)) {
+      return normalizePortableData(parseTemplateMarkdown(sourceString));
+    }
+
+    if (isYamlTemplateExtension(extension)) {
+      return normalizePortableData(parseTemplateYaml(sourceString));
+    }
+
+    return parseTemplatesFromData(JSON.parse(sourceString));
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error("Invalid JSON file format");
+    }
+    throw error instanceof Error ? error : new Error("Failed to parse template file");
   }
 };
 

@@ -78,20 +78,20 @@ const ChecklistLibrary = ({
         <div className="max-w-3xl">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium text-muted-foreground">
             <Compass className="h-4 w-4" />
-            {activeCategoryName ? 'Category collection' : 'Checklist library'}
+            {activeCategoryName ? 'Category collection' : 'Template library'}
           </div>
 
           <h1 className="mt-4 max-w-4xl text-3xl font-semibold text-foreground sm:text-4xl">
             {title ??
               (activeCategoryName
-                ? `${activeCategoryName} checklist packs`
-                : 'Find the checklist pack that already solved it')}
+                ? `${activeCategoryName} template packs`
+                : 'Find the template pack that already solved it')}
           </h1>
 
           <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
             {description ??
               (activeCategoryName
-                ? `Browse community checklists tagged for ${activeCategoryName.toLowerCase()}, then open the detail page to copy or run them.`
+                ? `Browse community templates tagged for ${activeCategoryName.toLowerCase()}, then open the detail page to copy or run them.`
                 : 'Explore public process templates, scan what each pack includes, and jump straight into creator-owned detail pages.')}
           </p>
 
@@ -106,7 +106,7 @@ const ChecklistLibrary = ({
                   type="button"
                   onClick={() => navigate(buildPublicTemplatesPath())}
                 >
-                  Back to all checklists
+                  Back to all templates
                 </button>
               </PublicPill>
             </div>
@@ -133,12 +133,12 @@ const ChecklistLibrary = ({
             </h2>
             <p className="mt-4 text-sm leading-7 text-muted-foreground">
               {activeCategoryName
-                ? `No public checklist packs are currently tagged for ${activeCategoryName}.`
+                ? `No public template packs are currently tagged for ${activeCategoryName}.`
                 : searchQuery
-                  ? `No checklist packs matched "${searchQuery}".`
+                  ? `No template packs matched "${searchQuery}".`
                   : templateType === 'recipe'
                     ? 'No public recipes are available yet.'
-                    : 'No public checklists are available yet.'}
+                    : 'No public templates are available yet.'}
             </p>
             <Button
               type="button"
@@ -146,7 +146,7 @@ const ChecklistLibrary = ({
               onClick={() => navigate(buildPublicTemplatesPath())}
               className="mt-6 rounded-full"
             >
-              Browse all checklists
+              Browse all templates
             </Button>
           </div>
         ) : (
@@ -172,7 +172,7 @@ const ChecklistLibrary = ({
       {templates.length > filteredTemplates.length ? (
         <PublicPageContainer className="mt-12">
           <div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground shadow-[0_18px_48px_-34px_rgba(15,23,42,0.18)]">
-            The library currently indexes {templates.length} public checklists
+            The library currently indexes {templates.length} public templates
             across {allCategories.length} categories.
           </div>
         </PublicPageContainer>

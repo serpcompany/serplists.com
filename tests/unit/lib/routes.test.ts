@@ -42,7 +42,7 @@ const baseTemplate: ChecklistTemplate = {
 
 describe('routes', () => {
   it('builds the canonical public routes', () => {
-    expect(buildPublicTemplatesPath()).toBe('/checklists');
+    expect(buildPublicTemplatesPath()).toBe('/templates');
     expect(buildPublicCategoriesPath()).toBe('/categories');
     expect(buildPublicCategoryPath('Technical SEO')).toBe(
       '/categories/technical-seo',
@@ -91,8 +91,8 @@ describe('routes', () => {
 
   it('classifies routes into public and console shells', () => {
     expect(resolveRouteShell('/')).toBe('public');
-    expect(resolveRouteShell('/checklists')).toBe('public');
     expect(resolveRouteShell('/templates')).toBe('public');
+    expect(resolveRouteShell('/checklists')).toBe('public');
     expect(resolveRouteShell('/profile/alice')).toBe('public');
     expect(resolveRouteShell('/profile/alice/ultimate-camping-checklist')).toBe(
       'public',
@@ -106,8 +106,8 @@ describe('routes', () => {
 
   it('labels public routes by discovery emphasis', () => {
     expect(resolvePublicRouteTier('/')).toBe('marketing');
-    expect(resolvePublicRouteTier('/checklists')).toBe('core');
     expect(resolvePublicRouteTier('/templates')).toBe('core');
+    expect(resolvePublicRouteTier('/checklists')).toBe('core');
     expect(resolvePublicRouteTier('/profile/alice')).toBe('core');
     expect(
       resolvePublicRouteTier('/profile/alice/ultimate-camping-checklist'),
@@ -129,6 +129,7 @@ describe('routes', () => {
     expect(resolveConsoleSection('/dashboard/runs/run-1')).toBe('runs');
     expect(resolveConsoleSection('/console')).toBe('home');
     expect(resolveConsoleSection('/account')).toBe('account');
+    expect(resolveConsoleSection('/templates')).toBeNull();
     expect(resolveConsoleSection('/checklists')).toBeNull();
   });
 

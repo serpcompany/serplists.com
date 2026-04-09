@@ -60,6 +60,22 @@ export type ChecklistTemplate = {
   };
 };
 
+export type TemplateSavePayload = {
+  id: string;
+  title: string;
+  description?: string;
+  type?: "checklist" | "recipe";
+  sections: ChecklistSection[];
+  isPublic: boolean;
+  seoTitle?: string;
+  seoDescription?: string;
+  seoUrl?: string;
+  rules?: TemplateRule[];
+  categories?: string[];
+  tags?: string[];
+  slug?: string;
+};
+
 export type ChecklistRun = {
   id: string;
   templateId: string;
@@ -113,7 +129,7 @@ export interface TemplatesContextProps {
   getRunsForTemplate: (templateId: string) => ChecklistRun[];
   getAllPublicTemplates: () => ChecklistTemplate[];
   createTemplate: (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => Promise<ChecklistTemplate>;
-  updateTemplate: (template: ChecklistTemplate) => void;
+  updateTemplate: (template: TemplateSavePayload) => Promise<void>;
   deleteTemplate: (id: string) => void;
   createRun: (params: { templateId: string; runName?: string }) => Promise<ChecklistRun | null>;
   updateRun: (run: ChecklistRun) => void;

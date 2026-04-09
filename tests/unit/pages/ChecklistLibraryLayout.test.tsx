@@ -57,7 +57,7 @@ describe('ChecklistLibrary layout', () => {
 
   it('starts the catalog with a compact toolbar instead of stacked summary chrome', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/checklists']}>
+      <MemoryRouter initialEntries={['/templates']}>
         <Routes>
           <Route path="*" element={<ChecklistLibrary />} />
         </Routes>

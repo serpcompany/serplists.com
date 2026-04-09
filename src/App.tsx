@@ -36,7 +36,7 @@ import Contact from './pages/Contact';
 import NotFound from './pages/NotFound';
 import {
   LEGACY_CONSOLE_HOME_PATH,
-  LEGACY_PUBLIC_TEMPLATES_PATH,
+  LEGACY_PUBLIC_LIBRARY_PATH,
   buildConsoleHomePath,
   buildConsoleRunsPath,
   buildConsoleTemplateCreatePath,
@@ -122,7 +122,7 @@ const App = () => {
 
                     {/* Canonical Public Content Routes */}
                     <Route
-                      path={LEGACY_PUBLIC_TEMPLATES_PATH}
+                      path={LEGACY_PUBLIC_LIBRARY_PATH}
                       element={
                         <Navigate replace to={buildPublicTemplatesPath()} />
                       }
