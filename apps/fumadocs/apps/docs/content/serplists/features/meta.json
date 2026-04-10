@@ -1,7 +1,0 @@
-{
-  "title": "Features",
-  "description": "Cross-page behavior records and reusable interaction contracts",
-  "icon": "Sparkles",
-  "root": true,
-  "pages": ["index", "feature-template", "records"]
-}

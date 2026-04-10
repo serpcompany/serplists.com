@@ -1,6 +1,0 @@
-{
-  "title": "Git",
-  "root": true,
-  "pages": ["index", "test"],
-  "icon": "git"
-}

@@ -1,7 +1,0 @@
-{
-  "title": "Inventory",
-  "description": "Page records for routes, content, metadata, behavior, and integration checks",
-  "icon": "ClipboardList",
-  "root": true,
-  "pages": ["index", "page-template", "pages"]
-}

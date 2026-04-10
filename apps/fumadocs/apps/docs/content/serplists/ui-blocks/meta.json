@@ -1,7 +1,0 @@
-{
-  "title": "UI Blocks",
-  "description": "Reusable block and component inventory placeholders",
-  "icon": "Boxes",
-  "root": true,
-  "pages": ["index", "ui-block-template"]
-}

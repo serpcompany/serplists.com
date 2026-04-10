@@ -1,7 +1,0 @@
-{
-  "title": "Overview",
-  "description": "Purpose, workflow, and operating model for the inventory docs",
-  "icon": "BookOpen",
-  "root": true,
-  "pages": ["index"]
-}

@@ -1,7 +1,0 @@
-{
-  "title": "Glossary",
-  "description": "Stable domain terms used throughout the inventory docs",
-  "icon": "BookKey",
-  "root": true,
-  "pages": ["index"]
-}
