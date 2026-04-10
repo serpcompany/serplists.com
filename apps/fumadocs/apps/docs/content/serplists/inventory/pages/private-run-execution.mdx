@@ -1,0 +1,114 @@
+---
+title: Private Run Execution
+description: Authenticated checklist run view for completing work from a template-derived run.
+recordType: page
+routeId: private-run-execution
+currentUrl: /dashboard/runs/:id
+futureUrl: /dashboard/runs/:id
+routePattern: /dashboard/runs/:id
+pageType: run-execution
+primaryEntity: checklist run
+access: authenticated
+status: seeded
+owner: Product + Frontend
+relatedFeatures:
+  - run-execution-progress
+  - share-run
+relatedBlocks:
+  - run-header
+  - task-outline
+  - task-detail-panel
+---
+
+## Identity
+
+- Current URL: `/dashboard/runs/:id`
+- Future URL: same unless execution IA changes
+- Route pattern: private run by internal id
+- Page type/template: execution workspace
+- Primary entity: checklist run
+- Access: authenticated
+
+## Purpose
+
+- Audience: users completing a run in their private workspace
+- Goal: make progress, context, and completion state obvious while preserving run-specific actions
+- Primary CTA: complete checklist tasks
+- Secondary CTA: rename run and create share link
+
+## Route Pattern & Examples
+
+- Example: `/dashboard/runs/456`
+- Entry points: dashboard run list, template detail, public template start-run flow
+
+## Metadata Template
+
+- Title pattern: `<run title> | Runs`
+- Canonical: none
+- Robots: noindex, nofollow
+- Open Graph fields: none required
+
+## Schema.org Template
+
+- Primary schema: none required
+- Supporting schema: none
+
+## Content Inventory
+
+- Run header with back button, title, progress, share
+- Task outline panel
+- Task detail panel
+- Completion dialog
+
+## Media Inventory
+
+- Required media: none
+- Optional media: content blocks from the source template embedded in task detail
+
+## UI Blocks & Components
+
+- Run header
+- Progress summary
+- Task outline
+- Task detail panel
+- Completion dialog
+
+## Feature List
+
+- select task
+- complete item
+- complete sub-item
+- rename run
+- create share link
+- finish run
+
+## States
+
+- Loading: context or API fetch in progress
+- Error: run not found or fetch failure
+- Success: active or completed run
+- Additional states: editing-title mode, completion dialog open
+
+## Integrations & Analytics
+
+- Integrations: run load/update, share-link creation
+- Tracking events: item completion, sub-item completion, share-link creation, run completion
+- Access dependencies: authenticated workspace
+
+## Migration Notes
+
+- Must preserve:
+  - first incomplete task auto-select behavior
+  - sub-item completion can affect parent completion
+  - checking an item also checks all sub-items
+- Allowed to change:
+  - panel layout, progress visualization, mobile adaptation
+- Open questions:
+  - what level of optimistic updates the new UI should expose
+
+## Integration QA Checks
+
+- Task selection remains stable across progress updates
+- Parent/sub-item completion logic still matches current behavior
+- Completion dialog appears at the correct moment
+- Share link is private-workspace only here

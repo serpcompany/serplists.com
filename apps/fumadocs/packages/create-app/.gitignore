@@ -1,0 +1,4 @@
+template
+!template/**/README.md
+!template/**/example.gitignore
+!template/+orama-cloud

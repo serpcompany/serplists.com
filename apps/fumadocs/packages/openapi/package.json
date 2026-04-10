@@ -1,0 +1,117 @@
+{
+  "name": "fumadocs-openapi",
+  "version": "10.6.7",
+  "description": "Generate MDX docs for your OpenAPI spec",
+  "keywords": [
+    "Docs",
+    "NextJs"
+  ],
+  "homepage": "https://fumadocs.dev",
+  "license": "MIT",
+  "author": "Fuma Nama",
+  "repository": "github:fuma-nama/fumadocs",
+  "files": [
+    "css",
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./i18n": "./dist/i18n.js",
+    "./playground/client": "./dist/playground/client.js",
+    "./requests/generators": "./dist/requests/generators/index.js",
+    "./requests/generators/all": "./dist/requests/generators/all.js",
+    "./requests/generators/csharp": "./dist/requests/generators/csharp.js",
+    "./requests/generators/curl": "./dist/requests/generators/curl.js",
+    "./requests/generators/go": "./dist/requests/generators/go.js",
+    "./requests/generators/java": "./dist/requests/generators/java.js",
+    "./requests/generators/javascript": "./dist/requests/generators/javascript.js",
+    "./requests/generators/python": "./dist/requests/generators/python.js",
+    "./scalar": "./dist/scalar/index.js",
+    "./server": "./dist/server/index.js",
+    "./ui": "./dist/ui/index.js",
+    "./ui/base": "./dist/ui/base.js",
+    "./ui/client": "./dist/ui/client/index.js",
+    "./ui/create-client": "./dist/ui/create-client.js",
+    "./package.json": "./package.json",
+    "./css/*": "./css/*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown --config-loader unrun",
+    "clean": "rimraf dist",
+    "dev": "tsdown --watch --clean false",
+    "lint": "oxlint .",
+    "types:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/deepmerge": "^3.2.1",
+    "@fumari/json-schema-ts": "^0.0.2",
+    "@fumari/stf": "workspace:*",
+    "@radix-ui/react-accordion": "^1.2.12",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@scalar/json-magic": "^0.12.5",
+    "@scalar/openapi-upgrader": "^0.2.4",
+    "ajv": "^8.18.0",
+    "chokidar": "^5.0.0",
+    "class-variance-authority": "^0.7.1",
+    "fast-content-type-parse": "^3.0.0",
+    "github-slugger": "^2.0.0",
+    "hast-util-to-jsx-runtime": "^2.3.6",
+    "js-yaml": "^4.1.1",
+    "lucide-react": "^1.7.0",
+    "next-themes": "^0.4.6",
+    "openapi-sampler": "^1.7.2",
+    "react-hook-form": "^7.72.1",
+    "remark": "^15.0.1",
+    "remark-rehype": "^11.1.2",
+    "tailwind-merge": "^3.5.0",
+    "xml-js": "^1.6.11"
+  },
+  "devDependencies": {
+    "@fumadocs/tailwind": "workspace:*",
+    "@scalar/api-client-react": "^1.4.20",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "25.5.2",
+    "@types/openapi-sampler": "^1.0.3",
+    "@types/react": "^19.2.14",
+    "fumadocs-core": "workspace:*",
+    "fumadocs-ui": "workspace:*",
+    "json-schema-typed": "^8.0.2",
+    "shiki": "^4.0.2",
+    "tailwindcss": "^4.2.2",
+    "tsconfig": "workspace:*",
+    "tsdown": "0.21.7"
+  },
+  "peerDependencies": {
+    "@scalar/api-client-react": "*",
+    "@types/react": "*",
+    "fumadocs-core": "^16.7.0",
+    "fumadocs-ui": "^16.7.0",
+    "json-schema-typed": "*",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "shiki": "*"
+  },
+  "peerDependenciesMeta": {
+    "shiki": {
+      "optional": true
+    },
+    "json-schema-typed": {
+      "optional": true
+    },
+    "@types/react": {
+      "optional": true
+    },
+    "@scalar/api-client-react": {
+      "optional": true
+    }
+  }
+}

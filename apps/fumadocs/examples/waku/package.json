@@ -1,0 +1,35 @@
+{
+  "name": "example-waku",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "scripts": {
+    "dev": "waku dev",
+    "build": "waku build",
+    "start": "waku start",
+    "types:check": "fumadocs-mdx && tsc --noEmit"
+  },
+  "dependencies": {
+    "@takumi-rs/image-response": "^0.73.1",
+    "fumadocs-core": "workspace:*",
+    "fumadocs-mdx": "workspace:*",
+    "fumadocs-ui": "workspace:*",
+    "lucide-react": "^1.7.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-server-dom-webpack": "^19.2.4",
+    "tailwind-merge": "^3.5.0",
+    "waku": "1.0.0-alpha.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/mdx": "^2.0.13",
+    "@types/node": "^25.5.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.7",
+    "vite-tsconfig-paths": "^6.1.1"
+  }
+}

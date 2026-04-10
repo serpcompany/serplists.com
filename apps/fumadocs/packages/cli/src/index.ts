@@ -1,0 +1,116 @@
+#!/usr/bin/env node
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { Command } from 'commander';
+import picocolors from 'picocolors';
+import { createOrLoadConfig, initConfig } from '@/config';
+import { type JsonTreeNode, treeToJavaScript, treeToMdx } from '@/commands/file-tree';
+import { runTree } from '@/utils/file-tree/run-tree';
+import packageJson from '../package.json';
+import { customise } from '@/commands/customise';
+import { add } from '@/commands/add';
+import { exportEpub } from '@/commands/export-epub';
+import { HttpRegistryConnector, LocalRegistryConnector } from 'fuma-cli/registry/connector';
+
+const program = new Command().option('--config <string>');
+
+program
+  .name('fumadocs')
+  .description('CLI to setup Fumadocs, init a config')
+  .version(packageJson.version)
+  .action(async () => {
+    if (await initConfig()) {
+      console.log(picocolors.green('Initialized a `./cli.json` config file.'));
+    } else {
+      console.log(picocolors.redBright('A config file already exists.'));
+    }
+  });
+
+program
+  .command('customise')
+  .alias('customize')
+  .description('simple way to customise layouts with Fumadocs UI')
+  .option('--dir <string>', 'the root url or directory to resolve registry')
+  .action(async (options: { config?: string; dir?: string }) => {
+    const config = await createOrLoadConfig(options.config);
+    await customise(config, createClientFromDir(options.dir));
+  });
+
+const dirShortcuts: Record<string, string> = {
+  ':preview': 'https://preview.fumadocs.dev/registry',
+  ':dev': 'http://localhost:3000/registry',
+};
+
+program
+  .command('add')
+  .description('add a new component to your docs')
+  .argument('[components...]', 'components to download')
+  .option('--dir <string>', 'the root url or directory to resolve registry')
+  .action(async (input: string[], options: { config?: string; dir?: string }) => {
+    const config = await createOrLoadConfig(options.config);
+    const client = createClientFromDir(options.dir);
+    await add(input, client, config);
+  });
+
+const exportCmd = program.command('export').description('export documentation to various formats');
+
+exportCmd
+  .command('epub')
+  .description('export documentation to EPUB format (run after production build)')
+  .requiredOption('--framework <name>', 'React framework: next, tanstack-start, react-router, waku')
+  .option('--output <path>', 'output file path', 'docs.epub')
+  .option('--scaffold-only', 'only scaffold the EPUB route, do not copy')
+  .action(async (options: { output?: string; framework: string; scaffoldOnly?: boolean }) => {
+    await exportEpub({
+      output: options.output,
+      framework: options.framework,
+      scaffoldOnly: options.scaffoldOnly,
+    });
+  });
+
+program
+  .command('tree')
+  .argument('[json_or_args]', 'JSON output of `tree` command or arguments for the `tree` command')
+  .argument('[output]', 'output path of file')
+  .option('--js', 'output as JavaScript file')
+  .option('--no-root', 'remove the root node')
+  .option('--import-name <name>', 'where to import components (JS only)')
+  .action(
+    async (
+      str: string | undefined,
+      output: string | undefined,
+      { js, root, importName }: { js: boolean; root: boolean; importName?: string },
+    ) => {
+      const jsExtensions = ['.js', '.tsx', '.jsx'];
+      const noRoot = !root;
+      let nodes: JsonTreeNode[];
+
+      try {
+        nodes = JSON.parse(str ?? '') as JsonTreeNode[];
+      } catch {
+        nodes = await runTree(str ?? './');
+      }
+
+      const out =
+        js || (output && jsExtensions.includes(path.extname(output)))
+          ? treeToJavaScript(nodes, noRoot, importName)
+          : treeToMdx(nodes, noRoot);
+
+      if (output) {
+        await fs.mkdir(path.dirname(output), { recursive: true });
+        await fs.writeFile(output, out);
+      } else {
+        console.log(out);
+      }
+    },
+  );
+
+function createClientFromDir(dir = 'https://fumadocs.dev/registry') {
+  if (dir in dirShortcuts) dir = dirShortcuts[dir];
+
+  return dir.startsWith('http://') || dir.startsWith('https://')
+    ? new HttpRegistryConnector(dir)
+    : new LocalRegistryConnector(dir);
+}
+
+program.parse();

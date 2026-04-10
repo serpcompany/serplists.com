@@ -1,0 +1,122 @@
+---
+title: Template Editor
+description: Authoring surface for creating and editing reusable checklist templates.
+recordType: page
+routeId: template-editor
+currentUrl: /dashboard/templates/new and /dashboard/templates/:id/edit
+futureUrl: same route family
+routePattern: /dashboard/templates/new, /dashboard/templates/:id/edit
+pageType: template-editor
+primaryEntity: checklist template
+access: authenticated
+status: seeded
+owner: Product + Frontend
+relatedFeatures:
+  - template-editor-authoring
+relatedBlocks:
+  - editor-header
+  - section-sidebar
+  - editor-detail-panel
+---
+
+## Identity
+
+- Current URLs:
+  - `/dashboard/templates/new`
+  - `/dashboard/templates/:id/edit`
+- Future URLs: same route family unless editor IA changes
+- Route pattern: create and edit routes sharing the same editor shell
+- Page type/template: nested authoring workspace
+- Primary entity: template definition
+- Access: authenticated
+
+## Purpose
+
+- Audience: creators authoring reusable templates
+- Goal: make nested template structure obvious and editable without confusion between source and run
+- Primary CTA: save template
+- Secondary CTA: add/remove sections and tasks, edit metadata and SEO, toggle public/private
+
+## Route Pattern & Examples
+
+- Example create route: `/dashboard/templates/new`
+- Example edit route: `/dashboard/templates/123/edit`
+- Shared editor shell across both routes
+
+## Metadata Template
+
+- Title pattern: `New Template | Workspace` or `Edit <template title> | Workspace`
+- Canonical: none
+- Robots: noindex, nofollow
+- Open Graph fields: none required
+
+## Schema.org Template
+
+- Primary schema: none required for private authoring route
+- Supporting schema: none
+
+## Content Inventory
+
+- Sticky editor header
+- Section/task outline
+- Main editing surface
+- Template basic info mode
+- SEO metadata mode
+- Section edit mode
+- Task edit mode
+
+## Media Inventory
+
+- Required media: none
+- Optional media: images, videos, files, embeds, and sub-item content blocks inside tasks
+- Media constraints: uploads and URLs must preserve content-block type distinctions
+
+## UI Blocks & Components
+
+- Editor header
+- Section sidebar
+- Section editor
+- Item editor
+- Template metadata panel
+- SEO metadata panel
+
+## Feature List
+
+- nested authoring
+- section and task creation/removal
+- inline rename in sidebar
+- metadata editing
+- SEO editing
+- public/private toggle
+- category and tag management
+
+## States
+
+- Loading: existing template load for edit route
+- Error: load failure or save validation failure
+- Success: editable template shell
+- Additional authoring states: blank template, selection changes, save in progress, field-level validation
+
+## Integrations & Analytics
+
+- Integrations: template load/save, uploads, category/tag data, auth
+- Tracking events: save template, publish toggle, add section, add task, remove section, remove task
+- Access dependencies: authenticated workspace
+
+## Migration Notes
+
+- Must preserve:
+  - template vs run distinction stays explicit
+  - metadata/SEO remain separate editing modes
+  - nested authoring stays obvious at section -> item -> content block level
+- Allowed to change:
+  - panel layout, keyboard shortcuts, density, responsiveness
+- Open questions:
+  - which editor blocks become reusable UI-block records first
+
+## Integration QA Checks
+
+- Create and edit routes share the same authoring rules
+- Existing template data hydrates correctly on edit route
+- Save errors are visible at the right level
+- Removing sections/tasks is explicit and recoverable enough

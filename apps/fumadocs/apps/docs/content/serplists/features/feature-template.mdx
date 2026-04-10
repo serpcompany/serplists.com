@@ -1,0 +1,107 @@
+---
+title: Feature Record Template
+description: Reusable template for documenting cross-page behavior and logic.
+icon: Sparkles
+recordType: guide
+status: approved
+owner: Product + Frontend
+---
+
+Use this as the copy-paste template for reusable feature records.
+
+## Frontmatter Contract
+
+| Field | Use |
+| --- | --- |
+| `recordType` | Set to `feature` |
+| `featureId` | Stable feature identifier |
+| `status` | `draft`, `seeded`, `in-review`, `approved` |
+| `owner` | Responsible team or role |
+| `relatedRoutes` | Route IDs or paths using the feature |
+| `relatedBlocks` | UI block IDs linked to the feature |
+
+## Copy-Paste Starter
+
+```mdx
+---
+title: <Feature name>
+description: <Short description>
+recordType: feature
+featureId: <stable-feature-id>
+status: draft
+owner: <owner>
+relatedRoutes:
+  - <route-id>
+relatedBlocks:
+  - <ui-block-id>
+---
+
+## Purpose
+
+- Why this feature exists:
+- User goal:
+
+## Trigger
+
+- Entry point:
+- User action:
+
+## Inputs
+
+- Input 1:
+- Input 2:
+
+## Outputs
+
+- Output 1:
+- Output 2:
+
+## Rules & Validation
+
+- Rule 1:
+- Rule 2:
+
+## States
+
+- Idle:
+- Loading:
+- Success:
+- Error:
+
+## Fallback
+
+- What happens if dependencies fail:
+- What the user can still do:
+
+## Dependencies
+
+- APIs:
+- Auth:
+- Billing:
+- Data contracts:
+
+## Tracking Events
+
+- Event 1:
+- Event 2:
+
+## Related Pages
+
+- Page 1:
+- Page 2:
+
+## Related UI Blocks
+
+- Block 1:
+- Block 2:
+
+## Must Preserve
+
+- Requirement 1:
+- Requirement 2:
+
+## Integration QA Checks
+
+- Check 1:
+- Check 2:
+```

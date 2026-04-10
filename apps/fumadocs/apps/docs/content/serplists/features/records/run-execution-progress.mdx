@@ -1,0 +1,92 @@
+---
+title: Run Execution Progress
+description: Completion logic, progress updates, and state transitions inside run execution views.
+recordType: feature
+featureId: run-execution-progress
+status: seeded
+owner: Product + Frontend
+relatedRoutes:
+  - private-run-execution
+  - shared-run-execution
+relatedBlocks:
+  - task-outline
+  - task-detail-panel
+  - completion-dialog
+---
+
+## Purpose
+
+- Keep run execution predictable while users move through tasks and sub-items
+- Make progress and completion state consistent across private and shared run views
+
+## Trigger
+
+- User selects a task
+- User completes an item
+- User completes a sub-item
+- User finishes the last remaining work
+
+## Inputs
+
+- run data
+- item completion state
+- sub-item completion state
+
+## Outputs
+
+- updated progress
+- updated item state
+- updated run completion state
+- completion dialog when all work is done
+
+## Rules & Validation
+
+- checking an item also checks all its sub-items
+- sub-item completion can auto-complete or un-complete the parent item
+- first incomplete task is auto-selected on load
+
+## States
+
+- Idle: active run with selected task
+- Loading: run data fetch or optimistic update pending
+- Success: progress and task state updated
+- Error: update failure or run fetch failure
+
+## Fallback
+
+- If updates fail, keep the previous visible state and show recoverable feedback
+
+## Dependencies
+
+- run update APIs
+- run progress computation
+- task content rendering
+
+## Tracking Events
+
+- task-selected
+- item-completed
+- sub-item-completed
+- run-completed
+
+## Related Pages
+
+- [Private Run Execution](/docs/inventory/pages/private-run-execution)
+- [Shared Run Execution](/docs/inventory/pages/shared-run-execution)
+
+## Related UI Blocks
+
+- run header
+- task outline
+- task detail panel
+
+## Must Preserve
+
+- completion rules remain consistent across private and shared runs
+- progress recomputes from actual section and item state
+
+## Integration QA Checks
+
+- Parent and sub-item completion rules still match current behavior
+- First incomplete task is auto-selected on load
+- Completion dialog fires only when the final remaining work is completed

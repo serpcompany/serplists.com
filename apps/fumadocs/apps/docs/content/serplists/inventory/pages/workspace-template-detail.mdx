@@ -1,0 +1,122 @@
+---
+title: Workspace Template Detail
+description: Private template detail page for owners and non-owners inside the console.
+recordType: page
+routeId: workspace-template-detail
+currentUrl: /dashboard/templates/:id
+futureUrl: /dashboard/templates/:id
+routePattern: /dashboard/templates/:id
+pageType: private-template-detail
+primaryEntity: checklist template
+access: authenticated
+status: seeded
+owner: Product + Frontend
+relatedFeatures:
+  - template-copy-save-access
+  - start-run-from-template
+  - billing-upgrade-gating
+relatedBlocks:
+  - template-detail-header
+  - owner-action-row
+  - run-name-dialog
+---
+
+## Identity
+
+- Current URL: `/dashboard/templates/:id`
+- Future URL: same unless console IA changes
+- Route pattern: private template detail by internal id
+- Page type/template: workspace template detail
+- Primary entity: owned or viewable template
+- Access: authenticated
+
+## Purpose
+
+- Audience: template owners and signed-in users evaluating a template in the console
+- Goal: manage a template, start runs, share, edit, archive, or copy into the workspace
+- Primary CTA: start run
+- Secondary CTA: edit, share, archive, or copy depending on ownership
+
+## Route Pattern & Examples
+
+- Example: `/dashboard/templates/123`
+- Related routes:
+  - `/dashboard/templates`
+  - `/dashboard/templates/:id/edit`
+  - `/dashboard/templates/new`
+
+## Metadata Template
+
+- Title pattern: `<template title> | Workspace`
+- Meta description pattern: not required for private route
+- Canonical: none
+- Robots: noindex, nofollow
+- Open Graph fields: none required
+
+## Schema.org Template
+
+- Primary schema: none required for private route
+- Supporting schema: none
+- Required fields: not applicable while private
+
+## Content Inventory
+
+- Back link
+- Template header
+- Owner or non-owner action row
+- Category chips
+- Template content
+- Run-name dialog
+- Archive confirmation dialog
+
+## Media Inventory
+
+- Required media: none
+- Optional media: owner-added media inside template content
+
+## UI Blocks & Components
+
+- Workspace template header
+- Owner action row
+- Template content renderer
+- Confirmation dialog
+- Run-name dialog
+
+## Feature List
+
+- start run
+- edit template
+- share template
+- archive template
+- copy template for non-owner view
+
+## States
+
+- Loading: template fetch pending
+- Error: not found or load failure
+- Success: detail page with action states
+- Additional action states: billing-status loading, copying, sharing, deleting, run-dialog open
+
+## Integrations & Analytics
+
+- Integrations: template load/save/share, billing, auth, username requirement for share
+- Tracking events: start run, edit click, archive confirm, share success/failure, copy click
+- Access dependencies: authenticated workspace, ownership, entitlement state
+
+## Migration Notes
+
+- Must preserve:
+  - owner and non-owner action sets remain distinct
+  - copy/save gating matches public detail route
+  - share may require public visibility and username
+- Allowed to change:
+  - action-bar layout and content/sidebar composition
+- Open questions:
+  - whether console and public detail can share more presentation later
+
+## Integration QA Checks
+
+- Ownership detection changes CTAs correctly
+- Share flow fails clearly when username is missing
+- Archive and delete confirmations are explicit
+- Start run path still produces a run record

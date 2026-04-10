@@ -1,0 +1,43 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "NEXT_PUBLIC_ORAMA_DATASOURCE_ID",
+    "NEXT_PUBLIC_ORAMA_PROJECT_ID",
+    "NEXT_PUBLIC_ORAMA_API_KEY",
+    "ORAMA_PRIVATE_API_KEY",
+    "GITHUB_APP_PRIVATE_KEY",
+    "GITHUB_APP_ID",
+    "GITHUB_TOKEN",
+    "INKEEP_API_KEY"
+  ],
+  "ui": "stream",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [
+        ".output",
+        "public/registry",
+        ".source/**",
+        ".next/**",
+        "!.next/cache/**",
+        "dist/**",
+        "css/generated/**",
+        "out",
+        "build",
+        ".vercel"
+      ]
+    },
+    "lint": {},
+    "types:check": {
+      "dependsOn": [],
+      "outputs": []
+    },
+    "clean": {
+      "cache": false
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

@@ -1,0 +1,111 @@
+---
+title: Shared Run Execution
+description: Guest-accessible execution view for a run shared by token.
+recordType: page
+routeId: shared-run-execution
+currentUrl: /share/:shareToken
+futureUrl: /share/:shareToken
+routePattern: /share/:shareToken
+pageType: shared-run-execution
+primaryEntity: shared checklist run
+access: guest-share
+status: seeded
+owner: Product + Frontend
+relatedFeatures:
+  - run-execution-progress
+  - share-run
+relatedBlocks:
+  - run-header
+  - task-outline
+  - task-detail-panel
+---
+
+## Identity
+
+- Current URL: `/share/:shareToken`
+- Future URL: same unless share model changes
+- Route pattern: tokenized guest route
+- Page type/template: shared execution workspace
+- Primary entity: shared checklist run
+- Access: guest-share
+
+## Purpose
+
+- Audience: guests collaborating on or reviewing a shared run
+- Goal: allow execution without exposing the private workspace
+- Primary CTA: complete checklist tasks
+- Secondary CTA: finish the run
+
+## Route Pattern & Examples
+
+- Example: `/share/abc123token`
+- Entry point: private run share-link generation
+
+## Metadata Template
+
+- Title pattern: `Shared Run | Serplists`
+- Canonical: none
+- Robots: noindex, nofollow
+- Open Graph fields: minimal share-safe title/description if any
+
+## Schema.org Template
+
+- Primary schema: none required
+- Supporting schema: none
+
+## Content Inventory
+
+- Run header with status and progress
+- Task outline panel
+- Task detail panel
+- Completion dialog
+
+## Media Inventory
+
+- Required media: none
+- Optional media: task content blocks inherited from template source
+
+## UI Blocks & Components
+
+- Shared run header
+- Task outline
+- Task detail panel
+- Completion dialog
+
+## Feature List
+
+- select task
+- complete item
+- complete sub-item
+- finish run
+
+## States
+
+- Loading: shared run fetch in progress
+- Error: invalid or missing share token
+- Success: in-progress or completed shared run
+- Restricted states: no private-only actions shown
+
+## Integrations & Analytics
+
+- Integrations: shared-checklist fetch/update by token
+- Tracking events: shared completion actions, completion dialog completion
+- Access dependencies: valid share token only
+
+## Migration Notes
+
+- Must preserve:
+  - guest access without auth
+  - title editing disabled
+  - private share action hidden
+- Allowed to change:
+  - shell polish and guest-facing messaging
+- Open questions:
+  - how much attribution or ownership info the shared view should surface
+
+## Integration QA Checks
+
+- Shared token route stays accessible without login
+- Private-only controls never appear
+- Shared updates persist through the share-token API path
+- Invalid token state is explicit and safe

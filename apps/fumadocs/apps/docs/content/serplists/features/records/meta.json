@@ -1,0 +1,12 @@
+{
+  "title": "Feature Records",
+  "description": "Seeded reusable behavior records for the integration checklist",
+  "pages": [
+    "template-copy-save-access",
+    "start-run-from-template",
+    "run-execution-progress",
+    "share-run",
+    "template-editor-authoring",
+    "billing-upgrade-gating"
+  ]
+}
