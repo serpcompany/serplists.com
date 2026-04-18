@@ -21,6 +21,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Templates from './pages/Templates';
+import DashboardSettings from './pages/DashboardSettings';
 import TemplateEditor from './pages/TemplateEditor';
 import TemplateDetail from './pages/TemplateDetail';
 import ChecklistRun from './pages/ChecklistRun';
@@ -38,11 +39,15 @@ import {
   LEGACY_CONSOLE_HOME_PATH,
   LEGACY_PUBLIC_LIBRARY_PATH,
   buildConsoleHomePath,
+  buildConsoleProfilePath,
   buildConsoleRunsPath,
+  buildConsoleSettingsPath,
   buildConsoleTemplateCreatePath,
   buildConsoleTemplatesPath,
   buildPublicTemplatesPath,
 } from './lib/routes';
+import { useAuth } from './contexts/CloudflareAuthContext';
+import { resolveDashboardProfileRedirectTarget } from './lib/dashboardRouteAliases';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +57,24 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+const DashboardProfileRedirect = () => {
+  const { user } = useAuth();
+  return (
+    <Navigate
+      replace
+      to={resolveDashboardProfileRedirectTarget(
+        user
+          ? {
+              email: user.email,
+              id: user.id,
+              username: user.username,
+            }
+          : null,
+      )}
+    />
+  );
+};
 
 const App = () => {
   return (
@@ -161,11 +184,7 @@ const App = () => {
                     />
                     <Route
                       path="/profile/:username/:templateSlug"
-                      element={
-                        <Layout>
-                          <PublicTemplate />
-                        </Layout>
-                      }
+                      element={<PublicTemplate />}
                     />
                     <Route
                       path="/profile/:username"
@@ -185,9 +204,7 @@ const App = () => {
                       path={buildConsoleHomePath()}
                       element={
                         <RequireAuth>
-                          <Layout>
-                            <Dashboard />
-                          </Layout>
+                          <Navigate replace to={buildConsoleTemplatesPath()} />
                         </RequireAuth>
                       }
                     />
@@ -198,6 +215,24 @@ const App = () => {
                           <Layout>
                             <Dashboard />
                           </Layout>
+                        </RequireAuth>
+                      }
+                    />
+                    <Route
+                      path={buildConsoleSettingsPath()}
+                      element={
+                        <RequireAuth>
+                          <Layout>
+                            <DashboardSettings />
+                          </Layout>
+                        </RequireAuth>
+                      }
+                    />
+                    <Route
+                      path={buildConsoleProfilePath()}
+                      element={
+                        <RequireAuth>
+                          <DashboardProfileRedirect />
                         </RequireAuth>
                       }
                     />
@@ -215,7 +250,9 @@ const App = () => {
                       path={buildConsoleTemplateCreatePath()}
                       element={
                         <RequireAuth>
-                          <TemplateEditor />
+                          <Layout>
+                            <TemplateEditor />
+                          </Layout>
                         </RequireAuth>
                       }
                     />
@@ -233,7 +270,9 @@ const App = () => {
                       path="/dashboard/templates/:id/edit"
                       element={
                         <RequireAuth>
-                          <TemplateEditor />
+                          <Layout>
+                            <TemplateEditor />
+                          </Layout>
                         </RequireAuth>
                       }
                     />
@@ -246,6 +285,10 @@ const App = () => {
                           </Layout>
                         </RequireAuth>
                       }
+                    />
+                    <Route
+                      path="/run/:id"
+                      element={<ChecklistRun />}
                     />
 
                     {/* Legacy Private Route Aliases */}

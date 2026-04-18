@@ -45,16 +45,16 @@ export const pageHeroVariants = cva('space-y-4', {
 });
 
 export const surfaceVariants = cva(
-  'rounded-[calc(var(--radius)+0.25rem)] border border-border/80 text-card-foreground',
+  'text-card-foreground',
   {
     variants: {
       tone: {
-        default: 'bg-card shadow-none',
-        glass: 'bg-card/94 shadow-none',
-        metric: 'bg-card shadow-none',
-        console: 'bg-card/96 shadow-none',
-        docs: 'bg-card/96 shadow-none',
-        flat: 'bg-card/96',
+        default: 'bg-card border border-border rounded-lg shadow-none',
+        glass: 'bg-card border border-border rounded-lg shadow-none',
+        metric: 'bg-card border border-border rounded-lg shadow-none',
+        console: 'bg-card border border-border rounded-lg shadow-none',
+        docs: 'bg-card border border-border rounded-lg shadow-none',
+        flat: 'bg-transparent border-0 rounded-none shadow-none',
       },
       padding: {
         none: '',

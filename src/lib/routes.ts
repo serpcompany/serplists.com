@@ -17,6 +17,15 @@ export const LEGACY_CONSOLE_RUNS_PATH = '/console/runs';
 
 export const buildPublicTemplatesPath = (): string => '/templates';
 
+export const isPublicTemplatesDiscoveryPath = (pathname: string): boolean => {
+  const normalizedPath = pathname.trim().toLowerCase();
+
+  return (
+    normalizedPath === buildPublicTemplatesPath() ||
+    normalizedPath === `${buildPublicTemplatesPath()}/`
+  );
+};
+
 export const buildCategorySlug = (categoryName: string): string =>
   generateSlug(categoryName.trim());
 
@@ -85,6 +94,16 @@ export const buildConsoleRunsPath = (): string => '/dashboard/runs';
 export const buildConsoleRunPath = (runId: string): string =>
   `/dashboard/runs/${encodeURIComponent(runId)}`;
 
+export const buildRunPath = (runId: string): string =>
+  `/run/${encodeURIComponent(runId)}`;
+
+export const buildRunUrl = (runId: string, origin: string): string =>
+  new URL(buildRunPath(runId), origin).toString();
+
+export const buildConsoleSettingsPath = (): string => '/dashboard/settings';
+
+export const buildConsoleProfilePath = (): string => '/dashboard/profile';
+
 export const isBlankTemplateEditorRoute = (pathname: string): boolean => {
   const normalizedPath = pathname.trim().toLowerCase();
 
@@ -150,6 +169,15 @@ export const resolveConsoleSection = (
   const normalizedPath = pathname.trim().toLowerCase();
 
   if (normalizedPath === '/account') {
+    return 'account';
+  }
+
+  if (
+    normalizedPath === buildConsoleSettingsPath() ||
+    normalizedPath === `${buildConsoleSettingsPath()}/` ||
+    normalizedPath === buildConsoleProfilePath() ||
+    normalizedPath === `${buildConsoleProfilePath()}/`
+  ) {
     return 'account';
   }
 

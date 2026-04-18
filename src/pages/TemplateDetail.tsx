@@ -1,18 +1,19 @@
-import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Archive, Pencil, PlayCircle, Share2, Copy } from "lucide-react";
-import { toast } from "sonner";
-import { useAuth } from "@/contexts/CloudflareAuthContext";
-import { useTemplates } from "@/contexts/TemplatesContext";
-import { api } from "@/lib/api";
-import { handleAccessFailure, navigateToLoginWithReturnPath, startBillingCheckout } from "@/lib/access-flow";
-import { getBillingStatusQueryKey } from "@/lib/billing";
-import { RunNameDialog } from "@/components/ui/run-name-dialog";
-import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import {
+  Archive,
+  ArrowLeft,
+  Copy,
+  Pencil,
+  PlayCircle,
+  Share2,
+} from 'lucide-react';
+import { toast } from 'sonner';
+
+import { PublicTemplateContent } from '@/components/template/PublicTemplateContent';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,242 +24,153 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import type { ChecklistTemplate } from "@/types/checklist";
+} from '@/components/ui/alert-dialog';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { useTemplates } from '@/contexts/TemplatesContext';
+import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import {
-  buildCanonicalPublicTemplatePath,
+  navigateToLoginWithReturnPath,
+  startBillingCheckout,
+} from '@/lib/access-flow';
+import {
   buildConsoleRunPath,
   buildConsoleTemplateEditPath,
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
-} from "@/lib/routes";
-
-const normalizeTemplate = (rawTemplate: Record<string, unknown>): ChecklistTemplate => {
-  const categories = Array.isArray(rawTemplate.categories)
-    ? (rawTemplate.categories as string[])
-    : typeof rawTemplate.category === "string" && rawTemplate.category
-      ? [rawTemplate.category]
-      : [];
-
-  let sections = [];
-  try {
-    if (Array.isArray(rawTemplate.sections)) {
-      sections = rawTemplate.sections as ChecklistTemplate["sections"];
-    } else if (rawTemplate.items) {
-      const rawItems = typeof rawTemplate.items === "string"
-        ? JSON.parse(rawTemplate.items)
-        : rawTemplate.items;
-      sections = Array.isArray(rawItems) ? rawItems : [];
-    }
-  } catch {
-    sections = [];
-  }
-
-  return {
-    id: String(rawTemplate.id || ""),
-    title: String(rawTemplate.title || "Template"),
-    description: typeof rawTemplate.description === "string" ? rawTemplate.description : "",
-    sections,
-    userId: String(rawTemplate.user_id || ""),
-    createdAt: String(rawTemplate.created_at || ""),
-    updatedAt: String(rawTemplate.updated_at || rawTemplate.created_at || ""),
-    isPublic: Boolean((rawTemplate as { is_public?: unknown }).is_public),
-    slug: typeof rawTemplate.slug === "string" ? rawTemplate.slug : undefined,
-    version: typeof rawTemplate.version === "number" ? rawTemplate.version : 1,
-    categories,
-    tags: Array.isArray(rawTemplate.tags) ? (rawTemplate.tags as string[]) : [],
-    ownerProfile:
-      typeof rawTemplate.owner_username === "string" || typeof rawTemplate.owner_full_name === "string"
-        ? {
-            username: typeof rawTemplate.owner_username === "string" ? rawTemplate.owner_username : undefined,
-            full_name: typeof rawTemplate.owner_full_name === "string" ? rawTemplate.owner_full_name : undefined,
-          }
-        : undefined,
-  };
-};
+} from '@/lib/routes';
 
 const TemplateDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
-  const { getTemplate, createRun, deleteTemplate } = useTemplates();
-  const queryClient = useQueryClient();
-  const [template, setTemplate] = useState<ChecklistTemplate | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
+  const { user, isAuthenticated } = useAuth();
+  const { createRun, createTemplate, deleteTemplate, getTemplate } =
+    useTemplates();
   const [runDialogOpen, setRunDialogOpen] = useState(false);
   const [isCreatingRun, setIsCreatingRun] = useState(false);
   const [isCloningTemplate, setIsCloningTemplate] = useState(false);
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const billing = useQuery({
-    queryKey: getBillingStatusQueryKey(user?.id),
-    queryFn: () => api.getBillingStatus(),
-    enabled: !!user,
-    retry: false,
+  const {
+    billingState,
+    loading,
+    notFound,
+    saveTemplate,
+    shareTemplate,
+    startRun,
+    template,
+  } = useTemplateDetailModel({
+    createRun,
+    createTemplate,
+    getCachedTemplate: getTemplate,
+    identifier: id,
+    isAuthenticated,
+    mode: 'private',
+    userId: user?.id,
+    username: user?.username,
   });
-  const billingEnabled = billing.data?.billingEnabled ?? true;
-  const isProUser = billing.data?.plan === "pro";
-  const isBillingLoading = !!user && billing.isLoading;
   const isOwner = user?.id === template?.userId;
-  const publicTemplatePath = template
-    ? buildCanonicalPublicTemplatePath({
-        ...template,
-        ownerProfile: {
-          ...template.ownerProfile,
-          username: template.ownerProfile?.username ?? user?.username,
-        },
-      })
-    : null;
-
-  useEffect(() => {
-    const loadTemplate = async () => {
-      if (!id) {
-        setNotFound(true);
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      setNotFound(false);
-
-      const cachedTemplate = getTemplate(id);
-      if (cachedTemplate) {
-        setTemplate(cachedTemplate);
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        let found = null;
-        try {
-          const byId = (await api.getTemplateById(id)) as Record<string, unknown>;
-          found = byId;
-        } catch {
-          const bySlug = (await api.getTemplateBySlug(id)) as Record<string, unknown>;
-          found = bySlug;
-        }
-
-        if (!found) {
-          setNotFound(true);
-          return;
-        }
-
-        setTemplate(normalizeTemplate(found));
-      } catch (error) {
-        console.error("Failed to load template:", error);
-        setNotFound(true);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    void loadTemplate();
-  }, [id, getTemplate]);
 
   const createdDate = template?.createdAt
-    ? new Date(template.createdAt).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })
-    : "";
+    ? new Date(template.createdAt).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : '';
 
   const handleStartRun = async (runName: string) => {
-    if (!template) return;
-
     setIsCreatingRun(true);
     try {
-      const newRun = await createRun({
-        templateId: template.id,
-        runName,
-      });
-      if (newRun) {
-        toast.success("Checklist run created");
-        setRunDialogOpen(false);
-        navigate(buildConsoleRunPath(newRun.id));
+      const result = await startRun(runName);
+
+      if (result.kind === 'login_required') {
+        navigateToLoginWithReturnPath(navigate, location);
+        return;
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create checklist run";
-      toast.error(message);
+
+      if (result.kind === 'upgrade_required') {
+        await startBillingCheckout(billingState.billingEnabled);
+        return;
+      }
+
+      if (result.kind === 'error') {
+        toast.error(result.message);
+        return;
+      }
+
+      if (result.runId) {
+        toast.success('Checklist run created');
+        setRunDialogOpen(false);
+        navigate(buildConsoleRunPath(result.runId));
+      }
     } finally {
       setIsCreatingRun(false);
     }
   };
 
   const handleShare = async () => {
-    if (!template) return;
-    if (user?.id !== template.userId) {
-      return;
-    }
-
     setIsCreatingShare(true);
     try {
-      if (!template.isPublic) {
-        await api.updateTemplate(template.id, {
-          is_public: true,
-        });
+      const result = await shareTemplate();
+
+      if (result.kind === 'login_required') {
+        navigateToLoginWithReturnPath(navigate, location);
+        return;
       }
 
-      const shareUrl = publicTemplatePath
-        ? `${window.location.origin}${publicTemplatePath}`
-        : null;
-
-      setTemplate((prev) => prev ? ({
-        ...prev,
-        isPublic: true
-      }) : prev);
-      if (!shareUrl) {
-        throw new Error("Set a username on your account before sharing templates with the canonical public URL.");
+      if (result.kind === 'upgrade_required') {
+        await startBillingCheckout(billingState.billingEnabled);
+        return;
       }
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success("Template share link copied. They can now copy it into their account.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create a share link for this template.";
-      toast.error(message || "Failed to create a share link for this template.");
+
+      if (result.kind === 'error') {
+        toast.error(result.message);
+        return;
+      }
+
+      if (!result.shareUrl) {
+        toast.error('Failed to create a share link for this template.');
+        return;
+      }
+
+      await navigator.clipboard.writeText(result.shareUrl);
+      toast.success(
+        'Template share link copied. They can now copy it into their account.',
+      );
     } finally {
       setIsCreatingShare(false);
     }
   };
 
   const handleCloneTemplate = async () => {
-    if (!template) return;
-    if (!user) {
-      navigateToLoginWithReturnPath(navigate, location);
-      return;
-    }
-
-    if (isBillingLoading) {
-      return;
-    }
-
-    if (!isProUser) {
-      await startBillingCheckout(billingEnabled);
-      return;
-    }
-
     setIsCloningTemplate(true);
     try {
-      const clonedTemplate = await api.clonePublicTemplate(template.id, {
-        visibility: "private",
-      });
+      const result = await saveTemplate();
 
-      toast.success("Template copied to your account");
-      await queryClient.invalidateQueries({ queryKey: ["templates", user?.id] });
-      await queryClient.invalidateQueries({ queryKey: ["user-templates", user?.id] });
-      if (clonedTemplate?.slug || clonedTemplate?.id) {
-        navigate(buildConsoleTemplatePath(clonedTemplate.id));
-      } else {
-        navigate(buildConsoleTemplatesPath());
+      if (result.kind === 'login_required') {
+        navigateToLoginWithReturnPath(navigate, location);
+        return;
       }
-    } catch (err) {
-      await handleAccessFailure(err, {
-        billingEnabled,
-        fallbackMessage: "Failed to copy template",
-        navigate,
-        location,
-      });
+
+      if (result.kind === 'upgrade_required') {
+        await startBillingCheckout(billingState.billingEnabled);
+        return;
+      }
+
+      if (result.kind === 'error') {
+        toast.error(result.message);
+        return;
+      }
+
+      toast.success('Template copied to your account');
+      if (result.templateId) {
+        navigate(buildConsoleTemplatePath(result.templateId));
+        return;
+      }
+
+      navigate(buildConsoleTemplatesPath());
     } finally {
       setIsCloningTemplate(false);
     }
@@ -270,16 +182,17 @@ const TemplateDetail = () => {
     setIsDeleting(true);
     try {
       await deleteTemplate(template.id);
-      toast.success("Template archived");
+      toast.success('Template archived');
       navigate(buildConsoleTemplatesPath());
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to archive template";
+      const message =
+        error instanceof Error ? error.message : 'Failed to archive template';
       toast.error(message);
       setIsDeleting(false);
     }
   };
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner message="Loading template..." />
@@ -334,7 +247,9 @@ const TemplateDetail = () => {
                 <>
                   <Button
                     variant="outline"
-                    onClick={() => navigate(buildConsoleTemplateEditPath(template.id))}
+                    onClick={() =>
+                      navigate(buildConsoleTemplateEditPath(template.id))
+                    }
                   >
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
@@ -345,23 +260,23 @@ const TemplateDetail = () => {
                     disabled={isCreatingShare}
                   >
                     <Share2 className="mr-2 h-4 w-4" />
-                    {isCreatingShare ? "Creating..." : "Share"}
+                    {isCreatingShare ? 'Creating...' : 'Share'}
                   </Button>
                 </>
               ) : user ? (
                 <Button
                   variant="outline"
                   onClick={handleCloneTemplate}
-                  disabled={isCloningTemplate || isBillingLoading}
+                  disabled={isCloningTemplate || billingState.isLoading}
                 >
                   <Copy className="mr-2 h-4 w-4" />
                   {isCloningTemplate
-                    ? "Copying..."
-                    : isBillingLoading
-                      ? "Checking plan..."
-                      : !isProUser
-                        ? "Upgrade to copy template"
-                        : "Copy to My Templates"}
+                    ? 'Copying...'
+                    : billingState.isLoading
+                      ? 'Checking plan...'
+                      : !billingState.isPro
+                        ? 'Upgrade to copy template'
+                        : 'Copy to My Templates'}
                 </Button>
               ) : (
                 <Button asChild variant="outline">
@@ -386,13 +301,18 @@ const TemplateDetail = () => {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Archive Template</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Are you sure you want to archive "{template.title}"? This removes the template and its future visibility from your account.
+                        Are you sure you want to archive "{template.title}"?
+                        This removes the template and its future visibility from
+                        your account.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
-                        {isDeleting ? "Archiving..." : "Archive"}
+                      <AlertDialogAction
+                        onClick={handleDelete}
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? 'Archiving...' : 'Archive'}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>

@@ -8,12 +8,16 @@ import {
   buildCategorySlug,
   buildCanonicalPublicTemplatePath,
   buildConsoleHomePath,
+  buildConsoleProfilePath,
   buildConsoleRunPath,
   buildConsoleRunsPath,
+  buildConsoleSettingsPath,
   buildConsoleTemplateCreatePath,
   buildConsoleTemplateEditPath,
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
+  buildRunPath,
+  buildRunUrl,
   buildPublicCategoriesPath,
   buildPublicCategoryPath,
   buildPublicFeaturePath,
@@ -69,6 +73,12 @@ describe('routes', () => {
     );
     expect(buildConsoleRunsPath()).toBe('/dashboard/runs');
     expect(buildConsoleRunPath('run-1')).toBe('/dashboard/runs/run-1');
+    expect(buildRunPath('run-1')).toBe('/run/run-1');
+    expect(buildRunUrl('run-1', 'https://serplists.com')).toBe(
+      'https://serplists.com/run/run-1',
+    );
+    expect(buildConsoleSettingsPath()).toBe('/dashboard/settings');
+    expect(buildConsoleProfilePath()).toBe('/dashboard/profile');
   });
 
   it('flags template editor routes that should render on a blank workspace shell', () => {
@@ -127,6 +137,8 @@ describe('routes', () => {
     );
     expect(resolveConsoleSection('/dashboard/runs')).toBe('runs');
     expect(resolveConsoleSection('/dashboard/runs/run-1')).toBe('runs');
+    expect(resolveConsoleSection('/dashboard/settings')).toBe('account');
+    expect(resolveConsoleSection('/dashboard/profile')).toBe('account');
     expect(resolveConsoleSection('/console')).toBe('home');
     expect(resolveConsoleSection('/account')).toBe('account');
     expect(resolveConsoleSection('/templates')).toBeNull();

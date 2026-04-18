@@ -55,7 +55,7 @@ describe('ChecklistLibrary layout', () => {
     });
   });
 
-  it('starts the catalog with a compact toolbar instead of stacked summary chrome', () => {
+  it('starts the catalog with discovery sort controls instead of the old stacked filter shell', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter initialEntries={['/templates']}>
         <Routes>
@@ -64,10 +64,28 @@ describe('ChecklistLibrary layout', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Filter categories');
+    expect(html).toContain('Popular');
+    expect(html).toContain('Trending');
+    expect(html).toContain('Recent');
     expect(html).not.toContain('Templates in view');
     expect(html).not.toContain('Actionable steps');
     expect(html).not.toContain('Available categories');
     expect(html).not.toContain('Showing');
+  });
+
+  it('uses the deployed public-library hero copy instead of the local migration copy', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/templates']}>
+        <Routes>
+          <Route path="*" element={<ChecklistLibrary />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Discover Templates');
+    expect(html).toContain(
+      'Browse hundreds of ready-to-use checklists created by the community',
+    );
+    expect(html).not.toContain('Find the template pack that already solved it');
   });
 });

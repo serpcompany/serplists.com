@@ -1,79 +1,81 @@
+import { useEffect, useRef } from "react";
+
 import { Button } from "@/components/ui/button";
-import { 
-  FileText, Image, Video, File, Code, ListCheck, 
-  X, PanelRightOpen
+import {
+  Code,
+  File,
+  FileText,
+  Image,
+  ListChecks,
+  PanelRightOpen,
+  Video,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ContentAddPanelProps {
   showAddPanel: boolean;
   onTogglePanel: () => void;
-  onAddContent: (contentType: "text" | "image" | "video" | "file" | "embed" | "subItems") => void;
+  onAddContent: (
+    contentType: "text" | "image" | "video" | "file" | "embed" | "subItems",
+  ) => void;
 }
 
-export const ContentAddPanel = ({ 
-  showAddPanel, 
-  onTogglePanel, 
-  onAddContent 
-}: ContentAddPanelProps) => {
+export const ContentAddPanel = ({
+  showAddPanel,
+  onTogglePanel,
+  onAddContent,
+}: ContentAddPanelProps): JSX.Element => {
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const contentTypeButtons = [
-    { type: "text" as const, icon: FileText, label: "Add Text" },
-    { type: "image" as const, icon: Image, label: "Add Image" },
-    { type: "video" as const, icon: Video, label: "Add Video" },
-    { type: "file" as const, icon: File, label: "Add File" },
-    { type: "embed" as const, icon: Code, label: "Add Embed" },
-    { type: "subItems" as const, icon: ListCheck, label: "Add Sub-tasks" },
+    { type: "text" as const, icon: FileText, label: "Text" },
+    { type: "image" as const, icon: Image, label: "Image" },
+    { type: "video" as const, icon: Video, label: "Video" },
+    { type: "file" as const, icon: File, label: "File" },
+    { type: "embed" as const, icon: Code, label: "Embed" },
+    { type: "subItems" as const, icon: ListChecks, label: "Sub-tasks" },
   ];
 
+  useEffect(() => {
+    if (!showAddPanel) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      onTogglePanel();
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [onTogglePanel, showAddPanel]);
+
   return (
-    <div className="flex items-center justify-between mb-6">
-      <h3 className="text-lg font-semibold">Content</h3>
-      <Button 
-        variant="outline" 
-        size="sm"
-        onClick={onTogglePanel}
-      >
+    <div ref={menuRef} className="relative inline-flex">
+      <Button variant="ghost" size="sm" onClick={onTogglePanel}>
         <PanelRightOpen className="mr-2 h-4 w-4" />
-        Add Content
+        Add Block
       </Button>
 
-      {/* Add Content Panel - Modal Style */}
-      {showAddPanel && (
-        <>
-          {/* Invisible Overlay for click-outside */}
-          <div 
-            className="fixed inset-0 z-40"
-            onClick={onTogglePanel}
-          />
-          
-          {/* Modal Panel */}
-          <div className="fixed right-4 top-1/2 transform -translate-y-1/2 w-64 h-96 border bg-background shadow-lg rounded-lg p-4 overflow-y-auto z-50">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold">Add Content</h4>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onTogglePanel}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="space-y-2">
-              {contentTypeButtons.map(({ type, icon: Icon, label }) => (
-                <Button
-                  key={type}
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start"
-                  onClick={() => onAddContent(type)}
-                >
-                  <Icon className="mr-2 h-4 w-4" />
-                  {label}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
+      {showAddPanel ? (
+        <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-lg border border-border bg-popover p-1 shadow-lg">
+          {contentTypeButtons.map(({ type, icon: Icon, label }) => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => onAddContent(type)}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-popover-foreground hover:bg-accent",
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 };

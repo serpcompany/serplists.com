@@ -1,12 +1,10 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useTemplates } from "@/contexts/TemplatesContext";
 import { useTemplateValidation } from "@/hooks/useTemplateValidation";
 import { ChecklistSection, TemplateSavePayload } from "@/types/checklist";
-import { buildConsoleTemplatesPath } from "@/lib/routes";
 import { ValidationError } from "@/hooks/useTemplateValidation";
 
-type SaveTemplateResult = {
+export type SaveTemplateResult = {
   success: boolean;
   errors: ValidationError[];
 };
@@ -19,10 +17,9 @@ type SaveTemplateDependencies = {
     title: string,
     sections: ChecklistSection[],
   ) => { title: string; sections: ChecklistSection[] };
-  navigateToTemplates: () => void;
 };
 
-type SaveTemplateInput = {
+export type SaveTemplateInput = {
   id?: string;
   title: string;
   description: string;
@@ -45,7 +42,6 @@ export const persistTemplateSave = async (
     createTemplate,
     updateTemplate,
     applyDefaults,
-    navigateToTemplates,
   } = dependencies;
   const {
     id,
@@ -99,7 +95,6 @@ export const persistTemplateSave = async (
       isPublic,
     });
 
-    navigateToTemplates();
     return { success: true, errors: [] };
   } catch (error) {
     console.error("Error saving template:", error);
@@ -117,23 +112,12 @@ export const persistTemplateSave = async (
 };
 
 export const useTemplateSave = () => {
-  const navigate = useNavigate();
   const { getTemplate, createTemplate, updateTemplate } = useTemplates();
   const { applyDefaults } = useTemplateValidation();
   const [isSaving, setIsSaving] = useState(false);
 
   const saveTemplate = async (
-    id: string | undefined,
-    title: string,
-    description: string,
-    sections: ChecklistSection[],
-    seoTitle: string,
-    seoDescription: string,
-    seoUrl: string,
-    templateType: "checklist" | "recipe",
-    categories: string[],
-    tags: string[],
-    isPublic: boolean = true
+    input: SaveTemplateInput,
   ): Promise<SaveTemplateResult> => {
     setIsSaving(true);
 
@@ -144,21 +128,8 @@ export const useTemplateSave = () => {
           createTemplate,
           updateTemplate,
           applyDefaults,
-          navigateToTemplates: () => navigate(buildConsoleTemplatesPath()),
         },
-        {
-          id,
-          title,
-          description,
-          sections,
-          seoTitle,
-          seoDescription,
-          seoUrl,
-          templateType,
-          categories,
-          tags,
-          isPublic,
-        },
+        input,
       );
     } finally {
       setIsSaving(false);

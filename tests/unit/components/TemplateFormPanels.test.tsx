@@ -29,11 +29,12 @@ describe('Template form panels', () => {
       </TemplateFormHarness>,
     );
 
-    expect(html).toContain('Identity');
-    expect(html).toContain('Template name');
-    expect(html).toContain('Goal / summary');
-    expect(html).toContain('Access');
-    expect(html).toContain('Organization');
+    expect(html).toContain('Template Settings');
+    expect(html).toContain('Template Name');
+    expect(html).toContain('Goal / Summary');
+    expect(html).toContain('Template Type');
+    expect(html).toContain('Categories');
+    expect(html).toContain('Public Template');
   });
 
   it('renders the SEO pane as a search preview form', () => {
@@ -43,9 +44,11 @@ describe('Template form panels', () => {
       </TemplateFormHarness>,
     );
 
-    expect(html).toContain('Search preview');
-    expect(html).toContain('Search title');
-    expect(html).toContain('URL slug');
-    expect(html).toContain('Search description');
+    expect(html).toContain('Search &amp; SEO');
+    expect(html).toContain('Search Title');
+    expect(html).toContain('URL Slug');
+    expect(html).toContain('Search Description');
+    expect(html).toContain('Preview');
+    expect(html).toContain('example.com/templates/');
   });
 });

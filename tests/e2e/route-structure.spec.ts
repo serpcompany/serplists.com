@@ -49,7 +49,15 @@ test.describe('route structure', () => {
   }) => {
     await signInAsAdmin(page);
     await page.goto('/console');
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+  });
+
+  test('canonical dashboard resolves to the templates dashboard surface', async ({
+    page,
+  }) => {
+    await signInAsAdmin(page);
+    await page.goto('/dashboard');
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
   });
 
   test('removed mixed-surface routes still return not found', async ({ page }) => {

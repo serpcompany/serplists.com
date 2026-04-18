@@ -1,4 +1,4 @@
-import { useFormContext } from "react-hook-form";
+import { useFormContext, useWatch } from "react-hook-form";
 
 import {
   FormControl,
@@ -12,94 +12,113 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { TemplateEditorDetailsFormValues } from "@/lib/forms/templateEditorDetailsForm";
 
-export const SEOMetaEditor = (): JSX.Element => {
+interface SEOMetaEditorProps {
+  showIntro?: boolean;
+}
+
+export const SEOMetaEditor = ({
+  showIntro = true,
+}: SEOMetaEditorProps): JSX.Element => {
   const { control } = useFormContext<TemplateEditorDetailsFormValues>();
+  const seoTitle = useWatch({ control, name: "seoTitle" });
+  const seoUrl = useWatch({ control, name: "seoUrl" });
+  const seoDescription = useWatch({ control, name: "seoDescription" });
+  const title = useWatch({ control, name: "title" });
+  const description = useWatch({ control, name: "description" });
+
+  const resolvedTitle = seoTitle || title || "Untitled Template";
+  const resolvedUrl = seoUrl || "untitled";
+  const resolvedDescription =
+    seoDescription || description || "No description provided";
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h3 className="text-lg font-semibold">Search preview</h3>
-        <p className="text-sm leading-6 text-muted-foreground">
-          Keep this tight. These fields shape how the template reads in search, shared links,
-          and public library previews.
-        </p>
-      </div>
-
-      <section className="rounded-lg border border-border/80 bg-card px-5 py-5">
-        <div className="mb-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-            Search preview
+      {showIntro ? (
+        <div className="space-y-1">
+          <h3 className="text-lg font-semibold">Search &amp; SEO</h3>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Configure how this template appears in search results and public listings.
           </p>
-          <h4 className="mt-2 text-base font-semibold text-foreground">
-            Control the title, slug, and description shown outside the editor.
-          </h4>
         </div>
+      ) : null}
 
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          <FormField
-            control={control}
-            name="seoTitle"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-sm font-medium">Search title</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="Technical SEO audit SOP"
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>
-                  Keep it readable first. Only optimize after the wording is clear.
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={control}
-            name="seoUrl"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-sm font-medium">
-                  URL slug
-                </FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="technical-seo-audit-sop"
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>
-                  Short, stable, and predictable beats clever.
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={control}
-            name="seoDescription"
-            render={({ field }) => (
-              <FormItem className="md:col-span-2">
-                <FormLabel className="text-sm font-medium">
-                  Search description
-                </FormLabel>
-                <FormControl>
-                  <Textarea
-                    placeholder="Explain what the SOP covers and who it helps."
-                    rows={4}
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>
-                  Write one compact summary that will still make sense when copied into a search or social preview.
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+      <div className="space-y-8">
+        <FormField
+          control={control}
+          name="seoTitle"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-base font-medium">Search Title</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="Title for search results..."
+                  className="mt-2 h-11 bg-input"
+                  {...field}
+                />
+              </FormControl>
+              <FormDescription>
+                Leave blank to use the template name.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={control}
+          name="seoUrl"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-base font-medium">URL Slug</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="my-template-slug"
+                  className="mt-2 h-11 bg-input font-mono text-sm"
+                  {...field}
+                />
+              </FormControl>
+              <FormDescription>
+                The URL-friendly identifier for this template.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={control}
+          name="seoDescription"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-base font-medium">
+                Search Description
+              </FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Description shown in search results..."
+                  rows={3}
+                  className="mt-2 resize-none bg-input"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="mb-3 text-sm font-medium text-foreground">Preview</h3>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-blue-400">{resolvedTitle}</p>
+            <p className="text-xs text-muted-foreground">
+              example.com/templates/{resolvedUrl}
+            </p>
+            <p className="line-clamp-2 text-sm text-muted-foreground">
+              {resolvedDescription}
+            </p>
+          </div>
         </div>
-      </section>
+      </div>
     </div>
   );
 };

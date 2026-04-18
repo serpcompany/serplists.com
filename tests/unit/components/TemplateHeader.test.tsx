@@ -11,20 +11,24 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 }));
 
 describe('TemplateHeader', () => {
-  it('renders a stripped template editor header instead of the old pseudo-wizard chrome', () => {
+  it('renders the compact reference-style editor top bar', () => {
     const html = renderToStaticMarkup(
       <TemplateHeader
         isEditing
         isSaving={false}
         templateSlug="piggyback-discovery-sop"
+        title="New Employee Onboarding"
         onCancel={() => undefined}
         onSave={() => undefined}
       />,
     );
 
-    expect(html).toContain('Template editor');
+    expect(html).toContain('New Employee Onboarding');
     expect(html).toContain('Editing');
-    expect(html).toContain('Templates');
-    expect(html).not.toContain('Versions');
+    expect(html).toContain('Save');
+    expect(html).toContain('sticky top-0 z-50');
+    expect(html).not.toContain('Template editor');
+    expect(html).not.toContain('Draft');
+    expect(html).not.toContain('Cancel');
   });
 });

@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import {
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -23,7 +22,13 @@ import { PREDEFINED_CATEGORIES } from "@/utils/categories";
 import type { TemplateEditorDetailsFormValues } from "@/lib/forms/templateEditorDetailsForm";
 import { cn } from "@/lib/utils";
 
-export const TemplateBasicInfo = (): JSX.Element => {
+interface TemplateBasicInfoProps {
+  showIntro?: boolean;
+}
+
+export const TemplateBasicInfo = ({
+  showIntro = true,
+}: TemplateBasicInfoProps): JSX.Element => {
   const { control, watch, setValue } =
     useFormContext<TemplateEditorDetailsFormValues>();
   const [categoryInput, setCategoryInput] = useState("");
@@ -81,343 +86,277 @@ export const TemplateBasicInfo = (): JSX.Element => {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h3 className="text-lg font-semibold">Template form</h3>
-        <p className="text-sm leading-6 text-muted-foreground">
-          Define the core template metadata first. Keep it clear enough for a human operator,
-          but structured enough that AI can follow it without guessing.
-        </p>
-      </div>
+      {showIntro ? (
+        <div className="space-y-1">
+          <h3 className="text-lg font-semibold">Template Settings</h3>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Define what this template is and how it should be organized.
+          </p>
+        </div>
+      ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-4">
-          <section className="rounded-lg border border-border/80 bg-card px-5 py-5">
-            <div className="mb-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                Identity
-              </p>
-              <h4 className="mt-2 text-base font-semibold text-foreground">
-                Name the SOP and describe the outcome.
-              </h4>
-            </div>
+      <div className="space-y-8">
+        <FormField
+          control={control}
+          name="title"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-base font-medium">Template Name</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="New Employee Onboarding"
+                  className="mt-2 h-11 bg-input"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-            <div className="space-y-5">
-              <FormField
-                control={control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">Template name</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Technical SEO audit SOP"
-                        className="text-base"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Use the clearest working name, not a marketing headline.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+        <FormField
+          control={control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-base font-medium">Goal / Summary</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Describe what this template helps accomplish..."
+                  rows={3}
+                  className="mt-2 resize-none bg-input"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-              <FormField
-                control={control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">Goal / summary</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Describe what a human or AI should accomplish by following this SOP."
-                        rows={4}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      This summary appears in the editor and also influences how the template reads publicly.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </section>
+        <FormField
+          control={control}
+          name="templateType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-base font-medium">Template Type</FormLabel>
+              <FormControl>
+                <Select
+                  value={field.value}
+                  onValueChange={(value) =>
+                    field.onChange(value as "checklist" | "recipe")
+                  }
+                >
+                  <SelectTrigger id="template-type" className="mt-2 h-11 bg-input">
+                    <SelectValue placeholder="Select a template type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="checklist">Checklist</SelectItem>
+                    <SelectItem value="recipe">Recipe</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-          <section className="rounded-lg border border-border/80 bg-card px-5 py-5">
-            <div className="mb-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                Organization
-              </p>
-              <h4 className="mt-2 text-base font-semibold text-foreground">
-                Classify the template so it is easy to find later.
-              </h4>
-            </div>
+        <FormField
+          control={control}
+          name="categories"
+          render={() => (
+            <FormItem>
+              <Label htmlFor="categories" className="text-base font-medium">
+                Categories
+              </Label>
 
-            <div className="space-y-5">
-              <FormField
-                control={control}
-                name="categories"
-                render={() => (
-                  <FormItem>
-                    <Label htmlFor="categories" className="text-sm font-medium">
-                      Categories
-                    </Label>
-                    <p className="text-sm leading-6 text-muted-foreground">
-                      Use broad buckets like SEO, Content, or Ops.
-                    </p>
-
-                    {categories.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {categories.map((category, index: number) => (
-                          <Badge
-                            key={index}
-                            variant="secondary"
-                            className="flex items-center gap-1 rounded-md"
-                          >
-                            {category}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="ml-1 h-auto p-0 hover:bg-transparent"
-                              onClick={() => removeCategory(category)}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Popover
-                          open={categoryPopoverOpen}
-                          onOpenChange={setCategoryPopoverOpen}
-                        >
-                          <PopoverAnchor asChild>
-                            <div className="w-full">
-                              <Input
-                                id="categories"
-                                value={categoryInput}
-                                onChange={(event) => {
-                                  setCategoryInput(event.target.value);
-                                  if (event.target.value && !categoryPopoverOpen) {
-                                    setCategoryPopoverOpen(true);
-                                  }
-                                }}
-                                onFocus={() => {
-                                  if (categoryInput) {
-                                    setCategoryPopoverOpen(true);
-                                  }
-                                }}
-                                onKeyDown={handleCategoryInputKeyDown}
-                                placeholder="Add category"
-                                className="w-full"
-                              />
-                            </div>
-                          </PopoverAnchor>
-                          <PopoverContent
-                            className="w-80 max-w-[calc(100vw-2rem)] p-0"
-                            align="start"
-                          >
-                            <Command>
-                              <CommandList>
-                                {filteredCategories.length > 0 ? (
-                                  <CommandGroup heading="Suggested categories">
-                                    {filteredCategories.map((category) => (
-                                      <CommandItem
-                                        key={category}
-                                        onSelect={() => addCategory(category)}
-                                        className="cursor-pointer"
-                                      >
-                                        <Check className={cn("mr-2 h-4 w-4", "opacity-0")} />
-                                        {category}
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                ) : categoryInput ? (
-                                  <CommandEmpty>
-                                    Press Enter to add &quot;{categoryInput}&quot;.
-                                  </CommandEmpty>
-                                ) : null}
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
+              {categories.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {categories.map((category) => (
+                    <Badge
+                      key={category}
+                      variant="secondary"
+                      className="gap-1 rounded-md"
+                    >
+                      {category}
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
-                        onClick={() => addCategory()}
-                        disabled={!categoryInput.trim()}
+                        className="ml-1 h-auto p-0 hover:bg-transparent"
+                        onClick={() => removeCategory(category)}
                       >
-                        <Plus className="h-4 w-4" />
+                        <X className="h-3 w-3" />
                       </Button>
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
 
-              <FormField
-                control={control}
-                name="tags"
-                render={() => (
-                  <FormItem>
-                    <Label htmlFor="tags" className="text-sm font-medium">
-                      Tags
-                    </Label>
-                    <p className="text-sm leading-6 text-muted-foreground">
-                      Use tighter descriptors like audit, onboarding, or reporting.
-                    </p>
-
-                    {tags.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {tags.map((tag, index: number) => (
-                          <Badge
-                            key={index}
-                            variant="outline"
-                            className="flex items-center gap-1 rounded-md"
-                          >
-                            {tag}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="ml-1 h-auto p-0 hover:bg-transparent"
-                              onClick={() => removeTag(tag)}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </Badge>
-                        ))}
+              <div className="mt-3 flex gap-2">
+                <div className="relative flex-1">
+                  <Popover
+                    open={categoryPopoverOpen}
+                    onOpenChange={setCategoryPopoverOpen}
+                  >
+                    <PopoverAnchor asChild>
+                      <div className="w-full">
+                        <Input
+                          id="categories"
+                          value={categoryInput}
+                          onChange={(event) => {
+                            setCategoryInput(event.target.value);
+                            if (event.target.value && !categoryPopoverOpen) {
+                              setCategoryPopoverOpen(true);
+                            }
+                          }}
+                          onFocus={() => {
+                            if (categoryInput) {
+                              setCategoryPopoverOpen(true);
+                            }
+                          }}
+                          onKeyDown={handleCategoryInputKeyDown}
+                          placeholder="Select categories..."
+                          className="h-11 w-full bg-input"
+                        />
                       </div>
-                    ) : null}
+                    </PopoverAnchor>
+                    <PopoverContent
+                      className="w-80 max-w-[calc(100vw-2rem)] p-0"
+                      align="start"
+                    >
+                      <Command>
+                        <CommandList>
+                          {filteredCategories.length > 0 ? (
+                            <CommandGroup heading="Suggested categories">
+                              {filteredCategories.map((category) => (
+                                <CommandItem
+                                  key={category}
+                                  onSelect={() => addCategory(category)}
+                                  className="cursor-pointer"
+                                >
+                                  <Check className={cn("mr-2 h-4 w-4", "opacity-0")} />
+                                  {category}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          ) : categoryInput ? (
+                            <CommandEmpty>
+                              Press Enter to add &quot;{categoryInput}&quot;.
+                            </CommandEmpty>
+                          ) : null}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => addCategory()}
+                  disabled={!categoryInput.trim()}
+                  className="h-11"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-                    <div className="flex gap-2">
-                      <Input
-                        id="tags"
-                        value={tagInput}
-                        onChange={(event) => setTagInput(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            addTag();
-                          }
-                        }}
-                        placeholder="Add tag"
-                        className="flex-1"
-                      />
+        <FormField
+          control={control}
+          name="tags"
+          render={() => (
+            <FormItem>
+              <Label htmlFor="tags" className="text-base font-medium">
+                Tags
+              </Label>
+
+              {tags.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <Badge
+                      key={tag}
+                      variant="outline"
+                      className="gap-1 rounded-md"
+                    >
+                      {tag}
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
-                        onClick={addTag}
-                        disabled={!tagInput.trim()}
+                        className="ml-1 h-auto p-0 hover:bg-transparent"
+                        onClick={() => removeTag(tag)}
                       >
-                        <Plus className="h-4 w-4" />
+                        <X className="h-3 w-3" />
                       </Button>
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </section>
-        </div>
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
 
-        <div className="space-y-4">
-          <section className="rounded-lg border border-border/80 bg-card px-5 py-5">
-            <div className="mb-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                Access
-              </p>
-              <h4 className="mt-2 text-base font-semibold text-foreground">
-                Choose the form factor and who can discover it.
-              </h4>
-            </div>
+              <div className="mt-3 flex gap-2">
+                <Input
+                  id="tags"
+                  value={tagInput}
+                  onChange={(event) => setTagInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addTag();
+                    }
+                  }}
+                  placeholder="Add tag..."
+                  className="h-11 flex-1 bg-input"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addTag}
+                  disabled={!tagInput.trim()}
+                  className="h-11"
+                >
+                  Add
+                </Button>
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-            <div className="space-y-5">
-              <FormField
-                control={control}
-                name="templateType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">
-                      Template type
-                    </FormLabel>
-                    <FormControl>
-                      <Select
-                        value={field.value}
-                        onValueChange={(value) =>
-                          field.onChange(value as "checklist" | "recipe")
-                        }
-                      >
-                        <SelectTrigger id="template-type">
-                          <SelectValue placeholder="Select a template type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="checklist">Checklist</SelectItem>
-                          <SelectItem value="recipe">Recipe</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormControl>
-                    <FormDescription>
-                      Use checklist for step-by-step execution and recipe for more prescriptive playbooks.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={control}
-                name="isPublic"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">Visibility</FormLabel>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between rounded-lg border border-border/80 bg-muted/20 p-4">
-                        <div className="flex items-center gap-3">
-                          {isPublic ? (
-                            <Globe className="h-5 w-5 text-green-600" />
-                          ) : (
-                            <Lock className="h-5 w-5 text-blue-600" />
-                          )}
-                          <div>
-                            <span className="font-medium">
-                              {isPublic ? "Public template" : "Private template"}
-                            </span>
-                            <p className="text-sm text-muted-foreground">
-                              {isPublic
-                                ? "Anyone can discover and copy this SOP."
-                                : "Keep the SOP private while the workflow is still being shaped."}
-                            </p>
-                          </div>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </div>
-                      <FormDescription>
-                        Start private while the form is still changing. Publish only when the SOP is stable.
-                      </FormDescription>
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </section>
-        </div>
+        <FormField
+          control={control}
+          name="isPublic"
+          render={({ field }) => (
+            <FormItem>
+              <div className="flex items-center justify-between">
+                <div>
+                  <FormLabel className="mb-0 text-base font-medium">
+                    Public Template
+                  </FormLabel>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Make this template visible in the public library
+                  </p>
+                </div>
+                <FormControl>
+                  <div className="flex items-center gap-3">
+                    {isPublic ? (
+                      <Globe className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Lock className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </div>
+                </FormControl>
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
       </div>
     </div>
   );

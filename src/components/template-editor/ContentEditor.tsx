@@ -116,46 +116,66 @@ export function ContentEditor({
     }
   }
 
+  const contentTypeLabels: Record<
+    NonNullable<(typeof contents)[number]>["type"],
+    string
+  > = {
+    text: "Text",
+    image: "Image",
+    video: "Video",
+    file: "File",
+    embed: "Embed",
+    subItems: "Sub-tasks",
+  };
+
   return (
-    <div className="flex gap-6">
-      <div className="flex-1 transition-all duration-200">
+    <div className="space-y-4">
+      <div className="sticky top-0 z-10 -mx-6 flex items-center justify-between border-b border-border bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <h3 className="text-sm font-medium text-foreground">Content Blocks</h3>
         <ContentAddPanel
           onAddContent={handleAddContent}
           onTogglePanel={() => setShowAddPanel((value) => !value)}
           showAddPanel={showAddPanel}
         />
+      </div>
 
-        <div className="space-y-4">
+      {contentsFieldArray.fields.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-8">
+          <p className="mb-3 text-sm text-muted-foreground">No content blocks yet</p>
+          <ContentAddPanel
+            onAddContent={handleAddContent}
+            onTogglePanel={() => setShowAddPanel((value) => !value)}
+            showAddPanel={showAddPanel}
+          />
+        </div>
+      ) : (
+        <div className="space-y-3">
           {contentsFieldArray.fields.map((contentField, contentIndex) => (
             <div
-              className="relative rounded-xl border border-border/80 bg-muted/20 p-4"
+              className="group rounded-lg border border-border bg-card"
               key={contentField.fieldId}
             >
-              <Button
-                className="absolute right-2 top-2 rounded-lg"
-                onClick={() => contentsFieldArray.remove(contentIndex)}
-                size="icon"
-                type="button"
-                variant="ghost"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+                <div className="h-4 w-4 shrink-0 cursor-grab rounded bg-muted/50" />
+                <span className="flex-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {contentTypeLabels[contents[contentIndex]?.type ?? "text"]}
+                </span>
+                <Button
+                  className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
+                  onClick={() => contentsFieldArray.remove(contentIndex)}
+                  size="icon"
+                  type="button"
+                  variant="ghost"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
 
-              {renderContentEditor(contentIndex)}
+              <div className="p-3">{renderContentEditor(contentIndex)}</div>
             </div>
           ))}
-
-          {!contents.length ? (
-            <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 py-8 text-center text-muted-foreground">
-              <p>No content added yet.</p>
-              <p className="text-sm">
-                Use the "Add Content" button above to add text, images, videos,
-                files, embeds, or sub-tasks.
-              </p>
-            </div>
-          ) : null}
         </div>
-      </div>
+      )}
     </div>
   );
 }

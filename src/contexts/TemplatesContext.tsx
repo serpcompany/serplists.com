@@ -256,7 +256,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await queryClient.invalidateQueries({ queryKey: ['templates'] });
       await queryClient.invalidateQueries({ queryKey: ['user-templates'] });
       await queryClient.invalidateQueries({ queryKey: ['runs'] });
-      toast.success("Template updated successfully - all related runs have been updated");
+      toast.success("Template updated successfully. Section and item changes are synced to existing runs.");
     },
     onError: (error: Error) => {
       toast.error(error.message);

@@ -1,174 +1,234 @@
-import { useState } from 'react';
-import { ArrowUpRight, Layers3, Sparkles } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import {
+  Grid3X3,
+  List,
+  PlusCircle,
+  Search,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
-import { TemplateBackup } from '@/components/TemplateBackup';
-import { UserTemplatesSection } from '@/components/templates/UserTemplatesSection';
-import { RunNameDialog } from '@/components/ui/run-name-dialog';
-import { useAuth } from '@/contexts/CloudflareAuthContext';
-import { useTemplates } from '@/contexts/TemplatesContext';
+import { Button } from '@/components/ui/button';
 import {
-  buildConsoleRunPath,
-  buildConsoleTemplateCreatePath,
-  buildConsoleTemplatePath,
-  buildPublicTemplatesPath,
-} from '@/lib/routes';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useDashboardTemplatesModel } from '@/features/dashboard-templates/useDashboardTemplatesModel';
+import { TemplateCard } from '@/components/dashboard/TemplateCard';
 
 const Templates = () => {
-  const { allTemplates, templatesLoading, createRun, deleteTemplate } =
-    useTemplates();
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState<{
-    title: string;
-  } | null>(null);
-  const [isCreatingRun, setIsCreatingRun] = useState(false);
+  const model = useDashboardTemplatesModel();
+  const [runName, setRunName] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState('most-recent');
 
-  const userTemplates = allTemplates.filter(
-    (template) => template.userId === user?.id,
-  );
-  const totalTemplateItems = userTemplates.reduce(
-    (total, template) =>
-      total +
-      template.sections.reduce(
-        (sectionTotal, section) => sectionTotal + section.items.length,
-        0,
-      ),
-    0,
-  );
+  const defaultRunName = model.selectedTemplate
+    ? `${model.selectedTemplate.title} - ${new Date().toLocaleString()}`
+    : '';
 
-  const handleCreateTemplate = () => {
-    navigate(buildConsoleTemplateCreatePath());
-  };
+  const filteredTemplates = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const nextTemplates = normalizedQuery
+      ? model.templates.filter((template) =>
+          [template.title, template.description, ...(template.categories ?? [])]
+            .join(' ')
+            .toLowerCase()
+            .includes(normalizedQuery),
+        )
+      : model.templates.slice();
 
-  const handleBrowsePublicTemplates = () => {
-    navigate(buildPublicTemplatesPath());
-  };
+    if (sortOrder === 'a-z') {
+      nextTemplates.sort((left, right) => left.title.localeCompare(right.title));
+    }
 
-  const handleViewTemplate = (id: string) => {
-    navigate(buildConsoleTemplatePath(id));
-  };
+    return nextTemplates;
+  }, [model.templates, searchQuery, sortOrder]);
 
-  const handleStartRun = (templateId: string) => {
-    const template = allTemplates.find((item) => item.id === templateId);
-    if (!template) {
+  const handleRunDialogChange = (open: boolean) => {
+    if (open) {
       return;
     }
 
-    setSelectedTemplateId(templateId);
-    setSelectedTemplate({ title: template.title });
-    setDialogOpen(true);
+    setRunName('');
+    model.closeRunLauncher();
+  };
+
+  const handleRunSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const result = await model.createRunFromTemplate(runName.trim() || undefined);
+
+    if (result.kind === 'error') {
+      toast.error(result.message);
+      return;
+    }
+
+    setRunName('');
   };
 
   const handleDeleteTemplate = async (templateId: string) => {
     try {
-      await deleteTemplate(templateId);
-      toast.success('Template deleted successfully');
+      await model.removeTemplate(templateId);
     } catch (error) {
-      console.error('Failed to delete template:', error);
-      toast.error('Failed to delete template');
-    }
-  };
-
-  const handleConfirmRun = async (runName: string) => {
-    setIsCreatingRun(true);
-    try {
-      const newRun = await createRun({
-        templateId: selectedTemplateId,
-        runName,
-      });
-
-      if (newRun) {
-        setDialogOpen(false);
-        navigate(buildConsoleRunPath(newRun.id));
-      }
-    } catch (error) {
-      console.error('Failed to create run:', error);
-      toast.error('Failed to create checklist run. Please try again.');
-    } finally {
-      setIsCreatingRun(false);
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to delete template.',
+      );
     }
   };
 
   return (
-    <div className="space-y-8">
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="console-card">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground">
-            <Sparkles className="h-4 w-4" />
-            Template operations
-          </div>
-          <h1 className="mt-6 text-4xl font-semibold text-foreground">
-            Your template inventory
-          </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-foreground">
-            Create private templates, clone public packs into your workspace,
-            and launch new runs from the console.
-          </p>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-          <div className="marketing-metric">
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Templates
-            </div>
-            <div className="mt-4 text-3xl font-semibold text-foreground">
-              {userTemplates.length}
-            </div>
-          </div>
-          <div className="marketing-metric">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              <Layers3 className="h-4 w-4" />
-              Documented items
-            </div>
-            <div className="mt-4 text-3xl font-semibold text-foreground">
-              {totalTemplateItems}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <UserTemplatesSection
-        title="My Templates"
-        description="Manage the template packs inside your private workspace."
-        templates={userTemplates}
-        loading={templatesLoading}
-        onCreateTemplate={handleCreateTemplate}
-        onBrowsePublicTemplates={handleBrowsePublicTemplates}
-        onViewTemplate={handleViewTemplate}
-        onDeleteTemplate={handleDeleteTemplate}
-        onStartRun={handleStartRun}
-      />
-
-      <div className="console-card">
-        <div className="mb-4 flex items-center justify-between gap-4">
+    <div className="min-h-full">
+      <div className="border-b border-border px-6 py-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold text-foreground">
-              Portable import and export
-            </h2>
-            <p className="mt-2 text-sm leading-7 text-muted-foreground">
-              Move template packs between environments or bootstrap your
-              workspace from a known sample.
+            <h1 className="text-4xl font-semibold text-foreground">
+              My Templates
+            </h1>
+            <p className="text-muted-foreground">
+              {filteredTemplates.length} templates in your library
             </p>
           </div>
-          <div className="hidden rounded-full border border-border bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground sm:flex sm:items-center sm:gap-2">
-            JSON packs
-            <ArrowUpRight className="h-4 w-4" />
-          </div>
+          <Button
+            type="button"
+            onClick={model.openCreateTemplate}
+            className="rounded-md"
+          >
+            <PlusCircle className="mr-2 h-4 w-4" />
+            New Template
+          </Button>
         </div>
-        <TemplateBackup />
       </div>
 
-      <RunNameDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        templateTitle={selectedTemplate?.title || ''}
-        onConfirm={handleConfirmRun}
-        loading={isCreatingRun}
-      />
+      <div className="space-y-6 px-6 py-4">
+        <div className="flex flex-col gap-3 xl:flex-row">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search templates..."
+              className="h-10 rounded-md border-border bg-card pl-11"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 justify-between rounded-md border-border bg-card xl:w-[130px]"
+          >
+            All
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              setSortOrder((current) =>
+                current === 'most-recent' ? 'a-z' : 'most-recent',
+              )
+            }
+            className="h-10 justify-between rounded-md border-border bg-card xl:w-[150px]"
+          >
+            {sortOrder === 'most-recent' ? 'Most Recent' : 'A-Z'}
+          </Button>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="icon" className="rounded-md border-border bg-card">
+              <Grid3X3 className="h-4 w-4" />
+            </Button>
+            <Button type="button" variant="outline" size="icon" className="rounded-md border-border bg-card">
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {model.loading ? (
+          <div className="text-sm text-muted-foreground">Loading templates...</div>
+        ) : filteredTemplates.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border px-6 py-10 text-sm text-muted-foreground">
+            No templates matched this view.
+          </div>
+        ) : (
+          <div className="grid gap-5 xl:grid-cols-4 lg:grid-cols-3 md:grid-cols-2">
+            {filteredTemplates.map((template) => (
+              <TemplateCard
+                key={template.id}
+                onDelete={() => void handleDeleteTemplate(template.id)}
+                onStartRun={model.openRunLauncher}
+                template={template}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <Dialog open={model.runLauncherOpen} onOpenChange={handleRunDialogChange}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Start Run</DialogTitle>
+            <DialogDescription>
+              Pick one of your templates and launch a new run.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleRunSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Select
+                value={model.selectedTemplateId}
+                onValueChange={model.selectRunTemplate}
+              >
+                <SelectTrigger id="run-template" className="rounded-md">
+                  <SelectValue placeholder="Select a template" />
+                </SelectTrigger>
+                <SelectContent>
+                  {model.templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Input
+                id="run-name"
+                value={runName}
+                onChange={(event) => setRunName(event.target.value)}
+                placeholder={defaultRunName}
+                className="rounded-md"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleRunDialogChange(false)}
+                disabled={model.isCreatingRun}
+                className="rounded-md"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!model.selectedTemplateId || model.isCreatingRun}
+                className="rounded-md"
+              >
+                {model.isCreatingRun ? 'Creating...' : 'Start Run'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -1,111 +1,107 @@
 import React from 'react';
-import { Filter, Grid, List, Search, X } from 'lucide-react';
+import { Clock, Star, TrendingUp } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { MultiSelect } from '@/components/ui/multi-select';
 import { cn } from '@/lib/utils';
+import type {
+  DiscoveryCategory,
+  DiscoverySort,
+} from '@/components/checklist-library/discovery-utils';
 
 interface SearchAndFiltersProps {
+  categories: DiscoveryCategory[];
+  onCategoryChange: (categorySlug: string | null) => void;
+  onSortChange: (sortBy: DiscoverySort) => void;
   resultCount: number;
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
-  viewMode: 'grid' | 'list';
-  setViewMode: (mode: 'grid' | 'list') => void;
-  allCategories: string[];
-  selectedCategories: string[];
-  setSelectedCategories: (categories: string[]) => void;
+  selectedCategorySlug: string | null;
+  sortBy: DiscoverySort;
 }
 
+const sortOptions: Array<{
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: DiscoverySort;
+}> = [
+  { icon: Star, label: 'Popular', value: 'popular' },
+  { icon: TrendingUp, label: 'Trending', value: 'trending' },
+  { icon: Clock, label: 'Recent', value: 'recent' },
+];
+
 export const SearchAndFilters: React.FC<SearchAndFiltersProps> = ({
+  categories,
+  onCategoryChange,
+  onSortChange,
   resultCount,
-  searchQuery,
-  setSearchQuery,
-  viewMode,
-  setViewMode,
-  allCategories,
-  selectedCategories,
-  setSelectedCategories,
+  selectedCategorySlug,
+  sortBy,
 }) => {
   return (
-    <div className="mb-8 overflow-hidden rounded-xl border border-border/80 bg-card/96 p-4 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.12)] sm:p-5">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="relative flex-1 min-w-0">
-          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            aria-label="Search templates"
-            placeholder="Search template packs, workflows, and process templates..."
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            className="h-11 rounded-lg border-border bg-background pl-11 text-sm shadow-none"
-          />
-        </div>
+    <section className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+        <p className="font-medium text-foreground">{resultCount} templates</p>
 
-        <div className="flex flex-wrap items-center gap-3 xl:justify-end">
-          <div className="text-sm text-muted-foreground">
-            <span className="font-semibold text-foreground">{resultCount}</span>{' '}
-            {resultCount === 1 ? 'result' : 'results'}
-          </div>
+        <div className="flex items-center gap-1">
+          {sortOptions.map((option) => {
+            const Icon = option.icon;
+            const isActive = sortBy === option.value;
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setViewMode('grid')}
-            className={cn(
-              'rounded-full border border-border/80 bg-background px-3',
-              viewMode === 'grid' &&
-                'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground',
-            )}
-          >
-            <Grid className="mr-2 h-4 w-4" />
-            Grid
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setViewMode('list')}
-            className={cn(
-              'rounded-full border border-border/80 bg-background px-3',
-              viewMode === 'list' &&
-                'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground',
-            )}
-          >
-            <List className="mr-2 h-4 w-4" />
-            List
-          </Button>
+            return (
+              <Button
+                key={option.value}
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onSortChange(option.value)}
+                className={cn(
+                  'gap-1.5 rounded-md border border-transparent px-3 text-sm text-muted-foreground hover:border-border hover:bg-secondary/40 hover:text-foreground',
+                  isActive &&
+                    'border-border bg-secondary/60 text-foreground hover:bg-secondary/60',
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {option.label}
+              </Button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center">
-        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <Filter className="h-4 w-4" />
-          Filter categories
-        </div>
+      <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => onCategoryChange(null)}
+          className={cn(
+            'shrink-0 rounded-md border border-border/80 bg-secondary/20 px-4 text-sm text-muted-foreground hover:border-border hover:bg-secondary/40 hover:text-foreground',
+            selectedCategorySlug === null &&
+              'border-transparent bg-background text-foreground shadow-sm',
+          )}
+        >
+          All
+        </Button>
 
-        <div className="min-w-0 flex-1">
-          <MultiSelect
-            options={allCategories}
-            selected={selectedCategories}
-            onChange={setSelectedCategories}
-            placeholder="Select one or more categories…"
-            className="w-full"
-          />
-        </div>
+        {categories.map((category) => {
+          const isActive = selectedCategorySlug === category.slug;
 
-        {selectedCategories.length > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setSelectedCategories([])}
-            className="justify-start rounded-full border border-transparent px-3 text-muted-foreground hover:border-border/80 hover:bg-background hover:text-foreground"
-          >
-            <X className="mr-2 h-4 w-4" />
-            Clear filters
-          </Button>
-        ) : null}
+          return (
+            <Button
+              key={category.slug}
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onCategoryChange(category.slug)}
+              className={cn(
+                'shrink-0 rounded-md border border-border/80 bg-secondary/20 px-4 text-sm text-muted-foreground hover:border-border hover:bg-secondary/40 hover:text-foreground',
+                isActive &&
+                  'border-transparent bg-background text-foreground shadow-sm',
+              )}
+            >
+              {category.name}
+            </Button>
+          );
+        })}
       </div>
-    </div>
+    </section>
   );
 };

@@ -24,9 +24,19 @@ describe('DevLoginBar', () => {
     expect(html).toBe('');
   });
 
-  it('still renders on normal routes in development', () => {
+  it('stays hidden on authenticated dashboard routes used for design QA', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter initialEntries={['/dashboard']}>
+        <DevLoginBar />
+      </MemoryRouter>,
+    );
+
+    expect(html).toBe('');
+  });
+
+  it('still renders on the login route in development', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/login']}>
         <DevLoginBar />
       </MemoryRouter>,
     );

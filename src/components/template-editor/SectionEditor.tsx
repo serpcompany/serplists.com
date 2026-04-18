@@ -12,10 +12,12 @@ import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 interface SectionEditorProps {
   sectionIndex: number;
+  showIntro?: boolean;
 }
 
 export function SectionEditor({
   sectionIndex,
+  showIntro = true,
 }: SectionEditorProps): JSX.Element {
   const { control } = useFormContext<TemplateEditorFormValues>();
   const section = useWatch({
@@ -25,13 +27,15 @@ export function SectionEditor({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold">Section details</h3>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Keep section names short enough that the outline reads like a clean
-          table of contents.
-        </p>
-      </div>
+      {showIntro ? (
+        <div>
+          <h3 className="text-lg font-semibold">Section details</h3>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Keep section names short enough that the outline reads like a clean
+            table of contents.
+          </p>
+        </div>
+      ) : null}
 
       <FormField
         control={control}

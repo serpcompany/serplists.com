@@ -41,12 +41,11 @@ const buildDependencies = (
     title: title.trim(),
     sections,
   })),
-  navigateToTemplates: vi.fn(),
   ...overrides,
 });
 
 describe("persistTemplateSave", () => {
-  it("waits for create success before navigating", async () => {
+  it("returns success after create without owning navigation", async () => {
     let createResolved = false;
     const dependencies = buildDependencies({
       createTemplate: vi.fn().mockImplementation(async () => {
@@ -66,7 +65,6 @@ describe("persistTemplateSave", () => {
       }),
     );
     expect(createResolved).toBe(true);
-    expect(dependencies.navigateToTemplates).toHaveBeenCalledTimes(1);
   });
 
   it("waits for update success and preserves rules from the cached template", async () => {
@@ -96,10 +94,9 @@ describe("persistTemplateSave", () => {
         rules: [{ id: "rule-1", type: "required", path: "sections.0" }],
       }),
     );
-    expect(dependencies.navigateToTemplates).not.toHaveBeenCalled();
   });
 
-  it("returns failure and does not navigate when create rejects", async () => {
+  it("returns failure when create rejects", async () => {
     const dependencies = buildDependencies({
       createTemplate: vi.fn().mockRejectedValue(new Error("create failed")),
     });
@@ -110,10 +107,9 @@ describe("persistTemplateSave", () => {
       success: false,
       errors: [{ type: "save", message: "create failed" }],
     });
-    expect(dependencies.navigateToTemplates).not.toHaveBeenCalled();
   });
 
-  it("returns failure and does not navigate when update rejects", async () => {
+  it("returns failure when update rejects", async () => {
     const dependencies = buildDependencies({
       updateTemplate: vi.fn().mockRejectedValue(new Error("update failed")),
     });
@@ -127,6 +123,5 @@ describe("persistTemplateSave", () => {
       success: false,
       errors: [{ type: "save", message: "update failed" }],
     });
-    expect(dependencies.navigateToTemplates).not.toHaveBeenCalled();
   });
 });

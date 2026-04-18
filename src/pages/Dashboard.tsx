@@ -16,6 +16,7 @@ import {
 import { toast } from 'sonner';
 
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
 import { UserTemplatesSection } from '@/components/templates/UserTemplatesSection';
 import { Button } from '@/components/ui/button';
 import {
@@ -98,6 +99,16 @@ const Dashboard = () => {
         )
       : 0;
 
+  if (isRunsRoute) {
+    return (
+      <RunsDashboardView
+        runs={runs}
+        onDeleteRun={deleteRun}
+        loading={runsLoading}
+      />
+    );
+  }
+
   const handleDeleteRun = () => {
     if (!runToDelete) {
       return;
@@ -138,10 +149,7 @@ const Dashboard = () => {
     const isCompleted = tone === 'completed';
 
     return (
-      <div
-        key={run.id}
-        className="rounded-xl border border-border/80 bg-card/96 p-5"
-      >
+      <div key={run.id} className="border border-border bg-card p-5">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -171,13 +179,12 @@ const Dashboard = () => {
                       }
                     }}
                     autoFocus
-                    className="rounded-2xl"
                   />
                   <div className="flex gap-2">
                     <Button
                       type="button"
                       onClick={() => handleTitleSave(run.id)}
-                      className="rounded-2xl"
+                      className="rounded-md"
                     >
                       Save
                     </Button>
@@ -188,7 +195,7 @@ const Dashboard = () => {
                         setEditingRunId(null);
                         setEditTitle('');
                       }}
-                      className="rounded-2xl"
+                      className="rounded-md"
                     >
                       Cancel
                     </Button>
@@ -244,12 +251,12 @@ const Dashboard = () => {
                 setRunToDelete(run.id);
                 setIsDeleteDialogOpen(true);
               }}
-              className="rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="rounded-md text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
             </Button>
-            <Button asChild className="rounded-xl">
+            <Button asChild className="rounded-md">
               <Link to={buildConsoleRunPath(run.id)}>
                 {isCompleted ? 'View details' : 'Continue'}
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -264,8 +271,8 @@ const Dashboard = () => {
   return (
     <div className="space-y-8">
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="console-card">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground">
+        <div className="border-b border-border pb-6">
+          <div className="inline-flex items-center gap-2 rounded-md border border-border bg-secondary px-3 py-1.5 text-sm font-medium text-secondary-foreground">
             <CheckCircle2 className="h-4 w-4" />
             {isRunsRoute ? 'Run management' : 'Operational home'}
           </div>
@@ -282,7 +289,7 @@ const Dashboard = () => {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
-          <div className="marketing-metric">
+          <div className="border bg-card p-5">
             <div className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               Active runs
             </div>
@@ -290,7 +297,7 @@ const Dashboard = () => {
               {activeRuns.length}
             </div>
           </div>
-          <div className="marketing-metric">
+          <div className="border bg-card p-5">
             <div className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               Completed runs
             </div>
@@ -298,7 +305,7 @@ const Dashboard = () => {
               {completedRuns.length}
             </div>
           </div>
-          <div className="marketing-metric">
+          <div className="border bg-card p-5">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               <Layers3 className="h-4 w-4" />
               Avg progress
@@ -311,13 +318,13 @@ const Dashboard = () => {
       </section>
 
       <div className="flex flex-wrap gap-3">
-        <Button asChild className="rounded-xl">
+        <Button asChild className="rounded-md">
           <Link to={buildConsoleTemplateCreatePath()}>
             <PlusCircle className="mr-2 h-4 w-4" />
             New template
           </Link>
         </Button>
-        <Button asChild variant="outline" className="rounded-2xl">
+        <Button asChild variant="outline" className="rounded-md">
           <Link to={buildConsoleTemplatesPath()}>
             <Play className="mr-2 h-4 w-4" />
             Start a new run
@@ -333,7 +340,7 @@ const Dashboard = () => {
         </div>
 
         {runsLoading ? (
-          <div className="console-card">
+          <div className="border bg-card p-6">
             <LoadingSpinner message="Loading runs..." />
           </div>
         ) : activeRuns.length > 0 ? (
@@ -341,14 +348,14 @@ const Dashboard = () => {
             {activeRuns.map((run) => renderRunCard(run, 'active'))}
           </div>
         ) : (
-          <div className="console-card text-center">
+          <div className="border bg-card p-6 text-center">
             <h3 className="text-xl font-semibold text-foreground">
               No active runs
             </h3>
             <p className="mt-3 text-sm leading-7 text-muted-foreground">
               Start a run from one of your templates and it will appear here.
             </p>
-            <Button asChild variant="outline" className="mt-6 rounded-xl">
+            <Button asChild variant="outline" className="mt-6 rounded-md">
               <Link to={buildConsoleTemplatesPath()}>Open templates</Link>
             </Button>
           </div>
@@ -360,7 +367,7 @@ const Dashboard = () => {
           Completed runs
         </h2>
         {runsLoading ? (
-          <div className="console-card">
+          <div className="border bg-card p-6">
             <LoadingSpinner message="Loading completed runs..." />
           </div>
         ) : completedRuns.length > 0 ? (
@@ -368,7 +375,7 @@ const Dashboard = () => {
             {completedRuns.map((run) => renderRunCard(run, 'completed'))}
           </div>
         ) : (
-          <div className="console-card text-center">
+          <div className="border bg-card p-6 text-center">
             <h3 className="text-xl font-semibold text-foreground">
               No completed runs yet
             </h3>

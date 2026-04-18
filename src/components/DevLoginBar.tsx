@@ -13,6 +13,7 @@ import {
 import {
   buildConsoleHomePath,
   isBlankTemplateEditorRoute,
+  isPublicTemplatesDiscoveryPath,
 } from '@/lib/routes';
 import { toast } from 'sonner';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -32,6 +33,21 @@ export function DevLoginBar(): JSX.Element | null {
   if (!import.meta.env.DEV) return null;
 
   if (isBlankTemplateEditorRoute(location.pathname)) {
+    return null;
+  }
+
+  if (isPublicTemplatesDiscoveryPath(location.pathname)) {
+    return null;
+  }
+
+  if (
+    location.pathname.startsWith('/profile/') ||
+    location.pathname.startsWith('/run/')
+  ) {
+    return null;
+  }
+
+  if (location.pathname.startsWith(buildConsoleHomePath())) {
     return null;
   }
 

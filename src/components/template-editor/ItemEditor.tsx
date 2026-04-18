@@ -15,23 +15,27 @@ import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 interface ItemEditorProps {
   itemIndex: number;
   sectionIndex: number;
+  showIntro?: boolean;
 }
 
 export function ItemEditor({
   itemIndex,
   sectionIndex,
+  showIntro = true,
 }: ItemEditorProps): JSX.Element {
   const { control } = useFormContext<TemplateEditorFormValues>();
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold">Task details</h3>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Write the task like a docs step. The title should be scannable and the
-          body should explain the exact action to take.
-        </p>
-      </div>
+      {showIntro ? (
+        <div>
+          <h3 className="text-lg font-semibold">Task details</h3>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Write the task like a docs step. The title should be scannable and the
+            body should explain the exact action to take.
+          </p>
+        </div>
+      ) : null}
 
       <div className="space-y-4">
         <FormField

@@ -4,66 +4,97 @@
 
 @layer base {
   :root {
-    --background: 210 33% 98%;
-    --foreground: 220 36% 15%;
-    --card: 0 0% 100%;
-    --card-foreground: 220 36% 15%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 36% 15%;
-    --primary: 221 48% 16%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 28% 95.5%;
-    --secondary-foreground: 220 36% 15%;
-    --muted: 210 25% 96.5%;
-    --muted-foreground: 217 15% 42%;
-    --accent: 210 25% 96.5%;
-    --accent-foreground: 220 36% 15%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214 23% 88%;
-    --input: 214 23% 88%;
-    --ring: 220 76% 56%;
-    --radius: 0.625rem;
+    /* Canonical v0-serplists-com-v0-design theme, dark by default */
+    --background: oklch(0.098 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.13 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.13 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.985 0 0);
+    --primary-foreground: oklch(0.098 0 0);
+    --secondary: oklch(0.2 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.2 0 0);
+    --muted-foreground: oklch(0.72 0 0);
+    --accent: oklch(0.2 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.65 0.25 25);
+    --destructive-foreground: oklch(0.985 0 0);
+    --border: oklch(0.35 0 0);
+    --input: oklch(0.35 0 0);
+    --ring: oklch(0.5 0 0);
+    --success: oklch(0.72 0.19 142);
+    --success-foreground: oklch(0.985 0 0);
+    --radius: 0.5rem;
+    --sidebar: oklch(0.13 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.985 0 0);
+    --sidebar-primary-foreground: oklch(0.098 0 0);
+    --sidebar-accent: oklch(0.2 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(0.35 0 0);
+    --sidebar-ring: oklch(0.5 0 0);
     --layout-shell-max: 80rem;
     --layout-content-max: 72.5rem;
     --layout-narrow-max: 56rem;
     --layout-wide-max: 90rem;
     --layout-docs-max: 64rem;
-    --shadow-panel-soft: 0 14px 32px -30px rgba(15, 23, 42, 0.12);
-    --shadow-panel-quiet: 0 18px 40px -34px rgba(15, 23, 42, 0.12);
-    --shadow-panel-strong: 0 18px 40px -34px rgba(15, 23, 42, 0.14);
   }
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+  .light {
+    --background: oklch(0.995 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.965 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.965 0 0);
+    --muted-foreground: oklch(0.45 0 0);
+    --accent: oklch(0.965 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --destructive-foreground: oklch(0.985 0 0);
+    --border: oklch(0.885 0 0);
+    --input: oklch(0.885 0 0);
+    --ring: oklch(0.708 0 0);
+    --success: oklch(0.55 0.2 142);
+    --success-foreground: oklch(0.985 0 0);
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.965 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.885 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
 
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
+    font-family:
+      'Geist',
+      'Inter',
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      sans-serif;
     text-rendering: optimizeLegibility;
   }
 }
@@ -71,35 +102,37 @@
 @layer components {
   .public-dot-grid {
     background-image: radial-gradient(
-      hsl(var(--foreground) / 0.06) 1px,
+      color-mix(in oklab, var(--foreground) 7%, transparent) 1px,
       transparent 1px
     );
     background-size: 18px 18px;
     background-position: center top;
   }
 
-  .glass-panel {
-    @apply rounded-[calc(var(--radius)+0.25rem)] border border-border/80 backdrop-blur;
-    background-color: hsl(var(--card) / 0.94);
-    box-shadow: none;
+  /* These old utility names remain as compatibility aliases, but they now
+     inherit the v0 visual language instead of the older boxed card system. */
+  .glass-panel,
+  .marketing-metric,
+  .console-card,
+  .docs-panel,
+  .section-card,
+  .template-card {
+    @apply border bg-card text-card-foreground shadow-none;
+    border-radius: var(--radius);
   }
 
   .marketing-metric {
-    @apply rounded-[calc(var(--radius)+0.25rem)] border border-border/80 p-5;
-    background-color: hsl(var(--card));
-    box-shadow: none;
+    @apply p-5;
   }
 
-  .console-card {
-    @apply rounded-[calc(var(--radius)+0.25rem)] border border-border/80 p-6;
-    background-color: hsl(var(--card) / 0.94);
-    box-shadow: var(--shadow-panel-strong);
+  .console-card,
+  .docs-panel,
+  .template-card {
+    @apply p-6;
   }
 
-  .docs-panel {
-    @apply rounded-[calc(var(--radius)+0.25rem)] border border-border/80;
-    background-color: hsl(var(--card) / 0.96);
-    box-shadow: none;
+  .section-card {
+    @apply p-4;
   }
 }
 
@@ -108,11 +141,11 @@
 }
 
 .progress-bar {
-  @apply h-2 rounded-full bg-muted;
+  @apply h-2 rounded-full bg-secondary;
 }
 
 .progress-bar-fill {
-  @apply h-full rounded-full bg-primary transition-all duration-300 ease-in-out;
+  @apply h-full rounded-full bg-success transition-all duration-300 ease-in-out;
 }
 
 @keyframes fade-in {
@@ -131,16 +164,11 @@
   animation: fade-in 0.3s ease-out forwards;
 }
 
-.section-card {
-  @apply mb-4 rounded-[calc(var(--radius)+0.25rem)] border border-border/80 bg-card p-4 transition-shadow hover:shadow-[0_12px_32px_-24px_rgba(15,23,42,0.16)];
-  box-shadow: var(--shadow-panel-soft);
-}
-
-.template-card {
-  @apply mb-4 rounded-[calc(var(--radius)+0.25rem)] border border-border/80 bg-card p-6 transition-shadow hover:shadow-[0_12px_32px_-24px_rgba(15,23,42,0.16)];
-  box-shadow: var(--shadow-panel-soft);
-}
-
 .checklist-item {
-  @apply flex items-start gap-3 border-b border-border/70 p-3 last:border-0 transition-colors hover:bg-muted/40;
+  @apply flex items-start gap-3 border-b p-3 transition-colors last:border-0;
+  border-color: color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.checklist-item:hover {
+  background-color: color-mix(in oklab, var(--muted) 30%, transparent);
 }

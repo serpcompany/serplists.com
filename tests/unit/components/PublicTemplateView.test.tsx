@@ -37,7 +37,7 @@ const template: ChecklistTemplate = {
 };
 
 describe('PublicTemplateView', () => {
-  it('starts checklist content without the extra overview framing bands', () => {
+  it('renders the v0-style public template detail surface', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <PublicTemplateView
@@ -56,17 +56,14 @@ describe('PublicTemplateView', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('On this page');
-    expect(html).toContain('Template details');
-    expect(html).toContain('Start checklist');
-    expect(html).toContain('Log in to copy template');
-    expect(html).toContain('text-3xl');
-    expect(html).toContain('text-base');
-    expect(html).not.toContain('Checklist preview');
-    expect(html).not.toContain('Overview');
-    expect(html).not.toContain('Action rail');
-    expect(html).not.toContain('At a glance');
-    expect(html).not.toContain('Template walkthrough');
-    expect(html).not.toContain('sm:text-5xl');
+    expect(html).toContain('What&#x27;s included');
+    expect(html).toContain('Ready to use this template?');
+    expect(html).toContain('Start Run');
+    expect(html).toContain('Save');
+    expect(html).toContain('Share');
+    expect(html).toContain('Sections');
+    expect(html).toContain('Minutes Est.');
+    expect(html).not.toContain('On this page');
+    expect(html).not.toContain('Template details');
   });
 });

@@ -50,7 +50,13 @@ describe('Layout console shell', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Search templates');
+    expect(html).toContain('New Template');
+    expect(html).toContain('My Templates');
+    expect(html).toContain('My Runs');
+    expect(html).toContain('Discover');
+    expect(html).toContain('/dashboard/settings');
+    expect(html).toContain('Import Template');
+    expect(html).not.toContain('Dashboard');
     expect(html).not.toContain('Operate your checklist system');
   });
 
@@ -70,7 +76,7 @@ describe('Layout console shell', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Checklists');
+    expect(html).toContain('Build repeatable checklists');
     expect(html).not.toContain('Explore');
     expect(html).not.toContain('Outside the app');
     expect(html).toContain('Company');
