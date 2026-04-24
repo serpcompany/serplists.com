@@ -274,10 +274,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       queryClient.invalidateQueries({ queryKey: ['templates'] });
       queryClient.invalidateQueries({ queryKey: ['user-templates'] });
       queryClient.invalidateQueries({ queryKey: ['runs'] });
-      toast.success("Template deleted successfully");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
     }
   });
 
@@ -366,9 +362,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['runs'] });
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
     }
   });
 
@@ -381,13 +374,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['runs'] });
-      toast.success("Checklist run deleted successfully");
-    },
-    onError: (error: Error) => {
-      console.error('Delete run error:', error);
-      toast.error(error.message === 'Checklist not found or unauthorized' 
-        ? 'Unable to delete this checklist. It may have already been deleted.'
-        : `Failed to delete checklist: ${error.message}`);
     }
   });
 
@@ -474,10 +460,14 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     getAllPublicTemplates,
     createTemplate: createTemplateMutation.mutateAsync,
     updateTemplate: updateTemplateMutation.mutateAsync,
-    deleteTemplate: deleteTemplateMutation.mutate,
+    deleteTemplate: async (id: string) => {
+      await deleteTemplateMutation.mutateAsync(id);
+    },
     createRun: createRunMutation.mutateAsync,
-    updateRun: updateRunMutation.mutate,
-    deleteRun: deleteRunMutation.mutate,
+    updateRun: updateRunMutation.mutateAsync,
+    deleteRun: async (id: string) => {
+      await deleteRunMutation.mutateAsync(id);
+    },
     importTemplates: importTemplatesWrapper,
   };
 

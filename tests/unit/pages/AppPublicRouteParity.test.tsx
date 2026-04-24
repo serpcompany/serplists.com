@@ -1,4 +1,5 @@
 import React from 'react';
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -60,6 +61,20 @@ vi.mock('@/components/RequireAuth', () => ({
   default: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+vi.mock('@/lib/analytics', () => ({
+  analytics: {
+    getEvents: vi.fn(() => []),
+    setEnabled: vi.fn(),
+    track: vi.fn(),
+    trackError: vi.fn(),
+    trackPageView: vi.fn(),
+    trackTemplateComplete: vi.fn(),
+    trackTemplateRun: vi.fn(),
+    trackTemplateView: vi.fn(),
+    trackUser: vi.fn(),
+  },
+}));
+
 import App from '@/App';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -107,17 +122,30 @@ const renderAppAt = (pathname: string) => {
 };
 
 describe('App public route parity', () => {
-  it('renders / as a standalone v0 page with both Design Docs actions pointing to /docs', () => {
+  it('renders / inside the public marketing shell with the product workflow homepage', () => {
     const html = renderAppAt('/');
 
-    expect(html).toContain('Checklist Product Prototype');
-    expect(html).toContain('href="/docs"');
-    expect((html.match(/href="\/docs"/g) ?? []).length).toBe(2);
-    expect(html).not.toContain('data-app-shell="public"');
+    expect(html).toContain('Build the checklist once. Run it every time.');
+    expect(html).toContain('Template library');
+    expect(html).toContain('Live run workspace');
+    expect(html).toContain('Shareable proof');
+    expect(html).toContain('data-app-shell="public"');
+    expect(html).toContain('href="/templates"');
+    expect(html).toContain('href="/features"');
+    expect(html).toContain('href="/pricing"');
+    expect(html).not.toContain('Checklist Product Prototype');
+  });
+
+  it('renders /docs inside the shared public shell instead of a standalone prototype header', () => {
+    const html = renderAppAt('/docs');
+
+    expect(html).toContain('Checklist &amp; Template Experience');
+    expect(html).toContain('data-app-shell="public"');
+    expect(html).not.toContain('Checklist Product Prototype');
     expect((html.match(/<header/g) ?? []).length).toBe(1);
   });
 
-  it('renders /templates outside the generic public shell with one discovery header and v0 card href semantics', () => {
+  it('renders /templates outside the generic public shell with one discovery header and detail-card href semantics', () => {
     const html = renderAppAt('/templates');
 
     expect(html).toContain('Discover Templates');
@@ -125,7 +153,7 @@ describe('App public route parity', () => {
     expect(html).toContain('href="/dashboard/templates"');
     expect(html).toContain('href="/dashboard/templates/new"');
     expect(html).toContain('href="/profile/designops/website-launch-checklist"');
-    expect(html).toContain('href="/run/website-launch"');
+    expect(html).not.toContain('href="/run/website-launch"');
     expect(html).not.toContain('data-app-shell="public"');
     expect(html).not.toContain('<footer');
     expect((html.match(/<header/g) ?? []).length).toBe(1);
@@ -151,5 +179,33 @@ describe('App public route parity', () => {
     expect(html).not.toContain('data-app-shell="public"');
     expect(html).not.toContain('<footer');
     expect((html.match(/<header/g) ?? []).length).toBe(1);
+  });
+
+  it('keeps private /run/:id in the authenticated dashboard layout and shared runs public', () => {
+    const appSource = readFileSync(
+      new URL('../../../src/App.tsx', import.meta.url),
+      'utf8',
+    );
+    const publicLayoutBranch = appSource.match(
+      /<Route element={<Layout \/>}>([\s\S]*?)<\/Route>/,
+    );
+    const privateLayoutBranch = appSource.match(
+      /<Route\s+element=\{\s*<RequireAuth>[\s\S]*?<Layout \/>[\s\S]*?<\/RequireAuth>\s*\}\s*>([\s\S]*?)<\/Route>/,
+    );
+
+    expect(privateLayoutBranch?.[1]).toContain('path="/run/:id"');
+    expect(privateLayoutBranch?.[1]).toContain('path="/dashboard/runs/:id"');
+    expect(publicLayoutBranch?.[1]).not.toContain('path="/run/:id"');
+    expect(appSource).toContain('path="/share/:shareToken"');
+  });
+
+  it('does not force dark mode globally because light mode is the default', () => {
+    const appSource = readFileSync(
+      new URL('../../../src/App.tsx', import.meta.url),
+      'utf8',
+    );
+
+    expect(appSource).not.toContain("classList.add('dark')");
+    expect(appSource).not.toContain('classList.add("dark")');
   });
 });

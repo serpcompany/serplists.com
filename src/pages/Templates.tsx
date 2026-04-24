@@ -1,12 +1,24 @@
 import { useMemo, useState } from 'react';
 import {
+  ArrowUpRight,
   Grid3X3,
   List,
-  PlusCircle,
+  Plus,
   Search,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { TemplateBackup } from '@/components/TemplateBackup';
+import { TemplateCard } from '@/components/dashboard/TemplateCard';
+import { TemplateListItem } from '@/components/dashboard/TemplateListItem';
+import {
+  DashboardContentShell,
+  DashboardEmptyState,
+  DashboardPageHeader,
+  DashboardScrollArea,
+  DashboardToolbar,
+} from '@/components/dashboard/DashboardContentShell';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -25,13 +37,21 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useDashboardTemplatesModel } from '@/features/dashboard-templates/useDashboardTemplatesModel';
-import { TemplateCard } from '@/components/dashboard/TemplateCard';
+
+type ViewMode = 'grid' | 'list';
+type SortOption = 'recent' | 'alphabetical' | 'tasks';
+type VisibilityFilter = 'all' | 'public' | 'private';
 
 const Templates = () => {
   const model = useDashboardTemplatesModel();
   const [runName, setRunName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortOrder, setSortOrder] = useState('most-recent');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [sortBy, setSortBy] = useState<SortOption>('recent');
+  const [filterVisibility, setFilterVisibility] =
+    useState<VisibilityFilter>('all');
+  const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
+  const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
 
   const defaultRunName = model.selectedTemplate
     ? `${model.selectedTemplate.title} - ${new Date().toLocaleString()}`
@@ -39,21 +59,45 @@ const Templates = () => {
 
   const filteredTemplates = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    const nextTemplates = normalizedQuery
-      ? model.templates.filter((template) =>
+
+    return model.templates
+      .filter((template) => {
+        const matchesSearch =
+          normalizedQuery.length === 0 ||
           [template.title, template.description, ...(template.categories ?? [])]
             .join(' ')
             .toLowerCase()
-            .includes(normalizedQuery),
-        )
-      : model.templates.slice();
+            .includes(normalizedQuery);
+        const matchesVisibility =
+          filterVisibility === 'all' ||
+          (filterVisibility === 'public' && template.isPublic) ||
+          (filterVisibility === 'private' && !template.isPublic);
 
-    if (sortOrder === 'a-z') {
-      nextTemplates.sort((left, right) => left.title.localeCompare(right.title));
-    }
+        return matchesSearch && matchesVisibility;
+      })
+      .sort((left, right) => {
+        if (sortBy === 'alphabetical') {
+          return left.title.localeCompare(right.title);
+        }
 
-    return nextTemplates;
-  }, [model.templates, searchQuery, sortOrder]);
+        if (sortBy === 'tasks') {
+          const leftTasks = left.sections.reduce(
+            (count, section) => count + section.items.length,
+            0,
+          );
+          const rightTasks = right.sections.reduce(
+            (count, section) => count + section.items.length,
+            0,
+          );
+
+          return rightTasks - leftTasks;
+        }
+
+        return (
+          new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+        );
+      });
+  }, [filterVisibility, model.templates, searchQuery, sortBy]);
 
   const handleRunDialogChange = (open: boolean) => {
     if (open) {
@@ -77,98 +121,176 @@ const Templates = () => {
     setRunName('');
   };
 
-  const handleDeleteTemplate = async (templateId: string) => {
+  const handleDeleteTemplate = async () => {
+    if (!templateToDelete) {
+      return;
+    }
+
+    setIsDeletingTemplate(true);
     try {
-      await model.removeTemplate(templateId);
+      await model.removeTemplate(templateToDelete);
+      toast.success('Template deleted');
+      setTemplateToDelete(null);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : 'Failed to delete template.',
       );
+    } finally {
+      setIsDeletingTemplate(false);
     }
   };
 
   return (
-    <div className="min-h-full">
-      <div className="border-b border-border px-6 py-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h1 className="text-4xl font-semibold text-foreground">
-              My Templates
-            </h1>
-            <p className="text-muted-foreground">
-              {filteredTemplates.length} templates in your library
-            </p>
-          </div>
+    <DashboardContentShell>
+      <DashboardPageHeader
+        title="My Templates"
+        description={`${model.templates.length} templates in your library`}
+        actions={
+        <Button type="button" onClick={model.openCreateTemplate}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Template
+        </Button>
+        }
+      />
+
+      <DashboardToolbar>
+        <div className="relative flex-1 lg:max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search templates..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="pl-9"
+          />
+        </div>
+
+        <Select
+          value={filterVisibility}
+          onValueChange={(value) => setFilterVisibility(value as VisibilityFilter)}
+        >
+          <SelectTrigger className="w-full lg:w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="public">Public</SelectItem>
+            <SelectItem value="private">Private</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={sortBy}
+          onValueChange={(value) => setSortBy(value as SortOption)}
+        >
+          <SelectTrigger className="w-full lg:w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="recent">Most Recent</SelectItem>
+            <SelectItem value="alphabetical">Alphabetical</SelectItem>
+            <SelectItem value="tasks">Most Tasks</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <div className="flex items-center rounded-md border border-border">
           <Button
+            aria-label="Show templates in grid view"
+            aria-pressed={viewMode === 'grid'}
             type="button"
-            onClick={model.openCreateTemplate}
-            className="rounded-md"
+            variant="ghost"
+            size="icon"
+            className={`h-8 w-8 rounded-none rounded-l-md ${
+              viewMode === 'grid' ? 'bg-secondary' : ''
+            }`}
+            onClick={() => setViewMode('grid')}
           >
-            <PlusCircle className="mr-2 h-4 w-4" />
-            New Template
+            <Grid3X3 className="h-4 w-4" />
+          </Button>
+          <Button
+            aria-label="Show templates in list view"
+            aria-pressed={viewMode === 'list'}
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={`h-8 w-8 rounded-none rounded-r-md ${
+              viewMode === 'list' ? 'bg-secondary' : ''
+            }`}
+            onClick={() => setViewMode('list')}
+          >
+            <List className="h-4 w-4" />
           </Button>
         </div>
-      </div>
+      </DashboardToolbar>
 
-      <div className="space-y-6 px-6 py-4">
-        <div className="flex flex-col gap-3 xl:flex-row">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search templates..."
-              className="h-10 rounded-md border-border bg-card pl-11"
+      <DashboardScrollArea>
+        <div className="space-y-8">
+          {model.loading ? (
+            <div className="text-sm text-muted-foreground">Loading templates...</div>
+          ) : filteredTemplates.length === 0 ? (
+            <DashboardEmptyState
+              icon={<SlidersHorizontal className="h-7 w-7" />}
+              title="No templates found"
+              description={
+                searchQuery || filterVisibility !== 'all'
+                  ? 'Try adjusting your search or filters'
+                  : 'Create your first template to get started'
+              }
+              action={
+                !searchQuery && filterVisibility === 'all' ? (
+                <Button type="button" onClick={model.openCreateTemplate}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Template
+                </Button>
+                ) : null
+              }
             />
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 justify-between rounded-md border-border bg-card xl:w-[130px]"
-          >
-            All
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              setSortOrder((current) =>
-                current === 'most-recent' ? 'a-z' : 'most-recent',
-              )
-            }
-            className="h-10 justify-between rounded-md border-border bg-card xl:w-[150px]"
-          >
-            {sortOrder === 'most-recent' ? 'Most Recent' : 'A-Z'}
-          </Button>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" size="icon" className="rounded-md border-border bg-card">
-              <Grid3X3 className="h-4 w-4" />
-            </Button>
-            <Button type="button" variant="outline" size="icon" className="rounded-md border-border bg-card">
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+          ) : viewMode === 'grid' ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredTemplates.map((template) => (
+                <TemplateCard
+                  key={template.id}
+                  onDelete={setTemplateToDelete}
+                  onStartRun={model.openRunLauncher}
+                  template={template}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredTemplates.map((template) => (
+                <TemplateListItem
+                  key={template.id}
+                  onDelete={setTemplateToDelete}
+                  onStartRun={model.openRunLauncher}
+                  template={template}
+                />
+              ))}
+            </div>
+          )}
 
-        {model.loading ? (
-          <div className="text-sm text-muted-foreground">Loading templates...</div>
-        ) : filteredTemplates.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border px-6 py-10 text-sm text-muted-foreground">
-            No templates matched this view.
-          </div>
-        ) : (
-          <div className="grid gap-5 xl:grid-cols-4 lg:grid-cols-3 md:grid-cols-2">
-            {filteredTemplates.map((template) => (
-              <TemplateCard
-                key={template.id}
-                onDelete={() => void handleDeleteTemplate(template.id)}
-                onStartRun={model.openRunLauncher}
-                template={template}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+          <section
+            id="template-import-export"
+            className="scroll-mt-20 rounded-xl border border-border bg-card p-6"
+          >
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">
+                  Portable import and export
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Move checklist packs between environments or bootstrap your
+                  workspace from a portable sample.
+                </p>
+              </div>
+              <div className="hidden rounded-full border border-border bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground sm:flex sm:items-center sm:gap-2">
+                JSON packs
+                <ArrowUpRight className="h-4 w-4" />
+              </div>
+            </div>
+            <TemplateBackup />
+          </section>
+        </div>
+      </DashboardScrollArea>
 
       <Dialog open={model.runLauncherOpen} onOpenChange={handleRunDialogChange}>
         <DialogContent className="sm:max-w-[480px]">
@@ -229,7 +351,44 @@ const Templates = () => {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+
+      <Dialog
+        open={templateToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !isDeletingTemplate) {
+            setTemplateToDelete(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete template</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this template? This removes it
+              from your library and cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isDeletingTemplate}
+              onClick={() => setTemplateToDelete(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isDeletingTemplate}
+              onClick={() => void handleDeleteTemplate()}
+            >
+              {isDeletingTemplate ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </DashboardContentShell>
   );
 };
 

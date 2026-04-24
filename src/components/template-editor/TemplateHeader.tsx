@@ -1,6 +1,7 @@
-import { ArrowLeft, Ellipsis, Eye, Loader2, Moon, Save } from 'lucide-react';
+import { ArrowLeft, Eye, Loader2, MoreHorizontal, Save } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +29,7 @@ export const TemplateHeader = ({
 }: TemplateHeaderProps): JSX.Element => {
   return (
     <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-border bg-background px-4">
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon"
@@ -38,8 +39,8 @@ export const TemplateHeader = ({
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-medium text-foreground">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-foreground">
             {title || 'Untitled Template'}
           </span>
           {isEditing ? (
@@ -85,16 +86,7 @@ export const TemplateHeader = ({
           )}
         </Button>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-          type="button"
-          aria-label="Toggle theme"
-          onClick={() => undefined}
-        >
-          <Moon className="h-4 w-4" />
-        </Button>
+        <ThemeToggle />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -104,7 +96,7 @@ export const TemplateHeader = ({
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
               type="button"
             >
-              <Ellipsis className="h-4 w-4" />
+              <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

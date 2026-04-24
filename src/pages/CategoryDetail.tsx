@@ -1,5 +1,5 @@
 import { useMemo, useState, type ElementType } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Briefcase,
@@ -20,8 +20,14 @@ import { CategoryNavigation } from '@/components/checklist-library/CategoryNavig
 import { SearchAndFilters } from '@/components/checklist-library/SearchAndFilters';
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import { TemplatesDiscoveryHeader } from '@/components/checklist-library/TemplatesDiscoveryHeader';
+import {
+  buildDiscoveryCategories,
+  filterAndSortTemplates,
+  type DiscoverySort,
+} from '@/components/checklist-library/discovery-utils';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import NotFound from '@/pages/NotFound';
 import {
   Select,
   SelectContent,
@@ -29,8 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { buildPublicTemplatesPath } from '@/lib/routes';
-import type { ChecklistTemplate } from '@/types/checklist';
+import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 
 const categoryData: Record<
   string,
@@ -112,109 +117,6 @@ const categoryData: Record<
   },
 };
 
-type CategoryTemplate = ChecklistTemplate & {
-  href?: string;
-};
-
-const buildSections = (count: number) =>
-  Array.from({ length: count }, (_, index) => ({
-    id: `section-${index + 1}`,
-    title: `Section ${index + 1}`,
-    items: [],
-  }));
-
-const getTemplatesForCategory = (slug: string): CategoryTemplate[] => [
-  {
-    id: '1',
-    title: 'Weekly Team Standup',
-    description:
-      'A structured approach to running efficient weekly team meetings',
-    type: 'checklist',
-    sections: buildSections(3),
-    userId: 'user-1',
-    createdAt: '2024-01-15T10:00:00Z',
-    updatedAt: '2024-02-20T14:30:00Z',
-    isPublic: true,
-    categories: [slug],
-    tags: ['meetings', 'team', 'productivity'],
-    href:
-      slug === 'business'
-        ? '/profile/designops/website-launch-checklist'
-        : buildPublicTemplatesPath(),
-  },
-  {
-    id: '2',
-    title: 'Quarterly Review Process',
-    description:
-      'Comprehensive checklist for conducting quarterly business reviews',
-    type: 'checklist',
-    sections: buildSections(3),
-    userId: 'user-2',
-    createdAt: '2024-01-20T10:00:00Z',
-    updatedAt: '2024-02-25T14:30:00Z',
-    isPublic: true,
-    categories: [slug],
-    tags: ['quarterly', 'review', 'business'],
-  },
-  {
-    id: '3',
-    title: 'Project Kickoff',
-    description: 'Everything you need to start a new project on the right foot',
-    type: 'checklist',
-    sections: buildSections(3),
-    userId: 'user-3',
-    createdAt: '2024-02-01T10:00:00Z',
-    updatedAt: '2024-02-28T14:30:00Z',
-    isPublic: true,
-    categories: [slug],
-    tags: ['project', 'kickoff', 'planning'],
-  },
-  {
-    id: '4',
-    title: 'Client Onboarding',
-    description: 'Streamlined process for welcoming new clients',
-    type: 'checklist',
-    sections: buildSections(3),
-    userId: 'user-1',
-    createdAt: '2024-02-05T10:00:00Z',
-    updatedAt: '2024-03-01T14:30:00Z',
-    isPublic: true,
-    categories: [slug],
-    tags: ['client', 'onboarding', 'process'],
-  },
-  {
-    id: '5',
-    title: 'Monthly Reporting',
-    description: 'Consistent framework for monthly performance reports',
-    type: 'checklist',
-    sections: buildSections(2),
-    userId: 'user-2',
-    createdAt: '2024-02-10T10:00:00Z',
-    updatedAt: '2024-03-05T14:30:00Z',
-    isPublic: true,
-    categories: [slug],
-    tags: ['reporting', 'monthly', 'metrics'],
-  },
-  {
-    id: '6',
-    title: 'Budget Planning',
-    description: 'Comprehensive budget planning and allocation checklist',
-    type: 'checklist',
-    sections: buildSections(3),
-    userId: 'user-3',
-    createdAt: '2024-02-15T10:00:00Z',
-    updatedAt: '2024-03-10T14:30:00Z',
-    isPublic: true,
-    categories: [slug],
-    tags: ['budget', 'finance', 'planning'],
-  },
-];
-
-const allCategories = Object.entries(categoryData).map(([slug, category]) => ({
-  name: category.name,
-  slug,
-}));
-
 const sortLabels: Record<string, string> = {
   name: 'Name A-Z',
   popular: 'Most Popular',
@@ -223,54 +125,62 @@ const sortLabels: Record<string, string> = {
 };
 
 const CategoryDetail = () => {
-  const navigate = useNavigate();
   const { categorySlug } = useParams<{ categorySlug: string }>();
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('popular');
+  const [sortBy, setSortBy] = useState<DiscoverySort | 'name'>('popular');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const { allCategories, templates } = useTemplateLibrary();
 
   const slug = categorySlug ?? 'business';
-  const category = categoryData[slug] ?? categoryData.business;
+  const categories = useMemo(
+    () => buildDiscoveryCategories(templates, allCategories),
+    [allCategories, templates],
+  );
+  const categoryStats = categories.find((item) => item.slug === slug);
+  const isKnownCategory = Boolean(categoryStats || categoryData[slug]);
+  const category = categoryData[slug] ?? {
+    name: categoryStats?.name ?? 'Category',
+    description: categoryStats
+      ? `Templates filed under ${categoryStats.name}.`
+      : 'Templates for this workflow area.',
+    icon: FileText,
+    color: 'text-slate-400',
+    bgColor: 'bg-slate-500/10',
+  };
   const Icon = category.icon;
-  const templates = useMemo(() => getTemplatesForCategory(slug), [slug]);
+  const categoryTemplateCount = categoryStats?.count ?? 0;
 
   const filteredTemplates = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-    const filtered = normalizedQuery
-      ? templates.filter(
-          (template) =>
-            template.title.toLowerCase().includes(normalizedQuery) ||
-            template.description?.toLowerCase().includes(normalizedQuery),
-        )
-      : templates;
+    const base =
+      sortBy === 'name'
+        ? filterAndSortTemplates(templates, {
+            categorySlug: slug,
+            searchQuery,
+            sortBy: 'popular',
+          })
+        : filterAndSortTemplates(templates, {
+            categorySlug: slug,
+            searchQuery,
+            sortBy,
+          });
 
-    return [...filtered].sort((left, right) => {
-      if (sortBy === 'recent') {
-        return (
-          new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
-        );
-      }
+    return sortBy === 'name'
+      ? [...base].sort((left, right) => left.title.localeCompare(right.title))
+      : base;
+  }, [searchQuery, slug, sortBy, templates]);
 
-      if (sortBy === 'trending') {
-        return right.title.localeCompare(left.title);
-      }
-
-      if (sortBy === 'name') {
-        return left.title.localeCompare(right.title);
-      }
-
-      return 0;
-    });
-  }, [searchQuery, sortBy, templates]);
-
-  const handleTemplateClick = (template: ChecklistTemplate) => {
-    const destination = (template as CategoryTemplate).href ?? buildPublicTemplatesPath();
-    navigate(destination);
-  };
+  if (!isKnownCategory) {
+    return (
+      <div className="min-h-screen bg-background">
+        <TemplatesDiscoveryHeader showSearch={false} />
+        <NotFound />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
-      <TemplatesDiscoveryHeader />
+      <TemplatesDiscoveryHeader showSearch={false} />
 
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6 flex items-center gap-2 text-sm">
@@ -295,7 +205,7 @@ const CategoryDetail = () => {
             </h1>
             <p className="mt-1 text-muted-foreground">{category.description}</p>
             <Badge className="mt-3" variant="secondary">
-              {templates.length} templates
+              {categoryTemplateCount} templates
             </Badge>
           </div>
         </div>
@@ -333,6 +243,8 @@ const CategoryDetail = () => {
               </Select>
               <div className="flex rounded-lg border border-border bg-card">
                 <button
+                  aria-label="Show templates in grid view"
+                  aria-pressed={viewMode === 'grid'}
                   className={`inline-flex h-9 w-9 items-center justify-center ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground'}`}
                   onClick={() => setViewMode('grid')}
                   type="button"
@@ -340,6 +252,8 @@ const CategoryDetail = () => {
                   <Grid3X3 className="h-4 w-4" />
                 </button>
                 <button
+                  aria-label="Show templates in list view"
+                  aria-pressed={viewMode === 'list'}
                   className={`inline-flex h-9 w-9 items-center justify-center ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground'}`}
                   onClick={() => setViewMode('list')}
                   type="button"
@@ -363,7 +277,6 @@ const CategoryDetail = () => {
               <TemplateCard
                 key={template.id}
                 layout={viewMode === 'list' ? 'horizontal' : 'vertical'}
-                onTemplateClick={handleTemplateClick}
                 template={template}
               />
             ))}
@@ -377,7 +290,7 @@ const CategoryDetail = () => {
         )}
 
         <CategoryNavigation
-          categories={allCategories}
+          categories={categories}
           currentCategorySlug={slug}
         />
       </main>

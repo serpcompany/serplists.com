@@ -1,254 +1,320 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
-  FileText,
+  ClipboardList,
+  Eye,
   Globe,
-  LayoutGrid,
-  Moon,
-  Play,
-  Sun,
-  User,
+  Library,
+  ListChecks,
+  PlayCircle,
+  Share2,
 } from 'lucide-react';
 
+import { IconBadge, PageHero, PageSection, Surface } from '@/components/layout/page-shell';
 import { Button } from '@/components/ui/button';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { useTemplates } from '@/contexts/TemplatesContext';
+import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  buildCanonicalPublicTemplatePath,
+  buildConsoleTemplatesPath,
+  buildPublicFeaturesPath,
+  buildPublicTemplatesPath,
+} from '@/lib/routes';
+import type { ChecklistTemplate } from '@/types/checklist';
 
-const surfaces = [
+const workflowSteps = [
   {
-    title: 'Template Editor (New)',
+    step: '1',
+    title: 'Make a template',
     description:
-      'The authoring surface for creating reusable checklist templates with nested sections, tasks, and content blocks.',
-    href: '/dashboard/templates/new',
-    icon: FileText,
-    badge: 'Authoring',
+      'Capture the repeatable process once with sections, tasks, rich instructions, and ownership context.',
+    icon: ClipboardList,
   },
   {
-    title: 'Template Editor (Edit)',
+    step: '2',
+    title: 'Run the workflow',
     description:
-      'Edit an existing template with all the same capabilities as the new template editor.',
-    href: '/dashboard/templates/tpl-1/edit',
-    icon: FileText,
-    badge: 'Authoring',
+      'Start a fresh run, move task by task, and keep progress separate from the source template.',
+    icon: PlayCircle,
   },
   {
-    title: 'Run Execution View',
+    step: '3',
+    title: 'Share the result',
     description:
-      'The checklist execution interface with progress tracking, task completion, and sub-task management.',
-    href: '/run/run-1',
-    icon: Play,
-    badge: 'Execution',
-  },
-  {
-    title: 'Shared Run View',
-    description:
-      'Guest-accessible run view via share link with optional completion permissions.',
-    href: '/share/abc123',
-    icon: Globe,
-    badge: 'Execution',
-  },
-  {
-    title: 'Template Library',
-    description:
-      'Private inventory view showing all your templates with search, filtering, and management actions.',
-    href: '/dashboard/templates',
-    icon: LayoutGrid,
-    badge: 'Dashboard',
-  },
-  {
-    title: 'Private Template Detail',
-    description:
-      'Owner management view for a template with stats, visibility toggle, and quick actions.',
-    href: '/dashboard/templates/tpl-1',
-    icon: FileText,
-    badge: 'Dashboard',
-  },
-  {
-    title: 'Runs Dashboard',
-    description:
-      'Track all your in-progress and completed runs with status filters and quick actions.',
-    href: '/dashboard/runs',
-    icon: Play,
-    badge: 'Dashboard',
-  },
-  {
-    title: 'Settings',
-    description:
-      'Manage your profile, notifications, privacy settings, and export data.',
-    href: '/dashboard/settings',
-    icon: User,
-    badge: 'Dashboard',
-  },
-  {
-    title: 'Public Template Discovery',
-    description:
-      'Browse and discover public templates created by the community, with category filtering and search.',
-    href: '/templates',
-    icon: Globe,
-    badge: 'Discovery',
-  },
-  {
-    title: 'Categories',
-    description:
-      'Explore templates organized by category to find exactly what you need.',
-    href: '/categories',
-    icon: LayoutGrid,
-    badge: 'Discovery',
-  },
-  {
-    title: 'Category Detail',
-    description:
-      'Browse all templates within a specific category with filtering and sorting.',
-    href: '/categories/business',
-    icon: LayoutGrid,
-    badge: 'Discovery',
-  },
-  {
-    title: 'Public Template Detail',
-    description:
-      'Evaluation page where users preview a template, see what it includes, and start a run or save to library.',
-    href: '/profile/designops/website-launch-checklist',
-    icon: FileText,
-    badge: 'Discovery',
-  },
-  {
-    title: 'Creator Profile',
-    description:
-      'Public creator profile page showing their templates, stats, and bio.',
-    href: '/profile/designops',
-    icon: User,
-    badge: 'Discovery',
+      'Send a clean read-only run or publish the template so others can trust and reuse the work.',
+    icon: Share2,
   },
 ] as const;
 
+const productSurfaces = [
+  {
+    title: 'Template library',
+    description:
+      'Reusable SOPs, audits, launches, onboarding flows, and field checklists live in one browsable library.',
+    icon: Library,
+  },
+  {
+    title: 'Live run workspace',
+    description:
+      'Every execution gets its own progress, task focus, completion states, and continuation link.',
+    icon: ListChecks,
+  },
+  {
+    title: 'Shareable proof',
+    description:
+      'Public share pages show what was done without exposing private dashboard controls.',
+    icon: Eye,
+  },
+] as const;
+
+function countTemplateItems(template: ChecklistTemplate): number {
+  return template.sections.reduce(
+    (total, section) => total + section.items.length,
+    0,
+  );
+}
+
 const Index = () => {
+  const { user } = useAuth();
+  const { templates, templatesLoading } = useTemplates();
+
+  const featuredTemplates = useMemo(
+    () => templates.filter((template) => isRepoTemplate(template)).slice(0, 3),
+    [templates],
+  );
+
+  const primaryCta = user
+    ? { href: buildConsoleTemplatesPath(), label: 'Open Dashboard' }
+    : { href: '/register', label: 'Get Started' };
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
-        <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <LayoutGrid className="h-5 w-5 text-primary" />
-            <span className="text-sm font-semibold text-foreground">
-              Checklist Product Prototype
-            </span>
-          </div>
+    <>
+      <PageSection spacing="hero" width="wide">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)] lg:items-center">
+          <PageHero
+            actions={
+              <>
+                <Button asChild>
+                  <Link to={primaryCta.href}>
+                    {primaryCta.label}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link to={buildPublicTemplatesPath()}>
+                    <Globe className="mr-2 h-4 w-4" />
+                    Browse Templates
+                  </Link>
+                </Button>
+              </>
+            }
+            description="Serplists turns repeatable work into a reusable template, a focused execution run, and a shareable record. It is for teams that need the same process done cleanly more than once."
+            eyebrow="Operations checklists that actually run"
+            title="Build the checklist once. Run it every time."
+          />
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button className="h-9 w-9" size="icon" variant="ghost">
-                <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                <span className="sr-only">Toggle theme</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>Light</DropdownMenuItem>
-              <DropdownMenuItem>Dark</DropdownMenuItem>
-              <DropdownMenuItem>System</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Surface className="overflow-hidden" padding="none" tone="glass">
+            <div className="border-b border-border p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                    Template library
+                  </p>
+                  <h2 className="mt-2 text-2xl font-semibold text-foreground">
+                    Launch QA checklist
+                  </h2>
+                </div>
+                <span className="rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">
+                  72% complete
+                </span>
+              </div>
+            </div>
+            <div className="grid gap-0 md:grid-cols-[minmax(0,1fr)_220px]">
+              <div className="space-y-3 p-5">
+                {[
+                  'Confirm final content and links',
+                  'Run technical QA',
+                  'Publish launch notes',
+                ].map((task, index) => (
+                  <div
+                    key={task}
+                    className="flex items-center gap-3 rounded-[var(--layout-card-radius)] border border-border bg-background p-3"
+                  >
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                      {index + 1}
+                    </span>
+                    <span className="text-sm font-medium text-foreground">
+                      {task}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t border-border bg-muted/40 p-5 md:border-l md:border-t-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                  Run state
+                </p>
+                <div className="mt-4 space-y-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Open tasks</span>
+                    <span className="font-medium text-foreground">4</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Done</span>
+                    <span className="font-medium text-foreground">9</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Share status</span>
+                    <span className="font-medium text-foreground">Ready</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Surface>
         </div>
-      </header>
+      </PageSection>
 
-      <main className="mx-auto max-w-4xl px-4 py-8 md:py-12">
-        <div className="mb-8 text-center md:mb-12">
-          <h1 className="mb-4 text-balance text-2xl font-bold text-foreground md:text-3xl">
-            Checklist &amp; Template Experience
-          </h1>
-          <p className="mx-auto max-w-2xl text-sm text-muted-foreground md:text-base">
-            A prototype of the key surfaces for a checklist and template
-            product. Explore the authoring layer (template editor), execution
-            layer (run view), and distribution layer (discovery and sharing).
-          </p>
-        </div>
-
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-4 md:mb-12">
-          <Button asChild size="lg" className="w-full sm:w-auto">
-            <Link to="/dashboard/templates/new">
-              <FileText className="mr-2 h-4 w-4" />
-              Create a Template
-            </Link>
-          </Button>
-          <Button
-            asChild
-            variant="outline"
-            size="lg"
-            className="w-full sm:w-auto"
-          >
-            <Link to="/templates">
-              <Globe className="mr-2 h-4 w-4" />
-              Browse Templates
-            </Link>
-          </Button>
-          <Button
-            asChild
-            variant="secondary"
-            size="lg"
-            className="w-full sm:w-auto"
-          >
-            <Link to="/dashboard/templates">
-              <LayoutGrid className="mr-2 h-4 w-4" />
-              Design Docs
-            </Link>
-          </Button>
-        </div>
-
-        <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
-          {surfaces.map((surface) => {
-            const Icon = surface.icon;
+      <PageSection className="pt-0" spacing="spacious">
+        <div className="grid gap-6 md:grid-cols-3">
+          {workflowSteps.map((step) => {
+            const Icon = step.icon;
 
             return (
-              <Link
-                key={surface.href}
-                to={surface.href}
-                className="group flex flex-col rounded-lg border border-border bg-card p-4 transition-all hover:border-muted-foreground/30 hover:shadow-lg hover:shadow-black/5 sm:p-6"
-              >
-                <div className="mb-3 flex items-start justify-between sm:mb-4">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary sm:h-10 sm:w-10">
-                    <Icon className="h-4 w-4 text-muted-foreground sm:h-5 sm:w-5" />
+              <Surface key={step.title} as="article" tone="docs">
+                <CardHeader className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <IconBadge>
+                      <Icon className="h-5 w-5" />
+                    </IconBadge>
+                    <span className="text-4xl font-semibold tracking-tight text-muted-foreground/30">
+                      {step.step}
+                    </span>
                   </div>
-                  <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                    {surface.badge}
-                  </span>
-                </div>
-                <h2 className="mb-1 text-sm font-medium text-foreground transition-colors group-hover:text-primary sm:mb-2 sm:text-base">
-                  {surface.title}
-                </h2>
-                <p className="mb-3 flex-1 text-xs text-muted-foreground sm:mb-4 sm:text-sm">
-                  {surface.description}
-                </p>
-                <div className="flex items-center text-xs text-muted-foreground transition-colors group-hover:text-foreground sm:text-sm">
-                  View surface
-                  <ArrowRight className="ml-1 h-3 w-3 sm:h-4 sm:w-4" />
-                </div>
-              </Link>
+                  <div className="space-y-2">
+                    <CardTitle>{step.title}</CardTitle>
+                    <CardDescription>{step.description}</CardDescription>
+                  </div>
+                </CardHeader>
+              </Surface>
             );
           })}
         </div>
+      </PageSection>
 
-        <div className="mt-12 rounded-lg border border-border bg-card p-6 text-center">
-          <h2 className="mb-2 font-medium text-foreground">
-            Design System Documentation
-          </h2>
-          <p className="mb-4 text-sm text-muted-foreground">
-            This prototype uses a dark theme with a clean, minimal aesthetic
-            inspired by modern productivity tools. Full documentation of color
-            tokens, typography, layout patterns, and custom components is
-            available in the design docs.
-          </p>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/dashboard/templates">
-              View Documentation
+      <PageSection spacing="spacious">
+        <div className="grid gap-6 lg:grid-cols-3">
+          {productSurfaces.map((surface) => {
+            const Icon = surface.icon;
+
+            return (
+              <Surface key={surface.title} as="article" tone="console">
+                <CardHeader className="space-y-4">
+                  <IconBadge>
+                    <Icon className="h-5 w-5" />
+                  </IconBadge>
+                  <div className="space-y-2">
+                    <CardTitle>{surface.title}</CardTitle>
+                    <CardDescription>{surface.description}</CardDescription>
+                  </div>
+                </CardHeader>
+              </Surface>
+            );
+          })}
+        </div>
+      </PageSection>
+
+      <PageSection spacing="spacious">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+              Starter library
+            </p>
+            <h2 className="mt-2 text-3xl font-semibold text-foreground">
+              Start with a real checklist, then make it yours.
+            </h2>
+          </div>
+          <Button asChild variant="ghost" className="w-fit">
+            <Link to={buildPublicTemplatesPath()}>
+              View all templates
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
         </div>
-      </main>
-    </div>
+
+        {templatesLoading ? (
+          <Surface tone="docs">
+            <CardContent className="p-6 text-sm text-muted-foreground">
+              Loading templates...
+            </CardContent>
+          </Surface>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-3">
+            {featuredTemplates.map((template) => {
+              const href =
+                buildCanonicalPublicTemplatePath(template) ??
+                buildPublicTemplatesPath();
+
+              return (
+                <Link key={template.id} to={href}>
+                  <Surface
+                    as="article"
+                    className="h-full transition-transform duration-200 hover:-translate-y-0.5"
+                    tone="glass"
+                  >
+                    <CardHeader className="space-y-3">
+                      <CardTitle>{template.title}</CardTitle>
+                      <CardDescription>
+                        {template.description || 'No description yet.'}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3 pt-0 text-sm text-muted-foreground">
+                      <p>
+                        {countTemplateItems(template)} items in {template.sections.length}{' '}
+                        sections
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {(template.categories || []).slice(0, 3).map((category) => (
+                          <span
+                            key={category}
+                            className="rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
+                          >
+                            {category}
+                          </span>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Surface>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </PageSection>
+
+      <PageSection spacing="spacious">
+        <Surface tone="glass">
+          <CardHeader className="space-y-3">
+            <CardTitle className="text-3xl">
+              Stop rebuilding the same checklist in docs and spreadsheets.
+            </CardTitle>
+            <CardDescription className="max-w-2xl text-base">
+              Serplists gives your repeatable work a home: one source template,
+              many tracked runs, and clean share links when someone needs proof.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3 pt-0">
+            <Button asChild>
+              <Link to={primaryCta.href}>{primaryCta.label}</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to={buildPublicFeaturesPath()}>Explore Features</Link>
+            </Button>
+          </CardContent>
+        </Surface>
+      </PageSection>
+    </>
   );
 };
 

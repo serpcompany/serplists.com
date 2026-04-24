@@ -24,6 +24,7 @@ export function OutlineSidebar({
   onSelectSEO,
   onSelectTemplateInfo,
 }: OutlineSidebarProps): JSX.Element {
+  const outlineSelectionActive = !showingSEO && !showingTemplateInfo;
   const modeButtons = [
     {
       active: showingTemplateInfo,
@@ -63,6 +64,7 @@ export function OutlineSidebar({
       </div>
 
       <SectionSidebar
+        outlineSelectionActive={outlineSelectionActive}
         selectedSectionIndex={selectedSectionIndex}
         selectedItemIndex={selectedItemIndex}
         onSelectSection={onSelectSection}

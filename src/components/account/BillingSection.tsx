@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
@@ -8,6 +9,8 @@ import { toast } from "sonner";
 
 export function BillingSection() {
   const { user } = useAuth();
+  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const billing = useQuery({
     queryKey: getBillingStatusQueryKey(user?.id),
     queryFn: () => api.getBillingStatus(),
@@ -24,20 +27,28 @@ export function BillingSection() {
       toast.error("Billing is temporarily unavailable. Please contact support.");
       return;
     }
+    setIsStartingCheckout(true);
     try {
       const { url } = await api.createBillingCheckout();
       window.location.href = url;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start checkout");
+      setIsStartingCheckout(false);
     }
   };
 
   const handleManage = async () => {
+    if (!billingEnabled) {
+      toast.error("Billing is temporarily unavailable. Please contact support.");
+      return;
+    }
+    setIsOpeningPortal(true);
     try {
       const { url } = await api.createBillingPortal();
       window.location.href = url;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to open billing portal");
+      setIsOpeningPortal(false);
     }
   };
 
@@ -59,12 +70,25 @@ export function BillingSection() {
         ) : null}
 
         {plan === "pro" ? (
-          <Button onClick={handleManage} variant="secondary" disabled={!billingEnabled}>
-            Manage subscription
+          <Button
+            onClick={handleManage}
+            variant="secondary"
+            disabled={!billingEnabled || isOpeningPortal}
+          >
+            {isOpeningPortal ? "Opening billing..." : "Manage subscription"}
           </Button>
         ) : (
-          <Button onClick={handleUpgrade} disabled={billing.isLoading || !billingEnabled}>
-            {billing.isLoading ? "Checking plan..." : billingEnabled ? "Upgrade to Pro" : "Upgrade unavailable"}
+          <Button
+            onClick={handleUpgrade}
+            disabled={billing.isLoading || !billingEnabled || isStartingCheckout}
+          >
+            {billing.isLoading
+              ? "Checking plan..."
+              : isStartingCheckout
+                ? "Opening checkout..."
+                : billingEnabled
+                  ? "Upgrade to Pro"
+                  : "Upgrade unavailable"}
           </Button>
         )}
       </CardContent>

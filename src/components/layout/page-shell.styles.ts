@@ -5,11 +5,11 @@ export const pageContainerVariants = cva(
   {
     variants: {
       width: {
-        shell: 'max-w-6xl',
-        content: 'max-w-6xl',
-        narrow: 'max-w-4xl',
+        shell: 'max-w-[var(--layout-shell-max)]',
+        content: 'max-w-[var(--layout-content-max)]',
+        narrow: 'max-w-[var(--layout-narrow-max)]',
         wide: 'max-w-[var(--layout-wide-max)]',
-        docs: 'max-w-4xl',
+        docs: 'max-w-[var(--layout-narrow-max)]',
       },
     },
     defaultVariants: {
@@ -24,7 +24,7 @@ export const pageSectionVariants = cva('', {
       compact: 'py-6',
       default: 'py-8',
       spacious: 'py-12',
-      hero: 'py-8 sm:py-10',
+      hero: 'pb-8 pt-10 sm:pb-10 sm:pt-12',
     },
   },
   defaultVariants: {

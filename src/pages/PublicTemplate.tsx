@@ -10,10 +10,6 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
-import {
-  V0_DEMO_PUBLIC_TEMPLATE_ROUTE,
-  buildV0DemoPublicTemplate,
-} from '@/features/parity/v0DemoFixtures';
 import { analytics } from '@/lib/analytics';
 import {
   navigateToLoginWithReturnPath,
@@ -40,9 +36,6 @@ const PublicTemplate = () => {
   const { createRun, createTemplate, templates } = useTemplates();
   const [isCreatingRun, setIsCreatingRun] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const isV0DemoRoute =
-    username === V0_DEMO_PUBLIC_TEMPLATE_ROUTE.username &&
-    templateSlug === V0_DEMO_PUBLIC_TEMPLATE_ROUTE.templateSlug;
   const {
     billingState,
     loading,
@@ -61,8 +54,7 @@ const PublicTemplate = () => {
     ownerUsername: username,
     userId: user?.id,
   });
-  const demoTemplate = isV0DemoRoute ? buildV0DemoPublicTemplate() : null;
-  const displayTemplate = template ?? demoTemplate;
+  const displayTemplate = template;
   const displayTotalItems =
     template && totalItems > 0
       ? totalItems
@@ -80,11 +72,6 @@ const PublicTemplate = () => {
   }, [displayTemplate]);
 
   const handleStartRun = async () => {
-    if (!template && demoTemplate) {
-      navigate('/run/template-3');
-      return;
-    }
-
     if (!template) return;
 
     setIsCreatingRun(true);
@@ -118,11 +105,6 @@ const PublicTemplate = () => {
   };
 
   const handleSaveTemplate = async () => {
-    if (!template && demoTemplate) {
-      toast.success('Template saved to your account');
-      return;
-    }
-
     if (!template) return;
 
     setIsSaving(true);
@@ -161,7 +143,7 @@ const PublicTemplate = () => {
     : null;
   const ownerPath = ownerSlug ? buildPublicProfilePath(ownerSlug) : null;
 
-  if (loading && !demoTemplate) {
+  if (loading) {
     return (
       <PageContainer className="py-16" width="shell">
         <Surface className="text-center" padding="xl" tone="glass">
@@ -174,7 +156,7 @@ const PublicTemplate = () => {
     );
   }
 
-  if ((notFound && !demoTemplate) || !displayTemplate) {
+  if (notFound || !displayTemplate) {
     return (
       <PageContainer className="py-16" width="narrow">
         <Surface className="text-center" padding="xl" tone="glass">

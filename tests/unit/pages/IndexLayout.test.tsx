@@ -19,19 +19,24 @@ vi.mock('@/contexts/TemplatesContext', () => ({
 }));
 
 describe('Index layout', () => {
-  it('keeps the standalone v0 reference framing and docs hrefs on the homepage route', () => {
+  it('explains the actual template to run to share workflow instead of generic marketing cards', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <Index />
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Checklist Product Prototype');
-    expect(html).toContain('mx-auto flex h-14 max-w-4xl items-center justify-between px-4');
-    expect(html).toContain('mx-auto max-w-4xl px-4 py-8 md:py-12');
-    expect(html).toContain('Design System Documentation');
-    expect(html).not.toContain('max-w-6xl');
-    expect(html).toContain('href="/docs"');
-    expect(html).not.toContain('href="/dashboard/templates"');
+    expect(html).toContain('Build the checklist once. Run it every time.');
+    expect(html).toContain('Template library');
+    expect(html).toContain('Live run workspace');
+    expect(html).toContain('Shareable proof');
+    expect(html).toContain('1');
+    expect(html).toContain('2');
+    expect(html).toContain('3');
+    expect(html).toContain('Make a template');
+    expect(html).toContain('Run the workflow');
+    expect(html).toContain('Share the result');
+    expect(html).not.toContain('Checklist Product Prototype');
+    expect(html).not.toContain('Create and Run Checklists for Your Processes');
   });
 });

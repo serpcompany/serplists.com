@@ -14,10 +14,6 @@ import {
 } from "@/lib/forms/templateEditorForm";
 import { api } from "@/lib/api";
 import type { ChecklistTemplate } from "@/types/checklist";
-import {
-  buildV0DemoPrivateTemplate,
-  isV0DemoPrivateTemplateId,
-} from "@/features/parity/v0DemoFixtures";
 
 type TemplateEditorApiClient = Pick<typeof api, "getTemplateById">;
 
@@ -51,118 +47,8 @@ export type TemplateEditorLoadResult = {
   templateSlug?: string;
 };
 
-export const buildDefaultTemplateEditorTemplate = (): Partial<ChecklistTemplate> => ({
-  id: "tpl-new-001",
-  title: "New Employee Onboarding",
-  description: "A comprehensive checklist for onboarding new team members",
-  type: "checklist",
-  slug: "new-employee-onboarding",
-  seoTitle: "New Employee Onboarding",
-  seoDescription: "A comprehensive checklist for onboarding new team members",
-  categories: ["HR", "Onboarding"],
-  tags: ["new-hire", "checklist", "employee"],
-  isPublic: false,
-  sections: [
-    {
-      id: "sec-001",
-      title: "Before Day One",
-      items: [
-        {
-          id: "task-001",
-          title: "Send welcome email with first-day instructions",
-          description:
-            "Include parking info, dress code, and arrival time",
-          contents: [
-            {
-              id: "content-001",
-              type: "text",
-              value:
-                "Make sure to include:\n- Office address and parking instructions\n- What to bring (ID, documents)\n- Who to ask for at reception",
-            },
-          ],
-        },
-        {
-          id: "task-002",
-          title: "Set up workstation and equipment",
-          contents: [
-            {
-              id: "content-002",
-              type: "subItems",
-              value: "",
-              subItems: [
-                { id: "sub-001", title: "Order laptop and accessories" },
-                { id: "sub-002", title: "Set up desk and chair" },
-                { id: "sub-003", title: "Prepare welcome kit" },
-              ],
-            },
-          ],
-        },
-        {
-          id: "task-003",
-          title: "Create accounts and access",
-          contents: [],
-        },
-      ],
-    },
-    {
-      id: "sec-002",
-      title: "First Day",
-      items: [
-        {
-          id: "task-004",
-          title: "Welcome and office tour",
-          description: "Show key areas and introduce to team",
-          contents: [
-            {
-              id: "content-003",
-              type: "video",
-              value: "https://www.youtube.com/watch?v=PL4ktpwAxBE",
-            },
-          ],
-        },
-        {
-          id: "task-005",
-          title: "IT setup and system access",
-          contents: [
-            {
-              id: "content-004",
-              type: "text",
-              value:
-                "Walk through email setup, VPN configuration, and access to essential tools.",
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: "sec-003",
-      title: "First Week",
-      items: [
-        {
-          id: "task-006",
-          title: "Complete HR paperwork",
-          contents: [],
-        },
-        {
-          id: "task-007",
-          title: "Team introductions and shadowing",
-          contents: [],
-        },
-        {
-          id: "task-008",
-          title: "Review company policies and handbook",
-          contents: [
-            {
-              id: "content-005",
-              type: "embed",
-              value: "https://company.notion.site/employee-handbook",
-            },
-          ],
-        },
-      ],
-    },
-  ],
-});
+export const buildDefaultTemplateEditorTemplate =
+  (): Partial<ChecklistTemplate> => ({});
 
 export const buildTemplateEditorSavedState = (
   values: TemplateEditorFormValues,
@@ -224,10 +110,6 @@ export const loadTemplateEditorData = async (
     return buildLoadResult(buildDefaultTemplateEditorTemplate());
   }
 
-  if (isV0DemoPrivateTemplateId(options.id)) {
-    return buildLoadResult(buildV0DemoPrivateTemplate());
-  }
-
   const cachedTemplate = options.getCachedTemplate(options.id);
   if (cachedTemplate) {
     return buildLoadResult(cachedTemplate);
@@ -258,10 +140,6 @@ export const saveTemplateEditorData = async (
   options: SaveTemplateEditorDataOptions,
   dependencies: SaveTemplateEditorDependencies,
 ): Promise<SaveTemplateResult> => {
-  if (isV0DemoPrivateTemplateId(options.id)) {
-    return { success: true, errors: [] };
-  }
-
   const normalizedForm = normalizeTemplateEditorFormForSave(options.values);
   return dependencies.saveTemplate({
     id: options.id,

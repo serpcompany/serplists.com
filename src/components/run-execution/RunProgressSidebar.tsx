@@ -3,7 +3,7 @@ import { Check, ChevronRight, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChecklistSection, ChecklistItem } from '@/types/checklist';
 
-interface RunProgressSidebarProps {
+interface RunProgressPanelProps {
   sections: ChecklistSection[];
   currentSectionId: string | null;
   currentTaskId: string | null;
@@ -23,12 +23,12 @@ const getSectionProgress = (section: ChecklistSection) => {
 
 const isTaskCompleted = (item: ChecklistItem) => item.isCompleted === true;
 
-export function RunProgressSidebar({
+export function RunProgressPanel({
   sections,
   currentSectionId,
   currentTaskId,
   onSelectTask,
-}: RunProgressSidebarProps) {
+}: RunProgressPanelProps) {
   const completedTasks = sections.reduce(
     (total, section) => total + section.items.filter((item) => item.isCompleted).length,
     0,
@@ -37,7 +37,10 @@ export function RunProgressSidebar({
   const overallPercentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
   return (
-    <aside className="flex h-full min-h-full w-full flex-col border-r border-border bg-card xl:w-64">
+    <section
+      className="hidden h-full min-h-full w-full flex-col border-l border-border bg-card xl:flex"
+      data-run-progress-panel="true"
+    >
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Progress
@@ -159,6 +162,6 @@ export function RunProgressSidebar({
           />
         </div>
       </div>
-    </aside>
+    </section>
   );
 }

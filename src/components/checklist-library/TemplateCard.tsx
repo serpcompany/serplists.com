@@ -2,17 +2,16 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, FileText, List, Play } from 'lucide-react';
 
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import {
   buildCanonicalPublicTemplatePath,
-  buildPublicCategoryPath,
   buildPublicProfilePath,
-  buildRunPath,
+  buildPublicTemplatesPath,
 } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { generateSlug } from '@/utils/urlHelpers';
 import {
   getTemplateItemCount,
   getTemplateOwnerLabel,
@@ -26,7 +25,6 @@ interface TemplateCardProps {
     runCount?: number;
     viewCount?: number;
   };
-  onTemplateClick: (template: ChecklistTemplate) => void;
 }
 
 const getTemplateIcon = (template: ChecklistTemplate) =>
@@ -39,39 +37,30 @@ const getTemplateIcon = (template: ChecklistTemplate) =>
 export const TemplateCard: React.FC<TemplateCardProps> = ({
   layout = 'vertical',
   template,
-  onTemplateClick,
 }) => {
   const sectionCount = getTemplateSectionCount(template);
   const itemCount = getTemplateItemCount(template);
   const ownerLabel = getTemplateOwnerLabel(template);
   const ownerHandle = template.ownerProfile?.username;
   const categories = template.categories ?? [];
-  const templatePath = buildCanonicalPublicTemplatePath(template);
+  const templatePath =
+    buildCanonicalPublicTemplatePath({
+      ...template,
+      slug: template.slug ?? generateSlug(template.title),
+    }) ?? buildPublicTemplatesPath();
   const isHorizontal = layout === 'horizontal';
-  const ownerInitial = ownerHandle
-    ? ownerLabel.charAt(0).toUpperCase()
-    : 'U';
-
-  const handleCardClick = () => {
-    onTemplateClick(template);
-  };
-
-  const handleCategoryClick = (event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
+  const ownerInitial = ownerLabel.charAt(0).toUpperCase() || 'U';
 
   return (
-    <Card
+    <div
       className={cn(
-        'group overflow-hidden border-border bg-card transition-all hover:border-muted-foreground/30 hover:shadow-lg hover:shadow-black/5',
-        isHorizontal ? 'flex' : 'flex flex-col',
+        'group overflow-hidden rounded-lg border border-border bg-card transition-all hover:border-muted-foreground/30 hover:shadow-lg hover:shadow-black/5',
+        isHorizontal && 'flex',
       )}
-      onClick={handleCardClick}
     >
-      <CardContent
+      <div
         className={cn(
-          'flex flex-1 p-0',
+          'flex flex-1',
           isHorizontal ? 'min-h-[12rem] flex-row' : 'flex-col',
         )}
       >
@@ -86,15 +75,11 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
           </div>
 
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 opacity-0 transition-opacity group-hover:opacity-100">
-            <Button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onTemplateClick(template);
-              }}
-            >
-              <Eye className="mr-2 h-4 w-4" />
-              View Template
+            <Button asChild>
+              <Link to={templatePath}>
+                <Eye className="mr-2 h-4 w-4" />
+                View Template
+              </Link>
             </Button>
           </div>
         </div>
@@ -103,26 +88,17 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
           {categories.length > 0 ? (
             <div className="mb-2 flex flex-wrap gap-1">
               {categories.slice(0, 2).map((category) => (
-                <Link
+                <span
                   key={category}
                   className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-                  onClick={handleCategoryClick}
-                  to={buildPublicCategoryPath(category)}
                 >
                   {category}
-                </Link>
+                </span>
               ))}
             </div>
           ) : null}
 
-          <button
-            className="block text-left"
-            onClick={(event) => {
-              event.stopPropagation();
-              onTemplateClick(template);
-            }}
-            type="button"
-          >
+          <Link to={templatePath} className="block">
             <h3 className="mb-1 line-clamp-1 text-sm font-medium text-foreground transition-colors group-hover:text-primary">
               {template.title}
             </h3>
@@ -131,7 +107,7 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
                 {template.description}
               </p>
             ) : null}
-          </button>
+          </Link>
 
           <div className="mt-auto flex items-center gap-3 text-xs text-muted-foreground">
             <span>{sectionCount} sections</span>
@@ -147,10 +123,10 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             {ownerHandle ? (
               <Link
                 className="flex min-w-0 items-center gap-2 transition-colors hover:text-foreground"
-                onClick={(event) => event.stopPropagation()}
                 to={buildPublicProfilePath(ownerHandle)}
               >
                 <Avatar className="h-5 w-5">
+                  <AvatarImage src="" />
                   <AvatarFallback className="text-[10px]">
                     {ownerInitial}
                   </AvatarFallback>
@@ -162,6 +138,7 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             ) : (
               <div className="flex min-w-0 items-center gap-2">
                 <Avatar className="h-5 w-5">
+                  <AvatarImage src="" />
                   <AvatarFallback className="text-[10px]">
                     {ownerInitial}
                   </AvatarFallback>
@@ -170,18 +147,14 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             )}
 
             <Button asChild className="h-7 px-2 text-xs" size="sm" variant="ghost">
-              <Link
-                onClick={(event) => event.stopPropagation()}
-                to={buildRunPath(template.id)}
-              >
+              <Link to={templatePath}>
                 <Play className="mr-1 h-3 w-3" />
                 Start
               </Link>
             </Button>
           </div>
-
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 };

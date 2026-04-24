@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { toast } from 'sonner';
 import { ProfileSection } from '@/components/account/ProfileSection';
@@ -7,6 +7,11 @@ import { SecuritySection } from '@/components/account/SecuritySection';
 import { BillingSection } from '@/components/account/BillingSection';
 import { useSearchParams } from 'react-router-dom';
 import { buildAccountUpdatePayload } from './accountProfileUpdates';
+import {
+  DashboardContentShell,
+  DashboardPageHeader,
+  DashboardScrollArea,
+} from '@/components/dashboard/DashboardContentShell';
 
 interface ProfileData {
   email: string;
@@ -108,13 +113,13 @@ const Account = () => {
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Account Settings</h1>
-        <p className="text-muted-foreground">Manage your profile</p>
-      </div>
-
-      <div className="grid gap-6">
+    <DashboardContentShell>
+      <DashboardPageHeader
+        title="Account Settings"
+        description="Manage your profile, billing, and security settings."
+      />
+      <DashboardScrollArea>
+        <div className="mx-auto grid max-w-4xl gap-6">
         {/* Profile Section */}
         <ProfileSection
           profileData={profileData}
@@ -127,8 +132,9 @@ const Account = () => {
         <BillingSection />
 
         <SecuritySection />
-      </div>
-    </div>
+        </div>
+      </DashboardScrollArea>
+    </DashboardContentShell>
   );
 };
 

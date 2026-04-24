@@ -13,6 +13,7 @@ interface SearchAndFiltersProps {
   onCategoryChange: (categorySlug: string | null) => void;
   onSortChange: (sortBy: DiscoverySort) => void;
   resultCount: number;
+  resultLabel?: string;
   searchSlot?: React.ReactNode;
   selectedCategorySlug: string | null;
   sortBy: DiscoverySort;
@@ -34,6 +35,7 @@ export const SearchAndFilters: React.FC<SearchAndFiltersProps> = ({
   onCategoryChange,
   onSortChange,
   resultCount,
+  resultLabel,
   searchSlot,
   selectedCategorySlug,
   sortBy,
@@ -99,7 +101,9 @@ export const SearchAndFilters: React.FC<SearchAndFiltersProps> = ({
         {searchSlot ? (
           searchSlot
         ) : (
-          <p className="text-sm text-muted-foreground">{resultCount} templates</p>
+          <p className="text-sm text-muted-foreground">
+            {resultLabel ?? `${resultCount} templates`}
+          </p>
         )}
 
         {sortControls}

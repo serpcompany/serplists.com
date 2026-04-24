@@ -26,6 +26,7 @@ type EditingItemState = {
 };
 
 interface SectionSidebarProps {
+  outlineSelectionActive: boolean;
   selectedSectionIndex: number;
   selectedItemIndex: number | null;
   onSelectSection: (sectionIndex: number) => void;
@@ -41,6 +42,7 @@ function buildItemFallbackLabel(itemIndex: number): string {
 }
 
 export function SectionSidebar({
+  outlineSelectionActive,
   selectedSectionIndex,
   selectedItemIndex,
   onSelectSection,
@@ -192,7 +194,7 @@ export function SectionSidebar({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-sidebar-border px-3 py-2">
-        <span className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
+        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Sections
         </span>
         <Button
@@ -211,7 +213,9 @@ export function SectionSidebar({
           {sectionsFieldArray.fields.map((sectionField, sectionIndex) => {
             const section = sections?.[sectionIndex];
             const sectionSelected =
-              selectedSectionIndex === sectionIndex && selectedItemIndex === null;
+              outlineSelectionActive &&
+              selectedSectionIndex === sectionIndex &&
+              selectedItemIndex === null;
             const isExpanded = expandedSections.has(sectionIndex);
 
             return (
@@ -224,7 +228,12 @@ export function SectionSidebar({
                       : "hover:bg-sidebar-accent/50",
                   )}
                 >
-                  <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                  <button
+                    type="button"
+                    className="h-3.5 w-3.5 shrink-0 cursor-grab touch-none rounded opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:opacity-100"
+                  >
+                    <GripVertical className="h-4 w-4 text-muted-foreground" />
+                  </button>
 
                   <button
                     onClick={() => toggleSection(sectionIndex)}
@@ -294,6 +303,7 @@ export function SectionSidebar({
                   <div className="ml-4 mt-0.5 border-l border-sidebar-border pl-2">
                     {section?.items.map((item, itemIndex) => {
                       const itemSelected =
+                        outlineSelectionActive &&
                         selectedSectionIndex === sectionIndex &&
                         selectedItemIndex === itemIndex;
                       const editingCurrentItem =
@@ -310,7 +320,12 @@ export function SectionSidebar({
                               : "hover:bg-sidebar-accent/50",
                           )}
                         >
-                          <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+                          <button
+                            type="button"
+                            className="h-3.5 w-3.5 shrink-0 cursor-grab touch-none rounded opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:opacity-100"
+                          >
+                            <GripVertical className="h-4 w-4 text-muted-foreground" />
+                          </button>
                           <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 
                           {editingCurrentItem ? (
@@ -362,7 +377,7 @@ export function SectionSidebar({
                       variant="ghost"
                       size="sm"
                       onClick={() => handleAddTask(sectionIndex)}
-                      className="mt-1 h-8 justify-start gap-2 px-1 text-muted-foreground hover:text-foreground"
+                      className="mt-1 h-7 w-full justify-start gap-2 text-xs text-muted-foreground hover:text-foreground"
                       type="button"
                     >
                       <Plus className="h-3.5 w-3.5" />

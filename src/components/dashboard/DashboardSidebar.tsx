@@ -20,6 +20,7 @@ import {
   buildConsoleTemplatesPath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 const navItems = [
   {
@@ -53,7 +54,9 @@ const secondaryNavItems = [
 ];
 
 const isActivePath = (pathname: string, href: string) =>
-  pathname === href || pathname.startsWith(`${href}/`);
+  pathname === href ||
+  pathname.startsWith(`${href}/`) ||
+  (href === buildConsoleRunsPath() && pathname.startsWith('/run/'));
 
 export function DashboardSidebar() {
   const location = useLocation();
@@ -124,14 +127,13 @@ export function DashboardSidebar() {
         </ul>
       </nav>
 
-      <div className="border-t border-border p-3">
-        <Button
-          variant="outline"
-          className="w-full justify-start gap-2"
-          type="button"
-        >
-          <Import className="h-4 w-4" />
-          Import Template
+      <div className="space-y-2 border-t border-border p-3">
+        <ThemeToggle showLabel />
+        <Button asChild variant="outline" className="w-full justify-start gap-2">
+          <Link to={`${buildConsoleTemplatesPath()}#template-import-export`}>
+            <Import className="h-4 w-4" />
+            Import Template
+          </Link>
         </Button>
       </div>
     </aside>

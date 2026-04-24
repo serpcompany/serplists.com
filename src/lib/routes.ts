@@ -119,6 +119,7 @@ export const resolveRouteShell = (pathname: string): AppShell => {
 
   if (
     normalizedPath === '/account' ||
+    normalizedPath.startsWith('/run/') ||
     normalizedPath.startsWith(buildConsoleHomePath()) ||
     normalizedPath.startsWith(LEGACY_CONSOLE_HOME_PATH)
   ) {
@@ -199,6 +200,7 @@ export const resolveConsoleSection = (
 
   if (
     normalizedPath.startsWith(buildConsoleRunsPath()) ||
+    normalizedPath.startsWith('/run/') ||
     normalizedPath.startsWith(LEGACY_CONSOLE_RUNS_PATH)
   ) {
     return 'runs';

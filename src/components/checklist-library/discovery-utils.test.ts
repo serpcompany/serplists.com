@@ -75,4 +75,18 @@ describe('discovery-utils', () => {
       { count: 1, name: 'Security', slug: 'security' },
     ]);
   });
+
+  it('deduplicates source categories that collapse to the same slug', () => {
+    expect(
+      buildDiscoveryCategories(templates, [
+        'Launch',
+        'Travel',
+        'travel',
+        'Security',
+      ]),
+    ).toEqual([
+      { count: 2, name: 'Launch', slug: 'launch' },
+      { count: 1, name: 'Security', slug: 'security' },
+    ]);
+  });
 });

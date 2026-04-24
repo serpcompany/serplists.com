@@ -59,7 +59,9 @@ const bottomNavItems = [
 ];
 
 const isActivePath = (pathname: string, href: string) =>
-  pathname === href || (href !== '/' && pathname.startsWith(href));
+  pathname === href ||
+  (href !== '/' && pathname.startsWith(href)) ||
+  (href === buildConsoleRunsPath() && pathname.startsWith('/run/'));
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
@@ -160,7 +162,11 @@ export function MobileBottomNav() {
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:hidden">
+    <nav
+      aria-label="Mobile console navigation"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:hidden"
+      data-mobile-bottom-nav="true"
+    >
       <div className="flex h-16 items-center justify-around px-2">
         {bottomNavItems.map((item) => {
           const active = isActivePath(pathname, item.href);

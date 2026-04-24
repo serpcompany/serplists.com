@@ -42,7 +42,7 @@ describe('TemplateCard', () => {
     expect(markup).toContain('View Template');
     expect(markup).toContain('href="/profile/designops/website-launch-checklist"');
     expect(markup).toContain('href="/profile/designops"');
-    expect(markup).toContain('href="/run/website-launch"');
+    expect(markup).not.toContain('href="/run/website-launch"');
     expect(markup).not.toContain('href="/categories/');
     expect(markup).toContain('<span class="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Launch</span>');
     expect(markup).toContain('<span class="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Marketing</span>');

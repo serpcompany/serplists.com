@@ -20,7 +20,15 @@ vi.mock('@/hooks/useTemplateSave', () => ({
 function ModelHarness({ id }: { id?: string }): JSX.Element {
   const model = useTemplateEditorModel({ id });
 
-  return <div>{model.loading ? 'loading' : 'ready'}</div>;
+  return (
+    <div>
+      <span>{model.loading ? 'loading' : 'ready'}</span>
+      <span>title:{model.initialValues.title}</span>
+      <span>description:{model.initialValues.description}</span>
+      <span>sections:{model.initialValues.sections.length}</span>
+      <span>first-section:{model.initialValues.sections[0]?.title}</span>
+    </div>
+  );
 }
 
 describe('useTemplateEditorModel create route', () => {
@@ -29,5 +37,15 @@ describe('useTemplateEditorModel create route', () => {
 
     expect(html).toContain('ready');
     expect(html).not.toContain('loading');
+  });
+
+  it('starts from a blank main-branch create-template state', () => {
+    const html = renderToStaticMarkup(<ModelHarness />);
+
+    expect(html).toContain('title:</span>');
+    expect(html).toContain('description:</span>');
+    expect(html).toContain('sections:1');
+    expect(html).toContain('first-section:</span>');
+    expect(html).not.toContain('New Employee Onboarding');
   });
 });

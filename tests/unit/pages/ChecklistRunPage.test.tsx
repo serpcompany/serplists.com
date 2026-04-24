@@ -57,7 +57,7 @@ const baseRun: ChecklistRun = {
 };
 
 describe('ChecklistRunPage layout', () => {
-  it('renders the private run as the reference two-pane progress workspace', () => {
+  it('renders the private run inside the shared dashboard shell with one persistent app sidebar', () => {
     mockUseRunExecutionModel.mockReturnValue({
       counts: { completed: 2, total: 9 },
       createShare: vi.fn(),
@@ -88,11 +88,18 @@ describe('ChecklistRunPage layout', () => {
     );
 
     expect(html).toContain('Progress');
+    expect(html).toContain('data-dashboard-content-shell="true"');
+    expect(html).toContain('data-dashboard-page-header="true"');
+    expect(html).toContain('data-run-workspace-shell="true"');
+    expect(html).toContain('data-mobile-run-progress="true"');
+    expect(html).toContain('data-run-progress-panel="true"');
     expect(html).toContain('Overall Progress');
     expect(html).toContain('Share');
     expect(html).toContain('Task 1 of 1');
     expect(html).toContain('Mark Complete');
     expect(html).toContain('min-h-[calc(100dvh-3.5rem)]');
+    expect(html).not.toContain('data-run-progress-sidebar="true"');
+    expect(html).not.toContain('border-r border-border bg-card xl:flex xl:w-64');
     expect(html).not.toContain('Tasks');
     expect(html).not.toContain('Work through the run like a docs outline');
   });
@@ -131,8 +138,13 @@ describe('ChecklistRunPage layout', () => {
     );
 
     expect(html).toContain('Copy Link');
-    expect(html).toContain('Want to use this checklist?');
-    expect(html).toContain('Create Your Own Copy');
+    expect(html).toContain('Browse Public Templates');
+    expect(html).toContain('Shared run snapshot');
+    expect(html).toContain('Run progress');
+    expect(html).not.toContain('Create Your Own Copy');
+    expect(html).toContain('max-w-[var(--layout-narrow-max)]');
+    expect(html).toContain('rounded-[var(--layout-card-radius)]');
+    expect(html).not.toContain('rounded-xl');
     expect(html).not.toContain('Creating link...');
     expect(html).not.toContain('Overall Progress');
   });

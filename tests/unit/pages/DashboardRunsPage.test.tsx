@@ -4,7 +4,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Dashboard from '@/pages/Dashboard';
-import type { ChecklistRun } from '@/types/checklist';
+import { createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
+import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
 const mockUseAuth = vi.fn();
 const mockUseTemplates = vi.fn();
@@ -130,6 +131,23 @@ const runs: ChecklistRun[] = [
   },
 ];
 
+const templates: ChecklistTemplate[] = [
+  {
+    id: 'template-5',
+    title: 'Team Offsite Template',
+    description: '',
+    type: 'checklist',
+    sections: [],
+    userId: 'user-1',
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
+    isPublic: false,
+    categories: [],
+    tags: [],
+    ownerProfile: { username: 'devteam' },
+  },
+];
+
 describe('/dashboard/runs presentation', () => {
   beforeEach(() => {
     mockUseAuth.mockReset();
@@ -142,7 +160,7 @@ describe('/dashboard/runs presentation', () => {
       logout: vi.fn(),
     });
     mockUseTemplates.mockReturnValue({
-      templates: [],
+      templates,
       templatesLoading: false,
       runs,
       runsLoading: false,
@@ -159,16 +177,22 @@ describe('/dashboard/runs presentation', () => {
     );
 
     expect(html).toContain('My Runs');
+    expect(html).toContain('data-dashboard-content-shell="true"');
+    expect(html).toContain('data-dashboard-page-header="true"');
     expect(html).toContain('3 in progress, 2 completed');
     expect(html).toContain('Search runs...');
     expect(html).toContain('role="combobox"');
     expect(html).toContain('Team Offsite Planning');
+    expect(html).toContain('From Team Offsite Template');
+    expect(html).toContain('href="/dashboard/templates/template-5"');
     expect(html).toContain('Website Launch - Q1 Release');
     expect(html).toContain('Started Jan 16, 2024');
     expect(html).toContain('In Progress');
     expect(html).toContain('Completed');
     expect(html).toContain('href="/run/run-5"');
     expect(html).toContain('href="/run/run-2"');
+    expect(html).toContain('data-run-actions="true"');
+    expect(html).toContain('focus-within:opacity-100');
     expect(html).not.toContain('Track active checklist runs');
     expect(html).not.toContain('Active runs');
     expect(html).not.toContain('Completed runs');
@@ -198,9 +222,28 @@ describe('/dashboard/runs presentation', () => {
     );
 
     expect(html).toContain('My Runs');
+    expect(html).toContain('data-dashboard-content-shell="true"');
     expect(html).toContain('Search runs...');
     expect(html).toContain('role="combobox"');
     expect(html).toContain('aria-busy="true"');
     expect(html).not.toContain('No runs found');
+  });
+
+  it('creates real shared run URLs instead of exposing protected run URLs', async () => {
+    const apiClient = {
+      createChecklistRunShare: vi.fn().mockResolvedValue({
+        shareToken: 'share-token-1',
+      }),
+    };
+
+    await expect(
+      createRunsDashboardShareUrl(
+        'run-5',
+        'https://serplists.com',
+        apiClient,
+      ),
+    ).resolves.toBe('https://serplists.com/share/share-token-1');
+
+    expect(apiClient.createChecklistRunShare).toHaveBeenCalledWith('run-5');
   });
 });

@@ -29,7 +29,7 @@ import {
   buildPublicTemplatesPath,
 } from '@/lib/routes';
 import { normalizeSections } from '@/lib/utils/checklistSections';
-import type { ChecklistSection, ChecklistTemplate } from '@/types/checklist';
+import type { ChecklistTemplate } from '@/types/checklist';
 
 type UserProfileRecord = {
   id: string;
@@ -57,21 +57,6 @@ type UserStats = {
 type ProfileFallbackState = {
   profile: ProfileSurfaceRecord;
   templates: ChecklistTemplate[];
-};
-
-const DESIGNOPS_DEMO_USERNAME = 'designops';
-
-const DESIGNOPS_DEMO_PROFILE: ProfileSurfaceRecord = {
-  id: 'designops-demo-profile',
-  full_name: 'Design Ops Team',
-  username: DESIGNOPS_DEMO_USERNAME,
-  avatar_url: null,
-  created_at: '2023-06-15T10:00:00Z',
-  bio: 'Building tools and processes for design teams. We share our operational checklists and templates to help other teams work more efficiently.',
-  location: 'San Francisco, CA',
-  totalRuns: 4500,
-  totalViews: 15600,
-  website: 'https://designops.io',
 };
 
 const countTemplateItems = (template: ChecklistTemplate) =>
@@ -117,105 +102,8 @@ const buildProfileSummary = (
   return `Public checklist templates and repeatable workflow packs published by @${profile.username}.`;
 };
 
-const buildDemoSections = (
-  sections: Array<{ itemCount: number; title: string }>,
-): ChecklistSection[] =>
-  sections.map((section, sectionIndex) => ({
-    id: `section-${sectionIndex + 1}`,
-    title: section.title,
-    items: Array.from({ length: section.itemCount }, (_, itemIndex) => ({
-      id: `item-${sectionIndex + 1}-${itemIndex + 1}`,
-      title: `Task ${itemIndex + 1}`,
-    })),
-  }));
-
-const buildDemoTemplate = ({
-  categories,
-  createdAt,
-  description,
-  id,
-  sections,
-  slug,
-  title,
-}: {
-  categories: string[];
-  createdAt: string;
-  description: string;
-  id: string;
-  sections: Array<{ itemCount: number; title: string }>;
-  slug: string;
-  title: string;
-}): ChecklistTemplate => ({
-  id,
-  title,
-  description,
-  type: 'checklist',
-  sections: buildDemoSections(sections),
-  userId: DESIGNOPS_DEMO_PROFILE.id,
-  createdAt,
-  updatedAt: createdAt,
-  isPublic: true,
-  slug,
-  categories,
-  ownerProfile: {
-    full_name: DESIGNOPS_DEMO_PROFILE.full_name ?? undefined,
-    username: DESIGNOPS_DEMO_PROFILE.username,
-  },
-});
-
-const DESIGNOPS_DEMO_TEMPLATES: ChecklistTemplate[] = [
-  buildDemoTemplate({
-    id: 'designops-template-1',
-    title: 'Website Launch Checklist',
-    description: 'A comprehensive checklist for launching a new website.',
-    slug: 'website-launch-checklist',
-    categories: ['Web Development', 'Launch'],
-    createdAt: '2024-01-10T10:00:00Z',
-    sections: [
-      { title: 'Pre-Launch', itemCount: 2 },
-      { title: 'Technical', itemCount: 1 },
-    ],
-  }),
-  buildDemoTemplate({
-    id: 'designops-template-2',
-    title: 'Design Review Process',
-    description: 'Structured process for conducting design reviews with stakeholders.',
-    slug: 'design-review-process',
-    categories: ['Design', 'Process'],
-    createdAt: '2024-01-05T09:00:00Z',
-    sections: [
-      { title: 'Preparation', itemCount: 1 },
-      { title: 'Review', itemCount: 2 },
-    ],
-  }),
-  buildDemoTemplate({
-    id: 'designops-template-3',
-    title: 'Design System Audit',
-    description: 'Quarterly audit checklist for design system health and adoption.',
-    slug: 'design-system-audit',
-    categories: ['Design', 'Quality'],
-    createdAt: '2024-01-01T11:00:00Z',
-    sections: [
-      { title: 'Components', itemCount: 1 },
-      { title: 'Documentation', itemCount: 1 },
-    ],
-  }),
-  buildDemoTemplate({
-    id: 'designops-template-4',
-    title: 'Brand Asset Handoff',
-    description: 'Checklist for handing off brand assets to external partners.',
-    slug: 'brand-asset-handoff',
-    categories: ['Design', 'Brand'],
-    createdAt: '2023-12-20T10:00:00Z',
-    sections: [{ title: 'Assets', itemCount: 2 }],
-  }),
-];
-
 const normalizeUsername = (value: string | undefined) =>
   value?.trim().toLowerCase() ?? '';
-
-const isDesignopsUsername = (value: string | undefined) =>
-  normalizeUsername(value) === DESIGNOPS_DEMO_USERNAME;
 
 const mapApiTemplate = (
   template: Record<string, unknown>,
@@ -311,13 +199,6 @@ const calculateStats = (templates: ChecklistTemplate[]): UserStats => {
 const getFallbackProfileState = (
   username: string | undefined,
 ): ProfileFallbackState | null => {
-  if (isDesignopsUsername(username)) {
-    return {
-      profile: DESIGNOPS_DEMO_PROFILE,
-      templates: DESIGNOPS_DEMO_TEMPLATES,
-    };
-  }
-
   if (normalizeUsername(username) === REPO_TEMPLATE_OWNER_SLUG) {
     return {
       profile: {
@@ -332,24 +213,6 @@ const getFallbackProfileState = (
   }
 
   return null;
-};
-
-const decorateProfileForSurface = (
-  profile: UserProfileRecord,
-): ProfileSurfaceRecord => {
-  if (!isDesignopsUsername(profile.username)) {
-    return profile;
-  }
-
-  return {
-    ...profile,
-    full_name: profile.full_name?.trim() || DESIGNOPS_DEMO_PROFILE.full_name,
-    bio: DESIGNOPS_DEMO_PROFILE.bio,
-    location: DESIGNOPS_DEMO_PROFILE.location,
-    totalRuns: DESIGNOPS_DEMO_PROFILE.totalRuns,
-    totalViews: DESIGNOPS_DEMO_PROFILE.totalViews,
-    website: DESIGNOPS_DEMO_PROFILE.website,
-  };
 };
 
 const getProfileWebsiteHref = (website: string) =>
@@ -387,7 +250,7 @@ const UserProfile = () => {
 
         if (isCancelled) return;
 
-        const decoratedProfile = decorateProfileForSurface(profileData);
+        const decoratedProfile = profileData;
         let resolvedTemplates: ChecklistTemplate[] = [];
 
         try {
@@ -411,13 +274,6 @@ const UserProfile = () => {
             setError('Unable to load this public profile.');
             return;
           }
-        }
-
-        if (
-          isDesignopsUsername(profileData.username) &&
-          resolvedTemplates.length === 0
-        ) {
-          resolvedTemplates = DESIGNOPS_DEMO_TEMPLATES;
         }
 
         if (isCancelled) return;

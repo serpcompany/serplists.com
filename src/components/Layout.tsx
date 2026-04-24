@@ -1,9 +1,6 @@
 import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Briefcase,
-  CheckSquare,
-  Compass,
   LayoutGrid,
   LogOut,
 } from 'lucide-react';
@@ -44,27 +41,8 @@ interface LayoutProps {
 
 type NavigationItem = {
   href: string;
-  icon?: React.ComponentType<{ className?: string }>;
   label: string;
 };
-
-const authenticatedNavigation: NavigationItem[] = [
-  {
-    href: buildConsoleHomePath(),
-    icon: LayoutGrid,
-    label: 'Dashboard',
-  },
-  {
-    href: buildConsoleTemplatesPath(),
-    icon: Briefcase,
-    label: 'Templates',
-  },
-  {
-    href: buildConsoleRunsPath(),
-    icon: CheckSquare,
-    label: 'Runs',
-  },
-];
 
 const isPathActive = (pathname: string, href: string): boolean => {
   if (href === buildConsoleHomePath()) {
@@ -231,33 +209,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
             <div className="flex items-center gap-2">
               {user ? (
-                <>
-                  <div className="hidden items-center gap-1 md:flex">
-                    {authenticatedNavigation.map((item) => {
-                      const Icon = item.icon ?? Compass;
-
-                      return (
-                        <Button
-                          key={item.href}
-                          asChild
-                          variant="ghost"
-                          className={cn(
-                            'px-3 text-sm',
-                            isPathActive(location.pathname, item.href)
-                              ? 'bg-secondary text-foreground'
-                              : 'text-muted-foreground',
-                          )}
-                        >
-                          <Link to={item.href}>
-                            <Icon className="mr-2 h-4 w-4" />
-                            {item.label}
-                          </Link>
-                        </Button>
-                      );
-                    })}
-                  </div>
-                  {accountMenu}
-                </>
+                accountMenu
               ) : (
                 <>
                   <Button

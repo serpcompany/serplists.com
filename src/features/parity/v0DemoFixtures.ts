@@ -164,6 +164,120 @@ const PRODUCT_LAUNCH_SECTIONS: ChecklistTemplate['sections'] = [
   },
 ];
 
+const PRODUCT_LAUNCH_EDITOR_SECTIONS: ChecklistTemplate['sections'] = [
+  {
+    id: 'edit-sec-001',
+    title: 'Pre-Launch Preparation',
+    items: [
+      {
+        id: 'edit-task-001',
+        title: 'Finalize product documentation',
+        description: 'Ensure all docs are up to date',
+        contents: [
+          {
+            id: 'edit-content-001',
+            type: 'text',
+            value:
+              'Review and update:\n- API documentation\n- User guides\n- Release notes',
+          },
+          {
+            id: 'edit-content-002',
+            type: 'subItems',
+            value: '',
+            subItems: [
+              { id: 'edit-sub-001', title: 'Update changelog' },
+              { id: 'edit-sub-002', title: 'Review API docs' },
+              { id: 'edit-sub-003', title: 'Update screenshots' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'edit-task-002',
+        title: 'QA sign-off',
+        contents: [
+          {
+            id: 'edit-content-003',
+            type: 'text',
+            value: 'Get final approval from QA team on all test cases.',
+          },
+        ],
+      },
+      {
+        id: 'edit-task-003',
+        title: 'Marketing assets ready',
+        contents: [
+          {
+            id: 'edit-content-004',
+            type: 'subItems',
+            value: '',
+            subItems: [
+              { id: 'edit-sub-004', title: 'Blog post drafted' },
+              { id: 'edit-sub-005', title: 'Social media content scheduled' },
+              { id: 'edit-sub-006', title: 'Email campaign prepared' },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'edit-sec-002',
+    title: 'Launch Day',
+    items: [
+      {
+        id: 'edit-task-004',
+        title: 'Deploy to production',
+        description: 'Execute deployment plan',
+        contents: [
+          {
+            id: 'edit-content-005',
+            type: 'text',
+            value: 'Follow the deployment runbook. Ensure rollback plan is ready.',
+          },
+        ],
+      },
+      {
+        id: 'edit-task-005',
+        title: 'Monitor metrics',
+        contents: [
+          {
+            id: 'edit-content-006',
+            type: 'embed',
+            value: 'https://grafana.company.com/dashboard/launch-metrics',
+          },
+        ],
+      },
+      {
+        id: 'edit-task-006',
+        title: 'Announce launch',
+        contents: [],
+      },
+    ],
+  },
+  {
+    id: 'edit-sec-003',
+    title: 'Post-Launch',
+    items: [
+      {
+        id: 'edit-task-007',
+        title: 'Gather initial feedback',
+        contents: [],
+      },
+      {
+        id: 'edit-task-008',
+        title: 'Schedule retrospective',
+        contents: [],
+      },
+      {
+        id: 'edit-task-009',
+        title: 'Update roadmap',
+        contents: [],
+      },
+    ],
+  },
+];
+
 export const isV0DemoProfileUsername = (username?: string): boolean =>
   username?.toLowerCase() === V0_DEMO_PROFILE.username;
 
@@ -235,6 +349,30 @@ export function buildV0DemoPrivateTemplate(): ChecklistTemplate & {
     viewCount: 1234,
     copyCount: 89,
     runCount: 342,
+    ownerProfile: {
+      full_name: 'Design Ops Team',
+      username: V0_DEMO_PROFILE.username,
+    },
+  };
+}
+
+export function buildV0DemoEditableTemplate(): ChecklistTemplate {
+  return {
+    id: V0_DEMO_PRIVATE_TEMPLATE_ID,
+    title: 'Product Launch Checklist',
+    description: 'Complete checklist for launching a new product or feature',
+    type: 'checklist',
+    sections: PRODUCT_LAUNCH_EDITOR_SECTIONS,
+    userId: 'user-1',
+    createdAt: '2024-01-15T10:00:00Z',
+    updatedAt: '2024-02-20T14:30:00Z',
+    isPublic: true,
+    slug: 'product-launch-checklist',
+    seoTitle: 'Product Launch Checklist - Complete Guide',
+    seoDescription:
+      'A comprehensive checklist covering pre-launch prep, launch day activities, and post-launch follow-up tasks.',
+    categories: ['Product', 'Engineering'],
+    tags: ['launch', 'release', 'product-management'],
     ownerProfile: {
       full_name: 'Design Ops Team',
       username: V0_DEMO_PROFILE.username,

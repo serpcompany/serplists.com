@@ -31,6 +31,9 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
   onProfileUpdate,
   onAvatarUpdate,
 }) => {
+  const origin =
+    typeof window !== 'undefined' ? window.location.origin : 'https://serplists.com';
+
   return (
     <Card>
       <CardHeader>
@@ -109,12 +112,12 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-primary hover:underline"
               >
-                {window.location.origin}
+                {origin}
                 {buildPublicProfilePath(profileData.username)}
                 <ExternalLink className="h-3 w-3" />
               </Link>
             ) : (
-              `${window.location.origin}/profile/username`
+              `${origin}/profile/username`
             )}
           </p>
         </div>

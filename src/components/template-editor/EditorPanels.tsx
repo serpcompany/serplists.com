@@ -84,7 +84,7 @@ export function EditorPanels({
 
   return (
     <ScrollArea className="flex-1 bg-background">
-      <div className="mx-auto max-w-2xl px-8 py-8">
+      <div className="mx-auto max-w-2xl p-8">
         <div className="space-y-8">
           <div className="space-y-1">
             <h2 className="text-lg font-semibold text-foreground">{panelTitle}</h2>

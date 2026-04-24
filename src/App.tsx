@@ -16,6 +16,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { DevLoginBar } from './components/DevLoginBar';
 import RequireAuth from '@/components/RequireAuth';
 import Index from './pages/Index';
+import Docs from './pages/Docs';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -50,6 +51,7 @@ import {
 } from './lib/routes';
 import { useAuth } from './contexts/CloudflareAuthContext';
 import { resolveDashboardProfileRedirectTarget } from './lib/dashboardRouteAliases';
+import { applyStoredTheme } from './lib/theme';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -78,15 +80,9 @@ const DashboardProfileRedirect = () => {
   );
 };
 
-const RootThemeClass = () => {
+const RootThemeSync = () => {
   useEffect(() => {
-    document.documentElement.classList.add('dark');
-    document.body.classList.add('dark');
-
-    return () => {
-      document.documentElement.classList.remove('dark');
-      document.body.classList.remove('dark');
-    };
+    applyStoredTheme();
   }, []);
 
   return null;
@@ -100,14 +96,15 @@ const App = () => {
           <TooltipProvider>
             <AuthProvider>
               <TemplatesProvider>
-                <RootThemeClass />
-                <Router>
+                <RootThemeSync />
+                <Router
+                  future={{
+                    v7_relativeSplatPath: true,
+                    v7_startTransition: true,
+                  }}
+                >
                   <Routes>
                     {/* Public Routes */}
-                    <Route
-                      path="/"
-                      element={<Index />}
-                    />
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     <Route
@@ -127,7 +124,18 @@ const App = () => {
                       path="/share/:shareToken"
                       element={<ChecklistRun />}
                     />
-
+                    <Route
+                      path={buildPublicTemplatesPath()}
+                      element={<ChecklistLibrary />}
+                    />
+                    <Route
+                      path="/categories"
+                      element={<Categories />}
+                    />
+                    <Route
+                      path="/categories/:categorySlug"
+                      element={<CategoryDetail />}
+                    />
                     {/* Canonical Private Routes */}
                     <Route
                       path={LEGACY_CONSOLE_HOME_PATH}
@@ -149,12 +157,15 @@ const App = () => {
                         </RequireAuth>
                       }
                     />
-                    <Route
-                      path="/run/:id"
-                      element={<ChecklistRun />}
-                    />
-
                     <Route element={<Layout />}>
+                      <Route
+                        path="/"
+                        element={<Index />}
+                      />
+                      <Route
+                        path="/docs"
+                        element={<Docs />}
+                      />
                       <Route
                         path="/features"
                         element={<Features />}
@@ -174,18 +185,6 @@ const App = () => {
                       <Route
                         path="/contact"
                         element={<Contact />}
-                      />
-                      <Route
-                        path={buildPublicTemplatesPath()}
-                        element={<ChecklistLibrary />}
-                      />
-                      <Route
-                        path="/categories"
-                        element={<Categories />}
-                      />
-                      <Route
-                        path="/categories/:categorySlug"
-                        element={<CategoryDetail />}
                       />
                       <Route
                         path="/profile/:username/:templateSlug"
@@ -230,6 +229,10 @@ const App = () => {
                       />
                       <Route
                         path="/dashboard/runs/:id"
+                        element={<ChecklistRun />}
+                      />
+                      <Route
+                        path="/run/:id"
                         element={<ChecklistRun />}
                       />
 

@@ -14,6 +14,13 @@ import {
 
 import { Button } from '@/components/ui/button';
 import {
+  DashboardContentShell,
+  DashboardEmptyState,
+  DashboardPageHeader,
+  DashboardScrollArea,
+  DashboardToolbar,
+} from '@/components/dashboard/DashboardContentShell';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -37,19 +44,21 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
   buildRunPath,
-  buildRunUrl,
 } from '@/lib/routes';
 import { cn } from '@/lib/utils';
-import type { ChecklistRun } from '@/types/checklist';
+import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 import { toast } from 'sonner';
+import { createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
 
 type StatusFilter = 'all' | 'in_progress' | 'completed';
 
 interface RunsDashboardViewProps {
   runs: ChecklistRun[];
-  onDeleteRun: (runId: string) => void;
+  templates?: Pick<ChecklistTemplate, 'id' | 'ownerProfile' | 'title'>[];
+  onDeleteRun: (runId: string) => void | Promise<void>;
   loading?: boolean;
 }
 
@@ -74,22 +83,38 @@ const getTaskCounts = (run: ChecklistRun) =>
 
 export function RunsDashboardView({
   runs,
+  templates = [],
   onDeleteRun,
   loading = false,
 }: RunsDashboardViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
+  const [isDeletingRun, setIsDeletingRun] = useState(false);
 
   const inProgressCount = runs.filter((run) => run.status === 'in_progress').length;
   const completedCount = runs.filter((run) => run.status === 'completed').length;
+  const templatesById = useMemo(
+    () => new Map(templates.map((template) => [template.id, template])),
+    [templates],
+  );
 
   const filteredRuns = useMemo(() => {
     const lowerSearch = searchQuery.toLowerCase();
 
     return runs
       .filter((run) => {
-        const matchesSearch = run.title.toLowerCase().includes(lowerSearch);
+        const template = templatesById.get(run.templateId);
+        const matchesSearch = [
+          run.title,
+          run.status,
+          template?.title ?? '',
+          template?.ownerProfile?.username ?? '',
+          template?.ownerProfile?.full_name ?? '',
+        ]
+          .join(' ')
+          .toLowerCase()
+          .includes(lowerSearch);
         const matchesStatus =
           statusFilter === 'all' || run.status === statusFilter;
 
@@ -99,32 +124,49 @@ export function RunsDashboardView({
         (left, right) =>
           new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime(),
       );
-  }, [runs, searchQuery, statusFilter]);
+  }, [runs, searchQuery, statusFilter, templatesById]);
 
   const shareRun = async (runId: string) => {
-    const shareUrl = buildRunUrl(runId, window.location.origin);
-
     try {
+      const shareUrl = await createRunsDashboardShareUrl(
+        runId,
+        window.location.origin,
+      );
       await navigator.clipboard.writeText(shareUrl);
-      toast.success('Run link copied');
+      toast.success('Share link copied');
     } catch {
-      toast.success('Run link ready');
+      toast.error('Failed to create share link');
+    }
+  };
+
+  const confirmDeleteRun = async () => {
+    if (!runToDelete) {
+      return;
+    }
+
+    setIsDeletingRun(true);
+    try {
+      await onDeleteRun(runToDelete);
+      toast.success('Run deleted');
+      setRunToDelete(null);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to delete run.',
+      );
+    } finally {
+      setIsDeletingRun(false);
     }
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b border-border px-6 py-4">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">My Runs</h1>
-          <p className="text-sm text-muted-foreground">
-            {inProgressCount} in progress, {completedCount} completed
-          </p>
-        </div>
-      </header>
+    <DashboardContentShell>
+      <DashboardPageHeader
+        title="My Runs"
+        description={`${inProgressCount} in progress, ${completedCount} completed`}
+      />
 
-      <div className="flex items-center gap-3 border-b border-border px-6 py-3">
-        <div className="relative flex-1 max-w-md">
+      <DashboardToolbar>
+        <div className="relative w-full lg:max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             aria-label="Search runs"
@@ -139,7 +181,7 @@ export function RunsDashboardView({
           value={statusFilter}
           onValueChange={(value) => setStatusFilter(value as StatusFilter)}
         >
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-full lg:w-40">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -148,9 +190,9 @@ export function RunsDashboardView({
             <SelectItem value="completed">Completed</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </DashboardToolbar>
 
-      <div className="flex-1 overflow-auto p-6">
+      <DashboardScrollArea>
         {loading ? (
           <div className="space-y-2" aria-busy="true">
             {Array.from({ length: 5 }).map((_, index) => (
@@ -171,34 +213,33 @@ export function RunsDashboardView({
             ))}
           </div>
         ) : filteredRuns.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
-              <Filter className="h-7 w-7 text-muted-foreground" />
-            </div>
-            <h3 className="mb-1 text-sm font-medium text-foreground">
-              No runs found
-            </h3>
-            <p className="mb-4 text-sm text-muted-foreground">
-              {searchQuery
+          <DashboardEmptyState
+            icon={<Filter className="h-7 w-7" />}
+            title="No runs found"
+            description={
+              searchQuery
                 ? 'Try adjusting your search or filters'
-                : 'Start a run from one of your templates'}
-            </p>
-            {!searchQuery ? (
+                : 'Start a run from one of your templates'
+            }
+            action={
+              !searchQuery ? (
               <Button asChild>
                 <Link to={buildConsoleTemplatesPath()}>Browse Templates</Link>
               </Button>
-            ) : null}
-          </div>
+              ) : null
+            }
+          />
         ) : (
           <div className="space-y-2">
             {filteredRuns.map((run) => {
               const isCompleted = run.status === 'completed';
               const { completed, total } = getTaskCounts(run);
+              const template = templatesById.get(run.templateId);
 
               return (
                 <div
                   key={run.id}
-                  className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-colors hover:border-muted-foreground/30"
+                  className="group grid gap-4 rounded-lg border border-border bg-card p-4 transition-colors hover:border-muted-foreground/30 sm:grid-cols-[auto_minmax(0,1fr)] xl:flex xl:items-center"
                 >
                   <div
                     className={cn(
@@ -220,7 +261,15 @@ export function RunsDashboardView({
                     >
                       {run.title}
                     </Link>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      {template ? (
+                        <Link
+                          to={buildConsoleTemplatePath(template.id)}
+                          className="font-medium text-foreground/80 hover:text-foreground hover:underline"
+                        >
+                          From {template.title}
+                        </Link>
+                      ) : null}
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         Started {formatDate(run.startedAt)}
@@ -231,7 +280,7 @@ export function RunsDashboardView({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3 sm:col-start-2 xl:col-start-auto">
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-20 overflow-hidden rounded-full bg-secondary">
                         <div
@@ -259,7 +308,10 @@ export function RunsDashboardView({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div
+                    className="flex flex-wrap items-center gap-2 opacity-100 transition-opacity xl:opacity-0 xl:group-hover:opacity-100 xl:focus-within:opacity-100"
+                    data-run-actions="true"
+                  >
                     {!isCompleted ? (
                       <Button asChild size="sm">
                         <Link to={buildRunPath(run.id)}>
@@ -308,12 +360,12 @@ export function RunsDashboardView({
             })}
           </div>
         )}
-      </div>
+      </DashboardScrollArea>
 
       <Dialog
         open={runToDelete !== null}
         onOpenChange={(open) => {
-          if (!open) {
+          if (!open && !isDeletingRun) {
             setRunToDelete(null);
           }
         }}
@@ -327,24 +379,23 @@ export function RunsDashboardView({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRunToDelete(null)}>
+            <Button
+              variant="outline"
+              disabled={isDeletingRun}
+              onClick={() => setRunToDelete(null)}
+            >
               Cancel
             </Button>
             <Button
               variant="destructive"
-              onClick={() => {
-                if (runToDelete) {
-                  onDeleteRun(runToDelete);
-                  toast.success('Run deleted');
-                  setRunToDelete(null);
-                }
-              }}
+              disabled={isDeletingRun}
+              onClick={() => void confirmDeleteRun()}
             >
-              Delete
+              {isDeletingRun ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </DashboardContentShell>
   );
 }

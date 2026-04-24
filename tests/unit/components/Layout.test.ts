@@ -16,7 +16,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 }));
 
 describe('Layout route contracts', () => {
-  it('renders non-discovery public routes with the shared h-14 max-w-6xl public header frame', () => {
+  it('renders non-discovery public routes with the shared h-14 public header frame', () => {
     const html = renderToStaticMarkup(
       React.createElement(
         MemoryRouter,
@@ -39,11 +39,11 @@ describe('Layout route contracts', () => {
     expect(html).toContain('Nested public child');
     expect(html).toContain('data-app-shell="public"');
     expect(html).toContain(
-      'mx-auto w-full px-4 max-w-6xl flex h-14 items-center justify-between gap-6',
+      'mx-auto w-full px-4 max-w-[var(--layout-shell-max)] flex h-14 items-center justify-between gap-6',
     );
   });
 
-  it('keeps categories and profile routes inside the shared public Layout branch in App.tsx', () => {
+  it('keeps profile routes in the shared public Layout branch without nesting discovery shells', () => {
     const appSource = readFileSync(
       new URL('../../../src/App.tsx', import.meta.url),
       'utf8',
@@ -52,8 +52,13 @@ describe('Layout route contracts', () => {
       /<Route element={<Layout \/>}>([\s\S]*?)<\/Route>/,
     );
 
-    expect(publicLayoutBranch?.[1]).toContain('path="/categories"');
-    expect(publicLayoutBranch?.[1]).toContain('path="/categories/:categorySlug"');
+    expect(publicLayoutBranch?.[1]).not.toContain(
+      'path={buildPublicTemplatesPath()}',
+    );
+    expect(publicLayoutBranch?.[1]).not.toContain('path="/categories"');
+    expect(publicLayoutBranch?.[1]).not.toContain(
+      'path="/categories/:categorySlug"',
+    );
     expect(publicLayoutBranch?.[1]).toContain(
       'path="/profile/:username/:templateSlug"',
     );

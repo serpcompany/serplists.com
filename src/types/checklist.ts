@@ -130,9 +130,9 @@ export interface TemplatesContextProps {
   getAllPublicTemplates: () => ChecklistTemplate[];
   createTemplate: (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => Promise<ChecklistTemplate>;
   updateTemplate: (template: TemplateSavePayload) => Promise<void>;
-  deleteTemplate: (id: string) => void;
+  deleteTemplate: (id: string) => Promise<void>;
   createRun: (params: { templateId: string; runName?: string }) => Promise<ChecklistRun | null>;
-  updateRun: (run: ChecklistRun) => void;
-  deleteRun: (id: string) => void;
+  updateRun: (run: ChecklistRun) => Promise<ChecklistRun>;
+  deleteRun: (id: string) => Promise<void>;
   importTemplates: (templates: ChecklistTemplate[], options?: TemplateImportOptions) => Promise<TemplateImportSummary>;
 }

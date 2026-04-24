@@ -1,4 +1,5 @@
 import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -33,29 +34,53 @@ vi.mock('@/lib/auth-client', () => ({
         },
       },
     }),
+    changePassword: vi.fn(),
+    revokeOtherSessions: vi.fn(),
     updateUser: (...args: unknown[]) => updateUser(...args),
   },
 }));
 
+vi.mock('@/lib/api', () => ({
+  api: {
+    createBillingCheckout: vi.fn(),
+    createBillingPortal: vi.fn(),
+    getBillingStatus: vi.fn().mockResolvedValue({
+      billingEnabled: false,
+      plan: 'free',
+    }),
+    uploadToR2: vi.fn(),
+  },
+}));
+
 describe('DashboardSettings page', () => {
-  it('renders the dashboard settings tabs and section cards', () => {
+  it('reuses the real account settings surface instead of fake settings-only panels', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const html = renderToStaticMarkup(
       <MemoryRouter initialEntries={['/dashboard/settings']}>
-        <DashboardSettings />
+        <QueryClientProvider client={queryClient}>
+          <DashboardSettings />
+        </QueryClientProvider>
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Settings');
-    expect(html).toContain('Profile');
-    expect(html).toContain('Notifications');
-    expect(html).toContain('Privacy');
-    expect(html).toContain('Data');
+    expect(html).toContain('Account Settings');
+    expect(html).toContain('data-dashboard-content-shell="true"');
+    expect(html).toContain('data-dashboard-page-header="true"');
     expect(html).toContain('Profile Information');
-    expect(html).toContain('Email Notifications');
-    expect(html).toContain('Privacy Settings');
-    expect(html).toContain('Export Data');
-    expect(html).toContain('Danger Zone');
+    expect(html).toContain('Billing');
+    expect(html).toContain('Security');
     expect(html).toContain('john@example.com');
     expect(html).toContain('John Doe');
+    expect(html).toContain('Update Profile');
+    expect(html).not.toContain('New Template');
+    expect(html).not.toContain('Import Template');
+    expect(html).not.toContain('Notifications');
+    expect(html).not.toContain('Privacy');
+    expect(html).not.toContain('Email Notifications');
+    expect(html).not.toContain('Privacy Settings');
+    expect(html).not.toContain('Export Data');
+    expect(html).not.toContain('Danger Zone');
   });
 });

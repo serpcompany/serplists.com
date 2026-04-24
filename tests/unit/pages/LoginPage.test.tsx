@@ -29,7 +29,7 @@ vi.mock('sonner', () => ({
 }));
 
 describe('Login page', () => {
-  it('uses the canonical v0 sign-in surface instead of the older auth shell wrapper', () => {
+  it('uses the feature-wired sign-in surface without dead auth affordances', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <Login />
@@ -37,10 +37,12 @@ describe('Login page', () => {
     );
 
     expect(html).toContain('Welcome back');
-    expect(html).toContain('Remember me for 30 days');
-    expect(html).toContain('or continue with');
-    expect(html).toContain('Google');
-    expect(html).toContain('GitHub');
+    expect(html).toContain('Forgot password?');
+    expect(html).toContain('Sign in');
+    expect(html).not.toContain('Remember me for 30 days');
+    expect(html).not.toContain('or continue with');
+    expect(html).not.toContain('Google');
+    expect(html).not.toContain('GitHub');
     expect(html).not.toContain('What happens after sign in');
   });
 });

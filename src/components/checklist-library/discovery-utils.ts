@@ -139,23 +139,37 @@ export const buildDiscoveryCategories = (
   templates: ChecklistTemplate[],
   categories?: string[],
 ): DiscoveryCategory[] => {
-  const categoryCounts = new Map<string, number>();
+  const categoryCountsBySlug = new Map<string, number>();
+  const categoryLabelBySlug = new Map<string, string>();
 
   templates.forEach((template) => {
     template.categories?.forEach((category) => {
-      categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
+      const slug = buildCategorySlug(category);
+      categoryCountsBySlug.set(slug, (categoryCountsBySlug.get(slug) ?? 0) + 1);
+      if (!categoryLabelBySlug.has(slug)) {
+        categoryLabelBySlug.set(slug, category);
+      }
     });
   });
 
   const sourceCategories =
-    categories ?? Array.from(categoryCounts.keys()).sort(compareText);
+    categories ?? Array.from(categoryLabelBySlug.values()).sort(compareText);
+  const categoriesBySlug = new Map<string, DiscoveryCategory>();
 
-  return sourceCategories
-    .map((name) => ({
-      count: categoryCounts.get(name) ?? 0,
-      name,
-      slug: buildCategorySlug(name),
-    }))
+  sourceCategories.forEach((name) => {
+    const slug = buildCategorySlug(name);
+    if (categoriesBySlug.has(slug)) {
+      return;
+    }
+
+    categoriesBySlug.set(slug, {
+      count: categoryCountsBySlug.get(slug) ?? 0,
+      name: categoryLabelBySlug.get(slug) ?? name,
+      slug,
+    });
+  });
+
+  return Array.from(categoriesBySlug.values())
     .filter((category) => category.count > 0)
     .sort((left, right) => {
       if (right.count !== left.count) {

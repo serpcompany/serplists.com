@@ -2,8 +2,13 @@ import React, { useRef, useState } from 'react';
 import { Button } from './button';
 import { Input } from './input';
 import { Label } from './label';
-import { Upload, X, File, Image, Video, ExternalLink } from 'lucide-react';
-import { uploadFile, validateFile, UploadResult } from '@/lib/utils/fileUpload';
+import { X, File, Image, Video, ExternalLink } from 'lucide-react';
+import {
+  deleteUploadedAsset,
+  uploadFile,
+  validateFile,
+  UploadResult,
+} from '@/lib/utils/fileUpload';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { getYoutubeVideoId } from '@/utils/urlHelpers';
@@ -26,6 +31,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   className = ''
 }) => {
   const [isUploading, setIsUploading] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const { toast } = useToast();
@@ -72,11 +78,15 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     setIsUploading(true);
 
     try {
+      const previousValue = value;
       const result: UploadResult = await uploadFile(file, getBucketName(), user.id);
       
       if (result.success && result.url) {
         onValueChange(result.url);
         onFileInfoChange(result.fileName, result.fileSize);
+        if (previousValue && previousValue !== result.url) {
+          await deleteUploadedAsset(previousValue);
+        }
         toast({
           title: "Upload successful",
           description: `${file.name} has been uploaded.`
@@ -102,9 +112,16 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     }
   };
 
-  const handleClear = () => {
-    onValueChange('');
-    onFileInfoChange(undefined, undefined);
+  const handleClear = async () => {
+    setIsClearing(true);
+
+    try {
+      await deleteUploadedAsset(value);
+      onValueChange('');
+      onFileInfoChange(undefined, undefined);
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   return (
@@ -144,6 +161,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={handleClear}
+                disabled={isUploading || isClearing}
+                aria-label={`Remove uploaded ${type}`}
               >
                 <X className="h-4 w-4" />
               </Button>

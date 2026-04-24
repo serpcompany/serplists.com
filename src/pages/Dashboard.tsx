@@ -18,6 +18,9 @@ import { toast } from 'sonner';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
 import { UserTemplatesSection } from '@/components/templates/UserTemplatesSection';
+import {
+  DashboardMetricCard,
+} from '@/components/dashboard/DashboardContentShell';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -52,11 +55,11 @@ const Dashboard = () => {
     deleteRun,
   } = useTemplates();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeRuns, setActiveRuns] = useState<ChecklistRun[]>([]);
-  const [completedRuns, setCompletedRuns] = useState<ChecklistRun[]>([]);
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeletingRun, setIsDeletingRun] = useState(false);
   const [editingRunId, setEditingRunId] = useState<string | null>(null);
+  const [isSavingRunTitle, setIsSavingRunTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
 
   const isRunsRoute = resolveConsoleSection(location.pathname) === 'runs';
@@ -69,9 +72,16 @@ const Dashboard = () => {
     }
   }, [searchParams, setSearchParams]);
 
-  useEffect(() => {
-    setActiveRuns(runs.filter((run) => run.status === 'in_progress'));
-    setCompletedRuns(
+  const templateLookup = useMemo(
+    () => new Map(templates.map((template) => [template.id, template])),
+    [templates],
+  );
+  const activeRuns = useMemo(
+    () => runs.filter((run) => run.status === 'in_progress'),
+    [runs],
+  );
+  const completedRuns = useMemo(
+    () =>
       runs
         .filter((run) => run.status === 'completed')
         .sort(
@@ -79,12 +89,7 @@ const Dashboard = () => {
             new Date(right.completedAt || '').getTime() -
             new Date(left.completedAt || '').getTime(),
         ),
-    );
-  }, [runs]);
-
-  const templateLookup = useMemo(
-    () => new Map(templates.map((template) => [template.id, template])),
-    [templates],
+    [runs],
   );
   const userTemplates = useMemo(
     () => templates.filter((template) => template.userId === user?.id),
@@ -103,20 +108,31 @@ const Dashboard = () => {
     return (
       <RunsDashboardView
         runs={runs}
+        templates={templates}
         onDeleteRun={deleteRun}
         loading={runsLoading}
       />
     );
   }
 
-  const handleDeleteRun = () => {
+  const handleDeleteRun = async () => {
     if (!runToDelete) {
       return;
     }
 
-    deleteRun(runToDelete);
-    setRunToDelete(null);
-    setIsDeleteDialogOpen(false);
+    setIsDeletingRun(true);
+    try {
+      await deleteRun(runToDelete);
+      toast.success('Run deleted');
+      setRunToDelete(null);
+      setIsDeleteDialogOpen(false);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to delete run.',
+      );
+    } finally {
+      setIsDeletingRun(false);
+    }
   };
 
   const handleTitleEdit = (run: ChecklistRun) => {
@@ -124,7 +140,7 @@ const Dashboard = () => {
     setEditTitle(run.title);
   };
 
-  const handleTitleSave = (runId: string) => {
+  const handleTitleSave = async (runId: string) => {
     if (!editTitle.trim()) {
       return;
     }
@@ -134,13 +150,22 @@ const Dashboard = () => {
       return;
     }
 
-    updateRun({
-      ...runToUpdate,
-      title: editTitle.trim(),
-    });
-    toast.success('Run title updated');
-    setEditingRunId(null);
-    setEditTitle('');
+    setIsSavingRunTitle(true);
+    try {
+      await updateRun({
+        ...runToUpdate,
+        title: editTitle.trim(),
+      });
+      toast.success('Run title updated');
+      setEditingRunId(null);
+      setEditTitle('');
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to update run title.',
+      );
+    } finally {
+      setIsSavingRunTitle(false);
+    }
   };
 
   const renderRunCard = (run: ChecklistRun, tone: 'active' | 'completed') => {
@@ -171,7 +196,7 @@ const Dashboard = () => {
                     onChange={(event) => setEditTitle(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {
-                        handleTitleSave(run.id);
+                        void handleTitleSave(run.id);
                       }
                       if (event.key === 'Escape') {
                         setEditingRunId(null);
@@ -183,14 +208,16 @@ const Dashboard = () => {
                   <div className="flex gap-2">
                     <Button
                       type="button"
-                      onClick={() => handleTitleSave(run.id)}
+                      disabled={isSavingRunTitle}
+                      onClick={() => void handleTitleSave(run.id)}
                       className="rounded-md"
                     >
-                      Save
+                      {isSavingRunTitle ? 'Saving...' : 'Save'}
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
+                      disabled={isSavingRunTitle}
                       onClick={() => {
                         setEditingRunId(null);
                         setEditTitle('');
@@ -289,31 +316,16 @@ const Dashboard = () => {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
-          <div className="border bg-card p-5">
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Active runs
-            </div>
-            <div className="mt-4 text-3xl font-semibold text-foreground">
-              {activeRuns.length}
-            </div>
-          </div>
-          <div className="border bg-card p-5">
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Completed runs
-            </div>
-            <div className="mt-4 text-3xl font-semibold text-foreground">
-              {completedRuns.length}
-            </div>
-          </div>
-          <div className="border bg-card p-5">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              <Layers3 className="h-4 w-4" />
-              Avg progress
-            </div>
-            <div className="mt-4 text-3xl font-semibold text-foreground">
-              {activeRunAverage}%
-            </div>
-          </div>
+          <DashboardMetricCard label="Active runs" value={activeRuns.length} />
+          <DashboardMetricCard
+            label="Completed runs"
+            value={completedRuns.length}
+          />
+          <DashboardMetricCard
+            icon={<Layers3 className="h-4 w-4" />}
+            label="Avg progress"
+            value={`${activeRunAverage}%`}
+          />
         </div>
       </section>
 
@@ -412,12 +424,17 @@ const Dashboard = () => {
           <DialogFooter>
             <Button
               variant="outline"
+              disabled={isDeletingRun}
               onClick={() => setIsDeleteDialogOpen(false)}
             >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteRun}>
-              Delete
+            <Button
+              variant="destructive"
+              disabled={isDeletingRun}
+              onClick={() => void handleDeleteRun()}
+            >
+              {isDeletingRun ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

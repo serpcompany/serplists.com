@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,14 +10,21 @@ import { useTemplateEditorState } from "@/hooks/useTemplateEditorState";
 import { TemplateHeader } from "@/components/template-editor/TemplateHeader";
 import { OutlineSidebar } from "@/components/template-editor/OutlineSidebar";
 import { EditorPanels } from "@/components/template-editor/EditorPanels";
-import { PageContainer } from "@/components/layout/page-shell";
-import { buildConsoleTemplatesPath } from "@/lib/routes";
+import {
+  buildConsoleTemplatePath,
+  buildConsoleTemplatesPath,
+} from "@/lib/routes";
 import {
   templateEditorFormSchema,
   type TemplateEditorFormValues,
 } from "@/lib/forms/templateEditorForm";
 import { Form } from "@/components/ui/form";
 import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
+import {
+  applyTemplateBeforeUnloadWarning,
+  confirmTemplateEditorNavigation,
+  shouldBlockTemplateEditorNavigation,
+} from "@/features/template-editor/navigationGuards";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const shouldNavigateToTemplatesAfterSave = (params: {
@@ -46,9 +53,42 @@ const TemplateEditor = () => {
     resolver: zodResolver(templateEditorFormSchema),
     defaultValues: model.initialValues,
   });
+  const shouldBlockNavigation = shouldBlockTemplateEditorNavigation({
+    isDirty: templateForm.formState.isDirty,
+    isSaving: model.isSaving,
+    loading: model.loading,
+  });
+
   useEffect(() => {
     templateForm.reset(model.initialValues);
   }, [model.initialValues, templateForm]);
+
+  useEffect(() => {
+    if (!shouldBlockNavigation) {
+      return undefined;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      applyTemplateBeforeUnloadWarning(event, shouldBlockNavigation);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [shouldBlockNavigation]);
+
+  const navigateWithEditorGuard = useCallback(
+    (path: string) => {
+      if (!confirmTemplateEditorNavigation(shouldBlockNavigation)) {
+        return;
+      }
+
+      navigate(path);
+    },
+    [navigate, shouldBlockNavigation],
+  );
 
   const handleSave = async () => {
     const isValid = await templateForm.trigger();
@@ -93,15 +133,20 @@ const TemplateEditor = () => {
       <TemplateHeader
         isEditing={!!id}
         isSaving={model.isSaving}
+        onCancel={() => navigateWithEditorGuard(buildConsoleTemplatesPath())}
+        onPreview={
+          id
+            ? () => navigateWithEditorGuard(buildConsoleTemplatePath(id))
+            : undefined
+        }
+        onSave={handleSave}
         templateSlug={model.templateSlug}
         title={templateForm.watch("title") || "New Template"}
-        onCancel={() => navigate(buildConsoleTemplatesPath())}
-        onSave={handleSave}
       />
 
       {/* Error Alert */}
       {errors.length > 0 && (
-        <PageContainer className="py-4" width="shell">
+        <div className="px-4 py-4">
           <Alert variant="destructive" className="border-destructive/40 bg-card shadow-none">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
@@ -113,31 +158,29 @@ const TemplateEditor = () => {
               </ul>
             </AlertDescription>
           </Alert>
-        </PageContainer>
+        </div>
       )}
 
       <Form {...templateForm}>
-        <PageContainer className="px-0 py-0 sm:px-0 lg:px-0" width="wide">
-          <div className="grid min-h-[calc(100vh-3.5rem)] gap-0 xl:grid-cols-[18rem_minmax(0,1fr)]">
-            <OutlineSidebar
-              selectedItemIndex={selectedItemIndex}
-              selectedSectionIndex={selectedSectionIndex}
-              showingSEO={showingSEO}
-              showingTemplateInfo={showingTemplateInfo}
-              onSelectItem={handleSelectItem}
-              onSelectSEO={handleSelectSEO}
-              onSelectSection={handleSelectSection}
-              onSelectTemplateInfo={handleSelectTemplateInfo}
-            />
+        <div className="flex min-h-[calc(100vh-3.5rem)]">
+          <OutlineSidebar
+            selectedItemIndex={selectedItemIndex}
+            selectedSectionIndex={selectedSectionIndex}
+            showingSEO={showingSEO}
+            showingTemplateInfo={showingTemplateInfo}
+            onSelectItem={handleSelectItem}
+            onSelectSEO={handleSelectSEO}
+            onSelectSection={handleSelectSection}
+            onSelectTemplateInfo={handleSelectTemplateInfo}
+          />
 
-            <EditorPanels
-              selectedItemIndex={selectedItemIndex}
-              selectedSectionIndex={selectedSectionIndex}
-              showingSEO={showingSEO}
-              showingTemplateInfo={showingTemplateInfo}
-            />
-          </div>
-        </PageContainer>
+          <EditorPanels
+            selectedItemIndex={selectedItemIndex}
+            selectedSectionIndex={selectedSectionIndex}
+            showingSEO={showingSEO}
+            showingTemplateInfo={showingTemplateInfo}
+          />
+        </div>
       </Form>
     </div>
   );

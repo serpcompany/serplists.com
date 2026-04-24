@@ -1,19 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Archive,
   ArrowLeft,
+  BarChart3,
+  Calendar,
+  ChevronRight,
+  Clock,
   Copy,
+  Download,
+  Eye,
+  Globe,
+  ListChecks,
+  Lock,
+  MoreHorizontal,
   Pencil,
   PlayCircle,
   Share2,
+  Tag,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { PublicTemplateContent } from '@/components/template/PublicTemplateContent';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,16 +30,44 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { RunNameDialog } from '@/components/ui/run-name-dialog';
+import { Switch } from '@/components/ui/switch';
+import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import {
+  DashboardContentShell,
+  DashboardPageHeader,
+  DashboardScrollArea,
+} from '@/components/dashboard/DashboardContentShell';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
-import {
-  buildV0DemoPrivateTemplate,
-  isV0DemoPrivateTemplateId,
-} from '@/features/parity/v0DemoFixtures';
 import {
   navigateToLoginWithReturnPath,
   startBillingCheckout,
@@ -43,20 +78,65 @@ import {
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
+import type { ChecklistTemplate, TemplateSavePayload } from '@/types/checklist';
+
+type TemplateMetrics = {
+  copyCount?: number;
+  runCount?: number;
+  viewCount?: number;
+};
+
+const formatDate = (value?: string): string => {
+  if (!value) {
+    return '';
+  }
+
+  return new Date(value).toLocaleDateString('en-US');
+};
+
+const buildTemplateSavePayload = (
+  template: ChecklistTemplate,
+  isPublic: boolean,
+): TemplateSavePayload => ({
+  id: template.id,
+  title: template.title,
+  description: template.description,
+  type: template.type ?? 'checklist',
+  sections: template.sections,
+  isPublic,
+  seoTitle: template.seoTitle,
+  seoDescription: template.seoDescription,
+  seoUrl: template.seoUrl,
+  rules: template.rules,
+  categories: template.categories,
+  tags: template.tags,
+  slug: template.slug,
+});
 
 const TemplateDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
-  const { createRun, createTemplate, deleteTemplate, getTemplate } =
-    useTemplates();
+  const {
+    createRun,
+    createTemplate,
+    deleteTemplate,
+    getTemplate,
+    updateTemplate,
+  } = useTemplates();
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [isCreatingRun, setIsCreatingRun] = useState(false);
   const [isCloningTemplate, setIsCloningTemplate] = useState(false);
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const isDemoTemplate = isV0DemoPrivateTemplateId(id);
+  const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
+  const [visibilityOverride, setVisibilityOverride] = useState<boolean | null>(
+    null,
+  );
   const {
     billingState,
     loading,
@@ -75,25 +155,22 @@ const TemplateDetail = () => {
     userId: user?.id,
     username: user?.username,
   });
-  const displayTemplate = template ?? (isDemoTemplate ? buildV0DemoPrivateTemplate() : null);
-  const isOwner = isDemoTemplate || user?.id === displayTemplate?.userId;
+  const displayTemplate = template;
+  const metrics = (displayTemplate as (ChecklistTemplate & TemplateMetrics) | null) ?? null;
+  const isOwner = user?.id === displayTemplate?.userId;
+  const isPublic = visibilityOverride ?? displayTemplate?.isPublic ?? false;
+  const totalTasks = displayTemplate?.sections.reduce(
+    (count, section) => count + section.items.length,
+    0,
+  ) ?? 0;
+  const createdDate = formatDate(displayTemplate?.createdAt);
+  const updatedDate = formatDate(displayTemplate?.updatedAt ?? displayTemplate?.createdAt);
 
-  const createdDate = displayTemplate?.createdAt
-    ? new Date(displayTemplate.createdAt).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-    : '';
+  useEffect(() => {
+    setVisibilityOverride(null);
+  }, [displayTemplate?.id]);
 
   const handleStartRun = async (runName: string) => {
-    if (isDemoTemplate) {
-      toast.success('Checklist run created');
-      setRunDialogOpen(false);
-      navigate('/run/run-1');
-      return;
-    }
-
     setIsCreatingRun(true);
     try {
       const result = await startRun(runName);
@@ -124,11 +201,7 @@ const TemplateDetail = () => {
   };
 
   const handleShare = async () => {
-    if (isDemoTemplate) {
-      await navigator.clipboard.writeText(
-        `${window.location.origin}/profile/designops/website-launch-checklist`,
-      );
-      toast.success('Template share link copied. They can now copy it into their account.');
+    if (!displayTemplate) {
       return;
     }
 
@@ -156,16 +229,56 @@ const TemplateDetail = () => {
         return;
       }
 
-      await navigator.clipboard.writeText(result.shareUrl);
-      toast.success(
-        'Template share link copied. They can now copy it into their account.',
-      );
+      setShareUrl(result.shareUrl);
+      setShareDialogOpen(true);
     } finally {
       setIsCreatingShare(false);
     }
   };
 
+  const handleCopyShareLink = async () => {
+    if (!shareUrl) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(shareUrl);
+    toast.success('Public link copied');
+  };
+
   const handleCloneTemplate = async () => {
+    if (!displayTemplate) {
+      return;
+    }
+
+    if (isOwner) {
+      setIsCloningTemplate(true);
+      try {
+        const duplicatedTemplate = await createTemplate({
+          categories: displayTemplate.categories ?? [],
+          description: displayTemplate.description,
+          isPublic: displayTemplate.isPublic,
+          rules: displayTemplate.rules,
+          sections: displayTemplate.sections,
+          seoDescription: displayTemplate.seoDescription,
+          seoTitle: displayTemplate.seoTitle,
+          seoUrl: '',
+          tags: displayTemplate.tags ?? [],
+          title: `${displayTemplate.title} Copy`,
+          type: displayTemplate.type ?? 'checklist',
+        });
+
+        navigate(buildConsoleTemplatePath(duplicatedTemplate.id));
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : 'Failed to duplicate template',
+        );
+      } finally {
+        setIsCloningTemplate(false);
+      }
+
+      return;
+    }
+
     setIsCloningTemplate(true);
     try {
       const result = await saveTemplate();
@@ -197,19 +310,53 @@ const TemplateDetail = () => {
     }
   };
 
-  const handleDelete = async () => {
-    if (!displayTemplate) return;
-
-    if (isDemoTemplate) {
-      toast.success('Template archived');
-      navigate(buildConsoleTemplatesPath());
+  const handleExport = () => {
+    if (!displayTemplate) {
       return;
     }
+
+    const blob = new Blob([JSON.stringify(displayTemplate, null, 2)], {
+      type: 'application/json',
+    });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${displayTemplate.slug ?? displayTemplate.id}.json`;
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+    toast.success('Template exported as JSON');
+  };
+
+  const handleTogglePublic = async (nextIsPublic: boolean) => {
+    if (!displayTemplate || !isOwner) {
+      return;
+    }
+
+    setIsUpdatingVisibility(true);
+    try {
+      await updateTemplate(buildTemplateSavePayload(displayTemplate, nextIsPublic));
+      setVisibilityOverride(nextIsPublic);
+      toast.success(
+        nextIsPublic ? 'Template is now public' : 'Template is now private',
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Failed to update template visibility',
+      );
+    } finally {
+      setIsUpdatingVisibility(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!displayTemplate) return;
 
     setIsDeleting(true);
     try {
       await deleteTemplate(displayTemplate.id);
-      toast.success('Template archived');
+      toast.success('Template deleted');
       navigate(buildConsoleTemplatesPath());
     } catch (error) {
       const message =
@@ -221,149 +368,438 @@ const TemplateDetail = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner message="Loading template..." />
-      </div>
+      <DashboardContentShell>
+        <DashboardScrollArea className="flex items-center justify-center">
+          <LoadingSpinner message="Loading template..." />
+        </DashboardScrollArea>
+      </DashboardContentShell>
     );
   }
 
   if (notFound || !displayTemplate) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Card className="p-8 text-center">
-          <h1 className="text-4xl font-bold mb-4">Template Not Found</h1>
-          <p className="text-muted-foreground mb-6">
-            This template does not exist or you don't have access to it.
+      <DashboardContentShell>
+        <DashboardPageHeader
+          title="Template Not Found"
+          description="This template does not exist or you do not have access to it."
+          actions={
+            <Button asChild>
+              <Link to={buildConsoleTemplatesPath()}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Templates
+              </Link>
+            </Button>
+          }
+        />
+        <DashboardScrollArea className="flex items-center justify-center">
+          <Card className="p-8 text-center">
+          <h2 className="mb-4 text-3xl font-bold">Template Not Found</h2>
+          <p className="mb-6 text-muted-foreground">
+            This template does not exist or you don&apos;t have access to it.
           </p>
-          <Button asChild>
-            <Link to={buildConsoleTemplatesPath()}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Templates
-            </Link>
-          </Button>
         </Card>
-      </div>
+        </DashboardScrollArea>
+      </DashboardContentShell>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-5xl px-4 py-8">
-        <Button asChild variant="ghost" className="mb-4">
-          <Link to={buildConsoleTemplatesPath()}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Templates
+  const templateHeaderActions = (
+    <>
+      <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
+        <Link to={buildConsoleTemplatesPath()}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Link>
+      </Button>
+
+      {isPublic ? (
+        <Badge
+          variant="secondary"
+          className="bg-success/20 text-success hover:bg-success/20"
+        >
+          <Globe className="mr-1 h-3 w-3" />
+          Public
+        </Badge>
+      ) : (
+        <Badge variant="secondary">
+          <Lock className="mr-1 h-3 w-3" />
+          Private
+        </Badge>
+      )}
+
+      {isOwner ? (
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleShare}
+            disabled={isCreatingShare}
+            className="border-border"
+          >
+            <Share2 className="mr-2 h-4 w-4" />
+            {isCreatingShare ? 'Creating...' : 'Share'}
+          </Button>
+          <Button asChild variant="outline" size="sm" className="border-border">
+            <Link to={buildConsoleTemplateEditPath(id ?? displayTemplate.id)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </Link>
+          </Button>
+        </>
+      ) : user ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleCloneTemplate}
+          disabled={isCloningTemplate || billingState.isLoading}
+          className="border-border"
+        >
+          <Copy className="mr-2 h-4 w-4" />
+          {isCloningTemplate
+            ? 'Copying...'
+            : billingState.isLoading
+              ? 'Checking plan...'
+              : !billingState.isPro
+                ? 'Upgrade to copy template'
+                : 'Copy to My Templates'}
+        </Button>
+      ) : (
+        <Button asChild variant="outline" size="sm" className="border-border">
+          <Link to="/login" state={{ from: location }}>
+            Log in to copy template
           </Link>
         </Button>
+      )}
 
-        <div className="mb-8 border-b border-border/70 pb-8">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="text-4xl font-bold">{displayTemplate.title}</h1>
-              {displayTemplate.description ? (
-                <p className="mt-2 text-lg text-muted-foreground">
-                  {displayTemplate.description}
-                </p>
-              ) : null}
-              <p className="mt-3 text-sm text-muted-foreground">
-                Created {createdDate}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {isOwner ? (
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      navigate(buildConsoleTemplateEditPath(id ?? displayTemplate.id))
-                    }
-                  >
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleShare}
-                    disabled={isCreatingShare}
-                  >
-                    <Share2 className="mr-2 h-4 w-4" />
-                    {isCreatingShare ? 'Creating...' : 'Share'}
-                  </Button>
-                </>
-              ) : user ? (
-                <Button
-                  variant="outline"
-                  onClick={handleCloneTemplate}
-                  disabled={isCloningTemplate || billingState.isLoading}
-                >
-                  <Copy className="mr-2 h-4 w-4" />
-                  {isCloningTemplate
-                    ? 'Copying...'
-                    : billingState.isLoading
-                      ? 'Checking plan...'
-                      : !billingState.isPro
-                        ? 'Upgrade to copy template'
-                        : 'Copy to My Templates'}
-                </Button>
-              ) : (
-                <Button asChild variant="outline">
-                  <Link to="/login" state={{ from: location }}>
-                    Log in to copy template
-                  </Link>
-                </Button>
-              )}
-              <Button onClick={() => setRunDialogOpen(true)}>
-                <PlayCircle className="mr-2 h-4 w-4" />
-                Start Run
-              </Button>
-              {isOwner ? (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive">
-                      <Archive className="mr-2 h-4 w-4" />
-                      Archive
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Archive Template</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Are you sure you want to archive "{displayTemplate.title}"?
-                        This removes the template and its future visibility from
-                        your account.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={handleDelete}
-                        disabled={isDeleting}
-                      >
-                        {isDeleting ? 'Archiving...' : 'Archive'}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              ) : null}
-            </div>
-          </div>
+      <Button
+        size="sm"
+        onClick={() => setRunDialogOpen(true)}
+        className="bg-foreground text-background hover:bg-foreground/90"
+      >
+        <PlayCircle className="mr-2 h-4 w-4" />
+        Start Run
+      </Button>
+
+      {isOwner ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onClick={handleCloneTemplate}>
+              <Copy className="mr-2 h-4 w-4" />
+              Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExport}>
+              <Download className="mr-2 h-4 w-4" />
+              Export JSON
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={() => setArchiveDialogOpen(true)}
+            >
+              <Archive className="mr-2 h-4 w-4" />
+              Archive
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+    </>
+  );
+
+  return (
+    <DashboardContentShell>
+      <DashboardPageHeader
+        title={displayTemplate.title}
+        description={
+          displayTemplate.description ||
+          'Review template structure, metadata, and run actions.'
+        }
+        actions={templateHeaderActions}
+      />
+      <DashboardScrollArea>
+        <div className="mx-auto max-w-6xl space-y-8">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="border-border bg-card">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                  <ListChecks className="h-5 w-5 text-foreground" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold text-foreground">
+                    {totalTasks}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Total Tasks</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border bg-card">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                  <Eye className="h-5 w-5 text-foreground" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold text-foreground">
+                    {metrics?.viewCount?.toLocaleString() ?? '0'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Views</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border bg-card">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                  <Copy className="h-5 w-5 text-foreground" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold text-foreground">
+                    {metrics?.copyCount?.toLocaleString() ?? '0'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Copies</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border bg-card">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                  <BarChart3 className="h-5 w-5 text-foreground" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold text-foreground">
+                    {metrics?.runCount?.toLocaleString() ?? '0'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Runs</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {displayTemplate.categories && displayTemplate.categories.length > 0 ? (
-          <div className="mb-8 flex flex-wrap gap-2">
-            {displayTemplate.categories.map((category) => (
-              <span
-                key={category}
-                className="inline-flex rounded-full border px-3 py-1 text-xs text-muted-foreground"
+        <Card className="border-border bg-card">
+          <CardHeader className="border-b border-border px-6 py-4">
+            <CardTitle className="text-base">Template Structure</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {displayTemplate.sections.map((section, sectionIndex) => (
+              <div
+                key={section.id}
+                className={
+                  sectionIndex < displayTemplate.sections.length - 1
+                    ? 'border-b border-border'
+                    : ''
+                }
               >
-                {category}
-              </span>
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex h-6 w-6 items-center justify-center rounded bg-muted text-xs font-medium text-foreground">
+                    {sectionIndex + 1}
+                  </div>
+                  <span className="font-medium text-foreground">
+                    {section.title}
+                  </span>
+                  <Badge variant="secondary" className="ml-auto">
+                    {section.items.length} tasks
+                  </Badge>
+                </div>
+                <div className="space-y-1 pb-3 pl-14 pr-4">
+                  {section.items.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-lg border border-transparent py-2"
+                    >
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <ChevronRight className="h-3 w-3" />
+                        <span>{item.title}</span>
+                      </div>
+                      {item.description ? (
+                        <p className="mt-1 pl-5 text-sm text-muted-foreground">
+                          {item.description}
+                        </p>
+                      ) : null}
+                      {item.contents?.length ? (
+                        <div className="mt-3 rounded-lg border border-border bg-background p-3">
+                          <ContentRenderer contents={item.contents} disabled />
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
             ))}
-          </div>
-        ) : null}
+          </CardContent>
+        </Card>
 
-        <PublicTemplateContent sections={displayTemplate.sections || []} />
-      </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="border-border bg-card">
+            <CardHeader className="border-b border-border px-6 py-4">
+              <CardTitle className="text-base">Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Calendar className="h-4 w-4" />
+                  Created
+                </div>
+                <span className="text-sm text-foreground">{createdDate}</span>
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Clock className="h-4 w-4" />
+                  Last updated
+                </div>
+                <span className="text-sm text-foreground">{updatedDate}</span>
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Globe className="h-4 w-4" />
+                  Visibility
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="template-visibility"
+                    checked={isPublic}
+                    disabled={!isOwner || isUpdatingVisibility}
+                    onCheckedChange={handleTogglePublic}
+                  />
+                  <Label
+                    htmlFor="template-visibility"
+                    className="text-sm text-foreground"
+                  >
+                    {isPublic ? 'Public' : 'Private'}
+                  </Label>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border bg-card">
+            <CardHeader className="border-b border-border px-6 py-4">
+              <CardTitle className="text-base">Categories &amp; Tags</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 p-4">
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Categories
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {displayTemplate.categories?.length ? (
+                    displayTemplate.categories.map((category) => (
+                      <Badge key={category} variant="secondary">
+                        {category}
+                      </Badge>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No categories assigned
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Tags
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {displayTemplate.tags?.length ? (
+                    displayTemplate.tags.map((tag) => (
+                      <Badge
+                        key={tag}
+                        variant="outline"
+                        className="border-border"
+                      >
+                        <Tag className="mr-1 h-3 w-3" />
+                        {tag}
+                      </Badge>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No tags assigned
+                    </p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        </div>
+      </DashboardScrollArea>
+
+      <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive Template</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to archive &quot;{displayTemplate.title}&quot;?
+              This removes the template and its future visibility from your
+              account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
+              {isDeleting ? 'Archiving...' : 'Archive'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <DialogContent className="border-border bg-card">
+          <DialogHeader>
+            <DialogTitle>Share Template</DialogTitle>
+            <DialogDescription>
+              Share this template with others. They can view it and copy it into
+              their library.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex items-center gap-2">
+              <Input
+                readOnly
+                value={shareUrl}
+                className="border-border bg-muted"
+              />
+              <Button
+                aria-label="Copy share link"
+                variant="outline"
+                size="icon"
+                onClick={handleCopyShareLink}
+                className="shrink-0 border-border"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShareDialogOpen(false)}
+              className="border-border"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <RunNameDialog
         open={runDialogOpen}
@@ -372,7 +808,7 @@ const TemplateDetail = () => {
         onConfirm={handleStartRun}
         loading={isCreatingRun}
       />
-    </div>
+    </DashboardContentShell>
   );
 };
 

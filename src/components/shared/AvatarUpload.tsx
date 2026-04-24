@@ -1,11 +1,12 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Camera, Upload, User } from "lucide-react";
+import { Camera, User, X } from "lucide-react";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
+import { deleteUploadedAsset } from "@/lib/utils/fileUpload";
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;
@@ -22,6 +23,7 @@ export const AvatarUpload = ({
 }: AvatarUploadProps) => {
   const { user, refreshProfile } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sizeClasses = {
@@ -56,6 +58,9 @@ export const AvatarUpload = ({
       const upload = await api.uploadToR2({ bucket: 'avatars', file });
       await authClient.updateUser({ image: upload.url });
       await refreshProfile();
+      if (currentAvatarUrl && currentAvatarUrl !== upload.url) {
+        await deleteUploadedAsset(currentAvatarUrl);
+      }
       toast.success("Avatar updated successfully!");
       onAvatarUpdate?.(upload.url);
     } catch (error) {
@@ -63,6 +68,25 @@ export const AvatarUpload = ({
       toast.error("Failed to upload avatar");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!user || !currentAvatarUrl) return;
+
+    setIsRemoving(true);
+
+    try {
+      await authClient.updateUser({ image: null });
+      await deleteUploadedAsset(currentAvatarUrl);
+      await refreshProfile();
+      toast.success("Avatar removed successfully!");
+      onAvatarUpdate?.("");
+    } catch (error) {
+      console.error('Error removing avatar:', error);
+      toast.error("Failed to remove avatar");
+    } finally {
+      setIsRemoving(false);
     }
   };
 
@@ -80,9 +104,10 @@ export const AvatarUpload = ({
           <Button
             variant="outline"
             size="icon"
-            className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full shadow-lg opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
             onClick={handleFileSelect}
-            disabled={isUploading}
+            disabled={isUploading || isRemoving}
+            aria-label="Upload avatar"
           >
             {isUploading ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -90,12 +115,30 @@ export const AvatarUpload = ({
               <Camera className="h-4 w-4" />
             )}
           </Button>
+
+          {currentAvatarUrl ? (
+            <Button
+              variant="outline"
+              size="icon"
+              className="absolute -bottom-2 -left-2 h-8 w-8 rounded-full shadow-lg opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              onClick={handleRemoveAvatar}
+              disabled={isUploading || isRemoving}
+              aria-label="Remove avatar"
+            >
+              {isRemoving ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <X className="h-4 w-4" />
+              )}
+            </Button>
+          ) : null}
           
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
             onChange={handleFileUpload}
+            disabled={isUploading || isRemoving}
             className="hidden"
           />
         </>

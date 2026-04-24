@@ -1,13 +1,6 @@
 import { useFormContext, useWatch } from "react-hook-form";
 
-import {
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { TemplateEditorDetailsFormValues } from "@/lib/forms/templateEditorDetailsForm";
@@ -19,7 +12,7 @@ interface SEOMetaEditorProps {
 export const SEOMetaEditor = ({
   showIntro = true,
 }: SEOMetaEditorProps): JSX.Element => {
-  const { control } = useFormContext<TemplateEditorDetailsFormValues>();
+  const { control, setValue } = useFormContext<TemplateEditorDetailsFormValues>();
   const seoTitle = useWatch({ control, name: "seoTitle" });
   const seoUrl = useWatch({ control, name: "seoUrl" });
   const seoDescription = useWatch({ control, name: "seoDescription" });
@@ -32,91 +25,72 @@ export const SEOMetaEditor = ({
     seoDescription || description || "No description provided";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {showIntro ? (
-        <div className="space-y-1">
-          <h3 className="text-lg font-semibold">Search &amp; SEO</h3>
-          <p className="text-sm leading-6 text-muted-foreground">
-            Configure how this template appears in search results and public listings.
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Search &amp; SEO</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Configure how this template appears in search results and public
+            listings.
           </p>
         </div>
       ) : null}
 
-      <div className="space-y-8">
-        <FormField
-          control={control}
-          name="seoTitle"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-base font-medium">Search Title</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="Title for search results..."
-                  className="mt-2 h-11 bg-input"
-                  {...field}
-                />
-              </FormControl>
-              <FormDescription>
-                Leave blank to use the template name.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+      <FieldGroup>
+        <Field>
+          <FieldLabel>Search Title</FieldLabel>
+          <Input
+            value={seoTitle || ""}
+            onChange={(event) =>
+              setValue("seoTitle", event.target.value, { shouldDirty: true })
+            }
+            placeholder="Title for search results..."
+            className="bg-input"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Leave blank to use the template name
+          </p>
+        </Field>
 
-        <FormField
-          control={control}
-          name="seoUrl"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-base font-medium">URL Slug</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="my-template-slug"
-                  className="mt-2 h-11 bg-input font-mono text-sm"
-                  {...field}
-                />
-              </FormControl>
-              <FormDescription>
-                The URL-friendly identifier for this template.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <Field>
+          <FieldLabel>URL Slug</FieldLabel>
+          <Input
+            value={seoUrl || ""}
+            onChange={(event) =>
+              setValue("seoUrl", event.target.value, { shouldDirty: true })
+            }
+            placeholder="my-template-slug"
+            className="bg-input font-mono text-sm"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            The URL-friendly identifier for this template
+          </p>
+        </Field>
 
-        <FormField
-          control={control}
-          name="seoDescription"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-base font-medium">
-                Search Description
-              </FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Description shown in search results..."
-                  rows={3}
-                  className="mt-2 resize-none bg-input"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <Field>
+          <FieldLabel>Search Description</FieldLabel>
+          <Textarea
+            value={seoDescription || ""}
+            onChange={(event) =>
+              setValue("seoDescription", event.target.value, { shouldDirty: true })
+            }
+            placeholder="Description shown in search results..."
+            rows={3}
+            className="resize-none bg-input"
+          />
+        </Field>
+      </FieldGroup>
 
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-3 text-sm font-medium text-foreground">Preview</h3>
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-blue-400">{resolvedTitle}</p>
-            <p className="text-xs text-muted-foreground">
-              example.com/templates/{resolvedUrl}
-            </p>
-            <p className="line-clamp-2 text-sm text-muted-foreground">
-              {resolvedDescription}
-            </p>
-          </div>
+      <div className="rounded-lg border border-border bg-card p-4">
+        <h3 className="mb-3 text-sm font-medium text-foreground">Preview</h3>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-blue-400">{resolvedTitle}</p>
+          <p className="text-xs text-muted-foreground">
+            example.com/templates/{resolvedUrl}
+          </p>
+          <p className="line-clamp-2 text-sm text-muted-foreground">
+            {resolvedDescription}
+          </p>
         </div>
       </div>
     </div>

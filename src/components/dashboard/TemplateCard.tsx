@@ -72,7 +72,7 @@ export function TemplateCard({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
+                className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
                 size="icon"
                 variant="ghost"
               >

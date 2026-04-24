@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -8,11 +8,17 @@ import {
   Copy,
   Edit2,
   Loader2,
+  ListChecks,
   MoreHorizontal,
   Share2,
 } from 'lucide-react';
 
-import { PageContainer } from '@/components/layout/page-shell';
+import { PageContainer, Surface } from '@/components/layout/page-shell';
+import {
+  DashboardContentShell,
+  DashboardPageHeader,
+  DashboardScrollArea,
+} from '@/components/dashboard/DashboardContentShell';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { Button } from '@/components/ui/button';
@@ -28,10 +34,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { RunProgressSidebar } from '@/components/run-execution/RunProgressSidebar';
+import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar';
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
 import { useTemplates } from '@/contexts/TemplatesContext';
-import { V0_DEMO_RUN_IDS, buildV0DemoRun } from '@/features/parity/v0DemoFixtures';
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
 import { cn } from '@/lib/utils';
 import {
@@ -71,13 +76,11 @@ const ChecklistRunPage = () => {
     shareToken,
     updateRun,
   });
-  const isV0DemoRun = Boolean(id && V0_DEMO_RUN_IDS.has(id));
-  const demoRun = isV0DemoRun ? buildV0DemoRun() : null;
-  const displayRun = run ?? demoRun;
+  const displayRun = run;
   const displayProgress = displayRun?.progress ?? progress;
 
   useEffect(() => {
-    if (isV0DemoRun || !notFound || loading) {
+    if (!notFound || loading) {
       return;
     }
 
@@ -86,7 +89,7 @@ const ChecklistRunPage = () => {
       isSharedRun ? buildPublicTemplatesPath() : buildConsoleHomePath(),
       { replace: true },
     );
-  }, [isSharedRun, isV0DemoRun, loading, navigate, notFound]);
+  }, [isSharedRun, loading, navigate, notFound]);
 
   useEffect(() => {
     if (!loadError) {
@@ -221,6 +224,16 @@ const ChecklistRunPage = () => {
   };
 
   if (loading) {
+    if (!isSharedRun) {
+      return (
+        <DashboardContentShell>
+          <DashboardScrollArea className="flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </DashboardScrollArea>
+        </DashboardContentShell>
+      );
+    }
+
     return (
       <div className="flex h-52 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -229,6 +242,26 @@ const ChecklistRunPage = () => {
   }
 
   if (!displayRun) {
+    if (!isSharedRun) {
+      return (
+        <DashboardContentShell>
+          <DashboardScrollArea className="flex items-center justify-center">
+            <div className="text-center">
+              <h2 className="text-xl font-semibold">
+                {loadError ? 'Unable to load run' : 'Run not found'}
+              </h2>
+              {loadError ? (
+                <p className="mt-2 text-sm text-muted-foreground">{loadError}</p>
+              ) : null}
+              <Button className="mt-4" onClick={handleBack}>
+                Back
+              </Button>
+            </div>
+          </DashboardScrollArea>
+        </DashboardContentShell>
+      );
+    }
+
     return (
       <div className="text-center">
         <h2 className="text-xl font-semibold">
@@ -272,6 +305,81 @@ const ChecklistRunPage = () => {
       section,
     };
   });
+  const privateRunHeaderActions = (
+    <>
+      <Button variant="ghost" size="sm" onClick={handleBack}>
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Runs
+      </Button>
+      {!isEditingTitle ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-muted-foreground"
+          onClick={handleTitleEdit}
+        >
+          <Edit2 className="mr-2 h-4 w-4" />
+          Rename
+        </Button>
+      ) : (
+        <>
+          <Button size="sm" onClick={() => void handleTitleSave()}>
+            Save title
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleTitleCancel}>
+            Cancel
+          </Button>
+        </>
+      )}
+      <Badge
+        variant={displayRun.status === 'completed' ? 'success' : 'secondary'}
+      >
+        {displayRun.status === 'completed' ? 'Completed' : 'In Progress'}
+      </Badge>
+      <div className="hidden min-w-[120px] xl:block">
+        <div className="mb-2 h-2 overflow-hidden rounded-full bg-secondary">
+          <div
+            className="h-full bg-success transition-all duration-300"
+            style={{ width: `${displayProgress}%` }}
+          />
+        </div>
+        <div className="text-right text-sm font-medium">{displayProgress}%</div>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={isCreatingShare}
+        onClick={() => void handleCreateShare()}
+      >
+        <Share2 className="mr-2 h-4 w-4" />
+        {isCreatingShare ? 'Creating link...' : 'Share'}
+      </Button>
+      <Button variant="ghost" size="icon" aria-label="More options">
+        <MoreHorizontal className="h-4 w-4" />
+      </Button>
+    </>
+  );
+  const privateRunTitle = isEditingTitle ? (
+    <Input
+      value={editTitle}
+      onChange={(event) => setEditTitle(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          void handleTitleSave();
+        }
+        if (event.key === 'Escape') {
+          handleTitleCancel();
+        }
+      }}
+      className="h-auto max-w-md border-none bg-transparent p-0 text-xl font-semibold focus-visible:ring-0"
+      autoFocus
+    />
+  ) : (
+    displayRun.title
+  );
+  const privateRunDescription = displayRun.templateOwner?.username
+    ? `by @${displayRun.templateOwner.username}`
+    : `${counts.completed} of ${counts.total} tasks finished`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -286,50 +394,77 @@ const ChecklistRunPage = () => {
 
       {isSharedRun ? (
         <>
-          <div className="border-b border-border">
+          <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <PageContainer
-              className="flex items-center justify-between gap-4 py-3"
-              width="shell"
+              className="flex h-14 items-center justify-between gap-4"
+              width="narrow"
             >
               <div className="flex min-w-0 items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-secondary text-muted-foreground">
-                  <CheckCircle className="h-4 w-4" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-foreground">
+                  <ListChecks className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <h1 className="truncate text-2xl font-semibold text-foreground">
+                  <h1 className="truncate text-sm font-medium text-foreground">
                     {displayRun.title}
                   </h1>
-                  <p className="text-sm text-muted-foreground">
-                    Shared checklist run
+                  <p className="text-xs text-muted-foreground">
+                    Shared run snapshot
                   </p>
                 </div>
               </div>
-              <Button variant="outline" onClick={() => void handleCopyCurrentLink()}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleCopyCurrentLink()}
+                className="border-border"
+              >
                 <Copy className="mr-2 h-4 w-4" />
                 Copy Link
               </Button>
             </PageContainer>
-          </div>
+          </header>
 
-          <PageContainer className="py-6" width="shell">
-            <div className="mb-8 space-y-3">
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <span>{progress}% Complete</span>
-                <span>
-                  {counts.completed} of {counts.total} tasks
-                </span>
-              </div>
-              <Progress value={progress} className="h-2" />
-            </div>
+          <main>
+            <PageContainer className="py-8" width="narrow">
+              <Surface className="mb-6" tone="glass">
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                      Shared run snapshot
+                    </p>
+                    <h2 className="mt-2 text-2xl font-semibold text-foreground">
+                      {displayRun.title}
+                    </h2>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      A read-only checklist run that can be copied, reviewed,
+                      and verified without dashboard access.
+                    </p>
+                  </div>
+                  <div className="min-w-40 rounded-[var(--layout-card-radius)] border border-border bg-background p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                      Run progress
+                    </p>
+                    <p className="mt-3 text-2xl font-semibold text-foreground">
+                      {progress}%
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {counts.completed} of {counts.total} tasks
+                    </p>
+                  </div>
+                </div>
+                <Progress value={progress} className="mt-5 h-2" />
+              </Surface>
 
-            <div className="space-y-6">
+              <div className="space-y-6">
               {sectionProgress.map(({ completed, section, total }) => (
-                <section
+                <Surface
+                  as="section"
                   key={section.id}
-                  className="overflow-hidden rounded-2xl border border-border bg-card"
+                  className="overflow-hidden"
+                  padding="none"
                 >
-                  <div className="flex items-center justify-between border-b border-border px-6 py-6">
-                    <h2 className="text-3xl font-semibold text-foreground">
+                  <div className="flex items-center justify-between border-b border-border p-4">
+                    <h2 className="text-base font-semibold text-foreground">
                       {section.title}
                     </h2>
                     <span className="rounded-full bg-secondary px-3 py-1 text-sm text-secondary-foreground">
@@ -340,7 +475,7 @@ const ChecklistRunPage = () => {
                     {section.items.map((item) => (
                       <div
                         key={item.id}
-                        className="rounded-2xl border border-border bg-background"
+                        className="rounded-[var(--layout-card-radius)] border border-border bg-background"
                       >
                         <div className="flex items-start gap-4 px-4 py-4">
                           <Checkbox
@@ -350,7 +485,7 @@ const ChecklistRunPage = () => {
                           <div className="min-w-0 flex-1">
                             <h3
                               className={cn(
-                                'text-2xl font-medium text-foreground',
+                                'font-medium text-foreground',
                                 item.isCompleted &&
                                   'line-through text-muted-foreground',
                               )}
@@ -382,108 +517,62 @@ const ChecklistRunPage = () => {
                       </div>
                     ))}
                   </div>
-                </section>
+                </Surface>
               ))}
 
-              <section className="rounded-2xl border border-border bg-card px-6 py-10 text-center">
-                <h3 className="text-3xl font-semibold text-foreground">
-                  Want to use this checklist?
+              <Surface as="section" className="text-center" tone="docs">
+                <h3 className="text-lg font-medium text-foreground">
+                  Want to run your own checklist?
                 </h3>
-                <p className="mt-4 text-base text-muted-foreground">
-                  Create your own copy and track your progress independently.
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Browse public templates and start a fresh run from a template
+                  that matches your workflow.
                 </p>
-                <Button className="mt-6">Create Your Own Copy</Button>
-              </section>
-            </div>
-          </PageContainer>
+                <Button
+                  asChild
+                  className="mt-4 bg-foreground text-background hover:bg-foreground/90"
+                >
+                  <Link to={buildPublicTemplatesPath()}>Browse Public Templates</Link>
+                </Button>
+              </Surface>
+              </div>
+            </PageContainer>
+          </main>
         </>
       ) : (
-        <PageContainer className="py-0" width="shell">
-          <div className="sticky top-0 z-20 -mx-4 mb-0 flex items-center justify-between gap-4 border-b border-border bg-background px-4 py-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-            <div className="flex min-w-0 items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={handleBack}>
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              <div className="min-w-0">
-                <div className="flex items-center gap-3">
-                  {isEditingTitle ? (
-                    <Input
-                      value={editTitle}
-                      onChange={(event) => setEditTitle(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          void handleTitleSave();
-                        }
-                        if (event.key === 'Escape') {
-                          handleTitleCancel();
-                        }
-                      }}
-                      className="h-auto max-w-md border-none bg-transparent p-0 text-2xl font-bold focus-visible:ring-0"
-                      autoFocus
-                    />
-                  ) : (
-                    <div className="min-w-0">
-                      <h1 className="truncate text-2xl font-bold">{displayRun.title}</h1>
-                      {displayRun.templateOwner?.username ? (
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          by @{displayRun.templateOwner.username}
-                        </p>
-                      ) : null}
-                    </div>
-                  )}
-                  {!isEditingTitle ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-muted-foreground"
-                      onClick={handleTitleEdit}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                  ) : null}
-                </div>
-                <div className="mt-1 flex items-center gap-2">
-                  <Badge
-                    variant={displayRun.status === 'completed' ? 'success' : 'secondary'}
-                  >
-                    {displayRun.status === 'completed' ? 'Completed' : 'In Progress'}
-                  </Badge>
-                </div>
+        <DashboardContentShell>
+          <DashboardPageHeader
+            title={privateRunTitle}
+            description={privateRunDescription}
+            actions={privateRunHeaderActions}
+          />
+          <DashboardScrollArea className="p-0">
+          <section
+            className="border-b border-border bg-card px-4 py-4 sm:px-6 xl:hidden"
+            data-mobile-run-progress="true"
+          >
+            <div className="mb-3 flex items-center justify-between gap-3 text-sm">
+              <div>
+                <p className="font-medium text-foreground">
+                  {displayProgress}% complete
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {counts.completed} of {counts.total} tasks finished
+                </p>
               </div>
+              {selectedEntry ? (
+                <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
+                  Task {selectedIndex + 1} of {flatItems.length}
+                </span>
+              ) : null}
             </div>
-            <div className="flex items-center gap-3">
-              <div className="min-w-[120px]">
-                <div className="mb-2 h-2 overflow-hidden rounded-full bg-secondary">
-                  <div
-                    className="h-full bg-success transition-all duration-300"
-                    style={{ width: `${displayProgress}%` }}
-                  />
-                </div>
-                <div className="text-right text-sm font-medium">{displayProgress}%</div>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={isCreatingShare}
-                onClick={() => void handleCreateShare()}
-              >
-                <Share2 className="mr-2 h-4 w-4" />
-                {isCreatingShare ? 'Creating link...' : 'Share'}
-              </Button>
-              <Button variant="ghost" size="icon" aria-label="More options">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+            <Progress value={displayProgress} className="h-2" />
+          </section>
 
-          <div className="grid min-h-[calc(100dvh-3.5rem)] grid-cols-1 gap-0 xl:grid-cols-[320px_minmax(0,1fr)]">
-            <RunProgressSidebar
-              sections={displayRun.sections}
-              currentSectionId={selectedEntry?.section.id ?? selectedData?.section.id ?? null}
-              currentTaskId={activeItemId}
-              onSelectTask={(_, taskId) => setSelectedItemId(taskId)}
-            />
-
+          <div
+            className="grid min-h-[calc(100dvh-3.5rem)] grid-cols-1 gap-0 xl:grid-cols-[minmax(0,1fr)_320px]"
+            data-run-workspace-shell="true"
+          >
             <main className="min-h-full min-w-0">
               {selectedEntry ? (
                 <TaskExecutionPanel
@@ -518,8 +607,15 @@ const ChecklistRunPage = () => {
                 </div>
               )}
             </main>
+            <RunProgressPanel
+              sections={displayRun.sections}
+              currentSectionId={selectedEntry?.section.id ?? selectedData?.section.id ?? null}
+              currentTaskId={activeItemId}
+              onSelectTask={(_, taskId) => setSelectedItemId(taskId)}
+            />
           </div>
-        </PageContainer>
+          </DashboardScrollArea>
+        </DashboardContentShell>
       )}
 
       <Dialog open={isCompleteDialogOpen} onOpenChange={setIsCompleteDialogOpen}>

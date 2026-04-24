@@ -70,12 +70,47 @@ describe('Templates page', () => {
     );
 
     expect(html).toContain('My Templates');
+    expect(html).toContain('data-dashboard-content-shell="true"');
+    expect(html).toContain('data-dashboard-page-header="true"');
     expect(html).toContain('templates in your library');
     expect(html).toContain('Search templates...');
-    expect(html).toContain('Most Recent');
+    expect(html).toContain('role="combobox"');
     expect(html).toContain('Start Run');
+    expect(html).toContain('Portable import and export');
+    expect(html).toContain('Template backup');
     expect(html).not.toContain('Beta workspace lane');
     expect(html).not.toContain('Owned templates');
-    expect(html).not.toContain('Portable import and export');
+  });
+
+  it('renders the reference empty state instead of the generic local fallback copy', () => {
+    mockUseDashboardTemplatesModel.mockReturnValue({
+      templates: [],
+      loading: false,
+      isEmpty: true,
+      canCreateRun: false,
+      totalTemplateItems: 0,
+      selectedTemplate: null,
+      selectedTemplateId: '',
+      runLauncherOpen: false,
+      isCreatingRun: false,
+      openCreateTemplate: vi.fn(),
+      openRunLauncher: vi.fn(),
+      openPublicLibrary: vi.fn(),
+      openTemplate: vi.fn(),
+      removeTemplate: vi.fn(),
+      closeRunLauncher: vi.fn(),
+      selectRunTemplate: vi.fn(),
+      createRunFromTemplate: vi.fn(),
+    });
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <Templates />
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('No templates found');
+    expect(html).toContain('Create Template');
+    expect(html).not.toContain('No templates matched this view.');
   });
 });

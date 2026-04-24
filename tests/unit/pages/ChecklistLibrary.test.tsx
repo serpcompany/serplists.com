@@ -129,6 +129,25 @@ describe('ChecklistLibrary route behavior', () => {
   });
 
   it('renders the categories route with the v0 sections and CTA treatment', () => {
+    mockUseTemplateLibrary.mockReturnValue({
+      templates: [
+        {
+          ...baseTemplate,
+          id: 'business-ops',
+          title: 'Business Ops Checklist',
+          categories: ['Business & Operations'],
+        },
+        {
+          ...baseTemplate,
+          id: 'launch-plan',
+          title: 'Launch Plan',
+          categories: ['Launch'],
+        },
+      ],
+      loading: false,
+      allCategories: ['Business & Operations', 'Launch'],
+    });
+
     const markup = renderToStaticMarkup(
       <MemoryRouter initialEntries={['/categories']}>
         <Categories />
@@ -143,9 +162,28 @@ describe('ChecklistLibrary route behavior', () => {
     expect(markup).toContain('Create Template');
   });
 
-  it('renders the business category route with the v0 breadcrumb, stats, and related categories', () => {
+  it('renders the business operations category route with the v0 breadcrumb, stats, and related categories', () => {
+    mockUseTemplateLibrary.mockReturnValue({
+      templates: [
+        {
+          ...baseTemplate,
+          id: 'business-ops',
+          title: 'Business Ops Checklist',
+          categories: ['Business & Operations'],
+        },
+        {
+          ...baseTemplate,
+          id: 'launch-plan',
+          title: 'Launch Plan',
+          categories: ['Launch'],
+        },
+      ],
+      loading: false,
+      allCategories: ['Business & Operations', 'Launch'],
+    });
+
     const markup = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/categories/business']}>
+      <MemoryRouter initialEntries={['/categories/business-operations']}>
         <Routes>
           <Route path="/categories/:categorySlug" element={<CategoryDetail />} />
         </Routes>
@@ -154,9 +192,36 @@ describe('ChecklistLibrary route behavior', () => {
 
     expect(markup).toContain('All Categories');
     expect(markup).toContain('Business &amp; Operations');
-    expect(markup).toContain('6 templates');
+    expect(markup).toContain('1 templates');
     expect(markup).toContain('Search templates...');
     expect(markup).toContain('Most Popular');
     expect(markup).toContain('Related Categories');
+  });
+
+  it('renders not-found UI for an unknown category slug instead of a fake empty category', () => {
+    mockUseTemplateLibrary.mockReturnValue({
+      templates: [
+        {
+          ...baseTemplate,
+          id: 'business-ops',
+          title: 'Business Ops Checklist',
+          categories: ['Business & Operations'],
+        },
+      ],
+      loading: false,
+      allCategories: ['Business & Operations'],
+    });
+
+    const markup = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/categories/not-a-real-category']}>
+        <Routes>
+          <Route path="/categories/:categorySlug" element={<CategoryDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(markup).toContain('That page does not exist');
+    expect(markup).toContain('/categories/not-a-real-category');
+    expect(markup).not.toContain('0 templates');
   });
 });
