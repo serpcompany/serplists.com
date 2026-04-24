@@ -1,6 +1,6 @@
 import { Env } from '../types';
 import { generateSlug } from '../utils/slug';
-import { and, desc, eq, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, ne, or, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { normalizeSectionsPayload, normalizeStringArray, templatePayloadSchema } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
@@ -14,6 +14,93 @@ import {
 } from '../../../src/lib/schemas/checklistSchema';
 
 const junkTemplateTitles = new Set(['Test Template', 'Updated Template Title']);
+
+type QueryResult<T> = PromiseLike<T> | T;
+type TemplateInsertValues = typeof schema.templates.$inferInsert;
+type TemplateUpdateValues = Partial<TemplateInsertValues>;
+
+function isMissingRulesColumnError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /templates[".]?\.?"?rules|no such column:.*rules/i.test(message);
+}
+
+function getTemplateSelectColumns(includeRules: boolean) {
+  const { templates } = schema;
+
+  return {
+    id: templates.id,
+    user_id: templates.user_id,
+    title: templates.title,
+    description: templates.description,
+    items: templates.items,
+    version: templates.version,
+    type: templates.type,
+    seo_title: templates.seo_title,
+    seo_description: templates.seo_description,
+    ...(includeRules ? { rules: templates.rules } : {}),
+    is_public: templates.is_public,
+    category: templates.category,
+    tags: templates.tags,
+    slug: templates.slug,
+    created_at: templates.created_at,
+    updated_at: templates.updated_at,
+  };
+}
+
+async function withRulesColumnFallback<T>(
+  operation: (includeRules: boolean) => QueryResult<T>,
+): Promise<T> {
+  try {
+    return await operation(true);
+  } catch (error) {
+    if (!isMissingRulesColumnError(error)) {
+      throw error;
+    }
+
+    return operation(false);
+  }
+}
+
+function omitRulesColumn<T extends Record<string, unknown>>(values: T): Omit<T, 'rules'> {
+  const { rules: _rules, ...rest } = values;
+  return rest;
+}
+
+async function insertTemplateWithRulesFallback(
+  db: ReturnType<typeof createDb>,
+  values: TemplateInsertValues,
+): Promise<void> {
+  try {
+    await db.insert(schema.templates).values(values);
+  } catch (error) {
+    if (!isMissingRulesColumnError(error)) {
+      throw error;
+    }
+
+    await db.insert(schema.templates).values(
+      omitRulesColumn(values as Record<string, unknown>) as TemplateInsertValues,
+    );
+  }
+}
+
+async function updateTemplateWithRulesFallback(
+  db: ReturnType<typeof createDb>,
+  values: TemplateUpdateValues,
+  whereClause: SQL | undefined,
+): Promise<void> {
+  try {
+    await db.update(schema.templates).set(values).where(whereClause);
+  } catch (error) {
+    if (!isMissingRulesColumnError(error)) {
+      throw error;
+    }
+
+    await db
+      .update(schema.templates)
+      .set(omitRulesColumn(values as Record<string, unknown>) as TemplateUpdateValues)
+      .where(whereClause);
+  }
+}
 
 async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
   const base = generateSlug(title || 'template') || 'template';
@@ -85,28 +172,13 @@ function parseTemplateRow(template: Record<string, unknown>) {
   };
 }
 
-function selectTemplatesWithOwner(env: Env) {
+function selectTemplatesWithOwner(env: Env, includeRules = true) {
   const db = createDb(env);
   const { templates, users } = schema;
 
   return db
     .select({
-      id: templates.id,
-      user_id: templates.user_id,
-      title: templates.title,
-      description: templates.description,
-      items: templates.items,
-      version: templates.version,
-      type: templates.type,
-      seo_title: templates.seo_title,
-      seo_description: templates.seo_description,
-      rules: templates.rules,
-      is_public: templates.is_public,
-      category: templates.category,
-      tags: templates.tags,
-      slug: templates.slug,
-      created_at: templates.created_at,
-      updated_at: templates.updated_at,
+      ...getTemplateSelectColumns(includeRules),
       owner_username: users.username,
       owner_full_name: users.name,
     })
@@ -251,11 +323,13 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         ? or(eq(templates.user_id, userId), eq(templates.is_public, true))
         : eq(templates.user_id, userId);
 
-      const rows = await db
-        .select()
-        .from(templates)
-        .where(whereClause)
-        .orderBy(desc(templates.created_at));
+      const rows = await withRulesColumnFallback((includeRules) =>
+        db
+          .select(getTemplateSelectColumns(includeRules))
+          .from(templates)
+          .where(whereClause)
+          .orderBy(desc(templates.created_at)),
+      );
 
       const [userRow] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
 
@@ -420,7 +494,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         const slug = await generateUniqueSlug(env, template.title || '', templateId);
 
         try {
-          await db.insert(templates).values({
+          await insertTemplateWithRulesFallback(db, {
             id: templateId,
             user_id: userId,
             title: template.title || '',
@@ -476,9 +550,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         return jsonError('userId required', 400);
       }
 
-      const rows = await selectTemplatesWithOwner(env)
-        .where(and(eq(templates.is_public, true), eq(templates.user_id, targetUserId)))
-        .orderBy(desc(templates.created_at));
+      const rows = await withRulesColumnFallback((includeRules) =>
+        selectTemplatesWithOwner(env, includeRules)
+          .where(and(eq(templates.is_public, true), eq(templates.user_id, targetUserId)))
+          .orderBy(desc(templates.created_at)),
+      );
 
       return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
     }
@@ -490,9 +566,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         ? and(eq(templates.slug, slug), or(eq(templates.is_public, true), eq(templates.user_id, userId)))
         : and(eq(templates.slug, slug), eq(templates.is_public, true));
 
-      const [template] = await selectTemplatesWithOwner(env)
-        .where(whereClause)
-        .limit(1);
+      const [template] = await withRulesColumnFallback((includeRules) =>
+        selectTemplatesWithOwner(env, includeRules)
+          .where(whereClause)
+          .limit(1),
+      );
 
       if (!template) {
         return jsonError('Template not found', 404);
@@ -508,9 +586,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         ? and(eq(templates.id, templateId), or(eq(templates.is_public, true), eq(templates.user_id, userId)))
         : and(eq(templates.id, templateId), eq(templates.is_public, true));
 
-      const [template] = await selectTemplatesWithOwner(env)
-        .where(whereClause)
-        .limit(1);
+      const [template] = await withRulesColumnFallback((includeRules) =>
+        selectTemplatesWithOwner(env, includeRules)
+          .where(whereClause)
+          .limit(1),
+      );
 
       if (!template) {
         return jsonError('Template not found', 404);
@@ -524,9 +604,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       ? or(eq(templates.is_public, true), eq(templates.user_id, userId))
       : eq(templates.is_public, true);
 
-    const rows = await selectTemplatesWithOwner(env)
-      .where(whereClause)
-      .orderBy(desc(templates.created_at));
+    const rows = await withRulesColumnFallback((includeRules) =>
+      selectTemplatesWithOwner(env, includeRules)
+        .where(whereClause)
+        .orderBy(desc(templates.created_at)),
+    );
 
     return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
   }
@@ -557,11 +639,13 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         }
       }
 
-      const [source] = await db
-        .select()
-        .from(templates)
-        .where(eq(templates.id, sourceId))
-        .limit(1);
+      const [source] = await withRulesColumnFallback((includeRules) =>
+        db
+          .select(getTemplateSelectColumns(includeRules))
+          .from(templates)
+          .where(eq(templates.id, sourceId))
+          .limit(1),
+      );
 
       if (!source || !source.is_public) {
         return jsonError('Template not found', 404);
@@ -582,7 +666,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       const templateId = crypto.randomUUID();
       const slug = await generateUniqueSlug(env, source.title || '', templateId);
 
-      await db.insert(templates).values({
+      await insertTemplateWithRulesFallback(db, {
         id: templateId,
         user_id: userId,
         title: source.title || '',
@@ -652,7 +736,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       console.warn('Junk template title created', { userId, title });
     }
 
-    await db.insert(templates).values({
+    await insertTemplateWithRulesFallback(db, {
       id: templateId,
       user_id: userId,
       title: title || '',
@@ -766,9 +850,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       console.warn('Junk template title updated', { userId, templateId, title });
     }
 
-    await db.update(templates)
-      .set(updates)
-      .where(and(eq(templates.id, templateId), eq(templates.user_id, userId)));
+    await updateTemplateWithRulesFallback(
+      db,
+      updates as TemplateUpdateValues,
+      and(eq(templates.id, templateId), eq(templates.user_id, userId)),
+    );
 
     if (syncedItems !== null) {
       await db.update(checklist_runs)

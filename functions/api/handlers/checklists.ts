@@ -145,7 +145,11 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
 
       const [sourceTemplate] = await db
-        .select()
+        .select({
+          id: templates.id,
+          title: templates.title,
+          items: templates.items,
+        })
         .from(templates)
         .where(and(eq(templates.id, templateId), eq(templates.user_id, userId)))
         .limit(1);
