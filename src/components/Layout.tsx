@@ -7,7 +7,6 @@ import {
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { TemplatesDiscoveryHeader } from '@/components/checklist-library/TemplatesDiscoveryHeader';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,7 +26,6 @@ import {
   buildConsoleTemplatesPath,
   buildConsoleSettingsPath,
   buildPublicProfilePath,
-  isPublicTemplatesDiscoveryPath,
   resolvePublicRouteTier,
   resolveRouteShell,
 } from '@/lib/routes';
@@ -38,11 +36,6 @@ import { MobileBottomNav, MobileNav } from '@/components/MobileNav';
 interface LayoutProps {
   children?: React.ReactNode;
 }
-
-type NavigationItem = {
-  href: string;
-  label: string;
-};
 
 const isPathActive = (pathname: string, href: string): boolean => {
   if (href === buildConsoleHomePath()) {
@@ -69,10 +62,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const shell = resolveRouteShell(location.pathname);
   const publicTier = resolvePublicRouteTier(location.pathname);
-  const isTemplatesDiscovery = isPublicTemplatesDiscoveryPath(location.pathname);
   const content = children ?? <Outlet />;
-  const shouldRenderFooter =
-    !isTemplatesDiscovery && publicTier !== 'minimal';
+  const shouldRenderFooter = publicTier !== 'minimal';
 
   const handleLogout = () => {
     logout();
@@ -181,56 +172,52 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       className="min-h-screen bg-background text-foreground"
       data-app-shell="public"
     >
-      {isTemplatesDiscovery ? (
-        <TemplatesDiscoveryHeader />
-      ) : (
-        <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <PageContainer
-            className="flex h-14 items-center justify-between gap-6"
-            width="shell"
-          >
-            <BrandLink to="/" />
+      <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <PageContainer
+          className="flex h-14 items-center justify-between gap-6"
+          width="shell"
+        >
+          <BrandLink to="/" />
 
-            <nav className="hidden items-center gap-5 md:flex">
-              {publicHeaderLinks.map((item) => (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  className={cn(
-                    'text-sm font-medium text-muted-foreground transition hover:text-foreground',
-                    isPathActive(location.pathname, item.href) &&
-                      'text-foreground',
-                  )}
+          <nav className="hidden items-center gap-5 md:flex">
+            {publicHeaderLinks.map((item) => (
+              <Link
+                key={item.href}
+                to={item.href}
+                className={cn(
+                  'text-sm font-medium text-muted-foreground transition hover:text-foreground',
+                  isPathActive(location.pathname, item.href) &&
+                    'text-foreground',
+                )}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-2">
+            {user ? (
+              accountMenu
+            ) : (
+              <>
+                <Button
+                  asChild
+                  variant="ghost"
+                  className="hidden text-muted-foreground md:inline-flex"
                 >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-
-            <div className="flex items-center gap-2">
-              {user ? (
-                accountMenu
-              ) : (
-                <>
-                  <Button
-                    asChild
-                    variant="ghost"
-                    className="hidden text-muted-foreground md:inline-flex"
-                  >
-                    <Link to="/login">Log in</Link>
-                  </Button>
-                  <Button asChild>
-                    <Link to="/register">Get started</Link>
-                  </Button>
-                </>
-              )}
-            </div>
-          </PageContainer>
-        </header>
-      )}
+                  <Link to="/login">Log in</Link>
+                </Button>
+                <Button asChild>
+                  <Link to="/register">Get started</Link>
+                </Button>
+              </>
+            )}
+          </div>
+        </PageContainer>
+      </header>
 
       <main className="relative flex-1">
-        {!isTemplatesDiscovery && publicTier !== 'minimal' ? (
+        {publicTier !== 'minimal' ? (
           <>
             <div className="public-dot-grid pointer-events-none absolute inset-x-0 top-0 h-80 opacity-70" />
             <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-muted/30 via-background to-transparent" />

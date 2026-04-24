@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -19,6 +19,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
 import { getBillingStatusQueryKey } from "@/lib/billing";
+import { cn } from "@/lib/utils";
 
 interface TemplateBackupProps {
   className?: string;
@@ -322,18 +323,26 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   };
   const publicTemplateCount = ownedTemplates.filter(t => t.isPublic).length;
   const privateTemplateCount = ownedTemplates.filter(t => !t.isPublic).length;
-  return <div className={className}>
-	      <Card>
-	        <CardHeader>
-	          <CardTitle className="flex items-center gap-2">
-	            <FileText className="h-5 w-5" />
-	            Template JSON Import & Export
-	          </CardTitle>
-	          <CardDescription>
-	            Export portable template packs or import compatible JSON files
-	          </CardDescription>
-	        </CardHeader>
-        <CardContent className="space-y-6">
+  return <section
+    className={cn("rounded-xl border border-border bg-card p-6", className)}
+    data-template-import-export="true"
+  >
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+          <FileText className="h-5 w-5 text-muted-foreground" />
+          Template JSON Import & Export
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Export portable template packs or import compatible JSON files.
+        </p>
+      </div>
+      <div className="w-fit rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
+        Portable packs
+      </div>
+    </div>
+
+    <div className="mt-6 space-y-6">
           {user && !billing.isLoading && plan !== "pro" ? (
             <div className="rounded-lg border p-4 bg-muted/50">
               <div className="flex items-start gap-3">
@@ -572,7 +581,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                 </CardContent>
               </Card>}
           </div>
-        </CardContent>
-      </Card>
-    </div>;
+    </div>
+  </section>;
 };

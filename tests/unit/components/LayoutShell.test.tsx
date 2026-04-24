@@ -36,10 +36,10 @@ describe('Layout shell selection', () => {
     );
     expect(html).toContain('New Template');
     expect(html).toContain('Switch to dark mode');
-    expect(html).toContain('Import Template');
+    expect(html).toContain('Import Templates');
   });
 
-  it('uses the exact discovery header framing from the v0 reference for discovery routes', () => {
+  it('uses the shared public shell for discovery routes', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter initialEntries={['/templates']}>
         <Routes>
@@ -56,11 +56,9 @@ describe('Layout shell selection', () => {
     );
 
     expect(html).toContain('h-14');
-    expect(html).toContain('max-w-6xl');
-    expect(html).toContain('px-4');
-    expect(html).toContain('Search templates...');
-    expect(html).toContain('Create Template');
-    expect(html).not.toContain('Build repeatable checklists');
+    expect(html).toContain('data-app-shell="public"');
+    expect(html).toContain('Discovery child');
+    expect(html).toContain('Build repeatable checklists');
   });
 
   it('uses the shared public shell for profile routes with the same px-4 h-14 frame', () => {

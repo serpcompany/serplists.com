@@ -19,7 +19,6 @@ import {
 import { CategoryNavigation } from '@/components/checklist-library/CategoryNavigation';
 import { SearchAndFilters } from '@/components/checklist-library/SearchAndFilters';
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
-import { TemplatesDiscoveryHeader } from '@/components/checklist-library/TemplatesDiscoveryHeader';
 import {
   buildDiscoveryCategories,
   filterAndSortTemplates,
@@ -170,18 +169,11 @@ const CategoryDetail = () => {
   }, [searchQuery, slug, sortBy, templates]);
 
   if (!isKnownCategory) {
-    return (
-      <div className="min-h-screen bg-background">
-        <TemplatesDiscoveryHeader showSearch={false} />
-        <NotFound />
-      </div>
-    );
+    return <NotFound />;
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <TemplatesDiscoveryHeader showSearch={false} />
-
+    <div className="bg-background">
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6 flex items-center gap-2 text-sm">
           <Link

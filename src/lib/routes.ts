@@ -83,6 +83,9 @@ export const buildConsoleTemplatesPath = (): string => '/dashboard/templates';
 export const buildConsoleTemplateCreatePath = (): string =>
   '/dashboard/templates/new';
 
+export const buildConsoleTemplateImportPath = (): string =>
+  '/dashboard/import-templates';
+
 export const buildConsoleTemplatePath = (templateId: string): string =>
   `/dashboard/templates/${encodeURIComponent(templateId)}`;
 
@@ -189,6 +192,13 @@ export const resolveConsoleSection = (
     normalizedPath === `${LEGACY_CONSOLE_HOME_PATH}/`
   ) {
     return 'home';
+  }
+
+  if (
+    normalizedPath === buildConsoleTemplateImportPath() ||
+    normalizedPath === `${buildConsoleTemplateImportPath()}/`
+  ) {
+    return 'templates';
   }
 
   if (

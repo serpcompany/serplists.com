@@ -13,10 +13,6 @@ vi.mock('@/features/dashboard-templates/useDashboardTemplatesModel', () => ({
     mockUseDashboardTemplatesModel(...args),
 }));
 
-vi.mock('@/components/TemplateBackup', () => ({
-  TemplateBackup: () => <div>Template backup</div>,
-}));
-
 const template = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
   id: 'template-1',
   title: 'Website Launch Checklist',
@@ -76,8 +72,8 @@ describe('Templates page', () => {
     expect(html).toContain('Search templates...');
     expect(html).toContain('role="combobox"');
     expect(html).toContain('Start Run');
-    expect(html).toContain('Portable import and export');
-    expect(html).toContain('Template backup');
+    expect(html).not.toContain('Portable import and export');
+    expect(html).not.toContain('Template JSON Import');
     expect(html).not.toContain('Beta workspace lane');
     expect(html).not.toContain('Owned templates');
   });

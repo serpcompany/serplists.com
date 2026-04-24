@@ -43,7 +43,7 @@ describe('Layout route contracts', () => {
     );
   });
 
-  it('keeps profile routes in the shared public Layout branch without nesting discovery shells', () => {
+  it('keeps public content routes in the shared public Layout branch', () => {
     const appSource = readFileSync(
       new URL('../../../src/App.tsx', import.meta.url),
       'utf8',
@@ -52,11 +52,11 @@ describe('Layout route contracts', () => {
       /<Route element={<Layout \/>}>([\s\S]*?)<\/Route>/,
     );
 
-    expect(publicLayoutBranch?.[1]).not.toContain(
+    expect(publicLayoutBranch?.[1]).toContain(
       'path={buildPublicTemplatesPath()}',
     );
-    expect(publicLayoutBranch?.[1]).not.toContain('path="/categories"');
-    expect(publicLayoutBranch?.[1]).not.toContain(
+    expect(publicLayoutBranch?.[1]).toContain('path="/categories"');
+    expect(publicLayoutBranch?.[1]).toContain(
       'path="/categories/:categorySlug"',
     );
     expect(publicLayoutBranch?.[1]).toContain(

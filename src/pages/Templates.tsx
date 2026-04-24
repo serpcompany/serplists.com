@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import {
-  ArrowUpRight,
   Grid3X3,
   List,
   Plus,
@@ -9,7 +8,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { TemplateBackup } from '@/components/TemplateBackup';
 import { TemplateCard } from '@/components/dashboard/TemplateCard';
 import { TemplateListItem } from '@/components/dashboard/TemplateListItem';
 import {
@@ -268,27 +266,6 @@ const Templates = () => {
             </div>
           )}
 
-          <section
-            id="template-import-export"
-            className="scroll-mt-20 rounded-xl border border-border bg-card p-6"
-          >
-            <div className="mb-5 flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">
-                  Portable import and export
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Move checklist packs between environments or bootstrap your
-                  workspace from a portable sample.
-                </p>
-              </div>
-              <div className="hidden rounded-full border border-border bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground sm:flex sm:items-center sm:gap-2">
-                JSON packs
-                <ArrowUpRight className="h-4 w-4" />
-              </div>
-            </div>
-            <TemplateBackup />
-          </section>
         </div>
       </DashboardScrollArea>
 

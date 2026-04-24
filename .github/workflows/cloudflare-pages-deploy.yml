@@ -4,10 +4,11 @@ on:
   push:
     branches:
       - main
+      - staging
   workflow_dispatch:
 
 concurrency:
-  group: pages-deploy-main
+  group: pages-deploy-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -57,4 +58,4 @@ jobs:
           CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
           CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
           CLOUDFLARE_PAGES_PROJECT: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
-        run: npx wrangler pages deploy ./dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch main --commit-hash "$GITHUB_SHA"
+        run: npx wrangler pages deploy ./dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch "$GITHUB_REF_NAME" --commit-hash "$GITHUB_SHA"

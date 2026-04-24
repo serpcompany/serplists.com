@@ -1,16 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ChevronRight, Filter } from 'lucide-react';
+import { ChevronRight, Filter, Search } from 'lucide-react';
 
 import { SearchAndFilters } from '@/components/checklist-library/SearchAndFilters';
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
-import { TemplatesDiscoveryHeader } from '@/components/checklist-library/TemplatesDiscoveryHeader';
 import {
   buildDiscoveryCategories,
   filterAndSortTemplates,
   type DiscoverySort,
 } from '@/components/checklist-library/discovery-utils';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { buildPublicTemplatesPath } from '@/lib/routes';
@@ -64,6 +64,9 @@ const ChecklistLibrary = ({
       }),
     [searchQuery, selectedCategorySlug, sortBy, templates],
   );
+  const resultLabel = `${filteredTemplates.length} templates${
+    selectedCategoryName ? ` in ${selectedCategoryName}` : ''
+  }`;
 
   const updateFilters = ({
     categorySlug = selectedCategorySlug,
@@ -103,9 +106,7 @@ const ChecklistLibrary = ({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <TemplatesDiscoveryHeader />
-
+      <div className="bg-background">
         <main className="mx-auto max-w-6xl px-4 py-8">
           <div className="mb-10 space-y-3 text-center">
             <Skeleton className="mx-auto h-9 w-56" />
@@ -129,12 +130,7 @@ const ChecklistLibrary = ({
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <TemplatesDiscoveryHeader
-        onSearchChange={(query) => updateFilters({ query })}
-        searchQuery={searchQuery}
-      />
-
+    <div className="bg-background">
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-10 text-center">
           <h1 className="mb-3 text-balance text-3xl font-bold text-foreground">
@@ -151,9 +147,23 @@ const ChecklistLibrary = ({
           onCategoryChange={(categorySlug) => updateFilters({ categorySlug })}
           onSortChange={(sort) => updateFilters({ sort })}
           resultCount={filteredTemplates.length}
-          resultLabel={`${filteredTemplates.length} templates${
-            selectedCategoryName ? ` in ${selectedCategoryName}` : ''
-          }`}
+          resultLabel={resultLabel}
+          searchSlot={
+            <div className="flex flex-1 flex-col gap-2 sm:max-w-md">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  className="border-border bg-card pl-10"
+                  onChange={(event) =>
+                    updateFilters({ query: event.target.value })
+                  }
+                  placeholder="Search templates..."
+                  value={searchQuery}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">{resultLabel}</p>
+            </div>
+          }
           selectedCategorySlug={selectedCategorySlug}
           sortBy={sortBy}
         />

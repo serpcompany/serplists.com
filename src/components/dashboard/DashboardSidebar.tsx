@@ -17,6 +17,7 @@ import {
   buildConsoleRunsPath,
   buildConsoleSettingsPath,
   buildConsoleTemplateCreatePath,
+  buildConsoleTemplateImportPath,
   buildConsoleTemplatesPath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
@@ -26,12 +27,12 @@ const navItems = [
   {
     href: buildConsoleTemplatesPath(),
     icon: FileText,
-    label: 'My Templates',
+    label: 'Templates',
   },
   {
     href: buildConsoleRunsPath(),
     icon: Play,
-    label: 'My Runs',
+    label: 'Runs',
   },
   {
     href: buildPublicTemplatesPath(),
@@ -60,6 +61,8 @@ const isActivePath = (pathname: string, href: string) =>
 
 export function DashboardSidebar() {
   const location = useLocation();
+  const importTemplatesPath = buildConsoleTemplateImportPath();
+  const importTemplatesActive = isActivePath(location.pathname, importTemplatesPath);
 
   return (
     <aside className="hidden h-full w-56 flex-col border-r border-border bg-card md:flex">
@@ -129,10 +132,14 @@ export function DashboardSidebar() {
 
       <div className="space-y-2 border-t border-border p-3">
         <ThemeToggle showLabel />
-        <Button asChild variant="outline" className="w-full justify-start gap-2">
-          <Link to={`${buildConsoleTemplatesPath()}#template-import-export`}>
+        <Button
+          asChild
+          variant={importTemplatesActive ? 'secondary' : 'outline'}
+          className="w-full justify-start gap-2"
+        >
+          <Link to={importTemplatesPath}>
             <Import className="h-4 w-4" />
-            Import Template
+            Import Templates
           </Link>
         </Button>
       </div>

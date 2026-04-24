@@ -14,6 +14,7 @@ import {
   buildConsoleSettingsPath,
   buildConsoleTemplateCreatePath,
   buildConsoleTemplateEditPath,
+  buildConsoleTemplateImportPath,
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
   buildRunPath,
@@ -65,6 +66,7 @@ describe('routes', () => {
     expect(buildConsoleHomePath()).toBe('/dashboard');
     expect(buildConsoleTemplatesPath()).toBe('/dashboard/templates');
     expect(buildConsoleTemplateCreatePath()).toBe('/dashboard/templates/new');
+    expect(buildConsoleTemplateImportPath()).toBe('/dashboard/import-templates');
     expect(buildConsoleTemplatePath('template-1')).toBe(
       '/dashboard/templates/template-1',
     );
@@ -133,6 +135,9 @@ describe('routes', () => {
     expect(resolveConsoleSection('/dashboard')).toBe('home');
     expect(resolveConsoleSection('/dashboard/templates')).toBe('templates');
     expect(resolveConsoleSection('/dashboard/templates/template-1')).toBe(
+      'templates',
+    );
+    expect(resolveConsoleSection('/dashboard/import-templates')).toBe(
       'templates',
     );
     expect(resolveConsoleSection('/dashboard/runs')).toBe('runs');

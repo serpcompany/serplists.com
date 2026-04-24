@@ -15,7 +15,6 @@ import {
   Zap,
 } from 'lucide-react';
 
-import { TemplatesDiscoveryHeader } from '@/components/checklist-library/TemplatesDiscoveryHeader';
 import { buildDiscoveryCategories } from '@/components/checklist-library/discovery-utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -141,9 +140,7 @@ const Categories = () => {
   }, [categories, searchQuery]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <TemplatesDiscoveryHeader showSearch={false} />
-
+    <div className="bg-background">
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground">

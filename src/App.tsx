@@ -23,6 +23,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Templates from './pages/Templates';
+import TemplateImportExport from './pages/TemplateImportExport';
 import DashboardSettings from './pages/DashboardSettings';
 import TemplateEditor from './pages/TemplateEditor';
 import TemplateDetail from './pages/TemplateDetail';
@@ -46,6 +47,7 @@ import {
   buildConsoleRunsPath,
   buildConsoleSettingsPath,
   buildConsoleTemplateCreatePath,
+  buildConsoleTemplateImportPath,
   buildConsoleTemplatesPath,
   buildPublicTemplatesPath,
 } from './lib/routes';
@@ -124,18 +126,6 @@ const App = () => {
                       path="/share/:shareToken"
                       element={<ChecklistRun />}
                     />
-                    <Route
-                      path={buildPublicTemplatesPath()}
-                      element={<ChecklistLibrary />}
-                    />
-                    <Route
-                      path="/categories"
-                      element={<Categories />}
-                    />
-                    <Route
-                      path="/categories/:categorySlug"
-                      element={<CategoryDetail />}
-                    />
                     {/* Canonical Private Routes */}
                     <Route
                       path={LEGACY_CONSOLE_HOME_PATH}
@@ -187,6 +177,18 @@ const App = () => {
                         element={<Contact />}
                       />
                       <Route
+                        path={buildPublicTemplatesPath()}
+                        element={<ChecklistLibrary />}
+                      />
+                      <Route
+                        path="/categories"
+                        element={<Categories />}
+                      />
+                      <Route
+                        path="/categories/:categorySlug"
+                        element={<CategoryDetail />}
+                      />
+                      <Route
                         path="/profile/:username/:templateSlug"
                         element={<PublicTemplate />}
                       />
@@ -214,6 +216,10 @@ const App = () => {
                       <Route
                         path={buildConsoleTemplatesPath()}
                         element={<Templates />}
+                      />
+                      <Route
+                        path={buildConsoleTemplateImportPath()}
+                        element={<TemplateImportExport />}
                       />
                       <Route
                         path={buildConsoleTemplateCreatePath()}

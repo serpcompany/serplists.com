@@ -145,39 +145,40 @@ describe('App public route parity', () => {
     expect((html.match(/<header/g) ?? []).length).toBe(1);
   });
 
-  it('renders /templates outside the generic public shell with one discovery header and detail-card href semantics', () => {
+  it('renders /templates inside the shared public shell with detail-card href semantics', () => {
     const html = renderAppAt('/templates');
 
     expect(html).toContain('Discover Templates');
     expect(html).toContain('Browse by Category');
-    expect(html).toContain('href="/dashboard/templates"');
-    expect(html).toContain('href="/dashboard/templates/new"');
+    expect(html).toContain('href="/templates"');
+    expect(html).toContain('href="/features"');
+    expect(html).toContain('href="/pricing"');
     expect(html).toContain('href="/profile/designops/website-launch-checklist"');
     expect(html).not.toContain('href="/run/website-launch"');
-    expect(html).not.toContain('data-app-shell="public"');
-    expect(html).not.toContain('<footer');
+    expect(html).toContain('data-app-shell="public"');
+    expect(html).toContain('<footer');
     expect((html.match(/<header/g) ?? []).length).toBe(1);
   });
 
-  it('renders /categories outside the generic public shell with one discovery header and no footer', () => {
+  it('renders /categories inside the shared public shell with one global header and footer', () => {
     const html = renderAppAt('/categories');
 
     expect(html).toContain('Browse Categories');
     expect(html).toContain('Popular Categories');
     expect(html).toContain('All Categories');
-    expect(html).not.toContain('data-app-shell="public"');
-    expect(html).not.toContain('<footer');
+    expect(html).toContain('data-app-shell="public"');
+    expect(html).toContain('<footer');
     expect((html.match(/<header/g) ?? []).length).toBe(1);
   });
 
-  it('renders /categories/business outside the generic public shell with one discovery header and no footer', () => {
+  it('renders /categories/business inside the shared public shell with one global header and footer', () => {
     const html = renderAppAt('/categories/business');
 
     expect(html).toContain('Business &amp; Operations');
     expect(html).toContain('All Categories');
     expect(html).toContain('Related Categories');
-    expect(html).not.toContain('data-app-shell="public"');
-    expect(html).not.toContain('<footer');
+    expect(html).toContain('data-app-shell="public"');
+    expect(html).toContain('<footer');
     expect((html.match(/<header/g) ?? []).length).toBe(1);
   });
 
