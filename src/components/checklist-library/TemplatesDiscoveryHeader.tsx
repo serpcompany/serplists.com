@@ -9,6 +9,7 @@ import {
   buildConsoleTemplatesPath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
+import { APP_BRAND_NAME } from '@/lib/brand';
 
 type TemplatesDiscoveryHeaderProps = {
   onSearchChange?: (query: string) => void;
@@ -29,7 +30,9 @@ export function TemplatesDiscoveryHeader({
           className="flex shrink-0 items-center gap-2"
         >
           <LayoutGrid className="h-5 w-5 text-primary" />
-          <span className="text-sm font-semibold text-foreground">Checklist</span>
+          <span className="text-sm font-semibold text-foreground">
+            {APP_BRAND_NAME}
+          </span>
         </Link>
 
         {showSearch ? (

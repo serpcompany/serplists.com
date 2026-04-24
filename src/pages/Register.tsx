@@ -65,9 +65,9 @@ const Register = () => {
       description="Sign up with email and password"
       footer={
         <>
-          Or{" "}
+          Already have an account?{" "}
           <Link to="/login" className="font-medium text-primary hover:underline">
-            sign in to your account
+            Sign in
           </Link>
         </>
       }

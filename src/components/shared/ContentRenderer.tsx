@@ -13,6 +13,8 @@ interface ContentRendererProps {
   onSubItemToggle?: (contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
 }
 
+const normalizeDisplayText = (value: string) => value.replace(/\\n/g, '\n');
+
 export const ContentRenderer: React.FC<ContentRendererProps> = ({ 
   contents, 
   disabled = false,
@@ -34,7 +36,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
           {content.type === "text" && content.value && (
             <div className="prose prose-sm max-w-none">
               <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeUrl}>
-                {content.value}
+                {normalizeDisplayText(content.value)}
               </ReactMarkdown>
             </div>
           )}

@@ -107,13 +107,6 @@ const App = () => {
                 >
                   <Routes>
                     {/* Public Routes */}
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/register" element={<Register />} />
-                    <Route
-                      path="/forgot-password"
-                      element={<ForgotPassword />}
-                    />
-                    <Route path="/reset-password" element={<ResetPassword />} />
 
                     {/* Canonical Public Content Routes */}
                     <Route
@@ -148,6 +141,13 @@ const App = () => {
                       }
                     />
                     <Route element={<Layout />}>
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/register" element={<Register />} />
+                      <Route
+                        path="/forgot-password"
+                        element={<ForgotPassword />}
+                      />
+                      <Route path="/reset-password" element={<ResetPassword />} />
                       <Route
                         path="/"
                         element={<Index />}

@@ -22,6 +22,7 @@ import {
   buildPublicTemplatesPath,
 } from '@/lib/routes';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { APP_BRAND_NAME } from '@/lib/brand';
 
 const navItems = [
   {
@@ -65,10 +66,12 @@ export function DashboardSidebar() {
   const importTemplatesActive = isActivePath(location.pathname, importTemplatesPath);
 
   return (
-    <aside className="hidden h-full w-56 flex-col border-r border-border bg-card md:flex">
+    <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 shrink-0 flex-col border-r border-border bg-card md:flex">
       <div className="flex h-14 items-center gap-2 border-b border-border px-4">
         <LayoutGrid className="h-5 w-5 text-primary" />
-        <span className="text-sm font-semibold text-foreground">Checklist</span>
+        <span className="text-sm font-semibold text-foreground">
+          {APP_BRAND_NAME}
+        </span>
       </div>
 
       <div className="p-3">

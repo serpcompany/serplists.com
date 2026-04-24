@@ -36,6 +36,7 @@ import {
   buildPublicCategoriesPath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
+import { APP_BRAND_NAME } from '@/lib/brand';
 
 const navItems = [
   { href: '/', icon: Home, title: 'Home' },
@@ -85,7 +86,7 @@ export function MobileNav() {
       </SheetTrigger>
       <SheetContent side="left" className="w-72 p-0">
         <SheetHeader className="border-b border-border px-4 py-3">
-          <SheetTitle className="text-left">Checklist</SheetTitle>
+          <SheetTitle className="text-left">{APP_BRAND_NAME}</SheetTitle>
         </SheetHeader>
 
         <div className="border-b border-border p-4">

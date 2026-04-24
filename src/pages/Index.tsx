@@ -93,8 +93,9 @@ const Index = () => {
   return (
     <>
       <PageSection spacing="hero" width="wide">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)] lg:items-center">
+        <div className="mx-auto max-w-4xl">
           <PageHero
+            align="center"
             actions={
               <>
                 <Button asChild>
@@ -111,68 +112,10 @@ const Index = () => {
                 </Button>
               </>
             }
-            description="Serplists turns repeatable work into a reusable template, a focused execution run, and a shareable record. It is for teams that need the same process done cleanly more than once."
+            description="SERP Lists turns repeatable work into a reusable template, a focused execution run, and a shareable record. It is for teams that need the same process done cleanly more than once."
             eyebrow="Operations checklists that actually run"
             title="Build the checklist once. Run it every time."
           />
-
-          <Surface className="overflow-hidden" padding="none" tone="glass">
-            <div className="border-b border-border p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                    Template library
-                  </p>
-                  <h2 className="mt-2 text-2xl font-semibold text-foreground">
-                    Launch QA checklist
-                  </h2>
-                </div>
-                <span className="rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">
-                  72% complete
-                </span>
-              </div>
-            </div>
-            <div className="grid gap-0 md:grid-cols-[minmax(0,1fr)_220px]">
-              <div className="space-y-3 p-5">
-                {[
-                  'Confirm final content and links',
-                  'Run technical QA',
-                  'Publish launch notes',
-                ].map((task, index) => (
-                  <div
-                    key={task}
-                    className="flex items-center gap-3 rounded-[var(--layout-card-radius)] border border-border bg-background p-3"
-                  >
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                      {index + 1}
-                    </span>
-                    <span className="text-sm font-medium text-foreground">
-                      {task}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="border-t border-border bg-muted/40 p-5 md:border-l md:border-t-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                  Run state
-                </p>
-                <div className="mt-4 space-y-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Open tasks</span>
-                    <span className="font-medium text-foreground">4</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Done</span>
-                    <span className="font-medium text-foreground">9</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Share status</span>
-                    <span className="font-medium text-foreground">Ready</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Surface>
         </div>
       </PageSection>
 
@@ -300,7 +243,7 @@ const Index = () => {
               Stop rebuilding the same checklist in docs and spreadsheets.
             </CardTitle>
             <CardDescription className="max-w-2xl text-base">
-              Serplists gives your repeatable work a home: one source template,
+              SERP Lists gives your repeatable work a home: one source template,
               many tracked runs, and clean share links when someone needs proof.
             </CardDescription>
           </CardHeader>

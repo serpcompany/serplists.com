@@ -31,12 +31,14 @@ describe('Layout shell selection', () => {
       </MemoryRouter>,
     );
 
+    expect(html).toContain('data-app-shell="console"');
     expect(html).toContain(
-      'hidden h-full w-56 flex-col border-r border-border bg-card md:flex',
+      'sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 shrink-0 flex-col border-r border-border bg-card md:flex',
     );
     expect(html).toContain('New Template');
     expect(html).toContain('Switch to dark mode');
     expect(html).toContain('Import Templates');
+    expect(html).toContain('Build repeatable checklists');
   });
 
   it('uses the shared public shell for discovery routes', () => {

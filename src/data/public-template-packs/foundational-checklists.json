@@ -77,10 +77,170 @@
           ]
         }
       ]
+    },
+    {
+      "title": "Full Website Launch QA Checklist",
+      "description": "A richer launch checklist with markdown instructions, subtasks, video review, image proof, file references, and external QA embeds.",
+      "type": "checklist",
+      "slug": "full-website-launch-qa-checklist",
+      "visibility": "public",
+      "categories": ["Tech", "Website", "QA"],
+      "tags": ["launch", "qa", "website", "rich-content", "demo"],
+      "sections": [
+        {
+          "title": "Launch Scope And Ownership",
+          "items": [
+            {
+              "title": "Confirm launch owner, rollback owner, and approval window",
+              "description": "Before anyone ships, make sure the people and the stop/go criteria are explicit.",
+              "contents": [
+                {
+                  "type": "text",
+                  "value": "Capture the launch decision in one place before the deployment starts.\n\n- Name the launch owner.\n- Name the rollback owner.\n- Define the exact approval window.\n- Link the final scope doc or ticket.\n\n**Exit criteria:** everyone knows who can approve, pause, or roll back the launch."
+                },
+                {
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "launch-owner",
+                      "title": "Launch owner is assigned"
+                    },
+                    {
+                      "id": "rollback-owner",
+                      "title": "Rollback owner is assigned"
+                    },
+                    {
+                      "id": "approval-window",
+                      "title": "Approval window is written down"
+                    },
+                    {
+                      "id": "stakeholder-channel",
+                      "title": "Stakeholder update channel is linked"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "Review launch walkthrough video",
+              "description": "Use the walkthrough to align on what should be visible after launch.",
+              "contents": [
+                {
+                  "type": "video",
+                  "value": "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+                  "uploadType": "url"
+                },
+                {
+                  "type": "text",
+                  "value": "While watching, note any screen, CTA, or user path that does not match the launch scope. Add screenshots to the launch ticket before approving."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Content, SEO, And Accessibility QA",
+          "items": [
+            {
+              "title": "Audit critical pages for content and metadata",
+              "description": "Check the home page, template index, pricing page, and one public template page.",
+              "contents": [
+                {
+                  "type": "text",
+                  "value": "For each critical URL, verify:\n\n1. One clear H1.\n2. Accurate title and meta description.\n3. Working primary CTA.\n4. No placeholder copy.\n5. Canonical URL points to the final public URL."
+                },
+                {
+                  "type": "embed",
+                  "value": "https://search.google.com/test/rich-results"
+                }
+              ]
+            },
+            {
+              "title": "Attach visual proof for the final hero section",
+              "description": "Keep a reference screenshot so design regressions are obvious later.",
+              "contents": [
+                {
+                  "type": "image",
+                  "value": "https://placehold.co/1200x675/png?text=Final+Launch+Hero+Screenshot",
+                  "uploadType": "url"
+                },
+                {
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "desktop-hero-proof",
+                      "title": "Desktop hero screenshot attached"
+                    },
+                    {
+                      "id": "mobile-hero-proof",
+                      "title": "Mobile hero screenshot attached"
+                    },
+                    {
+                      "id": "dark-light-proof",
+                      "title": "Light and dark mode checked"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Performance, Analytics, And Release Artifacts",
+          "items": [
+            {
+              "title": "Run performance checks and record the results",
+              "description": "Use the same tool and network profile each time so launch results are comparable.",
+              "contents": [
+                {
+                  "type": "embed",
+                  "value": "https://pagespeed.web.dev/"
+                },
+                {
+                  "type": "text",
+                  "value": "Record the mobile and desktop scores in the launch ticket. If a score regresses, add the blocking asset, script, or route to the post-launch cleanup list."
+                }
+              ]
+            },
+            {
+              "title": "Save the launch packet",
+              "description": "Attach the handoff packet so support, marketing, and engineering can refer to the same artifact.",
+              "contents": [
+                {
+                  "type": "file",
+                  "value": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+                  "uploadType": "url",
+                  "fileName": "launch-packet-example.pdf"
+                },
+                {
+                  "type": "subItems",
+                  "value": "",
+                  "subItems": [
+                    {
+                      "id": "analytics-events-verified",
+                      "title": "Analytics events verified in realtime"
+                    },
+                    {
+                      "id": "support-notes-shared",
+                      "title": "Support notes shared"
+                    },
+                    {
+                      "id": "release-notes-published",
+                      "title": "Release notes published"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ],
   "manifest": {
-    "totalTemplates": 2,
+    "totalTemplates": 3,
     "format": "portable",
     "includesVisibility": true,
     "includesRules": false,

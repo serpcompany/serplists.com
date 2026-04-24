@@ -62,7 +62,10 @@ describe('PublicTemplateView', () => {
     expect(html).toContain('Save');
     expect(html).toContain('Share');
     expect(html).toContain('Sections');
-    expect(html).toContain('Minutes Est.');
+    expect(html).toContain('Tasks');
+    expect(html).toContain('Type');
+    expect(html).toContain('checklist');
+    expect(html).not.toContain('Minutes Est.');
     expect(html).not.toContain('On this page');
     expect(html).not.toContain('Template details');
   });

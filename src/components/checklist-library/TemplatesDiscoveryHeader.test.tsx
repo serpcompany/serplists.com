@@ -15,7 +15,7 @@ describe('TemplatesDiscoveryHeader', () => {
       </MemoryRouter>,
     );
 
-    expect(markup).toContain('Checklist');
+    expect(markup).toContain('SERP Lists');
     expect(markup).toContain('Search templates...');
     expect(markup).toContain('My Library');
     expect(markup).toContain('Create Template');

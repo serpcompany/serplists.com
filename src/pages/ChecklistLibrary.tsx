@@ -119,7 +119,7 @@ const ChecklistLibrary = ({
             <Skeleton className="h-9 w-24 shrink-0" />
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 8 }).map((_, index) => (
               <Skeleton key={index} className="h-[320px] rounded-lg" />
             ))}
@@ -188,7 +188,7 @@ const ChecklistLibrary = ({
             </Button>
           </div>
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {filteredTemplates.map((template) => (
               <TemplateCard key={template.id} template={template} />
             ))}

@@ -22,7 +22,8 @@ describe('AuthPageShell', () => {
     );
 
     expect(html).not.toContain('min-h-screen flex items-center');
-    expect(html).toContain('What happens after sign in');
+    expect(html).toContain('Built for repeatable work');
+    expect(html).toContain('Create the template once. Run it cleanly every time.');
     expect(html).not.toContain('Why teams switch to SERP Lists');
   });
 });

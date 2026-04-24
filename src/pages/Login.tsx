@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  CheckCircle2,
   Eye,
   EyeOff,
   Loader2,
@@ -19,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AuthPageShell } from "@/components/auth/AuthPageShell";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -120,18 +120,21 @@ const Login = () => {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-foreground">
-            <CheckCircle2 className="h-6 w-6 text-background" />
-          </div>
-          <h1 className="text-xl font-semibold text-foreground">Welcome back</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Sign in to your account to continue
-          </p>
-        </div>
-
+    <AuthPageShell
+      title="Welcome back"
+      description="Sign in to your account to continue"
+      footer={
+        <>
+          Don&apos;t have an account?{" "}
+          <Link
+            to="/register"
+            className="font-medium text-primary hover:underline"
+          >
+            Sign up
+          </Link>
+        </>
+      }
+    >
         <form onSubmit={handleSubmit} className="space-y-4">
           {import.meta.env.DEV ? (
             <div className="space-y-3 rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
@@ -210,7 +213,7 @@ const Login = () => {
           ) : null}
 
           {unverifiedEmail ? (
-            <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
               Verify your email before signing in.
             </div>
           ) : null}
@@ -299,18 +302,7 @@ const Login = () => {
             )}
           </Button>
         </form>
-
-        <p className="mt-8 text-center text-sm text-muted-foreground">
-          Don&apos;t have an account?{" "}
-          <Link
-            to="/register"
-            className="font-medium text-foreground hover:underline"
-          >
-            Sign up
-          </Link>
-        </p>
-      </div>
-    </div>
+    </AuthPageShell>
   );
 };
 
