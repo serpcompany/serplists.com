@@ -43,6 +43,7 @@ jobs:
         run: pnpm run typecheck:env
 
       - name: Verify production D1 schema
+        if: github.ref_name == 'main'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
