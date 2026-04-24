@@ -13,8 +13,10 @@ interface SearchAndFiltersProps {
   onCategoryChange: (categorySlug: string | null) => void;
   onSortChange: (sortBy: DiscoverySort) => void;
   resultCount: number;
+  searchSlot?: React.ReactNode;
   selectedCategorySlug: string | null;
   sortBy: DiscoverySort;
+  trailingControls?: React.ReactNode;
 }
 
 const sortOptions: Array<{
@@ -32,75 +34,75 @@ export const SearchAndFilters: React.FC<SearchAndFiltersProps> = ({
   onCategoryChange,
   onSortChange,
   resultCount,
+  searchSlot,
   selectedCategorySlug,
   sortBy,
+  trailingControls,
 }) => {
+  const sortControls = trailingControls ?? (
+    <div className="flex items-center gap-1">
+      {sortOptions.map((option) => {
+        const Icon = option.icon;
+        const isActive = sortBy === option.value;
+
+        return (
+          <Button
+            key={option.value}
+            type="button"
+            variant={isActive ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => onSortChange(option.value)}
+            className={cn('gap-1.5', !isActive && 'text-muted-foreground')}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {option.label}
+          </Button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <section className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-        <p className="font-medium text-foreground">{resultCount} templates</p>
+      {categories.length > 0 ? (
+        <div className="flex items-center gap-2 overflow-x-auto pb-2">
+          <Button
+            type="button"
+            variant={selectedCategorySlug === null ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => onCategoryChange(null)}
+            className="shrink-0"
+          >
+            All
+          </Button>
 
-        <div className="flex items-center gap-1">
-          {sortOptions.map((option) => {
-            const Icon = option.icon;
-            const isActive = sortBy === option.value;
+          {categories.map((category) => {
+            const isActive = selectedCategorySlug === category.slug;
 
             return (
               <Button
-                key={option.value}
+                key={category.slug}
                 type="button"
-                variant="ghost"
+                variant={isActive ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => onSortChange(option.value)}
-                className={cn(
-                  'gap-1.5 rounded-md border border-transparent px-3 text-sm text-muted-foreground hover:border-border hover:bg-secondary/40 hover:text-foreground',
-                  isActive &&
-                    'border-border bg-secondary/60 text-foreground hover:bg-secondary/60',
-                )}
+                onClick={() => onCategoryChange(category.slug)}
+                className="shrink-0"
               >
-                <Icon className="h-3.5 w-3.5" />
-                {option.label}
+                {category.name}
               </Button>
             );
           })}
         </div>
-      </div>
+      ) : null}
 
-      <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => onCategoryChange(null)}
-          className={cn(
-            'shrink-0 rounded-md border border-border/80 bg-secondary/20 px-4 text-sm text-muted-foreground hover:border-border hover:bg-secondary/40 hover:text-foreground',
-            selectedCategorySlug === null &&
-              'border-transparent bg-background text-foreground shadow-sm',
-          )}
-        >
-          All
-        </Button>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {searchSlot ? (
+          searchSlot
+        ) : (
+          <p className="text-sm text-muted-foreground">{resultCount} templates</p>
+        )}
 
-        {categories.map((category) => {
-          const isActive = selectedCategorySlug === category.slug;
-
-          return (
-            <Button
-              key={category.slug}
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => onCategoryChange(category.slug)}
-              className={cn(
-                'shrink-0 rounded-md border border-border/80 bg-secondary/20 px-4 text-sm text-muted-foreground hover:border-border hover:bg-secondary/40 hover:text-foreground',
-                isActive &&
-                  'border-transparent bg-background text-foreground shadow-sm',
-              )}
-            >
-              {category.name}
-            </Button>
-          );
-        })}
+        {sortControls}
       </div>
     </section>
   );

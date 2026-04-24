@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Briefcase,
   CheckSquare,
@@ -39,7 +39,7 @@ import { DashboardSidebar } from '@/components/dashboard/DashboardSidebar';
 import { MobileBottomNav, MobileNav } from '@/components/MobileNav';
 
 interface LayoutProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 type NavigationItem = {
@@ -78,23 +78,10 @@ const isPathActive = (pathname: string, href: string): boolean => {
   return pathname === href || pathname.startsWith(`${href}/`);
 };
 
-const BrandMark = () => (
-  <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-foreground">
-    <LayoutGrid className="h-5 w-5" />
-  </span>
-);
-
 const BrandLink = ({ to }: { to: string }) => (
-  <Link to={to} className="group inline-flex items-center gap-3">
-    <BrandMark />
-    <span className="flex flex-col">
-      <span className="text-lg font-semibold tracking-tight text-foreground">
-        Checklist
-      </span>
-      <span className="text-xs text-muted-foreground">
-        Template and run workspace
-      </span>
-    </span>
+  <Link to={to} className="inline-flex items-center gap-2">
+    <LayoutGrid className="h-5 w-5 text-primary" />
+    <span className="text-sm font-semibold text-foreground">Checklist</span>
   </Link>
 );
 
@@ -105,6 +92,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const shell = resolveRouteShell(location.pathname);
   const publicTier = resolvePublicRouteTier(location.pathname);
   const isTemplatesDiscovery = isPublicTemplatesDiscoveryPath(location.pathname);
+  const content = children ?? <Outlet />;
+  const shouldRenderFooter =
+    !isTemplatesDiscovery && publicTier !== 'minimal';
 
   const handleLogout = () => {
     logout();
@@ -188,7 +178,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   if (shell === 'console') {
     return (
-      <div className="flex h-screen bg-background text-foreground">
+      <div
+        className="flex h-screen bg-background text-foreground"
+        data-app-shell="console"
+      >
         <DashboardSidebar />
 
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -198,7 +191,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="w-10" />
           </header>
 
-          <main className="flex-1 overflow-auto pb-16 md:pb-0">{children}</main>
+          <main className="flex-1 overflow-auto pb-16 md:pb-0">{content}</main>
           <MobileBottomNav />
         </div>
       </div>
@@ -206,13 +199,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div
+      className="min-h-screen bg-background text-foreground"
+      data-app-shell="public"
+    >
       {isTemplatesDiscovery ? (
         <TemplatesDiscoveryHeader />
       ) : (
-        <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <PageContainer
-            className="flex items-center justify-between gap-6 py-4"
+            className="flex h-14 items-center justify-between gap-6"
             width="shell"
           >
             <BrandLink to="/" />
@@ -278,44 +274,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               )}
             </div>
           </PageContainer>
-
-          <div className="border-t border-border bg-background/95 md:hidden">
-            <nav>
-              <PageContainer
-                className="flex gap-2 overflow-x-auto py-3"
-                width="shell"
-              >
-                {user
-                  ? authenticatedNavigation.map((item) => (
-                      <Link
-                        key={item.href}
-                        to={item.href}
-                        className={cn(
-                          'whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition',
-                          isPathActive(location.pathname, item.href) &&
-                            'bg-secondary text-foreground',
-                        )}
-                      >
-                        {item.label}
-                      </Link>
-                    ))
-                  : null}
-                {publicHeaderLinks.map((item) => (
-                  <Link
-                    key={item.href}
-                    to={item.href}
-                    className={cn(
-                      'whitespace-nowrap rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition',
-                      isPathActive(location.pathname, item.href) &&
-                        'bg-secondary text-foreground',
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-              </PageContainer>
-            </nav>
-          </div>
         </header>
       )}
 
@@ -326,54 +284,56 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-muted/30 via-background to-transparent" />
           </>
         ) : null}
-        <div className="relative">{children}</div>
+        <div className="relative">{content}</div>
       </main>
 
-      <footer className="border-t border-border bg-background">
-        <PageContainer
-          className="grid gap-10 py-12 lg:grid-cols-[1.2fr_repeat(3,minmax(0,0.72fr))]"
-          width="shell"
-        >
-          <div className="space-y-4">
-            <BrandLink to="/" />
-            <p className="max-w-sm text-sm leading-6 text-muted-foreground">
-              Build repeatable checklists, publish them cleanly, and run them
-              like operations.
-            </p>
-          </div>
-
-          {publicFooterGroups.map((column) => (
-            <div key={column.title}>
-              <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                {column.title}
-              </h3>
-              <div className="mt-4 space-y-3">
-                {column.items.map((item) =>
-                  item.external ? (
-                    <a
-                      key={item.label}
-                      href={item.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block text-sm text-muted-foreground transition hover:text-foreground"
-                    >
-                      {item.label}
-                    </a>
-                  ) : (
-                    <Link
-                      key={item.label}
-                      to={item.href}
-                      className="block text-sm text-muted-foreground transition hover:text-foreground"
-                    >
-                      {item.label}
-                    </Link>
-                  ),
-                )}
-              </div>
+      {shouldRenderFooter ? (
+        <footer className="border-t border-border bg-background">
+          <PageContainer
+            className="grid gap-10 py-12 lg:grid-cols-[1.2fr_repeat(3,minmax(0,0.72fr))]"
+            width="shell"
+          >
+            <div className="space-y-4">
+              <BrandLink to="/" />
+              <p className="max-w-sm text-sm leading-6 text-muted-foreground">
+                Build repeatable checklists, publish them cleanly, and run them
+                like operations.
+              </p>
             </div>
-          ))}
-        </PageContainer>
-      </footer>
+
+            {publicFooterGroups.map((column) => (
+              <div key={column.title}>
+                <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  {column.title}
+                </h3>
+                <div className="mt-4 space-y-3">
+                  {column.items.map((item) =>
+                    item.external ? (
+                      <a
+                        key={item.label}
+                        href={item.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-sm text-muted-foreground transition hover:text-foreground"
+                      >
+                        {item.label}
+                      </a>
+                    ) : (
+                      <Link
+                        key={item.label}
+                        to={item.href}
+                        className="block text-sm text-muted-foreground transition hover:text-foreground"
+                      >
+                        {item.label}
+                      </Link>
+                    ),
+                  )}
+                </div>
+              </div>
+            ))}
+          </PageContainer>
+        </footer>
+      ) : null}
     </div>
   );
 };

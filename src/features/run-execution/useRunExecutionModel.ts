@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
 import { api } from '@/lib/api';
+import {
+  buildV0DemoRun,
+  buildV0DemoSharedRun,
+  isV0DemoRunId,
+  isV0DemoShareToken,
+} from '@/features/parity/v0DemoFixtures';
 import { buildSharePath } from '@/lib/routes';
 import { calculateSectionsProgress } from '@/lib/utils/checklistSections';
 import type { ChecklistRun } from '@/types/checklist';
@@ -134,6 +140,10 @@ const persistRun = async (
   const nextRun = { ...params.run, progress };
 
   if (params.shareToken) {
+    if (isV0DemoShareToken(params.shareToken)) {
+      return nextRun;
+    }
+
     await apiClient.updateSharedChecklist(params.shareToken, {
       completed_at: nextRun.completedAt,
       progress,
@@ -162,6 +172,16 @@ export const loadRunExecutionData = async (
   if (mode === 'private') {
     if (!options.runId) {
       return { kind: 'not_found', mode };
+    }
+
+    if (isV0DemoRunId(options.runId)) {
+      const run = buildV0DemoRun();
+      return {
+        kind: 'ok',
+        mode,
+        run,
+        selectedItemId: getInitialSelectedItemId(run),
+      };
     }
 
     const cachedRun = options.getCachedRun?.(options.runId);
@@ -200,6 +220,16 @@ export const loadRunExecutionData = async (
 
   if (!options.shareToken) {
     return { kind: 'not_found', mode };
+  }
+
+  if (isV0DemoShareToken(options.shareToken)) {
+    const run = buildV0DemoSharedRun();
+    return {
+      kind: 'ok',
+      mode,
+      run,
+      selectedItemId: getInitialSelectedItemId(run),
+    };
   }
 
   try {
@@ -375,6 +405,17 @@ export const createRunExecutionShare = async (
 
   if (params.shareToken) {
     return { kind: 'shared_disabled' };
+  }
+
+  if (isV0DemoRunId(params.run.id)) {
+    const origin =
+      dependencies.origin ??
+      (typeof window !== 'undefined' ? window.location.origin : '');
+
+    return {
+      kind: 'ok',
+      shareUrl: `${origin}${buildSharePath('abc123')}`,
+    };
   }
 
   const apiClient = getApiClient(dependencies);

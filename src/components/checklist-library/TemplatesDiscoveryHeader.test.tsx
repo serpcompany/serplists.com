@@ -5,10 +5,13 @@ import { describe, expect, it } from 'vitest';
 import { TemplatesDiscoveryHeader } from '@/components/checklist-library/TemplatesDiscoveryHeader';
 
 describe('TemplatesDiscoveryHeader', () => {
-  it('renders the discovery header actions and search affordance', () => {
+  it('renders the v0 discovery header logo, search slot, and direct action links', () => {
     const markup = renderToStaticMarkup(
       <MemoryRouter initialEntries={['/templates']}>
-        <TemplatesDiscoveryHeader />
+        <TemplatesDiscoveryHeader
+          onSearchChange={() => undefined}
+          searchQuery="launch"
+        />
       </MemoryRouter>,
     );
 
@@ -16,5 +19,11 @@ describe('TemplatesDiscoveryHeader', () => {
     expect(markup).toContain('Search templates...');
     expect(markup).toContain('My Library');
     expect(markup).toContain('Create Template');
+    expect(markup).toContain('sticky top-0 z-50');
+    expect(markup).toContain('max-w-6xl');
+    expect(markup).toContain('value="launch"');
+    expect(markup).toContain('href="/templates"');
+    expect(markup).toContain('href="/dashboard/templates"');
+    expect(markup).toContain('href="/dashboard/templates/new"');
   });
 });

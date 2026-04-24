@@ -1,11 +1,15 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, ArrowUpRight, FileText, ListTodo } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Eye, FileText, List, Play } from 'lucide-react';
 
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
+  buildCanonicalPublicTemplatePath,
   buildPublicCategoryPath,
   buildPublicProfilePath,
+  buildRunPath,
 } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -16,77 +20,93 @@ import {
 } from '@/components/checklist-library/discovery-utils';
 
 interface TemplateCardProps {
-  template: ChecklistTemplate;
+  layout?: 'horizontal' | 'vertical';
+  template: ChecklistTemplate & {
+    copyCount?: number;
+    runCount?: number;
+    viewCount?: number;
+  };
   onTemplateClick: (template: ChecklistTemplate) => void;
 }
 
 const getTemplateIcon = (template: ChecklistTemplate) =>
   template.type === 'recipe' ? (
-    <ListTodo className="h-7 w-7 text-muted-foreground" />
+    <List className="h-7 w-7 text-muted-foreground" />
   ) : (
     <FileText className="h-7 w-7 text-muted-foreground" />
   );
 
 export const TemplateCard: React.FC<TemplateCardProps> = ({
+  layout = 'vertical',
   template,
   onTemplateClick,
 }) => {
-  const navigate = useNavigate();
   const sectionCount = getTemplateSectionCount(template);
   const itemCount = getTemplateItemCount(template);
   const ownerLabel = getTemplateOwnerLabel(template);
-  const ownerHandle = template.ownerProfile?.username ?? template.userId;
+  const ownerHandle = template.ownerProfile?.username;
   const categories = template.categories ?? [];
+  const templatePath = buildCanonicalPublicTemplatePath(template);
+  const isHorizontal = layout === 'horizontal';
+  const ownerInitial = ownerHandle
+    ? ownerLabel.charAt(0).toUpperCase()
+    : 'U';
 
-  const handleCategoryClick = (event: React.MouseEvent, category: string) => {
+  const handleCardClick = () => {
+    onTemplateClick(template);
+  };
+
+  const handleCategoryClick = (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    navigate(buildPublicCategoryPath(category));
   };
 
   return (
     <Card
       className={cn(
-        'group h-full cursor-pointer overflow-hidden border-border bg-card/70 shadow-none transition-colors hover:border-border/80 hover:bg-secondary/20',
+        'group overflow-hidden border-border bg-card transition-all hover:border-muted-foreground/30 hover:shadow-lg hover:shadow-black/5',
+        isHorizontal ? 'flex' : 'flex flex-col',
       )}
-      onClick={() => onTemplateClick(template)}
+      onClick={handleCardClick}
     >
-      <CardContent className="flex h-full flex-col p-0">
-        <div className="flex h-32 items-center justify-center border-b border-border/70 bg-gradient-to-br from-secondary/40 via-secondary/20 to-background">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-background/90 shadow-sm">
+      <CardContent
+        className={cn(
+          'flex flex-1 p-0',
+          isHorizontal ? 'min-h-[12rem] flex-row' : 'flex-col',
+        )}
+      >
+        <div
+          className={cn(
+            'relative flex items-center justify-center bg-gradient-to-br from-secondary to-secondary/50',
+            isHorizontal ? 'w-44 shrink-0' : 'h-32',
+          )}
+        >
+          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-background shadow-sm">
             {getTemplateIcon(template)}
+          </div>
+
+          <div className="absolute inset-0 flex items-center justify-center bg-background/80 opacity-0 transition-opacity group-hover:opacity-100">
+            <Button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onTemplateClick(template);
+              }}
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              View Template
+            </Button>
           </div>
         </div>
 
         <div className="flex flex-1 flex-col p-4">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              TEMPLATE PACK
-            </span>
-            <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground" />
-          </div>
-
-          <h3 className="mt-3 line-clamp-2 text-lg font-semibold text-foreground">
-            {template.title}
-          </h3>
-          <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">
-            {template.description ??
-              'Reusable template pack ready to clone or run.'}
-          </p>
-
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-            <span>{sectionCount} sections</span>
-            <span>{itemCount} items</span>
-            <span>by {ownerLabel}</span>
-          </div>
-
           {categories.length > 0 ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {categories.slice(0, 3).map((category) => (
+            <div className="mb-2 flex flex-wrap gap-1">
+              {categories.slice(0, 2).map((category) => (
                 <Link
                   key={category}
-                  className="inline-flex items-center rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition hover:border-border hover:bg-muted/25 hover:text-foreground"
-                  onClick={(event) => handleCategoryClick(event, category)}
+                  className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                  onClick={handleCategoryClick}
                   to={buildPublicCategoryPath(category)}
                 >
                   {category}
@@ -95,39 +115,71 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             </div>
           ) : null}
 
-          <div className="mt-auto border-t border-border/70 pt-4">
-            <div className="flex items-center justify-between gap-3">
-              {template.ownerProfile?.username ? (
-                <Link
-                  to={buildPublicProfilePath(template.ownerProfile.username)}
-                  onClick={(event) => event.stopPropagation()}
-                  className="flex min-w-0 items-center gap-2"
-                >
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-secondary text-[10px] font-semibold text-foreground">
-                    {ownerLabel.charAt(0).toUpperCase()}
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {ownerHandle}
-                  </span>
-                  <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
-                </Link>
-              ) : (
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-secondary text-[10px] font-semibold text-foreground">
-                    {ownerLabel.charAt(0).toUpperCase()}
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {ownerHandle}
-                  </span>
-                </div>
-              )}
+          <button
+            className="block text-left"
+            onClick={(event) => {
+              event.stopPropagation();
+              onTemplateClick(template);
+            }}
+            type="button"
+          >
+            <h3 className="mb-1 line-clamp-1 text-sm font-medium text-foreground transition-colors group-hover:text-primary">
+              {template.title}
+            </h3>
+            {template.description ? (
+              <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
+                {template.description}
+              </p>
+            ) : null}
+          </button>
 
-              <div className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
-                <span>View template</span>
-                <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-              </div>
-            </div>
+          <div className="mt-auto flex items-center gap-3 text-xs text-muted-foreground">
+            <span>{sectionCount} sections</span>
+            <span>{itemCount} tasks</span>
+            {typeof template.viewCount === 'number' ? (
+              <span className="ml-auto">
+                {template.viewCount.toLocaleString()} views
+              </span>
+            ) : null}
           </div>
+
+          <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+            {ownerHandle ? (
+              <Link
+                className="flex min-w-0 items-center gap-2 transition-colors hover:text-foreground"
+                onClick={(event) => event.stopPropagation()}
+                to={buildPublicProfilePath(ownerHandle)}
+              >
+                <Avatar className="h-5 w-5">
+                  <AvatarFallback className="text-[10px]">
+                    {ownerInitial}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="truncate text-xs text-muted-foreground">
+                  {ownerHandle}
+                </span>
+              </Link>
+            ) : (
+              <div className="flex min-w-0 items-center gap-2">
+                <Avatar className="h-5 w-5">
+                  <AvatarFallback className="text-[10px]">
+                    {ownerInitial}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+            )}
+
+            <Button asChild className="h-7 px-2 text-xs" size="sm" variant="ghost">
+              <Link
+                onClick={(event) => event.stopPropagation()}
+                to={buildRunPath(template.id)}
+              >
+                <Play className="mr-1 h-3 w-3" />
+                Start
+              </Link>
+            </Button>
+          </div>
+
         </div>
       </CardContent>
     </Card>

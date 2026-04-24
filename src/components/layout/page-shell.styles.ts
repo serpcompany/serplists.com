@@ -1,15 +1,15 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 
 export const pageContainerVariants = cva(
-  'mx-auto w-full px-4 sm:px-6 lg:px-8',
+  'mx-auto w-full px-4',
   {
     variants: {
       width: {
-        shell: 'max-w-[var(--layout-shell-max)]',
-        content: 'max-w-[var(--layout-content-max)]',
-        narrow: 'max-w-[var(--layout-narrow-max)]',
+        shell: 'max-w-6xl',
+        content: 'max-w-6xl',
+        narrow: 'max-w-4xl',
         wide: 'max-w-[var(--layout-wide-max)]',
-        docs: 'max-w-[var(--layout-docs-max)]',
+        docs: 'max-w-4xl',
       },
     },
     defaultVariants: {
@@ -21,10 +21,10 @@ export const pageContainerVariants = cva(
 export const pageSectionVariants = cva('', {
   variants: {
     spacing: {
-      compact: 'py-6 sm:py-8',
-      default: 'py-8 sm:py-10',
-      spacious: 'py-12 sm:py-16',
-      hero: 'pb-8 pt-10 sm:pb-10 sm:pt-12',
+      compact: 'py-6',
+      default: 'py-8',
+      spacious: 'py-12',
+      hero: 'py-8 sm:py-10',
     },
   },
   defaultVariants: {
@@ -49,11 +49,15 @@ export const surfaceVariants = cva(
   {
     variants: {
       tone: {
-        default: 'bg-card border border-border rounded-lg shadow-none',
-        glass: 'bg-card border border-border rounded-lg shadow-none',
-        metric: 'bg-card border border-border rounded-lg shadow-none',
-        console: 'bg-card border border-border rounded-lg shadow-none',
-        docs: 'bg-card border border-border rounded-lg shadow-none',
+        default:
+          'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
+        glass:
+          'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
+        metric:
+          'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
+        console:
+          'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
+        docs: 'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
         flat: 'bg-transparent border-0 rounded-none shadow-none',
       },
       padding: {

@@ -4,6 +4,7 @@ import {
   Route,
   Routes,
 } from 'react-router-dom';
+import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider } from './contexts/CloudflareAuthContext';
@@ -28,6 +29,7 @@ import ChecklistRun from './pages/ChecklistRun';
 import PublicTemplate from './pages/PublicTemplate';
 import ChecklistLibrary from './pages/ChecklistLibrary';
 import Categories from './pages/Categories';
+import CategoryDetail from './pages/CategoryDetail';
 import Account from './pages/Account';
 import UserProfile from './pages/UserProfile';
 import Features from './pages/Features';
@@ -76,6 +78,20 @@ const DashboardProfileRedirect = () => {
   );
 };
 
+const RootThemeClass = () => {
+  useEffect(() => {
+    document.documentElement.classList.add('dark');
+    document.body.classList.add('dark');
+
+    return () => {
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+    };
+  }, []);
+
+  return null;
+};
+
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
@@ -84,56 +100,13 @@ const App = () => {
           <TooltipProvider>
             <AuthProvider>
               <TemplatesProvider>
+                <RootThemeClass />
                 <Router>
                   <Routes>
                     {/* Public Routes */}
                     <Route
                       path="/"
-                      element={
-                        <Layout>
-                          <Index />
-                        </Layout>
-                      }
-                    />
-                    <Route
-                      path="/features"
-                      element={
-                        <Layout>
-                          <Features />
-                        </Layout>
-                      }
-                    />
-                    <Route
-                      path="/features/:featureSlug"
-                      element={
-                        <Layout>
-                          <Features />
-                        </Layout>
-                      }
-                    />
-                    <Route
-                      path="/pricing"
-                      element={
-                        <Layout>
-                          <Pricing />
-                        </Layout>
-                      }
-                    />
-                    <Route
-                      path="/about"
-                      element={
-                        <Layout>
-                          <About />
-                        </Layout>
-                      }
-                    />
-                    <Route
-                      path="/contact"
-                      element={
-                        <Layout>
-                          <Contact />
-                        </Layout>
-                      }
+                      element={<Index />}
                     />
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
@@ -151,48 +124,8 @@ const App = () => {
                       }
                     />
                     <Route
-                      path={buildPublicTemplatesPath()}
-                      element={
-                        <Layout>
-                          <ChecklistLibrary />
-                        </Layout>
-                      }
-                    />
-                    <Route
-                      path="/categories"
-                      element={
-                        <Layout>
-                          <Categories />
-                        </Layout>
-                      }
-                    />
-                    <Route
-                      path="/categories/:categorySlug"
-                      element={
-                        <Layout>
-                          <ChecklistLibrary />
-                        </Layout>
-                      }
-                    />
-                    <Route
                       path="/share/:shareToken"
-                      element={
-                        <Layout>
-                          <ChecklistRun />
-                        </Layout>
-                      }
-                    />
-                    <Route
-                      path="/profile/:username/:templateSlug"
-                      element={<PublicTemplate />}
-                    />
-                    <Route
-                      path="/profile/:username"
-                      element={
-                        <Layout>
-                          <UserProfile />
-                        </Layout>
-                      }
+                      element={<ChecklistRun />}
                     />
 
                     {/* Canonical Private Routes */}
@@ -209,26 +142,6 @@ const App = () => {
                       }
                     />
                     <Route
-                      path={buildConsoleRunsPath()}
-                      element={
-                        <RequireAuth>
-                          <Layout>
-                            <Dashboard />
-                          </Layout>
-                        </RequireAuth>
-                      }
-                    />
-                    <Route
-                      path={buildConsoleSettingsPath()}
-                      element={
-                        <RequireAuth>
-                          <Layout>
-                            <DashboardSettings />
-                          </Layout>
-                        </RequireAuth>
-                      }
-                    />
-                    <Route
                       path={buildConsoleProfilePath()}
                       element={
                         <RequireAuth>
@@ -237,99 +150,107 @@ const App = () => {
                       }
                     />
                     <Route
-                      path={buildConsoleTemplatesPath()}
-                      element={
-                        <RequireAuth>
-                          <Layout>
-                            <Templates />
-                          </Layout>
-                        </RequireAuth>
-                      }
-                    />
-                    <Route
-                      path={buildConsoleTemplateCreatePath()}
-                      element={
-                        <RequireAuth>
-                          <Layout>
-                            <TemplateEditor />
-                          </Layout>
-                        </RequireAuth>
-                      }
-                    />
-                    <Route
-                      path="/dashboard/templates/:id"
-                      element={
-                        <RequireAuth>
-                          <Layout>
-                            <TemplateDetail />
-                          </Layout>
-                        </RequireAuth>
-                      }
-                    />
-                    <Route
-                      path="/dashboard/templates/:id/edit"
-                      element={
-                        <RequireAuth>
-                          <Layout>
-                            <TemplateEditor />
-                          </Layout>
-                        </RequireAuth>
-                      }
-                    />
-                    <Route
-                      path="/dashboard/runs/:id"
-                      element={
-                        <RequireAuth>
-                          <Layout>
-                            <ChecklistRun />
-                          </Layout>
-                        </RequireAuth>
-                      }
-                    />
-                    <Route
                       path="/run/:id"
                       element={<ChecklistRun />}
                     />
 
-                    {/* Legacy Private Route Aliases */}
+                    <Route element={<Layout />}>
+                      <Route
+                        path="/features"
+                        element={<Features />}
+                      />
+                      <Route
+                        path="/features/:featureSlug"
+                        element={<Features />}
+                      />
+                      <Route
+                        path="/pricing"
+                        element={<Pricing />}
+                      />
+                      <Route
+                        path="/about"
+                        element={<About />}
+                      />
+                      <Route
+                        path="/contact"
+                        element={<Contact />}
+                      />
+                      <Route
+                        path={buildPublicTemplatesPath()}
+                        element={<ChecklistLibrary />}
+                      />
+                      <Route
+                        path="/categories"
+                        element={<Categories />}
+                      />
+                      <Route
+                        path="/categories/:categorySlug"
+                        element={<CategoryDetail />}
+                      />
+                      <Route
+                        path="/profile/:username/:templateSlug"
+                        element={<PublicTemplate />}
+                      />
+                      <Route
+                        path="/profile/:username"
+                        element={<UserProfile />}
+                      />
+                    </Route>
+
                     <Route
-                      path="/console/templates/:id"
                       element={
                         <RequireAuth>
-                          <Layout>
-                            <TemplateDetail />
-                          </Layout>
+                          <Layout />
                         </RequireAuth>
                       }
-                    />
-                    <Route
-                      path="/console/templates/:id/edit"
-                      element={
-                        <RequireAuth>
-                          <TemplateEditor />
-                        </RequireAuth>
-                      }
-                    />
-                    <Route
-                      path="/console/runs/:id"
-                      element={
-                        <RequireAuth>
-                          <Layout>
-                            <ChecklistRun />
-                          </Layout>
-                        </RequireAuth>
-                      }
-                    />
-                    <Route
-                      path="/account"
-                      element={
-                        <RequireAuth>
-                          <Layout>
-                            <Account />
-                          </Layout>
-                        </RequireAuth>
-                      }
-                    />
+                    >
+                      <Route
+                        path={buildConsoleRunsPath()}
+                        element={<Dashboard />}
+                      />
+                      <Route
+                        path={buildConsoleSettingsPath()}
+                        element={<DashboardSettings />}
+                      />
+                      <Route
+                        path={buildConsoleTemplatesPath()}
+                        element={<Templates />}
+                      />
+                      <Route
+                        path={buildConsoleTemplateCreatePath()}
+                        element={<TemplateEditor />}
+                      />
+                      <Route
+                        path="/dashboard/templates/:id"
+                        element={<TemplateDetail />}
+                      />
+                      <Route
+                        path="/dashboard/templates/:id/edit"
+                        element={<TemplateEditor />}
+                      />
+                      <Route
+                        path="/dashboard/runs/:id"
+                        element={<ChecklistRun />}
+                      />
+
+                      {/* Legacy Private Route Aliases */}
+                      <Route
+                        path="/console/templates/:id"
+                        element={<TemplateDetail />}
+                      />
+                      <Route
+                        path="/console/templates/:id/edit"
+                        element={<TemplateEditor />}
+                      />
+                      <Route
+                        path="/console/runs/:id"
+                        element={<ChecklistRun />}
+                      />
+                      <Route
+                        path="/account"
+                        element={<Account />}
+                      />
+                    </Route>
                     <Route
                       path="*"
                       element={

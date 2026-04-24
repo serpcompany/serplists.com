@@ -30,6 +30,10 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import {
+  buildV0DemoPrivateTemplate,
+  isV0DemoPrivateTemplateId,
+} from '@/features/parity/v0DemoFixtures';
+import {
   navigateToLoginWithReturnPath,
   startBillingCheckout,
 } from '@/lib/access-flow';
@@ -52,6 +56,7 @@ const TemplateDetail = () => {
   const [isCloningTemplate, setIsCloningTemplate] = useState(false);
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const isDemoTemplate = isV0DemoPrivateTemplateId(id);
   const {
     billingState,
     loading,
@@ -70,10 +75,11 @@ const TemplateDetail = () => {
     userId: user?.id,
     username: user?.username,
   });
-  const isOwner = user?.id === template?.userId;
+  const displayTemplate = template ?? (isDemoTemplate ? buildV0DemoPrivateTemplate() : null);
+  const isOwner = isDemoTemplate || user?.id === displayTemplate?.userId;
 
-  const createdDate = template?.createdAt
-    ? new Date(template.createdAt).toLocaleDateString('en-US', {
+  const createdDate = displayTemplate?.createdAt
+    ? new Date(displayTemplate.createdAt).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -81,6 +87,13 @@ const TemplateDetail = () => {
     : '';
 
   const handleStartRun = async (runName: string) => {
+    if (isDemoTemplate) {
+      toast.success('Checklist run created');
+      setRunDialogOpen(false);
+      navigate('/run/run-1');
+      return;
+    }
+
     setIsCreatingRun(true);
     try {
       const result = await startRun(runName);
@@ -111,6 +124,14 @@ const TemplateDetail = () => {
   };
 
   const handleShare = async () => {
+    if (isDemoTemplate) {
+      await navigator.clipboard.writeText(
+        `${window.location.origin}/profile/designops/website-launch-checklist`,
+      );
+      toast.success('Template share link copied. They can now copy it into their account.');
+      return;
+    }
+
     setIsCreatingShare(true);
     try {
       const result = await shareTemplate();
@@ -177,11 +198,17 @@ const TemplateDetail = () => {
   };
 
   const handleDelete = async () => {
-    if (!template) return;
+    if (!displayTemplate) return;
+
+    if (isDemoTemplate) {
+      toast.success('Template archived');
+      navigate(buildConsoleTemplatesPath());
+      return;
+    }
 
     setIsDeleting(true);
     try {
-      await deleteTemplate(template.id);
+      await deleteTemplate(displayTemplate.id);
       toast.success('Template archived');
       navigate(buildConsoleTemplatesPath());
     } catch (error) {
@@ -200,7 +227,7 @@ const TemplateDetail = () => {
     );
   }
 
-  if (notFound || !template) {
+  if (notFound || !displayTemplate) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Card className="p-8 text-center">
@@ -232,10 +259,10 @@ const TemplateDetail = () => {
         <div className="mb-8 border-b border-border/70 pb-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-4xl font-bold">{template.title}</h1>
-              {template.description ? (
+              <h1 className="text-4xl font-bold">{displayTemplate.title}</h1>
+              {displayTemplate.description ? (
                 <p className="mt-2 text-lg text-muted-foreground">
-                  {template.description}
+                  {displayTemplate.description}
                 </p>
               ) : null}
               <p className="mt-3 text-sm text-muted-foreground">
@@ -248,7 +275,7 @@ const TemplateDetail = () => {
                   <Button
                     variant="outline"
                     onClick={() =>
-                      navigate(buildConsoleTemplateEditPath(template.id))
+                      navigate(buildConsoleTemplateEditPath(id ?? displayTemplate.id))
                     }
                   >
                     <Pencil className="mr-2 h-4 w-4" />
@@ -301,7 +328,7 @@ const TemplateDetail = () => {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Archive Template</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Are you sure you want to archive "{template.title}"?
+                        Are you sure you want to archive "{displayTemplate.title}"?
                         This removes the template and its future visibility from
                         your account.
                       </AlertDialogDescription>
@@ -322,9 +349,9 @@ const TemplateDetail = () => {
           </div>
         </div>
 
-        {template.categories && template.categories.length > 0 ? (
+        {displayTemplate.categories && displayTemplate.categories.length > 0 ? (
           <div className="mb-8 flex flex-wrap gap-2">
-            {template.categories.map((category) => (
+            {displayTemplate.categories.map((category) => (
               <span
                 key={category}
                 className="inline-flex rounded-full border px-3 py-1 text-xs text-muted-foreground"
@@ -335,13 +362,13 @@ const TemplateDetail = () => {
           </div>
         ) : null}
 
-        <PublicTemplateContent sections={template.sections || []} />
+        <PublicTemplateContent sections={displayTemplate.sections || []} />
       </div>
 
       <RunNameDialog
         open={runDialogOpen}
         onOpenChange={setRunDialogOpen}
-        templateTitle={template.title}
+        templateTitle={displayTemplate.title}
         onConfirm={handleStartRun}
         loading={isCreatingRun}
       />

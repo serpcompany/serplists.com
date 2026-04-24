@@ -14,10 +14,10 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   }),
 }));
 
-describe('Layout console shell', () => {
-  it('does not force the console shell into dark mode', () => {
+describe('Layout shell selection', () => {
+  it('uses the exact dashboard sidebar framing from the v0 reference for dashboard routes', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/console']}>
+      <MemoryRouter initialEntries={['/dashboard/templates']}>
         <Routes>
           <Route
             path="*"
@@ -31,44 +31,22 @@ describe('Layout console shell', () => {
       </MemoryRouter>,
     );
 
-    expect(html).not.toContain('dark min-h-screen');
-  });
-
-  it('renders the stripped operational sidebar structure for console routes', () => {
-    const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/console/templates']}>
-        <Routes>
-          <Route
-            path="*"
-            element={
-              <Layout>
-                <div>Console child</div>
-              </Layout>
-            }
-          />
-        </Routes>
-      </MemoryRouter>,
+    expect(html).toContain(
+      'hidden h-full w-56 flex-col border-r border-border bg-card md:flex',
     );
-
     expect(html).toContain('New Template');
-    expect(html).toContain('My Templates');
-    expect(html).toContain('My Runs');
-    expect(html).toContain('Discover');
-    expect(html).toContain('/dashboard/settings');
     expect(html).toContain('Import Template');
-    expect(html).not.toContain('Dashboard');
-    expect(html).not.toContain('Operate your checklist system');
   });
 
-  it('keeps the public footer lean instead of repeating header links', () => {
+  it('uses the exact discovery header framing from the v0 reference for discovery routes', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/pricing']}>
+      <MemoryRouter initialEntries={['/templates']}>
         <Routes>
           <Route
             path="*"
             element={
               <Layout>
-                <div>Public child</div>
+                <div>Discovery child</div>
               </Layout>
             }
           />
@@ -76,12 +54,35 @@ describe('Layout console shell', () => {
       </MemoryRouter>,
     );
 
+    expect(html).toContain('h-14');
+    expect(html).toContain('max-w-6xl');
+    expect(html).toContain('px-4');
+    expect(html).toContain('Search templates...');
+    expect(html).toContain('Create Template');
+    expect(html).not.toContain('Build repeatable checklists');
+  });
+
+  it('uses the shared public shell for profile routes with the same max-w-6xl px-4 h-14 frame', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/profile/designops']}>
+        <Routes>
+          <Route
+            path="*"
+            element={
+              <Layout>
+                <div>Profile child</div>
+              </Layout>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('data-app-shell="public"');
+    expect(html).toContain('Profile child');
+    expect(html).toContain(
+      'mx-auto w-full px-4 max-w-6xl flex h-14 items-center justify-between gap-6',
+    );
     expect(html).toContain('Build repeatable checklists');
-    expect(html).not.toContain('Explore');
-    expect(html).not.toContain('Outside the app');
-    expect(html).toContain('Company');
-    expect(html).toContain('Support');
-    expect(html).toContain('Network');
-    expect(html).toContain('SERP DR');
   });
 });

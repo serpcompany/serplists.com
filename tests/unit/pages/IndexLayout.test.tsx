@@ -19,18 +19,19 @@ vi.mock('@/contexts/TemplatesContext', () => ({
 }));
 
 describe('Index layout', () => {
-  it('positions the homepage as a form-first workflow instead of a broad marketplace pitch', () => {
+  it('keeps the standalone v0 reference framing and docs hrefs on the homepage route', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <Index />
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Build the template once. Run it every time.');
-    expect(html).toContain('Template editing');
-    expect(html).toContain('Run execution');
-    expect(html).not.toContain(
-      'Turn messy repeat work into templates people can actually discover and run.',
-    );
+    expect(html).toContain('Checklist Product Prototype');
+    expect(html).toContain('mx-auto flex h-14 max-w-4xl items-center justify-between px-4');
+    expect(html).toContain('mx-auto max-w-4xl px-4 py-8 md:py-12');
+    expect(html).toContain('Design System Documentation');
+    expect(html).not.toContain('max-w-6xl');
+    expect(html).toContain('href="/docs"');
+    expect(html).not.toContain('href="/dashboard/templates"');
   });
 });

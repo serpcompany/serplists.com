@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 
 import { PageContainer } from '@/components/layout/page-shell';
+import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';

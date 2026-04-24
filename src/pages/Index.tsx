@@ -1,262 +1,253 @@
-import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
-  Compass,
-  FilePenLine,
-  PlaySquare,
-  Share2,
+  FileText,
+  Globe,
+  LayoutGrid,
+  Moon,
+  Play,
+  Sun,
+  User,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/contexts/CloudflareAuthContext';
-import { useTemplates } from '@/contexts/TemplatesContext';
-import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
 import {
-  buildCanonicalPublicTemplatePath,
-  buildConsoleTemplatesPath,
-  buildPublicTemplatesPath,
-} from '@/lib/routes';
-import { PageSection } from '@/components/layout/page-shell';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
-const countTemplateItems = (sectionCountable: {
-  sections: Array<{ items: unknown[] }>;
-}) =>
-  sectionCountable.sections.reduce(
-    (total, section) => total + section.items.length,
-    0,
-  );
+const surfaces = [
+  {
+    title: 'Template Editor (New)',
+    description:
+      'The authoring surface for creating reusable checklist templates with nested sections, tasks, and content blocks.',
+    href: '/dashboard/templates/new',
+    icon: FileText,
+    badge: 'Authoring',
+  },
+  {
+    title: 'Template Editor (Edit)',
+    description:
+      'Edit an existing template with all the same capabilities as the new template editor.',
+    href: '/dashboard/templates/tpl-1/edit',
+    icon: FileText,
+    badge: 'Authoring',
+  },
+  {
+    title: 'Run Execution View',
+    description:
+      'The checklist execution interface with progress tracking, task completion, and sub-task management.',
+    href: '/run/run-1',
+    icon: Play,
+    badge: 'Execution',
+  },
+  {
+    title: 'Shared Run View',
+    description:
+      'Guest-accessible run view via share link with optional completion permissions.',
+    href: '/share/abc123',
+    icon: Globe,
+    badge: 'Execution',
+  },
+  {
+    title: 'Template Library',
+    description:
+      'Private inventory view showing all your templates with search, filtering, and management actions.',
+    href: '/dashboard/templates',
+    icon: LayoutGrid,
+    badge: 'Dashboard',
+  },
+  {
+    title: 'Private Template Detail',
+    description:
+      'Owner management view for a template with stats, visibility toggle, and quick actions.',
+    href: '/dashboard/templates/tpl-1',
+    icon: FileText,
+    badge: 'Dashboard',
+  },
+  {
+    title: 'Runs Dashboard',
+    description:
+      'Track all your in-progress and completed runs with status filters and quick actions.',
+    href: '/dashboard/runs',
+    icon: Play,
+    badge: 'Dashboard',
+  },
+  {
+    title: 'Settings',
+    description:
+      'Manage your profile, notifications, privacy settings, and export data.',
+    href: '/dashboard/settings',
+    icon: User,
+    badge: 'Dashboard',
+  },
+  {
+    title: 'Public Template Discovery',
+    description:
+      'Browse and discover public templates created by the community, with category filtering and search.',
+    href: '/templates',
+    icon: Globe,
+    badge: 'Discovery',
+  },
+  {
+    title: 'Categories',
+    description:
+      'Explore templates organized by category to find exactly what you need.',
+    href: '/categories',
+    icon: LayoutGrid,
+    badge: 'Discovery',
+  },
+  {
+    title: 'Category Detail',
+    description:
+      'Browse all templates within a specific category with filtering and sorting.',
+    href: '/categories/business',
+    icon: LayoutGrid,
+    badge: 'Discovery',
+  },
+  {
+    title: 'Public Template Detail',
+    description:
+      'Evaluation page where users preview a template, see what it includes, and start a run or save to library.',
+    href: '/profile/designops/website-launch-checklist',
+    icon: FileText,
+    badge: 'Discovery',
+  },
+  {
+    title: 'Creator Profile',
+    description:
+      'Public creator profile page showing their templates, stats, and bio.',
+    href: '/profile/designops',
+    icon: User,
+    badge: 'Discovery',
+  },
+] as const;
 
 const Index = () => {
-  const { user } = useAuth();
-  const { templates, templatesLoading } = useTemplates();
-
-  const publicTemplates = useMemo(
-    () =>
-      templates.filter(
-        (template) =>
-          template.isPublic &&
-          template.userId !== 'system' &&
-          !isRepoTemplate(template),
-      ),
-    [templates],
-  );
-
-  const featuredTemplates = useMemo(
-    () =>
-      templates.filter(
-        (template) =>
-          template.isPublic &&
-          (template.userId === 'system' || isRepoTemplate(template)),
-      ),
-    [templates],
-  );
-
-  const templateStats = useMemo(() => {
-    const creatorIds = new Set(
-      [...featuredTemplates, ...publicTemplates]
-        .map((template) => template.userId)
-        .filter(Boolean),
-    );
-
-    return [
-      {
-        label: 'Public templates',
-        value: String(featuredTemplates.length + publicTemplates.length),
-      },
-      {
-        label: 'Documented steps',
-        value: String(
-          [...featuredTemplates, ...publicTemplates].reduce(
-            (total, template) => total + countTemplateItems(template),
-            0,
-          ),
-        ),
-      },
-      {
-        label: 'Template creators',
-        value: String(creatorIds.size),
-      },
-    ];
-  }, [featuredTemplates, publicTemplates]);
-  const showcaseTemplates = useMemo(
-    () => [...featuredTemplates, ...publicTemplates].slice(0, 6),
-    [featuredTemplates, publicTemplates],
-  );
-
   return (
-    <div className="pb-16">
-      <PageSection spacing="hero" width="shell">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
-          <div className="docs-panel p-6 sm:p-8">
-            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/60 px-3 py-1.5 text-sm font-medium text-muted-foreground">
-              <Compass className="h-4 w-4" />
-              SOP workspace
-            </div>
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border">
+        <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <LayoutGrid className="h-5 w-5 text-primary" />
+            <span className="text-sm font-semibold text-foreground">
+              Checklist Product Prototype
+            </span>
+          </div>
 
-            <div className="mt-5 max-w-3xl space-y-4">
-              <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
-                Build the template once. Run it every time.
-              </h1>
-              <p className="max-w-2xl text-base leading-7 text-muted-foreground">
-                Serplists should feel like a fast form system for SOPs, process
-                templates, and repeatable runs. Start with the structure, keep
-                the inputs dense, and publish later if the workflow deserves a
-                public page.
-              </p>
-            </div>
-
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Button asChild>
-                <Link
-                  to={
-                    user
-                      ? buildConsoleTemplatesPath()
-                      : buildPublicTemplatesPath()
-                  }
-                >
-                  {user ? 'Open template workspace' : 'Browse templates'}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="h-9 w-9" size="icon" variant="ghost">
+                <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                <span className="sr-only">Toggle theme</span>
               </Button>
-              {!user ? (
-                <Button asChild variant="outline">
-                  <Link to="/register">Create an account</Link>
-                </Button>
-              ) : null}
-            </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem>Light</DropdownMenuItem>
+              <DropdownMenuItem>Dark</DropdownMenuItem>
+              <DropdownMenuItem>System</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              {templateStats.map((item) => (
-                <div key={item.label} className="rounded-lg border border-border/80 bg-card px-4 py-4">
-                  <div className="text-2xl font-semibold text-foreground">
-                    {item.value}
+      <main className="mx-auto max-w-4xl px-4 py-8 md:py-12">
+        <div className="mb-8 text-center md:mb-12">
+          <h1 className="mb-4 text-balance text-2xl font-bold text-foreground md:text-3xl">
+            Checklist &amp; Template Experience
+          </h1>
+          <p className="mx-auto max-w-2xl text-sm text-muted-foreground md:text-base">
+            A prototype of the key surfaces for a checklist and template
+            product. Explore the authoring layer (template editor), execution
+            layer (run view), and distribution layer (discovery and sharing).
+          </p>
+        </div>
+
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-4 md:mb-12">
+          <Button asChild size="lg" className="w-full sm:w-auto">
+            <Link to="/dashboard/templates/new">
+              <FileText className="mr-2 h-4 w-4" />
+              Create a Template
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            size="lg"
+            className="w-full sm:w-auto"
+          >
+            <Link to="/templates">
+              <Globe className="mr-2 h-4 w-4" />
+              Browse Templates
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant="secondary"
+            size="lg"
+            className="w-full sm:w-auto"
+          >
+            <Link to="/dashboard/templates">
+              <LayoutGrid className="mr-2 h-4 w-4" />
+              Design Docs
+            </Link>
+          </Button>
+        </div>
+
+        <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
+          {surfaces.map((surface) => {
+            const Icon = surface.icon;
+
+            return (
+              <Link
+                key={surface.href}
+                to={surface.href}
+                className="group flex flex-col rounded-lg border border-border bg-card p-4 transition-all hover:border-muted-foreground/30 hover:shadow-lg hover:shadow-black/5 sm:p-6"
+              >
+                <div className="mb-3 flex items-start justify-between sm:mb-4">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary sm:h-10 sm:w-10">
+                    <Icon className="h-4 w-4 text-muted-foreground sm:h-5 sm:w-5" />
                   </div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    {item.label}
-                  </div>
+                  <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    {surface.badge}
+                  </span>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="docs-panel p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-              Start here
-            </p>
-            <div className="mt-4 space-y-3">
-              {[
-                {
-                  title: 'Template editing',
-                  description:
-                    'Define the JSON-backed SOP structure, metadata, and step content.',
-                  icon: FilePenLine,
-                },
-                {
-                  title: 'Run execution',
-                  description:
-                    'Launch a concrete run for a human or AI operator and track progress separately from the source template.',
-                  icon: PlaySquare,
-                },
-                {
-                  title: 'Public publishing',
-                  description:
-                    'Share the SOP only after the workflow is solid enough to be a reusable public asset.',
-                  icon: Share2,
-                },
-              ].map((item) => {
-                const Icon = item.icon;
-
-                return (
-                  <div
-                    key={item.title}
-                    className="rounded-lg border border-border/80 bg-card px-4 py-4"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-md border border-border/80 bg-muted/50 p-2 text-foreground">
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <h2 className="text-sm font-semibold text-foreground">
-                          {item.title}
-                        </h2>
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                          {item.description}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+                <h2 className="mb-1 text-sm font-medium text-foreground transition-colors group-hover:text-primary sm:mb-2 sm:text-base">
+                  {surface.title}
+                </h2>
+                <p className="mb-3 flex-1 text-xs text-muted-foreground sm:mb-4 sm:text-sm">
+                  {surface.description}
+                </p>
+                <div className="flex items-center text-xs text-muted-foreground transition-colors group-hover:text-foreground sm:text-sm">
+                  View surface
+                  <ArrowRight className="ml-1 h-3 w-3 sm:h-4 sm:w-4" />
+                </div>
+              </Link>
+            );
+          })}
         </div>
-      </PageSection>
 
-      <PageSection className="pt-0" width="shell">
-        <div className="docs-panel overflow-hidden">
-          <div className="flex flex-col gap-4 border-b border-border/70 px-5 py-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-2xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                Template library
-              </p>
-              <h2 className="mt-1 text-2xl font-semibold text-foreground">
-                Start from a template or open an existing run.
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                The product should lead users toward structure and execution, not padded marketing sections.
-              </p>
-            </div>
-            <Button asChild variant="outline">
-              <Link to={buildPublicTemplatesPath()}>Open the library</Link>
-            </Button>
-          </div>
-
-          <div className="divide-y divide-border/70">
-            {templatesLoading ? (
-              <div className="px-5 py-5 text-sm text-muted-foreground">
-                Loading templates…
-              </div>
-            ) : showcaseTemplates.length > 0 ? (
-              showcaseTemplates.map((template, index) => {
-                const templatePath =
-                  buildCanonicalPublicTemplatePath(template);
-
-                return (
-                  <Link
-                    key={template.id}
-                    to={templatePath ?? buildPublicTemplatesPath()}
-                    className="block px-5 py-4 transition hover:bg-muted/20"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          {index < featuredTemplates.length ? 'Official template' : 'Community template'}
-                        </div>
-                        <h3 className="mt-1 truncate text-lg font-semibold text-foreground">
-                          {template.title}
-                        </h3>
-                        <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-                          {template.description ||
-                            'Reusable workflow template ready to copy into your account.'}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right text-xs text-muted-foreground">
-                        <div>{template.sections.length} sections</div>
-                        <div className="mt-1">{countTemplateItems(template)} items</div>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })
-            ) : (
-              <div className="px-5 py-5 text-sm text-muted-foreground">
-                No public templates yet.
-              </div>
-            )}
-          </div>
+        <div className="mt-12 rounded-lg border border-border bg-card p-6 text-center">
+          <h2 className="mb-2 font-medium text-foreground">
+            Design System Documentation
+          </h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            This prototype uses a dark theme with a clean, minimal aesthetic
+            inspired by modern productivity tools. Full documentation of color
+            tokens, typography, layout patterns, and custom components is
+            available in the design docs.
+          </p>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/dashboard/templates">
+              View Documentation
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
         </div>
-      </PageSection>
+      </main>
     </div>
   );
 };

@@ -14,6 +14,10 @@ import {
 } from "@/lib/forms/templateEditorForm";
 import { api } from "@/lib/api";
 import type { ChecklistTemplate } from "@/types/checklist";
+import {
+  buildV0DemoPrivateTemplate,
+  isV0DemoPrivateTemplateId,
+} from "@/features/parity/v0DemoFixtures";
 
 type TemplateEditorApiClient = Pick<typeof api, "getTemplateById">;
 
@@ -220,6 +224,10 @@ export const loadTemplateEditorData = async (
     return buildLoadResult(buildDefaultTemplateEditorTemplate());
   }
 
+  if (isV0DemoPrivateTemplateId(options.id)) {
+    return buildLoadResult(buildV0DemoPrivateTemplate());
+  }
+
   const cachedTemplate = options.getCachedTemplate(options.id);
   if (cachedTemplate) {
     return buildLoadResult(cachedTemplate);
@@ -250,6 +258,10 @@ export const saveTemplateEditorData = async (
   options: SaveTemplateEditorDataOptions,
   dependencies: SaveTemplateEditorDependencies,
 ): Promise<SaveTemplateResult> => {
+  if (isV0DemoPrivateTemplateId(options.id)) {
+    return { success: true, errors: [] };
+  }
+
   const normalizedForm = normalizeTemplateEditorFormForSave(options.values);
   return dependencies.saveTemplate({
     id: options.id,

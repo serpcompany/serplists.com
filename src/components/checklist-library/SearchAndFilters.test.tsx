@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SearchAndFilters } from '@/components/checklist-library/SearchAndFilters';
 
 describe('SearchAndFilters', () => {
-  it('renders category pills and discovery sort controls', () => {
+  it('renders the v0 category pills above the discovery sort row', () => {
     const markup = renderToStaticMarkup(
       <SearchAndFilters
         categories={[
@@ -26,5 +26,8 @@ describe('SearchAndFilters', () => {
     expect(markup).toContain('Popular');
     expect(markup).toContain('Trending');
     expect(markup).toContain('Recent');
+    expect(markup.indexOf('Launch')).toBeLessThan(markup.indexOf('8 templates'));
+    expect(markup).toContain('overflow-x-auto pb-2');
+    expect(markup).toContain('justify-between');
   });
 });

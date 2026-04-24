@@ -4,45 +4,7 @@
 
 @layer base {
   :root {
-    /* Canonical v0-serplists-com-v0-design theme, dark by default */
-    --background: oklch(0.098 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.13 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.13 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.098 0 0);
-    --secondary: oklch(0.2 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.2 0 0);
-    --muted-foreground: oklch(0.72 0 0);
-    --accent: oklch(0.2 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.65 0.25 25);
-    --destructive-foreground: oklch(0.985 0 0);
-    --border: oklch(0.35 0 0);
-    --input: oklch(0.35 0 0);
-    --ring: oklch(0.5 0 0);
-    --success: oklch(0.72 0.19 142);
-    --success-foreground: oklch(0.985 0 0);
-    --radius: 0.5rem;
-    --sidebar: oklch(0.13 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.985 0 0);
-    --sidebar-primary-foreground: oklch(0.098 0 0);
-    --sidebar-accent: oklch(0.2 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(0.35 0 0);
-    --sidebar-ring: oklch(0.5 0 0);
-    --layout-shell-max: 80rem;
-    --layout-content-max: 72.5rem;
-    --layout-narrow-max: 56rem;
-    --layout-wide-max: 90rem;
-    --layout-docs-max: 64rem;
-  }
-
-  .light {
+    /* Light mode */
     --background: oklch(0.995 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -64,6 +26,7 @@
     --ring: oklch(0.708 0 0);
     --success: oklch(0.55 0.2 142);
     --success-foreground: oklch(0.985 0 0);
+    --radius: 0.5rem;
     --sidebar: oklch(0.985 0 0);
     --sidebar-foreground: oklch(0.145 0 0);
     --sidebar-primary: oklch(0.205 0 0);
@@ -72,10 +35,51 @@
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.885 0 0);
     --sidebar-ring: oklch(0.708 0 0);
+    --layout-topbar-height: 3.5rem;
+    --layout-page-gutter: 1rem;
+    --layout-card-radius: 0.5rem;
+    --layout-shell-max: 72rem;
+    --layout-content-max: 72rem;
+    --layout-narrow-max: 56rem;
+    --layout-wide-max: 90rem;
+    --layout-docs-max: 56rem;
+  }
+
+  .dark {
+    /* Dark mode - improved contrast */
+    --background: oklch(0.098 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.13 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.13 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.985 0 0);
+    --primary-foreground: oklch(0.098 0 0);
+    --secondary: oklch(0.2 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.2 0 0);
+    --muted-foreground: oklch(0.72 0 0);
+    --accent: oklch(0.2 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.65 0.25 25);
+    --destructive-foreground: oklch(0.985 0 0);
+    --border: oklch(0.35 0 0);
+    --input: oklch(0.35 0 0);
+    --ring: oklch(0.5 0 0);
+    --success: oklch(0.72 0.19 142);
+    --success-foreground: oklch(0.985 0 0);
+    --sidebar: oklch(0.13 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.985 0 0);
+    --sidebar-primary-foreground: oklch(0.098 0 0);
+    --sidebar-accent: oklch(0.2 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(0.35 0 0);
+    --sidebar-ring: oklch(0.5 0 0);
   }
 
   * {
-    @apply border-border;
+    @apply border-border outline-ring/50;
   }
 
   html,
@@ -118,7 +122,7 @@
   .section-card,
   .template-card {
     @apply border bg-card text-card-foreground shadow-none;
-    border-radius: var(--radius);
+    border-radius: var(--layout-card-radius);
   }
 
   .marketing-metric {

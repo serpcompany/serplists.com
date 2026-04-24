@@ -41,8 +41,11 @@ export function DevLoginBar(): JSX.Element | null {
   }
 
   if (
+    location.pathname === '/' ||
+    location.pathname.startsWith('/categories') ||
     location.pathname.startsWith('/profile/') ||
-    location.pathname.startsWith('/run/')
+    location.pathname.startsWith('/run/') ||
+    location.pathname.startsWith('/share/')
   ) {
     return null;
   }

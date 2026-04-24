@@ -20,6 +20,12 @@ import {
   mapApiTemplateToChecklistTemplate,
   resolveTemplateOwnerProfile,
 } from './templateDetailMappers';
+import {
+  buildV0DemoPrivateTemplate,
+  buildV0DemoPublicTemplate,
+  isV0DemoPrivateTemplateId,
+  isV0DemoPublicTemplateRoute,
+} from '@/features/parity/v0DemoFixtures';
 
 type TemplateDetailApiClient = Pick<
   typeof api,
@@ -149,6 +155,18 @@ export const loadTemplateDetailData = async (
       return { template: null, notFound: true };
     }
 
+    if (
+      isV0DemoPublicTemplateRoute({
+        username: options.ownerUsername,
+        templateSlug: options.identifier,
+      })
+    ) {
+      return {
+        template: buildV0DemoPublicTemplate(),
+        notFound: false,
+      };
+    }
+
     const cachedTemplate = findPublicTemplateByIdentifier(
       options.cachedTemplates,
       options.identifier,
@@ -189,6 +207,13 @@ export const loadTemplateDetailData = async (
   const cachedTemplate = options.getCachedTemplate(options.identifier);
   if (cachedTemplate) {
     return { template: cachedTemplate, notFound: false };
+  }
+
+  if (isV0DemoPrivateTemplateId(options.identifier)) {
+    return {
+      template: buildV0DemoPrivateTemplate(),
+      notFound: false,
+    };
   }
 
   try {
@@ -302,6 +327,8 @@ export const useTemplateDetailModel = (
     options.mode === 'public' ? options.cachedTemplates : null;
   const getCachedTemplate =
     options.mode === 'private' ? options.getCachedTemplate : null;
+  const publicOwnerUsername =
+    options.mode === 'public' ? options.ownerUsername : undefined;
 
   const billing = useQuery({
     queryKey: getBillingStatusQueryKey(options.userId),
@@ -326,13 +353,14 @@ export const useTemplateDetailModel = (
       const result = await loadTemplateDetailData(
         options.mode === 'public'
           ? {
-              cachedTemplates: options.cachedTemplates,
+              cachedTemplates: cachedTemplates ?? [],
               identifier: options.identifier,
               mode: 'public',
-              ownerUsername: options.ownerUsername,
+              ownerUsername: publicOwnerUsername,
             }
           : {
-              getCachedTemplate: options.getCachedTemplate,
+              getCachedTemplate:
+                getCachedTemplate ?? (() => undefined),
               identifier: options.identifier,
               mode: 'private',
             },
@@ -357,7 +385,7 @@ export const useTemplateDetailModel = (
     getCachedTemplate,
     options.identifier,
     options.mode,
-    options.mode === 'public' ? options.ownerUsername : null,
+    publicOwnerUsername,
   ]);
 
   const invalidateTemplates = async () => {
