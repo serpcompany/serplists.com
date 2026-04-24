@@ -3,9 +3,10 @@ import { expect, test, type Page } from "@playwright/test";
 const DEV_API_BASE_URL = "http://localhost:8788/api";
 
 async function signInAsAdmin(page: Page) {
-  await page.goto("/");
-  await page.getByRole("button", { name: /admin \(pro\)/i }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
+  await page.goto("/login");
+  await page.getByRole("button", { name: /fill admin/i }).click();
+  await page.getByRole("button", { name: /^sign in$/i }).click();
+  await expect(page).toHaveURL(/\/account/);
 }
 
 async function findTemplateByTitle(page: Page, title: string) {
@@ -33,23 +34,24 @@ test.describe("template editor regressions", () => {
   test("adds tags and categories before save and persists them", async ({ page }) => {
     const templateTitle = `QA Tags ${Date.now()}`;
     const tagName = `tag-${Date.now()}`;
-    const categoryName = `category-${Date.now()}`;
+    const categoryName = "camping";
     let createdTemplateId: string | null = null;
 
     await signInAsAdmin(page);
     await page.goto("/dashboard/templates/new");
 
-    await page.getByLabel("Template name").fill(templateTitle);
-    await page.getByLabel("Tags").fill(tagName);
-    await page.getByLabel("Tags").press("Enter");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByPlaceholder("Add tag...").fill(tagName);
+    await page.getByPlaceholder("Add tag...").press("Enter");
     await expect(page.getByText(tagName, { exact: true })).toBeVisible();
 
-    await page.getByLabel("Categories").fill(categoryName);
-    await page.getByLabel("Categories").press("Enter");
-    await expect(page.getByText(categoryName, { exact: true })).toBeVisible();
+    await page.getByText("Select categories...").click();
+    await page.getByRole("option", { name: categoryName }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByText(categoryName, { exact: true }).first()).toBeVisible();
 
     await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/console\/templates$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -75,14 +77,16 @@ test.describe("template editor regressions", () => {
     await signInAsAdmin(page);
     await page.goto("/dashboard/templates/new");
 
-    await page.getByLabel("Template name").fill(templateTitle);
-    await page.getByRole("button", { name: /search preview/i }).click();
-    await page.getByLabel("Search title").fill(seoTitle);
-    await page.getByLabel("URL slug").fill(seoSlug);
-    await page.getByLabel("Search description").fill(seoDescription);
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", { name: /search & seo/i }).click();
+    await page.getByPlaceholder("Title for search results...").fill(seoTitle);
+    await page.getByPlaceholder("my-template-slug").fill(seoSlug);
+    await page
+      .getByPlaceholder("Description shown in search results...")
+      .fill(seoDescription);
 
     await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/console\/templates$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -98,11 +102,13 @@ test.describe("template editor regressions", () => {
     }
 
     await page.goto(`/dashboard/templates/${createdTemplateId}/edit`);
-    await page.getByRole("button", { name: /search preview/i }).click();
+    await page.getByRole("button", { name: /search & seo/i }).click();
 
-    await expect(page.getByLabel("Search title")).toHaveValue(seoTitle);
-    await expect(page.getByLabel("URL slug")).toHaveValue(seoSlug);
-    await expect(page.getByLabel("Search description")).toHaveValue(seoDescription);
+    await expect(page.getByPlaceholder("Title for search results...")).toHaveValue(seoTitle);
+    await expect(page.getByPlaceholder("my-template-slug")).toHaveValue(seoSlug);
+    await expect(
+      page.getByPlaceholder("Description shown in search results..."),
+    ).toHaveValue(seoDescription);
 
     await deleteTemplate(page, createdTemplateId);
   });

@@ -5,7 +5,7 @@ const API_BASE_URL = process.env.VITE_API_URL ?? 'http://localhost:8788/api';
 async function signInAsAdmin(page: Page) {
   await page.goto('/login');
   await page.getByRole('button', { name: /fill admin/i }).click();
-  await page.getByRole('button', { name: /sign in with email/i }).click();
+  await page.getByRole('button', { name: /^sign in$/i }).click();
   await expect(page).toHaveURL(/\/account/);
 }
 
@@ -16,7 +16,7 @@ test.describe('route structure', () => {
     await page.goto('/templates');
     await expect(
       page.getByRole('heading', {
-        name: 'Find the template pack that already solved it',
+        name: 'Discover Templates',
       }),
     ).toBeVisible();
 
@@ -27,7 +27,7 @@ test.describe('route structure', () => {
 
     await page.goto('/categories/outdoor');
     await expect(
-      page.getByRole('heading', { name: 'outdoor template packs' }),
+      page.getByRole('heading', { name: 'outdoor' }),
     ).toBeVisible();
     await expect(
       page.getByRole('heading', { name: 'Ultimate Camping Checklist' }),
