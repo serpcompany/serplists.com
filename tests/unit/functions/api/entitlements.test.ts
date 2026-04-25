@@ -46,5 +46,19 @@ describe("getEntitlementsForUser", () => {
     expect(entitlements.limits.maxTemplates).toBe(1);
     expect(entitlements.limits.maxActiveRuns).toBe(3);
   });
-});
 
+  it("defaults to free when entitlement override table is not migrated yet", async () => {
+    dbMocks.selectChain.limit.mockRejectedValueOnce(
+      new Error("D1_ERROR: no such table: entitlement_overrides"),
+    );
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      { email: "new-user@example.com" },
+    ]);
+
+    const env: any = { DB: {} };
+    const entitlements = await getEntitlementsForUser(env, "user-1");
+
+    expect(entitlements.plan).toBe("free");
+    expect(entitlements.limits.maxTemplates).toBe(1);
+  });
+});

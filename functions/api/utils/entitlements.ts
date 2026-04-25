@@ -19,6 +19,11 @@ function isProSubscriptionStatus(status: string): boolean {
   return status === "active" || status === "trialing";
 }
 
+function isMissingOptionalBillingTableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /no such table: (entitlement_overrides|stripe_subscriptions)/i.test(message);
+}
+
 export async function getEntitlementsForUser(env: Env, userId: string): Promise<Entitlements> {
   const stripe = getStripeBillingConfig(env);
   const db = createDb(env);
@@ -26,16 +31,23 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
   const nowSeconds = Math.floor(Date.now() / 1000);
 
   // Manual override takes priority (for comp/revoke / support).
-  const [override] = await db
-    .select()
-    .from(entitlement_overrides)
-    .where(
-      and(
-        eq(entitlement_overrides.user_id, userId),
-        or(isNull(entitlement_overrides.expires_at), gt(entitlement_overrides.expires_at, nowSeconds))
+  let override: typeof entitlement_overrides.$inferSelect | undefined;
+  try {
+    [override] = await db
+      .select()
+      .from(entitlement_overrides)
+      .where(
+        and(
+          eq(entitlement_overrides.user_id, userId),
+          or(isNull(entitlement_overrides.expires_at), gt(entitlement_overrides.expires_at, nowSeconds))
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
+  } catch (error) {
+    if (!isMissingOptionalBillingTableError(error)) {
+      throw error;
+    }
+  }
 
   if (override) {
     const plan = override.plan === "pro" ? "pro" : "free";
@@ -65,11 +77,23 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
   const { stripe_subscriptions } = schema;
   type StripeSubscriptionRow = typeof stripe_subscriptions.$inferSelect;
 
-  const subs: StripeSubscriptionRow[] = await db
-    .select()
-    .from(stripe_subscriptions)
-    .where(and(eq(stripe_subscriptions.user_id, userId), eq(stripe_subscriptions.price_id, stripe.proPriceId)))
-    .orderBy(desc(stripe_subscriptions.updated_at));
+  let subs: StripeSubscriptionRow[];
+  try {
+    subs = await db
+      .select()
+      .from(stripe_subscriptions)
+      .where(and(eq(stripe_subscriptions.user_id, userId), eq(stripe_subscriptions.price_id, stripe.proPriceId)))
+      .orderBy(desc(stripe_subscriptions.updated_at));
+  } catch (error) {
+    if (!isMissingOptionalBillingTableError(error)) {
+      throw error;
+    }
+
+    return {
+      plan: "free",
+      limits: { maxTemplates: 1, maxActiveRuns: 3 },
+    };
+  }
 
   const best = subs.find((s) => isProSubscriptionStatus(s.status)) ?? subs[0] ?? null;
   const plan: Plan = best?.status && isProSubscriptionStatus(best.status) ? "pro" : "free";
