@@ -38,7 +38,7 @@ test('repo-backed public templates render in the checklist library', async ({
     .click();
 
   await expect(page).toHaveURL(
-    /\/profile\/devinschumacher\/ultimate-camping-checklist$/,
+    /\/profile\/serp\/ultimate-camping-checklist$/,
   );
   await expect(
     page.getByRole('heading', { level: 1, name: 'Ultimate Camping Checklist' }),
@@ -86,7 +86,7 @@ test('public creator profile page stays available under /profile/:username', asy
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1600 });
-  await page.goto('/profile/devinschumacher');
+  await page.goto('/profile/serp');
 
   const firstTemplateCard = page.getByRole('link', {
     name: /Complete Wedding Planning Checklist/i,
@@ -100,10 +100,10 @@ test('public creator profile page stays available under /profile/:username', asy
     page.getByRole('heading', { level: 1, name: 'SERP Lists Library' }),
   ).toBeVisible();
   await expect(
-    page.locator('main').getByText('@devinschumacher', { exact: true }).first(),
+    page.locator('main').getByText('@serp', { exact: true }).first(),
   ).toBeVisible();
   await expect(
-    page.getByText('Public checklist templates from @devinschumacher', {
+    page.getByText('Public checklist templates from @serp', {
       exact: false,
     }),
   ).toBeVisible();

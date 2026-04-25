@@ -13,6 +13,11 @@ import {
 } from "@/lib/repoTemplateCatalog";
 
 describe("repo template catalog", () => {
+  it("assigns repo templates to the SERP library profile", () => {
+    expect(REPO_TEMPLATE_OWNER_SLUG).toBe("serp");
+    expect(REPO_TEMPLATE_OWNER_NAME).toBe("SERP Lists Library");
+  });
+
   it("normalizes backup-style JSON sources into public repo templates", () => {
     const templates = normalizeRepoTemplateSources({
       "../docs/schema/camping-checklist.json": {

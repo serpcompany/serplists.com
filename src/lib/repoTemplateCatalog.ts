@@ -3,7 +3,7 @@ import type { ChecklistTemplate } from '@/types/checklist';
 
 export const REPO_TEMPLATE_USER_ID = 'repo-template-catalog';
 export const REPO_TEMPLATE_OWNER_NAME = 'SERP Lists Library';
-export const REPO_TEMPLATE_OWNER_SLUG = 'devinschumacher';
+export const REPO_TEMPLATE_OWNER_SLUG = 'serp';
 
 type RepoTemplateModule = {
   default?: unknown;
