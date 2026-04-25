@@ -33,6 +33,7 @@ import { PageContainer } from '@/components/layout/page-shell';
 import { DashboardSidebar } from '@/components/dashboard/DashboardSidebar';
 import { MobileBottomNav, MobileNav } from '@/components/MobileNav';
 import { APP_BRAND_NAME } from '@/lib/brand';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 interface LayoutProps {
   children?: React.ReactNode;
@@ -225,6 +226,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </nav>
 
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           {user ? (
             accountMenu
           ) : (

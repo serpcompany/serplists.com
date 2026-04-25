@@ -37,6 +37,7 @@ import {
   buildPublicTemplatesPath,
 } from '@/lib/routes';
 import { APP_BRAND_NAME } from '@/lib/brand';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 const navItems = [
   { href: '/', icon: Home, title: 'Home' },
@@ -139,6 +140,7 @@ export function MobileNav() {
         </nav>
 
         <div className="border-t border-border p-4">
+          <ThemeToggle showLabel className="mb-2" />
           <Link
             to={buildConsoleProfilePath()}
             onClick={() => setOpen(false)}

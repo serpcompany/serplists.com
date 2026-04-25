@@ -60,6 +60,7 @@ describe('Layout shell selection', () => {
     expect(html).toContain('h-14');
     expect(html).toContain('data-app-shell="public"');
     expect(html).toContain('Discovery child');
+    expect(html).toContain('Switch to dark mode');
     expect(html).toContain('Build repeatable checklists');
   });
 
@@ -85,5 +86,25 @@ describe('Layout shell selection', () => {
       'mx-auto w-full px-4 max-w-[var(--layout-shell-max)] flex h-14 items-center justify-between gap-6',
     );
     expect(html).toContain('Build repeatable checklists');
+  });
+
+  it('makes theme switching available from the mobile console menu', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/dashboard/templates']}>
+        <Routes>
+          <Route
+            path="*"
+            element={
+              <Layout>
+                <div>Console child</div>
+              </Layout>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Toggle menu');
+    expect(html).toContain('Light mode');
   });
 });
