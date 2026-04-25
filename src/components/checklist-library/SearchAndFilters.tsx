@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Clock, Star, TrendingUp } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ interface SearchAndFiltersProps {
   searchSlot?: React.ReactNode;
   selectedCategorySlug: string | null;
   sortBy: DiscoverySort;
+  getCategoryPath?: (category: DiscoveryCategory) => string;
   trailingControls?: React.ReactNode;
 }
 
@@ -39,6 +41,7 @@ export const SearchAndFilters: React.FC<SearchAndFiltersProps> = ({
   searchSlot,
   selectedCategorySlug,
   sortBy,
+  getCategoryPath,
   trailingControls,
 }) => {
   const sortControls = trailingControls ?? (
@@ -80,6 +83,21 @@ export const SearchAndFilters: React.FC<SearchAndFiltersProps> = ({
 
           {categories.map((category) => {
             const isActive = selectedCategorySlug === category.slug;
+            const categoryPath = getCategoryPath?.(category);
+
+            if (categoryPath) {
+              return (
+                <Button
+                  asChild
+                  key={category.slug}
+                  variant={isActive ? 'default' : 'outline'}
+                  size="sm"
+                  className="shrink-0"
+                >
+                  <Link to={categoryPath}>{category.name}</Link>
+                </Button>
+              );
+            }
 
             return (
               <Button

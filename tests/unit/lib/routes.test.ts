@@ -28,6 +28,7 @@ import {
   buildSharePath,
   findCategoryNameBySlug,
   isBlankTemplateEditorRoute,
+  resolveLegacyTemplatesCategoryRedirectPath,
   resolveConsoleSection,
   resolvePublicRouteTier,
   resolvePublicTemplateOwnerSlug,
@@ -98,6 +99,29 @@ describe('routes', () => {
     ).toBe('Technical SEO');
     expect(
       findCategoryNameBySlug(['Technical SEO', 'Content Ops'], 'missing'),
+    ).toBeNull();
+  });
+
+  it('redirects legacy category-only template queries to canonical category routes', () => {
+    expect(
+      resolveLegacyTemplatesCategoryRedirectPath(
+        new URLSearchParams('category=technical-seo'),
+      ),
+    ).toBe('/categories/technical-seo');
+    expect(
+      resolveLegacyTemplatesCategoryRedirectPath(
+        new URLSearchParams('category=Technical%20SEO'),
+      ),
+    ).toBe('/categories/technical-seo');
+    expect(
+      resolveLegacyTemplatesCategoryRedirectPath(
+        new URLSearchParams('category=technical-seo&sort=recent'),
+      ),
+    ).toBeNull();
+    expect(
+      resolveLegacyTemplatesCategoryRedirectPath(
+        new URLSearchParams('search=seo'),
+      ),
     ).toBeNull();
   });
 

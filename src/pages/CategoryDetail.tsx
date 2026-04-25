@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
+import { SEOHead } from '@/components/shared/SEOHead';
 
 const categoryData: Record<
   string,
@@ -122,6 +123,8 @@ const sortLabels: Record<string, string> = {
   recent: 'Most Recent',
   trending: 'Trending',
 };
+const CATEGORY_BASE_URL = 'https://serplists.com/categories';
+const SEO_IMAGE_URL = 'https://serplists.com/placeholder.svg';
 
 const CategoryDetail = () => {
   const { categorySlug } = useParams<{ categorySlug: string }>();
@@ -174,6 +177,13 @@ const CategoryDetail = () => {
 
   return (
     <div className="bg-background">
+      <SEOHead
+        title={`${category.name} Templates`}
+        description={`${categoryTemplateCount} templates for ${category.name}. ${category.description}`}
+        keywords={[category.name, 'checklist templates', 'workflow templates']}
+        image={SEO_IMAGE_URL}
+        url={`${CATEGORY_BASE_URL}/${encodeURIComponent(slug)}`}
+      />
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6 flex items-center gap-2 text-sm">
           <Link

@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ChecklistLibrary from '@/pages/ChecklistLibrary';
@@ -41,6 +42,17 @@ const template: ChecklistTemplate = {
   updatedAt: '2026-03-24T00:00:00.000Z',
 };
 
+const renderChecklistLibrary = () =>
+  renderToStaticMarkup(
+    <HelmetProvider>
+      <MemoryRouter initialEntries={['/templates']}>
+        <Routes>
+          <Route path="*" element={<ChecklistLibrary />} />
+        </Routes>
+      </MemoryRouter>
+    </HelmetProvider>,
+  );
+
 describe('ChecklistLibrary layout', () => {
   beforeEach(() => {
     mockUseTemplateLibrary.mockReturnValue({
@@ -56,13 +68,7 @@ describe('ChecklistLibrary layout', () => {
   });
 
   it('starts the catalog with discovery sort controls instead of the old stacked filter shell', () => {
-    const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/templates']}>
-        <Routes>
-          <Route path="*" element={<ChecklistLibrary />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    const html = renderChecklistLibrary();
 
     expect(html).toContain('Popular');
     expect(html).toContain('Trending');
@@ -74,13 +80,7 @@ describe('ChecklistLibrary layout', () => {
   });
 
   it('uses the deployed public-library hero copy instead of the local migration copy', () => {
-    const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/templates']}>
-        <Routes>
-          <Route path="*" element={<ChecklistLibrary />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    const html = renderChecklistLibrary();
 
     expect(html).toContain('Discover Templates');
     expect(html).toContain(

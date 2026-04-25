@@ -46,6 +46,21 @@ export const buildPublicCategoriesPath = (): string => '/categories';
 export const buildPublicCategoryPath = (categoryName: string): string =>
   `/categories/${encodeURIComponent(buildCategorySlug(categoryName) || categoryName.trim().toLowerCase())}`;
 
+export const resolveLegacyTemplatesCategoryRedirectPath = (
+  searchParams: URLSearchParams,
+): string | null => {
+  const categorySlug = searchParams.get('category')?.trim();
+  const hasOnlyCategoryParam = Array.from(searchParams.keys()).every(
+    (key) => key === 'category',
+  );
+
+  if (!categorySlug || !hasOnlyCategoryParam) {
+    return null;
+  }
+
+  return buildPublicCategoryPath(categorySlug);
+};
+
 export const buildPublicProfilePath = (username: string): string =>
   `/profile/${encodeURIComponent(username)}`;
 

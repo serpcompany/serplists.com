@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { ChevronRight, Filter, Search } from 'lucide-react';
 
 import { SearchAndFilters } from '@/components/checklist-library/SearchAndFilters';
@@ -13,7 +13,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
-import { buildPublicTemplatesPath } from '@/lib/routes';
+import { SEOHead } from '@/components/shared/SEOHead';
+import {
+  buildPublicCategoryPath,
+  resolveLegacyTemplatesCategoryRedirectPath,
+} from '@/lib/routes';
 
 type ChecklistLibraryProps = {
   templateType?: 'checklist' | 'recipe';
@@ -22,6 +26,8 @@ type ChecklistLibraryProps = {
 };
 
 const DEFAULT_SORT: DiscoverySort = 'popular';
+const PUBLIC_TEMPLATES_URL = 'https://serplists.com/templates';
+const SEO_IMAGE_URL = 'https://serplists.com/placeholder.svg';
 
 const ChecklistLibrary = ({
   templateType,
@@ -29,6 +35,8 @@ const ChecklistLibrary = ({
   description,
 }: ChecklistLibraryProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const legacyCategoryRedirectPath =
+    resolveLegacyTemplatesCategoryRedirectPath(searchParams);
   const [searchQuery, setSearchQuery] = useState(
     () => searchParams.get('search') ?? '',
   );
@@ -103,10 +111,27 @@ const ChecklistLibrary = ({
       sort: DEFAULT_SORT,
     });
   };
+  const seoHead = (
+    <SEOHead
+      title={title ?? 'Discover Templates'}
+      description={
+        description ??
+        'Browse hundreds of ready-to-use checklist templates created by the community.'
+      }
+      keywords={['checklist templates', 'workflow templates', 'SOP templates']}
+      image={SEO_IMAGE_URL}
+      url={PUBLIC_TEMPLATES_URL}
+    />
+  );
+
+  if (legacyCategoryRedirectPath) {
+    return <Navigate replace to={legacyCategoryRedirectPath} />;
+  }
 
   if (loading) {
     return (
       <div className="bg-background">
+        {seoHead}
         <main className="mx-auto max-w-6xl px-4 py-8">
           <div className="mb-10 space-y-3 text-center">
             <Skeleton className="mx-auto h-9 w-56" />
@@ -131,6 +156,7 @@ const ChecklistLibrary = ({
 
   return (
     <div className="bg-background">
+      {seoHead}
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-10 text-center">
           <h1 className="mb-3 text-balance text-3xl font-bold text-foreground">
@@ -144,6 +170,7 @@ const ChecklistLibrary = ({
 
         <SearchAndFilters
           categories={categories}
+          getCategoryPath={(category) => buildPublicCategoryPath(category.name)}
           onCategoryChange={(categorySlug) => updateFilters({ categorySlug })}
           onSortChange={(sort) => updateFilters({ sort })}
           resultCount={filteredTemplates.length}
@@ -202,19 +229,10 @@ const ChecklistLibrary = ({
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {categories.slice(0, 8).map((category) => {
-              const query = `?category=${encodeURIComponent(category.slug)}`;
-
               return (
                 <Link
                   key={category.slug}
-                  to={`${buildPublicTemplatesPath()}${query}`}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    updateFilters({ categorySlug: category.slug });
-                    if (typeof window !== 'undefined') {
-                      window.scrollTo({ behavior: 'smooth', top: 0 });
-                    }
-                  }}
+                  to={buildPublicCategoryPath(category.name)}
                   className="group flex items-center justify-between rounded-lg border border-border bg-card p-4 transition-colors hover:border-muted-foreground/30"
                 >
                   <div>

@@ -18,9 +18,17 @@ import {
 import type { ChecklistTemplate } from '@/types/checklist';
 
 const mockUseTemplateLibrary = vi.fn();
+const mockSeoHead = vi.fn();
 
 vi.mock('@/hooks/useTemplateLibrary', () => ({
   useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
+}));
+
+vi.mock('@/components/shared/SEOHead', () => ({
+  SEOHead: (props: Record<string, unknown>) => {
+    mockSeoHead(props);
+    return <div data-seo-head={String(props.url)}>{String(props.title)}</div>;
+  },
 }));
 
 const baseTemplate: ChecklistTemplate = {
@@ -72,8 +80,16 @@ describe('ChecklistLibrary route behavior', () => {
     expect(markup).toContain('1 templates');
     expect(markup).toContain('Browse by Category');
     expect(markup).toContain('href="/profile/designops/website-launch-checklist"');
+    expect(markup).toContain('href="/categories/launch"');
+    expect(markup).not.toContain('href="/templates?category=launch"');
     expect(markup).not.toContain('Template library');
     expect(markup).not.toContain('Browse all templates');
+    expect(mockSeoHead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Discover Templates',
+        url: 'https://serplists.com/templates',
+      }),
+    );
   });
 
   it('navigates to the owner/template path when the owner username is known', () => {
@@ -196,6 +212,12 @@ describe('ChecklistLibrary route behavior', () => {
     expect(markup).toContain('Search templates...');
     expect(markup).toContain('Most Popular');
     expect(markup).toContain('Related Categories');
+    expect(mockSeoHead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Business & Operations Templates',
+        url: 'https://serplists.com/categories/business-operations',
+      }),
+    );
   });
 
   it('renders not-found UI for an unknown category slug instead of a fake empty category', () => {

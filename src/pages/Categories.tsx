@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
+import { SEOHead } from '@/components/shared/SEOHead';
 import { buildPublicCategoryPath } from '@/lib/routes';
 
 const categoryMetadata = [
@@ -110,6 +111,8 @@ const defaultCategoryMeta = {
   color: 'text-slate-400',
   bgColor: 'bg-slate-500/10',
 };
+const CATEGORIES_URL = 'https://serplists.com/categories';
+const SEO_IMAGE_URL = 'https://serplists.com/placeholder.svg';
 
 const getCategoryMeta = (slug: string) =>
   categoryMetadata.find((category) => category.slug === slug) ??
@@ -141,6 +144,13 @@ const Categories = () => {
 
   return (
     <div className="bg-background">
+      <SEOHead
+        title="Browse Template Categories"
+        description="Explore checklist templates organized by category."
+        keywords={['template categories', 'checklist categories', 'workflow templates']}
+        image={SEO_IMAGE_URL}
+        url={CATEGORIES_URL}
+      />
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground">
