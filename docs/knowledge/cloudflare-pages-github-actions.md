@@ -4,9 +4,10 @@ This repo deploys to Cloudflare Pages via `wrangler pages deploy` in GitHub Acti
 
 ## Required GitHub secrets
 - `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_PAGES_PROJECT` (Pages project name)
 - `CLOUDFLARE_EMAIL`
 - `CLOUDFLARE_API_KEY`
+
+The Cloudflare Pages project name is `serplists-com`. It is not a secret and is set directly in the workflow. Do not set it to `serp-checklists`; that is the pages.dev domain/project config name, not the Pages Project Name Cloudflare expects for `wrangler pages deploy --project-name`.
 
 ## Why the workflow uses email + global key
 - The legacy `CLOUDFLARE_API_TOKEN` available to this repo verified as active, but Cloudflare returned an authentication error when the workflow tried to read the `serp-checklists` Pages project on the `SERP` account.
@@ -17,7 +18,7 @@ This repo deploys to Cloudflare Pages via `wrangler pages deploy` in GitHub Acti
 - The workflow runs `pnpm run verify:staging` before build/deploy on non-main branches.
 - Production checks read production D1. Preview checks read the D1 preview binding configured by `preview_database_id` in `wrangler.toml`.
 - These checks are read-only gates. If required migrations, tables, or columns are missing, the workflow fails before Pages deploy.
-- The workflow builds with `pnpm run build` and deploys `dist` with `npx wrangler pages deploy`.
+- The workflow builds with `pnpm run build` and deploys `dist` with `npx wrangler pages deploy --project-name serplists-com`.
 - The workflow also runs `pnpm run typecheck:env` before build. Because the real auth secret lives in Cloudflare Pages runtime settings, the workflow injects a build-only placeholder `BETTER_AUTH_SECRET` so env validation can pass in GitHub Actions without copying the production secret into GitHub.
 - Keep `actions/checkout` and `actions/setup-node` on `v5` or newer so the workflow does not fall back to the deprecated Node 20 action runtime.
 - Update `node-version` in `.github/workflows/cloudflare-pages-deploy.yml` if a different Node version is required.
