@@ -48,7 +48,8 @@ export function SectionSidebar({
   onSelectSection,
   onSelectItem,
 }: SectionSidebarProps): JSX.Element {
-  const { control, setValue } = useFormContext<TemplateEditorFormValues>();
+  const { control, getValues, setValue } =
+    useFormContext<TemplateEditorFormValues>();
   const sectionsFieldArray = useFieldArray({
     control,
     keyName: "fieldId",
@@ -118,22 +119,22 @@ export function SectionSidebar({
   }
 
   function handleAddTask(sectionIndex: number): void {
-    const currentItems = sections?.[sectionIndex]?.items ?? [];
+    const currentItems = getValues(`sections.${sectionIndex}.items`) ?? [];
     setValue(
       `sections.${sectionIndex}.items`,
       [...currentItems, createTemplateEditorItem()],
-      { shouldDirty: true },
+      { shouldDirty: true, shouldTouch: true, shouldValidate: true },
     );
     setExpandedSections((current) => new Set(current).add(sectionIndex));
     onSelectItem(sectionIndex, currentItems.length);
   }
 
   function handleRemoveTask(sectionIndex: number, itemIndex: number): void {
-    const currentItems = sections?.[sectionIndex]?.items ?? [];
+    const currentItems = getValues(`sections.${sectionIndex}.items`) ?? [];
     setValue(
       `sections.${sectionIndex}.items`,
       currentItems.filter((_, index) => index !== itemIndex),
-      { shouldDirty: true },
+      { shouldDirty: true, shouldTouch: true, shouldValidate: true },
     );
     onSelectSection(sectionIndex);
   }
@@ -198,6 +199,7 @@ export function SectionSidebar({
           Sections
         </span>
         <Button
+          aria-label="Add section"
           variant="ghost"
           size="icon"
           onClick={handleAddSection}
@@ -236,6 +238,11 @@ export function SectionSidebar({
                   </button>
 
                   <button
+                    aria-label={
+                      isExpanded
+                        ? `Collapse ${section?.title || buildSectionFallbackLabel(sectionIndex)}`
+                        : `Expand ${section?.title || buildSectionFallbackLabel(sectionIndex)}`
+                    }
                     onClick={() => toggleSection(sectionIndex)}
                     className="flex h-7 w-6 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
                     type="button"
@@ -279,6 +286,7 @@ export function SectionSidebar({
 
                   <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <Button
+                      aria-label={`Add task to ${section?.title || buildSectionFallbackLabel(sectionIndex)}`}
                       variant="ghost"
                       size="icon"
                       onClick={() => handleAddTask(sectionIndex)}
@@ -288,6 +296,7 @@ export function SectionSidebar({
                       <Plus className="h-3 w-3" />
                     </Button>
                     <Button
+                      aria-label={`Remove ${section?.title || buildSectionFallbackLabel(sectionIndex)}`}
                       variant="ghost"
                       size="icon"
                       onClick={() => handleRemoveSection(sectionIndex)}
@@ -361,6 +370,7 @@ export function SectionSidebar({
                           )}
 
                           <Button
+                            aria-label={`Remove ${item.title || buildItemFallbackLabel(itemIndex)}`}
                             variant="ghost"
                             size="icon"
                             onClick={() => handleRemoveTask(sectionIndex, itemIndex)}

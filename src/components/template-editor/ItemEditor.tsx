@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
 import { ContentEditor } from "@/components/template-editor/ContentEditor";
@@ -18,6 +19,8 @@ export function ItemEditor({
   showIntro = true,
 }: ItemEditorProps): JSX.Element {
   const { control, setValue } = useFormContext<TemplateEditorFormValues>();
+  const titleInputId = useId();
+  const descriptionInputId = useId();
   const title = useWatch({
     control,
     name: `sections.${sectionIndex}.items.${itemIndex}.title` as const,
@@ -40,8 +43,9 @@ export function ItemEditor({
 
       <FieldGroup>
         <Field>
-          <FieldLabel>Task Title</FieldLabel>
+          <FieldLabel htmlFor={titleInputId}>Task Title</FieldLabel>
           <Input
+            id={titleInputId}
             value={title ?? ""}
             onChange={(event) =>
               setValue(
@@ -56,8 +60,11 @@ export function ItemEditor({
         </Field>
 
         <Field>
-          <FieldLabel>Description (Optional)</FieldLabel>
+          <FieldLabel htmlFor={descriptionInputId}>
+            Description (Optional)
+          </FieldLabel>
           <Textarea
+            id={descriptionInputId}
             value={description ?? ""}
             onChange={(event) =>
               setValue(
