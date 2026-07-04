@@ -12,7 +12,6 @@ import {
   Plus,
   Search,
   Settings,
-  User,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -27,7 +26,6 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { cn } from '@/lib/utils';
 import {
   buildConsoleHomePath,
-  buildConsoleProfilePath,
   buildConsoleRunsPath,
   buildConsoleSettingsPath,
   buildConsoleTemplateCreatePath,
@@ -142,7 +140,7 @@ export function MobileNav() {
         <div className="border-t border-border p-4">
           <ThemeToggle showLabel className="mb-2" />
           <Link
-            to={buildConsoleProfilePath()}
+            to={buildConsoleSettingsPath()}
             onClick={() => setOpen(false)}
             className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           >
@@ -150,12 +148,12 @@ export function MobileNav() {
               {(user?.name?.charAt(0) || user?.email?.charAt(0) || 'U').toUpperCase()}
             </div>
             <div className="flex-1">
-              <p className="text-foreground">{user?.name || 'Your profile'}</p>
+              <p className="text-foreground">{user?.name || 'Account settings'}</p>
               <p className="text-xs text-muted-foreground">
                 {user?.username ? `@${user.username}` : user?.email || 'Account'}
               </p>
             </div>
-            <User className="h-4 w-4" />
+            <Settings className="h-4 w-4" />
           </Link>
         </div>
       </SheetContent>

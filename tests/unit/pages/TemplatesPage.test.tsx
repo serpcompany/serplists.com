@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import Templates from '@/pages/Templates';
@@ -60,9 +60,9 @@ describe('Templates page', () => {
     });
 
     const html = renderToStaticMarkup(
-      <MemoryRouter>
+      <StaticRouter location="/">
         <Templates />
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('My Templates');
@@ -100,9 +100,9 @@ describe('Templates page', () => {
     });
 
     const html = renderToStaticMarkup(
-      <MemoryRouter>
+      <StaticRouter location="/">
         <Templates />
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('No templates found');

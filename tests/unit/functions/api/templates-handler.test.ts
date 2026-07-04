@@ -23,6 +23,7 @@ const dbMocks = vi.hoisted(() => {
     insert: vi.fn(() => insertChain),
     update: vi.fn(() => updateChain),
     delete: vi.fn(() => deleteChain),
+    batch: vi.fn(),
   };
 
   return { selectChain, insertChain, updateChain, deleteChain, db };
@@ -38,11 +39,28 @@ vi.mock('@functions/api/utils/session', () => ({
 
 vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForUser: vi.fn(),
+  getEntitlementsForContext: vi.fn(),
 }));
 
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
-import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
+import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
+
+function collectSqlColumnNames(value: unknown, seen = new Set<unknown>()): string[] {
+  if (!value || typeof value !== 'object' || seen.has(value)) {
+    return [];
+  }
+
+  seen.add(value);
+  const record = value as Record<string, unknown>;
+  const names = typeof record.name === 'string' ? [record.name] : [];
+  const chunks = Array.isArray(record.queryChunks) ? record.queryChunks : [];
+
+  return [
+    ...names,
+    ...chunks.flatMap((chunk) => collectSqlColumnNames(chunk, seen)),
+  ];
+}
 
 describe('Templates Handlers', () => {
   let mockEnv: any;
@@ -56,8 +74,9 @@ describe('Templates Handlers', () => {
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockResolvedValue(undefined);
     dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockResolvedValue(undefined);
+    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
     dbMocks.deleteChain.where.mockResolvedValue(undefined);
+    dbMocks.db.batch.mockResolvedValue([]);
 
     mockEnv = {
       DB: {},
@@ -66,6 +85,10 @@ describe('Templates Handlers', () => {
 
     vi.mocked(getSessionUserId).mockResolvedValue(null);
     vi.mocked(getEntitlementsForUser).mockResolvedValue({
+      plan: 'free',
+      limits: { maxTemplates: 1, maxActiveRuns: 3 },
+    });
+    vi.mocked(getEntitlementsForContext).mockResolvedValue({
       plan: 'free',
       limits: { maxTemplates: 1, maxActiveRuns: 3 },
     });
@@ -101,6 +124,39 @@ describe('Templates Handlers', () => {
     });
   });
 
+  it('should scope authenticated template lists to public or personal-owned templates', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([]);
+
+    const request = new Request('http://localhost/api/templates', { method: 'GET' });
+    const response = await handleTemplates(request, mockEnv);
+    const predicate = dbMocks.selectChain.where.mock.calls[0][0];
+    const columnNames = collectSqlColumnNames(predicate);
+
+    expect(response.status).toBe(200);
+    expect(columnNames).toContain('is_public');
+    expect(columnNames).toContain('owner_type');
+    expect(columnNames).toContain('user_id');
+    expect(columnNames).toContain('team_id');
+    expect(columnNames).toContain('deleted_at');
+  });
+
+  it('should scope public profile template lists to personal-owned public templates', async () => {
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([]);
+
+    const request = new Request('http://localhost/api/templates/public?userId=user-123', { method: 'GET' });
+    const response = await handleTemplates(request, mockEnv);
+    const predicate = dbMocks.selectChain.where.mock.calls[0][0];
+    const columnNames = collectSqlColumnNames(predicate);
+
+    expect(response.status).toBe(200);
+    expect(columnNames).toContain('owner_type');
+    expect(columnNames).toContain('user_id');
+    expect(columnNames).toContain('team_id');
+    expect(columnNames).toContain('is_public');
+    expect(columnNames).toContain('deleted_at');
+  });
+
   it('should reject unauthenticated template creation', async () => {
     const request = new Request('http://localhost/api/templates', {
       method: 'POST',
@@ -133,9 +189,76 @@ describe('Templates Handlers', () => {
 
     const inserted = dbMocks.insertChain.values.mock.calls[0][0];
     const storedItems = JSON.parse(inserted.items);
+    const personalLimitPredicate = dbMocks.selectChain.where.mock.calls[0][0];
+    const personalLimitColumns = collectSqlColumnNames(personalLimitPredicate);
     expect(Array.isArray(storedItems)).toBe(true);
     expect(storedItems[0].items).toHaveLength(1);
     expect(inserted.version).toBe(1);
+    expect(personalLimitColumns).toContain('owner_type');
+    expect(personalLimitColumns).toContain('user_id');
+    expect(personalLimitColumns).toContain('team_id');
+    expect(personalLimitColumns).toContain('deleted_at');
+  });
+
+  it('should create team-owned templates for team editors', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    vi.mocked(getEntitlementsForContext).mockResolvedValue({
+      plan: 'team',
+      limits: { maxTemplates: null, maxActiveRuns: null },
+    });
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([{ id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'editor', status: 'active' }])
+      .mockResolvedValueOnce([]);
+
+    const request = new Request('http://localhost/api/templates', {
+      method: 'POST',
+      body: JSON.stringify({
+        teamId: 'team-1',
+        title: 'Team Template',
+        sections: [{ id: 'section-1', title: 'Checklist', items: [] }],
+      }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.id).toBeDefined();
+    expect(vi.mocked(getEntitlementsForContext)).toHaveBeenCalledWith(
+      mockEnv,
+      expect.objectContaining({ type: 'team', teamId: 'team-1', userId: 'user-123' }),
+    );
+
+    const inserted = dbMocks.insertChain.values.mock.calls[0][0];
+    expect(inserted.owner_type).toBe('team');
+    expect(inserted.team_id).toBe('team-1');
+    expect(inserted.created_by_user_id).toBe('user-123');
+  });
+
+  it('should list team templates for active team members', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'viewer', status: 'active' },
+    ]);
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        title: 'Team Template',
+        items: JSON.stringify([{ id: 'section-1', title: 'Checklist', items: [] }]),
+        user_id: 'creator-1',
+        owner_type: 'team',
+        team_id: 'team-1',
+        is_public: 0,
+      },
+    ]);
+
+    const request = new Request('http://localhost/api/templates?teamId=team-1', { method: 'GET' });
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data[0].id).toBe('template-1');
+    expect(data[0].team_id).toBe('team-1');
   });
 
   it('should persist requested SEO metadata and slug on template creation', async () => {
@@ -209,6 +332,22 @@ describe('Templates Handlers', () => {
 
   it('should update SEO metadata and requested slug on template update', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        {
+          id: 'template-1',
+          user_id: 'user-123',
+          title: 'Existing Template',
+          description: '',
+          items: '[]',
+          version: 1,
+          is_public: false,
+          slug: 'existing-template',
+          created_at: new Date().toISOString(),
+          updated_at: null,
+        },
+      ])
+      .mockResolvedValueOnce([]);
 
     const request = new Request('http://localhost/api/templates/template-1', {
       method: 'PUT',
@@ -245,6 +384,20 @@ describe('Templates Handlers', () => {
 
   it('should update related checklist runs when template sections change', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        user_id: 'user-123',
+        title: 'Existing Template',
+        description: '',
+        items: '[]',
+        version: 1,
+        is_public: false,
+        slug: 'existing-template',
+        created_at: new Date().toISOString(),
+        updated_at: null,
+      },
+    ]);
 
     const request = new Request('http://localhost/api/templates/template-1', {
       method: 'PUT',
@@ -308,6 +461,246 @@ describe('Templates Handlers', () => {
     expect(data.seoTitle).toBe('Stored SEO Title');
     expect(data.seoDescription).toBe('Stored SEO description');
     expect(data.rules).toHaveLength(1);
+  });
+
+  it('should return template history for active team members', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.orderBy
+      .mockReturnValueOnce(dbMocks.selectChain)
+      .mockReturnValueOnce(dbMocks.selectChain);
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        {
+          id: 'template-1',
+          title: 'Team Template',
+          description: '',
+          items: '[]',
+          version: 2,
+          user_id: 'creator-1',
+          owner_type: 'team',
+          team_id: 'team-1',
+          is_public: false,
+          slug: 'team-template',
+          created_at: new Date().toISOString(),
+          updated_at: null,
+        },
+      ])
+      .mockResolvedValueOnce([
+        { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'viewer', status: 'active' },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'version-2',
+          version: 2,
+          changed_by_user_id: 'user-123',
+          subject_type: 'team',
+          subject_id: 'team-1',
+          content_hash: 'hash-2',
+          change_summary: 'template.updated',
+          created_at: '2026-07-03T12:00:00.000Z',
+          actor_email: 'editor@example.com',
+          actor_name: 'Editor Example',
+          actor_username: 'editor',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'audit-1',
+          actor_user_id: 'user-123',
+          subject_type: 'team',
+          subject_id: 'team-1',
+          resource_type: 'template',
+          resource_id: 'template-1',
+          action: 'template.updated',
+          diff_json: '{"title":"Team Template"}',
+          metadata_json: '{"source":"test"}',
+          request_id: 'req-1',
+          created_at: '2026-07-03T12:00:00.000Z',
+          actor_email: 'editor@example.com',
+          actor_name: 'Editor Example',
+          actor_username: 'editor',
+        },
+      ]);
+
+    const request = new Request('http://localhost/api/templates/template-1/history', { method: 'GET' });
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.subject).toEqual({ type: 'team', id: 'team-1' });
+    expect(data.versions[0]).toEqual(
+      expect.objectContaining({
+        action: 'template.updated',
+        version: 2,
+        actor: expect.objectContaining({ name: 'Editor Example' }),
+      }),
+    );
+    expect(data.events[0].diff).toEqual({ title: 'Team Template' });
+  });
+
+  it('should not expose public template history to non-owners', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        title: 'Public Template',
+        description: '',
+        items: '[]',
+        version: 1,
+        user_id: 'other-user',
+        owner_type: 'user',
+        team_id: null,
+        is_public: true,
+        slug: 'public-template',
+        created_at: new Date().toISOString(),
+        updated_at: null,
+      },
+    ]);
+
+    const request = new Request('http://localhost/api/templates/template-1/history', { method: 'GET' });
+    const response = await handleTemplates(request, mockEnv);
+
+    expect(response.status).toBe(404);
+  });
+
+  it('should hide archived templates from normal detail reads', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        title: 'Archived Public Template',
+        description: '',
+        items: '[]',
+        version: 1,
+        user_id: 'user-123',
+        owner_type: 'user',
+        team_id: null,
+        is_public: true,
+        slug: 'archived-public-template',
+        deleted_at: '2026-07-03T12:00:00.000Z',
+        created_at: new Date().toISOString(),
+        updated_at: null,
+      },
+    ]);
+
+    const request = new Request('http://localhost/api/templates/template-1', { method: 'GET' });
+    const response = await handleTemplates(request, mockEnv);
+
+    expect(response.status).toBe(404);
+  });
+
+  it('should archive templates with deleted_at instead of hard deleting', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        user_id: 'user-123',
+        owner_type: 'user',
+        team_id: null,
+        title: 'Existing Template',
+        description: '',
+        items: '[]',
+        version: 1,
+        is_public: true,
+        slug: 'existing-template',
+        created_at: new Date().toISOString(),
+        updated_at: null,
+      },
+    ]);
+
+    const request = new Request('http://localhost/api/templates/template-1', { method: 'DELETE' });
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(dbMocks.db.delete).not.toHaveBeenCalled();
+    expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deleted_at: expect.any(String),
+        is_public: false,
+        updated_by_user_id: 'user-123',
+      }),
+    );
+  });
+
+  it('should list archived templates for the active personal workspace', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        title: 'Archived Template',
+        description: '',
+        items: '[]',
+        version: 1,
+        user_id: 'user-123',
+        owner_type: 'user',
+        team_id: null,
+        is_public: false,
+        slug: 'archived-template',
+        deleted_at: '2026-07-03T12:00:00.000Z',
+        created_at: new Date().toISOString(),
+        updated_at: '2026-07-03T12:00:00.000Z',
+      },
+    ]);
+
+    const request = new Request('http://localhost/api/templates/archived', { method: 'GET' });
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data[0]).toEqual(
+      expect.objectContaining({
+        id: 'template-1',
+        title: 'Archived Template',
+        deleted_at: '2026-07-03T12:00:00.000Z',
+      }),
+    );
+  });
+
+  it('should restore archived templates privately and audit the restore', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({
+      plan: 'pro',
+      limits: { maxTemplates: null, maxActiveRuns: null },
+    });
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        user_id: 'user-123',
+        owner_type: 'user',
+        team_id: null,
+        title: 'Archived Template',
+        description: '',
+        items: '[]',
+        version: 1,
+        is_public: false,
+        deleted_at: '2026-07-03T12:00:00.000Z',
+        created_at: new Date().toISOString(),
+        updated_at: '2026-07-03T12:00:00.000Z',
+      },
+    ]);
+
+    const request = new Request('http://localhost/api/templates/template-1/restore', { method: 'POST' });
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deleted_at: null,
+        is_public: false,
+        updated_by_user_id: 'user-123',
+      }),
+    );
+    expect(dbMocks.insertChain.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'template.restored',
+        resource_type: 'template',
+        resource_id: 'template-1',
+      }),
+    );
   });
 
   it('should reject template backup export for free users', async () => {
@@ -391,6 +784,14 @@ describe('Templates Handlers', () => {
         visibility: 'private',
       }),
     ]);
+    expect(dbMocks.db.batch).toHaveBeenCalled();
+    expect(dbMocks.db.batch.mock.calls[0][0]).toHaveLength(3);
+    expect(dbMocks.insertChain.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'template.imported',
+        resource_type: 'template',
+      }),
+    );
   });
 
   it('should return per-template partial import results when some templates fail', async () => {

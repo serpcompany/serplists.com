@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import TemplateDetail from '@/pages/TemplateDetail';
@@ -34,6 +35,13 @@ vi.mock('@/contexts/TemplatesContext', () => ({
   }),
 }));
 
+vi.mock('@/contexts/WorkspaceContext', () => ({
+  useWorkspace: () => ({
+    activeTeamId: undefined,
+    canEditTemplates: true,
+  }),
+}));
+
 vi.mock('@/lib/access-flow', () => ({
   navigateToLoginWithReturnPath: vi.fn(),
   startBillingCheckout: vi.fn(),
@@ -49,6 +57,25 @@ describe('TemplateDetail page', () => {
       },
       loading: false,
       notFound: false,
+      history: {
+        data: {
+          events: [],
+          subject: { type: 'user', id: 'user-1' },
+          templateId: 'tpl-1',
+          versions: [
+            {
+              id: 'version-1',
+              action: 'template.created',
+              actor: { name: 'John Example' },
+              contentHash: 'hash-1',
+              createdAt: '2026-07-03T12:00:00.000Z',
+              version: 1,
+            },
+          ],
+        },
+        isError: false,
+        isLoading: false,
+      },
       saveTemplate: vi.fn(),
       shareTemplate: vi.fn(),
       startRun: vi.fn(),
@@ -56,14 +83,14 @@ describe('TemplateDetail page', () => {
     });
 
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/dashboard/templates/tpl-1']}>
+      <StaticRouter location="/dashboard/templates/tpl-1">
         <Routes>
           <Route
             path="/dashboard/templates/:id"
             element={<TemplateDetail />}
           />
         </Routes>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('Product Launch Checklist');
@@ -77,6 +104,9 @@ describe('TemplateDetail page', () => {
     expect(html).toContain('Template Structure');
     expect(html).toContain('Details');
     expect(html).toContain('Categories &amp; Tags');
+    expect(html).toContain('Changelog');
+    expect(html).toContain('Created template v1');
+    expect(html).toContain('John Example');
     expect(html).toContain('Start Run');
     expect(html).toContain('Share');
     expect(html).toContain('Edit');

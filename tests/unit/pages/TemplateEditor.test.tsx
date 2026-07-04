@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import TemplateEditor from '@/pages/TemplateEditor';
@@ -60,11 +61,11 @@ describe('TemplateEditor page', () => {
     });
 
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/dashboard/templates/new']}>
+      <StaticRouter location="/dashboard/templates/new">
         <Routes>
           <Route path="/dashboard/templates/new" element={<TemplateEditor />} />
         </Routes>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('Template Settings');

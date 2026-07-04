@@ -18,6 +18,8 @@ const templateRuleSchema = z.object({
 });
 
 export const templatePayloadSchema = z.object({
+  teamId: z.string().trim().min(1).optional(),
+  team_id: z.string().trim().min(1).optional(),
   title: boundedRequiredString(160).optional(),
   description: boundedOptionalString(5000),
   type: z.enum(["checklist", "recipe"]).optional(),
@@ -40,6 +42,8 @@ export const templatePayloadSchema = z.object({
 });
 
 export const checklistPayloadSchema = z.object({
+  teamId: z.string().trim().min(1).optional(),
+  team_id: z.string().trim().min(1).optional(),
   template_id: z.string().trim().min(1).nullable().optional(),
   title: boundedRequiredString(160).optional(),
   sections: z.unknown().optional(),

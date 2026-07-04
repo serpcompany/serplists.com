@@ -3,11 +3,23 @@ compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "dist"
 
-# D1 Database binding
+# Local development and production D1 binding. Preview deployments must not use
+# this database. After creating the staging D1 database, paste its UUID into
+# `preview_database_id` below before enabling preview deployments.
 [[d1_databases]]
 binding = "DB"
 database_name = "serp-checklists-db"
 database_id = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1"
+migrations_table = "d1_migrations"
+migrations_dir = "db/migrations"
+preview_database_id = "fcaf4325-5be7-4ead-ab60-45932a04177b"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "serp-checklists-db"
+database_id = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1"
+migrations_table = "d1_migrations"
+migrations_dir = "db/migrations"
 
 # R2 bucket binding (create bucket + set name to match)
 [[r2_buckets]]

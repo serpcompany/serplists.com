@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import { json, jsonError } from "../utils/response";
 import { getStripeBillingConfig, stripePostForm } from "../utils/stripe";
 import { getSessionUserId } from "../utils/session";
-import { getEntitlementsForUser } from "../utils/entitlements";
+import { getEntitlementsForContext, getEntitlementsForUser } from "../utils/entitlements";
+import { canViewTeam, getActiveTeamMembership, normalizeTeamRole } from "../utils/team-access";
 
 type StripeCustomer = { id: string };
 type StripeCheckoutSession = { id: string; url: string | null };
@@ -32,7 +33,18 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
   const origin = getAppOrigin(request, env);
 
   if (request.method === "GET" && billingSubpath[0] === "status") {
-    const entitlements = await getEntitlementsForUser(env, userId);
+    const teamId = url.searchParams.get("teamId");
+
+    if (teamId) {
+      const membership = await getActiveTeamMembership(env, teamId, userId);
+      if (!membership || !canViewTeam(normalizeTeamRole(membership.role))) {
+        return jsonError("Team not found", 404);
+      }
+    }
+
+    const entitlements = teamId
+      ? await getEntitlementsForContext(env, { type: "team", teamId, userId })
+      : await getEntitlementsForUser(env, userId);
     return json({
       plan: entitlements.plan,
       limits: entitlements.limits,

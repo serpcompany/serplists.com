@@ -11,7 +11,9 @@ export type PublicRouteTier = 'marketing' | 'core' | 'secondary' | 'minimal';
 export type ConsoleSection = 'home' | 'templates' | 'runs' | 'account';
 
 export const LEGACY_PUBLIC_LIBRARY_PATH = '/checklists';
+export const LEGACY_ACCOUNT_PATH = '/account';
 export const LEGACY_CONSOLE_HOME_PATH = '/console';
+export const LEGACY_CONSOLE_PROFILE_PATH = '/dashboard/profile';
 export const LEGACY_CONSOLE_TEMPLATES_PATH = '/console/templates';
 export const LEGACY_CONSOLE_RUNS_PATH = '/console/runs';
 
@@ -120,8 +122,6 @@ export const buildRunUrl = (runId: string, origin: string): string =>
 
 export const buildConsoleSettingsPath = (): string => '/dashboard/settings';
 
-export const buildConsoleProfilePath = (): string => '/dashboard/profile';
-
 export const isBlankTemplateEditorRoute = (pathname: string): boolean => {
   const normalizedPath = pathname.trim().toLowerCase();
 
@@ -136,7 +136,7 @@ export const resolveRouteShell = (pathname: string): AppShell => {
   const normalizedPath = pathname.trim().toLowerCase();
 
   if (
-    normalizedPath === '/account' ||
+    normalizedPath === LEGACY_ACCOUNT_PATH ||
     normalizedPath.startsWith('/run/') ||
     normalizedPath.startsWith(buildConsoleHomePath()) ||
     normalizedPath.startsWith(LEGACY_CONSOLE_HOME_PATH)
@@ -187,15 +187,15 @@ export const resolveConsoleSection = (
 ): ConsoleSection | null => {
   const normalizedPath = pathname.trim().toLowerCase();
 
-  if (normalizedPath === '/account') {
+  if (normalizedPath === LEGACY_ACCOUNT_PATH) {
     return 'account';
   }
 
   if (
     normalizedPath === buildConsoleSettingsPath() ||
     normalizedPath === `${buildConsoleSettingsPath()}/` ||
-    normalizedPath === buildConsoleProfilePath() ||
-    normalizedPath === `${buildConsoleProfilePath()}/`
+    normalizedPath === LEGACY_CONSOLE_PROFILE_PATH ||
+    normalizedPath === `${LEGACY_CONSOLE_PROFILE_PATH}/`
   ) {
     return 'account';
   }

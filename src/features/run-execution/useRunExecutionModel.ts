@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
-import { api } from '@/lib/api';
+import { api, type ChecklistRunHistoryResponse } from '@/lib/api';
 import { buildSharePath } from '@/lib/routes';
 import { calculateSectionsProgress } from '@/lib/utils/checklistSections';
 import type { ChecklistRun } from '@/types/checklist';
@@ -97,6 +98,12 @@ export type RunExecutionActionResult =
       kind: 'error';
       message: string;
     };
+
+export type RunExecutionHistoryState = {
+  data: ChecklistRunHistoryResponse | null;
+  isError: boolean;
+  isLoading: boolean;
+};
 
 export type UseRunExecutionModelOptions = RunExecutionLoadOptions & {
   updateRun: UpdateRun;
@@ -489,6 +496,13 @@ export const useRunExecutionModel = (
 
   const counts = countRunExecutionItems(run);
   const selectedData = getSelectedRunItem(run, selectedItemId);
+  const canLoadHistory = Boolean(run?.id && mode !== 'shared');
+  const history = useQuery({
+    queryKey: ['checklist-run-history', run?.id ?? 'none'],
+    queryFn: () => api.getChecklistHistory(run?.id ?? ''),
+    enabled: canLoadHistory,
+    retry: false,
+  });
 
   const applyResult = (result: RunExecutionActionResult): RunExecutionActionResult => {
     if (result.kind === 'ok' && result.run) {
@@ -517,6 +531,11 @@ export const useRunExecutionModel = (
           dependencies,
         ),
       ),
+    history: {
+      data: history.data ?? null,
+      isError: history.isError,
+      isLoading: canLoadHistory && history.isLoading,
+    } satisfies RunExecutionHistoryState,
     isSharedRun: mode === 'shared',
     loadError,
     loading,

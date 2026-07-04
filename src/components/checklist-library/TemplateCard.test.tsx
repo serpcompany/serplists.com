@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
@@ -25,9 +25,9 @@ const template = {
 describe('TemplateCard', () => {
   it('renders the v0 preview card metadata, direct links, passive category pills, and creator fallback', () => {
     const markup = renderToStaticMarkup(
-      <MemoryRouter>
+      <StaticRouter location="/">
         <TemplateCard template={template} />
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(markup).toContain('Launch');

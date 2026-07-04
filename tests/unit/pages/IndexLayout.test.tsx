@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import Index from '@/pages/Index';
@@ -21,9 +21,9 @@ vi.mock('@/contexts/TemplatesContext', () => ({
 describe('Index layout', () => {
   it('explains the actual template to run to share workflow instead of generic marketing cards', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter>
+      <StaticRouter location="/">
         <Index />
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('Build the checklist once. Run it every time.');

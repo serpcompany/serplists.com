@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Layout } from '@/components/Layout';
@@ -14,10 +15,31 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   }),
 }));
 
+vi.mock('@/contexts/WorkspaceContext', () => ({
+  useWorkspace: () => ({
+    activeWorkspace: {
+      id: 'personal',
+      name: 'Personal',
+      role: 'owner',
+      type: 'personal',
+    },
+    isWorkspaceLoading: false,
+    selectWorkspace: vi.fn(),
+    workspaces: [
+      {
+        id: 'personal',
+        name: 'Personal',
+        role: 'owner',
+        type: 'personal',
+      },
+    ],
+  }),
+}));
+
 describe('Layout shell selection', () => {
   it('uses the exact dashboard sidebar framing from the v0 reference for dashboard routes', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/dashboard/templates']}>
+      <StaticRouter location="/dashboard/templates">
         <Routes>
           <Route
             path="*"
@@ -28,7 +50,7 @@ describe('Layout shell selection', () => {
             }
           />
         </Routes>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('data-app-shell="console"');
@@ -36,6 +58,8 @@ describe('Layout shell selection', () => {
       'sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 shrink-0 flex-col border-r border-border bg-card md:flex',
     );
     expect(html).toContain('New Template');
+    expect(html).toContain('Settings');
+    expect(html).not.toContain('>Profile<');
     expect(html).toContain('Switch to dark mode');
     expect(html).toContain('Import Templates');
     expect(html).toContain('Build repeatable checklists');
@@ -43,7 +67,7 @@ describe('Layout shell selection', () => {
 
   it('uses the shared public shell for discovery routes', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/templates']}>
+      <StaticRouter location="/templates">
         <Routes>
           <Route
             path="*"
@@ -54,7 +78,7 @@ describe('Layout shell selection', () => {
             }
           />
         </Routes>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('h-14');
@@ -66,7 +90,7 @@ describe('Layout shell selection', () => {
 
   it('uses the shared public shell for profile routes with the same px-4 h-14 frame', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/profile/designops']}>
+      <StaticRouter location="/profile/designops">
         <Routes>
           <Route
             path="*"
@@ -77,7 +101,7 @@ describe('Layout shell selection', () => {
             }
           />
         </Routes>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('data-app-shell="public"');
@@ -90,7 +114,7 @@ describe('Layout shell selection', () => {
 
   it('makes theme switching available from the mobile console menu', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/dashboard/templates']}>
+      <StaticRouter location="/dashboard/templates">
         <Routes>
           <Route
             path="*"
@@ -101,7 +125,7 @@ describe('Layout shell selection', () => {
             }
           />
         </Routes>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('Toggle menu');

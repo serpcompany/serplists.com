@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TemplateListItem } from '@/components/dashboard/TemplateListItem';
@@ -23,13 +23,13 @@ const template: ChecklistTemplate = {
 describe('TemplateListItem', () => {
   it('keeps start, edit, and delete actions available in dashboard list view', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter>
+      <StaticRouter location="/">
         <TemplateListItem
           onDelete={vi.fn()}
           onStartRun={vi.fn()}
           template={template}
         />
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('Start Run');

@@ -20,7 +20,11 @@ export const authClient = createAuthClient({
   },
 });
 
-export async function getAuthStatus(): Promise<{ emailAuthAvailable: boolean }> {
+export async function getAuthStatus(): Promise<{
+  accountRegistrationAvailable?: boolean;
+  emailAuthAvailable: boolean;
+  emailVerificationRequired?: boolean;
+}> {
   const response = await fetch(`${API_BASE_URL}/auth/status`, {
     credentials: "include",
   });

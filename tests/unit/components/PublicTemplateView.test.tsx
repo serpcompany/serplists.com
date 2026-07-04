@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
@@ -39,7 +39,7 @@ const template: ChecklistTemplate = {
 describe('PublicTemplateView', () => {
   it('renders the v0-style public template detail surface', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter>
+      <StaticRouter location="/">
         <PublicTemplateView
           template={template}
           totalItems={1}
@@ -53,7 +53,7 @@ describe('PublicTemplateView', () => {
           onStartRun={() => undefined}
           onSaveTemplate={() => undefined}
         />
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('What&#x27;s included');

@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { TemplatesDiscoveryHeader } from '@/components/checklist-library/TemplatesDiscoveryHeader';
@@ -7,12 +7,12 @@ import { TemplatesDiscoveryHeader } from '@/components/checklist-library/Templat
 describe('TemplatesDiscoveryHeader', () => {
   it('renders the v0 discovery header logo, search slot, and direct action links', () => {
     const markup = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/templates']}>
+      <StaticRouter location="/templates">
         <TemplatesDiscoveryHeader
           onSearchChange={() => undefined}
           searchQuery="launch"
         />
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(markup).toContain('SERP Lists');

@@ -1,6 +1,23 @@
-const API_URL = import.meta.env.DEV 
-  ? 'http://localhost:8787/api'
-  : '/api';
+const API_URL = import.meta.env.DEV
+  ? import.meta.env.VITE_API_URL ?? 'http://localhost:8788/api'
+  : import.meta.env.VITE_API_URL ?? '/api';
+
+export function redirectToLoginAfterUnauthorized() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  if (window.location.pathname !== '/login') {
+    window.history.pushState({ authRedirect: true }, '', '/login');
+  }
+
+  const event =
+    typeof PopStateEvent === 'function'
+      ? new PopStateEvent('popstate', { state: window.history.state })
+      : new Event('popstate');
+
+  window.dispatchEvent(event);
+}
 
 class ApiClient {
   private token: string | null = null;
@@ -37,7 +54,7 @@ class ApiClient {
     if (!response.ok) {
       if (response.status === 401) {
         this.clearToken();
-        window.location.href = '/login';
+        redirectToLoginAfterUnauthorized();
       }
       const error = await response.json().catch(() => ({ error: 'Request failed' }));
       throw new Error(error.error || 'Request failed');

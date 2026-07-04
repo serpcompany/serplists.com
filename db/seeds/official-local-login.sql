@@ -2,7 +2,10 @@
 -- This keeps the remote official seed unchanged while making `serp` usable
 -- as a dev persona for local import/public-profile verification.
 
-INSERT OR IGNORE INTO account (
+DELETE FROM account
+WHERE user_id = 'serp-user' AND provider_id = 'credential';
+
+INSERT INTO account (
   id,
   account_id,
   provider_id,
@@ -11,7 +14,7 @@ INSERT OR IGNORE INTO account (
   created_at,
   updated_at
 ) VALUES (
-  lower(hex(randomblob(16))),
+  'account-serp-user-credential',
   'serp-user',
   'credential',
   'serp-user',

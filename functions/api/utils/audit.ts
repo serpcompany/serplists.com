@@ -1,0 +1,106 @@
+import { schema } from "../db";
+import { sha256Hex } from "./crypto";
+
+export type AuditSubject = {
+  type: "user" | "team";
+  id: string;
+};
+
+export type AuditResource = {
+  type: "template" | "checklist_run" | "team" | "team_member" | "team_invite";
+  id: string;
+};
+
+type JsonValue = Record<string, unknown> | unknown[] | string | number | boolean | null;
+
+export type AuditEventInput = {
+  actorUserId: string | null;
+  subject: AuditSubject;
+  resource: AuditResource;
+  action: string;
+  before?: JsonValue;
+  after?: JsonValue;
+  diff?: JsonValue;
+  metadata?: JsonValue;
+  request?: Request;
+  createdAt?: string;
+};
+
+export type TemplateVersionInput = {
+  templateId: string;
+  version: number;
+  changedByUserId: string;
+  subject: AuditSubject;
+  snapshot: JsonValue;
+  changeSummary?: string;
+  createdAt?: string;
+};
+
+function serializeJson(value: JsonValue | undefined): string | null {
+  if (typeof value === "undefined") return null;
+  return JSON.stringify(value);
+}
+
+function getClientIp(request?: Request): string | null {
+  if (!request) return null;
+  const forwarded = request.headers.get("CF-Connecting-IP")
+    ?? request.headers.get("True-Client-IP")
+    ?? request.headers.get("X-Forwarded-For");
+
+  return forwarded?.split(",")[0]?.trim() || null;
+}
+
+async function getRequestAuditMetadata(request?: Request): Promise<{
+  requestId: string | null;
+  ipHash: string | null;
+  userAgent: string | null;
+}> {
+  const ip = getClientIp(request);
+
+  return {
+    requestId: request?.headers.get("X-Request-Id") ?? request?.headers.get("CF-Ray") ?? null,
+    ipHash: ip ? await sha256Hex(ip) : null,
+    userAgent: request?.headers.get("User-Agent") ?? null,
+  };
+}
+
+export async function buildAuditEventValues(input: AuditEventInput): Promise<typeof schema.audit_events.$inferInsert> {
+  const requestMetadata = await getRequestAuditMetadata(input.request);
+
+  return {
+    id: crypto.randomUUID(),
+    actor_user_id: input.actorUserId,
+    subject_type: input.subject.type,
+    subject_id: input.subject.id,
+    resource_type: input.resource.type,
+    resource_id: input.resource.id,
+    action: input.action,
+    before_json: serializeJson(input.before),
+    after_json: serializeJson(input.after),
+    diff_json: serializeJson(input.diff),
+    metadata_json: serializeJson(input.metadata),
+    request_id: requestMetadata.requestId,
+    ip_hash: requestMetadata.ipHash,
+    user_agent: requestMetadata.userAgent,
+    created_at: input.createdAt ?? new Date().toISOString(),
+  };
+}
+
+export async function buildTemplateVersionValues(
+  input: TemplateVersionInput,
+): Promise<typeof schema.template_versions.$inferInsert> {
+  const snapshotJson = serializeJson(input.snapshot) ?? "{}";
+
+  return {
+    id: crypto.randomUUID(),
+    template_id: input.templateId,
+    version: input.version,
+    changed_by_user_id: input.changedByUserId,
+    subject_type: input.subject.type,
+    subject_id: input.subject.id,
+    snapshot_json: snapshotJson,
+    content_hash: await sha256Hex(snapshotJson),
+    change_summary: input.changeSummary ?? null,
+    created_at: input.createdAt ?? new Date().toISOString(),
+  };
+}

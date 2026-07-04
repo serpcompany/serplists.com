@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { HelmetProvider } from 'react-helmet-async';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -45,11 +46,11 @@ const template: ChecklistTemplate = {
 const renderChecklistLibrary = () =>
   renderToStaticMarkup(
     <HelmetProvider>
-      <MemoryRouter initialEntries={['/templates']}>
+      <StaticRouter location="/templates">
         <Routes>
           <Route path="*" element={<ChecklistLibrary />} />
         </Routes>
-      </MemoryRouter>
+      </StaticRouter>
     </HelmetProvider>,
   );
 

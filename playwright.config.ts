@@ -1,9 +1,5 @@
 import { defineConfig } from "@playwright/test";
-
-function shellQuote(value: string) {
-  const escapedValue = value.replaceAll("'", `'"'"'`);
-  return `'${escapedValue}'`;
-}
+import { existsSync } from "node:fs";
 
 const frontendHost = process.env.PLAYWRIGHT_FRONTEND_HOST ?? "localhost";
 const frontendPort = process.env.PLAYWRIGHT_FRONTEND_PORT ?? "4173";
@@ -12,14 +8,25 @@ const frontendBaseUrl =
 const apiPort = process.env.PLAYWRIGHT_API_PORT ?? "8788";
 const apiBaseUrl =
   process.env.PLAYWRIGHT_API_URL ?? process.env.VITE_API_URL ?? `http://localhost:${apiPort}/api`;
-const frontendUrlForApi = process.env.FRONTEND_URL ?? "http://localhost:8080";
+const frontendUrlForApi = process.env.FRONTEND_URL ?? frontendBaseUrl;
 const corsAllowedOrigins = process.env.CORS_ALLOWED_ORIGINS
   ? `${process.env.CORS_ALLOWED_ORIGINS},${frontendBaseUrl}`
   : `${frontendUrlForApi},${frontendBaseUrl}`;
+const betterAuthSecret =
+  process.env.BETTER_AUTH_SECRET ??
+  process.env.JWT_SECRET ??
+  "playwright-local-better-auth-secret-32-chars";
 const reuseExistingServer =
   process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER != null
     ? process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1"
     : !process.env.CI;
+const devVarsFlag = existsSync(".dev.vars") ? " --env-file .dev.vars" : "";
+const wranglerPersistFlag = process.env.PLAYWRIGHT_WRANGLER_PERSIST_TO
+  ? ` --persist-to ${process.env.PLAYWRIGHT_WRANGLER_PERSIST_TO}`
+  : "";
+const frontendCommand = existsSync(".dev.vars")
+  ? `pnpm exec dotenv -e .dev.vars -- vite --host ${frontendHost} --port ${frontendPort} --strictPort`
+  : `pnpm exec vite --host ${frontendHost} --port ${frontendPort} --strictPort`;
 
 process.env.VITE_API_URL ??= apiBaseUrl;
 
@@ -35,7 +42,7 @@ export default defineConfig({
   webServer: [
     {
       name: "frontend",
-      command: `pnpm exec dotenv -e .dev.vars -- vite --host ${frontendHost} --port ${frontendPort} --strictPort`,
+      command: frontendCommand,
       url: frontendBaseUrl,
       reuseExistingServer,
       timeout: 120000,
@@ -45,9 +52,10 @@ export default defineConfig({
     {
       name: "api",
       command:
-        `pnpm run build:dev && npx wrangler pages dev ./dist --local --port ${apiPort} --env-file .dev.vars ` +
-        `-b FRONTEND_URL=${shellQuote(frontendUrlForApi)} ` +
-        `-b CORS_ALLOWED_ORIGINS=${shellQuote(corsAllowedOrigins)}`,
+        `pnpm run build:dev && npx wrangler pages dev ./dist --local --port ${apiPort}${devVarsFlag}${wranglerPersistFlag} ` +
+        `-b FRONTEND_URL=${frontendUrlForApi} ` +
+        `-b CORS_ALLOWED_ORIGINS=${corsAllowedOrigins} ` +
+        `-b BETTER_AUTH_SECRET=${betterAuthSecret}`,
       url: `http://localhost:${apiPort}/api/health`,
       reuseExistingServer,
       timeout: 180000,
@@ -55,6 +63,7 @@ export default defineConfig({
       stderr: "pipe",
       env: {
         ...process.env,
+        BETTER_AUTH_SECRET: betterAuthSecret,
         FRONTEND_URL: frontendUrlForApi,
         CORS_ALLOWED_ORIGINS: corsAllowedOrigins,
       },

@@ -7,6 +7,156 @@ const API_BASE_URL = import.meta.env.DEV
   ? DEV_API_BASE_URL
   : env.VITE_API_URL ?? '/api';
 
+export type TeamRole = 'owner' | 'admin' | 'editor' | 'runner' | 'viewer';
+export type TeamMemberStatus = 'active' | 'disabled';
+
+export type TeamSummary = {
+  id: string;
+  name: string;
+  slug?: string | null;
+  role: TeamRole;
+  membershipStatus: TeamMemberStatus;
+  memberId: string;
+};
+
+export type TeamMember = {
+  id: string;
+  team_id: string;
+  user_id: string;
+  role: TeamRole;
+  status: TeamMemberStatus;
+  email?: string | null;
+  name?: string | null;
+  avatar_url?: string | null;
+};
+
+export type TeamInvite = {
+  id: string;
+  team_id: string;
+  email: string;
+  role: Exclude<TeamRole, 'owner'>;
+  invited_by_user_id: string;
+  expires_at: string;
+  created_at: string;
+  updated_at?: string | null;
+  inviterEmail?: string | null;
+  inviterName?: string | null;
+};
+
+export type TeamInviteDelivery =
+  | {
+      mode: 'link';
+      status: 'ready';
+      invitePath: string;
+      inviteUrl: string;
+    }
+  | {
+      mode: 'email';
+      status: 'queued' | 'sent';
+      invitePath: string;
+      inviteUrl: string;
+    };
+
+export type CreatedTeamInvite = {
+  id: string;
+  email: string;
+  role: Exclude<TeamRole, 'owner'>;
+  expiresAt: string;
+  inviteToken: string;
+  invitePath: string;
+  inviteUrl?: string;
+  delivery?: TeamInviteDelivery;
+};
+
+export type AcceptedTeamInvite = {
+  memberId: string;
+  role: TeamRole;
+  teamId: string;
+  team?: TeamSummary;
+};
+
+export type IncomingTeamInvite = {
+  id: string;
+  teamId: string;
+  teamName: string;
+  teamSlug?: string | null;
+  email: string;
+  role: Exclude<TeamRole, 'owner'>;
+  expiresAt: string;
+  createdAt: string;
+  inviterEmail?: string | null;
+  inviterName?: string | null;
+};
+
+export type TeamActivityEvent = {
+  id: string;
+  action: string;
+  resource: {
+    type: string;
+    id: string;
+  };
+  metadata?: unknown;
+  requestId?: string | null;
+  createdAt: string;
+  actor: {
+    userId?: string | null;
+    email?: string | null;
+    name?: string | null;
+    username?: string | null;
+  };
+};
+
+export type TeamDetail = {
+  id: string;
+  name: string;
+  slug?: string | null;
+  billing_owner_user_id?: string | null;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at?: string | null;
+  archived_at?: string | null;
+  membership: { id: string; role: TeamRole; status: TeamMemberStatus };
+};
+
+export type TemplateHistoryActor = {
+  userId?: string | null;
+  email?: string | null;
+  name?: string | null;
+  username?: string | null;
+};
+
+export type TemplateHistoryVersion = {
+  id: string;
+  version: number;
+  action: string;
+  contentHash?: string | null;
+  createdAt: string;
+  actor: TemplateHistoryActor;
+};
+
+export type TemplateHistoryEvent = {
+  id: string;
+  action: string;
+  createdAt: string;
+  requestId?: string | null;
+  diff?: unknown;
+  metadata?: unknown;
+  actor: TemplateHistoryActor;
+};
+
+export type TemplateHistoryResponse = {
+  templateId: string;
+  subject: { type: 'user' | 'team'; id: string };
+  versions: TemplateHistoryVersion[];
+  events: TemplateHistoryEvent[];
+};
+
+export type ChecklistRunHistoryResponse = {
+  checklistId: string;
+  subject: { type: 'user' | 'team'; id: string };
+  events: TemplateHistoryEvent[];
+};
+
 class ApiClient {
   private async request(endpoint: string, options: RequestInit = {}) {
     const headers: HeadersInit = {
@@ -47,12 +197,26 @@ class ApiClient {
   }
 
   // Templates
-  async getTemplates() {
-    return this.request('/templates');
+  async getTemplates(params?: { teamId?: string }) {
+    const search = new URLSearchParams();
+    if (params?.teamId) search.set('teamId', params.teamId);
+    const query = search.toString();
+    return this.request(`/templates${query ? `?${query}` : ''}`);
+  }
+
+  async getArchivedTemplates(params?: { teamId?: string }) {
+    const search = new URLSearchParams();
+    if (params?.teamId) search.set('teamId', params.teamId);
+    const query = search.toString();
+    return this.request(`/templates/archived${query ? `?${query}` : ''}`);
   }
 
   async getTemplateById(id: string) {
     return this.request(`/templates/${encodeURIComponent(id)}`);
+  }
+
+  async getTemplateHistory(id: string): Promise<TemplateHistoryResponse> {
+    return this.request(`/templates/${encodeURIComponent(id)}/history`);
   }
 
   async getTemplateBySlug(slug: string) {
@@ -65,6 +229,7 @@ class ApiClient {
 
   async createTemplate(template: {
     title: string;
+    teamId?: string;
     description?: string;
     type?: "checklist" | "recipe";
     seoTitle?: string;
@@ -108,22 +273,35 @@ class ApiClient {
     });
   }
 
-  async exportTemplateBackup(params?: { includePublic?: boolean; format?: 'backup' | 'portable' }) {
+  async restoreTemplate(id: string): Promise<{ success: true }> {
+    return this.request(`/templates/${encodeURIComponent(id)}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  async exportTemplateBackup(params?: { includePublic?: boolean; format?: 'backup' | 'portable'; teamId?: string | null }) {
     const search = new URLSearchParams();
     if (params?.includePublic) search.set('includePublic', '1');
+    if (params?.teamId) search.set('teamId', params.teamId);
     search.set('format', params?.format ?? 'portable');
     const query = search.toString();
     return this.request(`/templates/backup${query ? `?${query}` : ''}`);
   }
 
   async importTemplateBackup(payload: {
+    teamId?: string | null;
     templates: unknown[];
     options?: { visibility?: 'preserve' | 'public' | 'private' };
   }): Promise<TemplateImportSummary> {
-    return this.request('/templates/backup', { method: 'POST', body: JSON.stringify(payload) });
+    const search = new URLSearchParams();
+    if (payload.teamId) search.set('teamId', payload.teamId);
+    const query = search.toString();
+    const { teamId: _teamId, ...body } = payload;
+    return this.request(`/templates/backup${query ? `?${query}` : ''}`, { method: 'POST', body: JSON.stringify(body) });
   }
 
-  async clonePublicTemplate(templateId: string, payload?: { visibility?: 'public' | 'private' | 'preserve' }): Promise<{ id: string; slug?: string }> {
+  async clonePublicTemplate(templateId: string, payload?: { visibility?: 'public' | 'private' | 'preserve'; teamId?: string }): Promise<{ id: string; slug?: string }> {
     return this.request(`/templates/${encodeURIComponent(templateId)}/clone`, {
       method: 'POST',
       body: JSON.stringify(payload ?? {}),
@@ -131,15 +309,30 @@ class ApiClient {
   }
 
   // Checklists
-  async getChecklists() {
-    return this.request('/checklists');
+  async getChecklists(params?: { teamId?: string }) {
+    const search = new URLSearchParams();
+    if (params?.teamId) search.set('teamId', params.teamId);
+    const query = search.toString();
+    return this.request(`/checklists${query ? `?${query}` : ''}`);
+  }
+
+  async getArchivedChecklists(params?: { teamId?: string }) {
+    const search = new URLSearchParams();
+    if (params?.teamId) search.set('teamId', params.teamId);
+    const query = search.toString();
+    return this.request(`/checklists/archived${query ? `?${query}` : ''}`);
   }
 
   async getChecklistById(id: string) {
     return this.request(`/checklists/${encodeURIComponent(id)}`);
   }
 
+  async getChecklistHistory(id: string): Promise<ChecklistRunHistoryResponse> {
+    return this.request(`/checklists/${encodeURIComponent(id)}/history`);
+  }
+
   async createChecklist(checklist: {
+    teamId?: string;
     template_id?: string;
     title: string;
     items?: unknown[];
@@ -152,10 +345,13 @@ class ApiClient {
     });
   }
 
-  async createChecklistShare(templateId: string, runName?: string) {
+  async createChecklistShare(templateId: string, runName?: string, params?: { teamId?: string }) {
     return this.request(`/checklists/${encodeURIComponent(templateId)}/share`, {
       method: 'POST',
-      body: JSON.stringify(runName ? { runName } : {}),
+      body: JSON.stringify({
+        ...(runName ? { runName } : {}),
+        ...(params?.teamId ? { teamId: params.teamId } : {}),
+      }),
     });
   }
 
@@ -209,6 +405,103 @@ class ApiClient {
     });
   }
 
+  async restoreChecklist(id: string): Promise<{ success: true }> {
+    return this.request(`/checklists/${encodeURIComponent(id)}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  // Teams
+  async getTeams(): Promise<TeamSummary[]> {
+    return this.request('/teams');
+  }
+
+  async createTeam(payload: { name: string; slug?: string }): Promise<TeamSummary> {
+    return this.request('/teams', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getTeam(teamId: string): Promise<TeamDetail> {
+    return this.request(`/teams/${encodeURIComponent(teamId)}`);
+  }
+
+  async updateTeam(teamId: string, payload: { name?: string; slug?: string }): Promise<{ success: true; team: TeamDetail }> {
+    return this.request(`/teams/${encodeURIComponent(teamId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getTeamMembers(teamId: string): Promise<TeamMember[]> {
+    return this.request(`/teams/${encodeURIComponent(teamId)}/members`);
+  }
+
+  async getTeamInvites(teamId: string): Promise<TeamInvite[]> {
+    return this.request(`/teams/${encodeURIComponent(teamId)}/invites`);
+  }
+
+  async getTeamActivity(teamId: string): Promise<TeamActivityEvent[]> {
+    return this.request(`/teams/${encodeURIComponent(teamId)}/activity`);
+  }
+
+  async getIncomingTeamInvites(): Promise<IncomingTeamInvite[]> {
+    return this.request('/teams/invites/pending');
+  }
+
+  async createTeamInvite(
+    teamId: string,
+    payload: { email: string; role?: Exclude<TeamRole, 'owner'> },
+  ): Promise<CreatedTeamInvite> {
+    return this.request(`/teams/${encodeURIComponent(teamId)}/invites`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async acceptTeamInvite(inviteToken: string): Promise<AcceptedTeamInvite> {
+    return this.request(`/teams/invites/${encodeURIComponent(inviteToken)}/accept`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  async acceptIncomingTeamInvite(inviteId: string): Promise<AcceptedTeamInvite> {
+    return this.request(`/teams/invites/pending/${encodeURIComponent(inviteId)}/accept`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  async revokeTeamInvite(teamId: string, inviteId: string): Promise<{ success: true }> {
+    return this.request(`/teams/${encodeURIComponent(teamId)}/invites/${encodeURIComponent(inviteId)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async updateTeamMember(
+    teamId: string,
+    memberId: string,
+    updates: { role?: Exclude<TeamRole, 'owner'>; status?: TeamMemberStatus },
+  ): Promise<{ success: true }> {
+    return this.request(`/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(memberId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async transferTeamOwnership(
+    teamId: string,
+    memberId: string,
+  ): Promise<{ success: true; ownerMemberId: string; ownerUserId: string }> {
+    return this.request(`/teams/${encodeURIComponent(teamId)}/owner`, {
+      method: 'PUT',
+      body: JSON.stringify({ memberId }),
+    });
+  }
+
   // Public profiles
   async getProfileByUsername(username: string) {
     return this.request(`/profiles/by-username?username=${encodeURIComponent(username)}`);
@@ -231,12 +524,15 @@ class ApiClient {
   }
 
   // Billing (Stripe)
-  async getBillingStatus(): Promise<{
-    plan: 'free' | 'pro';
+  async getBillingStatus(params?: { teamId?: string }): Promise<{
+    plan: 'free' | 'pro' | 'team';
     limits?: { maxTemplates: number | null; maxActiveRuns: number | null };
     billingEnabled?: boolean;
   }> {
-    return this.request('/billing/status');
+    const search = new URLSearchParams();
+    if (params?.teamId) search.set('teamId', params.teamId);
+    const query = search.toString();
+    return this.request(`/billing/status${query ? `?${query}` : ''}`);
   }
 
   async createBillingCheckout(): Promise<{ url: string }> {

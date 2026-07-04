@@ -17,7 +17,7 @@ vi.mock("drizzle-orm/d1", () => ({
   drizzle: vi.fn(() => dbMocks.db),
 }));
 
-import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
+import { getEntitlementsForContext, getEntitlementsForUser } from "@functions/api/utils/entitlements";
 
 describe("getEntitlementsForUser", () => {
   beforeEach(() => {
@@ -36,6 +36,7 @@ describe("getEntitlementsForUser", () => {
     const env: any = { DB: {} };
     const entitlements = await getEntitlementsForUser(env, "user-1");
     expect(entitlements.plan).toBe("pro");
+    expect(entitlements.source).toBe("user_override");
     expect(entitlements.limits.maxTemplates).toBeNull();
   });
 
@@ -43,6 +44,7 @@ describe("getEntitlementsForUser", () => {
     const env: any = { DB: {} };
     const entitlements = await getEntitlementsForUser(env, "user-1");
     expect(entitlements.plan).toBe("free");
+    expect(entitlements.source).toBe("free");
     expect(entitlements.limits.maxTemplates).toBe(1);
     expect(entitlements.limits.maxActiveRuns).toBe(3);
   });
@@ -60,5 +62,30 @@ describe("getEntitlementsForUser", () => {
 
     expect(entitlements.plan).toBe("free");
     expect(entitlements.limits.maxTemplates).toBe(1);
+  });
+
+  it("resolves user context through the existing user entitlement path", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      { user_id: "user-1", plan: "pro", expires_at: null, created_at: "now" },
+    ]);
+
+    const env: any = { DB: {} };
+    const entitlements = await getEntitlementsForContext(env, { type: "user", userId: "user-1" });
+
+    expect(entitlements.plan).toBe("pro");
+    expect(entitlements.source).toBe("user_override");
+  });
+
+  it("resolves premium team context from a team override without upgrading the user", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      { team_id: "team-1", plan: "team", expires_at: null, created_at: "now" },
+    ]);
+
+    const env: any = { DB: {} };
+    const entitlements = await getEntitlementsForContext(env, { type: "team", teamId: "team-1", userId: "user-1" });
+
+    expect(entitlements.plan).toBe("team");
+    expect(entitlements.source).toBe("team_override");
+    expect(entitlements.limits.maxTemplates).toBeNull();
   });
 });
