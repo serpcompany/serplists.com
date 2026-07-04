@@ -67,7 +67,7 @@ function getTemplateSections(template: Record<string, unknown>) {
 }
 
 test.describe("template editor regressions", () => {
-  test("@smoke preserves multiple newly added task edits before save", async ({ page }) => {
+  test("@smoke preserves task edits when adding then switching between tasks", async ({ page }) => {
     const templateTitle = `QA Tasks ${Date.now()}`;
     const firstTaskTitle = `First task ${Date.now()}`;
     const secondTaskTitle = `Second task ${Date.now()}`;
@@ -80,17 +80,18 @@ test.describe("template editor regressions", () => {
 
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
 
-    const addTaskToFirstSection = page.getByRole("button", {
+    await page.getByRole("button", {
       name: /add task to section 1/i,
-    });
-    await addTaskToFirstSection.dblclick();
+    }).click();
 
     await expect(page.getByRole("button", { name: /^Task 1$/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^Task 2$/ })).toBeVisible();
-
-    await page.getByRole("button", { name: /^Task 1$/ }).click();
     await page.getByLabel("Task Title").fill(firstTaskTitle);
     await page.getByLabel("Description (Optional)").fill(firstTaskDescription);
+
+    await page.getByRole("button", { name: /^Add task$/ }).click();
+    await expect(page.getByRole("button", { name: /^Task 2$/ })).toBeVisible();
+    await expect(page.getByLabel("Task Title")).toHaveValue("");
+    await expect(page.getByLabel("Description (Optional)")).toHaveValue("");
 
     await page.getByRole("button", { name: /^Task 2$/ }).click();
     await page.getByLabel("Task Title").fill(secondTaskTitle);
@@ -102,6 +103,18 @@ test.describe("template editor regressions", () => {
     await expect(
       page.getByRole("button", { exact: true, name: secondTaskTitle }),
     ).toBeVisible();
+
+    await page.getByRole("button", { exact: true, name: firstTaskTitle }).click();
+    await expect(page.getByLabel("Task Title")).toHaveValue(firstTaskTitle);
+    await expect(page.getByLabel("Description (Optional)")).toHaveValue(
+      firstTaskDescription,
+    );
+
+    await page.getByRole("button", { exact: true, name: secondTaskTitle }).click();
+    await expect(page.getByLabel("Task Title")).toHaveValue(secondTaskTitle);
+    await expect(page.getByLabel("Description (Optional)")).toHaveValue(
+      secondTaskDescription,
+    );
 
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page).toHaveURL(/\/dashboard\/templates$/);
