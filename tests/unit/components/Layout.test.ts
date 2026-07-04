@@ -1,7 +1,8 @@
 import React from 'react';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Layout } from '@/components/Layout';
@@ -15,12 +16,33 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   }),
 }));
 
+vi.mock('@/contexts/WorkspaceContext', () => ({
+  useWorkspace: () => ({
+    activeWorkspace: {
+      id: 'personal',
+      name: 'Personal',
+      role: 'owner',
+      type: 'personal',
+    },
+    isWorkspaceLoading: false,
+    selectWorkspace: vi.fn(),
+    workspaces: [
+      {
+        id: 'personal',
+        name: 'Personal',
+        role: 'owner',
+        type: 'personal',
+      },
+    ],
+  }),
+}));
+
 describe('Layout route contracts', () => {
   it('renders non-discovery public routes with the shared h-14 public header frame', () => {
     const html = renderToStaticMarkup(
       React.createElement(
-        MemoryRouter,
-        { initialEntries: ['/pricing'] },
+        StaticRouter,
+        { location: '/pricing' },
         React.createElement(
           Routes,
           null,
@@ -68,8 +90,8 @@ describe('Layout route contracts', () => {
   it('renders nested dashboard route content through the shared layout outlet', () => {
     const html = renderToStaticMarkup(
       React.createElement(
-        MemoryRouter,
-        { initialEntries: ['/dashboard/templates'] },
+        StaticRouter,
+        { location: '/dashboard/templates' },
         React.createElement(
           Routes,
           null,

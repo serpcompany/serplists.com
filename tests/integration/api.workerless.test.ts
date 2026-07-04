@@ -121,9 +121,9 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(data.error).toBe("Test accounts are disabled in production");
   });
 
-  it('fails sign-up email flow explicitly when auth email provider is not configured', async () => {
+  it('fails production sign-up email flow explicitly when auth email provider is not configured', async () => {
     const response = await apiWorker.fetch(
-      new Request("http://localhost/api/auth/sign-up/email", {
+      new Request("https://serplists.com/api/auth/sign-up/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -178,6 +178,8 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.emailAuthAvailable).toBe(false);
+    expect(data.emailVerificationRequired).toBe(false);
+    expect(data.accountRegistrationAvailable).toBe(true);
   });
 
   it('reports auth email available in auth status when a provider is configured', async () => {
@@ -191,6 +193,24 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.emailAuthAvailable).toBe(true);
+    expect(data.emailVerificationRequired).toBe(true);
+    expect(data.accountRegistrationAvailable).toBe(true);
+  });
+
+  it('reports account registration unavailable on production when no auth email provider is configured', async () => {
+    const response = await apiWorker.fetch(
+      new Request('https://serplists.com/api/auth/status'),
+      buildEnv({
+        RESEND_API_KEY: undefined,
+        USESEND_API_KEY: undefined,
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.emailAuthAvailable).toBe(false);
+    expect(data.emailVerificationRequired).toBe(true);
+    expect(data.accountRegistrationAvailable).toBe(false);
   });
 
   it('enforces CORS allowlist when configured', async () => {

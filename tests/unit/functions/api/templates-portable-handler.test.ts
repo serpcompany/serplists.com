@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
     from: vi.fn(),
+    leftJoin: vi.fn(),
     where: vi.fn(),
     orderBy: vi.fn(),
     limit: vi.fn(),
@@ -13,6 +14,7 @@ const dbMocks = vi.hoisted(() => {
   const db = {
     select: vi.fn(() => selectChain),
     insert: vi.fn(() => insertChain),
+    batch: vi.fn(),
   };
 
   return { selectChain, insertChain, db };
@@ -28,10 +30,11 @@ vi.mock('@functions/api/utils/session', () => ({
 
 vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForUser: vi.fn(),
+  getEntitlementsForContext: vi.fn(),
 }));
 
 import { handleTemplates } from '@functions/api/handlers/templates';
-import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
+import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 
 describe('portable template import/export API', () => {
@@ -41,15 +44,22 @@ describe('portable template import/export API', () => {
   };
 
   beforeEach(() => {
+    vi.clearAllMocks();
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
+    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockResolvedValue(undefined);
+    dbMocks.db.batch.mockResolvedValue([]);
 
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     vi.mocked(getEntitlementsForUser).mockResolvedValue({
       plan: 'pro',
+      limits: { maxTemplates: null, maxActiveRuns: null },
+    });
+    vi.mocked(getEntitlementsForContext).mockResolvedValue({
+      plan: 'team',
       limits: { maxTemplates: null, maxActiveRuns: null },
     });
   });
@@ -141,11 +151,84 @@ describe('portable template import/export API', () => {
       }),
     ]);
 
+    expect(dbMocks.db.batch).toHaveBeenCalled();
+    expect(dbMocks.db.batch.mock.calls[0][0]).toHaveLength(3);
     const inserted = dbMocks.insertChain.values.mock.calls[0][0];
     expect(inserted.is_public).toBe(true);
     expect(inserted.seo_title).toBe('Imported SEO Title');
     expect(inserted.seo_description).toBe('Imported SEO Description');
     expect(inserted.rules).toContain('required-field');
+  });
+
+  it('exports portable template packs for paid team workspaces', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'editor', status: 'active' },
+    ]).mockResolvedValue([]);
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        title: 'Team Template',
+        description: '',
+        items: JSON.stringify([{ id: 's-1', title: 'Checklist', items: [{ id: 'i-1', title: 'Item' }] }]),
+        category: '["ops"]',
+        tags: '["team"]',
+        user_id: 'creator-1',
+        owner_type: 'team',
+        team_id: 'team-1',
+        is_public: 0,
+        slug: 'team-template',
+        created_at: new Date().toISOString(),
+        updated_at: null,
+        version: 1,
+      },
+    ]);
+
+    const request = new Request('http://localhost/api/templates/backup?teamId=team-1', { method: 'GET' });
+    const response = await handleTemplates(request, mockEnv as never);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(getEntitlementsForContext)).toHaveBeenCalledWith(
+      mockEnv,
+      expect.objectContaining({ type: 'team', teamId: 'team-1', userId: 'user-123' }),
+    );
+    expect(data.kind).toBe('serplists-template-pack');
+    expect(data.templates[0].title).toBe('Team Template');
+  });
+
+  it('imports portable template packs into paid team workspaces', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'editor', status: 'active' },
+    ]).mockResolvedValue([]);
+
+    const request = new Request('http://localhost/api/templates/backup?teamId=team-1', {
+      method: 'POST',
+      body: JSON.stringify({
+        kind: 'serplists-template-pack',
+        schemaVersion: '2.0.0',
+        exportedAt: '2026-03-21T00:00:00.000Z',
+        templates: [
+          {
+            title: 'Imported Team Template',
+            visibility: 'private',
+            sections: [{ title: 'Checklist', items: [{ title: 'Item' }] }],
+          },
+        ],
+      }),
+    });
+
+    const response = await handleTemplates(request, mockEnv as never);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.imported).toBe(1);
+
+    expect(dbMocks.db.batch).toHaveBeenCalled();
+    expect(dbMocks.db.batch.mock.calls[0][0]).toHaveLength(3);
+    const inserted = dbMocks.insertChain.values.mock.calls[0][0];
+    expect(inserted.owner_type).toBe('team');
+    expect(inserted.team_id).toBe('team-1');
+    expect(inserted.created_by_user_id).toBe('user-123');
   });
 
   it('rejects unsupported portable schema versions', async () => {

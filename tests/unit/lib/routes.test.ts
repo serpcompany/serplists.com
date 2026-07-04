@@ -5,10 +5,11 @@ import {
   REPO_TEMPLATE_USER_ID,
 } from '@/lib/repoTemplateCatalog';
 import {
+  LEGACY_ACCOUNT_PATH,
+  LEGACY_CONSOLE_PROFILE_PATH,
   buildCategorySlug,
   buildCanonicalPublicTemplatePath,
   buildConsoleHomePath,
-  buildConsoleProfilePath,
   buildConsoleRunPath,
   buildConsoleRunsPath,
   buildConsoleSettingsPath,
@@ -81,7 +82,8 @@ describe('routes', () => {
       'https://serplists.com/run/run-1',
     );
     expect(buildConsoleSettingsPath()).toBe('/dashboard/settings');
-    expect(buildConsoleProfilePath()).toBe('/dashboard/profile');
+    expect(LEGACY_ACCOUNT_PATH).toBe('/account');
+    expect(LEGACY_CONSOLE_PROFILE_PATH).toBe('/dashboard/profile');
   });
 
   it('flags template editor routes that should render on a blank workspace shell', () => {

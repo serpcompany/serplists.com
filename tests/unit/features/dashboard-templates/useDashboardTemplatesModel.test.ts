@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
 import { Layout } from '@/components/Layout';
@@ -31,6 +32,28 @@ const authState = vi.hoisted(() => ({
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => authState,
+}));
+
+vi.mock('@/contexts/WorkspaceContext', () => ({
+  useWorkspace: () => ({
+    activeTeamId: undefined,
+    activeWorkspace: {
+      id: 'personal',
+      name: 'Personal',
+      role: 'owner',
+      type: 'personal',
+    },
+    isWorkspaceLoading: false,
+    selectWorkspace: vi.fn(),
+    workspaces: [
+      {
+        id: 'personal',
+        name: 'Personal',
+        role: 'owner',
+        type: 'personal',
+      },
+    ],
+  }),
 }));
 
 const buildTemplate = (
@@ -65,7 +88,7 @@ afterEach(() => {
 });
 
 describe('signed-in layout navigation', () => {
-  it('shows canonical dashboard, templates, and runs destinations for authenticated users', () => {
+  it('shows canonical dashboard, templates, runs, and settings destinations for authenticated users', () => {
     authState.user = {
       id: 'user-1',
       name: 'Alice Example',
@@ -75,8 +98,8 @@ describe('signed-in layout navigation', () => {
 
     const html = renderToStaticMarkup(
       React.createElement(
-        MemoryRouter,
-        { initialEntries: ['/dashboard/templates'] },
+        StaticRouter,
+        { location: '/dashboard/templates' },
         React.createElement(
           Routes,
           null,
@@ -94,8 +117,8 @@ describe('signed-in layout navigation', () => {
 
     expect(html).toContain('href="/dashboard/templates"');
     expect(html).toContain('href="/dashboard/runs"');
-    expect(html).toContain('href="/dashboard/profile"');
     expect(html).toContain('href="/dashboard/settings"');
+    expect(html).not.toContain('href="/dashboard/profile"');
     expect(html).not.toContain('href="/console"');
     expect(html).not.toContain('href="/console/templates"');
     expect(html).not.toContain('href="/console/runs"');

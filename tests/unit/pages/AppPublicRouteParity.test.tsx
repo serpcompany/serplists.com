@@ -10,13 +10,15 @@ const mockUseTemplateLibrary = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual =
     await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  const { StaticRouter } =
+    await vi.importActual<typeof import('react-router-dom/server')>(
+      'react-router-dom/server',
+    );
 
   return {
     ...actual,
     BrowserRouter: ({ children }: { children: React.ReactNode }) => (
-      <actual.MemoryRouter initialEntries={[currentPath]}>
-        {children}
-      </actual.MemoryRouter>
+      <StaticRouter location={currentPath}>{children}</StaticRouter>
     ),
   };
 });
@@ -38,6 +40,28 @@ vi.mock('@/contexts/TemplatesContext', () => ({
   useTemplates: () => ({
     templates: [],
     templatesLoading: false,
+  }),
+}));
+
+vi.mock('@/contexts/WorkspaceContext', () => ({
+  WorkspaceProvider: ({ children }: { children: React.ReactNode }) => children,
+  useWorkspace: () => ({
+    activeWorkspace: {
+      id: 'personal',
+      name: 'Personal',
+      role: 'owner',
+      type: 'personal',
+    },
+    isWorkspaceLoading: false,
+    selectWorkspace: vi.fn(),
+    workspaces: [
+      {
+        id: 'personal',
+        name: 'Personal',
+        role: 'owner',
+        type: 'personal',
+      },
+    ],
   }),
 }));
 

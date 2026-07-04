@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Dashboard from '@/pages/Dashboard';
@@ -169,11 +170,11 @@ describe('/dashboard/runs presentation', () => {
     });
 
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/dashboard/runs']}>
+      <StaticRouter location="/dashboard/runs">
         <Routes>
           <Route path="*" element={<Dashboard />} />
         </Routes>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('My Runs');
@@ -214,11 +215,11 @@ describe('/dashboard/runs presentation', () => {
     });
 
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/dashboard/runs']}>
+      <StaticRouter location="/dashboard/runs">
         <Routes>
           <Route path="*" element={<Dashboard />} />
         </Routes>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('My Runs');

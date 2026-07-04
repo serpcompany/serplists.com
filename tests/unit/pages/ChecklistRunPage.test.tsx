@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import ChecklistRunPage from '@/pages/ChecklistRun';
@@ -61,6 +62,22 @@ describe('ChecklistRunPage layout', () => {
     mockUseRunExecutionModel.mockReturnValue({
       counts: { completed: 2, total: 9 },
       createShare: vi.fn(),
+      history: {
+        data: {
+          checklistId: 'run-1',
+          events: [
+            {
+              id: 'audit-1',
+              action: 'checklist_run.created',
+              actor: { name: 'Jane Runner' },
+              createdAt: '2026-07-03T12:00:00.000Z',
+            },
+          ],
+          subject: { type: 'user', id: 'user-1' },
+        },
+        isError: false,
+        isLoading: false,
+      },
       isSharedRun: false,
       loadError: null,
       loading: false,
@@ -80,11 +97,11 @@ describe('ChecklistRunPage layout', () => {
     });
 
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/dashboard/runs/run-1']}>
+      <StaticRouter location="/dashboard/runs/run-1">
         <Routes>
           <Route path="/dashboard/runs/:id" element={<ChecklistRunPage />} />
         </Routes>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('Progress');
@@ -94,6 +111,9 @@ describe('ChecklistRunPage layout', () => {
     expect(html).toContain('data-mobile-run-progress="true"');
     expect(html).toContain('data-run-progress-panel="true"');
     expect(html).toContain('Overall Progress');
+    expect(html).toContain('Changelog');
+    expect(html).toContain('Created run');
+    expect(html).toContain('Jane Runner');
     expect(html).toContain('Share');
     expect(html).toContain('Task 1 of 1');
     expect(html).toContain('Mark Complete');
@@ -108,6 +128,11 @@ describe('ChecklistRunPage layout', () => {
     mockUseRunExecutionModel.mockReturnValue({
       counts: { completed: 2, total: 7 },
       createShare: vi.fn(),
+      history: {
+        data: null,
+        isError: false,
+        isLoading: false,
+      },
       isSharedRun: true,
       loadError: null,
       loading: false,
@@ -130,11 +155,11 @@ describe('ChecklistRunPage layout', () => {
     });
 
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/share/abc123']}>
+      <StaticRouter location="/share/abc123">
         <Routes>
           <Route path="/share/:shareToken" element={<ChecklistRunPage />} />
         </Routes>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('Copy Link');
@@ -147,5 +172,6 @@ describe('ChecklistRunPage layout', () => {
     expect(html).not.toContain('rounded-xl');
     expect(html).not.toContain('Creating link...');
     expect(html).not.toContain('Overall Progress');
+    expect(html).not.toContain('Changelog');
   });
 });

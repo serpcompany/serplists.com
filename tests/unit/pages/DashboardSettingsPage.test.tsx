@@ -1,7 +1,7 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import DashboardSettings from '@/pages/DashboardSettings';
@@ -19,6 +19,22 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
       username: 'johndoe',
     },
     refreshProfile,
+  }),
+}));
+
+vi.mock('@/contexts/WorkspaceContext', () => ({
+  useWorkspace: () => ({
+    activeTeamId: undefined,
+    activeWorkspace: {
+      id: 'personal',
+      name: 'Personal',
+      role: 'owner',
+      type: 'personal',
+    },
+    canManageTeam: false,
+    createTeam: vi.fn(),
+    isTeamWorkspace: false,
+    refreshTeams: vi.fn(),
   }),
 }));
 
@@ -58,11 +74,11 @@ describe('DashboardSettings page', () => {
       defaultOptions: { queries: { retry: false } },
     });
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/dashboard/settings']}>
+      <StaticRouter location="/dashboard/settings">
         <QueryClientProvider client={queryClient}>
           <DashboardSettings />
         </QueryClientProvider>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('Account Settings');

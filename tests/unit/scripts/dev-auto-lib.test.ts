@@ -45,8 +45,10 @@ describe("buildDevAutoConfig", () => {
       apiPort: 8789,
       frontendUrl: "http://localhost:8081",
       apiUrl: "http://localhost:8789/api",
+      betterAuthSecret: "local-dev-better-auth-secret-32-chars",
       corsAllowedOrigins: "http://localhost:8080,http://localhost:8081",
       envOverrides: {
+        BETTER_AUTH_SECRET: "local-dev-better-auth-secret-32-chars",
         FRONTEND_URL: "http://localhost:8081",
         CORS_ALLOWED_ORIGINS: "http://localhost:8080,http://localhost:8081",
         PORT: "8081",

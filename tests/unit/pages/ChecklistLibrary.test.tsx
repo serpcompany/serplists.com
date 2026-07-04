@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import ChecklistLibrary from '@/pages/ChecklistLibrary';
@@ -68,9 +69,9 @@ describe('ChecklistLibrary route behavior', () => {
     });
 
     const markup = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/templates']}>
+      <StaticRouter location="/templates">
         <ChecklistLibrary />
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(markup).toContain('Discover Templates');
@@ -165,9 +166,9 @@ describe('ChecklistLibrary route behavior', () => {
     });
 
     const markup = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/categories']}>
+      <StaticRouter location="/categories">
         <Categories />
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(markup).toContain('Browse Categories');
@@ -199,11 +200,11 @@ describe('ChecklistLibrary route behavior', () => {
     });
 
     const markup = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/categories/business-operations']}>
+      <StaticRouter location="/categories/business-operations">
         <Routes>
           <Route path="/categories/:categorySlug" element={<CategoryDetail />} />
         </Routes>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(markup).toContain('All Categories');
@@ -235,11 +236,11 @@ describe('ChecklistLibrary route behavior', () => {
     });
 
     const markup = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/categories/not-a-real-category']}>
+      <StaticRouter location="/categories/not-a-real-category">
         <Routes>
           <Route path="/categories/:categorySlug" element={<CategoryDetail />} />
         </Routes>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(markup).toContain('That page does not exist');

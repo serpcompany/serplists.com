@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import Login from '@/pages/Login';
@@ -31,9 +31,9 @@ vi.mock('sonner', () => ({
 describe('Login page', () => {
   it('uses the feature-wired sign-in surface without dead auth affordances', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter>
+      <StaticRouter location="/">
         <Login />
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('Welcome back');
