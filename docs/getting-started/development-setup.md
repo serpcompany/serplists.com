@@ -1,7 +1,8 @@
 # Development
 
 ## Requirements
-- Node.js and pnpm
+- Node.js 22
+- pnpm 9
 - Wrangler (via `npx wrangler` or the dev dependency)
 
 ## Environment
@@ -47,11 +48,12 @@ pnpm run dev:all    # Runs both in parallel
 pnpm run db:migrate:d1:local
 pnpm run db:seed
 pnpm run db:reset
+pnpm run db:migrations:list:local
 pnpm run db:reset:test-user-passwords
 pnpm run db:query "SELECT * FROM templates LIMIT 5"
 ```
 
-Local D1 state lives under `.wrangler/state/...`. The `db:seed` script seeds local test users plus the official `serp` publisher/templates. The `db:reset` script clears local state, applies tracked D1 migrations through Wrangler, and then runs those same local seeds.
+Local D1 state lives under `.wrangler/state/...`. The `db:seed` script seeds local test users, sample team data, pending team invites, team entitlement overrides, audit rows, and the official `serp` publisher/templates. The `db:reset` script clears local state, applies tracked D1 migrations through Wrangler, and then runs those same local seeds.
 
 Drizzle schema lives in `db/schema/` (entry: `db/schema/index.ts`); Drizzle Kit config in `db/drizzle.config.ts`.
 
@@ -59,6 +61,34 @@ The official local publisher seed creates:
 - username `serp`
 - display name `SERP`
 - a small set of official public templates owned by that account
+
+The local team seed creates data for verifying:
+- workspace switching
+- team membership display
+- pending incoming invites
+- invite acceptance
+- team entitlement behavior
+- team audit/activity history
+
+## Remote database commands
+Use the staging/preview database before production. Preview deployments must not point to production D1.
+
+```bash
+pnpm run verify:staging
+pnpm run db:migrate:d1:staging
+pnpm run db:seed:official:staging
+pnpm run check:staging:d1-schema
+```
+
+Production commands:
+
+```bash
+pnpm run verify:prod:d1
+pnpm run db:migrate:d1:prod
+pnpm run check:prod:d1-schema
+```
+
+See [Database environments](../operations/database-environments.md) before changing remote D1 configuration or applying production migrations.
 
 ## Dev login (local dummy users)
 In development mode (`import.meta.env.DEV`), two helpers are available:
@@ -85,6 +115,19 @@ pnpm run db:reset:test-user-passwords
 If login fails, verify:
 1. `pnpm run dev:api` is running on port 8788
 2. `pnpm run db:seed` or `pnpm run db:reset` has been executed
+3. the browser is talking to `http://localhost:8788/api` or the intended `VITE_API_URL`
+
+## Team flow verification
+Use `/dashboard/settings` for team creation, team management, and incoming invites.
+
+Useful local flow:
+
+1. Log in with `admin@test.com` and create a team from `/dashboard/settings`.
+2. Create a link invite for another seeded or newly registered email.
+3. Log out or use a separate browser context.
+4. Register or log in as the invitee.
+5. Accept from `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
+6. Confirm the workspace switcher shows the accepted team and that personal workspace data remains separate.
 
 ## Testing and checks
 Install Playwright browsers once before running e2e/smoke tests:
@@ -103,6 +146,15 @@ pnpm run test:e2e:ui
 pnpm run typecheck
 pnpm run typecheck:env
 pnpm run lint
+pnpm run secret:scan
+pnpm run verify:release
+```
+
+The smoke suite includes route/auth/team coverage. Team-specific Playwright specs live in:
+
+```bash
+pnpm run test:e2e -- tests/e2e/team-workspace.spec.ts
+pnpm run test:e2e -- tests/e2e/team-invite-flow.spec.ts
 ```
 
 ## Git hooks

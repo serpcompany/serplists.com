@@ -72,6 +72,12 @@ pnpm run check:prod:d1-schema
 Wrangler records applied migrations in `d1_migrations` and applies only pending
 migrations.
 
+Seed policy:
+
+- Local: `pnpm run db:seed` includes test users, team fixtures, team invites, team entitlement overrides, audit fixtures, and official templates.
+- Staging: use `pnpm run db:seed:official:staging` for official templates only unless there is a deliberate test-data plan.
+- Production: do not seed test users or team fixtures.
+
 ## Non-Destructive Release Checks
 
 Use these before promoting a branch. They verify bindings, list migration
@@ -116,6 +122,7 @@ outside Wrangler migrations. Fresh staging databases do not need a baseline.
 3. Run `pnpm run db:migrate:d1:staging` only when pending migrations are expected.
 4. Run `pnpm run check:staging:d1-schema`.
 5. Deploy a preview branch and verify new data lands in staging, not production.
+6. Exercise a team create/invite/accept flow in preview before promoting team-related changes.
 
 ## Production Safety
 
@@ -128,3 +135,5 @@ npx wrangler d1 export serp-checklists-db --remote --output ./tmp/backups/serp-c
 - Never use ad hoc `wrangler d1 execute serp-checklists-db --remote --file=...`
   for schema changes. Use `pnpm run db:migrate:d1:prod` so D1 records the migration.
 - Keep preview and production Pages secrets separate in Cloudflare.
+- Run `pnpm run verify:prod:d1` before promoting staging to production.
+- Confirm team audit/history tables exist before deploying code that writes team or template history.

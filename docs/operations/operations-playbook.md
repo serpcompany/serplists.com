@@ -13,13 +13,34 @@ pnpm run verify:release
 ```
 This runs lint, typecheck, unit/integration tests, and Playwright smoke checks.
 
-### Automated deploy (GitHub Actions)
-Pushes/merges to `main` trigger `cloudflare-pages-deploy.yml`, which:
+Remote D1 readiness is separate because it needs Cloudflare credentials:
+
+```bash
+pnpm run verify:staging
+pnpm run verify:prod:d1
+```
+
+### CI and automated deploy (GitHub Actions)
+`ci.yml` runs on pull requests and pushes to `main` or `staging`:
+
+- frozen install
+- env contract validation
+- lint
+- typecheck
+- unit/integration tests
+- build
+- Playwright Chromium install
+- smoke tests
+
+`cloudflare-pages-deploy.yml` runs on pushes to `main` or `staging`:
 
 - validates env
-- verifies the live production D1 schema with `pnpm run check:prod:d1-schema`
+- verifies production D1 readiness with `pnpm run verify:prod:d1` for `main`
+- verifies preview/staging D1 readiness with `pnpm run verify:staging` for non-main branches
 - builds with `pnpm run build`
-- deploys `dist` to Cloudflare Pages
+- deploys `dist` to Cloudflare Pages with the current branch name
+
+Preview deployments use the D1 `preview_database_id`. Production deployments use the production D1 database id.
 
 Required GitHub secrets:
 - `CLOUDFLARE_ACCOUNT_ID`
@@ -64,6 +85,8 @@ The binding name is always `DB`.
 
 - Local/prod database name: `serp-checklists-db`
 - Staging/preview database name: `serp-checklists-staging-db`
+- Production database UUID in `wrangler.toml`: `b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1`
+- Staging preview database UUID in `wrangler.toml`: `fcaf4325-5be7-4ead-ab60-45932a04177b`
 
 Use Wrangler D1 migrations instead of ad hoc remote `wrangler d1 execute` commands for schema changes:
 
@@ -73,6 +96,7 @@ pnpm run db:migrations:list:local
 pnpm run db:migrate:d1:local
 pnpm run db:migrations:list:staging
 pnpm run db:migrate:d1:staging
+pnpm run db:seed:official:staging
 pnpm run db:migrations:list:prod
 pnpm run db:migrate:d1:prod
 ```
@@ -91,6 +115,7 @@ Preview deployments should not be enabled against production data. Create
 
 ```bash
 pnpm run check:preview:d1-binding
+pnpm run verify:staging
 pnpm run db:migrate:d1:staging
 pnpm run check:staging:d1-schema
 ```
@@ -107,6 +132,7 @@ pnpm run db:migrate
 
 Production schema gate:
 ```bash
+pnpm run verify:prod:d1
 pnpm run check:prod:d1-schema
 ```
 
