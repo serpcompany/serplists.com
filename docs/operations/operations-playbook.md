@@ -46,7 +46,12 @@ Required GitHub secrets:
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_EMAIL`
 - `CLOUDFLARE_API_KEY`
-- `CLOUDFLARE_PAGES_PROJECT`
+
+Cloudflare Pages project:
+- Project name: `serplists-com`
+- Domains: `serp-checklists.pages.dev`, `serplists.com`, `staging.serplists.com`
+
+The Pages project name is not secret and is set directly in `.github/workflows/cloudflare-pages-deploy.yml`. Do not use the `serp-checklists.pages.dev` domain or `wrangler.toml` `name` as the `wrangler pages deploy --project-name` value.
 
 ## Secrets and environment
 Set these in Cloudflare Pages (production) or `.dev.vars` (local):

@@ -21,6 +21,9 @@ jobs:
       # placeholder so `pnpm run typecheck:env` can validate the contract
       # without duplicating the production secret into GitHub Actions.
       BETTER_AUTH_SECRET: ci-build-placeholder-secret-32-chars-minimum
+      # Cloudflare Pages project names are not secrets. This must be the Pages
+      # Project Name, not the pages.dev domain or the wrangler.toml `name`.
+      CLOUDFLARE_PAGES_PROJECT: serplists-com
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -66,5 +69,4 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
           CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
-          CLOUDFLARE_PAGES_PROJECT: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
         run: npx wrangler pages deploy ./dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch "$GITHUB_REF_NAME" --commit-hash "$GITHUB_SHA"
