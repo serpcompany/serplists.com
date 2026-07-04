@@ -27,16 +27,18 @@ of deploy history, make it idempotent, numbered, and name it clearly.
 npx wrangler d1 create serp-checklists-staging-db
 ```
 
-Paste the returned database UUID into the `preview_database_id` field in
-`wrangler.toml`. The current staging database UUID is already configured there.
+Paste the returned database UUID into both staging fields in `wrangler.toml`:
+
+- top-level `preview_database_id`, used by Wrangler `--preview` D1 commands
+- `[[env.preview.d1_databases]].database_id`, used by Cloudflare Pages preview deployments
 
 Cloudflare Pages supports only `production` and `preview` environment overrides
 in `wrangler.toml`, so this one staging database is the shared DB for all preview
 deployments.
 
 The Pages deploy workflow runs `pnpm run check:preview:d1-binding` for non-main
-branches and will fail preview/staging deploys until `preview_database_id` is set
-to a UUID that differs from production.
+branches and will fail preview/staging deploys until both preview D1 fields are
+set to the same staging UUID and that UUID differs from production.
 
 Staging DB commands intentionally target the `DB` binding with Wrangler's
 `--preview` flag. Do not change them back to the staging database name directly;
@@ -117,7 +119,7 @@ outside Wrangler migrations. Fresh staging databases do not need a baseline.
 
 ## Preview Deployment Checklist
 
-1. Confirm `wrangler.toml` has a `preview_database_id` that differs from production.
+1. Confirm `wrangler.toml` has both `preview_database_id` and `[[env.preview.d1_databases]].database_id` pointing at staging, not production.
 2. Run `pnpm run verify:staging`.
 3. Run `pnpm run db:migrate:d1:staging` only when pending migrations are expected.
 4. Run `pnpm run check:staging:d1-schema`.

@@ -40,7 +40,9 @@ pnpm run verify:prod:d1
 - builds with `pnpm run build`
 - deploys `dist` to Cloudflare Pages with the current branch name
 
-Preview deployments use the D1 `preview_database_id`. Production deployments use the production D1 database id.
+Preview deployments use the `[[env.preview.d1_databases]]` D1 binding, which
+must match the top-level `preview_database_id`. Production deployments use the
+production D1 database id.
 
 Required GitHub secrets:
 - `CLOUDFLARE_ACCOUNT_ID`
