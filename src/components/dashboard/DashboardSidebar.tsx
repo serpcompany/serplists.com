@@ -7,13 +7,11 @@ import {
   Play,
   PlusCircle,
   Settings,
-  User,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
-  buildConsoleProfilePath,
   buildConsoleRunsPath,
   buildConsoleSettingsPath,
   buildConsoleTemplateCreatePath,
@@ -43,11 +41,6 @@ const navItems = [
 ];
 
 const secondaryNavItems = [
-  {
-    href: buildConsoleProfilePath(),
-    icon: User,
-    label: 'Profile',
-  },
   {
     href: buildConsoleSettingsPath(),
     icon: Settings,
