@@ -138,6 +138,141 @@ test("@smoke API-backed public template single renders", async ({ page }) => {
   await expect(page.getByText("Check robots.txt and meta robots")).toBeVisible();
 });
 
+test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
+  const description =
+    "First URL instruction line\nSecond URL instruction line\\nThird URL instruction line";
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+
+    if (path === "/api/auth/get-session" && request.method() === "GET") {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          session: {
+            id: "session-run-lines",
+            createdAt: "2026-07-04T00:00:00.000Z",
+            expiresAt: "2026-07-11T00:00:00.000Z",
+            token: "session-token-run-lines",
+            updatedAt: "2026-07-04T00:00:00.000Z",
+            userId: "user-run-lines",
+          },
+          user: {
+            id: "user-run-lines",
+            email: "run-lines@example.com",
+            emailVerified: true,
+            name: "Run Lines",
+            username: "runlines",
+          },
+        }),
+      });
+      return;
+    }
+
+    if (path === "/api/teams" && request.method() === "GET") {
+      await route.fulfill({ contentType: "application/json", body: "[]" });
+      return;
+    }
+
+    if (path === "/api/teams/invites/pending" && request.method() === "GET") {
+      await route.fulfill({ contentType: "application/json", body: "[]" });
+      return;
+    }
+
+    if (path === "/api/billing/status" && request.method() === "GET") {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ billingEnabled: true, plan: "free" }),
+      });
+      return;
+    }
+
+    if (path === "/api/templates" && request.method() === "GET") {
+      await route.fulfill({ contentType: "application/json", body: "[]" });
+      return;
+    }
+
+    if (path === "/api/checklists" && request.method() === "GET") {
+      await route.fulfill({ contentType: "application/json", body: "[]" });
+      return;
+    }
+
+    if (
+      path === "/api/checklists/run-line-breaks/history" &&
+      request.method() === "GET"
+    ) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          checklistId: "run-line-breaks",
+          events: [],
+          subject: { id: "user-run-lines", type: "user" },
+        }),
+      });
+      return;
+    }
+
+    if (path === "/api/checklists/run-line-breaks" && request.method() === "GET") {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "run-line-breaks",
+          template_id: "template-line-breaks",
+          title: "Run Line Break Verification",
+          status: "in_progress",
+          sections: [
+            {
+              id: "section-1",
+              title: "Crawl Prep",
+              items: [
+                {
+                  id: "item-1",
+                  title: "Create a .txt file of URLs",
+                  description,
+                  isCompleted: false,
+                  contents: [],
+                },
+              ],
+            },
+          ],
+          started_at: "2026-07-04T00:00:00.000Z",
+          user_id: "user-run-lines",
+          template_version: 1,
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ error: `Unexpected API route in smoke test: ${path}` }),
+      status: 404,
+    });
+  });
+
+  await page.goto("/dashboard/runs/run-line-breaks");
+
+  await expect(
+    page.getByRole("heading", { name: "Create a .txt file of URLs" }),
+  ).toBeVisible();
+
+  const renderedDescription = page
+    .locator("p.whitespace-pre-line")
+    .filter({ hasText: "First URL instruction line" })
+    .first();
+  await expect(renderedDescription).toBeVisible();
+  await expect(renderedDescription).toContainText("Second URL instruction line");
+  await expect(renderedDescription).toContainText("Third URL instruction line");
+
+  const whiteSpace = await renderedDescription.evaluate(
+    (node) => getComputedStyle(node).whiteSpace,
+  );
+  expect(whiteSpace).toBe("pre-line");
+  await expect(page.getByRole("button", { name: "More options" })).toHaveCount(0);
+});
+
 [
   "/templates",
   "/pricing",

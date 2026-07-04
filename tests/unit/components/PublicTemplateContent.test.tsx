@@ -17,7 +17,8 @@ describe('PublicTemplateContent', () => {
               {
                 id: 'item-1',
                 title: 'Review the steps',
-                description: 'First description line\nSecond description line',
+                description:
+                  'First description line\nSecond description line\\nThird description line',
                 contents: [
                   {
                     id: 'content-1',
@@ -34,11 +35,10 @@ describe('PublicTemplateContent', () => {
 
     expect(markup).toContain('whitespace-pre-line');
     expect(markup).toContain(
-      'First description line\nSecond description line',
+      'First description line\nSecond description line\nThird description line',
     );
     expect(markup).toContain(
       'First content line\nSecond content line\nThird content line',
     );
   });
 });
-

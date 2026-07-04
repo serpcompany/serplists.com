@@ -76,7 +76,8 @@ describe('PublicTemplateView', () => {
         <PublicTemplateView
           template={{
             ...template,
-            description: 'Template description line one\nTemplate description line two',
+            description:
+              'Template description line one\nTemplate description line two\\nTemplate description line three',
             sections: [
               {
                 id: 'section-1',
@@ -85,7 +86,7 @@ describe('PublicTemplateView', () => {
                   {
                     id: 'item-1',
                     title: 'Set the budget and guest count',
-                    description: 'Task line one\nTask line two',
+                    description: 'Task line one\nTask line two\\nTask line three',
                     contents: [],
                   },
                 ],
@@ -108,8 +109,8 @@ describe('PublicTemplateView', () => {
 
     expect(html).toContain('whitespace-pre-line');
     expect(html).toContain(
-      'Template description line one\nTemplate description line two',
+      'Template description line one\nTemplate description line two\nTemplate description line three',
     );
-    expect(html).toContain('Task line one\nTask line two');
+    expect(html).toContain('Task line one\nTask line two\nTask line three');
   });
 });

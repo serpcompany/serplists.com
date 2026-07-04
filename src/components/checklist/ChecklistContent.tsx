@@ -2,6 +2,7 @@ import React from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CheckCircle } from 'lucide-react';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
+import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import { ChecklistItem, ChecklistSection } from '@/types/checklist';
 
 interface ChecklistContentProps {
@@ -50,8 +51,8 @@ export const ChecklistContent: React.FC<ChecklistContentProps> = ({
           </div>
         </div>
         {selectedData.item.description && (
-          <p className="text-muted-foreground">
-            {selectedData.item.description}
+          <p className="whitespace-pre-line text-muted-foreground">
+            {normalizeDisplayText(selectedData.item.description)}
           </p>
         )}
       </div>

@@ -10,7 +10,6 @@ import {
   History,
   Loader2,
   ListChecks,
-  MoreHorizontal,
   Share2,
 } from 'lucide-react';
 
@@ -45,6 +44,7 @@ import {
   buildConsoleRunsPath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
+import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { TemplateHistoryEvent } from '@/lib/api';
 
 const runHistoryActionLabels: Record<string, string> = {
@@ -381,9 +381,6 @@ const ChecklistRunPage = () => {
         <Share2 className="mr-2 h-4 w-4" />
         {isCreatingShare ? 'Creating link...' : 'Share'}
       </Button>
-      <Button variant="ghost" size="icon" aria-label="More options">
-        <MoreHorizontal className="h-4 w-4" />
-      </Button>
     </>
   );
   const privateRunTitle = isEditingTitle ? (
@@ -521,8 +518,8 @@ const ChecklistRunPage = () => {
                               {item.title}
                             </h3>
                             {item.description ? (
-                              <p className="mt-2 text-sm text-muted-foreground">
-                                {item.description}
+                              <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
+                                {normalizeDisplayText(item.description)}
                               </p>
                             ) : null}
                           </div>
