@@ -58,6 +58,7 @@ export type ChecklistTemplate = {
     full_name?: string;
     username?: string;
   };
+  teamId?: string;
 };
 
 export type TemplateSavePayload = {
@@ -87,6 +88,7 @@ export type ChecklistRun = {
   completedAt?: string;
   userId: string;
   templateVersion?: number;
+  teamId?: string;
 };
 
 export type TemplateImportOptions = {

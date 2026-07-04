@@ -3,7 +3,7 @@ import { getApiEnv } from './env';
 import { applyCorsHeaders, buildCorsPreflightResponse } from './utils/cors';
 import { getClientIp, log } from './utils/logger';
 import { checkRateLimit } from './utils/rate-limit';
-import { createBetterAuth } from './better-auth';
+import { createBetterAuth, getAuthEmailPolicy } from './better-auth';
 import { isBodyWithinLimit } from './utils/body';
 import { 
   handleProfileByUsername, 
@@ -15,6 +15,7 @@ import { handleUploads } from './handlers/uploads';
 import { handleStripe } from './handlers/stripe';
 import { handleBilling } from './handlers/billing';
 import { handleAdmin } from './handlers/admin';
+import { handleTeams } from './handlers/teams';
 import { jsonError } from './utils/response';
 
 const blockedTestEmailDomains = new Set(['serplists.dev', 'serp-checklists.dev']);
@@ -43,9 +44,12 @@ function isAuthEmailConfigured(env: Env): boolean {
   return Boolean(env.RESEND_API_KEY || env.USESEND_API_KEY);
 }
 
-function requiresAuthEmailProvider(path: string): boolean {
+function requiresConfiguredAuthEmail(path: string, isProdRequest: boolean): boolean {
+  if (path === 'auth/sign-up/email') {
+    return isProdRequest;
+  }
+
   return (
-    path === 'auth/sign-up/email' ||
     path === 'auth/request-password-reset' ||
     path === 'auth/send-verification-email'
   );
@@ -72,10 +76,13 @@ async function handleCORS(context: { request: Request; env: Env }): Promise<Resp
 }
 
 async function handleRequest(context: { request: Request; env: Env }): Promise<Response> {
-  const { request, env } = context;
+  const { env } = context;
+  const requestId = crypto.randomUUID();
+  const requestHeaders = new Headers(context.request.headers);
+  requestHeaders.set('X-Request-Id', requestId);
+  const request = new Request(context.request, { headers: requestHeaders });
   const url = new URL(request.url);
   const path = url.pathname.replace('/api/', '');
-  const requestId = crypto.randomUUID();
   const startMs = Date.now();
   const ip = getClientIp(request);
 
@@ -134,7 +141,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       const isAuth = path.startsWith('auth/');
       const isSensitiveWrite =
         (request.method === 'POST' || request.method === 'PUT' || request.method === 'DELETE') &&
-        (path.startsWith('templates') || path.startsWith('checklists') || path.startsWith('uploads'));
+        (path.startsWith('templates') || path.startsWith('checklists') || path.startsWith('uploads') || path.startsWith('teams'));
 
       if (isAuth) {
         const limit = isLocalRequest(url)
@@ -162,9 +169,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       });
     } else if (path === 'auth/status' && request.method === 'GET') {
       response = new Response(
-        JSON.stringify({
-          emailAuthAvailable: isAuthEmailConfigured(env),
-        }),
+        JSON.stringify(getAuthEmailPolicy(env, request)),
         {
           headers: { 'Content-Type': 'application/json' },
         }
@@ -199,7 +204,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         }
       }
 
-      if (requiresAuthEmailProvider(path) && !isAuthEmailConfigured(env)) {
+      if (requiresConfiguredAuthEmail(path, isProdRequest) && !isAuthEmailConfigured(env)) {
         response = jsonError('Auth email is temporarily unavailable. Please contact support.', 503, {
           code: 'auth_email_unavailable',
         });
@@ -219,6 +224,8 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       response = await handleTemplates(request, env);
     } else if (path.startsWith('checklists')) {
       response = await handleChecklists(request, env);
+    } else if (path.startsWith('teams')) {
+      response = await handleTeams(request, env);
     } else if (path.startsWith('uploads')) {
       response = await handleUploads(request, env);
     } else if (path.startsWith('stripe')) {

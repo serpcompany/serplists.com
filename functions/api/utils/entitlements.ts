@@ -3,10 +3,22 @@ import { createDb, schema } from "../db";
 import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { getStripeBillingConfig } from "./stripe";
 
-export type Plan = "free" | "pro";
+export type Plan = "free" | "pro" | "team";
+
+export type EntitlementContext =
+  | { type: "user"; userId: string }
+  | { type: "team"; teamId: string; userId?: string };
+
+export type EntitlementSource =
+  | "free"
+  | "user_override"
+  | "team_override"
+  | "user_subscription"
+  | "dev_test_user";
 
 export type Entitlements = {
   plan: Plan;
+  source?: EntitlementSource;
   limits: {
     maxTemplates: number | null;
     maxActiveRuns: number | null;
@@ -21,7 +33,33 @@ function isProSubscriptionStatus(status: string): boolean {
 
 function isMissingOptionalBillingTableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /no such table: (entitlement_overrides|stripe_subscriptions)/i.test(message);
+  return /no such table: (entitlement_overrides|team_entitlement_overrides|stripe_subscriptions)/i.test(message);
+}
+
+function freeEntitlements(): Entitlements {
+  return {
+    plan: "free",
+    source: "free",
+    limits: { maxTemplates: 1, maxActiveRuns: 3 },
+  };
+}
+
+function paidEntitlements(plan: "pro" | "team", source: EntitlementSource): Entitlements {
+  return {
+    plan,
+    source,
+    limits: { maxTemplates: null, maxActiveRuns: null },
+  };
+}
+
+function userOverrideEntitlements(plan: string): Entitlements {
+  return plan === "pro" ? paidEntitlements("pro", "user_override") : freeEntitlements();
+}
+
+function teamOverrideEntitlements(plan: string): Entitlements {
+  if (plan === "team") return paidEntitlements("team", "team_override");
+  if (plan === "pro") return paidEntitlements("team", "team_override");
+  return freeEntitlements();
 }
 
 export async function getEntitlementsForUser(env: Env, userId: string): Promise<Entitlements> {
@@ -50,10 +88,7 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
   }
 
   if (override) {
-    const plan = override.plan === "pro" ? "pro" : "free";
-    return plan === "pro"
-      ? { plan, limits: { maxTemplates: null, maxActiveRuns: null } }
-      : { plan, limits: { maxTemplates: 1, maxActiveRuns: 3 } };
+    return userOverrideEntitlements(override.plan);
   }
 
   // Keep local seeded personas aligned with their visible labels before a reseed.
@@ -64,14 +99,11 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
     .limit(1);
 
   if (user?.email && devProTestEmails.has(user.email.toLowerCase())) {
-    return { plan: "pro", limits: { maxTemplates: null, maxActiveRuns: null } };
+    return paidEntitlements("pro", "dev_test_user");
   }
 
   if (!stripe) {
-    return {
-      plan: "free",
-      limits: { maxTemplates: 1, maxActiveRuns: 3 },
-    };
+    return freeEntitlements();
   }
 
   const { stripe_subscriptions } = schema;
@@ -89,16 +121,46 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
       throw error;
     }
 
-    return {
-      plan: "free",
-      limits: { maxTemplates: 1, maxActiveRuns: 3 },
-    };
+    return freeEntitlements();
   }
 
   const best = subs.find((s) => isProSubscriptionStatus(s.status)) ?? subs[0] ?? null;
-  const plan: Plan = best?.status && isProSubscriptionStatus(best.status) ? "pro" : "free";
+  const plan = best?.status && isProSubscriptionStatus(best.status) ? "pro" : "free";
 
   return plan === "pro"
-    ? { plan, limits: { maxTemplates: null, maxActiveRuns: null } }
-    : { plan, limits: { maxTemplates: 1, maxActiveRuns: 3 } };
+    ? paidEntitlements("pro", "user_subscription")
+    : freeEntitlements();
+}
+
+export async function getEntitlementsForContext(env: Env, context: EntitlementContext): Promise<Entitlements> {
+  if (context.type === "user") {
+    return getEntitlementsForUser(env, context.userId);
+  }
+
+  const db = createDb(env);
+  const { team_entitlement_overrides } = schema;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+
+  try {
+    const [override] = await db
+      .select()
+      .from(team_entitlement_overrides)
+      .where(
+        and(
+          eq(team_entitlement_overrides.team_id, context.teamId),
+          or(isNull(team_entitlement_overrides.expires_at), gt(team_entitlement_overrides.expires_at, nowSeconds))
+        )
+      )
+      .limit(1);
+
+    if (override) {
+      return teamOverrideEntitlements(override.plan);
+    }
+  } catch (error) {
+    if (!isMissingOptionalBillingTableError(error)) {
+      throw error;
+    }
+  }
+
+  return freeEntitlements();
 }
