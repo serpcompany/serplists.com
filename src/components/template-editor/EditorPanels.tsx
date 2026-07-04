@@ -104,6 +104,7 @@ export function EditorPanels({
               ) : selectedItem ? (
                 <ItemEditor
                   itemIndex={selectedItemIndex}
+                  key={`${selectedSection.id}:${selectedItem.id}`}
                   sectionIndex={selectedSectionIndex}
                   showIntro={false}
                 />

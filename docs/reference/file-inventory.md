@@ -127,7 +127,7 @@ Current migrations:
 
 - `.github/workflows/ci.yml` - Quality gate for pull requests and pushes to `main`/`staging`.
 - `.github/workflows/cloudflare-pages-deploy.yml` - Cloudflare Pages deploy with staging/production D1 readiness checks.
-- `scripts/check-preview-d1-binding.mjs` - Verifies preview D1 is configured and separate from production.
+- `scripts/check-preview-d1-binding.mjs` - Verifies Wrangler and Pages preview D1 bindings are configured and separate from production.
 - `scripts/check-production-d1-schema.mjs` - Read-only D1 schema readiness check for staging/production.
 - `scripts/d1-baseline-migrations.mjs` - One-time D1 migration ledger baseline helper.
 - `scripts/d1-reset-local.mjs` - Local D1 reset/migrate/seed helper.

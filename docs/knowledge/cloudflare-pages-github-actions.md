@@ -27,6 +27,6 @@ The Cloudflare Pages project name is `serplists-com`. It is not a secret and is 
 ## Database routing
 
 - `main` deploys must use production D1: `serp-checklists-db`.
-- `staging` and preview deploys must use staging D1 through Wrangler's preview binding: `serp-checklists-staging-db`.
+- `staging` and preview deploys must use staging D1 through Wrangler's preview binding and the explicit Pages preview env binding: `serp-checklists-staging-db`.
 - The workflow intentionally calls `pnpm run verify:staging` for non-main branches so preview deploys fail if the preview binding is missing or points to production.
 - Do not remove the preview D1 check when adding new branches; production data must not be used for preview deploys.

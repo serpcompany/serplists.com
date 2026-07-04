@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from "react";
+import React, { createContext, useContext, useMemo } from "react";
 import { useAuth } from "./CloudflareAuthContext";
 import { useWorkspace } from "./WorkspaceContext";
 import { toast } from "sonner";
@@ -243,12 +243,19 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     staleTime: 5 * 60 * 1000,
   });
 
-  const publicTemplates = mergePublicTemplateCollections(repoTemplates, catalogApiTemplates);
+  const publicTemplates = useMemo(
+    () => mergePublicTemplateCollections(repoTemplates, catalogApiTemplates),
+    [catalogApiTemplates],
+  );
 
   // Combine public templates with user's own templates (both public and private)
-  const allTemplates = activeTeamId
-    ? workspaceTemplates
-    : mergeAccountTemplateCollections(publicTemplates, workspaceTemplates, user?.id);
+  const allTemplates = useMemo(
+    () =>
+      activeTeamId
+        ? workspaceTemplates
+        : mergeAccountTemplateCollections(publicTemplates, workspaceTemplates, user?.id),
+    [activeTeamId, publicTemplates, workspaceTemplates, user?.id],
+  );
   const templatesLoading = catalogTemplatesLoading || workspaceTemplatesLoading;
 
   // Mutations

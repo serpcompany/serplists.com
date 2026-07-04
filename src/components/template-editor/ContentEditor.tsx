@@ -14,6 +14,8 @@ import {
   type TemplateEditorFormValues,
 } from "@/lib/forms/templateEditorForm";
 
+type ActiveAddPanel = "empty" | "header" | null;
+
 interface ContentEditorProps {
   itemIndex: number;
   sectionIndex: number;
@@ -24,7 +26,7 @@ export function ContentEditor({
   sectionIndex,
 }: ContentEditorProps): JSX.Element {
   const { control, setValue } = useFormContext<TemplateEditorFormValues>();
-  const [showAddPanel, setShowAddPanel] = useState(false);
+  const [activeAddPanel, setActiveAddPanel] = useState<ActiveAddPanel>(null);
   const contentsFieldArray = useFieldArray({
     control,
     keyName: "fieldId",
@@ -38,7 +40,13 @@ export function ContentEditor({
 
   function handleAddContent(type: TemplateEditorContentType): void {
     contentsFieldArray.append(createTemplateEditorContent(type));
-    setShowAddPanel(false);
+    setActiveAddPanel(null);
+  }
+
+  function toggleAddPanel(panel: Exclude<ActiveAddPanel, null>): void {
+    setActiveAddPanel((currentPanel) =>
+      currentPanel === panel ? null : panel,
+    );
   }
 
   function handleContentValueChange(contentIndex: number, value: string): void {
@@ -134,8 +142,8 @@ export function ContentEditor({
         <h3 className="text-sm font-medium text-foreground">Content Blocks</h3>
         <ContentAddPanel
           onAddContent={handleAddContent}
-          onTogglePanel={() => setShowAddPanel((value) => !value)}
-          showAddPanel={showAddPanel}
+          onTogglePanel={() => toggleAddPanel("header")}
+          showAddPanel={activeAddPanel === "header"}
         />
       </div>
 
@@ -144,8 +152,8 @@ export function ContentEditor({
           <p className="mb-3 text-sm text-muted-foreground">No content blocks yet</p>
           <ContentAddPanel
             onAddContent={handleAddContent}
-            onTogglePanel={() => setShowAddPanel((value) => !value)}
-            showAddPanel={showAddPanel}
+            onTogglePanel={() => toggleAddPanel("empty")}
+            showAddPanel={activeAddPanel === "empty"}
           />
         </div>
       ) : (

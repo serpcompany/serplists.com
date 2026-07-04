@@ -130,7 +130,7 @@ Do not use git history for user-generated template or team history. Git only tra
 ## Deployment Environments
 
 - Local D1: Miniflare state under `.wrangler/`.
-- Staging/preview D1: `serp-checklists-staging-db` through `preview_database_id` and Wrangler's `--preview` flag.
+- Staging/preview D1: `serp-checklists-staging-db` through `preview_database_id`, `[[env.preview.d1_databases]]`, and Wrangler's `--preview` flag.
 - Production D1: `serp-checklists-db`.
 
 Preview deployments must not point at production D1. See [Database environments](../operations/database-environments.md).

@@ -1,12 +1,25 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const DEV_API_BASE_URL = "http://localhost:8788/api";
+const DEV_API_BASE_URL =
+  process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api";
+const PASSWORD = "Aa!template-editor-password-12345";
 
-async function signInAsAdmin(page: Page) {
-  await page.goto("/login");
-  await page.getByRole("button", { name: /fill admin/i }).click();
-  await page.getByRole("button", { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/account/);
+function uniqueSuffix() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function registerAccount(page: Page) {
+  const suffix = uniqueSuffix();
+
+  await page.goto("/register");
+  await page.getByLabel("Name").fill("Template Editor QA");
+  await page.getByLabel("Email").fill(`template-editor+${suffix}@e2e.local`);
+  await page.locator("#password").fill(PASSWORD);
+  await page.locator("#confirmPassword").fill(PASSWORD);
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByRole("button", { name: "Switch workspace" })).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 async function findTemplateByTitle(page: Page, title: string) {
@@ -30,14 +43,189 @@ async function deleteTemplate(page: Page, templateId: string) {
   }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
 }
 
+function getTemplateSections(template: Record<string, unknown>) {
+  const rawSections = template.sections ?? template.items ?? [];
+  const parsedSections =
+    typeof rawSections === "string" ? JSON.parse(rawSections) : rawSections;
+
+  if (!Array.isArray(parsedSections)) {
+    return [];
+  }
+
+  const firstEntry = parsedSections[0] as { items?: unknown } | undefined;
+  if (firstEntry && Array.isArray(firstEntry.items)) {
+    return parsedSections as Array<{
+      items: Array<{
+        contents?: Array<{ type?: string; value?: string }>;
+        description?: string;
+        title?: string;
+      }>;
+    }>;
+  }
+
+  return [
+    {
+      items: parsedSections as Array<{
+        contents?: Array<{ type?: string; value?: string }>;
+        description?: string;
+        title?: string;
+      }>,
+    },
+  ];
+}
+
 test.describe("template editor regressions", () => {
+  test("@smoke preserves task edits when adding then switching between tasks", async ({ page }) => {
+    const templateTitle = `QA Tasks ${Date.now()}`;
+    const firstTaskTitle = `First task ${Date.now()}`;
+    const secondTaskTitle = `Second task ${Date.now()}`;
+    const firstTaskDescription = "First task details should not be overwritten";
+    const secondTaskDescription = "Second task details should persist separately";
+    let createdTemplateId: string | null = null;
+
+    await registerAccount(page);
+    await page.goto("/dashboard/templates/new");
+
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+
+    await page.getByRole("button", {
+      name: /add task to section 1/i,
+    }).click();
+
+    await expect(page.getByRole("button", { name: /^Task 1$/ })).toBeVisible();
+    await page.getByLabel("Task Title").fill(firstTaskTitle);
+    await page.getByLabel("Description (Optional)").fill(firstTaskDescription);
+
+    await page.getByRole("button", { name: /^Add task$/ }).click();
+    await expect(page.getByRole("button", { name: /^Task 2$/ })).toBeVisible();
+    await expect(page.getByLabel("Task Title")).toHaveValue("");
+    await expect(page.getByLabel("Description (Optional)")).toHaveValue("");
+
+    await page.getByRole("button", { name: /^Task 2$/ }).click();
+    await page.getByLabel("Task Title").fill(secondTaskTitle);
+    await page.getByLabel("Description (Optional)").fill(secondTaskDescription);
+
+    await expect(
+      page.getByRole("button", { exact: true, name: firstTaskTitle }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { exact: true, name: secondTaskTitle }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { exact: true, name: firstTaskTitle }).click();
+    await expect(page.getByLabel("Task Title")).toHaveValue(firstTaskTitle);
+    await expect(page.getByLabel("Description (Optional)")).toHaveValue(
+      firstTaskDescription,
+    );
+
+    await page.getByRole("button", { exact: true, name: secondTaskTitle }).click();
+    await expect(page.getByLabel("Task Title")).toHaveValue(secondTaskTitle);
+    await expect(page.getByLabel("Description (Optional)")).toHaveValue(
+      secondTaskDescription,
+    );
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    createdTemplateId =
+      savedTemplate && typeof savedTemplate.id === "string" ? savedTemplate.id : null;
+
+    expect(savedTemplate).toBeTruthy();
+
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    expect(sections[0]?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          description: firstTaskDescription,
+          title: firstTaskTitle,
+        }),
+        expect.objectContaining({
+          description: secondTaskDescription,
+          title: secondTaskTitle,
+        }),
+      ]),
+    );
+
+    if (createdTemplateId) {
+      await deleteTemplate(page, createdTemplateId);
+    }
+  });
+
+  test("@smoke adds and persists a text content block", async ({ page }) => {
+    const stamp = Date.now();
+    const templateTitle = `QA Content ${stamp}`;
+    const taskTitle = `Task with content ${stamp}`;
+    const contentLines = [
+      `Markdown content block ${stamp}`,
+      `Second display line ${stamp}`,
+      `Third display line ${stamp}`,
+    ];
+    const contentValue = contentLines.join("\n");
+    let createdTemplateId: string | null = null;
+
+    await registerAccount(page);
+    await page.goto("/dashboard/templates/new");
+
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", {
+      name: /add task to section 1/i,
+    }).click();
+    await page.getByLabel("Task Title").fill(taskTitle);
+
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("button", { name: "Text" }).last().click();
+
+    await expect(
+      page.getByPlaceholder("Enter text or markdown content"),
+    ).toBeVisible();
+    await page
+      .getByPlaceholder("Enter text or markdown content")
+      .fill(contentValue);
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    createdTemplateId =
+      savedTemplate && typeof savedTemplate.id === "string" ? savedTemplate.id : null;
+
+    expect(savedTemplate).toBeTruthy();
+
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    expect(sections[0]?.items[0]?.contents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "text",
+          value: contentValue,
+        }),
+      ]),
+    );
+
+    if (createdTemplateId) {
+      await page.goto(`/dashboard/templates/${createdTemplateId}`);
+      const renderedContent = page.getByText(
+        new RegExp(`${contentLines[0]}\\s+${contentLines[1]}\\s+${contentLines[2]}`),
+      );
+      await expect(renderedContent).toBeVisible();
+
+      const whiteSpace = await renderedContent.evaluate((node) => {
+        const container = node.closest(".whitespace-pre-line");
+        return container ? getComputedStyle(container).whiteSpace : null;
+      });
+      expect(whiteSpace).toBe("pre-line");
+
+      await deleteTemplate(page, createdTemplateId);
+    }
+  });
+
   test("adds tags and categories before save and persists them", async ({ page }) => {
     const templateTitle = `QA Tags ${Date.now()}`;
     const tagName = `tag-${Date.now()}`;
     const categoryName = "camping";
     let createdTemplateId: string | null = null;
 
-    await signInAsAdmin(page);
+    await registerAccount(page);
     await page.goto("/dashboard/templates/new");
 
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
@@ -74,7 +262,7 @@ test.describe("template editor regressions", () => {
     const seoSlug = `qa-seo-${stamp}`;
     let createdTemplateId: string | null = null;
 
-    await signInAsAdmin(page);
+    await registerAccount(page);
     await page.goto("/dashboard/templates/new");
 
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);

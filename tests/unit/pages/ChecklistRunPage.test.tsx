@@ -45,7 +45,8 @@ const baseRun: ChecklistRun = {
         {
           id: 'item-1',
           title: 'Review all page content',
-          description: 'Check for typos, broken links, and outdated information.',
+          description:
+            'Check for typos and broken links.\nThen verify redirects.\\nFinally submit the report.',
           isCompleted: false,
           contents: [],
         },
@@ -117,11 +118,16 @@ describe('ChecklistRunPage layout', () => {
     expect(html).toContain('Share');
     expect(html).toContain('Task 1 of 1');
     expect(html).toContain('Mark Complete');
+    expect(html).toContain('whitespace-pre-line');
+    expect(html).toContain(
+      'Check for typos and broken links.\nThen verify redirects.\nFinally submit the report.',
+    );
     expect(html).toContain('min-h-[calc(100dvh-3.5rem)]');
     expect(html).not.toContain('data-run-progress-sidebar="true"');
     expect(html).not.toContain('border-r border-border bg-card xl:flex xl:w-64');
     expect(html).not.toContain('Tasks');
     expect(html).not.toContain('Work through the run like a docs outline');
+    expect(html).not.toContain('More options');
   });
 
   it('renders the shared run as the public copyable checklist flow', () => {
@@ -166,6 +172,10 @@ describe('ChecklistRunPage layout', () => {
     expect(html).toContain('Browse Public Templates');
     expect(html).toContain('Shared run snapshot');
     expect(html).toContain('Run progress');
+    expect(html).toContain('whitespace-pre-line');
+    expect(html).toContain(
+      'Check for typos and broken links.\nThen verify redirects.\nFinally submit the report.',
+    );
     expect(html).not.toContain('Create Your Own Copy');
     expect(html).toContain('max-w-[var(--layout-narrow-max)]');
     expect(html).toContain('rounded-[var(--layout-card-radius)]');
