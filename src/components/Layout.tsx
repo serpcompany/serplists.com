@@ -34,6 +34,7 @@ import { DashboardSidebar } from '@/components/dashboard/DashboardSidebar';
 import { MobileBottomNav, MobileNav } from '@/components/MobileNav';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
 
 interface LayoutProps {
   children?: React.ReactNode;
@@ -207,7 +208,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         className="flex h-14 items-center justify-between gap-6"
         width="shell"
       >
-        <BrandLink to="/" />
+        <div className="flex min-w-0 items-center gap-3">
+          <BrandLink to="/" />
+          {user && shell === 'console' ? (
+            <div className="hidden md:block">
+              <WorkspaceSwitcher />
+            </div>
+          ) : null}
+        </div>
 
         <nav className="hidden items-center gap-5 md:flex">
           {publicHeaderLinks.map((item) => (
@@ -262,7 +270,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="flex min-w-0 flex-1 flex-col">
             <header className="sticky top-14 z-40 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:hidden">
               <MobileNav />
-              <span className="text-sm font-semibold">Workspace</span>
+              <div className="min-w-0 flex-1 px-3">
+                <WorkspaceSwitcher />
+              </div>
               <div className="w-10" />
             </header>
 

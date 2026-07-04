@@ -1,5 +1,6 @@
 import React, { createContext, useContext } from "react";
 import { useAuth } from "./CloudflareAuthContext";
+import { useWorkspace } from "./WorkspaceContext";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -27,6 +28,7 @@ export type {
 import { generateSlug } from "@/utils/urlHelpers";
 import { calculateSectionsProgress, isSectionsShape, normalizeSections, resetSectionsCompletion } from "@/lib/utils/checklistSections";
 import {
+  isRepoTemplate,
   mergeAccountTemplateCollections,
   mergePublicTemplateCollections,
   repoTemplates,
@@ -34,6 +36,52 @@ import {
 
 
 const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
+
+type CreateRunRequest = {
+  apiPayload: {
+    teamId?: string;
+    template_id?: string;
+    title: string;
+    sections?: ChecklistSection[];
+    status: "in_progress";
+  };
+  runSections: ChecklistSection[];
+  title: string;
+};
+
+export function buildCreateRunRequest(params: {
+  activeTeamId?: string;
+  runName?: string;
+  template: ChecklistTemplate;
+  templateId: string;
+}): CreateRunRequest {
+  const runSections = resetSectionsCompletion(params.template.sections);
+  const title = params.runName || params.template.title;
+
+  if (isRepoTemplate(params.template)) {
+    return {
+      apiPayload: {
+        teamId: params.activeTeamId,
+        title,
+        sections: runSections,
+        status: "in_progress",
+      },
+      runSections,
+      title,
+    };
+  }
+
+  return {
+    apiPayload: {
+      template_id: params.templateId,
+      teamId: params.activeTeamId,
+      title,
+      status: "in_progress",
+    },
+    runSections,
+    title,
+  };
+}
 
 // calculateSectionsProgress is imported from lib/utils/checklistSections
 
@@ -47,71 +95,88 @@ export const useTemplates = () => {
 
 export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { activeTeamId, workspaceScopeId } = useWorkspace();
   const queryClient = useQueryClient();
 
-  // Fetch all public templates for visitors and logged-in users
-  const { data: templates = [], isLoading: templatesLoading } = useQuery({
-    queryKey: ['templates', user?.id],
+  const mapApiTemplate = (template: Record<string, unknown>): ChecklistTemplate => ({
+    id: String(template.id),
+    title: String(template.title || ''),
+    description: typeof template.description === 'string' ? template.description : '',
+    type: typeof template.type === 'string' ? template.type as "checklist" | "recipe" : 'checklist',
+    seoTitle: typeof template.seoTitle === 'string' ? template.seoTitle : '',
+    seoDescription: typeof template.seoDescription === 'string' ? template.seoDescription : '',
+    rules: Array.isArray(template.rules) ? template.rules as ChecklistTemplate["rules"] : undefined,
+    seoUrl: typeof template.slug === 'string' ? template.slug : '',
+    sections: normalizeSections((() => {
+      if (template.sections) return template.sections;
+      if (template.items) {
+        const parsedItems = typeof template.items === 'string' ? JSON.parse(template.items) : template.items;
+        if (Array.isArray(parsedItems) && parsedItems.length > 0 && parsedItems[0]?.items) {
+          return parsedItems;
+        }
+        return [{
+          id: '1',
+          title: 'Checklist',
+          items: parsedItems
+        }];
+      }
+      return [];
+    })()),
+    categories: Array.isArray(template.categories)
+      ? template.categories as string[]
+      : (template.category ? [String(template.category)] : []),
+    tags: typeof template.tags === 'string' ? JSON.parse(template.tags) : (Array.isArray(template.tags) ? template.tags as string[] : []),
+    userId: typeof template.user_id === 'string' ? template.user_id : '',
+    createdAt: typeof template.created_at === 'string' ? template.created_at : '',
+    updatedAt: typeof template.updated_at === 'string' ? template.updated_at : '',
+    isPublic: Boolean(template.is_public),
+    slug: typeof template.slug === 'string' ? template.slug : '',
+    version: typeof template.version === 'number' ? template.version : 1,
+    teamId:
+      typeof template.team_id === 'string'
+        ? template.team_id
+        : typeof template.teamId === 'string'
+          ? template.teamId
+          : undefined,
+    ownerProfile:
+      typeof template.owner_username === "string" || typeof template.owner_full_name === "string"
+        ? {
+            username: typeof template.owner_username === "string" ? template.owner_username : undefined,
+            full_name: typeof template.owner_full_name === "string" ? template.owner_full_name : undefined,
+          }
+        : undefined,
+  });
+
+  // Fetch catalog templates for public-facing pages. The merge step keeps only public templates.
+  const { data: catalogApiTemplates = [], isLoading: catalogTemplatesLoading } = useQuery({
+    queryKey: ['catalog-templates', user?.id],
     queryFn: async () => {
       try {
         const templatesData = await api.getTemplates();
-        
-        // Transform API response to app format
-        const transformedTemplates = templatesData.map((template: Record<string, unknown>) => ({
-          id: template.id,
-          title: template.title,
-          description: template.description || '',
-          type: typeof template.type === 'string' ? template.type : 'checklist',
-          seoTitle: typeof template.seoTitle === 'string' ? template.seoTitle : '',
-          seoDescription: typeof template.seoDescription === 'string' ? template.seoDescription : '',
-          rules: Array.isArray(template.rules) ? template.rules : undefined,
-          seoUrl: typeof template.slug === 'string' ? template.slug : '',
-          sections: (() => {
-            if (template.sections) return template.sections;
-            if (template.items) {
-              const parsedItems = typeof template.items === 'string' ? JSON.parse(template.items) : template.items;
-              // Check if items is already in sections format
-              if (Array.isArray(parsedItems) && parsedItems.length > 0 && parsedItems[0]?.items) {
-                return parsedItems;
-              }
-              // Legacy format - wrap in single section
-              return [{
-                id: '1',
-                title: 'Checklist',
-                items: parsedItems
-              }];
-            }
-            return [];
-          })(),
-          categories: Array.isArray(template.categories)
-            ? template.categories
-            : (template.category ? [String(template.category)] : []),
-          tags: typeof template.tags === 'string' ? JSON.parse(template.tags) : (template.tags || []),
-          userId: template.user_id,
-          createdAt: template.created_at,
-          updatedAt: template.updated_at,
-          isPublic: Boolean(template.is_public),
-          slug: template.slug || '',
-          version: template.version || 1,
-          ownerProfile:
-            typeof template.owner_username === "string" || typeof template.owner_full_name === "string"
-              ? {
-                  username: typeof template.owner_username === "string" ? template.owner_username : undefined,
-                  full_name: typeof template.owner_full_name === "string" ? template.owner_full_name : undefined,
-                }
-              : undefined,
-        }));
-
-        return transformedTemplates.map((t: Record<string, unknown>) => ({
-          ...t,
-          sections: normalizeSections(t.sections),
-        }));
+        return templatesData.map((template: Record<string, unknown>) => mapApiTemplate(template));
       } catch (error) {
         console.error('Error fetching templates:', error);
         return [];
       }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Fetch the templates owned by the active console workspace.
+  const { data: workspaceTemplates = [], isLoading: workspaceTemplatesLoading } = useQuery({
+    queryKey: ['templates', user?.id ?? 'visitor', workspaceScopeId],
+    queryFn: async () => {
+      try {
+        const templatesData = await api.getTemplates(
+          activeTeamId ? { teamId: activeTeamId } : undefined,
+        );
+        return templatesData.map((template: Record<string, unknown>) => mapApiTemplate(template));
+      } catch (error) {
+        console.error('Error fetching workspace templates:', error);
+        return [];
+      }
+    },
+    staleTime: 5 * 60 * 1000,
   });
 
   // Fetch user's own templates (both public and private) if logged in
@@ -135,12 +200,14 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Fetch user's runs (only if logged in)
   const { data: runs = [], isLoading: runsLoading } = useQuery({
-    queryKey: ['runs', user?.id],
+    queryKey: ['runs', user?.id, workspaceScopeId],
     queryFn: async () => {
       if (!user) return [];
       
       try {
-        const checklistsData = await api.getChecklists();
+        const checklistsData = await api.getChecklists(
+          activeTeamId ? { teamId: activeTeamId } : undefined,
+        );
         // Transform to run format
         const transformedRuns = checklistsData.map((checklist: Record<string, unknown>) => {
           const sections = (() => {
@@ -158,6 +225,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           startedAt: checklist.started_at || checklist.created_at,
           completedAt: checklist.completed_at || undefined,
           userId: checklist.user_id || '',
+          teamId: typeof checklist.team_id === 'string' ? checklist.team_id : undefined,
           templateVersion: typeof checklist.template_version === 'number' ? checklist.template_version : 1
         });
         });
@@ -175,10 +243,13 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     staleTime: 5 * 60 * 1000,
   });
 
-  const publicTemplates = mergePublicTemplateCollections(repoTemplates, templates);
+  const publicTemplates = mergePublicTemplateCollections(repoTemplates, catalogApiTemplates);
 
   // Combine public templates with user's own templates (both public and private)
-  const allTemplates = mergeAccountTemplateCollections(publicTemplates, templates, user?.id);
+  const allTemplates = activeTeamId
+    ? workspaceTemplates
+    : mergeAccountTemplateCollections(publicTemplates, workspaceTemplates, user?.id);
+  const templatesLoading = catalogTemplatesLoading || workspaceTemplatesLoading;
 
   // Mutations
   const createTemplateMutation = useMutation({
@@ -187,8 +258,10 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       
       const finalIsPublic = templateData.isPublic ?? true;
 
+      const teamId = templateData.teamId ?? activeTeamId;
       const result = await api.createTemplate({
         title: templateData.title,
+        teamId,
         description: templateData.description,
         type: templateData.type,
         seoTitle: templateData.seoTitle,
@@ -218,7 +291,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         updatedAt: new Date().toISOString(),
         isPublic: finalIsPublic,
         slug: result.slug || generateSlug(templateData.title),
-        version: 1
+        version: 1,
+        teamId,
       };
     },
     onSuccess: () => {
@@ -281,31 +355,33 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     mutationFn: async ({ templateId, runName }: { templateId: string; runName?: string }) => {
       if (!user) throw new Error("User must be logged in to create a run");
       
-      const template = allTemplates.find((t: { id: unknown }) => t.id === templateId);
+      const template =
+        allTemplates.find((t: { id: unknown }) => t.id === templateId) ??
+        publicTemplates.find((t: { id: unknown }) => t.id === templateId);
       if (!template) throw new Error("Template not found");
-      
-      // Create a deep copy of the template sections with isCompleted set to false
-      const runSections = resetSectionsCompletion(template.sections);
-      
-      const result = await api.createChecklist({
-        template_id: templateId,
-        title: runName || template.title,
-        sections: runSections,
-        status: 'in_progress'
+
+      const { apiPayload, runSections, title } = buildCreateRunRequest({
+        activeTeamId,
+        runName,
+        template,
+        templateId,
       });
+
+      const result = await api.createChecklist(apiPayload);
       
       if (!result) throw new Error("Failed to create checklist run");
       
       return {
         id: result.id,
         templateId: templateId,
-        title: runName || template.title,
+        title,
         status: "in_progress" as const,
         progress: 0,
         sections: runSections,
         startedAt: new Date().toISOString(),
         completedAt: undefined,
         userId: user.id,
+        teamId: activeTeamId,
         templateVersion: template.version || 1
       };
     },
@@ -412,6 +488,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       
       const templatesToImport = prepareTemplatesForImport(templatesData, user.id, options);
       return api.importTemplateBackup({
+        teamId: activeTeamId,
         templates: templatesToImport,
         options: { visibility: options?.visibility ?? "preserve" },
       });

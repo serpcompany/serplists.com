@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { getAccessFailure } from '@/lib/api-errors';
-import { api } from '@/lib/api';
+import { api, type TemplateHistoryResponse } from '@/lib/api';
 import { getBillingStatusQueryKey } from '@/lib/billing';
 import {
   buildRepoTemplateCreatePayload,
@@ -60,6 +60,7 @@ type TemplateDetailCommonOptions = {
   createRun: CreateRun;
   createTemplate: CreateTemplate;
   isAuthenticated: boolean;
+  teamId?: string;
   userId?: string;
   username?: string;
 };
@@ -77,6 +78,12 @@ export type TemplateDetailBillingState = {
   billingEnabled: boolean;
   isLoading: boolean;
   isPro: boolean;
+};
+
+export type TemplateDetailHistoryState = {
+  data: TemplateHistoryResponse | null;
+  isError: boolean;
+  isLoading: boolean;
 };
 
 type LoadTemplateDetailResult = {
@@ -250,6 +257,7 @@ export const saveTemplateToAccount = async (params: {
   createTemplate: CreateTemplate;
   invalidateTemplates?: () => Promise<void> | void;
   isAuthenticated: boolean;
+  teamId?: string;
   template: ChecklistTemplate | null;
   userId?: string;
 }): Promise<TemplateDetailActionResult> => {
@@ -280,6 +288,7 @@ export const saveTemplateToAccount = async (params: {
     }
 
     const clonedTemplate = await apiClient.clonePublicTemplate(params.template.id, {
+      teamId: params.teamId,
       visibility: 'private',
     });
 
@@ -306,8 +315,9 @@ export const useTemplateDetailModel = (
     options.mode === 'public' ? options.ownerUsername : undefined;
 
   const billing = useQuery({
-    queryKey: getBillingStatusQueryKey(options.userId),
-    queryFn: () => api.getBillingStatus(),
+    queryKey: getBillingStatusQueryKey(options.userId, options.teamId),
+    queryFn: () =>
+      api.getBillingStatus(options.teamId ? { teamId: options.teamId } : undefined),
     enabled: options.isAuthenticated,
     retry: false,
   });
@@ -315,8 +325,26 @@ export const useTemplateDetailModel = (
   const billingState: TemplateDetailBillingState = {
     billingEnabled: billing.data?.billingEnabled ?? true,
     isLoading: options.isAuthenticated && billing.isLoading,
-    isPro: billing.data?.plan === 'pro',
+    isPro: billing.data?.plan === 'pro' || billing.data?.plan === 'team',
   };
+  const canLoadTemplateHistory =
+    options.mode === 'private' &&
+    options.isAuthenticated &&
+    Boolean(template?.id) &&
+    (template?.userId === options.userId ||
+      (Boolean(options.teamId) && template?.teamId === options.teamId));
+
+  const history = useQuery({
+    queryKey: [
+      'template-history',
+      template?.id ?? 'none',
+      options.userId ?? 'guest',
+      options.teamId ?? 'personal',
+    ],
+    queryFn: () => api.getTemplateHistory(template?.id ?? ''),
+    enabled: canLoadTemplateHistory,
+    retry: false,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -390,6 +418,7 @@ export const useTemplateDetailModel = (
       createTemplate: options.createTemplate,
       invalidateTemplates,
       isAuthenticated: options.isAuthenticated,
+      teamId: options.teamId,
       template,
       userId: options.userId,
     });
@@ -462,6 +491,11 @@ export const useTemplateDetailModel = (
 
   return {
     billingState,
+    history: {
+      data: history.data ?? null,
+      isError: history.isError,
+      isLoading: canLoadTemplateHistory && history.isLoading,
+    } satisfies TemplateDetailHistoryState,
     loading,
     notFound,
     saveTemplate,

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import {
   buildConsoleRunPath,
   buildConsoleTemplateCreatePath,
@@ -22,6 +23,7 @@ type Navigate = (path: string) => void;
 type DashboardTemplatesStateOptions = {
   allTemplates: ChecklistTemplate[];
   templatesLoading?: boolean;
+  teamId?: string;
   userId?: string;
 };
 
@@ -90,12 +92,15 @@ export const openDashboardPublicLibrary = (navigate: Navigate): void => {
 
 export const buildDashboardTemplatesState = ({
   allTemplates,
+  teamId,
   templatesLoading = false,
   userId,
 }: DashboardTemplatesStateOptions) => {
-  const templates = userId
-    ? allTemplates.filter((template) => template.userId === userId)
-    : [];
+  const templates = teamId
+    ? allTemplates.filter((template) => template.teamId === teamId)
+    : userId
+      ? allTemplates.filter((template) => template.userId === userId && !template.teamId)
+      : [];
   const totalTemplateItems = templates.reduce(
     (total, template) => total + countTemplateItems(template),
     0,
@@ -163,11 +168,13 @@ export const useDashboardTemplatesModel = (
 ) => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { activeTeamId } = useWorkspace();
   const templateContext = useTemplates();
   const model = buildDashboardTemplatesState({
     allTemplates: dependencies?.allTemplates ?? templateContext.allTemplates,
     templatesLoading:
       dependencies?.templatesLoading ?? templateContext.templatesLoading,
+    teamId: activeTeamId,
     userId: dependencies?.userId ?? user?.id,
   });
   const createRun = dependencies?.createRun ?? templateContext.createRun;

@@ -11,6 +11,7 @@ import {
   Download,
   Eye,
   Globe,
+  History,
   ListChecks,
   Lock,
   MoreHorizontal,
@@ -67,11 +68,16 @@ import {
 } from '@/components/dashboard/DashboardContentShell';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import {
   navigateToLoginWithReturnPath,
   startBillingCheckout,
 } from '@/lib/access-flow';
+import type {
+  TemplateHistoryEvent,
+  TemplateHistoryVersion,
+} from '@/lib/api';
 import {
   buildConsoleRunPath,
   buildConsoleTemplateEditPath,
@@ -93,6 +99,42 @@ const formatDate = (value?: string): string => {
 
   return new Date(value).toLocaleDateString('en-US');
 };
+
+const formatDateTime = (value?: string): string => {
+  if (!value) {
+    return '';
+  }
+
+  return new Date(value).toLocaleString('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+};
+
+const historyActionLabels: Record<string, string> = {
+  'template.created': 'Created template',
+  'template.updated': 'Updated template',
+  'template.imported': 'Imported template',
+  'template.cloned': 'Copied template',
+  'template.deleted': 'Archived template',
+  'template.versioned': 'Saved template version',
+};
+
+const formatHistoryAction = (
+  action: string,
+  version?: number,
+): string => {
+  const label = historyActionLabels[action] ?? action;
+  return typeof version === 'number' ? `${label} v${version}` : label;
+};
+
+const getHistoryActorName = (
+  actor?: TemplateHistoryEvent['actor'] | TemplateHistoryVersion['actor'],
+): string => actor?.name || actor?.username || actor?.email || 'Unknown user';
+
+const isHistoryVersion = (
+  entry: TemplateHistoryEvent | TemplateHistoryVersion,
+): entry is TemplateHistoryVersion => 'version' in entry;
 
 const buildTemplateSavePayload = (
   template: ChecklistTemplate,
@@ -118,6 +160,7 @@ const TemplateDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
+  const { activeTeamId, canEditTemplates, isTeamWorkspace } = useWorkspace();
   const {
     createRun,
     createTemplate,
@@ -145,6 +188,7 @@ const TemplateDetail = () => {
     shareTemplate,
     startRun,
     template,
+    history,
   } = useTemplateDetailModel({
     createRun,
     createTemplate,
@@ -152,12 +196,17 @@ const TemplateDetail = () => {
     identifier: id,
     isAuthenticated,
     mode: 'private',
+    teamId: activeTeamId,
     userId: user?.id,
     username: user?.username,
   });
   const displayTemplate = template;
   const metrics = (displayTemplate as (ChecklistTemplate & TemplateMetrics) | null) ?? null;
   const isOwner = user?.id === displayTemplate?.userId;
+  const isActiveTeamTemplate =
+    Boolean(activeTeamId) && displayTemplate?.teamId === activeTeamId;
+  const canEditTemplate = isOwner || (isActiveTeamTemplate && canEditTemplates);
+  const canViewTemplateHistory = isOwner || isActiveTeamTemplate;
   const isPublic = visibilityOverride ?? displayTemplate?.isPublic ?? false;
   const totalTasks = displayTemplate?.sections.reduce(
     (count, section) => count + section.items.length,
@@ -165,10 +214,24 @@ const TemplateDetail = () => {
   ) ?? 0;
   const createdDate = formatDate(displayTemplate?.createdAt);
   const updatedDate = formatDate(displayTemplate?.updatedAt ?? displayTemplate?.createdAt);
+  const historyEntries = (
+    history?.data?.versions.length
+      ? history.data.versions
+      : history?.data?.events ?? []
+  ).slice(0, 8);
 
   useEffect(() => {
     setVisibilityOverride(null);
   }, [displayTemplate?.id]);
+
+  const handleUpgradeRequired = async () => {
+    if (isTeamWorkspace) {
+      toast.error('This team needs workspace access before using this feature.');
+      return;
+    }
+
+    await startBillingCheckout(billingState.billingEnabled);
+  };
 
   const handleStartRun = async (runName: string) => {
     setIsCreatingRun(true);
@@ -181,7 +244,7 @@ const TemplateDetail = () => {
       }
 
       if (result.kind === 'upgrade_required') {
-        await startBillingCheckout(billingState.billingEnabled);
+        await handleUpgradeRequired();
         return;
       }
 
@@ -215,7 +278,7 @@ const TemplateDetail = () => {
       }
 
       if (result.kind === 'upgrade_required') {
-        await startBillingCheckout(billingState.billingEnabled);
+        await handleUpgradeRequired();
         return;
       }
 
@@ -250,7 +313,7 @@ const TemplateDetail = () => {
       return;
     }
 
-    if (isOwner) {
+    if (canEditTemplate) {
       setIsCloningTemplate(true);
       try {
         const duplicatedTemplate = await createTemplate({
@@ -289,7 +352,7 @@ const TemplateDetail = () => {
       }
 
       if (result.kind === 'upgrade_required') {
-        await startBillingCheckout(billingState.billingEnabled);
+        await handleUpgradeRequired();
         return;
       }
 
@@ -328,7 +391,7 @@ const TemplateDetail = () => {
   };
 
   const handleTogglePublic = async (nextIsPublic: boolean) => {
-    if (!displayTemplate || !isOwner) {
+    if (!displayTemplate || !canEditTemplate) {
       return;
     }
 
@@ -427,18 +490,20 @@ const TemplateDetail = () => {
         </Badge>
       )}
 
-      {isOwner ? (
+      {canEditTemplate ? (
         <>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleShare}
-            disabled={isCreatingShare}
-            className="border-border"
-          >
-            <Share2 className="mr-2 h-4 w-4" />
-            {isCreatingShare ? 'Creating...' : 'Share'}
-          </Button>
+          {isOwner ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleShare}
+              disabled={isCreatingShare}
+              className="border-border"
+            >
+              <Share2 className="mr-2 h-4 w-4" />
+              {isCreatingShare ? 'Creating...' : 'Share'}
+            </Button>
+          ) : null}
           <Button asChild variant="outline" size="sm" className="border-border">
             <Link to={buildConsoleTemplateEditPath(id ?? displayTemplate.id)}>
               <Pencil className="mr-2 h-4 w-4" />
@@ -480,7 +545,7 @@ const TemplateDetail = () => {
         Start Run
       </Button>
 
-      {isOwner ? (
+      {canEditTemplate ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -676,7 +741,7 @@ const TemplateDetail = () => {
                   <Switch
                     id="template-visibility"
                     checked={isPublic}
-                    disabled={!isOwner || isUpdatingVisibility}
+                    disabled={!canEditTemplate || isUpdatingVisibility}
                     onCheckedChange={handleTogglePublic}
                   />
                   <Label
@@ -739,6 +804,59 @@ const TemplateDetail = () => {
               </div>
             </CardContent>
           </Card>
+
+          {canViewTemplateHistory ? (
+            <Card className="border-border bg-card lg:col-span-2">
+              <CardHeader className="border-b border-border px-6 py-4">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <History className="h-4 w-4 text-muted-foreground" />
+                  Changelog
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4">
+                {history?.isLoading ? (
+                  <p className="text-sm text-muted-foreground">
+                    Loading template history...
+                  </p>
+                ) : history?.isError ? (
+                  <p className="text-sm text-muted-foreground">
+                    Template history is unavailable right now.
+                  </p>
+                ) : historyEntries.length > 0 ? (
+                  <div className="divide-y divide-border">
+                    {historyEntries.map((entry) => {
+                      const version = isHistoryVersion(entry)
+                        ? entry.version
+                        : undefined;
+
+                      return (
+                        <div
+                          key={`${isHistoryVersion(entry) ? 'version' : 'event'}-${entry.id}`}
+                          className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-foreground">
+                              {formatHistoryAction(entry.action, version)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {getHistoryActorName(entry.actor)}
+                            </p>
+                          </div>
+                          <time className="text-xs text-muted-foreground">
+                            {formatDateTime(entry.createdAt)}
+                          </time>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No template history has been recorded yet.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
         </div>
       </DashboardScrollArea>

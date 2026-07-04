@@ -16,6 +16,7 @@ import {
 import { toast } from 'sonner';
 
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { ArchiveRecoverySection } from '@/components/dashboard/ArchiveRecoverySection';
 import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
 import { UserTemplatesSection } from '@/components/templates/UserTemplatesSection';
 import {
@@ -48,6 +49,7 @@ const Dashboard = () => {
   const { user } = useAuth();
   const {
     templates,
+    allTemplates,
     templatesLoading,
     runs,
     runsLoading,
@@ -61,6 +63,7 @@ const Dashboard = () => {
   const [editingRunId, setEditingRunId] = useState<string | null>(null);
   const [isSavingRunTitle, setIsSavingRunTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
+  const workspaceTemplates = allTemplates ?? templates;
 
   const isRunsRoute = resolveConsoleSection(location.pathname) === 'runs';
 
@@ -73,8 +76,8 @@ const Dashboard = () => {
   }, [searchParams, setSearchParams]);
 
   const templateLookup = useMemo(
-    () => new Map(templates.map((template) => [template.id, template])),
-    [templates],
+    () => new Map(workspaceTemplates.map((template) => [template.id, template])),
+    [workspaceTemplates],
   );
   const activeRuns = useMemo(
     () => runs.filter((run) => run.status === 'in_progress'),
@@ -92,8 +95,13 @@ const Dashboard = () => {
     [runs],
   );
   const userTemplates = useMemo(
-    () => templates.filter((template) => template.userId === user?.id),
-    [templates, user?.id],
+    () =>
+      workspaceTemplates.filter(
+        (template) =>
+          template.teamId ||
+          (template.userId === user?.id && !template.id.startsWith('repo:')),
+      ),
+    [workspaceTemplates, user?.id],
   );
 
   const activeRunAverage =
@@ -411,6 +419,8 @@ const Dashboard = () => {
           />
         </section>
       ) : null}
+
+      {!isRunsRoute ? <ArchiveRecoverySection /> : null}
 
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>

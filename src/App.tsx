@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider } from './contexts/CloudflareAuthContext';
 import { TemplatesProvider } from './contexts/TemplatesContext';
+import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { Layout } from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from '@/components/ui/sonner';
@@ -32,7 +33,7 @@ import PublicTemplate from './pages/PublicTemplate';
 import ChecklistLibrary from './pages/ChecklistLibrary';
 import Categories from './pages/Categories';
 import CategoryDetail from './pages/CategoryDetail';
-import Account from './pages/Account';
+import TeamInviteAccept from './pages/TeamInviteAccept';
 import UserProfile from './pages/UserProfile';
 import Features from './pages/Features';
 import Pricing from './pages/Pricing';
@@ -41,9 +42,10 @@ import Contact from './pages/Contact';
 import NotFound from './pages/NotFound';
 import {
   LEGACY_CONSOLE_HOME_PATH,
+  LEGACY_ACCOUNT_PATH,
+  LEGACY_CONSOLE_PROFILE_PATH,
   LEGACY_PUBLIC_LIBRARY_PATH,
   buildConsoleHomePath,
-  buildConsoleProfilePath,
   buildConsoleRunsPath,
   buildConsoleSettingsPath,
   buildConsoleTemplateCreatePath,
@@ -51,8 +53,6 @@ import {
   buildConsoleTemplatesPath,
   buildPublicTemplatesPath,
 } from './lib/routes';
-import { useAuth } from './contexts/CloudflareAuthContext';
-import { resolveDashboardProfileRedirectTarget } from './lib/dashboardRouteAliases';
 import { applyStoredTheme } from './lib/theme';
 
 const queryClient = new QueryClient({
@@ -63,24 +63,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-const DashboardProfileRedirect = () => {
-  const { user } = useAuth();
-  return (
-    <Navigate
-      replace
-      to={resolveDashboardProfileRedirectTarget(
-        user
-          ? {
-              email: user.email,
-              id: user.id,
-              username: user.username,
-            }
-          : null,
-      )}
-    />
-  );
-};
 
 const RootThemeSync = () => {
   useEffect(() => {
@@ -97,14 +79,14 @@ const App = () => {
         <ErrorBoundary>
           <TooltipProvider>
             <AuthProvider>
-              <TemplatesProvider>
-                <RootThemeSync />
-                <Router
-                  future={{
-                    v7_relativeSplatPath: true,
-                    v7_startTransition: true,
-                  }}
-                >
+              <WorkspaceProvider>
+                <TemplatesProvider>
+                  <RootThemeSync />
+                  <Router
+                    future={{
+                      v7_relativeSplatPath: true,
+                    }}
+                  >
                   <Routes>
                     {/* Public Routes */}
 
@@ -129,14 +111,6 @@ const App = () => {
                       element={
                         <RequireAuth>
                           <Navigate replace to={buildConsoleTemplatesPath()} />
-                        </RequireAuth>
-                      }
-                    />
-                    <Route
-                      path={buildConsoleProfilePath()}
-                      element={
-                        <RequireAuth>
-                          <DashboardProfileRedirect />
                         </RequireAuth>
                       }
                     />
@@ -175,6 +149,10 @@ const App = () => {
                       <Route
                         path="/contact"
                         element={<Contact />}
+                      />
+                      <Route
+                        path="/team-invites/:token"
+                        element={<TeamInviteAccept />}
                       />
                       <Route
                         path={buildPublicTemplatesPath()}
@@ -256,8 +234,12 @@ const App = () => {
                         element={<ChecklistRun />}
                       />
                       <Route
-                        path="/account"
-                        element={<Account />}
+                        path={LEGACY_CONSOLE_PROFILE_PATH}
+                        element={<Navigate replace to={buildConsoleSettingsPath()} />}
+                      />
+                      <Route
+                        path={LEGACY_ACCOUNT_PATH}
+                        element={<Navigate replace to={buildConsoleSettingsPath()} />}
                       />
                     </Route>
                     <Route
@@ -271,8 +253,9 @@ const App = () => {
                   </Routes>
                   <DevLoginBar />
                   <Toaster />
-                </Router>
-              </TemplatesProvider>
+                  </Router>
+                </TemplatesProvider>
+              </WorkspaceProvider>
             </AuthProvider>
           </TooltipProvider>
         </ErrorBoundary>
