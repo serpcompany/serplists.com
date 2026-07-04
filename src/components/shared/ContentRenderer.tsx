@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { VideoEmbed } from './VideoEmbed';
 import { File, Code, ListCheck } from 'lucide-react';
 import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
+import { normalizeMarkdownDisplayText } from '@/lib/utils/markdownDisplay';
 import { safeUrl } from '@/lib/utils/safeUrl';
 
 interface ContentRendererProps {
@@ -12,8 +13,6 @@ interface ContentRendererProps {
   disabled?: boolean;
   onSubItemToggle?: (contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
 }
-
-const normalizeDisplayText = (value: string) => value.replace(/\\n/g, '\n');
 
 export const ContentRenderer: React.FC<ContentRendererProps> = ({ 
   contents, 
@@ -34,9 +33,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       {contents.map((content, contentIndex: number) => (
         <div key={contentIndex} className="space-y-3">
           {content.type === "text" && content.value && (
-            <div className="prose prose-sm max-w-none">
+            <div className="prose prose-sm max-w-none whitespace-pre-line">
               <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeUrl}>
-                {normalizeDisplayText(content.value)}
+                {normalizeMarkdownDisplayText(content.value)}
               </ReactMarkdown>
             </div>
           )}

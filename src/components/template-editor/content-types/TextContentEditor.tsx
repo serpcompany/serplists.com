@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ReactMarkdown from "react-markdown";
 import { FileText } from "lucide-react";
 import remarkGfm from "remark-gfm";
+import { normalizeMarkdownDisplayText } from "@/lib/utils/markdownDisplay";
 import { safeUrl } from "@/lib/utils/safeUrl";
 
 interface TextContentEditorProps {
@@ -31,9 +32,9 @@ export const TextContentEditor = ({ value, onChange }: TextContentEditorProps) =
           />
         </TabsContent>
         <TabsContent value="preview">
-          <div className="prose prose-sm max-w-none rounded-md border p-3 min-h-[150px]">
+          <div className="prose prose-sm max-w-none min-h-[150px] rounded-md border p-3 whitespace-pre-line">
             <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeUrl}>
-              {value}
+              {normalizeMarkdownDisplayText(value)}
             </ReactMarkdown>
           </div>
         </TabsContent>

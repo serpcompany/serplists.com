@@ -5,6 +5,23 @@ import { describe, expect, it } from 'vitest';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 
 describe('ContentRenderer accessibility', () => {
+  it('preserves authored line breaks in text content', () => {
+    const markup = renderToStaticMarkup(
+      <ContentRenderer
+        contents={[
+          {
+            id: 'text-1',
+            type: 'text',
+            value: 'Line one\nLine two\\nLine three',
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain('whitespace-pre-line');
+    expect(markup).toContain('Line one\nLine two\nLine three');
+  });
+
   it('renders file, embed, and video content as keyboard-reachable elements with accessible names', () => {
     const markup = renderToStaticMarkup(
       <ContentRenderer

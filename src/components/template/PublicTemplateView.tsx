@@ -150,7 +150,7 @@ export function PublicTemplateView({
           </h1>
 
           {template.description ? (
-            <p className="mb-6 text-pretty text-base leading-relaxed text-muted-foreground">
+            <p className="mb-6 whitespace-pre-line text-pretty text-base leading-relaxed text-muted-foreground">
               {template.description}
             </p>
           ) : null}
@@ -337,7 +337,7 @@ function TaskPreviewItem({ item, index }: { item: ChecklistItem; index: number }
       <div className="min-w-0 flex-1">
         <p className="text-sm text-foreground">{item.title}</p>
         {item.description ? (
-          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+          <p className="mt-0.5 whitespace-pre-line text-xs leading-5 text-muted-foreground">
             {item.description}
           </p>
         ) : null}

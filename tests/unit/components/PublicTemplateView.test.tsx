@@ -69,4 +69,47 @@ describe('PublicTemplateView', () => {
     expect(html).not.toContain('On this page');
     expect(html).not.toContain('Template details');
   });
+
+  it('preserves authored line breaks in template and task descriptions', () => {
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/">
+        <PublicTemplateView
+          template={{
+            ...template,
+            description: 'Template description line one\nTemplate description line two',
+            sections: [
+              {
+                id: 'section-1',
+                title: 'Early Planning',
+                items: [
+                  {
+                    id: 'item-1',
+                    title: 'Set the budget and guest count',
+                    description: 'Task line one\nTask line two',
+                    contents: [],
+                  },
+                ],
+              },
+            ],
+          }}
+          totalItems={1}
+          ownerSlug="devinschumacher"
+          ownerPath="/profile/devinschumacher"
+          isAuthenticated={false}
+          isBillingLoading={false}
+          isProUser={false}
+          isCreatingRun={false}
+          isSaving={false}
+          onStartRun={() => undefined}
+          onSaveTemplate={() => undefined}
+        />
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('whitespace-pre-line');
+    expect(html).toContain(
+      'Template description line one\nTemplate description line two',
+    );
+    expect(html).toContain('Task line one\nTask line two');
+  });
 });

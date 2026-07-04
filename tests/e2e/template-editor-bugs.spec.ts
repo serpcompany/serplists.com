@@ -156,7 +156,12 @@ test.describe("template editor regressions", () => {
     const stamp = Date.now();
     const templateTitle = `QA Content ${stamp}`;
     const taskTitle = `Task with content ${stamp}`;
-    const contentValue = `Markdown content block ${stamp}`;
+    const contentLines = [
+      `Markdown content block ${stamp}`,
+      `Second display line ${stamp}`,
+      `Third display line ${stamp}`,
+    ];
+    const contentValue = contentLines.join("\n");
     let createdTemplateId: string | null = null;
 
     await registerAccount(page);
@@ -198,6 +203,18 @@ test.describe("template editor regressions", () => {
     );
 
     if (createdTemplateId) {
+      await page.goto(`/dashboard/templates/${createdTemplateId}`);
+      const renderedContent = page.getByText(
+        new RegExp(`${contentLines[0]}\\s+${contentLines[1]}\\s+${contentLines[2]}`),
+      );
+      await expect(renderedContent).toBeVisible();
+
+      const whiteSpace = await renderedContent.evaluate((node) => {
+        const container = node.closest(".whitespace-pre-line");
+        return container ? getComputedStyle(container).whiteSpace : null;
+      });
+      expect(whiteSpace).toBe("pre-line");
+
       await deleteTemplate(page, createdTemplateId);
     }
   });

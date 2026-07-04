@@ -693,7 +693,7 @@ const TemplateDetail = () => {
                         <span>{item.title}</span>
                       </div>
                       {item.description ? (
-                        <p className="mt-1 pl-5 text-sm text-muted-foreground">
+                        <p className="mt-1 whitespace-pre-line pl-5 text-sm text-muted-foreground">
                           {item.description}
                         </p>
                       ) : null}
