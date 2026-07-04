@@ -1,4 +1,4 @@
--- Cleanup seed/test data inserted by `db/migrations/seed-test-data.sql`.
+-- Cleanup seed/test data inserted by `db/seeds/test-data.sql`.
 -- Safe target: only users with ids `user-1..user-4` and/or emails ending in `@test.com`.
 
 -- Preview counts

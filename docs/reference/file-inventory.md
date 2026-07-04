@@ -36,19 +36,21 @@ serplists.com/
 - `functions/api/utils/response.ts` (shared JSON response helpers)
 
 ## Data and migrations
-- `db/schema.sql` (maintained snapshot for reference; `db/migrations/` is the source of truth)
+- `db/schema.sql` (maintained snapshot for reference)
 - `db/schema/` (Drizzle schema used by API handlers; entry `db/schema/index.ts`)
 - `db/types/` (Drizzle model types)
 - `db/drizzle.config.ts` (Drizzle Kit config)
+- `db/migrations/` (numbered D1 migration files tracked in D1's `d1_migrations` table)
+- `db/seeds/official-templates.sql` (official public template seed)
+- `db/seeds/test-data.sql` (dev test users and sample data)
+- `db/maintenance/` (one-off maintenance SQL that should not be tracked as schema history)
 - `db/migrations/0001_initial_schema.sql` (core tables)
 - `db/migrations/0002_add_slug_to_templates.sql`
 - `db/migrations/0002_add_username_and_profiles.sql`
 - `db/migrations/0003_unique_template_slugs.sql`
 - `db/migrations/0004_remove_affiliate_and_pages.sql`
 - `db/migrations/0005_backfill_template_slugs.sql`
-- `db/migrations/0006_seed_official_templates.sql`
 - `db/migrations/0007_add_checklist_run_progress.sql`
-- `db/migrations/seed-test-data.sql` (dev test users and sample data)
 
 ## App state and services
 - `src/contexts/CloudflareAuthContext.tsx` - Auth state and profile refresh

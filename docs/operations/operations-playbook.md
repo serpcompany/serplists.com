@@ -58,16 +58,41 @@ MVP assumes Cloudflare runtime logs only (no external sink/alerts). View request
 See `docs/knowledge/incident-response-runbook.md`.
 
 ## D1 database
-The database binding and name are defined in `wrangler.toml`:
-- Binding: `DB`
-- Database name: `serp-checklists-db`
+See [Database environments](database-environments.md) for the local/staging/production model.
 
-Migrations live in `db/migrations/`. The repo uses `wrangler d1 execute` scripts rather than `wrangler d1 migrations`:
+The binding name is always `DB`.
+
+- Local/prod database name: `serp-checklists-db`
+- Staging/preview database name: `serp-checklists-staging-db`
+
+Use Wrangler D1 migrations instead of ad hoc remote `wrangler d1 execute` commands for schema changes:
+
 ```bash
 pnpm run db:reset
-pnpm run db:seed
-pnpm run db:backfill-slugs:remote
-pnpm run db:migrate:progress:remote
+pnpm run db:migrations:list:local
+pnpm run db:migrate:d1:local
+pnpm run db:migrations:list:staging
+pnpm run db:migrate:d1:staging
+pnpm run db:migrations:list:prod
+pnpm run db:migrate:d1:prod
+```
+
+If a remote DB predates native D1 migration tracking, baseline its existing
+history before applying new migrations:
+
+```bash
+pnpm run db:migrations:baseline:prod -- --through 0020
+pnpm run db:migrations:baseline:prod -- --through 0020 --execute
+```
+
+Preview deployments should not be enabled against production data. Create
+`serp-checklists-staging-db`, paste its UUID into `preview_database_id` in
+`wrangler.toml`, then run:
+
+```bash
+pnpm run check:preview:d1-binding
+pnpm run db:migrate:d1:staging
+pnpm run check:staging:d1-schema
 ```
 
 Drizzle Kit config lives at `db/drizzle.config.ts` and expects these env vars:
@@ -85,7 +110,7 @@ Production schema gate:
 pnpm run check:prod:d1-schema
 ```
 
-If this fails, production D1 is missing one or more required tables/columns for the deployed API. Apply the checked-in migration files before shipping the frontend deploy.
+If this fails, production D1 is missing one or more required tables/columns for the deployed API. Apply pending D1 migrations before shipping the frontend deploy.
 
 ### D1 backup and restore
 **Backups (recommended):** use `wrangler d1 export` to generate a `.sql` file containing schema + data.

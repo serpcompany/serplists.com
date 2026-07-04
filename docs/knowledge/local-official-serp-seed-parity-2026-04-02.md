@@ -1,6 +1,6 @@
 # Local official SERP seed parity (2026-04-02)
 
-The repo already had an official publisher seed in [db/migrations/0006_seed_official_templates.sql](/Users/devin/dev/repos/serplists.com/db/migrations/0006_seed_official_templates.sql), but the default local `db:reset` flow skipped it.
+The repo already had an official publisher seed in `db/seeds/official-templates.sql`, but the default local `db:reset` flow skipped it.
 
 That created an avoidable mismatch:
 

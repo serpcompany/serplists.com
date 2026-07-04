@@ -44,14 +44,14 @@ pnpm run dev:all    # Runs both in parallel
 
 ## Local database (D1)
 ```bash
+pnpm run db:migrate:d1:local
 pnpm run db:seed
-pnpm run db:seed:official:local
 pnpm run db:reset
 pnpm run db:reset:test-user-passwords
 pnpm run db:query "SELECT * FROM templates LIMIT 5"
 ```
 
-Local D1 state lives under `.wrangler/state/...`. The `db:reset` script clears that local state, replays migrations, seeds the local test users, and re-adds the official `serp` publisher/templates.
+Local D1 state lives under `.wrangler/state/...`. The `db:seed` script seeds local test users plus the official `serp` publisher/templates. The `db:reset` script clears local state, applies tracked D1 migrations through Wrangler, and then runs those same local seeds.
 
 Drizzle schema lives in `db/schema/` (entry: `db/schema/index.ts`); Drizzle Kit config in `db/drizzle.config.ts`.
 
@@ -65,7 +65,7 @@ In development mode (`import.meta.env.DEV`), two helpers are available:
 - `DevLoginBar` (fixed bar at the bottom of the app)
 - Quick-fill buttons on the `/login` page
 
-These helpers use the test users seeded by `db/migrations/seed-test-data.sql`.
+These helpers use the users seeded by `pnpm run db:seed`.
 
 Credentials:
 - checklists@serp.co
@@ -84,7 +84,7 @@ pnpm run db:reset:test-user-passwords
 
 If login fails, verify:
 1. `pnpm run dev:api` is running on port 8788
-2. `pnpm run db:seed` has been executed
+2. `pnpm run db:seed` or `pnpm run db:reset` has been executed
 
 ## Testing and checks
 Install Playwright browsers once before running e2e/smoke tests:

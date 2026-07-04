@@ -23,12 +23,24 @@ pnpm run sre:deps
 
 ## Database (local D1)
 ```bash
+pnpm run db:migrate:d1:local
 pnpm run db:seed
 pnpm run db:reset
 pnpm run db:reset:test-user-passwords
 pnpm run db:generate
 pnpm run db:migrate
 pnpm run db:query "SELECT * FROM templates LIMIT 5"
+```
+
+## Database (remote D1)
+```bash
+pnpm run check:preview:d1-binding
+pnpm run db:migrate:d1:staging
+pnpm run check:staging:d1-schema
+# One-time only if prod predates native D1 migration tracking:
+pnpm run db:migrations:baseline:prod -- --through 0020 --execute
+pnpm run db:migrate:d1:prod
+pnpm run check:prod:d1-schema
 ```
 
 ## Ports and base URLs
@@ -46,6 +58,6 @@ pnpm run db:query "SELECT * FROM templates LIMIT 5"
 ## Dev login (dummy users)
 - Visible only in dev mode.
 - Seed users via `pnpm run db:seed` or `pnpm run db:reset`.
-- Emails: admin@test.com, john@test.com, jane@test.com, bob@test.com
+- Emails: checklists@serp.co, admin@test.com, john@test.com, jane@test.com, bob@test.com
 - Default password: `password123`
 - Restore changed local test-user passwords: `pnpm run db:reset:test-user-passwords`
