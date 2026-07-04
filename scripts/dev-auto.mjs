@@ -26,10 +26,14 @@ function getMode() {
 
 function buildCommands(mode, config) {
   const frontendCommand = `pnpm exec vite --host localhost --port ${config.frontendPort} --strictPort`;
+  const devVarsArgs = existsSync(".dev.vars") ? ["--env-file", ".dev.vars"] : [];
+  const devVarsFlag = existsSync(".dev.vars") ? "--env-file .dev.vars " : "";
   const apiCommand =
-    `npx wrangler pages dev ./dist --local --port ${config.apiPort} --env-file .dev.vars ` +
+    `npx wrangler pages dev ./dist --local --port ${config.apiPort} ${devVarsFlag}` +
     `--show-interactive-dev-session=false ` +
-    `-b FRONTEND_URL=${config.frontendUrl} -b CORS_ALLOWED_ORIGINS=${config.corsAllowedOrigins}`;
+    `-b FRONTEND_URL=${config.frontendUrl} ` +
+    `-b CORS_ALLOWED_ORIGINS=${config.corsAllowedOrigins} ` +
+    `-b BETTER_AUTH_SECRET=${config.betterAuthSecret}`;
 
   if (mode === "frontend") {
     return {
@@ -49,13 +53,14 @@ function buildCommands(mode, config) {
         "--local",
         "--port",
         String(config.apiPort),
-        "--env-file",
-        ".dev.vars",
+        ...devVarsArgs,
         "--show-interactive-dev-session=false",
         "-b",
         `FRONTEND_URL=${config.frontendUrl}`,
         "-b",
         `CORS_ALLOWED_ORIGINS=${config.corsAllowedOrigins}`,
+        "-b",
+        `BETTER_AUTH_SECRET=${config.betterAuthSecret}`,
       ],
     };
   }
