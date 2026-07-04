@@ -21,6 +21,9 @@ const reuseExistingServer =
     ? process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1"
     : !process.env.CI;
 const devVarsFlag = existsSync(".dev.vars") ? " --env-file .dev.vars" : "";
+const wranglerPersistFlag = process.env.PLAYWRIGHT_WRANGLER_PERSIST_TO
+  ? ` --persist-to ${process.env.PLAYWRIGHT_WRANGLER_PERSIST_TO}`
+  : "";
 const frontendCommand = existsSync(".dev.vars")
   ? `pnpm exec dotenv -e .dev.vars -- vite --host ${frontendHost} --port ${frontendPort} --strictPort`
   : `pnpm exec vite --host ${frontendHost} --port ${frontendPort} --strictPort`;
@@ -49,7 +52,7 @@ export default defineConfig({
     {
       name: "api",
       command:
-        `pnpm run build:dev && npx wrangler pages dev ./dist --local --port ${apiPort}${devVarsFlag} ` +
+        `pnpm run build:dev && npx wrangler pages dev ./dist --local --port ${apiPort}${devVarsFlag}${wranglerPersistFlag} ` +
         `-b FRONTEND_URL=${frontendUrlForApi} ` +
         `-b CORS_ALLOWED_ORIGINS=${corsAllowedOrigins} ` +
         `-b BETTER_AUTH_SECRET=${betterAuthSecret}`,
