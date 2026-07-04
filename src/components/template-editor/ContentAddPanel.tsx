@@ -54,7 +54,7 @@ export const ContentAddPanel = ({
 
   return (
     <div ref={menuRef} className="relative inline-flex">
-      <Button variant="ghost" size="sm" onClick={onTogglePanel}>
+      <Button variant="ghost" size="sm" onClick={onTogglePanel} type="button">
         <PanelRightOpen className="mr-2 h-4 w-4" />
         Add Block
       </Button>

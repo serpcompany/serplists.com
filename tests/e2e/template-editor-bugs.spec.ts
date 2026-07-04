@@ -55,13 +55,21 @@ function getTemplateSections(template: Record<string, unknown>) {
   const firstEntry = parsedSections[0] as { items?: unknown } | undefined;
   if (firstEntry && Array.isArray(firstEntry.items)) {
     return parsedSections as Array<{
-      items: Array<{ description?: string; title?: string }>;
+      items: Array<{
+        contents?: Array<{ type?: string; value?: string }>;
+        description?: string;
+        title?: string;
+      }>;
     }>;
   }
 
   return [
     {
-      items: parsedSections as Array<{ description?: string; title?: string }>,
+      items: parsedSections as Array<{
+        contents?: Array<{ type?: string; value?: string }>;
+        description?: string;
+        title?: string;
+      }>,
     },
   ];
 }
@@ -135,6 +143,56 @@ test.describe("template editor regressions", () => {
         expect.objectContaining({
           description: secondTaskDescription,
           title: secondTaskTitle,
+        }),
+      ]),
+    );
+
+    if (createdTemplateId) {
+      await deleteTemplate(page, createdTemplateId);
+    }
+  });
+
+  test("@smoke adds and persists a text content block", async ({ page }) => {
+    const stamp = Date.now();
+    const templateTitle = `QA Content ${stamp}`;
+    const taskTitle = `Task with content ${stamp}`;
+    const contentValue = `Markdown content block ${stamp}`;
+    let createdTemplateId: string | null = null;
+
+    await registerAccount(page);
+    await page.goto("/dashboard/templates/new");
+
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", {
+      name: /add task to section 1/i,
+    }).click();
+    await page.getByLabel("Task Title").fill(taskTitle);
+
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("button", { name: "Text" }).last().click();
+
+    await expect(
+      page.getByPlaceholder("Enter text or markdown content"),
+    ).toBeVisible();
+    await page
+      .getByPlaceholder("Enter text or markdown content")
+      .fill(contentValue);
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    createdTemplateId =
+      savedTemplate && typeof savedTemplate.id === "string" ? savedTemplate.id : null;
+
+    expect(savedTemplate).toBeTruthy();
+
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    expect(sections[0]?.items[0]?.contents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "text",
+          value: contentValue,
         }),
       ]),
     );
