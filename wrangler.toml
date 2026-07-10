@@ -37,4 +37,8 @@ bucket_name = "serp-checklists-uploads"
 binding = "R2_UPLOADS"
 bucket_name = "serp-checklists-uploads"
 
+[[env.production.r2_buckets]]
+binding = "R2_UPLOADS"
+bucket_name = "serp-checklists-uploads"
+
 # Production secrets should be set via Pages Secrets (e.g. `wrangler pages secret put JWT_SECRET`).
