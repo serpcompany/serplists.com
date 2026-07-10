@@ -13,19 +13,47 @@ pnpm run verify:release
 ```
 This runs lint, typecheck, unit/integration tests, and Playwright smoke checks.
 
-### Automated deploy (GitHub Actions)
-Pushes/merges to `main` trigger `cloudflare-pages-deploy.yml`, which:
+Remote D1 readiness is separate because it needs Cloudflare credentials:
+
+```bash
+pnpm run verify:staging
+pnpm run verify:prod:d1
+```
+
+### CI and automated deploy (GitHub Actions)
+`ci.yml` runs on pull requests and pushes to `main` or `staging`:
+
+- frozen install
+- env contract validation
+- lint
+- typecheck
+- unit/integration tests
+- build
+- Playwright Chromium install
+- smoke tests
+
+`cloudflare-pages-deploy.yml` runs on pushes to `main` or `staging`:
 
 - validates env
-- verifies the live production D1 schema with `pnpm run check:prod:d1-schema`
+- verifies production D1 readiness with `pnpm run verify:prod:d1` for `main`
+- verifies preview/staging D1 readiness with `pnpm run verify:staging` for non-main branches
 - builds with `pnpm run build`
-- deploys `dist` to Cloudflare Pages
+- deploys `dist` to Cloudflare Pages with the current branch name
+
+Preview deployments use the `[[env.preview.d1_databases]]` D1 binding, which
+must match the top-level `preview_database_id`. Production deployments use the
+production D1 database id.
 
 Required GitHub secrets:
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_EMAIL`
 - `CLOUDFLARE_API_KEY`
-- `CLOUDFLARE_PAGES_PROJECT`
+
+Cloudflare Pages project:
+- Project name: `serplists-com`
+- Domains: `serp-checklists.pages.dev`, `serplists.com`, `staging.serplists.com`
+
+The Pages project name is not secret and is set directly in `.github/workflows/cloudflare-pages-deploy.yml`. Do not use the `serp-checklists.pages.dev` domain or `wrangler.toml` `name` as the `wrangler pages deploy --project-name` value.
 
 ## Secrets and environment
 Set these in Cloudflare Pages (production) or `.dev.vars` (local):
@@ -58,16 +86,45 @@ MVP assumes Cloudflare runtime logs only (no external sink/alerts). View request
 See `docs/knowledge/incident-response-runbook.md`.
 
 ## D1 database
-The database binding and name are defined in `wrangler.toml`:
-- Binding: `DB`
-- Database name: `serp-checklists-db`
+See [Database environments](database-environments.md) for the local/staging/production model.
 
-Migrations live in `db/migrations/`. The repo uses `wrangler d1 execute` scripts rather than `wrangler d1 migrations`:
+The binding name is always `DB`.
+
+- Local/prod database name: `serp-checklists-db`
+- Staging/preview database name: `serp-checklists-staging-db`
+- Production database UUID in `wrangler.toml`: `b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1`
+- Staging preview database UUID in `wrangler.toml`: `fcaf4325-5be7-4ead-ab60-45932a04177b`
+
+Use Wrangler D1 migrations instead of ad hoc remote `wrangler d1 execute` commands for schema changes:
+
 ```bash
 pnpm run db:reset
-pnpm run db:seed
-pnpm run db:backfill-slugs:remote
-pnpm run db:migrate:progress:remote
+pnpm run db:migrations:list:local
+pnpm run db:migrate:d1:local
+pnpm run db:migrations:list:staging
+pnpm run db:migrate:d1:staging
+pnpm run db:seed:official:staging
+pnpm run db:migrations:list:prod
+pnpm run db:migrate:d1:prod
+```
+
+If a remote DB predates native D1 migration tracking, baseline its existing
+history before applying new migrations:
+
+```bash
+pnpm run db:migrations:baseline:prod -- --through 0020
+pnpm run db:migrations:baseline:prod -- --through 0020 --execute
+```
+
+Preview deployments should not be enabled against production data. Create
+`serp-checklists-staging-db`, paste its UUID into `preview_database_id` in
+`wrangler.toml`, then run:
+
+```bash
+pnpm run check:preview:d1-binding
+pnpm run verify:staging
+pnpm run db:migrate:d1:staging
+pnpm run check:staging:d1-schema
 ```
 
 Drizzle Kit config lives at `db/drizzle.config.ts` and expects these env vars:
@@ -82,10 +139,11 @@ pnpm run db:migrate
 
 Production schema gate:
 ```bash
+pnpm run verify:prod:d1
 pnpm run check:prod:d1-schema
 ```
 
-If this fails, production D1 is missing one or more required tables/columns for the deployed API. Apply the checked-in migration files before shipping the frontend deploy.
+If this fails, production D1 is missing one or more required tables/columns for the deployed API. Apply pending D1 migrations before shipping the frontend deploy.
 
 ### D1 backup and restore
 **Backups (recommended):** use `wrangler d1 export` to generate a `.sql` file containing schema + data.

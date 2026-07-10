@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { DevLoginBar } from '@/components/DevLoginBar';
@@ -16,19 +16,29 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 describe('DevLoginBar', () => {
   it('stays hidden on blank template editor routes', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/dashboard/templates/new']}>
+      <StaticRouter location="/dashboard/templates/new">
         <DevLoginBar />
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toBe('');
   });
 
-  it('still renders on normal routes in development', () => {
+  it('stays hidden on authenticated dashboard routes used for design QA', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/dashboard']}>
+      <StaticRouter location="/dashboard">
         <DevLoginBar />
-      </MemoryRouter>,
+      </StaticRouter>,
+    );
+
+    expect(html).toBe('');
+  });
+
+  it('still renders on the login route in development', () => {
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/login">
+        <DevLoginBar />
+      </StaticRouter>,
     );
 
     expect(html).toContain('DEV MODE');

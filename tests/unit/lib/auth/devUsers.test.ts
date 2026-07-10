@@ -9,6 +9,7 @@ import {
 describe("devUsers", () => {
   it("defines the seeded local personas in one place", () => {
     expect(DEV_TEST_USERS.map((user) => user.email)).toEqual([
+      "checklists@serp.co",
       "admin@test.com",
       "john@test.com",
       "jane@test.com",

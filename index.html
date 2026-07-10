@@ -14,6 +14,21 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="/placeholder.svg" />
 
+    <script>
+      (function () {
+        try {
+          var storedTheme = window.localStorage.getItem('serplists-theme');
+          if (storedTheme === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (_error) {
+          document.documentElement.classList.remove('dark');
+        }
+      })();
+    </script>
+
     <style>
       #boot-splash {
         min-height: 100vh;
@@ -47,16 +62,6 @@
       #boot-text {
         font-size: 14px;
         letter-spacing: 0.2px;
-      }
-      @media (prefers-color-scheme: dark) {
-        #boot-splash {
-          color: #f9fafb;
-          background: #0b1220;
-        }
-        #boot-spinner {
-          border-color: rgba(249, 250, 251, 0.18);
-          border-top-color: rgba(249, 250, 251, 0.75);
-        }
       }
     </style>
   </head>

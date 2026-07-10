@@ -83,14 +83,20 @@ export function buildDevAutoConfig({
     baseEnv.CORS_ALLOWED_ORIGINS,
     frontendUrl,
   );
+  const betterAuthSecret =
+    baseEnv.BETTER_AUTH_SECRET ||
+    baseEnv.JWT_SECRET ||
+    "local-dev-better-auth-secret-32-chars";
 
   return {
     frontendPort,
     apiPort,
     frontendUrl,
     apiUrl,
+    betterAuthSecret,
     corsAllowedOrigins,
     envOverrides: {
+      BETTER_AUTH_SECRET: betterAuthSecret,
       FRONTEND_URL: frontendUrl,
       CORS_ALLOWED_ORIGINS: corsAllowedOrigins,
       PORT: String(frontendPort),

@@ -1,201 +1,160 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, ArrowUpRight, BadgeCheck } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Eye, FileText, List, Play } from 'lucide-react';
 
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-import { PublicPill } from '@/components/shared/PublicPill';
-import { UserInfo } from '@/components/shared/UserInfo';
-import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
-import { buildPublicCategoryPath, buildPublicProfilePath } from '@/lib/routes';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import {
+  buildCanonicalPublicTemplatePath,
+  buildPublicProfilePath,
+  buildPublicTemplatesPath,
+} from '@/lib/routes';
+import { cn } from '@/lib/utils';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { generateSlug } from '@/utils/urlHelpers';
+import {
+  getTemplateItemCount,
+  getTemplateOwnerLabel,
+  getTemplateSectionCount,
+} from '@/components/checklist-library/discovery-utils';
 
 interface TemplateCardProps {
-  template: ChecklistTemplate;
-  viewMode: 'grid' | 'list';
-  onTemplateClick: (template: ChecklistTemplate) => void;
+  layout?: 'horizontal' | 'vertical';
+  template: ChecklistTemplate & {
+    copyCount?: number;
+    runCount?: number;
+    viewCount?: number;
+  };
 }
 
-const countTemplateItems = (template: ChecklistTemplate) =>
-  template.sections.reduce((total, section) => total + section.items.length, 0);
+const getTemplateIcon = (template: ChecklistTemplate) =>
+  template.type === 'recipe' ? (
+    <List className="h-7 w-7 text-muted-foreground" />
+  ) : (
+    <FileText className="h-7 w-7 text-muted-foreground" />
+  );
 
 export const TemplateCard: React.FC<TemplateCardProps> = ({
+  layout = 'vertical',
   template,
-  viewMode,
-  onTemplateClick,
 }) => {
-  const navigate = useNavigate();
-
-  const handleCategoryClick = (event: React.MouseEvent, category: string) => {
-    event.preventDefault();
-    event.stopPropagation();
-    navigate(buildPublicCategoryPath(category));
-  };
-
-  const totalItems = countTemplateItems(template);
-  const categories = template.categories || [];
-  const ownerLabel =
-    template.ownerProfile?.full_name || template.ownerProfile?.username;
-  const ownerProfilePath = template.ownerProfile?.username
-    ? buildPublicProfilePath(template.ownerProfile.username)
-    : null;
-  const isOfficial =
-    template.userId === REPO_TEMPLATE_USER_ID ||
-    template.id.startsWith('repo:');
-
-  if (viewMode === 'list') {
-    return (
-      <Card
-        className="group overflow-hidden rounded-xl border-border/80 bg-card shadow-[0_12px_30px_-24px_rgba(15,23,42,0.14)] transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[0_18px_36px_-28px_rgba(15,23,42,0.16)]"
-        onClick={() => onTemplateClick(template)}
-      >
-        <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              {isOfficial ? (
-                <Badge className="rounded-full border border-border bg-secondary px-3 text-secondary-foreground hover:bg-secondary">
-                  <BadgeCheck className="mr-1 h-3.5 w-3.5" />
-                  Official
-                </Badge>
-              ) : null}
-              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                Public template
-              </span>
-            </div>
-
-            <h3 className="mt-3 text-2xl font-semibold text-foreground">
-              {template.title}
-            </h3>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              {template.description ||
-                'Reusable template pack ready to clone or run.'}
-            </p>
-
-            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-              <span>{template.sections.length} sections</span>
-              <span>{totalItems} items</span>
-              {ownerLabel ? (
-                ownerProfilePath ? (
-                  <Link
-                    to={ownerProfilePath}
-                    onClick={(event) => event.stopPropagation()}
-                    className="inline-flex items-center gap-1 hover:text-foreground"
-                  >
-                    by {ownerLabel}
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </Link>
-                ) : (
-                  <span>by {ownerLabel}</span>
-                )
-              ) : (
-                <UserInfo userId={template.userId} />
-              )}
-            </div>
-
-            {categories.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {categories.slice(0, 4).map((category) => (
-                  <PublicPill key={category} asChild>
-                    <a
-                      href={buildPublicCategoryPath(category)}
-                      onClick={(event) => handleCategoryClick(event, category)}
-                    >
-                      {category}
-                    </a>
-                  </PublicPill>
-                ))}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="flex shrink-0 items-center gap-3">
-            <div className="rounded-full border border-border/80 bg-background px-4 py-2 text-sm font-medium text-foreground">
-              View template
-            </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-full border border-border/80 bg-secondary text-foreground transition group-hover:translate-x-0.5">
-              <ArrowRight className="h-4 w-4" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const sectionCount = getTemplateSectionCount(template);
+  const itemCount = getTemplateItemCount(template);
+  const ownerLabel = getTemplateOwnerLabel(template);
+  const ownerHandle = template.ownerProfile?.username;
+  const categories = template.categories ?? [];
+  const templatePath =
+    buildCanonicalPublicTemplatePath({
+      ...template,
+      slug: template.slug ?? generateSlug(template.title),
+    }) ?? buildPublicTemplatesPath();
+  const isHorizontal = layout === 'horizontal';
+  const ownerInitial = ownerLabel.charAt(0).toUpperCase() || 'U';
 
   return (
-    <Card
-      className="group h-full cursor-pointer overflow-hidden rounded-xl border-border/80 bg-card shadow-[0_12px_30px_-24px_rgba(15,23,42,0.14)] transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[0_18px_36px_-28px_rgba(15,23,42,0.16)]"
-      onClick={() => onTemplateClick(template)}
+    <div
+      className={cn(
+        'group overflow-hidden rounded-lg border border-border bg-card transition-all hover:border-muted-foreground/30 hover:shadow-lg hover:shadow-black/5',
+        isHorizontal && 'flex',
+      )}
     >
-      <CardContent className="flex h-full flex-col p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            {isOfficial ? (
-              <Badge className="rounded-full border border-border bg-secondary px-3 text-secondary-foreground hover:bg-secondary">
-                <BadgeCheck className="mr-1 h-3.5 w-3.5" />
-                Official
-              </Badge>
-            ) : null}
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              Template pack
-            </span>
-          </div>
-          <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground" />
-        </div>
-
-        <div className="mt-4 flex-1">
-          <h3 className="line-clamp-2 text-xl font-semibold text-foreground">
-            {template.title}
-          </h3>
-          <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">
-            {template.description ||
-              'Reusable template pack ready to clone or run.'}
-          </p>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-          <span>{template.sections.length} sections</span>
-          <span>{totalItems} items</span>
-          {ownerLabel ? (
-            ownerProfilePath ? (
-              <Link
-                to={ownerProfilePath}
-                onClick={(event) => event.stopPropagation()}
-                className="inline-flex items-center gap-1 hover:text-foreground"
-              >
-                by {ownerLabel}
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </Link>
-            ) : (
-              <span>by {ownerLabel}</span>
-            )
-          ) : (
-            <UserInfo userId={template.userId} />
+      <div
+        className={cn(
+          'flex flex-1',
+          isHorizontal ? 'min-h-[12rem] flex-row' : 'flex-col',
+        )}
+      >
+        <div
+          className={cn(
+            'relative flex items-center justify-center bg-gradient-to-br from-secondary to-secondary/50',
+            isHorizontal ? 'w-44 shrink-0' : 'h-32',
           )}
+        >
+          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-background shadow-sm">
+            {getTemplateIcon(template)}
+          </div>
+
+          <div className="absolute inset-0 flex items-center justify-center bg-background/80 opacity-0 transition-opacity group-hover:opacity-100">
+            <Button asChild>
+              <Link to={templatePath}>
+                <Eye className="mr-2 h-4 w-4" />
+                View Template
+              </Link>
+            </Button>
+          </div>
         </div>
 
-        {categories.length > 0 ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {categories.slice(0, 3).map((category) => (
-              <PublicPill key={category} asChild>
-                <a
-                  href={buildPublicCategoryPath(category)}
-                  onClick={(event) => handleCategoryClick(event, category)}
+        <div className="flex flex-1 flex-col p-4">
+          {categories.length > 0 ? (
+            <div className="mb-2 flex flex-wrap gap-1">
+              {categories.slice(0, 2).map((category) => (
+                <span
+                  key={category}
+                  className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
                 >
                   {category}
-                </a>
-              </PublicPill>
-            ))}
-            {categories.length > 3 ? (
-              <PublicPill>+{categories.length - 3}</PublicPill>
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          <Link to={templatePath} className="block">
+            <h3 className="mb-1 line-clamp-1 text-sm font-medium text-foreground transition-colors group-hover:text-primary">
+              {template.title}
+            </h3>
+            {template.description ? (
+              <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
+                {template.description}
+              </p>
+            ) : null}
+          </Link>
+
+          <div className="mt-auto flex items-center gap-3 text-xs text-muted-foreground">
+            <span>{sectionCount} sections</span>
+            <span>{itemCount} tasks</span>
+            {typeof template.viewCount === 'number' ? (
+              <span className="ml-auto">
+                {template.viewCount.toLocaleString()} views
+              </span>
             ) : null}
           </div>
-        ) : null}
 
-        <div className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-foreground">
-          <span>View template</span>
-          <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+          <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+            {ownerHandle ? (
+              <Link
+                className="flex min-w-0 items-center gap-2 transition-colors hover:text-foreground"
+                to={buildPublicProfilePath(ownerHandle)}
+              >
+                <Avatar className="h-5 w-5">
+                  <AvatarImage src="" />
+                  <AvatarFallback className="text-[10px]">
+                    {ownerInitial}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="truncate text-xs text-muted-foreground">
+                  {ownerHandle}
+                </span>
+              </Link>
+            ) : (
+              <div className="flex min-w-0 items-center gap-2">
+                <Avatar className="h-5 w-5">
+                  <AvatarImage src="" />
+                  <AvatarFallback className="text-[10px]">
+                    {ownerInitial}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+            )}
+
+            <Button asChild className="h-7 px-2 text-xs" size="sm" variant="ghost">
+              <Link to={templatePath}>
+                <Play className="mr-1 h-3 w-3" />
+                Start
+              </Link>
+            </Button>
+          </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 };

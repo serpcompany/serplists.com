@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Download, Upload, FileText, AlertCircle, CheckCircle } from "lucide-react";
 import { useTemplates } from "@/contexts/TemplatesContext";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { toast } from "sonner";
 import { downloadBackupFile, exportPortableTemplatesToJSON, parseTemplatesFromFile } from "@/lib/utils/templateBackup";
 import type { TemplateImportResult } from "@/lib/utils/templateBackup";
@@ -18,7 +19,9 @@ import type { TemplateImportOptions, TemplateImportSummary } from "@/types/check
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
+import { getAccessFailure } from "@/lib/api-errors";
 import { getBillingStatusQueryKey } from "@/lib/billing";
+import { cn } from "@/lib/utils";
 
 interface TemplateBackupProps {
   className?: string;
@@ -58,14 +61,22 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const {
     user
   } = useAuth();
+  const {
+    activeTeamId,
+    activeWorkspace,
+    canEditTemplates,
+    isTeamWorkspace,
+  } = useWorkspace();
   const billing = useQuery({
-    queryKey: getBillingStatusQueryKey(user?.id),
-    queryFn: () => api.getBillingStatus(),
+    queryKey: getBillingStatusQueryKey(user?.id, activeTeamId),
+    queryFn: () => api.getBillingStatus(activeTeamId ? { teamId: activeTeamId } : undefined),
     enabled: !!user,
     retry: false
   });
   const plan = billing.data?.plan ?? "free";
   const billingEnabled = billing.data?.billingEnabled ?? true;
+  const hasBackupAccess = plan === "pro" || plan === "team";
+  const workspaceTemplateLabel = isTeamWorkspace ? "Workspace Templates" : "My Templates";
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<TemplateImportResult | null>(null);
   const [lastImportSummary, setLastImportSummary] = useState<TemplateImportSummary | null>(null);
@@ -73,7 +84,11 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const [includePublicTemplates, setIncludePublicTemplates] = useState(false);
   const [importVisibility, setImportVisibility] = useState<ImportVisibility>("preserve");
 
-  const ownedTemplates = user ? allTemplates.filter(t => t.userId === user.id) : [];
+  const ownedTemplates = activeTeamId
+    ? allTemplates.filter(t => t.teamId === activeTeamId)
+    : user
+      ? allTemplates.filter(t => t.userId === user.id && !t.teamId)
+      : [];
   const communityTemplates = templates.filter(t => t.isPublic && t.userId !== user?.id);
   const templatesToExport = includePublicTemplates
     ? [...ownedTemplates, ...communityTemplates]
@@ -82,7 +97,28 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const exceedsTemplateLimit = importPreview ? importPreview.templates.length > MAX_TEMPLATES_PER_IMPORT : false;
 
   const handleUpgrade = async () => {
+    if (isTeamWorkspace) {
+      toast.error("This team needs workspace import/export access.");
+      return;
+    }
     await startBillingCheckout(billingEnabled);
+  };
+
+  const handleBackupFailure = async (error: unknown, fallbackMessage: string) => {
+    if (isTeamWorkspace) {
+      const failure = getAccessFailure(error, fallbackMessage);
+      toast.error(
+        failure.kind === "upgrade_required"
+          ? "This team needs workspace import/export access."
+          : failure.message,
+      );
+      return;
+    }
+
+    await handleAccessFailure(error, {
+      billingEnabled,
+      fallbackMessage,
+    });
   };
 
   const handleExportAll = async () => {
@@ -91,8 +127,13 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       return;
     }
 
-    if (plan !== "pro") {
-      await startBillingCheckout(billingEnabled);
+    if (!canEditTemplates) {
+      toast.error("You need editor access to export workspace templates.");
+      return;
+    }
+
+    if (!hasBackupAccess) {
+      await handleUpgrade();
       return;
     }
 
@@ -103,7 +144,8 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 
     try {
       const backup = await api.exportTemplateBackup({
-        includePublic: includePublicTemplates
+        includePublic: includePublicTemplates,
+        teamId: activeTeamId,
       });
       downloadBackupFile(backup);
       const count = Array.isArray((backup as { templates?: unknown }).templates) ? (backup as {
@@ -112,10 +154,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       toast.success(`Exported ${count} templates successfully`);
     } catch (error) {
       console.error("Export error:", error);
-      await handleAccessFailure(error, {
-        billingEnabled,
-        fallbackMessage: "Failed to export templates",
-      });
+      await handleBackupFailure(error, "Failed to export templates");
     }
   };
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -148,8 +187,13 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const handleConfirmImport = async () => {
     if (!importPreview || !user) return;
 
-    if (plan !== "pro") {
-      await startBillingCheckout(billingEnabled);
+    if (!canEditTemplates) {
+      toast.error("You need editor access to import workspace templates.");
+      return;
+    }
+
+    if (!hasBackupAccess) {
+      await handleUpgrade();
       return;
     }
 
@@ -187,10 +231,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       const fileInput = document.getElementById('template-file-input') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
     } catch (error) {
-      await handleAccessFailure(error, {
-        billingEnabled,
-        fallbackMessage: "Failed to import templates",
-      });
+      await handleBackupFailure(error, "Failed to import templates");
     } finally {
       setIsImporting(false);
     }
@@ -322,32 +363,58 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   };
   const publicTemplateCount = ownedTemplates.filter(t => t.isPublic).length;
   const privateTemplateCount = ownedTemplates.filter(t => !t.isPublic).length;
-  return <div className={className}>
-	      <Card>
-	        <CardHeader>
-	          <CardTitle className="flex items-center gap-2">
-	            <FileText className="h-5 w-5" />
-	            Template JSON Import & Export
-	          </CardTitle>
-	          <CardDescription>
-	            Export portable template packs or import compatible JSON files
-	          </CardDescription>
-	        </CardHeader>
-        <CardContent className="space-y-6">
-          {user && !billing.isLoading && plan !== "pro" ? (
+  return <section
+    className={cn("rounded-xl border border-border bg-card p-6", className)}
+    data-template-import-export="true"
+  >
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+          <FileText className="h-5 w-5 text-muted-foreground" />
+          Template JSON Import & Export
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Export portable template packs or import compatible JSON files for {activeWorkspace.name}.
+        </p>
+      </div>
+      <div className="w-fit rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
+        Portable packs
+      </div>
+    </div>
+
+    <div className="mt-6 space-y-6">
+          {user && !billing.isLoading && !hasBackupAccess ? (
             <div className="rounded-lg border p-4 bg-muted/50">
               <div className="flex items-start gap-3">
                 <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5" />
                 <div className="space-y-1">
-                  <div className="font-medium">Pro feature</div>
+                  <div className="font-medium">{isTeamWorkspace ? "Workspace feature" : "Pro feature"}</div>
                   <div className="text-sm text-muted-foreground">
-                    {billingEnabled
-                      ? "Template import/export is available on Pro."
-                      : "Billing is temporarily unavailable. Please contact support."}
+                    {isTeamWorkspace
+                      ? "This team needs workspace import/export access."
+                      : billingEnabled
+                        ? "Template import/export is available on Pro."
+                        : "Billing is temporarily unavailable. Please contact support."}
                   </div>
-                  <Button className="mt-2" onClick={handleUpgrade} disabled={!billingEnabled}>
-                    {billingEnabled ? "Upgrade to Pro" : "Upgrade unavailable"}
-                  </Button>
+                  {!isTeamWorkspace ? (
+                    <Button className="mt-2" onClick={handleUpgrade} disabled={!billingEnabled}>
+                      {billingEnabled ? "Upgrade to Pro" : "Upgrade unavailable"}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {user && isTeamWorkspace && !canEditTemplates ? (
+            <div className="rounded-lg border p-4 bg-muted/50">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-medium">Editor access required</div>
+                  <div className="text-sm text-muted-foreground">
+                    You can view this workspace, but importing or exporting templates requires editor access.
+                  </div>
                 </div>
               </div>
             </div>
@@ -357,7 +424,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
           <div className="grid grid-cols-3 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold">{ownedTemplates.length}</div>
-              <div className="text-sm text-muted-foreground">My Templates</div>
+              <div className="text-sm text-muted-foreground">{workspaceTemplateLabel}</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">{publicTemplateCount}</div>
@@ -387,10 +454,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                   id="include-public-templates"
                   checked={includePublicTemplates}
                   onCheckedChange={setIncludePublicTemplates}
-                  disabled={!user || billing.isLoading || plan !== "pro" || !billingEnabled}
+                  disabled={!user || billing.isLoading || !hasBackupAccess || !canEditTemplates}
                 />
               </div>
-	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={!user || billing.isLoading || plan !== "pro" || !billingEnabled}>
+	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={!user || billing.isLoading || !hasBackupAccess || !canEditTemplates}>
 	              <Download className="h-4 w-4" />
 	              Export Portable Pack
 	            </Button>
@@ -419,7 +486,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
               </div>
 	            <div className="space-y-2">
 	              <Label htmlFor="template-file-input">Select a YAML, JSON, or Markdown template file</Label>
-	              <Input id="template-file-input" type="file" accept=".json,.md,.markdown,.yaml,.yml" onChange={handleFileSelect} disabled={isImporting || !user || billing.isLoading || plan !== "pro" || !billingEnabled} />
+	              <Input id="template-file-input" type="file" accept=".json,.md,.markdown,.yaml,.yml" onChange={handleFileSelect} disabled={isImporting || !user || billing.isLoading || !hasBackupAccess || !canEditTemplates} />
 	              <p className="text-sm text-muted-foreground">
 	                Need an example?{" "}
 	                <Button variant="link" className="p-0 h-auto text-primary" onClick={downloadSampleTemplate}>
@@ -572,7 +639,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                 </CardContent>
               </Card>}
           </div>
-        </CardContent>
-      </Card>
-    </div>;
+    </div>
+  </section>;
 };

@@ -1,10 +1,37 @@
-import { useTheme } from "next-themes"
+import { useEffect, useState } from "react"
 import { Toaster as Sonner, toast } from "sonner"
+
+import {
+  applyStoredTheme,
+  getStoredTheme,
+  THEME_CHANGE_EVENT,
+  type SerpListsTheme,
+} from "@/lib/theme"
 
 type ToasterProps = React.ComponentProps<typeof Sonner>
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  const [theme, setTheme] = useState<SerpListsTheme>(() => getStoredTheme())
+
+  useEffect(() => {
+    setTheme(applyStoredTheme())
+
+    const handleThemeChange = (event: Event) => {
+      const nextTheme =
+        event instanceof CustomEvent && event.detail
+          ? event.detail
+          : getStoredTheme()
+      setTheme(nextTheme)
+    }
+
+    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange)
+    window.addEventListener("storage", handleThemeChange)
+
+    return () => {
+      window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange)
+      window.removeEventListener("storage", handleThemeChange)
+    }
+  }, [])
 
   return (
     <Sonner

@@ -1,175 +1,371 @@
-import { useState } from 'react';
-import { ArrowUpRight, Layers3, Sparkles } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import {
+  Grid3X3,
+  List,
+  Plus,
+  Search,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
-import { TemplateBackup } from '@/components/TemplateBackup';
-import { UserTemplatesSection } from '@/components/templates/UserTemplatesSection';
-import { RunNameDialog } from '@/components/ui/run-name-dialog';
-import { useAuth } from '@/contexts/CloudflareAuthContext';
-import { useTemplates } from '@/contexts/TemplatesContext';
+import { TemplateCard } from '@/components/dashboard/TemplateCard';
+import { TemplateListItem } from '@/components/dashboard/TemplateListItem';
 import {
-  buildConsoleRunPath,
-  buildConsoleTemplateCreatePath,
-  buildConsoleTemplatePath,
-  buildPublicTemplatesPath,
-} from '@/lib/routes';
+  DashboardContentShell,
+  DashboardEmptyState,
+  DashboardPageHeader,
+  DashboardScrollArea,
+  DashboardToolbar,
+} from '@/components/dashboard/DashboardContentShell';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useDashboardTemplatesModel } from '@/features/dashboard-templates/useDashboardTemplatesModel';
+
+type ViewMode = 'grid' | 'list';
+type SortOption = 'recent' | 'alphabetical' | 'tasks';
+type VisibilityFilter = 'all' | 'public' | 'private';
 
 const Templates = () => {
-  const { allTemplates, templatesLoading, createRun, deleteTemplate } =
-    useTemplates();
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState<{
-    title: string;
-  } | null>(null);
-  const [isCreatingRun, setIsCreatingRun] = useState(false);
+  const model = useDashboardTemplatesModel();
+  const [runName, setRunName] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [sortBy, setSortBy] = useState<SortOption>('recent');
+  const [filterVisibility, setFilterVisibility] =
+    useState<VisibilityFilter>('all');
+  const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
+  const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
 
-  const userTemplates = allTemplates.filter(
-    (template) => template.userId === user?.id,
-  );
-  const totalTemplateItems = userTemplates.reduce(
-    (total, template) =>
-      total +
-      template.sections.reduce(
-        (sectionTotal, section) => sectionTotal + section.items.length,
-        0,
-      ),
-    0,
-  );
+  const defaultRunName = model.selectedTemplate
+    ? `${model.selectedTemplate.title} - ${new Date().toLocaleString()}`
+    : '';
 
-  const handleCreateTemplate = () => {
-    navigate(buildConsoleTemplateCreatePath());
-  };
+  const filteredTemplates = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
 
-  const handleBrowsePublicTemplates = () => {
-    navigate(buildPublicTemplatesPath());
-  };
+    return model.templates
+      .filter((template) => {
+        const matchesSearch =
+          normalizedQuery.length === 0 ||
+          [template.title, template.description, ...(template.categories ?? [])]
+            .join(' ')
+            .toLowerCase()
+            .includes(normalizedQuery);
+        const matchesVisibility =
+          filterVisibility === 'all' ||
+          (filterVisibility === 'public' && template.isPublic) ||
+          (filterVisibility === 'private' && !template.isPublic);
 
-  const handleViewTemplate = (id: string) => {
-    navigate(buildConsoleTemplatePath(id));
-  };
+        return matchesSearch && matchesVisibility;
+      })
+      .sort((left, right) => {
+        if (sortBy === 'alphabetical') {
+          return left.title.localeCompare(right.title);
+        }
 
-  const handleStartRun = (templateId: string) => {
-    const template = allTemplates.find((item) => item.id === templateId);
-    if (!template) {
+        if (sortBy === 'tasks') {
+          const leftTasks = left.sections.reduce(
+            (count, section) => count + section.items.length,
+            0,
+          );
+          const rightTasks = right.sections.reduce(
+            (count, section) => count + section.items.length,
+            0,
+          );
+
+          return rightTasks - leftTasks;
+        }
+
+        return (
+          new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+        );
+      });
+  }, [filterVisibility, model.templates, searchQuery, sortBy]);
+
+  const handleRunDialogChange = (open: boolean) => {
+    if (open) {
       return;
     }
 
-    setSelectedTemplateId(templateId);
-    setSelectedTemplate({ title: template.title });
-    setDialogOpen(true);
+    setRunName('');
+    model.closeRunLauncher();
   };
 
-  const handleDeleteTemplate = async (templateId: string) => {
-    try {
-      await deleteTemplate(templateId);
-      toast.success('Template deleted successfully');
-    } catch (error) {
-      console.error('Failed to delete template:', error);
-      toast.error('Failed to delete template');
+  const handleRunSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const result = await model.createRunFromTemplate(runName.trim() || undefined);
+
+    if (result.kind === 'error') {
+      toast.error(result.message);
+      return;
     }
+
+    setRunName('');
   };
 
-  const handleConfirmRun = async (runName: string) => {
-    setIsCreatingRun(true);
-    try {
-      const newRun = await createRun({
-        templateId: selectedTemplateId,
-        runName,
-      });
+  const handleDeleteTemplate = async () => {
+    if (!templateToDelete) {
+      return;
+    }
 
-      if (newRun) {
-        setDialogOpen(false);
-        navigate(buildConsoleRunPath(newRun.id));
-      }
+    setIsDeletingTemplate(true);
+    try {
+      await model.removeTemplate(templateToDelete);
+      toast.success('Template deleted');
+      setTemplateToDelete(null);
     } catch (error) {
-      console.error('Failed to create run:', error);
-      toast.error('Failed to create checklist run. Please try again.');
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to delete template.',
+      );
     } finally {
-      setIsCreatingRun(false);
+      setIsDeletingTemplate(false);
     }
   };
 
   return (
-    <div className="space-y-8">
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="console-card">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground">
-            <Sparkles className="h-4 w-4" />
-            Template operations
-          </div>
-          <h1 className="mt-6 text-4xl font-semibold text-foreground">
-            Your template inventory
-          </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-foreground">
-            Create private templates, clone public packs into your workspace,
-            and launch new runs from the console.
-          </p>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-          <div className="marketing-metric">
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Templates
-            </div>
-            <div className="mt-4 text-3xl font-semibold text-foreground">
-              {userTemplates.length}
-            </div>
-          </div>
-          <div className="marketing-metric">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              <Layers3 className="h-4 w-4" />
-              Documented items
-            </div>
-            <div className="mt-4 text-3xl font-semibold text-foreground">
-              {totalTemplateItems}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <UserTemplatesSection
+    <DashboardContentShell>
+      <DashboardPageHeader
         title="My Templates"
-        description="Manage the template packs inside your private workspace."
-        templates={userTemplates}
-        loading={templatesLoading}
-        onCreateTemplate={handleCreateTemplate}
-        onBrowsePublicTemplates={handleBrowsePublicTemplates}
-        onViewTemplate={handleViewTemplate}
-        onDeleteTemplate={handleDeleteTemplate}
-        onStartRun={handleStartRun}
+        description={`${model.templates.length} templates in your library`}
+        actions={
+        <Button type="button" onClick={model.openCreateTemplate}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Template
+        </Button>
+        }
       />
 
-      <div className="console-card">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-semibold text-foreground">
-              Portable import and export
-            </h2>
-            <p className="mt-2 text-sm leading-7 text-muted-foreground">
-              Move template packs between environments or bootstrap your
-              workspace from a known sample.
-            </p>
-          </div>
-          <div className="hidden rounded-full border border-border bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground sm:flex sm:items-center sm:gap-2">
-            JSON packs
-            <ArrowUpRight className="h-4 w-4" />
-          </div>
+      <DashboardToolbar>
+        <div className="relative flex-1 lg:max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search templates..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="pl-9"
+          />
         </div>
-        <TemplateBackup />
-      </div>
 
-      <RunNameDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        templateTitle={selectedTemplate?.title || ''}
-        onConfirm={handleConfirmRun}
-        loading={isCreatingRun}
-      />
-    </div>
+        <Select
+          value={filterVisibility}
+          onValueChange={(value) => setFilterVisibility(value as VisibilityFilter)}
+        >
+          <SelectTrigger className="w-full lg:w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="public">Public</SelectItem>
+            <SelectItem value="private">Private</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={sortBy}
+          onValueChange={(value) => setSortBy(value as SortOption)}
+        >
+          <SelectTrigger className="w-full lg:w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="recent">Most Recent</SelectItem>
+            <SelectItem value="alphabetical">Alphabetical</SelectItem>
+            <SelectItem value="tasks">Most Tasks</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <div className="flex items-center rounded-md border border-border">
+          <Button
+            aria-label="Show templates in grid view"
+            aria-pressed={viewMode === 'grid'}
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={`h-8 w-8 rounded-none rounded-l-md ${
+              viewMode === 'grid' ? 'bg-secondary' : ''
+            }`}
+            onClick={() => setViewMode('grid')}
+          >
+            <Grid3X3 className="h-4 w-4" />
+          </Button>
+          <Button
+            aria-label="Show templates in list view"
+            aria-pressed={viewMode === 'list'}
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={`h-8 w-8 rounded-none rounded-r-md ${
+              viewMode === 'list' ? 'bg-secondary' : ''
+            }`}
+            onClick={() => setViewMode('list')}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+        </div>
+      </DashboardToolbar>
+
+      <DashboardScrollArea>
+        <div className="space-y-8">
+          {model.loading ? (
+            <div className="text-sm text-muted-foreground">Loading templates...</div>
+          ) : filteredTemplates.length === 0 ? (
+            <DashboardEmptyState
+              icon={<SlidersHorizontal className="h-7 w-7" />}
+              title="No templates found"
+              description={
+                searchQuery || filterVisibility !== 'all'
+                  ? 'Try adjusting your search or filters'
+                  : 'Create your first template to get started'
+              }
+              action={
+                !searchQuery && filterVisibility === 'all' ? (
+                <Button type="button" onClick={model.openCreateTemplate}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Template
+                </Button>
+                ) : null
+              }
+            />
+          ) : viewMode === 'grid' ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredTemplates.map((template) => (
+                <TemplateCard
+                  key={template.id}
+                  onDelete={setTemplateToDelete}
+                  onStartRun={model.openRunLauncher}
+                  template={template}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredTemplates.map((template) => (
+                <TemplateListItem
+                  key={template.id}
+                  onDelete={setTemplateToDelete}
+                  onStartRun={model.openRunLauncher}
+                  template={template}
+                />
+              ))}
+            </div>
+          )}
+
+        </div>
+      </DashboardScrollArea>
+
+      <Dialog open={model.runLauncherOpen} onOpenChange={handleRunDialogChange}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Start Run</DialogTitle>
+            <DialogDescription>
+              Pick one of your templates and launch a new run.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleRunSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Select
+                value={model.selectedTemplateId}
+                onValueChange={model.selectRunTemplate}
+              >
+                <SelectTrigger id="run-template" className="rounded-md">
+                  <SelectValue placeholder="Select a template" />
+                </SelectTrigger>
+                <SelectContent>
+                  {model.templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Input
+                id="run-name"
+                value={runName}
+                onChange={(event) => setRunName(event.target.value)}
+                placeholder={defaultRunName}
+                className="rounded-md"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleRunDialogChange(false)}
+                disabled={model.isCreatingRun}
+                className="rounded-md"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!model.selectedTemplateId || model.isCreatingRun}
+                className="rounded-md"
+              >
+                {model.isCreatingRun ? 'Creating...' : 'Start Run'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={templateToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !isDeletingTemplate) {
+            setTemplateToDelete(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete template</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this template? This removes it
+              from your library and cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isDeletingTemplate}
+              onClick={() => setTemplateToDelete(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isDeletingTemplate}
+              onClick={() => void handleDeleteTemplate()}
+            >
+              {isDeletingTemplate ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </DashboardContentShell>
   );
 };
 

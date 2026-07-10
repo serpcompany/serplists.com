@@ -65,7 +65,7 @@ export function UserTemplatesSection(props: Props) {
         </div>
 
         {props.onCreateTemplate ? (
-          <Button onClick={props.onCreateTemplate} className="rounded-xl">
+          <Button onClick={props.onCreateTemplate} className="rounded-md">
             <PlusCircle className="mr-2 h-4 w-4" />
             {props.createLabel ?? 'New template'}
           </Button>
@@ -73,13 +73,13 @@ export function UserTemplatesSection(props: Props) {
       </div>
 
       {props.loading ? (
-        <Card className="console-card">
+        <Card className="border bg-card shadow-none">
           <CardContent>
             <LoadingSpinner message="Loading templates..." />
           </CardContent>
         </Card>
       ) : templates.length === 0 ? (
-        <Card className="console-card">
+        <Card className="border bg-card shadow-none">
           <CardContent className="py-14 text-center">
             <p className="text-lg font-medium text-foreground">
               {props.emptyStateLabel ??
@@ -91,7 +91,7 @@ export function UserTemplatesSection(props: Props) {
             </p>
             <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
               {props.onCreateTemplate ? (
-                <Button onClick={props.onCreateTemplate} className="rounded-xl">
+                <Button onClick={props.onCreateTemplate} className="rounded-md">
                   <PlusCircle className="mr-2 h-4 w-4" />
                   Create your first template
                 </Button>
@@ -100,7 +100,7 @@ export function UserTemplatesSection(props: Props) {
                 <Button
                   variant="outline"
                   onClick={props.onBrowsePublicTemplates}
-                  className="rounded-2xl"
+                  className="rounded-md"
                 >
                   Browse public templates
                 </Button>
@@ -109,16 +109,16 @@ export function UserTemplatesSection(props: Props) {
           </CardContent>
         </Card>
       ) : (
-        <div className="docs-panel overflow-hidden">
+        <div className="overflow-hidden border border-border bg-card">
           {templates.map((template) => (
             <div
               key={template.id}
-              className="border-b border-border/70 last:border-b-0"
+              className="border-b border-border last:border-b-0"
             >
               <div className="flex flex-col gap-6 p-5 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border border-border bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-secondary-foreground">
+                    <span className="border border-border bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-secondary-foreground">
                       Internal template
                     </span>
                     <span className="text-sm text-muted-foreground">
@@ -154,7 +154,7 @@ export function UserTemplatesSection(props: Props) {
                       ].map((item) => (
                         <div
                           key={item.label}
-                          className="rounded-xl border border-border/80 bg-muted/25 px-4 py-3 text-center"
+                          className="border border-border bg-secondary/30 px-4 py-3 text-center"
                         >
                           <div className="text-lg font-semibold text-foreground">
                             {item.value}
@@ -173,7 +173,7 @@ export function UserTemplatesSection(props: Props) {
                     <Button
                       type="button"
                       onClick={() => props.onStartRun?.(template.id)}
-                      className="rounded-xl"
+                      className="rounded-md"
                     >
                       <Play className="mr-2 h-4 w-4" />
                       Run
@@ -185,7 +185,7 @@ export function UserTemplatesSection(props: Props) {
                       type="button"
                       variant="outline"
                       onClick={() => props.onEditTemplate?.(template.id)}
-                      className="rounded-2xl"
+                      className="rounded-md"
                     >
                       Edit
                     </Button>
@@ -196,7 +196,7 @@ export function UserTemplatesSection(props: Props) {
                       type="button"
                       variant="outline"
                       onClick={() => props.onViewTemplate?.(template.id)}
-                      className="rounded-2xl"
+                      className="rounded-md"
                     >
                       View
                     </Button>
@@ -208,7 +208,7 @@ export function UserTemplatesSection(props: Props) {
                         <Button
                           type="button"
                           variant="outline"
-                          className="rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          className="rounded-md text-destructive hover:bg-destructive/10 hover:text-destructive"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

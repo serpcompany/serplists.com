@@ -16,12 +16,14 @@ This docs hub is the source of truth for setup, architecture, operations, implem
 
 ## Implementation guides
 - [Modules index](modules/index.md)
+- [Team workspaces](modules/team-workspaces.md)
 - [Patterns index](patterns/index.md)
 - [Recipes index](recipes/index.md)
 
 ## Operations and incidents
 - [Operations index](operations/index.md)
 - [Operations playbook](operations/operations-playbook.md)
+- [Database environments](operations/database-environments.md)
 - [Knowledge base index](knowledge/index.md)
 
 ## Data schema and examples

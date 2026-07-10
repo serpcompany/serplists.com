@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
+import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import { ChecklistItem, ChecklistSection } from '@/types/checklist';
 
 interface ChecklistItemCardProps {
@@ -51,8 +52,8 @@ export const ChecklistItemCard: React.FC<ChecklistItemCardProps> = ({
               {item.title}
             </CardTitle>
             {item.description && (
-              <p className="text-sm text-muted-foreground mt-1">
-                {item.description}
+              <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
+                {normalizeDisplayText(item.description)}
               </p>
             )}
             <p className="text-xs text-muted-foreground">

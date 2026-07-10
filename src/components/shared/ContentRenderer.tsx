@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { VideoEmbed } from './VideoEmbed';
 import { File, Code, ListCheck } from 'lucide-react';
 import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
+import { normalizeMarkdownDisplayText } from '@/lib/utils/markdownDisplay';
 import { safeUrl } from '@/lib/utils/safeUrl';
 
 interface ContentRendererProps {
@@ -32,9 +33,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       {contents.map((content, contentIndex: number) => (
         <div key={contentIndex} className="space-y-3">
           {content.type === "text" && content.value && (
-            <div className="prose prose-sm max-w-none">
+            <div className="prose prose-sm max-w-none whitespace-pre-line">
               <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeUrl}>
-                {content.value}
+                {normalizeMarkdownDisplayText(content.value)}
               </ReactMarkdown>
             </div>
           )}
@@ -54,7 +55,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
           
           {content.type === "video" && content.value && (
             <div className="rounded-lg border overflow-hidden">
-              <VideoEmbed url={content.value} />
+              <VideoEmbed title="Task video content" url={content.value} />
             </div>
           )}
           
@@ -68,6 +69,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
                     href={safeUrl(content.value)} 
                     target="_blank" 
                     rel="noopener noreferrer"
+                    aria-label={`Download ${content.fileName || "file"}`}
                     className="text-sm text-primary hover:underline"
                   >
                     Download File
@@ -84,6 +86,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
                   href={safeUrl(content.value)} 
                   target="_blank" 
                   rel="noopener noreferrer"
+                  aria-label="Open embedded content"
                   className="flex items-center gap-2 text-primary hover:underline"
                 >
                   <Code className="h-4 w-4" />

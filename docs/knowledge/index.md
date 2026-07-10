@@ -43,6 +43,7 @@ Operational notes, debugging lessons, and implementation decisions.
 - [Portable template metadata persistence (2026-03-24)](template-portable-metadata-persistence-2026-03-24.md)
 - [Template JSON versioning](template-json-versioning.md)
 - [Junk template cleanup](template-junk-templates.md)
+- [UI feature audit and screen inventory (2026-04-09)](ui-feature-audit-2026-04-09.md)
 - [Test users and production safety](test-users-production-safety.md)
 - [Vitest coverage](vitest-coverage.md)
 - [Vitest Drizzle mocking](vitest-drizzle-mocking.md)

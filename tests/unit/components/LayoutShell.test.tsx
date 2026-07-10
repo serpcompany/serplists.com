@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Layout } from '@/components/Layout';
@@ -14,10 +15,31 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   }),
 }));
 
-describe('Layout console shell', () => {
-  it('does not force the console shell into dark mode', () => {
+vi.mock('@/contexts/WorkspaceContext', () => ({
+  useWorkspace: () => ({
+    activeWorkspace: {
+      id: 'personal',
+      name: 'Personal',
+      role: 'owner',
+      type: 'personal',
+    },
+    isWorkspaceLoading: false,
+    selectWorkspace: vi.fn(),
+    workspaces: [
+      {
+        id: 'personal',
+        name: 'Personal',
+        role: 'owner',
+        type: 'personal',
+      },
+    ],
+  }),
+}));
+
+describe('Layout shell selection', () => {
+  it('uses the exact dashboard sidebar framing from the v0 reference for dashboard routes', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/console']}>
+      <StaticRouter location="/dashboard/templates">
         <Routes>
           <Route
             path="*"
@@ -28,15 +50,71 @@ describe('Layout console shell', () => {
             }
           />
         </Routes>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
-    expect(html).not.toContain('dark min-h-screen');
+    expect(html).toContain('data-app-shell="console"');
+    expect(html).toContain(
+      'sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 shrink-0 flex-col border-r border-border bg-card md:flex',
+    );
+    expect(html).toContain('New Template');
+    expect(html).toContain('Settings');
+    expect(html).not.toContain('>Profile<');
+    expect(html).toContain('Switch to dark mode');
+    expect(html).toContain('Import Templates');
+    expect(html).toContain('Build repeatable checklists');
   });
 
-  it('renders the stripped operational sidebar structure for console routes', () => {
+  it('uses the shared public shell for discovery routes', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/console/templates']}>
+      <StaticRouter location="/templates">
+        <Routes>
+          <Route
+            path="*"
+            element={
+              <Layout>
+                <div>Discovery child</div>
+              </Layout>
+            }
+          />
+        </Routes>
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('h-14');
+    expect(html).toContain('data-app-shell="public"');
+    expect(html).toContain('Discovery child');
+    expect(html).toContain('Switch to dark mode');
+    expect(html).toContain('Build repeatable checklists');
+  });
+
+  it('uses the shared public shell for profile routes with the same px-4 h-14 frame', () => {
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/profile/designops">
+        <Routes>
+          <Route
+            path="*"
+            element={
+              <Layout>
+                <div>Profile child</div>
+              </Layout>
+            }
+          />
+        </Routes>
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('data-app-shell="public"');
+    expect(html).toContain('Profile child');
+    expect(html).toContain(
+      'mx-auto w-full px-4 max-w-[var(--layout-shell-max)] flex h-14 items-center justify-between gap-6',
+    );
+    expect(html).toContain('Build repeatable checklists');
+  });
+
+  it('makes theme switching available from the mobile console menu', () => {
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/dashboard/templates">
         <Routes>
           <Route
             path="*"
@@ -47,35 +125,10 @@ describe('Layout console shell', () => {
             }
           />
         </Routes>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
-    expect(html).toContain('Search templates');
-    expect(html).not.toContain('Operate your checklist system');
-  });
-
-  it('keeps the public footer lean instead of repeating header links', () => {
-    const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/pricing']}>
-        <Routes>
-          <Route
-            path="*"
-            element={
-              <Layout>
-                <div>Public child</div>
-              </Layout>
-            }
-          />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    expect(html).toContain('Checklists');
-    expect(html).not.toContain('Explore');
-    expect(html).not.toContain('Outside the app');
-    expect(html).toContain('Company');
-    expect(html).toContain('Support');
-    expect(html).toContain('Network');
-    expect(html).toContain('SERP DR');
+    expect(html).toContain('Toggle menu');
+    expect(html).toContain('Light mode');
   });
 });

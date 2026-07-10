@@ -24,7 +24,7 @@ export const useTemplateActions = (templateId: string) => {
       }
     } catch (error) {
       console.error('Failed to create run:', error);
-      toast.error('Please log in with admin/demo to start a checklist run');
+      toast.error('Unable to start this checklist run. Please try again.');
     }
   };
 

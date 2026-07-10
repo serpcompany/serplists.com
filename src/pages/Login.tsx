@@ -1,25 +1,33 @@
-import { useState, useEffect } from "react";
-import { useNavigate, Link, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import {
+  Eye,
+  EyeOff,
+  Loader2,
+  Lock,
+  Mail,
+} from "lucide-react";
+import { toast } from "sonner";
+
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { authClient, getAuthStatus } from "@/lib/auth-client";
+import {
+  DEV_TEST_USER_DEFAULT_PASSWORD,
+  DEV_TEST_USER_PASSWORD_RESET_COMMAND,
+} from "@/lib/auth/devUsers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
-import { DEV_TEST_USER_DEFAULT_PASSWORD, DEV_TEST_USER_PASSWORD_RESET_COMMAND } from "@/lib/auth/devUsers";
+
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResendingVerification, setIsResendingVerification] = useState(false);
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
-  const {
-    login,
-    isAuthenticated,
-    isLoading
-  } = useAuth();
+  const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/account";
@@ -27,6 +35,7 @@ const Login = () => {
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const prefilledEmail = searchParams.get("email");
+
     if (prefilledEmail) {
       setEmail(prefilledEmail);
       setUnverifiedEmail(prefilledEmail);
@@ -41,30 +50,32 @@ const Login = () => {
     }
   }, [location.search]);
 
-  // Auto-redirect if already authenticated
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      navigate(from, {
-        replace: true
-      });
+      navigate(from, { replace: true });
     }
-  }, [isAuthenticated, isLoading, navigate, from]);
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  }, [from, isAuthenticated, isLoading, navigate]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setIsSubmitting(true);
+
     try {
       const result = await login(email, password);
+
       if (result.ok) {
         toast.success("Login successful");
         setUnverifiedEmail(null);
-      } else {
-        if (result.errorCode === "EMAIL_NOT_VERIFIED") {
-          setUnverifiedEmail(email);
-          toast.error("Email not verified. Check your inbox or resend verification.");
-        } else {
-          toast.error(result.error || "Invalid email or password");
-        }
+        return;
       }
+
+      if (result.errorCode === "EMAIL_NOT_VERIFIED") {
+        setUnverifiedEmail(email);
+        toast.error("Email not verified. Check your inbox or resend verification.");
+        return;
+      }
+
+      toast.error(result.error || "Invalid email or password");
     } catch (error) {
       toast.error("An error occurred during login");
       console.error("Login error:", error);
@@ -81,6 +92,7 @@ const Login = () => {
     }
 
     setIsResendingVerification(true);
+
     try {
       const authStatus = await getAuthStatus();
       if (!authStatus.emailAuthAvailable) {
@@ -95,9 +107,10 @@ const Login = () => {
 
       if (result?.error) {
         toast.error(result.error.message || "Unable to resend verification email");
-      } else {
-        toast.success("Verification email sent.");
+        return;
       }
+
+      toast.success("Verification email sent.");
     } catch (error) {
       toast.error("Unable to resend verification email");
       console.error("Resend verification error:", error);
@@ -105,158 +118,193 @@ const Login = () => {
       setIsResendingVerification(false);
     }
   };
-  const handleDemoLogin = () => {
-    setEmail("admin");
-    setPassword("demo");
-  };
+
   return (
     <AuthPageShell
-      title="Sign in to your account"
-      description={
-        import.meta.env.DEV ? (
-          <span className="text-yellow-600 dark:text-yellow-400">🧪 Development Mode - Use quick login buttons below</span>
-        ) : undefined
-      }
+      title="Welcome back"
+      description="Sign in to your account to continue"
       footer={
         <>
-          Or{" "}
-          <Link to="/register" className="font-medium text-primary hover:underline">
-            create a new account
+          Don&apos;t have an account?{" "}
+          <Link
+            to="/register"
+            className="font-medium text-primary hover:underline"
+          >
+            Sign up
           </Link>
         </>
       }
     >
-      {import.meta.env.DEV && (
-        <div className="space-y-3 rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setEmail("checklists@serp.co");
-                setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
-              }}
-              className="text-xs"
-            >
-              <div className="mr-1 h-2 w-2 rounded-full bg-amber-500" />
-              Fill SERP
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setEmail("admin@test.com");
-                setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
-              }}
-              className="text-xs"
-            >
-              <div className="mr-1 h-2 w-2 rounded-full bg-red-500" />
-              Fill Admin
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setEmail("john@test.com");
-                setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
-              }}
-              className="text-xs"
-            >
-              <div className="mr-1 h-2 w-2 rounded-full bg-blue-500" />
-              Fill John
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setEmail("jane@test.com");
-                setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
-              }}
-              className="text-xs"
-            >
-              <div className="mr-1 h-2 w-2 rounded-full bg-purple-500" />
-              Fill Jane
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setEmail("bob@test.com");
-                setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
-              }}
-              className="text-xs"
-            >
-              <div className="mr-1 h-2 w-2 rounded-full bg-green-500" />
-              Fill Bob
-            </Button>
-          </div>
-          <p className="text-xs text-yellow-700 dark:text-yellow-300">
-            Default local seed password: <code>{DEV_TEST_USER_DEFAULT_PASSWORD}</code>. If you changed a persona password, run <code>{DEV_TEST_USER_PASSWORD_RESET_COMMAND}</code>.
-          </p>
-        </div>
-      )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {import.meta.env.DEV ? (
+            <div className="space-y-3 rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEmail("checklists@serp.co");
+                    setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
+                  }}
+                  className="text-xs"
+                >
+                  <div className="mr-1 h-2 w-2 rounded-full bg-amber-500" />
+                  Fill SERP
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEmail("admin@test.com");
+                    setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
+                  }}
+                  className="text-xs"
+                >
+                  <div className="mr-1 h-2 w-2 rounded-full bg-red-500" />
+                  Fill Admin
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEmail("john@test.com");
+                    setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
+                  }}
+                  className="text-xs"
+                >
+                  <div className="mr-1 h-2 w-2 rounded-full bg-blue-500" />
+                  Fill John
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEmail("jane@test.com");
+                    setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
+                  }}
+                  className="text-xs"
+                >
+                  <div className="mr-1 h-2 w-2 rounded-full bg-purple-500" />
+                  Fill Jane
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEmail("bob@test.com");
+                    setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
+                  }}
+                  className="text-xs"
+                >
+                  <div className="mr-1 h-2 w-2 rounded-full bg-green-500" />
+                  Fill Bob
+                </Button>
+              </div>
+              <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                Default local seed password: <code>{DEV_TEST_USER_DEFAULT_PASSWORD}</code>. If you changed a persona password, run{" "}
+                <code>{DEV_TEST_USER_PASSWORD_RESET_COMMAND}</code>.
+              </p>
+            </div>
+          ) : null}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="text"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            required
-          />
-          <div className="text-right">
-            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
-              Forgot password?
-            </Link>
+          {unverifiedEmail ? (
+            <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
+              Verify your email before signing in.
+            </div>
+          ) : null}
+
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="pl-10"
+                required
+                disabled={isSubmitting || isLoading}
+              />
+            </div>
           </div>
-        </div>
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in...
-            </>
-          ) : (
-            "Sign in with email"
-          )}
-        </Button>
-        {unverifiedEmail && (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            disabled={isResendingVerification}
-            onClick={handleResendVerification}
-          >
-            {isResendingVerification ? (
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <Link
+                to="/forgot-password"
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Forgot password?
+              </Link>
+            </div>
+
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="pl-10 pr-10"
+                required
+                disabled={isSubmitting || isLoading}
+              />
+              <button
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                type="button"
+                onClick={() => setShowPassword((current) => !current)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {unverifiedEmail ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleResendVerification}
+              disabled={isResendingVerification}
+              className="w-full"
+            >
+              {isResendingVerification ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Resending verification…
+                </>
+              ) : (
+                "Resend verification email"
+              )}
+            </Button>
+          ) : null}
+
+          <Button type="submit" className="w-full" disabled={isSubmitting || isLoading}>
+            {isSubmitting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resending verification...
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Signing in...
               </>
             ) : (
-              "Resend verification email"
+              "Sign in"
             )}
           </Button>
-        )}
-      </form>
+        </form>
     </AuthPageShell>
   );
 };
+
 export default Login;

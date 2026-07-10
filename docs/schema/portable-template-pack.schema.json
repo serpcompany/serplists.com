@@ -243,8 +243,8 @@
     "templates"
   ],
   "additionalProperties": false,
-  "title": "Serplists Portable Template Pack v2.0.0",
+  "title": "SERP Lists Portable Template Pack v2.0.0",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://serplists.com/schema/portable-template-pack.schema.json",
-  "description": "Canonical portable Serplists template-pack contract generated from the Zod source of truth."
+  "description": "Canonical portable SERP Lists template-pack contract generated from the Zod source of truth."
 }

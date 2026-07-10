@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   diffD1Schema,
   formatSchemaDrift,
+  mapIndexPragmaResults,
   mapPragmaResults,
 } from "../../../scripts/check-production-d1-schema-lib.mjs";
 
@@ -18,6 +19,37 @@ describe("mapPragmaResults", () => {
     expect(actual).toEqual({
       templates: ["id", "title", "version"],
       checklist_runs: ["id", "share_token"],
+    });
+  });
+});
+
+describe("mapIndexPragmaResults", () => {
+  it("maps wrangler index pragma results back to their table names", () => {
+    const actual = mapIndexPragmaResults(
+      ["team_members", "team_invites"],
+      [
+        {
+          results: [
+            { name: "idx_team_members_team_user_unique", unique: 1, partial: 0 },
+            { name: "idx_team_members_active_owner_unique", unique: 1, partial: 1 },
+          ],
+        },
+        {
+          results: [
+            { name: "idx_team_invites_email", unique: 0, partial: 0 },
+          ],
+        },
+      ],
+    );
+
+    expect(actual).toEqual({
+      team_members: {
+        idx_team_members_team_user_unique: { unique: true, partial: false },
+        idx_team_members_active_owner_unique: { unique: true, partial: true },
+      },
+      team_invites: {
+        idx_team_invites_email: { unique: false, partial: false },
+      },
     });
   });
 });
@@ -43,6 +75,8 @@ describe("diffD1Schema", () => {
         templates: ["version"],
         checklist_runs: ["share_token"],
       },
+      missingIndexes: {},
+      invalidIndexes: {},
     });
   });
 
@@ -59,6 +93,46 @@ describe("diffD1Schema", () => {
     expect(diff).toEqual({
       missingTables: [],
       missingColumns: {},
+      missingIndexes: {},
+      invalidIndexes: {},
+    });
+  });
+
+  it("reports missing and invalid required indexes", () => {
+    const diff = diffD1Schema(
+      {
+        team_members: ["id", "team_id", "user_id", "role", "status"],
+      },
+      {
+        team_members: ["id", "team_id", "user_id", "role", "status"],
+      },
+      {
+        team_members: [
+          { name: "idx_team_members_team_user_unique", unique: true },
+          { name: "idx_team_members_active_owner_unique", unique: true, partial: true },
+        ],
+      },
+      {
+        team_members: {
+          idx_team_members_team_user_unique: { unique: false, partial: false },
+        },
+      },
+    );
+
+    expect(diff).toEqual({
+      missingTables: [],
+      missingColumns: {},
+      missingIndexes: {
+        team_members: ["idx_team_members_active_owner_unique"],
+      },
+      invalidIndexes: {
+        team_members: [
+          {
+            name: "idx_team_members_team_user_unique",
+            issues: ["expected unique"],
+          },
+        ],
+      },
     });
   });
 });
@@ -72,6 +146,17 @@ describe("formatSchemaDrift", () => {
           templates: ["version"],
           checklist_runs: ["share_token", "share_used_at"],
         },
+        missingIndexes: {
+          team_members: ["idx_team_members_active_owner_unique"],
+        },
+        invalidIndexes: {
+          team_invites: [
+            {
+              name: "idx_team_invites_token_hash_unique",
+              issues: ["expected unique"],
+            },
+          ],
+        },
       },
       "serp-checklists-db",
     );
@@ -80,6 +165,8 @@ describe("formatSchemaDrift", () => {
     expect(message).toContain("- missing table: entitlement_overrides");
     expect(message).toContain("- templates: missing columns version");
     expect(message).toContain("- checklist_runs: missing columns share_token, share_used_at");
+    expect(message).toContain("- team_members: missing indexes idx_team_members_active_owner_unique");
+    expect(message).toContain("- team_invites: invalid index idx_team_invites_token_hash_unique (expected unique)");
     expect(message).toContain("Apply the required checked-in D1 migrations before deploying.");
   });
 });

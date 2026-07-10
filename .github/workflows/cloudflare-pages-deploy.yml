@@ -4,10 +4,11 @@ on:
   push:
     branches:
       - main
+      - staging
   workflow_dispatch:
 
 concurrency:
-  group: pages-deploy-main
+  group: pages-deploy-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -20,14 +21,15 @@ jobs:
       # placeholder so `pnpm run typecheck:env` can validate the contract
       # without duplicating the production secret into GitHub Actions.
       BETTER_AUTH_SECRET: ci-build-placeholder-secret-32-chars-minimum
+      # Cloudflare Pages project names are not secrets. This must be the Pages
+      # Project Name, not the pages.dev domain or the wrangler.toml `name`.
+      CLOUDFLARE_PAGES_PROJECT: serplists-com
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node
         uses: actions/setup-node@v5
@@ -41,12 +43,21 @@ jobs:
       - name: Validate environment contract
         run: pnpm run typecheck:env
 
-      - name: Verify production D1 schema
+      - name: Verify production D1 readiness
+        if: github.ref_name == 'main'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
           CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
-        run: pnpm run check:prod:d1-schema
+        run: pnpm run verify:prod:d1
+
+      - name: Verify preview D1 readiness
+        if: github.ref_name != 'main'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+        run: pnpm run verify:staging
 
       - name: Build site
         run: pnpm run build
@@ -56,5 +67,4 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
           CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
-          CLOUDFLARE_PAGES_PROJECT: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
-        run: npx wrangler pages deploy ./dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch main --commit-hash "$GITHUB_SHA"
+        run: npx wrangler pages deploy ./dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch "$GITHUB_REF_NAME" --commit-hash "$GITHUB_SHA"

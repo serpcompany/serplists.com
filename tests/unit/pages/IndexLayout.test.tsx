@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import Index from '@/pages/Index';
@@ -19,18 +19,24 @@ vi.mock('@/contexts/TemplatesContext', () => ({
 }));
 
 describe('Index layout', () => {
-  it('positions the homepage as a form-first workflow instead of a broad marketplace pitch', () => {
+  it('explains the actual template to run to share workflow instead of generic marketing cards', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter>
+      <StaticRouter location="/">
         <Index />
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
-    expect(html).toContain('Build the template once. Run it every time.');
-    expect(html).toContain('Template editing');
-    expect(html).toContain('Run execution');
-    expect(html).not.toContain(
-      'Turn messy repeat work into templates people can actually discover and run.',
-    );
+    expect(html).toContain('Build the checklist once. Run it every time.');
+    expect(html).toContain('Template library');
+    expect(html).toContain('Live run workspace');
+    expect(html).toContain('Shareable proof');
+    expect(html).toContain('1');
+    expect(html).toContain('2');
+    expect(html).toContain('3');
+    expect(html).toContain('Make a template');
+    expect(html).toContain('Run the workflow');
+    expect(html).toContain('Share the result');
+    expect(html).not.toContain('Checklist Product Prototype');
+    expect(html).not.toContain('Create and Run Checklists for Your Processes');
   });
 });

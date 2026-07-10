@@ -1,6 +1,13 @@
 import { optimizeImage, isImageFile } from "@/lib/imageOptimization";
 import { api } from "@/lib/api";
 
+export type TemplateUploadBucket =
+  | 'template-images'
+  | 'template-videos'
+  | 'template-files';
+
+export type UploadedAssetBucket = TemplateUploadBucket | 'avatars';
+
 export type UploadResult = {
   success: boolean;
   url?: string;
@@ -11,7 +18,7 @@ export type UploadResult = {
 
 export const uploadFile = async (
   file: File,
-  bucket: 'template-images' | 'template-videos' | 'template-files',
+  bucket: TemplateUploadBucket,
   userId: string
 ): Promise<UploadResult> => {
   try {
@@ -58,13 +65,37 @@ export const uploadFile = async (
 
 export const deleteFile = async (
   url: string,
-  bucket: 'template-images' | 'template-videos' | 'template-files'
+  bucket: TemplateUploadBucket,
 ): Promise<boolean> => {
+  void bucket;
+  return deleteUploadedAsset(url);
+};
+
+export const getUploadedAssetKey = (url: string): string | null => {
   try {
-    void bucket;
-    const parsed = new URL(url, window.location.origin);
-    const key = parsed.searchParams.get('key');
-    if (!key) return false;
+    const parsed = new URL(url, 'https://serplists.local');
+    const isUploadEndpoint =
+      parsed.pathname === '/api/uploads/file' ||
+      parsed.pathname === '/uploads/file';
+    const key = parsed.searchParams.get('key')?.trim();
+
+    return isUploadEndpoint && key ? key : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+export const isUploadedAssetUrl = (url: string): boolean =>
+  getUploadedAssetKey(url) !== null;
+
+export const deleteUploadedAsset = async (url: string): Promise<boolean> => {
+  const key = getUploadedAssetKey(url);
+
+  if (!key) {
+    return false;
+  }
+
+  try {
     await api.deleteFromR2(key);
     return true;
   } catch (error) {

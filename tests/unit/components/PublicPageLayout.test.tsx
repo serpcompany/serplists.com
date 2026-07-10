@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -13,7 +13,7 @@ import {
 describe('PublicPageLayout', () => {
   it('renders a reusable public detail-page frame with a tighter docs-style sidebar rail', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter>
+      <StaticRouter location="/">
         <PublicPageContainer>
           <PublicPageBackLink to="/templates">Back to templates</PublicPageBackLink>
           <PublicPageSplitLayout
@@ -26,7 +26,7 @@ describe('PublicPageLayout', () => {
             }
           />
         </PublicPageContainer>
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
     expect(html).toContain('Back to templates');

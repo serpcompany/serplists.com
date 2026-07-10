@@ -7,11 +7,13 @@ test('repo-backed starter templates appear as featured content on the homepage',
 
   await expect(
     page.getByRole('heading', {
-      name: 'Turn messy repeat work into templates people can actually discover and run.',
+      name: 'Build the checklist once. Run it every time.',
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Start with the official library' }),
+    page.getByRole('heading', {
+      name: 'Start with a real checklist, then make it yours.',
+    }),
   ).toBeVisible();
   await expect(page.getByText('Ultimate Camping Checklist')).toBeVisible();
 });
@@ -24,7 +26,7 @@ test('repo-backed public templates render in the checklist library', async ({
 
   await expect(
     page.getByRole('heading', {
-      name: 'Find the checklist pack that already solved it',
+      name: 'Discover Templates',
     }),
   ).toBeVisible();
   await expect(
@@ -36,38 +38,38 @@ test('repo-backed public templates render in the checklist library', async ({
     .click();
 
   await expect(page).toHaveURL(
-    /\/profile\/devinschumacher\/ultimate-camping-checklist$/,
+    /\/profile\/serp\/ultimate-camping-checklist$/,
   );
   await expect(
     page.getByRole('heading', { level: 1, name: 'Ultimate Camping Checklist' }),
   ).toBeVisible();
-  await expect(page.getByText('Action rail')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Share' })).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Start checklist' }),
+    page.getByRole('button', { name: 'Start Run' }).first(),
   ).toBeVisible();
   await expect(page.getByText('Pack the tent setup')).toBeVisible();
 
   const backToTemplatesLink = page.getByRole('link', {
-    name: 'Back to templates',
+    name: 'Back',
   });
-  const templateTypeBadge = page.getByText('Public checklist template', {
-    exact: true,
-  });
-  const categoryChip = page.getByRole('link', { name: 'outdoor' });
-  const actionRail = page.getByText('Action rail').locator('..');
+  const shareButton = page.getByRole('button', { name: 'Share' });
+  const ctaPanel = page
+    .getByRole('heading', { name: 'Ready to use this template?' })
+    .locator('..');
+  const actionRail = shareButton.locator('..');
 
   const backLinkRadius = Number.parseFloat(
     await backToTemplatesLink.evaluate(
       (element) => getComputedStyle(element).borderRadius,
     ),
   );
-  const templateTypeBadgeRadius = Number.parseFloat(
-    await templateTypeBadge.evaluate(
+  const shareButtonRadius = Number.parseFloat(
+    await shareButton.evaluate(
       (element) => getComputedStyle(element).borderRadius,
     ),
   );
-  const categoryChipRadius = Number.parseFloat(
-    await categoryChip.evaluate(
+  const ctaPanelRadius = Number.parseFloat(
+    await ctaPanel.evaluate(
       (element) => getComputedStyle(element).borderRadius,
     ),
   );
@@ -76,68 +78,53 @@ test('repo-backed public templates render in the checklist library', async ({
   expect(actionRailBox).not.toBeNull();
   expect(actionRailBox?.width ?? 999).toBeLessThan(340);
   expect(backLinkRadius).toBeLessThan(16);
-  expect(templateTypeBadgeRadius).toBeLessThan(16);
-  expect(categoryChipRadius).toBeLessThan(16);
+  expect(shareButtonRadius).toBeLessThan(16);
+  expect(ctaPanelRadius).toBeLessThan(16);
 });
 
 test('public creator profile page stays available under /profile/:username', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1600 });
-  await page.goto('/profile/devinschumacher');
+  await page.goto('/profile/serp');
 
-  const profileSidebar = page.getByRole('complementary');
   const firstTemplateCard = page.getByRole('link', {
     name: /Complete Wedding Planning Checklist/i,
   });
-  const shareProfileButton = profileSidebar.getByRole('button', {
-    name: 'Share profile',
-  });
-  const firstSidebarChip = profileSidebar.getByRole('link', {
-    name: 'wedding',
-  });
   const firstTemplateChip = firstTemplateCard.getByText('wedding', {
     exact: true,
-  });
+  }).first();
+  const firstTemplateSurface = firstTemplateCard.locator('..');
 
   await expect(
-    profileSidebar.getByText('@devinschumacher', { exact: true }),
+    page.getByRole('heading', { level: 1, name: 'SERP Lists Library' }),
   ).toBeVisible();
-  await expect(profileSidebar.getByText('Public profile')).toBeVisible();
+  await expect(
+    page.locator('main').getByText('@serp', { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Public checklist templates from @serp', {
+      exact: false,
+    }),
+  ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Public templates' }),
   ).toBeVisible();
-  await expect(profileSidebar.getByText('Profile stats')).toBeVisible();
-  await expect(profileSidebar.getByText('Share profile')).toBeVisible();
+  await expect(page.getByText('Checklist Items')).toBeVisible();
+  await expect(firstTemplateCard).toBeVisible();
 
-  const sidebarBox = await profileSidebar.boundingBox();
   const templateCardBox = await firstTemplateCard.boundingBox();
-  const shareButtonRadius = Number.parseFloat(
-    await shareProfileButton.evaluate(
-      (element) => getComputedStyle(element).borderRadius,
-    ),
-  );
-  const sidebarChipRadius = Number.parseFloat(
-    await firstSidebarChip.evaluate(
-      (element) => getComputedStyle(element).borderRadius,
-    ),
-  );
-  const templateChipRadius = Number.parseFloat(
-    await firstTemplateChip.evaluate(
+  const templateSurfaceRadius = Number.parseFloat(
+    await firstTemplateSurface.evaluate(
       (element) => getComputedStyle(element).borderRadius,
     ),
   );
 
-  expect(sidebarBox).not.toBeNull();
   expect(templateCardBox).not.toBeNull();
-  expect(sidebarBox?.x ?? 0).toBeGreaterThan(70);
-  expect(sidebarBox?.width ?? 0).toBeGreaterThan(220);
-  expect(sidebarBox?.width ?? 999).toBeLessThan(280);
-  expect(templateCardBox?.x ?? 0).toBeGreaterThan(260);
+  expect(templateCardBox?.x ?? 0).toBeGreaterThan(250);
   expect(templateCardBox?.width ?? 0).toBeGreaterThan(360);
-  expect(templateCardBox?.width ?? 999).toBeLessThan(440);
-  expect(templateCardBox?.height ?? 999).toBeLessThan(244);
-  expect(shareButtonRadius).toBeLessThan(16);
-  expect(sidebarChipRadius).toBeLessThan(16);
-  expect(templateChipRadius).toBeLessThan(16);
+  expect(templateCardBox?.width ?? 999).toBeLessThan(460);
+  expect(templateCardBox?.height ?? 999).toBeLessThan(280);
+  expect(templateSurfaceRadius).toBeLessThan(16);
+  await expect(firstTemplateChip).toBeVisible();
 });

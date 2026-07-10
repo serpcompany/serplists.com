@@ -11,11 +11,22 @@ export type PublicRouteTier = 'marketing' | 'core' | 'secondary' | 'minimal';
 export type ConsoleSection = 'home' | 'templates' | 'runs' | 'account';
 
 export const LEGACY_PUBLIC_LIBRARY_PATH = '/checklists';
+export const LEGACY_ACCOUNT_PATH = '/account';
 export const LEGACY_CONSOLE_HOME_PATH = '/console';
+export const LEGACY_CONSOLE_PROFILE_PATH = '/dashboard/profile';
 export const LEGACY_CONSOLE_TEMPLATES_PATH = '/console/templates';
 export const LEGACY_CONSOLE_RUNS_PATH = '/console/runs';
 
 export const buildPublicTemplatesPath = (): string => '/templates';
+
+export const isPublicTemplatesDiscoveryPath = (pathname: string): boolean => {
+  const normalizedPath = pathname.trim().toLowerCase();
+
+  return (
+    normalizedPath === buildPublicTemplatesPath() ||
+    normalizedPath === `${buildPublicTemplatesPath()}/`
+  );
+};
 
 export const buildCategorySlug = (categoryName: string): string =>
   generateSlug(categoryName.trim());
@@ -36,6 +47,21 @@ export const buildPublicCategoriesPath = (): string => '/categories';
 
 export const buildPublicCategoryPath = (categoryName: string): string =>
   `/categories/${encodeURIComponent(buildCategorySlug(categoryName) || categoryName.trim().toLowerCase())}`;
+
+export const resolveLegacyTemplatesCategoryRedirectPath = (
+  searchParams: URLSearchParams,
+): string | null => {
+  const categorySlug = searchParams.get('category')?.trim();
+  const hasOnlyCategoryParam = Array.from(searchParams.keys()).every(
+    (key) => key === 'category',
+  );
+
+  if (!categorySlug || !hasOnlyCategoryParam) {
+    return null;
+  }
+
+  return buildPublicCategoryPath(categorySlug);
+};
 
 export const buildPublicProfilePath = (username: string): string =>
   `/profile/${encodeURIComponent(username)}`;
@@ -74,6 +100,9 @@ export const buildConsoleTemplatesPath = (): string => '/dashboard/templates';
 export const buildConsoleTemplateCreatePath = (): string =>
   '/dashboard/templates/new';
 
+export const buildConsoleTemplateImportPath = (): string =>
+  '/dashboard/import-templates';
+
 export const buildConsoleTemplatePath = (templateId: string): string =>
   `/dashboard/templates/${encodeURIComponent(templateId)}`;
 
@@ -84,6 +113,14 @@ export const buildConsoleRunsPath = (): string => '/dashboard/runs';
 
 export const buildConsoleRunPath = (runId: string): string =>
   `/dashboard/runs/${encodeURIComponent(runId)}`;
+
+export const buildRunPath = (runId: string): string =>
+  `/run/${encodeURIComponent(runId)}`;
+
+export const buildRunUrl = (runId: string, origin: string): string =>
+  new URL(buildRunPath(runId), origin).toString();
+
+export const buildConsoleSettingsPath = (): string => '/dashboard/settings';
 
 export const isBlankTemplateEditorRoute = (pathname: string): boolean => {
   const normalizedPath = pathname.trim().toLowerCase();
@@ -99,7 +136,8 @@ export const resolveRouteShell = (pathname: string): AppShell => {
   const normalizedPath = pathname.trim().toLowerCase();
 
   if (
-    normalizedPath === '/account' ||
+    normalizedPath === LEGACY_ACCOUNT_PATH ||
+    normalizedPath.startsWith('/run/') ||
     normalizedPath.startsWith(buildConsoleHomePath()) ||
     normalizedPath.startsWith(LEGACY_CONSOLE_HOME_PATH)
   ) {
@@ -149,7 +187,16 @@ export const resolveConsoleSection = (
 ): ConsoleSection | null => {
   const normalizedPath = pathname.trim().toLowerCase();
 
-  if (normalizedPath === '/account') {
+  if (normalizedPath === LEGACY_ACCOUNT_PATH) {
+    return 'account';
+  }
+
+  if (
+    normalizedPath === buildConsoleSettingsPath() ||
+    normalizedPath === `${buildConsoleSettingsPath()}/` ||
+    normalizedPath === LEGACY_CONSOLE_PROFILE_PATH ||
+    normalizedPath === `${LEGACY_CONSOLE_PROFILE_PATH}/`
+  ) {
     return 'account';
   }
 
@@ -163,6 +210,13 @@ export const resolveConsoleSection = (
   }
 
   if (
+    normalizedPath === buildConsoleTemplateImportPath() ||
+    normalizedPath === `${buildConsoleTemplateImportPath()}/`
+  ) {
+    return 'templates';
+  }
+
+  if (
     normalizedPath.startsWith(buildConsoleTemplatesPath()) ||
     normalizedPath.startsWith(LEGACY_CONSOLE_TEMPLATES_PATH)
   ) {
@@ -171,6 +225,7 @@ export const resolveConsoleSection = (
 
   if (
     normalizedPath.startsWith(buildConsoleRunsPath()) ||
+    normalizedPath.startsWith('/run/') ||
     normalizedPath.startsWith(LEGACY_CONSOLE_RUNS_PATH)
   ) {
     return 'runs';

@@ -1,125 +1,45 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
-import { Badge } from "@/components/ui/badge";
-import { PublicPill } from "@/components/shared/PublicPill";
-import { ArrowRight } from "lucide-react";
-import { buildPublicCategoryPath, buildPublicCategoriesPath, buildPublicTemplatesPath } from "@/lib/routes";
+import React from 'react';
+import { Link } from 'react-router-dom';
 
-interface Template {
-  id: string;
-  categories: string[];
-}
+import { Badge } from '@/components/ui/badge';
 
 interface CategoryNavigationProps {
-  allCategories: string[];
-  templates: Template[];
-  category?: string;
-  onCategoryClick: (categoryName: string) => void;
+  categories: Array<{
+    name: string;
+    slug: string;
+  }>;
+  currentCategorySlug?: string;
+  title?: string;
 }
 
 export const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
-  allCategories,
-  templates,
-  category,
-  onCategoryClick,
+  categories,
+  currentCategorySlug,
+  title = 'Related Categories',
 }) => {
-  const navigate = useNavigate();
+  const relatedCategories = categories.filter(
+    (category) => category.slug !== currentCategorySlug,
+  );
 
-  if (allCategories.length === 0) return null;
-
-  // Show different navigation based on whether we're on a specific category page
-  if (category) {
-    const filteredCount = templates.filter(t => t.categories.includes(category)).length;
-    
-    return (
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold capitalize">{category} Templates</h2>
-            <Badge variant="secondary">
-              {filteredCount} {filteredCount === 1 ? 'template' : 'templates'}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-3">
-            <a
-              href={buildPublicCategoriesPath()}
-              onClick={(e) => {
-                e.preventDefault();
-                navigate(buildPublicCategoriesPath());
-              }}
-              className="text-sm text-primary hover:underline flex items-center gap-1"
-            >
-              Browse All Categories
-              <ArrowRight className="h-3 w-3" />
-            </a>
-            <a
-              href={buildPublicTemplatesPath()}
-              onClick={(e) => {
-                e.preventDefault();
-                navigate(buildPublicTemplatesPath());
-              }}
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
-              ← Back to All Templates
-            </a>
-          </div>
-        </div>
-      </div>
-    );
+  if (relatedCategories.length === 0) {
+    return null;
   }
 
   return (
-    <div className="mb-6">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold">Browse by Category</h2>
-        <a
-          href={buildPublicCategoriesPath()}
-          onClick={(e) => {
-            e.preventDefault();
-            navigate(buildPublicCategoriesPath());
-          }}
-          className="text-sm text-primary hover:underline flex items-center gap-1"
-        >
-          View All Categories
-          <ArrowRight className="h-3 w-3" />
-        </a>
-      </div>
+    <section className="mt-12">
+      <h2 className="mb-4 text-lg font-semibold text-foreground">{title}</h2>
       <div className="flex flex-wrap gap-2">
-        <a
-          href={buildPublicTemplatesPath()}
-          onClick={(e) => {
-            e.preventDefault();
-            navigate(buildPublicTemplatesPath());
-          }}
-        >
-          <PublicPill tone="active" className="text-sm">
-            All Categories ({templates.length})
-          </PublicPill>
-        </a>
-        {allCategories
-          .filter((cat) => {
-            const count = templates.filter(t => t.categories.includes(cat)).length;
-            return count > 0; // Only show categories with at least one template
-          })
-          .map((cat) => {
-            const count = templates.filter(t => t.categories.includes(cat)).length;
-            const categoryUrl = buildPublicCategoryPath(cat);
-            return (
-              <a
-                key={cat}
-                href={categoryUrl}
-                onClick={(e) => {
-                  e.preventDefault();
-                  onCategoryClick(cat);
-                }}
-              >
-                <PublicPill tone="active" className="text-sm">
-                  {cat} ({count})
-                </PublicPill>
-              </a>
-            );
-          })}
+        {relatedCategories.slice(0, 5).map((category) => (
+          <Link key={category.slug} to={`/categories/${category.slug}`}>
+            <Badge
+              className="border-border px-3 py-1.5 hover:bg-muted"
+              variant="outline"
+            >
+              {category.name}
+            </Badge>
+          </Link>
+        ))}
       </div>
-    </div>
+    </section>
   );
 };

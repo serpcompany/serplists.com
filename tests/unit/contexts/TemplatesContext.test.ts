@@ -1,4 +1,76 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
+
+import { buildCreateRunRequest } from '@/contexts/TemplatesContext';
+import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
+import type { ChecklistTemplate } from '@/types/checklist';
+
+const buildRunTemplate = (
+  overrides: Partial<ChecklistTemplate> = {},
+): ChecklistTemplate => ({
+  id: 'template-1',
+  title: 'Launch Checklist',
+  description: '',
+  sections: [
+    {
+      id: 'section-1',
+      title: 'Prep',
+      items: [
+        {
+          id: 'item-1',
+          title: 'Confirm owner',
+          isCompleted: true,
+        },
+      ],
+    },
+  ],
+  userId: 'user-1',
+  createdAt: '2026-07-03T12:00:00.000Z',
+  updatedAt: '2026-07-03T12:00:00.000Z',
+  isPublic: true,
+  categories: [],
+  tags: [],
+  version: 1,
+  ...overrides,
+});
+
+describe('buildCreateRunRequest', () => {
+  it('uses a server-side template snapshot for database-backed templates', () => {
+    const request = buildCreateRunRequest({
+      activeTeamId: 'team-1',
+      runName: 'Client Run',
+      template: buildRunTemplate(),
+      templateId: 'template-1',
+    });
+
+    expect(request.apiPayload).toEqual({
+      teamId: 'team-1',
+      template_id: 'template-1',
+      title: 'Client Run',
+      status: 'in_progress',
+    });
+    expect(request.runSections[0]?.items[0]?.isCompleted).toBe(false);
+  });
+
+  it('sends sections directly for frontend-only repo templates', () => {
+    const request = buildCreateRunRequest({
+      activeTeamId: 'team-1',
+      template: buildRunTemplate({
+        id: 'repo:launch-checklist',
+        userId: REPO_TEMPLATE_USER_ID,
+      }),
+      templateId: 'repo:launch-checklist',
+    });
+
+    expect(request.apiPayload).toEqual({
+      teamId: 'team-1',
+      title: 'Launch Checklist',
+      sections: request.runSections,
+      status: 'in_progress',
+    });
+    expect(request.apiPayload).not.toHaveProperty('template_id');
+    expect(request.runSections[0]?.items[0]?.isCompleted).toBe(false);
+  });
+});
 
 describe('Template Import Functionality', () => {
   describe('Template Structure Preservation', () => {

@@ -5,7 +5,7 @@ const API_BASE_URL = process.env.VITE_API_URL ?? "http://localhost:8788/api";
 async function signInAsAdmin(page: Page) {
   await page.goto("/login");
   await page.getByRole("button", { name: /fill admin/i }).click();
-  await page.getByRole("button", { name: /sign in with email/i }).click();
+  await page.getByRole("button", { name: /^sign in$/i }).click();
   await expect(page).toHaveURL(/\/account/);
 }
 

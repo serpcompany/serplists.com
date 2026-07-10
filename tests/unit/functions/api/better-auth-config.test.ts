@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createBetterAuth } from "@functions/api/better-auth";
+import { createBetterAuth, getAuthEmailPolicy } from "@functions/api/better-auth";
 
 const { betterAuthMock, drizzleAdapterMock } = vi.hoisted(() => ({
   betterAuthMock: vi.fn(() => ({ handler: vi.fn() })),
@@ -49,6 +49,60 @@ describe("createBetterAuth config", () => {
     expect(options.emailAndPassword.requireEmailVerification).toBe(true);
     expect(options.emailVerification.sendOnSignUp).toBe(true);
     expect(typeof options.emailVerification.sendVerificationEmail).toBe("function");
+  });
+
+  it("allows non-production account creation without email delivery", () => {
+    const env = buildEnv({
+      FRONTEND_URL: undefined,
+      RESEND_API_KEY: undefined,
+      USESEND_API_KEY: undefined,
+    });
+    const request = new Request("http://localhost:8788/api/auth/sign-up/email");
+
+    createBetterAuth(env, request);
+
+    const options = betterAuthMock.mock.calls[0]?.[0];
+    expect(getAuthEmailPolicy(env, request)).toEqual({
+      accountRegistrationAvailable: true,
+      emailAuthAvailable: false,
+      emailVerificationRequired: false,
+    });
+    expect(options.emailAndPassword.requireEmailVerification).toBe(false);
+    expect(options.emailVerification.sendOnSignUp).toBe(false);
+    expect(options.plugins).toEqual([{ id: "username" }]);
+  });
+
+  it("enables breached-password checks when setting production passwords", () => {
+    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/sign-up/email"));
+
+    const options = betterAuthMock.mock.calls[0]?.[0];
+
+    expect(options.plugins).toEqual([
+      { id: "username" },
+      { id: "haveIBeenPwned" },
+    ]);
+  });
+
+  it("does not check breached passwords on production sign-in", () => {
+    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/sign-in/email"));
+
+    const options = betterAuthMock.mock.calls[0]?.[0];
+
+    expect(options.plugins).toEqual([{ id: "username" }]);
+  });
+
+  it("requires production account verification to have email delivery", () => {
+    const env = buildEnv({
+      RESEND_API_KEY: undefined,
+      USESEND_API_KEY: undefined,
+    });
+    const request = new Request("https://serplists.com/api/auth/sign-up/email");
+
+    expect(getAuthEmailPolicy(env, request)).toEqual({
+      accountRegistrationAvailable: false,
+      emailAuthAvailable: false,
+      emailVerificationRequired: true,
+    });
   });
 
   it("trusts only the request origin when no frontend origins are configured", () => {

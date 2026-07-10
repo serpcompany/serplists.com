@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
@@ -37,9 +37,9 @@ const template: ChecklistTemplate = {
 };
 
 describe('PublicTemplateView', () => {
-  it('starts checklist content without the extra overview framing bands', () => {
+  it('renders the v0-style public template detail surface', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter>
+      <StaticRouter location="/">
         <PublicTemplateView
           template={template}
           totalItems={1}
@@ -53,20 +53,64 @@ describe('PublicTemplateView', () => {
           onStartRun={() => undefined}
           onSaveTemplate={() => undefined}
         />
-      </MemoryRouter>,
+      </StaticRouter>,
     );
 
-    expect(html).toContain('On this page');
-    expect(html).toContain('Template details');
-    expect(html).toContain('Start checklist');
-    expect(html).toContain('Log in to copy template');
-    expect(html).toContain('text-3xl');
-    expect(html).toContain('text-base');
-    expect(html).not.toContain('Checklist preview');
-    expect(html).not.toContain('Overview');
-    expect(html).not.toContain('Action rail');
-    expect(html).not.toContain('At a glance');
-    expect(html).not.toContain('Template walkthrough');
-    expect(html).not.toContain('sm:text-5xl');
+    expect(html).toContain('What&#x27;s included');
+    expect(html).toContain('Ready to use this template?');
+    expect(html).toContain('Start Run');
+    expect(html).toContain('Save');
+    expect(html).toContain('Share');
+    expect(html).toContain('Sections');
+    expect(html).toContain('Tasks');
+    expect(html).toContain('Type');
+    expect(html).toContain('checklist');
+    expect(html).not.toContain('Minutes Est.');
+    expect(html).not.toContain('On this page');
+    expect(html).not.toContain('Template details');
+  });
+
+  it('preserves authored line breaks in template and task descriptions', () => {
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/">
+        <PublicTemplateView
+          template={{
+            ...template,
+            description:
+              'Template description line one\nTemplate description line two\\nTemplate description line three',
+            sections: [
+              {
+                id: 'section-1',
+                title: 'Early Planning',
+                items: [
+                  {
+                    id: 'item-1',
+                    title: 'Set the budget and guest count',
+                    description: 'Task line one\nTask line two\\nTask line three',
+                    contents: [],
+                  },
+                ],
+              },
+            ],
+          }}
+          totalItems={1}
+          ownerSlug="devinschumacher"
+          ownerPath="/profile/devinschumacher"
+          isAuthenticated={false}
+          isBillingLoading={false}
+          isProUser={false}
+          isCreatingRun={false}
+          isSaving={false}
+          onStartRun={() => undefined}
+          onSaveTemplate={() => undefined}
+        />
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('whitespace-pre-line');
+    expect(html).toContain(
+      'Template description line one\nTemplate description line two\nTemplate description line three',
+    );
+    expect(html).toContain('Task line one\nTask line two\nTask line three');
   });
 });

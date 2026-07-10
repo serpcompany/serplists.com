@@ -13,6 +13,10 @@ import remarkGfm from 'remark-gfm';
 import { Checkbox } from '@/components/ui/checkbox';
 import { buildPublicTemplateSectionId } from '@/components/template/publicTemplateSectionId';
 import { cn } from '@/lib/utils';
+import {
+  normalizeDisplayText,
+  normalizeMarkdownDisplayText,
+} from '@/lib/utils/markdownDisplay';
 import { safeUrl } from '@/lib/utils/safeUrl';
 import type {
   ChecklistItem,
@@ -21,14 +25,16 @@ import type {
 } from '@/types/checklist';
 
 interface PublicTemplateContentProps {
+  initialExpandedItems?: Record<string, boolean>;
   sections: ChecklistSection[];
 }
 
 export function PublicTemplateContent({
+  initialExpandedItems,
   sections,
 }: PublicTemplateContentProps) {
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>(
-    {},
+    initialExpandedItems ?? {},
   );
 
   const toggleItem = (itemId: string) => {
@@ -43,13 +49,13 @@ export function PublicTemplateContent({
       case 'text':
         return content.value ? (
           <div className="mt-3 border-l-2 border-border/70 pl-4">
-            <div className="prose prose-sm max-w-none">
+            <div className="prose prose-sm max-w-none whitespace-pre-line">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 skipHtml
                 urlTransform={safeUrl}
               >
-                {content.value}
+                {normalizeMarkdownDisplayText(content.value)}
               </ReactMarkdown>
             </div>
           </div>
@@ -168,8 +174,8 @@ export function PublicTemplateContent({
                 {isExpanded ? (
                   <div className="mt-3 space-y-3">
                     {hasDescription ? (
-                      <p className="text-sm leading-7 text-muted-foreground">
-                        {item.description}
+                      <p className="whitespace-pre-line text-sm leading-7 text-muted-foreground">
+                        {normalizeDisplayText(item.description)}
                       </p>
                     ) : null}
 

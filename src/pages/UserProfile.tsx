@@ -3,32 +3,20 @@ import { Link, useParams } from 'react-router-dom';
 import {
   ArrowUpRight,
   CalendarDays,
-  Copy,
+  Eye,
+  FileText,
+  Link as LinkIcon,
   ListChecks,
+  MapPin,
+  Play,
   Sparkles,
 } from 'lucide-react';
-import { toast } from 'sonner';
 
-import {
-  PublicPageBackLink,
-  PublicPageContainer,
-  PublicPageSplitLayout,
-  PublicSidebarSection,
-} from '@/components/layout/PublicPageLayout';
+import { PublicPageContainer } from '@/components/layout/PublicPageLayout';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
-import { PublicPill } from '@/components/shared/PublicPill';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+import { Card } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import {
   REPO_TEMPLATE_OWNER_NAME,
@@ -38,7 +26,6 @@ import {
 } from '@/lib/repoTemplateCatalog';
 import {
   buildCanonicalPublicTemplatePath,
-  buildPublicCategoryPath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
 import { normalizeSections } from '@/lib/utils/checklistSections';
@@ -52,11 +39,24 @@ type UserProfileRecord = {
   created_at: string;
 };
 
+type ProfileSurfaceRecord = UserProfileRecord & {
+  bio?: string;
+  location?: string;
+  totalRuns?: number;
+  totalViews?: number;
+  website?: string;
+};
+
 type UserStats = {
   averageItemsPerTemplate: number;
   categoriesUsed: string[];
   totalItems: number;
   totalTemplates: number;
+};
+
+type ProfileFallbackState = {
+  profile: ProfileSurfaceRecord;
+  templates: ChecklistTemplate[];
 };
 
 const countTemplateItems = (template: ChecklistTemplate) =>
@@ -67,6 +67,8 @@ const formatJoinedDate = (value: string): string =>
     month: 'long',
     year: 'numeric',
   });
+
+const formatStatValue = (value: number) => value.toLocaleString('en-US');
 
 const getProfileDisplayName = (profile: UserProfileRecord): string =>
   profile.full_name?.trim() || `@${profile.username}`;
@@ -84,9 +86,13 @@ const getProfileInitials = (profile: UserProfileRecord): string => {
 };
 
 const buildProfileSummary = (
-  profile: UserProfileRecord,
+  profile: ProfileSurfaceRecord,
   stats: UserStats,
 ): string => {
+  if (profile.bio?.trim()) {
+    return profile.bio.trim();
+  }
+
   if (stats.categoriesUsed.length) {
     return `Public checklist templates from @${profile.username} covering ${stats.categoriesUsed
       .slice(0, 3)
@@ -95,6 +101,9 @@ const buildProfileSummary = (
 
   return `Public checklist templates and repeatable workflow packs published by @${profile.username}.`;
 };
+
+const normalizeUsername = (value: string | undefined) =>
+  value?.trim().toLowerCase() ?? '';
 
 const mapApiTemplate = (
   template: Record<string, unknown>,
@@ -153,7 +162,7 @@ const mergeProfileTemplates = (
 ): ChecklistTemplate[] => {
   const merged = new Map<string, ChecklistTemplate>();
   const sources =
-    username.toLowerCase() === REPO_TEMPLATE_OWNER_SLUG
+    normalizeUsername(username) === REPO_TEMPLATE_OWNER_SLUG
       ? [...repoTemplates, ...apiTemplates]
       : apiTemplates;
 
@@ -187,70 +196,123 @@ const calculateStats = (templates: ChecklistTemplate[]): UserStats => {
   };
 };
 
+const getFallbackProfileState = (
+  username: string | undefined,
+): ProfileFallbackState | null => {
+  if (normalizeUsername(username) === REPO_TEMPLATE_OWNER_SLUG) {
+    return {
+      profile: {
+        id: REPO_TEMPLATE_USER_ID,
+        full_name: REPO_TEMPLATE_OWNER_NAME,
+        username: REPO_TEMPLATE_OWNER_SLUG,
+        avatar_url: null,
+        created_at: repoTemplates[0]?.createdAt || new Date().toISOString(),
+      },
+      templates: repoTemplates,
+    };
+  }
+
+  return null;
+};
+
+const getProfileWebsiteHref = (website: string) =>
+  website.startsWith('http://') || website.startsWith('https://')
+    ? website
+    : `https://${website}`;
+
+const formatWebsiteLabel = (website: string) =>
+  website.replace(/^https?:\/\//, '').replace(/\/$/, '');
+
 const UserProfile = () => {
   const { username } = useParams<{ username: string }>();
-  const [profile, setProfile] = useState<UserProfileRecord | null>(null);
+  const [profile, setProfile] = useState<ProfileSurfaceRecord | null>(null);
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        if (!username) {
-          setError('No username provided');
-          setLoading(false);
-          return;
-        }
+    let isCancelled = false;
 
+    const fetchProfile = async () => {
+      if (!username) {
+        setError('No username provided');
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
         const profileData = (await api.getProfileByUsername(
           username,
         )) as UserProfileRecord;
-        const publicTemplates = (await api.getPublicTemplatesForUser(
-          profileData.id,
-        )) as Array<Record<string, unknown>>;
 
-        setProfile(profileData);
-        setTemplates(
-          mergeProfileTemplates(
+        if (isCancelled) return;
+
+        const decoratedProfile = profileData;
+        let resolvedTemplates: ChecklistTemplate[] = [];
+
+        try {
+          const publicTemplates = (await api.getPublicTemplatesForUser(
+            profileData.id,
+          )) as Array<Record<string, unknown>>;
+
+          resolvedTemplates = mergeProfileTemplates(
             profileData.username,
             publicTemplates.map(mapApiTemplate),
-          ),
-        );
+          );
+        } catch (caughtTemplateError) {
+          console.error('Error fetching public templates:', caughtTemplateError);
+
+          const fallbackState = getFallbackProfileState(profileData.username);
+          if (fallbackState) {
+            resolvedTemplates = fallbackState.templates;
+          } else {
+            setProfile(decoratedProfile);
+            setTemplates([]);
+            setError('Unable to load this public profile.');
+            return;
+          }
+        }
+
+        if (isCancelled) return;
+
+        setProfile(decoratedProfile);
+        setTemplates(resolvedTemplates);
       } catch (caughtError) {
         console.error('Error fetching public profile:', caughtError);
 
-        if (username?.toLowerCase() === REPO_TEMPLATE_OWNER_SLUG) {
-          setProfile({
-            id: REPO_TEMPLATE_USER_ID,
-            full_name: REPO_TEMPLATE_OWNER_NAME,
-            username: REPO_TEMPLATE_OWNER_SLUG,
-            avatar_url: null,
-            created_at: new Date().toISOString(),
-          });
-          setTemplates(repoTemplates);
+        const fallbackState = getFallbackProfileState(username);
+        if (fallbackState) {
+          if (isCancelled) return;
+
+          setProfile(fallbackState.profile);
+          setTemplates(fallbackState.templates);
+          setError(null);
           return;
         }
 
+        if (isCancelled) return;
+
+        setProfile(null);
+        setTemplates([]);
         setError('User not found');
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     };
 
     void fetchProfile();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [username]);
 
   const stats = useMemo(() => calculateStats(templates), [templates]);
-
-  const handleCopyProfileLink = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast.success('Profile link copied');
-    } catch {
-      toast.error('Unable to copy profile link');
-    }
-  };
 
   if (loading) {
     return (
@@ -265,12 +327,6 @@ const UserProfile = () => {
   if (error || !profile) {
     return (
       <PublicPageContainer className="py-14">
-        <div className="mb-6">
-          <PublicPageBackLink to={buildPublicTemplatesPath()}>
-            Back to templates
-          </PublicPageBackLink>
-        </div>
-
         <EmptyState
           title={error === 'User not found' ? 'User not found' : 'Error'}
           description={error || 'Unable to load this public profile.'}
@@ -281,212 +337,189 @@ const UserProfile = () => {
     );
   }
 
+  const statCards = [
+    {
+      icon: FileText,
+      label: 'Templates',
+      value: formatStatValue(stats.totalTemplates),
+    },
+    profile.totalViews
+      ? {
+          icon: Eye,
+          label: 'Total Views',
+          value: formatStatValue(profile.totalViews),
+        }
+      : {
+          icon: ListChecks,
+          label: 'Checklist Items',
+          value: formatStatValue(stats.totalItems),
+        },
+    profile.totalRuns
+      ? {
+          icon: Play,
+          label: 'Total Runs',
+          value: formatStatValue(profile.totalRuns),
+        }
+      : {
+          icon: Sparkles,
+          label: 'Categories',
+          value: formatStatValue(stats.categoriesUsed.length),
+        },
+  ];
+
   return (
-    <PublicPageContainer className="pb-16 pt-6">
-      <div className="mb-4">
-        <PublicPageBackLink to={buildPublicTemplatesPath()}>
-          Back to templates
-        </PublicPageBackLink>
-      </div>
+    <PublicPageContainer className="pb-16 pt-8">
+      <div className="mx-auto max-w-4xl">
+        <section className="mb-10">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">
+            <Avatar className="h-20 w-20 border border-border/70">
+              <AvatarImage src={profile.avatar_url || undefined} />
+              <AvatarFallback className="bg-muted text-2xl font-medium text-foreground">
+                {getProfileInitials(profile)}
+              </AvatarFallback>
+            </Avatar>
 
-      <PublicPageSplitLayout
-        asidePosition="start"
-        className="lg:items-start lg:gap-10"
-        asideClassName="lg:sticky lg:top-24 lg:self-start"
-        aside={
-          <>
-            <div className="flex flex-col gap-5">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border border-border bg-muted p-1.5">
-                <Avatar className="h-full w-full rounded-full">
-                  <AvatarImage src={profile.avatar_url || undefined} />
-                  <AvatarFallback className="rounded-full bg-muted text-2xl font-medium text-foreground">
-                    {getProfileInitials(profile)}
-                  </AvatarFallback>
-                </Avatar>
-              </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                {getProfileDisplayName(profile)}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                @{profile.username}
+              </p>
 
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                  Public profile
-                </p>
-                <h1 className="mt-3 text-[2rem] font-semibold tracking-tight text-foreground">
-                  {getProfileDisplayName(profile)}
-                </h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  @{profile.username}
-                </p>
-              </div>
-
-              <p className="text-sm leading-6 text-muted-foreground">
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-foreground/90">
                 {buildProfileSummary(profile, stats)}
               </p>
 
-              {stats.categoriesUsed.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {stats.categoriesUsed.slice(0, 6).map((category) => (
-                    <PublicPill key={category} asChild tone="subtle">
-                      <Link to={buildPublicCategoryPath(category)}>
-                        {category}
-                      </Link>
-                    </PublicPill>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+              <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                {profile.location ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <MapPin className="h-4 w-4" />
+                    {profile.location}
+                  </span>
+                ) : null}
 
-            <PublicSidebarSection divider title="Member since">
-              <div className="flex items-start gap-3 text-sm">
-                <CalendarDays className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                <div className="text-muted-foreground">
-                  {formatJoinedDate(profile.created_at)}
-                </div>
-              </div>
-            </PublicSidebarSection>
-
-            <PublicSidebarSection divider title="Profile stats">
-              <dl className="space-y-3 text-sm">
-                {[
-                  { label: 'Public templates', value: stats.totalTemplates },
-                  { label: 'Documented steps', value: stats.totalItems },
-                  {
-                    label: 'Average items',
-                    value: stats.averageItemsPerTemplate,
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.label}
-                    className="flex items-center justify-between gap-4"
+                {profile.website ? (
+                  <a
+                    href={getProfileWebsiteHref(profile.website)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
                   >
-                    <dt className="text-muted-foreground">{item.label}</dt>
-                    <dd className="font-medium text-foreground">
-                      {item.value}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </PublicSidebarSection>
+                    <LinkIcon className="h-4 w-4" />
+                    {formatWebsiteLabel(profile.website)}
+                  </a>
+                ) : null}
 
-            <PublicSidebarSection divider title="Actions">
-              <div className="flex flex-col items-start gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyProfileLink}
-                >
-                  <Copy className="mr-2 h-4 w-4" />
-                  Share profile
-                </Button>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link to={buildPublicTemplatesPath()}>Browse templates</Link>
-                </Button>
+                <span className="inline-flex items-center gap-1.5">
+                  <CalendarDays className="h-4 w-4" />
+                  Joined {formatJoinedDate(profile.created_at)}
+                </span>
               </div>
-            </PublicSidebarSection>
-          </>
-        }
-        main={
-          <section className="min-w-0 lg:max-w-[820px]">
-            <div className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="mt-1.5 text-3xl font-semibold tracking-tight text-foreground">
-                  Public templates
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Browse every public template published from this profile.
-                </p>
-              </div>
-              <Badge
-                variant="secondary"
-              className="h-8 rounded-md px-2.5 text-xs font-medium text-secondary-foreground"
-              >
-                {stats.totalTemplates} live templates
-              </Badge>
             </div>
+          </div>
 
-            {templates.length === 0 ? (
-              <div className="mt-6">
-                <EmptyState
-                  title="No public templates"
-                  description={`@${profile.username} has not published any public templates yet.`}
-                  icon={Sparkles}
-                  className="min-h-0 rounded-lg border border-dashed"
-                />
-              </div>
-            ) : (
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                {templates.map((template) => {
-                  const templatePath =
-                    buildCanonicalPublicTemplatePath(template) ||
-                    buildPublicTemplatesPath();
-                  const templateSlug = template.slug?.trim() || template.id;
+          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            {statCards.map((card) => {
+              const Icon = card.icon;
 
-                  return (
-                    <Card
-                      key={template.id}
-                      className="h-full rounded-lg border-border/80 shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-sm"
+              return (
+                <Card
+                  key={card.label}
+                  className="rounded-xl border-border/70 bg-card shadow-none"
+                >
+                  <div className="p-5 text-center">
+                    <div className="flex items-center justify-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                      <Icon className="h-4 w-4" />
+                      <span>{card.label}</span>
+                    </div>
+                    <p className="mt-3 text-2xl font-bold text-foreground">
+                      {card.value}
+                    </p>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
+
+        <section>
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-foreground">
+              Public Templates
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Browse every public template published from this profile.
+            </p>
+          </div>
+
+          {templates.length === 0 ? (
+            <EmptyState
+              title="No public templates"
+              description={`@${profile.username} has not published any public templates yet.`}
+              icon={Sparkles}
+              className="min-h-0 rounded-lg border border-dashed"
+            />
+          ) : (
+            <div className="grid gap-6 sm:grid-cols-2">
+              {templates.map((template) => {
+                const templatePath =
+                  buildCanonicalPublicTemplatePath(template) ||
+                  buildPublicTemplatesPath();
+
+                return (
+                  <Card
+                    key={template.id}
+                    className="h-full rounded-xl border-border/70 shadow-none transition-colors hover:border-foreground/20"
+                  >
+                    <Link
+                      to={templatePath}
+                      className="group flex h-full flex-col gap-4 p-5"
                     >
-                      <Link
-                        to={templatePath}
-                        className="group flex h-full min-h-[208px] flex-col"
-                      >
-                        <CardHeader className="space-y-2.5 px-4 pb-2.5 pt-4">
-                          <div className="flex items-start gap-3">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-secondary text-foreground">
-                              <ListChecks className="h-4 w-4" />
-                            </div>
-
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <CardTitle className="line-clamp-2 text-base leading-snug">
-                                    {template.title}
-                                  </CardTitle>
-                                  <CardDescription className="mt-1 truncate text-[11px]">
-                                    {profile.username}/
-                                    {templateSlug.replace(/^repo:/, '')}
-                                  </CardDescription>
-                                </div>
-                                <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-foreground" />
-                              </div>
-                            </div>
-                          </div>
-                        </CardHeader>
-
-                        <CardContent className="flex flex-1 flex-col px-4 pb-4 pt-0">
-                          <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">
-                            {template.description ||
-                              'Public template pack published in this creator profile.'}
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <h3 className="line-clamp-2 text-base font-semibold text-foreground transition-colors group-hover:text-foreground">
+                            {template.title}
+                          </h3>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            @{profile.username}
                           </p>
+                        </div>
+                        <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-foreground" />
+                      </div>
 
-                          {(template.categories || []).length ? (
-                            <div className="mt-4 flex flex-wrap gap-1.5">
-                              {(template.categories || [])
-                                .slice(0, 3)
-                                .map((category) => (
-                                  <PublicPill key={category} tone="subtle">
-                                    {category}
-                                  </PublicPill>
-                                ))}
-                            </div>
-                          ) : null}
+                      <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">
+                        {template.description ||
+                          'Public template pack published in this creator profile.'}
+                      </p>
 
-                          <Separator className="mt-auto" />
+                      {(template.categories || []).length ? (
+                        <div className="flex flex-wrap gap-2">
+                          {(template.categories || [])
+                            .slice(0, 3)
+                            .map((category) => (
+                              <span
+                                key={category}
+                                className="inline-flex items-center rounded-full border border-border/70 px-2.5 py-1 text-xs font-medium text-muted-foreground"
+                              >
+                                {category}
+                              </span>
+                            ))}
+                        </div>
+                      ) : null}
 
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-3 text-[11px] text-muted-foreground">
-                            <span>@{profile.username}</span>
-                            <span>{template.sections.length} sections</span>
-                            <span>{countTemplateItems(template)} items</span>
-                          </div>
-                        </CardContent>
-                      </Link>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        }
-      />
+                      <div className="mt-auto flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        <span>{template.sections.length} sections</span>
+                        <span>{countTemplateItems(template)} items</span>
+                      </div>
+                    </Link>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
     </PublicPageContainer>
   );
 };

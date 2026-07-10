@@ -79,8 +79,58 @@ const sendEmailVerificationEmail = async (env: Env, params: { to: string; url: s
   });
 };
 
+function isAuthEmailConfigured(env: Env): boolean {
+  return Boolean(env.RESEND_API_KEY || env.USESEND_API_KEY);
+}
+
+function isProductionHost(hostname: string): boolean {
+  return hostname === "serplists.com" || hostname.endsWith(".serplists.com");
+}
+
+function isProductionAuthRequest(env: Env, request: Request): boolean {
+  const url = new URL(request.url);
+  if (isProductionHost(url.hostname)) {
+    return true;
+  }
+
+  if (env.FRONTEND_URL) {
+    try {
+      return isProductionHost(new URL(env.FRONTEND_URL).hostname);
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+export function getAuthEmailPolicy(env: Env, request: Request) {
+  const emailAuthAvailable = isAuthEmailConfigured(env);
+  const emailVerificationRequired = emailAuthAvailable || isProductionAuthRequest(env, request);
+
+  return {
+    accountRegistrationAvailable: emailAuthAvailable || !emailVerificationRequired,
+    emailAuthAvailable,
+    emailVerificationRequired,
+  };
+}
+
+function shouldCheckBreachedPassword(env: Env, request: Request): boolean {
+  if (!isProductionAuthRequest(env, request)) {
+    return false;
+  }
+
+  const pathname = new URL(request.url).pathname;
+  return (
+    pathname.endsWith("/auth/sign-up/email") ||
+    pathname.endsWith("/auth/change-password") ||
+    pathname.endsWith("/auth/reset-password")
+  );
+}
+
 export function createBetterAuth(env: Env, request: Request) {
   const authSecret = resolveAuthSecret(env);
+  const authEmailPolicy = getAuthEmailPolicy(env, request);
 
   const origin = new URL(request.url).origin;
 
@@ -93,6 +143,16 @@ export function createBetterAuth(env: Env, request: Request) {
   const isSecure = origin.startsWith("https://");
 
   const db = createDb(env);
+  const plugins = [username()];
+
+  if (shouldCheckBreachedPassword(env, request)) {
+    plugins.push(
+      haveIBeenPwned({
+        customPasswordCompromisedMessage:
+          "Please choose a less common password.",
+      }),
+    );
+  }
 
   return betterAuth({
     secret: authSecret,
@@ -109,7 +169,7 @@ export function createBetterAuth(env: Env, request: Request) {
       onPasswordReset: async ({ user }, request) => {
         console.info(`Password reset completed for ${user.email}`);
       },
-      requireEmailVerification: true,
+      requireEmailVerification: authEmailPolicy.emailVerificationRequired,
       minPasswordLength: 10,
       maxPasswordLength: 128,
       password: {
@@ -118,18 +178,12 @@ export function createBetterAuth(env: Env, request: Request) {
       },
     },
     emailVerification: {
-      sendOnSignUp: true,
+      sendOnSignUp: authEmailPolicy.emailVerificationRequired,
       sendVerificationEmail: async ({ user, url }, request) => {
         await sendEmailVerificationEmail(env, { to: user.email, url });
       },
     },
-    plugins: [
-      username(),
-      haveIBeenPwned({
-        customPasswordCompromisedMessage:
-          "Password is too common/compromised. Choose a stronger password.",
-      }),
-    ],
+    plugins,
     user: {
       modelName: "users",
       fields: {

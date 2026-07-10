@@ -2,6 +2,7 @@ import React from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CheckCircle } from 'lucide-react';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
+import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import { ChecklistItem, ChecklistSection } from '@/types/checklist';
 
 interface ChecklistContentProps {
@@ -21,7 +22,7 @@ export const ChecklistContent: React.FC<ChecklistContentProps> = ({
 }) => {
   if (!selectedData) {
     return (
-      <div className="docs-panel px-6 py-16 text-center">
+      <div className="px-6 py-16 text-center">
           <CheckCircle className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
           <p className="text-muted-foreground">Select a task from the sidebar to view details</p>
       </div>
@@ -29,8 +30,8 @@ export const ChecklistContent: React.FC<ChecklistContentProps> = ({
   }
 
   return (
-    <div className="docs-panel overflow-hidden">
-      <div className="border-b border-border/70 bg-muted/25 px-6 py-6">
+    <div className="overflow-hidden">
+      <div className="border-b border-border bg-secondary/20 px-6 py-6">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <Checkbox
@@ -50,8 +51,8 @@ export const ChecklistContent: React.FC<ChecklistContentProps> = ({
           </div>
         </div>
         {selectedData.item.description && (
-          <p className="text-muted-foreground">
-            {selectedData.item.description}
+          <p className="whitespace-pre-line text-muted-foreground">
+            {normalizeDisplayText(selectedData.item.description)}
           </p>
         )}
       </div>
@@ -66,7 +67,7 @@ export const ChecklistContent: React.FC<ChecklistContentProps> = ({
         />
       </div>
 
-      {actions ? <div className="flex justify-end border-t border-border/70 bg-muted/20 px-6 py-4">{actions}</div> : null}
+      {actions ? <div className="flex justify-end border-t border-border bg-secondary/10 px-6 py-4">{actions}</div> : null}
     </div>
   );
 };

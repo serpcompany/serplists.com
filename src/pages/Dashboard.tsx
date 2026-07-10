@@ -16,7 +16,12 @@ import {
 import { toast } from 'sonner';
 
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { ArchiveRecoverySection } from '@/components/dashboard/ArchiveRecoverySection';
+import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
 import { UserTemplatesSection } from '@/components/templates/UserTemplatesSection';
+import {
+  DashboardMetricCard,
+} from '@/components/dashboard/DashboardContentShell';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -44,6 +49,7 @@ const Dashboard = () => {
   const { user } = useAuth();
   const {
     templates,
+    allTemplates,
     templatesLoading,
     runs,
     runsLoading,
@@ -51,12 +57,13 @@ const Dashboard = () => {
     deleteRun,
   } = useTemplates();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeRuns, setActiveRuns] = useState<ChecklistRun[]>([]);
-  const [completedRuns, setCompletedRuns] = useState<ChecklistRun[]>([]);
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeletingRun, setIsDeletingRun] = useState(false);
   const [editingRunId, setEditingRunId] = useState<string | null>(null);
+  const [isSavingRunTitle, setIsSavingRunTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
+  const workspaceTemplates = allTemplates ?? templates;
 
   const isRunsRoute = resolveConsoleSection(location.pathname) === 'runs';
 
@@ -68,9 +75,16 @@ const Dashboard = () => {
     }
   }, [searchParams, setSearchParams]);
 
-  useEffect(() => {
-    setActiveRuns(runs.filter((run) => run.status === 'in_progress'));
-    setCompletedRuns(
+  const templateLookup = useMemo(
+    () => new Map(workspaceTemplates.map((template) => [template.id, template])),
+    [workspaceTemplates],
+  );
+  const activeRuns = useMemo(
+    () => runs.filter((run) => run.status === 'in_progress'),
+    [runs],
+  );
+  const completedRuns = useMemo(
+    () =>
       runs
         .filter((run) => run.status === 'completed')
         .sort(
@@ -78,16 +92,16 @@ const Dashboard = () => {
             new Date(right.completedAt || '').getTime() -
             new Date(left.completedAt || '').getTime(),
         ),
-    );
-  }, [runs]);
-
-  const templateLookup = useMemo(
-    () => new Map(templates.map((template) => [template.id, template])),
-    [templates],
+    [runs],
   );
   const userTemplates = useMemo(
-    () => templates.filter((template) => template.userId === user?.id),
-    [templates, user?.id],
+    () =>
+      workspaceTemplates.filter(
+        (template) =>
+          template.teamId ||
+          (template.userId === user?.id && !template.id.startsWith('repo:')),
+      ),
+    [workspaceTemplates, user?.id],
   );
 
   const activeRunAverage =
@@ -98,14 +112,35 @@ const Dashboard = () => {
         )
       : 0;
 
-  const handleDeleteRun = () => {
+  if (isRunsRoute) {
+    return (
+      <RunsDashboardView
+        runs={runs}
+        templates={templates}
+        onDeleteRun={deleteRun}
+        loading={runsLoading}
+      />
+    );
+  }
+
+  const handleDeleteRun = async () => {
     if (!runToDelete) {
       return;
     }
 
-    deleteRun(runToDelete);
-    setRunToDelete(null);
-    setIsDeleteDialogOpen(false);
+    setIsDeletingRun(true);
+    try {
+      await deleteRun(runToDelete);
+      toast.success('Run deleted');
+      setRunToDelete(null);
+      setIsDeleteDialogOpen(false);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to delete run.',
+      );
+    } finally {
+      setIsDeletingRun(false);
+    }
   };
 
   const handleTitleEdit = (run: ChecklistRun) => {
@@ -113,7 +148,7 @@ const Dashboard = () => {
     setEditTitle(run.title);
   };
 
-  const handleTitleSave = (runId: string) => {
+  const handleTitleSave = async (runId: string) => {
     if (!editTitle.trim()) {
       return;
     }
@@ -123,13 +158,22 @@ const Dashboard = () => {
       return;
     }
 
-    updateRun({
-      ...runToUpdate,
-      title: editTitle.trim(),
-    });
-    toast.success('Run title updated');
-    setEditingRunId(null);
-    setEditTitle('');
+    setIsSavingRunTitle(true);
+    try {
+      await updateRun({
+        ...runToUpdate,
+        title: editTitle.trim(),
+      });
+      toast.success('Run title updated');
+      setEditingRunId(null);
+      setEditTitle('');
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to update run title.',
+      );
+    } finally {
+      setIsSavingRunTitle(false);
+    }
   };
 
   const renderRunCard = (run: ChecklistRun, tone: 'active' | 'completed') => {
@@ -138,10 +182,7 @@ const Dashboard = () => {
     const isCompleted = tone === 'completed';
 
     return (
-      <div
-        key={run.id}
-        className="rounded-xl border border-border/80 bg-card/96 p-5"
-      >
+      <div key={run.id} className="border border-border bg-card p-5">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -163,7 +204,7 @@ const Dashboard = () => {
                     onChange={(event) => setEditTitle(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {
-                        handleTitleSave(run.id);
+                        void handleTitleSave(run.id);
                       }
                       if (event.key === 'Escape') {
                         setEditingRunId(null);
@@ -171,24 +212,25 @@ const Dashboard = () => {
                       }
                     }}
                     autoFocus
-                    className="rounded-2xl"
                   />
                   <div className="flex gap-2">
                     <Button
                       type="button"
-                      onClick={() => handleTitleSave(run.id)}
-                      className="rounded-2xl"
+                      disabled={isSavingRunTitle}
+                      onClick={() => void handleTitleSave(run.id)}
+                      className="rounded-md"
                     >
-                      Save
+                      {isSavingRunTitle ? 'Saving...' : 'Save'}
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
+                      disabled={isSavingRunTitle}
                       onClick={() => {
                         setEditingRunId(null);
                         setEditTitle('');
                       }}
-                      className="rounded-2xl"
+                      className="rounded-md"
                     >
                       Cancel
                     </Button>
@@ -244,12 +286,12 @@ const Dashboard = () => {
                 setRunToDelete(run.id);
                 setIsDeleteDialogOpen(true);
               }}
-              className="rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="rounded-md text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
             </Button>
-            <Button asChild className="rounded-xl">
+            <Button asChild className="rounded-md">
               <Link to={buildConsoleRunPath(run.id)}>
                 {isCompleted ? 'View details' : 'Continue'}
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -264,8 +306,8 @@ const Dashboard = () => {
   return (
     <div className="space-y-8">
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="console-card">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground">
+        <div className="border-b border-border pb-6">
+          <div className="inline-flex items-center gap-2 rounded-md border border-border bg-secondary px-3 py-1.5 text-sm font-medium text-secondary-foreground">
             <CheckCircle2 className="h-4 w-4" />
             {isRunsRoute ? 'Run management' : 'Operational home'}
           </div>
@@ -282,42 +324,27 @@ const Dashboard = () => {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
-          <div className="marketing-metric">
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Active runs
-            </div>
-            <div className="mt-4 text-3xl font-semibold text-foreground">
-              {activeRuns.length}
-            </div>
-          </div>
-          <div className="marketing-metric">
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Completed runs
-            </div>
-            <div className="mt-4 text-3xl font-semibold text-foreground">
-              {completedRuns.length}
-            </div>
-          </div>
-          <div className="marketing-metric">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              <Layers3 className="h-4 w-4" />
-              Avg progress
-            </div>
-            <div className="mt-4 text-3xl font-semibold text-foreground">
-              {activeRunAverage}%
-            </div>
-          </div>
+          <DashboardMetricCard label="Active runs" value={activeRuns.length} />
+          <DashboardMetricCard
+            label="Completed runs"
+            value={completedRuns.length}
+          />
+          <DashboardMetricCard
+            icon={<Layers3 className="h-4 w-4" />}
+            label="Avg progress"
+            value={`${activeRunAverage}%`}
+          />
         </div>
       </section>
 
       <div className="flex flex-wrap gap-3">
-        <Button asChild className="rounded-xl">
+        <Button asChild className="rounded-md">
           <Link to={buildConsoleTemplateCreatePath()}>
             <PlusCircle className="mr-2 h-4 w-4" />
             New template
           </Link>
         </Button>
-        <Button asChild variant="outline" className="rounded-2xl">
+        <Button asChild variant="outline" className="rounded-md">
           <Link to={buildConsoleTemplatesPath()}>
             <Play className="mr-2 h-4 w-4" />
             Start a new run
@@ -333,7 +360,7 @@ const Dashboard = () => {
         </div>
 
         {runsLoading ? (
-          <div className="console-card">
+          <div className="border bg-card p-6">
             <LoadingSpinner message="Loading runs..." />
           </div>
         ) : activeRuns.length > 0 ? (
@@ -341,14 +368,14 @@ const Dashboard = () => {
             {activeRuns.map((run) => renderRunCard(run, 'active'))}
           </div>
         ) : (
-          <div className="console-card text-center">
+          <div className="border bg-card p-6 text-center">
             <h3 className="text-xl font-semibold text-foreground">
               No active runs
             </h3>
             <p className="mt-3 text-sm leading-7 text-muted-foreground">
               Start a run from one of your templates and it will appear here.
             </p>
-            <Button asChild variant="outline" className="mt-6 rounded-xl">
+            <Button asChild variant="outline" className="mt-6 rounded-md">
               <Link to={buildConsoleTemplatesPath()}>Open templates</Link>
             </Button>
           </div>
@@ -360,7 +387,7 @@ const Dashboard = () => {
           Completed runs
         </h2>
         {runsLoading ? (
-          <div className="console-card">
+          <div className="border bg-card p-6">
             <LoadingSpinner message="Loading completed runs..." />
           </div>
         ) : completedRuns.length > 0 ? (
@@ -368,7 +395,7 @@ const Dashboard = () => {
             {completedRuns.map((run) => renderRunCard(run, 'completed'))}
           </div>
         ) : (
-          <div className="console-card text-center">
+          <div className="border bg-card p-6 text-center">
             <h3 className="text-xl font-semibold text-foreground">
               No completed runs yet
             </h3>
@@ -393,6 +420,8 @@ const Dashboard = () => {
         </section>
       ) : null}
 
+      {!isRunsRoute ? <ArchiveRecoverySection /> : null}
+
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -405,12 +434,17 @@ const Dashboard = () => {
           <DialogFooter>
             <Button
               variant="outline"
+              disabled={isDeletingRun}
               onClick={() => setIsDeleteDialogOpen(false)}
             >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteRun}>
-              Delete
+            <Button
+              variant="destructive"
+              disabled={isDeletingRun}
+              onClick={() => void handleDeleteRun()}
+            >
+              {isDeletingRun ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

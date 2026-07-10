@@ -22,8 +22,14 @@ export function PageContainer({
   width,
   ...props
 }: PageContainerProps) {
+  const resolvedWidth = width ?? 'content';
+
   return (
-    <div className={cn(pageContainerVariants({ width }), className)} {...props}>
+    <div
+      className={cn(pageContainerVariants({ width: resolvedWidth }), className)}
+      data-page-container={resolvedWidth}
+      {...props}
+    >
       {children}
     </div>
   );

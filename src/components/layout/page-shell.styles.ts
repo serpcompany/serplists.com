@@ -1,7 +1,7 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 
 export const pageContainerVariants = cva(
-  'mx-auto w-full px-4 sm:px-6 lg:px-8',
+  'mx-auto w-full px-4',
   {
     variants: {
       width: {
@@ -9,7 +9,7 @@ export const pageContainerVariants = cva(
         content: 'max-w-[var(--layout-content-max)]',
         narrow: 'max-w-[var(--layout-narrow-max)]',
         wide: 'max-w-[var(--layout-wide-max)]',
-        docs: 'max-w-[var(--layout-docs-max)]',
+        docs: 'max-w-[var(--layout-narrow-max)]',
       },
     },
     defaultVariants: {
@@ -21,9 +21,9 @@ export const pageContainerVariants = cva(
 export const pageSectionVariants = cva('', {
   variants: {
     spacing: {
-      compact: 'py-6 sm:py-8',
-      default: 'py-8 sm:py-10',
-      spacious: 'py-12 sm:py-16',
+      compact: 'py-6',
+      default: 'py-8',
+      spacious: 'py-12',
       hero: 'pb-8 pt-10 sm:pb-10 sm:pt-12',
     },
   },
@@ -45,16 +45,20 @@ export const pageHeroVariants = cva('space-y-4', {
 });
 
 export const surfaceVariants = cva(
-  'rounded-[calc(var(--radius)+0.25rem)] border border-border/80 text-card-foreground',
+  'text-card-foreground',
   {
     variants: {
       tone: {
-        default: 'bg-card shadow-none',
-        glass: 'bg-card/94 shadow-none',
-        metric: 'bg-card shadow-none',
-        console: 'bg-card/96 shadow-none',
-        docs: 'bg-card/96 shadow-none',
-        flat: 'bg-card/96',
+        default:
+          'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
+        glass:
+          'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
+        metric:
+          'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
+        console:
+          'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
+        docs: 'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
+        flat: 'bg-transparent border-0 rounded-none shadow-none',
       },
       padding: {
         none: '',

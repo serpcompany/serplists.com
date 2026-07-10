@@ -1,18 +1,22 @@
-import React, { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { Compass } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
+import { ChevronRight, Filter, Search } from 'lucide-react';
 
 import { SearchAndFilters } from '@/components/checklist-library/SearchAndFilters';
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
-import { PublicPageContainer } from '@/components/layout/PublicPageLayout';
-import { PublicPill } from '@/components/shared/PublicPill';
+import {
+  buildDiscoveryCategories,
+  filterAndSortTemplates,
+  type DiscoverySort,
+} from '@/components/checklist-library/discovery-utils';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
+import { SEOHead } from '@/components/shared/SEOHead';
 import {
-  buildCanonicalPublicTemplatePath,
-  buildPublicTemplatesPath,
-  findCategoryNameBySlug,
+  buildPublicCategoryPath,
+  resolveLegacyTemplatesCategoryRedirectPath,
 } from '@/lib/routes';
 
 type ChecklistLibraryProps = {
@@ -21,162 +25,232 @@ type ChecklistLibraryProps = {
   description?: string;
 };
 
+const DEFAULT_SORT: DiscoverySort = 'popular';
+const PUBLIC_TEMPLATES_URL = 'https://serplists.com/templates';
+const SEO_IMAGE_URL = 'https://serplists.com/placeholder.svg';
+
 const ChecklistLibrary = ({
   templateType,
   title,
   description,
 }: ChecklistLibraryProps) => {
-  const { categorySlug } = useParams<{ categorySlug?: string }>();
-  const navigate = useNavigate();
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const legacyCategoryRedirectPath =
+    resolveLegacyTemplatesCategoryRedirectPath(searchParams);
+  const [searchQuery, setSearchQuery] = useState(
+    () => searchParams.get('search') ?? '',
+  );
+  const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | null>(
+    () => searchParams.get('category'),
+  );
+  const [sortBy, setSortBy] = useState<DiscoverySort>(() => {
+    const sort = searchParams.get('sort');
+    return sort === 'recent' || sort === 'trending' || sort === 'popular'
+      ? sort
+      : DEFAULT_SORT;
+  });
 
-  const {
-    templates,
-    filteredTemplates,
-    loading,
-    searchQuery,
-    setSearchQuery,
-    selectedCategories,
-    setSelectedCategories,
-    allCategories,
-  } = useTemplateLibrary(categorySlug, templateType);
+  const { templates, loading, allCategories } = useTemplateLibrary(
+    undefined,
+    templateType,
+  );
 
-  const activeCategoryName = categorySlug
-    ? (findCategoryNameBySlug(allCategories, categorySlug) ?? categorySlug)
-    : undefined;
+  const categories = useMemo(
+    () => buildDiscoveryCategories(templates, allCategories),
+    [allCategories, templates],
+  );
+  const selectedCategoryName =
+    categories.find((category) => category.slug === selectedCategorySlug)?.name ??
+    null;
 
-  const handleTemplateClick = (template: {
-    id: string;
-    slug?: string;
-    userId: string;
-    ownerProfile?: { username?: string };
+  const filteredTemplates = useMemo(
+    () =>
+      filterAndSortTemplates(templates, {
+        categorySlug: selectedCategorySlug,
+        searchQuery,
+        sortBy,
+      }),
+    [searchQuery, selectedCategorySlug, sortBy, templates],
+  );
+  const resultLabel = `${filteredTemplates.length} templates${
+    selectedCategoryName ? ` in ${selectedCategoryName}` : ''
+  }`;
+
+  const updateFilters = ({
+    categorySlug = selectedCategorySlug,
+    query = searchQuery,
+    sort = sortBy,
+  }: {
+    categorySlug?: string | null;
+    query?: string;
+    sort?: DiscoverySort;
   }) => {
-    const path = buildCanonicalPublicTemplatePath(template);
-    navigate(path ?? buildPublicTemplatesPath());
+    const nextParams = new URLSearchParams();
+    const normalizedQuery = query.trim();
+
+    if (categorySlug) {
+      nextParams.set('category', categorySlug);
+    }
+    if (normalizedQuery) {
+      nextParams.set('search', normalizedQuery);
+    }
+    if (sort !== DEFAULT_SORT) {
+      nextParams.set('sort', sort);
+    }
+
+    setSearchQuery(query);
+    setSelectedCategorySlug(categorySlug);
+    setSortBy(sort);
+    setSearchParams(nextParams, { replace: true });
   };
+
+  const handleResetFilters = () => {
+    updateFilters({
+      categorySlug: null,
+      query: '',
+      sort: DEFAULT_SORT,
+    });
+  };
+  const seoHead = (
+    <SEOHead
+      title={title ?? 'Discover Templates'}
+      description={
+        description ??
+        'Browse hundreds of ready-to-use checklist templates created by the community.'
+      }
+      keywords={['checklist templates', 'workflow templates', 'SOP templates']}
+      image={SEO_IMAGE_URL}
+      url={PUBLIC_TEMPLATES_URL}
+    />
+  );
+
+  if (legacyCategoryRedirectPath) {
+    return <Navigate replace to={legacyCategoryRedirectPath} />;
+  }
 
   if (loading) {
     return (
-      <PublicPageContainer className="py-14">
-        <div className="glass-panel p-8">
-          <Skeleton className="h-5 w-40" />
-          <Skeleton className="mt-4 h-12 w-full max-w-2xl" />
-          <Skeleton className="mt-4 h-6 w-full max-w-xl" />
-          <div className="mt-8 grid gap-4 lg:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <Skeleton key={index} className="h-52 rounded-xl" />
+      <div className="bg-background">
+        {seoHead}
+        <main className="mx-auto max-w-6xl px-4 py-8">
+          <div className="mb-10 space-y-3 text-center">
+            <Skeleton className="mx-auto h-9 w-56" />
+            <Skeleton className="mx-auto h-5 w-80 max-w-full" />
+          </div>
+
+          <div className="mb-8 flex items-center gap-2 overflow-x-auto pb-2">
+            <Skeleton className="h-9 w-16 shrink-0" />
+            <Skeleton className="h-9 w-28 shrink-0" />
+            <Skeleton className="h-9 w-24 shrink-0" />
+          </div>
+
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <Skeleton key={index} className="h-[320px] rounded-lg" />
             ))}
           </div>
-        </div>
-      </PublicPageContainer>
+        </main>
+      </div>
     );
   }
 
   return (
-    <div className="pb-20">
-      <PublicPageContainer className="pb-6 pt-10">
-        <div className="max-w-3xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium text-muted-foreground">
-            <Compass className="h-4 w-4" />
-            {activeCategoryName ? 'Category collection' : 'Template library'}
-          </div>
-
-          <h1 className="mt-4 max-w-4xl text-3xl font-semibold text-foreground sm:text-4xl">
-            {title ??
-              (activeCategoryName
-                ? `${activeCategoryName} template packs`
-                : 'Find the template pack that already solved it')}
+    <div className="bg-background">
+      {seoHead}
+      <main className="mx-auto max-w-6xl px-4 py-8">
+        <div className="mb-10 text-center">
+          <h1 className="mb-3 text-balance text-3xl font-bold text-foreground">
+            {title ?? 'Discover Templates'}
           </h1>
-
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
+          <p className="text-muted-foreground">
             {description ??
-              (activeCategoryName
-                ? `Browse community templates tagged for ${activeCategoryName.toLowerCase()}, then open the detail page to copy or run them.`
-                : 'Explore public process templates, scan what each pack includes, and jump straight into creator-owned detail pages.')}
+              'Browse hundreds of ready-to-use checklists created by the community'}
           </p>
-
-          {activeCategoryName ? (
-            <div className="mt-4">
-              <PublicPill
-                asChild
-                tone="subtle"
-                className="cursor-pointer"
-              >
-                <button
-                  type="button"
-                  onClick={() => navigate(buildPublicTemplatesPath())}
-                >
-                  Back to all templates
-                </button>
-              </PublicPill>
-            </div>
-          ) : null}
         </div>
-      </PublicPageContainer>
 
-      <PublicPageContainer>
         <SearchAndFilters
+          categories={categories}
+          getCategoryPath={(category) => buildPublicCategoryPath(category.name)}
+          onCategoryChange={(categorySlug) => updateFilters({ categorySlug })}
+          onSortChange={(sort) => updateFilters({ sort })}
           resultCount={filteredTemplates.length}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-          allCategories={allCategories}
-          selectedCategories={selectedCategories}
-          setSelectedCategories={setSelectedCategories}
+          resultLabel={resultLabel}
+          searchSlot={
+            <div className="flex flex-1 flex-col gap-2 sm:max-w-md">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  className="border-border bg-card pl-10"
+                  onChange={(event) =>
+                    updateFilters({ query: event.target.value })
+                  }
+                  placeholder="Search templates..."
+                  value={searchQuery}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">{resultLabel}</p>
+            </div>
+          }
+          selectedCategorySlug={selectedCategorySlug}
+          sortBy={sortBy}
         />
 
         {filteredTemplates.length === 0 ? (
-          <div className="glass-panel p-10 text-center">
-            <h2 className="text-2xl font-semibold text-foreground">
-              Nothing matched this view
-            </h2>
-            <p className="mt-4 text-sm leading-7 text-muted-foreground">
-              {activeCategoryName
-                ? `No public template packs are currently tagged for ${activeCategoryName}.`
-                : searchQuery
-                  ? `No template packs matched "${searchQuery}".`
-                  : templateType === 'recipe'
-                    ? 'No public recipes are available yet.'
-                    : 'No public templates are available yet.'}
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
+              <Filter className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <h3 className="mb-1 text-sm font-medium text-foreground">
+              No templates found
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Try adjusting your search or filters
             </p>
             <Button
-              type="button"
+              className="mt-6"
+              onClick={handleResetFilters}
               variant="outline"
-              onClick={() => navigate(buildPublicTemplatesPath())}
-              className="mt-6 rounded-full"
             >
-              Browse all templates
+              Reset filters
             </Button>
           </div>
         ) : (
-          <div
-            className={
-              viewMode === 'grid'
-                ? 'grid gap-6 md:grid-cols-2 xl:grid-cols-3'
-                : 'space-y-4'
-            }
-          >
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {filteredTemplates.map((template) => (
-              <TemplateCard
-                key={template.id}
-                template={template}
-                viewMode={viewMode}
-                onTemplateClick={handleTemplateClick}
-              />
+              <TemplateCard key={template.id} template={template} />
             ))}
           </div>
         )}
-      </PublicPageContainer>
 
-      {templates.length > filteredTemplates.length ? (
-        <PublicPageContainer className="mt-12">
-          <div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground shadow-[0_18px_48px_-34px_rgba(15,23,42,0.18)]">
-            The library currently indexes {templates.length} public templates
-            across {allCategories.length} categories.
+        <section className="mt-16 border-t border-border pt-12">
+          <h2 className="mb-6 text-lg font-semibold text-foreground">
+            Browse by Category
+          </h2>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {categories.slice(0, 8).map((category) => {
+              return (
+                <Link
+                  key={category.slug}
+                  to={buildPublicCategoryPath(category.name)}
+                  className="group flex items-center justify-between rounded-lg border border-border bg-card p-4 transition-colors hover:border-muted-foreground/30"
+                >
+                  <div>
+                    <h3 className="font-medium text-foreground transition-colors group-hover:text-primary">
+                      {category.name}
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      {category.count}{' '}
+                      {category.count === 1 ? 'template' : 'templates'}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+                </Link>
+              );
+            })}
           </div>
-        </PublicPageContainer>
-      ) : null}
+        </section>
+      </main>
     </div>
   );
 };

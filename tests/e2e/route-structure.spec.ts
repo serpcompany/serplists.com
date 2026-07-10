@@ -1,12 +1,73 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Route } from '@playwright/test';
 
 const API_BASE_URL = process.env.VITE_API_URL ?? 'http://localhost:8788/api';
+
+async function fulfillJson(route: Route, body: unknown, status = 200) {
+  await route.fulfill({
+    body: JSON.stringify(body),
+    contentType: 'application/json',
+    status,
+  });
+}
+
+async function mockAuthenticatedRouteApi(page: Page) {
+  await page.route('**/api/**', async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+
+    if (path === '/api/auth/get-session' && request.method() === 'GET') {
+      await fulfillJson(route, {
+        session: {
+          id: 'session-route-structure',
+          createdAt: '2026-07-01T00:00:00.000Z',
+          expiresAt: '2026-07-08T00:00:00.000Z',
+          token: 'route-structure-session-token',
+          updatedAt: '2026-07-01T00:00:00.000Z',
+          userId: 'user-route-structure',
+        },
+        user: {
+          id: 'user-route-structure',
+          email: 'route@example.com',
+          emailVerified: true,
+          name: 'Route Structure User',
+          username: 'routeuser',
+        },
+      });
+      return;
+    }
+
+    if (path === '/api/teams' && request.method() === 'GET') {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (path === '/api/templates' && request.method() === 'GET') {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (path === '/api/checklists' && request.method() === 'GET') {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (path === '/api/billing/status' && request.method() === 'GET') {
+      await fulfillJson(route, {
+        billingEnabled: true,
+        plan: 'free',
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+}
 
 async function signInAsAdmin(page: Page) {
   await page.goto('/login');
   await page.getByRole('button', { name: /fill admin/i }).click();
-  await page.getByRole('button', { name: /sign in with email/i }).click();
-  await expect(page).toHaveURL(/\/account/);
+  await page.getByRole('button', { name: /^sign in$/i }).click();
+  await expect(page).toHaveURL(/\/dashboard\/settings$/, { timeout: 30_000 });
 }
 
 test.describe('route structure', () => {
@@ -16,7 +77,7 @@ test.describe('route structure', () => {
     await page.goto('/templates');
     await expect(
       page.getByRole('heading', {
-        name: 'Find the template pack that already solved it',
+        name: 'Discover Templates',
       }),
     ).toBeVisible();
 
@@ -27,7 +88,7 @@ test.describe('route structure', () => {
 
     await page.goto('/categories/outdoor');
     await expect(
-      page.getByRole('heading', { name: 'outdoor template packs' }),
+      page.getByRole('heading', { name: 'outdoor' }),
     ).toBeVisible();
     await expect(
       page.getByRole('heading', { name: 'Ultimate Camping Checklist' }),
@@ -47,9 +108,25 @@ test.describe('route structure', () => {
   test('legacy console routes redirect to the live canonical dashboard path', async ({
     page,
   }) => {
-    await signInAsAdmin(page);
+    await mockAuthenticatedRouteApi(page);
+
     await page.goto('/console');
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+
+    await page.goto('/account');
+    await expect(page).toHaveURL(/\/dashboard\/settings$/);
+
+    await page.goto('/dashboard/profile');
+    await expect(page).toHaveURL(/\/dashboard\/settings$/);
+  });
+
+  test('canonical dashboard resolves to the templates dashboard surface', async ({
+    page,
+  }) => {
+    await mockAuthenticatedRouteApi(page);
+
+    await page.goto('/dashboard');
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
   });
 
   test('removed mixed-surface routes still return not found', async ({ page }) => {
@@ -72,6 +149,8 @@ test.describe('route structure', () => {
   test('shared checklist pages use /share and render noindex,nofollow', async ({
     page,
   }) => {
+    test.setTimeout(120_000);
+
     await signInAsAdmin(page);
 
     const shareToken = await page.evaluate(async (apiBase) => {

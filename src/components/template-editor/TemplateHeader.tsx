@@ -1,93 +1,109 @@
-import { ChevronRight, ExternalLink, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, Eye, Loader2, MoreHorizontal, Save } from 'lucide-react';
 
-import { PageContainer } from '@/components/layout/page-shell';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/contexts/CloudflareAuthContext';
-import { buildPublicTemplatePath } from '@/lib/routes';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface TemplateHeaderProps {
   isEditing: boolean;
   isSaving: boolean;
+  title: string;
   templateSlug?: string;
   onCancel: () => void;
   onSave: () => void;
+  onPreview?: () => void;
 }
 
 export const TemplateHeader = ({
   isEditing,
   isSaving,
-  templateSlug,
+  title,
   onCancel,
   onSave,
+  onPreview,
 }: TemplateHeaderProps): JSX.Element => {
-  const { user } = useAuth();
-  const publicUrl =
-    templateSlug && user?.username
-      ? `${window.location.origin}${buildPublicTemplatePath(user.username, templateSlug)}`
-      : null;
   return (
-    <div className="border-b border-border/80 bg-background">
-      <PageContainer className="py-4" width="shell">
-        <div className="docs-panel flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <Button
-                variant="ghost"
-                onClick={onCancel}
-                className="h-auto px-0 text-sm font-medium text-foreground hover:bg-transparent hover:text-foreground/80"
-              >
-                Templates
-              </Button>
-              <ChevronRight className="h-4 w-4" />
-              <span>{isEditing ? 'Editing' : 'Draft'}</span>
-            </div>
+    <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-border bg-background px-4">
+      <div className="flex items-center gap-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onCancel}
+          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
 
-            <div className="max-w-3xl">
-              <h1 className="text-2xl font-semibold tracking-tight">
-                Template editor
-              </h1>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                Keep the workflow dense: define the metadata, shape the steps,
-                and save the SOP without extra landing-page chrome.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {publicUrl ? (
-              <Button
-                className="hidden rounded-lg sm:flex"
-                onClick={() => window.open(publicUrl, '_blank')}
-                size="sm"
-                variant="outline"
-              >
-                <ExternalLink className="mr-2 h-4 w-4" />
-                View public
-              </Button>
-            ) : null}
-            <Button
-              className="rounded-lg"
-              onClick={onCancel}
-              variant="outline"
-            >
-              Cancel
-            </Button>
-            <Button className="rounded-lg" disabled={isSaving} onClick={onSave}>
-              {isSaving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save
-                </>
-              )}
-            </Button>
-          </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-foreground">
+            {title || 'Untitled Template'}
+          </span>
+          {isEditing ? (
+            <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+              Editing
+            </span>
+          ) : null}
         </div>
-      </PageContainer>
-    </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {onPreview ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onPreview}
+            className="text-muted-foreground hover:text-foreground"
+            type="button"
+          >
+            <Eye className="mr-2 h-4 w-4" />
+            Preview
+          </Button>
+        ) : null}
+
+        <Button
+          variant="default"
+          size="sm"
+          onClick={onSave}
+          disabled={isSaving}
+          className="bg-foreground text-background hover:bg-foreground/90"
+          type="button"
+        >
+          {isSaving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              Save
+            </>
+          )}
+        </Button>
+
+        <ThemeToggle />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              type="button"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onCancel}>Discard changes</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </header>
   );
 };
