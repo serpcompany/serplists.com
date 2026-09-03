@@ -35,8 +35,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useDashboardTemplatesModel } from '@/features/dashboard-templates/useDashboardTemplatesModel';
+import { useViewModePreference } from '@/hooks/useViewModePreference';
 
-type ViewMode = 'grid' | 'list';
 type SortOption = 'recent' | 'alphabetical' | 'tasks';
 type VisibilityFilter = 'all' | 'public' | 'private';
 
@@ -44,7 +44,10 @@ const Templates = () => {
   const model = useDashboardTemplatesModel();
   const [runName, setRunName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useViewModePreference({
+    surface: 'dashboard-templates',
+    userId: model.preferenceOwnerId,
+  });
   const [sortBy, setSortBy] = useState<SortOption>('recent');
   const [filterVisibility, setFilterVisibility] =
     useState<VisibilityFilter>('all');

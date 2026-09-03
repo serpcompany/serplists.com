@@ -108,7 +108,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
               </div>
               <div className="space-y-2 pl-7">
                 {content.subItems.map((subItem: ChecklistSubItem, subItemIndex: number) => (
-                  <div key={subItem.id} className="flex items-center gap-3">
+                  <div key={subItem.id} className="flex items-center gap-3 rounded-md border border-border/70 p-3">
                     <Checkbox
                       checked={!!subItem.isCompleted}
                       disabled={disabled || !onSubItemToggle}

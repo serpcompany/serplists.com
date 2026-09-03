@@ -7,6 +7,59 @@ export const getYoutubeVideoId = (url: string): string | null => {
   return (match && match[2].length === 11) ? match[2] : null;
 };
 
+export type VideoEmbedSource = {
+  kind: 'iframe' | 'video';
+  url: string;
+};
+
+const extractIframeSource = (value: string): string | null => {
+  const match = value.match(/<iframe\b[^>]*\bsrc\s*=\s*(["'])(.*?)\1/i);
+  return match?.[2]?.replaceAll('&amp;', '&').trim() ?? null;
+};
+
+export const getVideoEmbedSource = (value: string): VideoEmbedSource | null => {
+  const trimmedValue = value.trim();
+  const iframeSource = extractIframeSource(trimmedValue);
+  const candidate = iframeSource ?? trimmedValue;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return null;
+  }
+
+  const isYoutubeHost =
+    parsed.hostname === 'youtu.be' ||
+    parsed.hostname === 'youtube.com' ||
+    parsed.hostname === 'www.youtube.com';
+  if (isYoutubeHost) {
+    const youtubeId = getYoutubeVideoId(candidate);
+    if (youtubeId) {
+      return { kind: 'iframe', url: `https://www.youtube.com/embed/${youtubeId}` };
+    }
+  }
+
+  const isClipyHost =
+    parsed.hostname === 'clipy.online' || parsed.hostname === 'www.clipy.online';
+  if (isClipyHost) {
+    const clipyMatch = parsed.pathname.match(/^\/(?:video|embed)\/([a-zA-Z0-9_-]+)\/?$/);
+    if (clipyMatch?.[1]) {
+      const query = parsed.pathname.startsWith('/embed/') ? parsed.search : '';
+      return {
+        kind: 'iframe',
+        url: `https://clipy.online/embed/${clipyMatch[1]}${query}`,
+      };
+    }
+  }
+
+  return { kind: iframeSource ? 'iframe' : 'video', url: parsed.toString() };
+};
+
 /**
  * Generates a URL-friendly slug from a title
  */

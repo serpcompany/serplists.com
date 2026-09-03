@@ -279,5 +279,6 @@ export const useDashboardTemplatesModel = (
     selectedTemplate,
     selectedTemplateId,
     selectRunTemplate,
+    preferenceOwnerId: dependencies?.userId ?? user?.id,
   };
 };

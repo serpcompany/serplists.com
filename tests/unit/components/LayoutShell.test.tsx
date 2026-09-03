@@ -58,6 +58,7 @@ describe('Layout shell selection', () => {
       'sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 shrink-0 flex-col border-r border-border bg-card md:flex',
     );
     expect(html).toContain('New Template');
+    expect(html).toContain('min-h-11 w-full justify-start');
     expect(html).toContain('Settings');
     expect(html).not.toContain('>Profile<');
     expect(html).toContain('Switch to dark mode');

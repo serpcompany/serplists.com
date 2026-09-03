@@ -25,6 +25,10 @@ vi.mock('@/hooks/useTemplateLibrary', () => ({
   useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
 }));
 
+vi.mock('@/contexts/CloudflareAuthContext', () => ({
+  useAuth: () => ({ user: null }),
+}));
+
 vi.mock('@/components/shared/SEOHead', () => ({
   SEOHead: (props: Record<string, unknown>) => {
     mockSeoHead(props);

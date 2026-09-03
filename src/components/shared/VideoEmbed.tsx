@@ -1,5 +1,5 @@
 import React from 'react';
-import { getYoutubeVideoId } from '@/utils/urlHelpers';
+import { getVideoEmbedSource } from '@/utils/urlHelpers';
 
 interface VideoEmbedProps {
   url: string;
@@ -12,13 +12,13 @@ export const VideoEmbed: React.FC<VideoEmbedProps> = ({
   title = "YouTube video",
   className = "h-64 w-full rounded-md"
 }) => {
-  const videoId = getYoutubeVideoId(url);
+  const source = getVideoEmbedSource(url);
   
-  if (videoId) {
+  if (source?.kind === 'iframe') {
     return (
       <div className="aspect-w-16 aspect-h-9 overflow-hidden rounded-md">
         <iframe
-          src={`https://www.youtube.com/embed/${videoId}`}
+          src={source.url}
           title={title}
           className={className}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -27,6 +27,15 @@ export const VideoEmbed: React.FC<VideoEmbedProps> = ({
       </div>
     );
   }
+
+  if (source?.kind === 'video') {
+    return (
+      <video className={className} controls preload="metadata">
+        <source src={source.url} />
+        Your browser does not support embedded video.
+      </video>
+    );
+  }
   
-  return <div className="italic text-muted-foreground">{url}</div>;
+  return <div className="italic text-muted-foreground">Invalid video URL or embed code</div>;
 };

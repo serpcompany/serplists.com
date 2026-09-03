@@ -22,6 +22,15 @@ async function registerAccount(page: Page) {
   });
 }
 
+async function loginAsSeedUser(page: Page) {
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Fill SERP' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('button', { name: 'Switch workspace' })).toBeVisible({
+    timeout: 30_000,
+  });
+}
+
 async function findTemplateByTitle(page: Page, title: string) {
   return page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
     const response = await fetch(`${apiBaseUrl}/templates`, { credentials: "include" });
@@ -75,6 +84,127 @@ function getTemplateSections(template: Record<string, unknown>) {
 }
 
 test.describe("template editor regressions", () => {
+  test('remembers the signed-in user layout independently on template screens', async ({ page }) => {
+    await loginAsSeedUser(page);
+    await page.goto('/dashboard/templates');
+
+    await page.getByRole('button', { name: 'Show templates in list view' }).click();
+    await expect(
+      page.getByRole('button', { name: 'Show templates in list view' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    await page.reload();
+    await expect(
+      page.getByRole('button', { name: 'Show templates in list view' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    await page.goto('/categories/seo');
+    await expect(
+      page.getByRole('button', { name: 'Show templates in grid view' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Show templates in list view' }).click();
+    await page.reload();
+    await expect(
+      page.getByRole('button', { name: 'Show templates in list view' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('supports full-size console navigation targets', async ({ page }) => {
+    await loginAsSeedUser(page);
+    await page.goto('/dashboard/templates');
+
+    const runsLink = page.getByRole('link', { name: 'Runs', exact: true });
+    const box = await runsLink.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await runsLink.click({ position: { x: 8, y: 8 } });
+    await expect(page).toHaveURL(/\/dashboard\/runs$/);
+  });
+
+  test('reorders sections and tasks with the visible drag handles', async ({ page }) => {
+    await loginAsSeedUser(page);
+    await page.goto('/dashboard/templates/new');
+
+    await page.getByRole('button', { name: /add task to section 1/i }).click();
+    await page.getByLabel('Task Title').fill('First task');
+    await page.getByRole('button', { name: /^Add task$/ }).click();
+    await page.getByLabel('Task Title').fill('Second task');
+    await page.getByRole('button', { name: 'Add section' }).click();
+    await page.getByPlaceholder('Enter section title...').fill('Second section');
+
+    const draggedSection = page.getByRole('button', { name: 'Drag Second section' });
+    const sectionDropTarget = page.getByRole('button', { name: 'Drag Section 1' });
+    const sectionDataTransfer = await page.evaluateHandle(() => new DataTransfer());
+    await draggedSection.dispatchEvent('dragstart', { dataTransfer: sectionDataTransfer });
+    await sectionDropTarget.dispatchEvent('dragover', { dataTransfer: sectionDataTransfer });
+    await expect(page.locator('[data-drop-indicator="section-before"]')).toBeVisible();
+    await sectionDropTarget.dispatchEvent('drop', { dataTransfer: sectionDataTransfer });
+    const sectionHandles = page.getByRole('button', { name: /^Drag / });
+    await expect(sectionHandles.first()).toHaveAccessibleName('Drag Second section');
+
+    await page.getByRole('button', { name: 'Drag Second task' }).dragTo(
+      page.getByRole('button', { name: 'Drag First task' }),
+    );
+    const taskButtons = page.getByRole('button', { name: /^(First|Second) task$/ });
+    await expect(taskButtons.first()).toHaveText('Second task');
+  });
+
+  test('previews the current unsaved template draft', async ({ page }) => {
+    await loginAsSeedUser(page);
+    await page.goto('/dashboard/templates/new');
+    await page.getByPlaceholder('Enter template name...').fill('Unsaved preview title');
+
+    await page.getByRole('button', { name: 'Preview' }).click();
+
+    await expect(page.getByRole('dialog')).toContainText('Unsaved preview title');
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+  });
+
+  test('shows one task-level notes area and persists it on the run', async ({ page }) => {
+    await loginAsSeedUser(page);
+    const runId = await page.evaluate(async ({ apiBaseUrl }) => {
+      const response = await fetch(`${apiBaseUrl}/checklists`, {
+        body: JSON.stringify({
+          sections: [
+            {
+              id: 'notes-section',
+              title: 'Outreach',
+              items: [
+                {
+                  id: 'notes-task',
+                  title: 'Send email',
+                  contents: [
+                    {
+                      type: 'subItems',
+                      value: '',
+                      subItems: [{ id: 'notes-subtask', title: 'Wait for reply' }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          title: 'Run notes QA',
+        }),
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      if (!response.ok) throw new Error(`Failed to create run: ${response.status}`);
+      return ((await response.json()) as { id: string }).id;
+    }, { apiBaseUrl: DEV_API_BASE_URL });
+
+    await page.goto(`/dashboard/runs/${runId}`);
+    await expect(page.getByLabel('Task notes')).toHaveCount(1);
+    await expect(page.getByLabel('Notes for Wait for reply')).toHaveCount(0);
+    await page.getByLabel('Task notes').fill('Sent email: https://example.com/message/42');
+    await page.getByLabel('Task notes').locator('..').getByRole('button', { name: 'Save notes' }).click();
+
+    await page.reload();
+    await expect(page.getByLabel('Task notes')).toHaveValue(
+      'Sent email: https://example.com/message/42',
+    );
+  });
+
   test("@smoke preserves task edits when adding then switching between tasks", async ({ page }) => {
     const templateTitle = `QA Tasks ${Date.now()}`;
     const firstTaskTitle = `First task ${Date.now()}`;

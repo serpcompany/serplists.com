@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistItem, ChecklistSection } from '@/types/checklist';
+import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
 
 interface TaskExecutionPanelProps {
   section: ChecklistSection;
@@ -15,6 +16,7 @@ interface TaskExecutionPanelProps {
   onNavigatePrev: () => void;
   onToggleSubItem: (contentIndex: number, subItemIndex: number) => void;
   onToggleTask: () => void;
+  onSaveNotes: (notes: string) => Promise<boolean>;
   hasNext: boolean;
   hasPrev: boolean;
 }
@@ -28,6 +30,7 @@ export function TaskExecutionPanel({
   onNavigatePrev,
   onToggleSubItem,
   onToggleTask,
+  onSaveNotes,
   hasNext,
   hasPrev,
 }: TaskExecutionPanelProps) {
@@ -89,6 +92,12 @@ export function TaskExecutionPanel({
               </p>
             </div>
           )}
+          <RunNotesEditor
+            initialValue={task.notes}
+            key={task.id}
+            label="Task notes"
+            onSave={onSaveNotes}
+          />
         </div>
       </div>
 
