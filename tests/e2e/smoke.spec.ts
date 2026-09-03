@@ -113,6 +113,16 @@ test("@smoke login page renders", async ({ page }) => {
   await expect(page.getByText("Sign in to your account to continue")).toBeVisible();
 });
 
+test("@smoke removed docs prototype renders the public not-found page", async ({ page }) => {
+  await page.goto("/docs");
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: "That page does not exist" }),
+  ).toBeVisible();
+  await expect(page.getByText("The route /docs could not be found.")).toBeVisible();
+  await expect(page.getByText("Checklist & Template Experience")).toHaveCount(0);
+});
+
 test("@smoke public document installs the configured Google Tag Manager container", async ({ request }) => {
   const pagesOrigin = new URL(
     process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api",
