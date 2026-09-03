@@ -156,7 +156,31 @@ const publishedClipyTemplate: ChecklistTemplate = {
   seoTitle: 'Saved Clipy Search Title',
   seoDescription: 'Saved Clipy search description with five actionable steps.',
   isPublic: true,
-  sections: [{ id: 'steps', title: 'Steps', items: [] }],
+  sections: [{
+    id: 'steps',
+    title: 'Steps',
+    items: [{
+      id: 'source',
+      title: 'Watch the source recording',
+      description: '',
+      contents: [
+        {
+          type: 'text',
+          value: '### Recording summary\nPersisted summary.\n\n### Transcript\nPersisted transcript.',
+        },
+        {
+          type: 'video',
+          uploadType: 'url',
+          value: 'https://clipy.online/video/8fptqlnappr6',
+        },
+        {
+          type: 'image',
+          uploadType: 'url',
+          value: 'https://cdn.clipy.online/key-moments/demo/issues.jpg',
+        },
+      ],
+    }],
+  }],
   userId: 'user-1',
   ownerProfile: { username: 'alice' },
   createdAt: '2026-09-04T00:00:00.000Z',
@@ -202,6 +226,15 @@ describe('PublicTemplate rendered route', () => {
     expect(helmet.meta.toString()).toContain(
       'content="Saved Clipy search description with five actionable steps."',
     );
+    expect(html).toContain('Recording summary');
+    expect(html).toContain('Persisted summary.');
+    expect(html).toContain('Transcript');
+    expect(html).toContain('Persisted transcript.');
+    expect(html).toContain('src="https://clipy.online/embed/8fptqlnappr6?ref=serplists.com"');
+    expect(html).toContain('src="https://cdn.clipy.online/key-moments/demo/issues.jpg"');
+    expect(html).toContain('href="https://clipy.online/video/8fptqlnappr6?ref=serplists.com"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="nofollow noopener noreferrer"');
   });
 
   it('falls back to the ordinary title and description when saved SEO fields are empty', () => {
