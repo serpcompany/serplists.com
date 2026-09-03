@@ -1,0 +1,28 @@
+{
+  "templates": [
+    {
+      "slug": "complete-wedding-planning-checklist",
+      "categories": [
+        "wedding",
+        "events",
+        "planning"
+      ]
+    },
+    {
+      "slug": "full-website-launch-qa-checklist",
+      "categories": [
+        "Tech",
+        "Website",
+        "QA"
+      ]
+    },
+    {
+      "slug": "ultimate-camping-checklist",
+      "categories": [
+        "outdoor",
+        "travel",
+        "recreation"
+      ]
+    }
+  ]
+}

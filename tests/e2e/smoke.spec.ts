@@ -102,6 +102,27 @@ test("@smoke login page renders", async ({ page }) => {
   await expect(page.getByText("Sign in to your account to continue")).toBeVisible();
 });
 
+test("@smoke public document installs the configured Google Tag Manager container", async ({ request }) => {
+  const pagesOrigin = new URL(
+    process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api",
+  ).origin;
+  const response = await request.get(`${pagesOrigin}/`);
+  const html = await response.text();
+  const csp = response.headers()["content-security-policy"] ?? "";
+
+  expect(response.ok()).toBe(true);
+  expect(html).toContain("GTM-PZZFQBGG");
+  expect(html.indexOf("googletagmanager.com/gtm.js")).toBeLessThan(
+    html.indexOf("</head>"),
+  );
+  expect(html.indexOf("googletagmanager.com/ns.html?id=GTM-PZZFQBGG")).toBeGreaterThan(
+    html.indexOf("<body>"),
+  );
+  expect(csp).toContain("script-src");
+  expect(csp).toContain("https://www.googletagmanager.com");
+  expect(csp).toContain("frame-src");
+});
+
 test("@smoke login link renders the login page without refresh", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: /^log in$/i }).click();
