@@ -8,10 +8,7 @@ export const PREDEFINED_CATEGORIES = [
   "camping",
   "packing",
   "morning routine",
-  "home inspection",
-  "software development",
-  "project management",
-  "productivity"
+  "home inspection"
 ] as const;
 
 export const getPredefinedCategories = () => PREDEFINED_CATEGORIES;

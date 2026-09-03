@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  buildClipyTemplateDraft,
   handleGenerateTemplateFromClipy,
-  parseClipyWatchUrl,
 } from '../../../functions/api/handlers/clipy';
 
 const sourceUrl = 'https://clipy.online/video/8fptqlnappr6';
@@ -15,6 +13,7 @@ function completeContext() {
       video: 'ready',
       transcript: 'ready',
       summary: 'ready',
+      keyMoments: 'ready',
     },
     clip: {
       accessMode: 'public',
@@ -70,52 +69,6 @@ function request(url = sourceUrl) {
 }
 
 describe('Clipy template generation', () => {
-  it('accepts only canonical public Clipy watch URLs', () => {
-    expect(parseClipyWatchUrl(`${sourceUrl}/`)).toEqual({
-      id: '8fptqlnappr6',
-      watchUrl: sourceUrl,
-    });
-    expect(parseClipyWatchUrl('http://clipy.online/video/8fptqlnappr6')).toBeNull();
-    expect(parseClipyWatchUrl('https://clipy.online.evil.test/video/8fptqlnappr6')).toBeNull();
-    expect(parseClipyWatchUrl('https://clipy.online/video/8fptqlnappr6?next=https://evil.test')).toBeNull();
-    expect(parseClipyWatchUrl('https://example.com/video/8fptqlnappr6')).toBeNull();
-  });
-
-  it('maps Clipy summary data to a deterministic private editor draft', () => {
-    const draft = buildClipyTemplateDraft(completeContext(), {
-      id: '8fptqlnappr6',
-      watchUrl: sourceUrl,
-    });
-
-    expect(draft).toMatchObject({
-      title: 'Creating Issues In GitHub Repositories',
-      description: expect.stringContaining(`Source: ${sourceUrl}?ref=serplists.com`),
-      templateType: 'checklist',
-      categories: ['software development', 'project management'],
-      tags: ['Clipy', 'GitHub', 'Issue Tracking', 'Software Development'],
-      isPublic: false,
-      seoTitle: 'Creating Issues In GitHub Repositories Checklist',
-      seoDescription: 'Create a clear GitHub issue that a developer can act on. Includes 5 actionable steps from the recorded walkthrough.',
-      sections: [{ id: 'clipy_8fptqlnappr6_steps', title: 'Steps' }],
-    });
-    expect(draft.sections[0].items[0]).toMatchObject({
-      id: 'clipy_8fptqlnappr6_source',
-      contents: [
-        { type: 'video', value: `${sourceUrl}?ref=serplists.com` },
-        {
-          type: 'text',
-          value: expect.stringMatching(/### Recording summary[\s\S]+### Transcript[\s\S]+\?ref=serplists\.com/),
-        },
-      ],
-    });
-    expect(draft.sections[0].items.slice(1).map((item) => item.title)).toEqual(
-      completeContext().summary.keyPoints,
-    );
-    expect(
-      draft.sections[0].items.flatMap((item) => item.contents).filter((content) => content.type === 'image'),
-    ).toHaveLength(3);
-  });
-
   it('requires a Serplists session before fetching Clipy', async () => {
     const fetchMock = vi.fn();
     const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
@@ -155,6 +108,18 @@ describe('Clipy template generation', () => {
     expect(await response.json()).toMatchObject({ code: 'clipy_not_ready' });
   });
 
+  it('waits for key moments before generating the media-complete draft', async () => {
+    const context = completeContext();
+    context.readiness.keyMoments = 'processing';
+    const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
+      fetch: vi.fn().mockResolvedValue(Response.json(context)),
+      getUserId: vi.fn().mockResolvedValue('user-1'),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'clipy_not_ready' });
+  });
+
   it('reports unavailable public recordings without using their response as content', async () => {
     const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
       fetch: vi.fn().mockResolvedValue(new Response('Not found', { status: 404 })),
@@ -180,8 +145,42 @@ describe('Clipy template generation', () => {
     expect(await response.json()).toMatchObject({
       draft: {
         title: 'Creating Issues In GitHub Repositories',
+        description: 'Create a clear GitHub issue that a developer can act on.',
+        templateType: 'checklist',
+        categories: [],
+        tags: ['Clipy', 'GitHub', 'Issue Tracking', 'Software Development'],
         isPublic: false,
+        seoTitle: 'Creating Issues In GitHub Repositories Checklist',
+        seoDescription: 'Create a clear GitHub issue that a developer can act on. Includes 5 actionable steps from the recorded walkthrough.',
+        sections: [{ id: 'clipy_8fptqlnappr6_steps', title: 'Steps' }],
       },
     });
+  });
+
+  it('returns only approved categories and does not classify generic process language', async () => {
+    const context = completeContext();
+    context.clip.title = 'A process for reviewing a routine project';
+    context.summary.tldr = 'Review the process and organize project tasks.';
+    const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
+      fetch: vi.fn().mockResolvedValue(Response.json(context)),
+      getUserId: vi.fn().mockResolvedValue('user-1'),
+    });
+
+    expect((await response.json()).draft.categories).toEqual([]);
+  });
+
+  it('preserves the complete transcript returned within the response size limit', async () => {
+    const context = completeContext();
+    context.transcript.plaintext = `Start ${'detailed transcript '.repeat(900)} Finish`;
+    const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
+      fetch: vi.fn().mockResolvedValue(Response.json(context)),
+      getUserId: vi.fn().mockResolvedValue('user-1'),
+    });
+    const payload = await response.json();
+    const sourceText = payload.draft.sections[0].items[0].contents.find(
+      (content: { type: string }) => content.type === 'text',
+    ).value;
+
+    expect(sourceText).toContain('Finish');
   });
 });

@@ -25,7 +25,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
-import { MarkdownText } from "@/components/shared/MarkdownText";
 import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
 import {
   applyTemplateBeforeUnloadWarning,
@@ -210,9 +209,9 @@ const TemplateEditor = () => {
                 {templateForm.watch("title") || "Untitled Template"}
               </h2>
               {templateForm.watch("description") ? (
-                <MarkdownText className="mt-2 text-sm text-muted-foreground">
+                <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
                   {templateForm.watch("description")}
-                </MarkdownText>
+                </p>
               ) : null}
             </div>
             <PublicTemplateContent

@@ -2,10 +2,11 @@ import { useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
-  Image,
   Link2,
   ListTodo,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { buildPublicTemplateSectionId } from '@/components/template/publicTemplateSectionId';
@@ -14,7 +15,6 @@ import {
   normalizeDisplayText,
   normalizeMarkdownDisplayText,
 } from '@/lib/utils/markdownDisplay';
-import { getOutboundLinkProps } from '@/lib/utils/clipyUrl';
 import { safeUrl } from '@/lib/utils/safeUrl';
 import type {
   ChecklistItem,
@@ -22,7 +22,6 @@ import type {
   ChecklistSection,
 } from '@/types/checklist';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
-import { MarkdownText } from '@/components/shared/MarkdownText';
 
 interface PublicTemplateContentProps {
   initialExpandedItems?: Record<string, boolean>;
@@ -44,12 +43,20 @@ export function PublicTemplateContent({
     }));
   };
 
-  const renderContent = (content: ChecklistItemContent) => {
+  const renderContent = (content: ChecklistItemContent, itemTitle: string) => {
     switch (content.type) {
       case 'text':
         return content.value ? (
           <div className="mt-3 border-l-2 border-border/70 pl-4">
-            <MarkdownText>{normalizeMarkdownDisplayText(content.value)}</MarkdownText>
+            <div className="prose prose-sm max-w-none whitespace-pre-line">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                skipHtml
+                urlTransform={safeUrl}
+              >
+                {normalizeMarkdownDisplayText(content.value)}
+              </ReactMarkdown>
+            </div>
           </div>
         ) : null;
 
@@ -62,11 +69,13 @@ export function PublicTemplateContent({
 
       case 'image':
         return content.value ? (
-          <div className="mt-3 border-l-2 border-border/70 pl-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Image className="h-4 w-4" />
-              Image content attached
-            </div>
+          <div className="mt-3 overflow-hidden rounded-md border border-border/70">
+            <img
+              src={safeUrl(content.value)}
+              alt={itemTitle}
+              className="max-h-96 w-full object-contain"
+              loading="lazy"
+            />
           </div>
         ) : null;
 
@@ -77,7 +86,9 @@ export function PublicTemplateContent({
               <Link2 className="h-4 w-4" />
               {safeUrl(content.value) ? (
                 <a
-                  {...getOutboundLinkProps(safeUrl(content.value))}
+                  href={safeUrl(content.value)}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-foreground underline-offset-4 hover:underline"
                 >
                   {content.value}
@@ -170,7 +181,7 @@ export function PublicTemplateContent({
                       <div className="space-y-2">
                         {item.contents?.map((content, contentIndex) => (
                           <div key={content.id || contentIndex}>
-                            {renderContent(content)}
+                            {renderContent(content, item.title)}
                           </div>
                         ))}
                       </div>

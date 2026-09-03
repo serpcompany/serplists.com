@@ -60,7 +60,6 @@ import { Label } from '@/components/ui/label';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { Switch } from '@/components/ui/switch';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
-import { MarkdownText } from '@/components/shared/MarkdownText';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import {
   DashboardContentShell,
@@ -587,7 +586,7 @@ const TemplateDetail = () => {
         title={displayTemplate.title}
         description={
           (displayTemplate.description
-            ? <MarkdownText className="text-sm text-muted-foreground">{displayTemplate.description}</MarkdownText>
+            ? normalizeDisplayText(displayTemplate.description)
             : null) ||
           'Review template structure, metadata, and run actions.'
         }

@@ -1,18 +1,12 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { VideoEmbed } from './VideoEmbed';
-import { File, Code, ListCheck, ZoomIn } from 'lucide-react';
+import { File, Code, ListCheck } from 'lucide-react';
 import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
 import { normalizeMarkdownDisplayText } from '@/lib/utils/markdownDisplay';
-import { getOutboundLinkProps } from '@/lib/utils/clipyUrl';
 import { safeUrl } from '@/lib/utils/safeUrl';
-import { MarkdownText } from './MarkdownText';
 
 interface ContentRendererProps {
   contents: ChecklistItemContent[];
@@ -25,8 +19,6 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   disabled = false,
   onSubItemToggle,
 }) => {
-  const [expandedImageUrl, setExpandedImageUrl] = React.useState<string | null>(null);
-
   if (!contents || contents.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
@@ -41,20 +33,15 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       {contents.map((content, contentIndex: number) => (
         <div key={contentIndex} className="space-y-3">
           {content.type === "text" && content.value && (
-            <MarkdownText>{normalizeMarkdownDisplayText(content.value)}</MarkdownText>
+            <div className="prose prose-sm max-w-none whitespace-pre-line">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeUrl}>
+                {normalizeMarkdownDisplayText(content.value)}
+              </ReactMarkdown>
+            </div>
           )}
           
           {content.type === "image" && content.value && (
-            <button
-              type="button"
-              aria-label="View image full size"
-              className="group relative block w-full cursor-zoom-in overflow-hidden rounded-lg border text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              onClick={() =>
-                setExpandedImageUrl(
-                  safeUrl(content.value) || "https://placehold.co/400x200?text=Invalid+Image",
-                )
-              }
-            >
+            <div className="rounded-lg border overflow-hidden">
               <img 
                 src={safeUrl(content.value) || "https://placehold.co/400x200?text=Invalid+Image"} 
                 alt="Task content" 
@@ -63,11 +50,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
                   (e.target as HTMLImageElement).src = "https://placehold.co/400x200?text=Invalid+Image";
                 }}
               />
-              <span className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-md bg-black/75 px-2.5 py-1.5 text-xs font-medium text-white opacity-90 shadow-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                <ZoomIn aria-hidden="true" className="h-3.5 w-3.5" />
-                View full size
-              </span>
-            </button>
+            </div>
           )}
           
           {content.type === "video" && content.value && (
@@ -83,7 +66,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
                 <div>
                   <p className="font-medium">{content.fileName || "File"}</p>
                   <a 
-                    {...getOutboundLinkProps(safeUrl(content.value))}
+                    href={safeUrl(content.value)} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
                     aria-label={`Download ${content.fileName || "file"}`}
                     className="text-sm text-primary hover:underline"
                   >
@@ -98,7 +83,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
             <div className="border rounded-lg p-4 bg-muted/20">
               {safeUrl(content.value) ? (
                 <a 
-                  {...getOutboundLinkProps(safeUrl(content.value))}
+                  href={safeUrl(content.value)} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
                   aria-label="Open embedded content"
                   className="flex items-center gap-2 text-primary hover:underline"
                 >
@@ -138,27 +125,6 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
           )}
         </div>
       ))}
-
-      <Dialog
-        open={expandedImageUrl !== null}
-        onOpenChange={(open) => {
-          if (!open) setExpandedImageUrl(null);
-        }}
-      >
-        <DialogContent className="max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] border-white/10 bg-black/95 p-2 text-white shadow-2xl sm:rounded-lg">
-          <DialogTitle className="sr-only">Image preview</DialogTitle>
-          <DialogDescription className="sr-only">
-            Expanded task image. Close this dialog to return to the checklist.
-          </DialogDescription>
-          {expandedImageUrl ? (
-            <img
-              src={expandedImageUrl}
-              alt="Task content, expanded"
-              className="mx-auto max-h-[calc(100vh-4rem)] max-w-full object-contain"
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

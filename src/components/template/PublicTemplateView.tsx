@@ -18,7 +18,6 @@ import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
-import { MarkdownText } from '@/components/shared/MarkdownText';
 import { buildPublicCategoryPath, buildPublicTemplatesPath } from '@/lib/routes';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistItem, ChecklistSection, ChecklistTemplate } from '@/types/checklist';
@@ -152,9 +151,9 @@ export function PublicTemplateView({
           </h1>
 
           {template.description ? (
-            <MarkdownText className="mb-6 text-pretty text-base leading-relaxed text-muted-foreground">
-              {template.description}
-            </MarkdownText>
+            <p className="mb-6 whitespace-pre-line text-pretty text-base leading-relaxed text-muted-foreground">
+              {normalizeDisplayText(template.description)}
+            </p>
           ) : null}
 
           <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground">

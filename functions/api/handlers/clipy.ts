@@ -10,7 +10,6 @@ const MAX_RESPONSE_BYTES = 1024 * 1024;
 const FETCH_TIMEOUT_MS = 10_000;
 const MAX_KEY_POINTS = 50;
 const MAX_IMAGES = 3;
-const MAX_TRANSCRIPT_LENGTH = 12_000;
 const MAX_SEO_TITLE_LENGTH = 70;
 const MAX_SEO_DESCRIPTION_LENGTH = 160;
 
@@ -26,6 +25,7 @@ type ClipyContext = {
     summary?: string;
     transcript?: string;
     video?: string;
+    keyMoments?: string;
   };
   clip?: {
     accessMode?: string;
@@ -117,9 +117,6 @@ const TAG_RULES: Array<{ label: string; pattern: RegExp }> = [
 ];
 
 const CATEGORY_RULES: Array<{ label: string; pattern: RegExp }> = [
-  { label: 'software development', pattern: /\b(code|developer|development|git|github|repository|repositories|pull request)\b/i },
-  { label: 'project management', pattern: /\b(issue|issues|project|task|tasks|ticket|tickets|workflow|planning)\b/i },
-  { label: 'productivity', pattern: /\b(productivity|organize|organizing|routine|process)\b/i },
   { label: 'wedding', pattern: /\bwedding\b/i },
   { label: 'moving', pattern: /\b(moving|relocation|relocate)\b/i },
   { label: 'camping', pattern: /\b(camping|campsite|campground)\b/i },
@@ -263,7 +260,9 @@ export function buildClipyTemplateDraft(
         .filter(Boolean)
         .slice(0, MAX_KEY_POINTS)
     : [];
-  const transcript = boundedString(context.transcript?.plaintext, MAX_TRANSCRIPT_LENGTH);
+  const transcript = typeof context.transcript?.plaintext === 'string'
+    ? context.transcript.plaintext.trim()
+    : '';
 
   if (!title || !tldr || keyPoints.length === 0) {
     throw new Error('Clipy recording does not contain a usable title, summary, and checklist steps');
@@ -277,13 +276,12 @@ export function buildClipyTemplateDraft(
   const sourceMarkdown = [
     `### Recording summary\n${tldr}`,
     transcript ? `### Transcript\n${transcript}` : '',
-    `[Watch the source recording on Clipy](${referredWatchUrl})`,
   ].filter(Boolean).join('\n\n');
   const searchableText = [title, tldr, ...keyPoints, transcript].join(' ');
 
   return {
     title,
-    description: `${tldr}\n\nSource: ${referredWatchUrl}`,
+    description: tldr,
     templateType: 'checklist',
     categories: suggestCategories(searchableText),
     tags: suggestTags(searchableText),
@@ -447,7 +445,8 @@ export async function handleGenerateTemplateFromClipy(
     context.readiness?.state !== 'complete' ||
     context.readiness?.video !== 'ready' ||
     context.readiness?.transcript !== 'ready' ||
-    context.readiness?.summary !== 'ready'
+    context.readiness?.summary !== 'ready' ||
+    context.readiness?.keyMoments !== 'ready'
   ) {
     return jsonError('This Clipy recording is still processing. Try again when it is ready.', 409, {
       code: 'clipy_not_ready',

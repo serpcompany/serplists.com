@@ -113,31 +113,4 @@ describe('PublicTemplateView', () => {
     );
     expect(html).toContain('Task line one\nTask line two\nTask line three');
   });
-
-  it('renders Clipy source URLs as referred new-tab nofollow links', () => {
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <PublicTemplateView
-          template={{
-            ...template,
-            description: 'Source: https://clipy.online/video/8fptqlnappr6',
-          }}
-          totalItems={1}
-          ownerSlug="devinschumacher"
-          ownerPath="/profile/devinschumacher"
-          isAuthenticated={false}
-          isBillingLoading={false}
-          isProUser={false}
-          isCreatingRun={false}
-          isSaving={false}
-          onStartRun={() => undefined}
-          onSaveTemplate={() => undefined}
-        />
-      </StaticRouter>,
-    );
-
-    expect(html).toContain('href="https://clipy.online/video/8fptqlnappr6?ref=serplists.com"');
-    expect(html).toContain('target="_blank"');
-    expect(html).toContain('rel="nofollow noopener noreferrer"');
-  });
 });
