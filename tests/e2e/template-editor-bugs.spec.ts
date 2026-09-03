@@ -261,7 +261,7 @@ test.describe("template editor regressions", () => {
     expect(createPayload).toBeNull();
     await preview.getByRole('button', { name: 'Close' }).click();
 
-    await page.getByText('Public Template', { exact: true }).locator('..').getByRole('switch').click();
+    await page.getByRole('switch').click();
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page).toHaveURL(/\/dashboard\/templates$/);
     expect(createPayload).toMatchObject({
