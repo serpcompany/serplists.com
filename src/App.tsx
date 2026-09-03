@@ -17,7 +17,6 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { DevLoginBar } from './components/DevLoginBar';
 import RequireAuth from '@/components/RequireAuth';
 import Index from './pages/Index';
-import Docs from './pages/Docs';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -125,10 +124,6 @@ const App = () => {
                       <Route
                         path="/"
                         element={<Index />}
-                      />
-                      <Route
-                        path="/docs"
-                        element={<Docs />}
                       />
                       <Route
                         path="/features"

@@ -1,6 +1,34 @@
 -- Schema snapshot for reference and local inspection.
 -- `db/migrations/*.sql` remains the source of truth for schema changes.
 
+CREATE TABLE sitemap_revisions (
+  kind TEXT PRIMARY KEY CHECK (kind IN ('profiles', 'templates', 'categories')),
+  revised_at TEXT NOT NULL
+);
+
+CREATE TABLE sitemap_profile_revisions (
+  user_id TEXT PRIMARY KEY,
+  revised_at TEXT NOT NULL
+);
+
+CREATE TABLE sitemap_owner_revisions (
+  user_id TEXT PRIMARY KEY,
+  revised_at TEXT NOT NULL
+);
+
+CREATE TABLE sitemap_category_revisions (
+  category TEXT PRIMARY KEY,
+  revised_at TEXT NOT NULL
+);
+
+CREATE TABLE sitemap_shard_revisions (
+  kind TEXT NOT NULL,
+  page INTEGER NOT NULL,
+  content_hash TEXT NOT NULL,
+  revised_at TEXT NOT NULL,
+  PRIMARY KEY (kind, page)
+);
+
 -- Users table
 CREATE TABLE users (
   id TEXT PRIMARY KEY,
