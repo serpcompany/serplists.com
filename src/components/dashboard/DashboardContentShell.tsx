@@ -48,9 +48,9 @@ export function DashboardPageHeader({
           {title}
         </h1>
         {description ? (
-          <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
+          <div className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
             {description}
-          </p>
+          </div>
         ) : null}
       </div>
       {actions ? (

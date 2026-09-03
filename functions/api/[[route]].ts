@@ -16,6 +16,7 @@ import { handleStripe } from './handlers/stripe';
 import { handleBilling } from './handlers/billing';
 import { handleAdmin } from './handlers/admin';
 import { handleTeams } from './handlers/teams';
+import { handleGenerateTemplateFromClipy } from './handlers/clipy';
 import { jsonError } from './utils/response';
 
 const blockedTestEmailDomains = new Set(['serplists.dev', 'serp-checklists.dev']);
@@ -220,6 +221,8 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       response = await handleProfileByUsername(request, env);
     } else if (path === 'profiles/by-id') {
       response = await handleProfileById(request, env);
+    } else if (path === 'templates/generate-from-clipy') {
+      response = await handleGenerateTemplateFromClipy(request, env);
     } else if (path.startsWith('templates')) {
       response = await handleTemplates(request, env);
     } else if (path.startsWith('checklists')) {

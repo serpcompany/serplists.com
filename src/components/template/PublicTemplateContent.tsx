@@ -6,8 +6,6 @@ import {
   Link2,
   ListTodo,
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { buildPublicTemplateSectionId } from '@/components/template/publicTemplateSectionId';
@@ -16,6 +14,7 @@ import {
   normalizeDisplayText,
   normalizeMarkdownDisplayText,
 } from '@/lib/utils/markdownDisplay';
+import { getOutboundLinkProps } from '@/lib/utils/clipyUrl';
 import { safeUrl } from '@/lib/utils/safeUrl';
 import type {
   ChecklistItem,
@@ -23,6 +22,7 @@ import type {
   ChecklistSection,
 } from '@/types/checklist';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
+import { MarkdownText } from '@/components/shared/MarkdownText';
 
 interface PublicTemplateContentProps {
   initialExpandedItems?: Record<string, boolean>;
@@ -49,15 +49,7 @@ export function PublicTemplateContent({
       case 'text':
         return content.value ? (
           <div className="mt-3 border-l-2 border-border/70 pl-4">
-            <div className="prose prose-sm max-w-none whitespace-pre-line">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                skipHtml
-                urlTransform={safeUrl}
-              >
-                {normalizeMarkdownDisplayText(content.value)}
-              </ReactMarkdown>
-            </div>
+            <MarkdownText>{normalizeMarkdownDisplayText(content.value)}</MarkdownText>
           </div>
         ) : null;
 
@@ -85,9 +77,7 @@ export function PublicTemplateContent({
               <Link2 className="h-4 w-4" />
               {safeUrl(content.value) ? (
                 <a
-                  href={safeUrl(content.value)}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  {...getOutboundLinkProps(safeUrl(content.value))}
                   className="text-foreground underline-offset-4 hover:underline"
                 >
                   {content.value}

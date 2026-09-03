@@ -159,6 +159,85 @@ test.describe("template editor regressions", () => {
     await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
   });
 
+  test('hydrates an unsaved template draft from Clipy without a live Clipy request', async ({ page }) => {
+    await loginAsSeedUser(page);
+    const createRequests: string[] = [];
+    page.on('request', (outboundRequest) => {
+      if (
+        outboundRequest.method() === 'POST' &&
+        outboundRequest.url().endsWith('/api/templates')
+      ) {
+        createRequests.push(outboundRequest.url());
+      }
+    });
+    await page.route('**/api/templates/generate-from-clipy', async (route) => {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          draft: {
+            title: 'Creating Issues In GitHub Repositories',
+            description: 'Create a clear issue.\n\nSource: https://clipy.online/video/8fptqlnappr6',
+            templateType: 'checklist',
+            categories: [],
+            tags: ['Clipy'],
+            isPublic: false,
+            seoTitle: '',
+            seoDescription: '',
+            seoUrl: '',
+            sections: [
+              {
+                id: 'clipy_8fptqlnappr6_steps',
+                title: 'Steps',
+                items: [
+                  {
+                    id: 'clipy_8fptqlnappr6_source',
+                    title: 'Watch the source recording',
+                    description: 'Review the original walkthrough.',
+                    contents: [
+                      {
+                        id: 'clipy_8fptqlnappr6_video',
+                        type: 'video',
+                        uploadType: 'url',
+                        value: 'https://clipy.online/video/8fptqlnappr6',
+                      },
+                    ],
+                  },
+                  {
+                    id: 'clipy_8fptqlnappr6_step_1',
+                    title: 'Navigate to the repository issues tab.',
+                    description: '',
+                    contents: [],
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      });
+    });
+
+    await page.goto('/dashboard/templates/new');
+    await page.getByLabel('Public Clipy video link').fill(
+      'https://clipy.online/video/8fptqlnappr6',
+    );
+    await page.getByRole('button', { name: 'Generate draft' }).click();
+
+    await expect(page.getByPlaceholder('Enter template name...')).toHaveValue(
+      'Creating Issues In GitHub Repositories',
+    );
+    await expect(
+      page.getByRole('button', { name: 'Watch the source recording', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', {
+        name: 'Navigate to the repository issues tab.',
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+    expect(createRequests).toEqual([]);
+  });
+
   test('shows one task-level notes area and persists it on the run', async ({ page }) => {
     await loginAsSeedUser(page);
     const runId = await page.evaluate(async ({ apiBaseUrl }) => {

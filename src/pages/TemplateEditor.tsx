@@ -10,6 +10,7 @@ import { useTemplateEditorState } from "@/hooks/useTemplateEditorState";
 import { TemplateHeader } from "@/components/template-editor/TemplateHeader";
 import { OutlineSidebar } from "@/components/template-editor/OutlineSidebar";
 import { EditorPanels } from "@/components/template-editor/EditorPanels";
+import { GenerateFromClipy } from "@/components/template-editor/GenerateFromClipy";
 import { buildConsoleTemplatesPath } from "@/lib/routes";
 import {
   templateEditorFormSchema,
@@ -24,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
+import { MarkdownText } from "@/components/shared/MarkdownText";
 import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
 import {
   applyTemplateBeforeUnloadWarning,
@@ -163,6 +165,15 @@ const TemplateEditor = () => {
         </div>
       )}
 
+      {!id ? (
+        <GenerateFromClipy
+          onGenerated={(draft) => {
+            templateForm.reset(draft, { keepDefaultValues: true });
+            handleSelectTemplateInfo();
+          }}
+        />
+      ) : null}
+
       <Form {...templateForm}>
         <div className="flex min-h-[calc(100vh-3.5rem)]">
           <OutlineSidebar
@@ -199,9 +210,9 @@ const TemplateEditor = () => {
                 {templateForm.watch("title") || "Untitled Template"}
               </h2>
               {templateForm.watch("description") ? (
-                <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
+                <MarkdownText className="mt-2 text-sm text-muted-foreground">
                   {templateForm.watch("description")}
-                </p>
+                </MarkdownText>
               ) : null}
             </div>
             <PublicTemplateContent

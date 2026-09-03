@@ -54,7 +54,44 @@ describe('ContentRenderer accessibility', () => {
     expect(markup).toContain('aria-label="Download launch-plan.pdf"');
     expect(markup).toContain('aria-label="Open embedded content"');
     expect(markup).toContain('title="Task video content"');
-    expect(markup).toContain('src="https://clipy.online/embed/tizg5pl1gkul"');
+    expect(markup).toContain('src="https://clipy.online/embed/tizg5pl1gkul?ref=serplists.com"');
+    expect(markup).toContain('href="https://clipy.online/video/tizg5pl1gkul?ref=serplists.com"');
+    expect(markup).toContain('rel="nofollow noopener noreferrer"');
     expect(markup).toContain('href="/api/uploads/file?key=template-files/launch-plan.pdf"');
+  });
+
+  it('renders image content as a keyboard-accessible lightbox trigger', () => {
+    const markup = renderToStaticMarkup(
+      <ContentRenderer
+        contents={[
+          {
+            id: 'image-1',
+            type: 'image',
+            value: 'https://cdn.clipy.online/key-moments/demo/image.jpg',
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain('aria-label="View image full size"');
+    expect(markup).toContain('type="button"');
+    expect(markup).toContain('cursor-zoom-in');
+    expect(markup).toContain('View full size');
+  });
+
+  it('turns Clipy URLs in generated text into referred new-tab nofollow links', () => {
+    const markup = renderToStaticMarkup(
+      <ContentRenderer
+        contents={[{
+          id: 'text-clipy',
+          type: 'text',
+          value: 'Source: https://clipy.online/video/8fptqlnappr6',
+        }]}
+      />,
+    );
+
+    expect(markup).toContain('href="https://clipy.online/video/8fptqlnappr6?ref=serplists.com"');
+    expect(markup).toContain('target="_blank"');
+    expect(markup).toContain('rel="nofollow noopener noreferrer"');
   });
 });
