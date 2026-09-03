@@ -1,3 +1,5 @@
+import { withSerpListsClipyRef } from '@/lib/utils/clipyUrl';
+
 /**
  * Extracts YouTube video ID from various YouTube URL formats
  */
@@ -10,6 +12,7 @@ export const getYoutubeVideoId = (url: string): string | null => {
 export type VideoEmbedSource = {
   kind: 'iframe' | 'video';
   url: string;
+  outboundUrl?: string;
 };
 
 const extractIframeSource = (value: string): string | null => {
@@ -49,10 +52,14 @@ export const getVideoEmbedSource = (value: string): VideoEmbedSource | null => {
   if (isClipyHost) {
     const clipyMatch = parsed.pathname.match(/^\/(?:video|embed)\/([a-zA-Z0-9_-]+)\/?$/);
     if (clipyMatch?.[1]) {
-      const query = parsed.pathname.startsWith('/embed/') ? parsed.search : '';
       return {
         kind: 'iframe',
-        url: `https://clipy.online/embed/${clipyMatch[1]}${query}`,
+        url: withSerpListsClipyRef(
+          `https://clipy.online/embed/${clipyMatch[1]}${parsed.search}`,
+        ),
+        outboundUrl: withSerpListsClipyRef(
+          `https://clipy.online/video/${clipyMatch[1]}`,
+        ),
       };
     }
   }
