@@ -3,7 +3,6 @@ export type ChecklistSubItem = {
   id: string;
   title: string;
   isCompleted?: boolean;
-  notes?: string;
 };
 
 export type ChecklistItemContent = {

@@ -92,7 +92,6 @@ const ChecklistRunPage = () => {
     progress,
     run,
     saveItemNotes,
-    saveSubItemNotes,
     saveTitle,
     selectedData,
     selectedItemId,
@@ -170,18 +169,6 @@ const ChecklistRunPage = () => {
     const result = await saveItemNotes(itemId, notes);
     if (result.kind === 'ok') return true;
     toast.error(result.kind === 'error' ? result.message : 'Unable to save task notes.');
-    return false;
-  };
-
-  const handleSubItemNotesSave = async (
-    itemId: string,
-    contentIndex: number,
-    subItemIndex: number,
-    notes: string,
-  ) => {
-    const result = await saveSubItemNotes(itemId, contentIndex, subItemIndex, notes);
-    if (result.kind === 'ok') return true;
-    toast.error(result.kind === 'error' ? result.message : 'Unable to save sub-task notes.');
     return false;
   };
 
@@ -551,14 +538,6 @@ const ChecklistRunPage = () => {
                             <ContentRenderer
                               contents={item.contents}
                               disabled={false}
-                              onSubItemNotesSave={(contentIndex, subItemIndex, notes) =>
-                                handleSubItemNotesSave(
-                                  item.id,
-                                  contentIndex,
-                                  subItemIndex,
-                                  notes,
-                                )
-                              }
                               onSubItemToggle={(contentIndex, subItemIndex) =>
                                 void handleSubItemToggle(
                                   item.id,
@@ -662,14 +641,6 @@ const ChecklistRunPage = () => {
                   onToggleTask={() => void handleItemToggle(selectedEntry.item.id)}
                   onSaveNotes={(notes) =>
                     handleItemNotesSave(selectedEntry.item.id, notes)
-                  }
-                  onSaveSubItemNotes={(contentIndex, subItemIndex, notes) =>
-                    handleSubItemNotesSave(
-                      selectedEntry.item.id,
-                      contentIndex,
-                      subItemIndex,
-                      notes,
-                    )
                   }
                   hasNext={Boolean(nextEntry)}
                   hasPrev={Boolean(previousEntry)}

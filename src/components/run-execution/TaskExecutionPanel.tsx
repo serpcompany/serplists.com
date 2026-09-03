@@ -17,7 +17,6 @@ interface TaskExecutionPanelProps {
   onToggleSubItem: (contentIndex: number, subItemIndex: number) => void;
   onToggleTask: () => void;
   onSaveNotes: (notes: string) => Promise<boolean>;
-  onSaveSubItemNotes: (contentIndex: number, subItemIndex: number, notes: string) => Promise<boolean>;
   hasNext: boolean;
   hasPrev: boolean;
 }
@@ -32,7 +31,6 @@ export function TaskExecutionPanel({
   onToggleSubItem,
   onToggleTask,
   onSaveNotes,
-  onSaveSubItemNotes,
   hasNext,
   hasPrev,
 }: TaskExecutionPanelProps) {
@@ -85,7 +83,6 @@ export function TaskExecutionPanel({
               contents={task.contents}
               disabled={false}
               onSubItemToggle={onToggleSubItem}
-              onSubItemNotesSave={onSaveSubItemNotes}
             />
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">

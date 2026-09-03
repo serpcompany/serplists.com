@@ -59,11 +59,6 @@ type SaveRunItemNotesParams = RunExecutionMutationParams & {
   notes: string;
 };
 
-type SaveRunSubItemNotesParams = SaveRunItemNotesParams & {
-  contentIndex: number;
-  subItemIndex: number;
-};
-
 type SaveRunTitleParams = RunExecutionMutationParams & {
   title: string;
 };
@@ -378,39 +373,6 @@ export const saveRunItemNotes = async (
   return { kind: 'not_found' };
 };
 
-export const saveRunSubItemNotes = async (
-  params: SaveRunSubItemNotesParams,
-  dependencies: RunExecutionDependencies,
-): Promise<RunExecutionActionResult> => {
-  if (!params.run) {
-    return { kind: 'not_found' };
-  }
-
-  const nextRun = withClonedRun(params.run);
-  for (const section of nextRun.sections) {
-    const item = section.items.find((candidate) => candidate.id === params.itemId);
-    const content = item?.contents?.[params.contentIndex];
-    const subItem =
-      content?.type === 'subItems' ? content.subItems?.[params.subItemIndex] : undefined;
-    if (!subItem) continue;
-
-    subItem.notes = params.notes;
-    try {
-      return {
-        kind: 'ok',
-        run: await persistRun(
-          { run: nextRun, shareToken: params.shareToken },
-          dependencies,
-        ),
-      };
-    } catch (error) {
-      return toErrorResult(error, 'Unable to save sub-task notes.');
-    }
-  }
-
-  return { kind: 'not_found' };
-};
-
 export const saveRunExecutionTitle = async (
   params: SaveRunTitleParams,
   dependencies: RunExecutionDependencies,
@@ -632,25 +594,6 @@ export const useRunExecutionModel = (
       applyResult(
         await saveRunItemNotes(
           { itemId, notes, run, shareToken: options.shareToken },
-          dependencies,
-        ),
-      ),
-    saveSubItemNotes: async (
-      itemId: string,
-      contentIndex: number,
-      subItemIndex: number,
-      notes: string,
-    ) =>
-      applyResult(
-        await saveRunSubItemNotes(
-          {
-            contentIndex,
-            itemId,
-            notes,
-            run,
-            shareToken: options.shareToken,
-            subItemIndex,
-          },
           dependencies,
         ),
       ),

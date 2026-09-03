@@ -7,7 +7,6 @@ import {
   createRunExecutionShare,
   loadRunExecutionData,
   saveRunItemNotes,
-  saveRunSubItemNotes,
   toggleRunItem,
   toggleRunSubItem,
 } from '@/features/run-execution/useRunExecutionModel';
@@ -210,37 +209,6 @@ describe('run execution model actions', () => {
       'Sent email: https://example.com/message/42',
     );
     expect(run.sections[0]?.items[0]?.notes).toBeUndefined();
-    expect(updateRun).toHaveBeenCalledOnce();
-  });
-
-  it('persists notes for an individual sub-task', async () => {
-    const updateRun = vi.fn();
-
-    const result = await saveRunSubItemNotes(
-      {
-        contentIndex: 0,
-        itemId: 'item-1',
-        notes: 'Waiting for reply',
-        run: buildRun(),
-        subItemIndex: 1,
-      },
-      {
-        apiClient: {
-          createChecklistRunShare: vi.fn(),
-          getChecklistById: vi.fn(),
-          getSharedChecklist: vi.fn(),
-          updateSharedChecklist: vi.fn(),
-        },
-        updateRun,
-      },
-    );
-
-    expect(result.kind).toBe('ok');
-    if (result.kind !== 'ok') throw new Error('expected ok result');
-    const content = result.run?.sections[0]?.items[0]?.contents?.[0];
-    expect(content?.type === 'subItems' ? content.subItems?.[1]?.notes : undefined).toBe(
-      'Waiting for reply',
-    );
     expect(updateRun).toHaveBeenCalledOnce();
   });
 

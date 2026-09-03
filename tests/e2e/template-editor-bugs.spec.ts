@@ -106,9 +106,13 @@ test.describe("template editor regressions", () => {
     await page.getByRole('button', { name: 'Add section' }).click();
     await page.getByPlaceholder('Enter section title...').fill('Second section');
 
-    await page.getByRole('button', { name: 'Drag Second section' }).dragTo(
-      page.getByRole('button', { name: 'Drag Section 1' }),
-    );
+    const draggedSection = page.getByRole('button', { name: 'Drag Second section' });
+    const sectionDropTarget = page.getByRole('button', { name: 'Drag Section 1' });
+    const sectionDataTransfer = await page.evaluateHandle(() => new DataTransfer());
+    await draggedSection.dispatchEvent('dragstart', { dataTransfer: sectionDataTransfer });
+    await sectionDropTarget.dispatchEvent('dragover', { dataTransfer: sectionDataTransfer });
+    await expect(page.locator('[data-drop-indicator="section-before"]')).toBeVisible();
+    await sectionDropTarget.dispatchEvent('drop', { dataTransfer: sectionDataTransfer });
     const sectionHandles = page.getByRole('button', { name: /^Drag / });
     await expect(sectionHandles.first()).toHaveAccessibleName('Drag Second section');
 
@@ -130,7 +134,7 @@ test.describe("template editor regressions", () => {
     await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
   });
 
-  test('persists task and sub-task notes on the run', async ({ page }) => {
+  test('shows one task-level notes area and persists it on the run', async ({ page }) => {
     await loginAsSeedUser(page);
     const runId = await page.evaluate(async ({ apiBaseUrl }) => {
       const response = await fetch(`${apiBaseUrl}/checklists`, {
@@ -165,21 +169,14 @@ test.describe("template editor regressions", () => {
     }, { apiBaseUrl: DEV_API_BASE_URL });
 
     await page.goto(`/dashboard/runs/${runId}`);
+    await expect(page.getByLabel('Task notes')).toHaveCount(1);
+    await expect(page.getByLabel('Notes for Wait for reply')).toHaveCount(0);
     await page.getByLabel('Task notes').fill('Sent email: https://example.com/message/42');
     await page.getByLabel('Task notes').locator('..').getByRole('button', { name: 'Save notes' }).click();
-    await page.getByLabel('Notes for Wait for reply').fill('Waiting on their response');
-    await page
-      .getByLabel('Notes for Wait for reply')
-      .locator('..')
-      .getByRole('button', { name: 'Save notes' })
-      .click();
 
     await page.reload();
     await expect(page.getByLabel('Task notes')).toHaveValue(
       'Sent email: https://example.com/message/42',
-    );
-    await expect(page.getByLabel('Notes for Wait for reply')).toHaveValue(
-      'Waiting on their response',
     );
   });
 

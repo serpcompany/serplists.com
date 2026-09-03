@@ -29,6 +29,15 @@ type OutlineDragState =
   | { kind: "section"; sectionIndex: number }
   | { kind: "task"; itemIndex: number; sectionIndex: number };
 
+type OutlineDropTarget =
+  | { edge: "after" | "before"; kind: "section"; sectionIndex: number }
+  | {
+      edge: "after" | "before";
+      itemIndex: number;
+      kind: "task";
+      sectionIndex: number;
+    };
+
 const OUTLINE_DRAG_TYPE = "application/x-serplists-outline";
 
 function remapIndexAfterMove(index: number, fromIndex: number, toIndex: number): number {
@@ -87,6 +96,8 @@ export function SectionSidebar({
   const [editingValue, setEditingValue] = useState("");
   const [draggedOutlineItem, setDraggedOutlineItem] =
     useState<OutlineDragState | null>(null);
+  const [outlineDropTarget, setOutlineDropTarget] =
+    useState<OutlineDropTarget | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<number>>(
     new Set(sectionsFieldArray.fields.map((_, index) => index)),
   );
@@ -229,6 +240,55 @@ export function SectionSidebar({
 
   function finishDrag(): void {
     setDraggedOutlineItem(null);
+    setOutlineDropTarget(null);
+  }
+
+  function handleSectionDragOver(
+    event: DragEvent<HTMLElement>,
+    sectionIndex: number,
+  ): void {
+    const drag = draggedOutlineItem;
+    if (!drag || drag.kind !== "section" || drag.sectionIndex === sectionIndex) {
+      return;
+    }
+
+    allowDrop(event);
+    const edge = drag.sectionIndex > sectionIndex ? "before" : "after";
+    setOutlineDropTarget((current) =>
+      current?.kind === "section" &&
+      current.sectionIndex === sectionIndex &&
+      current.edge === edge
+        ? current
+        : { edge, kind: "section", sectionIndex },
+    );
+  }
+
+  function handleTaskDragOver(
+    event: DragEvent<HTMLElement>,
+    sectionIndex: number,
+    itemIndex: number,
+  ): void {
+    event.stopPropagation();
+    const drag = draggedOutlineItem;
+    if (
+      !drag ||
+      drag.kind !== "task" ||
+      drag.sectionIndex !== sectionIndex ||
+      drag.itemIndex === itemIndex
+    ) {
+      return;
+    }
+
+    allowDrop(event);
+    const edge = drag.itemIndex > itemIndex ? "before" : "after";
+    setOutlineDropTarget((current) =>
+      current?.kind === "task" &&
+      current.sectionIndex === sectionIndex &&
+      current.itemIndex === itemIndex &&
+      current.edge === edge
+        ? current
+        : { edge, itemIndex, kind: "task", sectionIndex },
+    );
   }
 
   function handleSectionDrop(event: DragEvent<HTMLElement>, toIndex: number): void {
@@ -321,17 +381,29 @@ export function SectionSidebar({
               selectedSectionIndex === sectionIndex &&
               selectedItemIndex === null;
             const isExpanded = expandedSections.has(sectionIndex);
+            const sectionDropEdge =
+              outlineDropTarget?.kind === "section" &&
+              outlineDropTarget.sectionIndex === sectionIndex
+                ? outlineDropTarget.edge
+                : null;
 
             return (
               <div
                 className={cn(
-                  "mb-1 rounded-md",
+                  "relative mb-1 rounded-md",
                   draggedOutlineItem?.kind === "section" &&
                     draggedOutlineItem.sectionIndex === sectionIndex &&
                     "opacity-50",
+                  sectionDropEdge === "before" &&
+                    "before:absolute before:inset-x-1 before:-top-0.5 before:z-20 before:h-0.5 before:rounded-full before:bg-primary before:content-['']",
+                  sectionDropEdge === "after" &&
+                    "after:absolute after:inset-x-1 after:-bottom-0.5 after:z-20 after:h-0.5 after:rounded-full after:bg-primary after:content-['']",
                 )}
+                data-drop-indicator={
+                  sectionDropEdge ? `section-${sectionDropEdge}` : undefined
+                }
                 key={sectionField.fieldId}
-                onDragOver={allowDrop}
+                onDragOver={(event) => handleSectionDragOver(event, sectionIndex)}
                 onDrop={(event) => handleSectionDrop(event, sectionIndex)}
               >
                 <div
@@ -436,17 +508,33 @@ export function SectionSidebar({
                       const editingCurrentItem =
                         editingItem?.sectionIndex === sectionIndex &&
                         editingItem?.itemIndex === itemIndex;
+                      const taskDropEdge =
+                        outlineDropTarget?.kind === "task" &&
+                        outlineDropTarget.sectionIndex === sectionIndex &&
+                        outlineDropTarget.itemIndex === itemIndex
+                          ? outlineDropTarget.edge
+                          : null;
 
                       return (
                         <div
                           key={item.id || `${sectionField.fieldId}-${itemIndex}`}
                           className={cn(
-                            "group flex min-w-0 items-center gap-2 rounded-md px-1 py-1.5 transition-colors",
+                            "group relative flex min-w-0 items-center gap-2 rounded-md px-1 py-1.5 transition-colors",
                             itemSelected
                               ? "bg-sidebar-accent"
                               : "hover:bg-sidebar-accent/50",
+                            taskDropEdge && "bg-primary/10",
+                            taskDropEdge === "before" &&
+                              "before:absolute before:inset-x-1 before:-top-0.5 before:z-20 before:h-0.5 before:rounded-full before:bg-primary before:content-['']",
+                            taskDropEdge === "after" &&
+                              "after:absolute after:inset-x-1 after:-bottom-0.5 after:z-20 after:h-0.5 after:rounded-full after:bg-primary after:content-['']",
                           )}
-                          onDragOver={allowDrop}
+                          data-drop-indicator={
+                            taskDropEdge ? `task-${taskDropEdge}` : undefined
+                          }
+                          onDragOver={(event) =>
+                            handleTaskDragOver(event, sectionIndex, itemIndex)
+                          }
                           onDrop={(event) =>
                             handleTaskDrop(event, sectionIndex, itemIndex)
                           }
