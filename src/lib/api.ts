@@ -1,6 +1,7 @@
 import { env } from "@/env";
 import { createApiError } from "@/lib/api-errors";
 import type { TemplateImportSummary } from "@/types/checklist";
+import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 const DEV_API_BASE_URL = env.VITE_API_URL ?? 'http://localhost:8788/api';
 const API_BASE_URL = import.meta.env.DEV
@@ -213,6 +214,13 @@ class ApiClient {
 
   async getTemplateById(id: string) {
     return this.request(`/templates/${encodeURIComponent(id)}`);
+  }
+
+  async generateTemplateFromClipy(url: string): Promise<{ draft: TemplateEditorFormValues }> {
+    return this.request('/templates/generate-from-clipy', {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    });
   }
 
   async getTemplateHistory(id: string): Promise<TemplateHistoryResponse> {

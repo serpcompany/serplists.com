@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
-  Image,
   Link2,
   ListTodo,
 } from 'lucide-react';
@@ -44,7 +43,7 @@ export function PublicTemplateContent({
     }));
   };
 
-  const renderContent = (content: ChecklistItemContent) => {
+  const renderContent = (content: ChecklistItemContent, itemTitle: string) => {
     switch (content.type) {
       case 'text':
         return content.value ? (
@@ -70,11 +69,13 @@ export function PublicTemplateContent({
 
       case 'image':
         return content.value ? (
-          <div className="mt-3 border-l-2 border-border/70 pl-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Image className="h-4 w-4" />
-              Image content attached
-            </div>
+          <div className="mt-3 overflow-hidden rounded-md border border-border/70">
+            <img
+              src={safeUrl(content.value)}
+              alt={itemTitle}
+              className="max-h-96 w-full object-contain"
+              loading="lazy"
+            />
           </div>
         ) : null;
 
@@ -180,7 +181,7 @@ export function PublicTemplateContent({
                       <div className="space-y-2">
                         {item.contents?.map((content, contentIndex) => (
                           <div key={content.id || contentIndex}>
-                            {renderContent(content)}
+                            {renderContent(content, item.title)}
                           </div>
                         ))}
                       </div>

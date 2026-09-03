@@ -10,6 +10,7 @@ import { useTemplateEditorState } from "@/hooks/useTemplateEditorState";
 import { TemplateHeader } from "@/components/template-editor/TemplateHeader";
 import { OutlineSidebar } from "@/components/template-editor/OutlineSidebar";
 import { EditorPanels } from "@/components/template-editor/EditorPanels";
+import { GenerateFromClipy } from "@/components/template-editor/GenerateFromClipy";
 import { buildConsoleTemplatesPath } from "@/lib/routes";
 import {
   templateEditorFormSchema,
@@ -162,6 +163,15 @@ const TemplateEditor = () => {
           </Alert>
         </div>
       )}
+
+      {!id ? (
+        <GenerateFromClipy
+          onGenerated={(draft) => {
+            templateForm.reset(draft, { keepDefaultValues: true });
+            handleSelectTemplateInfo();
+          }}
+        />
+      ) : null}
 
       <Form {...templateForm}>
         <div className="flex min-h-[calc(100vh-3.5rem)]">

@@ -75,5 +75,39 @@ describe('TemplateEditor page', () => {
     expect(html).toContain('max-w-2xl');
     expect(html).not.toContain('text-4xl');
     expect(html).not.toContain('Add a section from the outline to start building this template.');
+    expect(html).toContain('Generate from Clipy');
+  });
+
+  it('does not show Clipy import controls while editing an existing template', () => {
+    mockUseTemplateEditorModel.mockReturnValue({
+      initialValues: buildTemplateEditorFormValues({ title: 'Existing template' }),
+      isSaving: false,
+      loading: false,
+      loadError: null,
+      save: vi.fn(),
+      templateSlug: 'existing-template',
+    });
+    mockUseTemplateEditorState.mockReturnValue({
+      selectedSectionIndex: 0,
+      selectedItemIndex: null,
+      showingSEO: false,
+      showingTemplateInfo: true,
+      errors: [],
+      setErrors: vi.fn(),
+      handleSelectSection: vi.fn(),
+      handleSelectItem: vi.fn(),
+      handleSelectSEO: vi.fn(),
+      handleSelectTemplateInfo: vi.fn(),
+    });
+
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/dashboard/templates/template-1/edit">
+        <Routes>
+          <Route path="/dashboard/templates/:id/edit" element={<TemplateEditor />} />
+        </Routes>
+      </StaticRouter>,
+    );
+
+    expect(html).not.toContain('Generate from Clipy');
   });
 });

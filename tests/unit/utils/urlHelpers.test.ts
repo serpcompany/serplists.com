@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { generateSlug, getVideoEmbedSource } from '@/utils/urlHelpers';
+import { getOutboundLinkProps, withSerpListsClipyRef } from '@/lib/utils/clipyUrl';
 
 describe('urlHelpers', () => {
   describe('generateSlug', () => {
@@ -42,7 +43,8 @@ describe('getVideoEmbedSource', () => {
   it('turns a Clipy watch URL into its iframe player URL', () => {
     expect(getVideoEmbedSource('https://clipy.online/video/tizg5pl1gkul')).toEqual({
       kind: 'iframe',
-      url: 'https://clipy.online/embed/tizg5pl1gkul',
+      url: 'https://clipy.online/embed/tizg5pl1gkul?ref=serplists.com',
+      outboundUrl: 'https://clipy.online/video/tizg5pl1gkul?ref=serplists.com',
     });
   });
 
@@ -53,7 +55,8 @@ describe('getVideoEmbedSource', () => {
       ),
     ).toEqual({
       kind: 'iframe',
-      url: 'https://clipy.online/embed/tizg5pl1gkul?autoplay=1',
+      url: 'https://clipy.online/embed/tizg5pl1gkul?autoplay=1&ref=serplists.com',
+      outboundUrl: 'https://clipy.online/video/tizg5pl1gkul?ref=serplists.com',
     });
   });
 
@@ -61,6 +64,25 @@ describe('getVideoEmbedSource', () => {
     expect(getVideoEmbedSource('https://cdn.example.com/walkthrough.mp4')).toEqual({
       kind: 'video',
       url: 'https://cdn.example.com/walkthrough.mp4',
+    });
+  });
+});
+
+describe('Clipy outbound links', () => {
+  it('adds or replaces the Serplists referral without dropping other query values', () => {
+    expect(withSerpListsClipyRef('https://www.clipy.online/video/demo?autoplay=1')).toBe(
+      'https://clipy.online/video/demo?autoplay=1&ref=serplists.com',
+    );
+    expect(withSerpListsClipyRef('https://clipy.online/video/demo?ref=old')).toBe(
+      'https://clipy.online/video/demo?ref=serplists.com',
+    );
+  });
+
+  it('marks Clipy anchors as new-tab nofollow links', () => {
+    expect(getOutboundLinkProps('https://clipy.online/video/demo')).toEqual({
+      href: 'https://clipy.online/video/demo?ref=serplists.com',
+      target: '_blank',
+      rel: 'nofollow noopener noreferrer',
     });
   });
 });
