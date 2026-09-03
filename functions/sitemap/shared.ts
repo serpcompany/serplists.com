@@ -125,6 +125,10 @@ export function latestLastmod(entries: SitemapEntry[]): string | null {
   return timestamps.at(-1) ?? null;
 }
 
+export function mostRecentLastmod(...values: Array<string | null | undefined>): string | null {
+  return latestLastmod(values.map((lastmod) => ({ path: '/', lastmod })));
+}
+
 export function paginateEntries<T>(entries: T[], page: number): T[] {
   const offset = (page - 1) * SITEMAP_PAGE_SIZE;
   return entries.slice(offset, offset + SITEMAP_PAGE_SIZE);
@@ -139,7 +143,11 @@ export function bundledTemplateEntries(): SitemapEntry[] {
 
 export function staticSitemapEntries(): SitemapEntry[] {
   return [
-    ...staticPages,
+    ...staticPages.map((entry) => (
+      entry.path === '/templates' || entry.path === '/categories'
+        ? { path: entry.path }
+        : entry
+    )),
     ...bundledTemplateEntries(),
   ];
 }
@@ -161,7 +169,6 @@ export function buildInMemoryShardIndex(
     const page = index + 1;
     return {
       path: `/sitemaps/${kind}/${page}.xml`,
-      lastmod: latestLastmod(paginateEntries(entries, page)),
     };
   });
 }
@@ -212,32 +219,26 @@ export async function handleInMemoryPagedSitemap(
 
 export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
   const result = await env.DB.prepare(
-    `SELECT t.category, t.created_at, t.updated_at
+    `SELECT t.category
        FROM templates AS t
       WHERE ${PUBLIC_TEMPLATE_SQL_WHERE}
         AND t.category IS NOT NULL AND TRIM(t.category) <> ''`,
-  ).all<{ category: string | null; created_at: string; updated_at: string | null }>();
-  const lastmodBySlug = new Map<string, string | null>();
-  const addCategory = (category: string, lastmod: string | null | undefined) => {
+  ).all<{ category: string | null }>();
+  const slugs = new Set<string>();
+  const addCategory = (category: string) => {
     const slug = categorySlug(category);
-    if (!slug) return;
-    const current = lastmodBySlug.get(slug);
-    const candidate = validLastmod(lastmod);
-    if (!current || (candidate && candidate > current)) lastmodBySlug.set(slug, candidate);
+    if (slug) slugs.add(slug);
   };
 
   bundledTemplates.forEach((template) => {
-    template.categories?.forEach((category) => addCategory(category, template.lastmod));
+    template.categories?.forEach(addCategory);
   });
   result.results.forEach((row) => {
-    parseCategories(row.category).forEach((category) => {
-      addCategory(category, row.updated_at || row.created_at);
-    });
+    parseCategories(row.category).forEach(addCategory);
   });
 
-  return Array.from(lastmodBySlug, ([slug, lastmod]) => ({
+  return Array.from(slugs, (slug) => ({
     path: `/categories/${encodeURIComponent(slug)}`,
-    lastmod,
   })).sort((left, right) => left.path.localeCompare(right.path));
 }
 

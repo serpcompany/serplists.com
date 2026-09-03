@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -6,6 +7,7 @@ import { promisify } from 'node:util';
 type SitemapTemplate = {
   slug: string;
   categories: string[];
+  contentHash: string;
   lastmod: string;
 };
 
@@ -85,22 +87,31 @@ for (const fileName of files) {
   const pack = JSON.parse(
     await readFile(path.join(packsDirectory, fileName), 'utf8'),
   ) as { exportedAt?: string; templates?: Array<Record<string, unknown>> };
-  const packLastmod = normalizeDate(pack.exportedAt) ?? await gitLastmod([
+  const packGitLastmod = await gitLastmod([
     path.relative(repoRoot, path.join(packsDirectory, fileName)),
   ]);
-  if (!packLastmod) throw new Error(`Unable to determine lastmod for ${fileName}`);
+  const packFallbackLastmod = normalizeDate(pack.exportedAt);
 
   for (const template of pack.templates ?? []) {
     const slug = typeof template.slug === 'string' ? template.slug.trim() : '';
     const visibility = template.visibility;
     if (!slug || visibility !== 'public') continue;
+    const contentHash = createHash('sha256')
+      .update(JSON.stringify(template))
+      .digest('hex');
+    const previous = previousCatalog.templates?.find((entry) => entry.slug === slug);
+    const lastmod = previous?.contentHash === contentHash
+      ? normalizeDate(previous.lastmod)
+      : packGitLastmod ?? packFallbackLastmod;
+    if (!lastmod) throw new Error(`Unable to determine lastmod for ${slug}`);
 
     templates.push({
       slug,
       categories: Array.isArray(template.categories)
         ? template.categories.filter((value): value is string => typeof value === 'string')
         : [],
-      lastmod: packLastmod,
+      contentHash,
+      lastmod,
     });
   }
 }

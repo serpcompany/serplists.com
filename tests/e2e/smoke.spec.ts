@@ -139,7 +139,9 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
   expect(indexXml).toContain("<sitemapindex");
   expect(indexXml).not.toContain("?page=");
   expect(childLocations.length).toBeGreaterThan(0);
-  expect(indexXml.match(/<lastmod>[^<]+<\/lastmod>/g)).toHaveLength(childLocations.length);
+  expect(indexXml).not.toContain("<lastmod>");
+  expect(indexXml.match(/<sitemap>/g)?.length ?? 0).toBeLessThanOrEqual(50_000);
+  expect(new TextEncoder().encode(indexXml).byteLength).toBeLessThanOrEqual(50 * 1024 * 1024);
 
   for (const childLocation of childLocations) {
     const localLocation = childLocation.replace("https://serplists.com", pagesOrigin);
@@ -161,7 +163,10 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     expect(pageLocations.length).toBeGreaterThan(0);
     expect(pageLocations.length).toBeLessThanOrEqual(25_000);
     expect(new TextEncoder().encode(childXml).byteLength).toBeLessThanOrEqual(50 * 1024 * 1024);
-    expect(lastmods).toHaveLength(pageLocations.length);
+    expect(lastmods.length).toBeLessThanOrEqual(pageLocations.length);
+    if (childLocation.includes("/static/") || childLocation.includes("/templates/")) {
+      expect(lastmods.length).toBeGreaterThan(0);
+    }
     expect(lastmods.every((value) => Number.isFinite(Date.parse(value)))).toBe(true);
     expect(childXml).not.toContain("<priority>");
     expect(childXml).not.toContain("<changefreq>");

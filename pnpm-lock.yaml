@@ -291,6 +291,9 @@ importers:
       wrangler:
         specifier: ^4.54.0
         version: 4.54.0(@cloudflare/workers-types@4.20250816.0)
+      xmllint-wasm:
+        specifier: 5.3.0
+        version: 5.3.0(@types/node@22.17.2)
       zod-to-json-schema:
         specifier: ^3.25.1
         version: 3.25.1(zod@3.25.76)
@@ -5141,6 +5144,12 @@ packages:
         optional: true
       utf-8-validate:
         optional: true
+
+  xmllint-wasm@5.3.0:
+    resolution: {integrity: sha512-sEgRXdf2t13eYCFCURmCE6h2hwleEOIS9VL/jOh9JJJnez2YXIooi2Ghm05/JZEPXyPawN8sMASPVZlmh8Sd6A==}
+    engines: {node: '>=16'}
+    peerDependencies:
+      '@types/node': '>=16'
 
   y18n@5.0.8:
     resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
@@ -10311,6 +10320,10 @@ snapshots:
   wrappy@1.0.2: {}
 
   ws@8.18.0: {}
+
+  xmllint-wasm@5.3.0(@types/node@22.17.2):
+    dependencies:
+      '@types/node': 22.17.2
 
   y18n@5.0.8: {}
 

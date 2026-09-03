@@ -3,6 +3,7 @@ import {
   handlePagedDatabaseSitemap,
   isValidTemplateSlug,
   isValidUsername,
+  mostRecentLastmod,
   PUBLIC_TEMPLATE_SQL_WHERE,
   VALID_TEMPLATE_SLUG_SQL,
   VALID_USERNAME_SQL,
@@ -13,6 +14,7 @@ type TemplateRow = {
   slug: string;
   created_at: string;
   updated_at: string | null;
+  owner_updated_at: string | null;
 };
 
 export const onRequest: PagesFunction<Env> = async ({ request, env, params }) => {
@@ -20,7 +22,8 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, params }) =>
     request,
     env,
     params,
-    sql: `SELECT u.username, t.slug, t.created_at, t.updated_at
+    sql: `SELECT u.username, t.slug, t.created_at, t.updated_at,
+                u.updated_at AS owner_updated_at
        FROM templates AS t
        JOIN users AS u ON u.id = t.user_id
       WHERE ${PUBLIC_TEMPLATE_SQL_WHERE}
@@ -30,7 +33,10 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, params }) =>
       LIMIT ? OFFSET ?`,
     toEntry: (row) => isValidUsername(row.username.trim()) && isValidTemplateSlug(row.slug.trim()) ? ({
         path: `/profile/${encodeURIComponent(row.username.trim())}/${encodeURIComponent(row.slug.trim())}`,
-        lastmod: row.updated_at || row.created_at,
+        lastmod: mostRecentLastmod(
+          row.updated_at || row.created_at,
+          row.owner_updated_at,
+        ),
       }) : null,
   });
 };

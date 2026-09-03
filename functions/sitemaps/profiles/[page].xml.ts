@@ -23,7 +23,6 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, params }) =>
       LIMIT ? OFFSET ?`,
     toEntry: (row) => isValidUsername(row.username.trim()) ? ({
         path: `/profile/${encodeURIComponent(row.username.trim())}`,
-        lastmod: row.updated_at || row.created_at,
       }) : null,
   });
 };
