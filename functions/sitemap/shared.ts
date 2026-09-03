@@ -142,14 +142,15 @@ export function bundledTemplateEntries(): SitemapEntry[] {
 }
 
 export function staticSitemapEntries(): SitemapEntry[] {
-  return [
-    ...staticPages.map((entry) => (
-      entry.path === '/templates' || entry.path === '/categories'
-        ? { path: entry.path }
-        : entry
-    )),
-    ...bundledTemplateEntries(),
-  ];
+  return staticPages.filter(
+    (entry) => entry.path !== '/templates' && entry.path !== '/categories',
+  );
+}
+
+export function catalogPageEntry(path: '/templates' | '/categories'): SitemapEntry {
+  const entry = staticPages.find((page) => page.path === path);
+  if (!entry) throw new Error(`Missing generated sitemap metadata for ${path}`);
+  return entry;
 }
 
 export function isValidUsername(value: string): boolean {
@@ -219,27 +220,55 @@ export async function handleInMemoryPagedSitemap(
 
 export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
   const result = await env.DB.prepare(
-    `SELECT t.category
+    `SELECT t.category, t.created_at, t.updated_at,
+            u.updated_at AS owner_updated_at
        FROM templates AS t
+       JOIN users AS u ON u.id = t.user_id
       WHERE ${PUBLIC_TEMPLATE_SQL_WHERE}
         AND t.category IS NOT NULL AND TRIM(t.category) <> ''`,
-  ).all<{ category: string | null }>();
-  const slugs = new Set<string>();
-  const addCategory = (category: string) => {
+  ).all<{
+    category: string | null;
+    created_at: string;
+    updated_at: string | null;
+    owner_updated_at: string | null;
+  }>();
+  const lastmodBySlug = new Map<string, string | null>();
+  const addCategory = (category: string, lastmod: string | null | undefined) => {
     const slug = categorySlug(category);
-    if (slug) slugs.add(slug);
+    if (!slug) return;
+    lastmodBySlug.set(
+      slug,
+      mostRecentLastmod(lastmodBySlug.get(slug), lastmod),
+    );
   };
 
   bundledTemplates.forEach((template) => {
-    template.categories?.forEach(addCategory);
+    template.categories?.forEach((category) => addCategory(category, template.lastmod));
   });
   result.results.forEach((row) => {
-    parseCategories(row.category).forEach(addCategory);
+    const lastmod = mostRecentLastmod(
+      row.updated_at || row.created_at,
+      row.owner_updated_at,
+    );
+    parseCategories(row.category).forEach((category) => addCategory(category, lastmod));
   });
 
-  return Array.from(slugs, (slug) => ({
+  const categoryEntries = Array.from(lastmodBySlug, ([slug, lastmod]) => ({
     path: `/categories/${encodeURIComponent(slug)}`,
+    lastmod,
   })).sort((left, right) => left.path.localeCompare(right.path));
+  const landingPage = catalogPageEntry('/categories');
+
+  return [
+    {
+      ...landingPage,
+      lastmod: mostRecentLastmod(
+        landingPage.lastmod,
+        ...categoryEntries.map((entry) => entry.lastmod),
+      ),
+    },
+    ...categoryEntries,
+  ];
 }
 
 type PagedSitemapOptions<Row> = {
@@ -248,6 +277,7 @@ type PagedSitemapOptions<Row> = {
   params: Record<string, string | string[]>;
   sql: string;
   toEntry: (row: Row) => SitemapEntry | null;
+  prefixEntries?: SitemapEntry[];
 };
 
 export async function handlePagedDatabaseSitemap<Row>({
@@ -256,17 +286,23 @@ export async function handlePagedDatabaseSitemap<Row>({
   params,
   sql,
   toEntry,
+  prefixEntries = [],
 }: PagedSitemapOptions<Row>): Promise<Response> {
   if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
   const page = parsePage(params.page);
   if (!page) return xmlResponse(request, renderUrlset([]), 404);
 
-  const result = await env.DB.prepare(sql)
-    .bind(SITEMAP_PAGE_SIZE, (page - 1) * SITEMAP_PAGE_SIZE)
-    .all<Row>();
-  const entries = result.results
+  const offset = (page - 1) * SITEMAP_PAGE_SIZE;
+  const prefixedPageEntries = prefixEntries.slice(offset, offset + SITEMAP_PAGE_SIZE);
+  const databaseLimit = SITEMAP_PAGE_SIZE - prefixedPageEntries.length;
+  const databaseOffset = Math.max(0, offset - prefixEntries.length);
+  const result = databaseLimit > 0
+    ? await env.DB.prepare(sql).bind(databaseLimit, databaseOffset).all<Row>()
+    : { results: [] as Row[] };
+  const databaseEntries = result.results
     .map(toEntry)
     .filter((entry): entry is SitemapEntry => entry !== null);
+  const entries = [...prefixedPageEntries, ...databaseEntries];
 
   return entries.length === 0
     ? xmlResponse(request, renderUrlset([]), 404)

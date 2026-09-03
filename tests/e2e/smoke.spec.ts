@@ -165,8 +165,12 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     expect(pageLocations.length).toBeLessThanOrEqual(25_000);
     expect(new TextEncoder().encode(childXml).byteLength).toBeLessThanOrEqual(50 * 1024 * 1024);
     expect(lastmods.length).toBeLessThanOrEqual(pageLocations.length);
-    if (childLocation.includes("/pages/") || childLocation.includes("/templates/")) {
-      expect(lastmods.length).toBeGreaterThan(0);
+    if (
+      childLocation.includes("/pages/") ||
+      childLocation.includes("/templates/") ||
+      childLocation.includes("/categories/")
+    ) {
+      expect(lastmods).toHaveLength(pageLocations.length);
     }
     expect(lastmods.every((value) => Number.isFinite(Date.parse(value)))).toBe(true);
     expect(childXml).not.toContain("<priority>");

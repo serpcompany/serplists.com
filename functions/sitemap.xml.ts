@@ -1,6 +1,7 @@
 import type { Env } from './api/types';
 import {
   buildInMemoryShardIndex,
+  bundledTemplateEntries,
   loadCategoryEntries,
   methodNotAllowed,
   PUBLIC_TEMPLATE_SQL_WHERE,
@@ -48,11 +49,12 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
         AND ${VALID_USERNAME_SQL}`,
   );
   const categoryEntries = await loadCategoryEntries(env);
+  const templateInventoryCount = templateCount + bundledTemplateEntries().length + 1;
   const entries = [
     ...buildInMemoryShardIndex('pages', staticSitemapEntries()),
     ...buildInMemoryShardIndex('categories', categoryEntries),
     ...buildDatabaseShardIndex('profiles', profileCount),
-    ...buildDatabaseShardIndex('templates', templateCount),
+    ...buildDatabaseShardIndex('templates', templateInventoryCount),
   ];
 
   return xmlResponse(request, renderSitemapIndex(entries));

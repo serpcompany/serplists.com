@@ -1,5 +1,7 @@
 import type { Env } from '../../api/types';
 import {
+  bundledTemplateEntries,
+  catalogPageEntry,
   handlePagedDatabaseSitemap,
   isValidTemplateSlug,
   isValidUsername,
@@ -22,6 +24,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, params }) =>
     request,
     env,
     params,
+    prefixEntries: [catalogPageEntry('/templates'), ...bundledTemplateEntries()],
     sql: `SELECT u.username, t.slug, t.created_at, t.updated_at,
                 u.updated_at AS owner_updated_at
        FROM templates AS t

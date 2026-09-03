@@ -115,13 +115,14 @@ describe('public sitemap HTTP responses', () => {
       '/pricing',
       '/about',
       '/contact',
-      '/templates',
-      '/categories',
     ]);
     expect(xml).toContain('<loc>https://serplists.com/</loc>');
     expect(xml).toContain('<loc>https://serplists.com/features/template-builder</loc>');
-    expect(xml).toContain('<loc>https://serplists.com/profile/serp/ultimate-camping-checklist</loc>');
-    expect(xml.match(/<url>[\s\S]*?<lastmod>[^<]+<\/lastmod>[\s\S]*?<\/url>/g)).toHaveLength(12);
+    expect(xml).not.toContain('<loc>https://serplists.com/templates</loc>');
+    expect(xml).not.toContain('<loc>https://serplists.com/categories</loc>');
+    expect(xml).not.toContain('/profile/');
+    expect(xml.match(/<url>/g)).toHaveLength(9);
+    expect(xml.match(/<lastmod>[^<]+<\/lastmod>/g)).toHaveLength(9);
     expect(xml).not.toContain('/login');
     expect(xml).not.toContain('/checklists');
     expect(xml).not.toContain('<loc>https://serplists.com/docs</loc>');
@@ -145,7 +146,10 @@ describe('public sitemap HTTP responses', () => {
     expect(response.status).toBe(200);
     expect(xml.match(/\/categories\/seo-analytics/g)).toHaveLength(1);
     expect(xml.match(/\/categories\/outdoor/g)).toHaveLength(1);
-    expect(xml).not.toContain('<lastmod>');
+    expect(xml).toContain('<loc>https://serplists.com/categories</loc>');
+    expect(xml.match(/<lastmod>[^<]+<\/lastmod>/g)).toHaveLength(
+      xml.match(/<url>/g)?.length ?? 0,
+    );
     await expectValidXml(xml, sitemapSchema, 'category-sitemap.xml');
   });
 
@@ -203,9 +207,16 @@ describe('public sitemap HTTP responses', () => {
     const xml = await response.text();
 
     expect(response.status).toBe(200);
+    expect(xml).toContain('<loc>https://serplists.com/templates</loc>');
+    expect(xml).toContain('<loc>https://serplists.com/profile/serp/complete-wedding-planning-checklist</loc>');
+    expect(xml).toContain('<loc>https://serplists.com/profile/serp/full-website-launch-qa-checklist</loc>');
+    expect(xml).toContain('<loc>https://serplists.com/profile/serp/ultimate-camping-checklist</loc>');
     expect(xml).toContain('<loc>https://serplists.com/profile/alice/technical-seo</loc>');
     expect(xml).not.toContain('invalid%20owner');
     expect(xml).toContain('<lastmod>2026-08-09T00:00:00.000Z</lastmod>');
+    expect(xml.match(/<lastmod>[^<]+<\/lastmod>/g)).toHaveLength(
+      xml.match(/<url>/g)?.length ?? 0,
+    );
     await expectValidXml(xml, sitemapSchema, 'template-sitemap.xml');
   });
 
@@ -238,8 +249,9 @@ describe('public sitemap HTTP responses', () => {
     const xml = await response.text();
 
     expect(response.status).toBe(200);
+    expect(xml).toContain('/categories/category-25000');
     expect(xml).toContain('/categories/category-25001');
-    expect(xml).not.toContain('/categories/category-25000<');
+    expect(xml).not.toContain('/categories/category-24999<');
   });
 
   it('supports HEAD without returning an XML body', async () => {
