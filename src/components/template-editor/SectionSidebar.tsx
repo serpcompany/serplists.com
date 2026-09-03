@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from "react";
+import { useState, type DragEvent, type KeyboardEvent } from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import {
   ChevronDown,
@@ -24,6 +24,27 @@ type EditingItemState = {
   itemIndex: number;
   sectionIndex: number;
 };
+
+type OutlineDragState =
+  | { kind: "section"; sectionIndex: number }
+  | { kind: "task"; itemIndex: number; sectionIndex: number };
+
+const OUTLINE_DRAG_TYPE = "application/x-serplists-outline";
+
+function remapIndexAfterMove(index: number, fromIndex: number, toIndex: number): number {
+  if (index === fromIndex) return toIndex;
+  if (fromIndex < toIndex && index > fromIndex && index <= toIndex) return index - 1;
+  if (toIndex < fromIndex && index >= toIndex && index < fromIndex) return index + 1;
+  return index;
+}
+
+function moveArrayEntry<T>(items: T[], fromIndex: number, toIndex: number): T[] {
+  const nextItems = [...items];
+  const [movedItem] = nextItems.splice(fromIndex, 1);
+  if (movedItem === undefined) return items;
+  nextItems.splice(toIndex, 0, movedItem);
+  return nextItems;
+}
 
 interface SectionSidebarProps {
   outlineSelectionActive: boolean;
@@ -64,6 +85,8 @@ export function SectionSidebar({
   );
   const [editingItem, setEditingItem] = useState<EditingItemState | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  const [draggedOutlineItem, setDraggedOutlineItem] =
+    useState<OutlineDragState | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<number>>(
     new Set(sectionsFieldArray.fields.map((_, index) => index)),
   );
@@ -192,6 +215,85 @@ export function SectionSidebar({
     }
   }
 
+  function startDrag(event: DragEvent<HTMLButtonElement>, drag: OutlineDragState): void {
+    event.stopPropagation();
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData(OUTLINE_DRAG_TYPE, JSON.stringify(drag));
+    setDraggedOutlineItem(drag);
+  }
+
+  function allowDrop(event: DragEvent<HTMLElement>): void {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }
+
+  function finishDrag(): void {
+    setDraggedOutlineItem(null);
+  }
+
+  function handleSectionDrop(event: DragEvent<HTMLElement>, toIndex: number): void {
+    event.preventDefault();
+    const drag = draggedOutlineItem;
+    if (!drag || drag.kind !== "section" || drag.sectionIndex === toIndex) {
+      finishDrag();
+      return;
+    }
+
+    const fromIndex = drag.sectionIndex;
+    sectionsFieldArray.move(fromIndex, toIndex);
+    setExpandedSections((current) =>
+      new Set(
+        [...current].map((index) => remapIndexAfterMove(index, fromIndex, toIndex)),
+      ),
+    );
+
+    const nextSelectedSection = remapIndexAfterMove(
+      selectedSectionIndex,
+      fromIndex,
+      toIndex,
+    );
+    if (selectedItemIndex === null) {
+      onSelectSection(nextSelectedSection);
+    } else {
+      onSelectItem(nextSelectedSection, selectedItemIndex);
+    }
+    finishDrag();
+  }
+
+  function handleTaskDrop(
+    event: DragEvent<HTMLElement>,
+    sectionIndex: number,
+    toIndex: number,
+  ): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const drag = draggedOutlineItem;
+    if (
+      !drag ||
+      drag.kind !== "task" ||
+      drag.sectionIndex !== sectionIndex ||
+      drag.itemIndex === toIndex
+    ) {
+      finishDrag();
+      return;
+    }
+
+    const currentItems = getValues(`sections.${sectionIndex}.items`) ?? [];
+    setValue(
+      `sections.${sectionIndex}.items`,
+      moveArrayEntry(currentItems, drag.itemIndex, toIndex),
+      { shouldDirty: true, shouldTouch: true, shouldValidate: true },
+    );
+
+    if (selectedSectionIndex === sectionIndex && selectedItemIndex !== null) {
+      onSelectItem(
+        sectionIndex,
+        remapIndexAfterMove(selectedItemIndex, drag.itemIndex, toIndex),
+      );
+    }
+    finishDrag();
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-sidebar-border px-3 py-2">
@@ -221,7 +323,17 @@ export function SectionSidebar({
             const isExpanded = expandedSections.has(sectionIndex);
 
             return (
-              <div className="mb-1" key={sectionField.fieldId}>
+              <div
+                className={cn(
+                  "mb-1 rounded-md",
+                  draggedOutlineItem?.kind === "section" &&
+                    draggedOutlineItem.sectionIndex === sectionIndex &&
+                    "opacity-50",
+                )}
+                key={sectionField.fieldId}
+                onDragOver={allowDrop}
+                onDrop={(event) => handleSectionDrop(event, sectionIndex)}
+              >
                 <div
                   className={cn(
                     "group flex min-w-0 items-center gap-1 overflow-hidden rounded-md px-1 transition-colors",
@@ -231,8 +343,14 @@ export function SectionSidebar({
                   )}
                 >
                   <button
+                    aria-label={`Drag ${section?.title || buildSectionFallbackLabel(sectionIndex)}`}
+                    draggable
+                    onDragEnd={finishDrag}
+                    onDragStart={(event) =>
+                      startDrag(event, { kind: "section", sectionIndex })
+                    }
                     type="button"
-                    className="h-3.5 w-3.5 shrink-0 cursor-grab touch-none rounded opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:opacity-100"
+                    className="flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:opacity-100 active:cursor-grabbing"
                   >
                     <GripVertical className="h-4 w-4 text-muted-foreground" />
                   </button>
@@ -328,10 +446,24 @@ export function SectionSidebar({
                               ? "bg-sidebar-accent"
                               : "hover:bg-sidebar-accent/50",
                           )}
+                          onDragOver={allowDrop}
+                          onDrop={(event) =>
+                            handleTaskDrop(event, sectionIndex, itemIndex)
+                          }
                         >
                           <button
+                            aria-label={`Drag ${item.title || buildItemFallbackLabel(itemIndex)}`}
+                            draggable
+                            onDragEnd={finishDrag}
+                            onDragStart={(event) =>
+                              startDrag(event, {
+                                itemIndex,
+                                kind: "task",
+                                sectionIndex,
+                              })
+                            }
                             type="button"
-                            className="h-3.5 w-3.5 shrink-0 cursor-grab touch-none rounded opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:opacity-100"
+                            className="flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:opacity-100 active:cursor-grabbing"
                           >
                             <GripVertical className="h-4 w-4 text-muted-foreground" />
                           </button>

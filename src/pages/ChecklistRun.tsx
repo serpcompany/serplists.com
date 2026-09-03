@@ -46,6 +46,7 @@ import {
 } from '@/lib/routes';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { TemplateHistoryEvent } from '@/lib/api';
+import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
 
 const runHistoryActionLabels: Record<string, string> = {
   'checklist_run.created': 'Created run',
@@ -90,6 +91,8 @@ const ChecklistRunPage = () => {
     notFound,
     progress,
     run,
+    saveItemNotes,
+    saveSubItemNotes,
     saveTitle,
     selectedData,
     selectedItemId,
@@ -161,6 +164,25 @@ const ChecklistRunPage = () => {
     if (result.kind === 'error') {
       toast.error(result.message || 'Unable to save your progress. Please try again.');
     }
+  };
+
+  const handleItemNotesSave = async (itemId: string, notes: string) => {
+    const result = await saveItemNotes(itemId, notes);
+    if (result.kind === 'ok') return true;
+    toast.error(result.kind === 'error' ? result.message : 'Unable to save task notes.');
+    return false;
+  };
+
+  const handleSubItemNotesSave = async (
+    itemId: string,
+    contentIndex: number,
+    subItemIndex: number,
+    notes: string,
+  ) => {
+    const result = await saveSubItemNotes(itemId, contentIndex, subItemIndex, notes);
+    if (result.kind === 'ok') return true;
+    toast.error(result.kind === 'error' ? result.message : 'Unable to save sub-task notes.');
+    return false;
   };
 
   const handleTitleEdit = () => {
@@ -529,6 +551,14 @@ const ChecklistRunPage = () => {
                             <ContentRenderer
                               contents={item.contents}
                               disabled={false}
+                              onSubItemNotesSave={(contentIndex, subItemIndex, notes) =>
+                                handleSubItemNotesSave(
+                                  item.id,
+                                  contentIndex,
+                                  subItemIndex,
+                                  notes,
+                                )
+                              }
                               onSubItemToggle={(contentIndex, subItemIndex) =>
                                 void handleSubItemToggle(
                                   item.id,
@@ -539,6 +569,13 @@ const ChecklistRunPage = () => {
                             />
                           </div>
                         ) : null}
+                        <div className="border-t border-border px-4 py-4">
+                          <RunNotesEditor
+                            initialValue={item.notes}
+                            label="Task notes"
+                            onSave={(notes) => handleItemNotesSave(item.id, notes)}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -623,6 +660,17 @@ const ChecklistRunPage = () => {
                     )
                   }
                   onToggleTask={() => void handleItemToggle(selectedEntry.item.id)}
+                  onSaveNotes={(notes) =>
+                    handleItemNotesSave(selectedEntry.item.id, notes)
+                  }
+                  onSaveSubItemNotes={(contentIndex, subItemIndex, notes) =>
+                    handleSubItemNotesSave(
+                      selectedEntry.item.id,
+                      contentIndex,
+                      subItemIndex,
+                      notes,
+                    )
+                  }
                   hasNext={Boolean(nextEntry)}
                   hasPrev={Boolean(previousEntry)}
                 />

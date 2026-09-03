@@ -7,17 +7,20 @@ import { File, Code, ListCheck } from 'lucide-react';
 import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
 import { normalizeMarkdownDisplayText } from '@/lib/utils/markdownDisplay';
 import { safeUrl } from '@/lib/utils/safeUrl';
+import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
 
 interface ContentRendererProps {
   contents: ChecklistItemContent[];
   disabled?: boolean;
   onSubItemToggle?: (contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
+  onSubItemNotesSave?: (contentIndex: number, subItemIndex: number, notes: string) => Promise<boolean>;
 }
 
 export const ContentRenderer: React.FC<ContentRendererProps> = ({ 
   contents, 
   disabled = false,
   onSubItemToggle,
+  onSubItemNotesSave,
 }) => {
   if (!contents || contents.length === 0) {
     return (
@@ -108,16 +111,27 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
               </div>
               <div className="space-y-2 pl-7">
                 {content.subItems.map((subItem: ChecklistSubItem, subItemIndex: number) => (
-                  <div key={subItem.id} className="flex items-center gap-3">
-                    <Checkbox
-                      checked={!!subItem.isCompleted}
-                      disabled={disabled || !onSubItemToggle}
-                      className={disabled || !onSubItemToggle ? "opacity-50" : ""}
-                      onCheckedChange={() =>
-                        onSubItemToggle?.(contentIndex, subItemIndex, !subItem.isCompleted)
-                      }
-                    />
-                    <span className={subItem.isCompleted ? "line-through text-muted-foreground" : ""}>{subItem.title}</span>
+                  <div key={subItem.id} className="space-y-2 rounded-md border border-border/70 p-3">
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        checked={!!subItem.isCompleted}
+                        disabled={disabled || !onSubItemToggle}
+                        className={disabled || !onSubItemToggle ? "opacity-50" : ""}
+                        onCheckedChange={() =>
+                          onSubItemToggle?.(contentIndex, subItemIndex, !subItem.isCompleted)
+                        }
+                      />
+                      <span className={subItem.isCompleted ? "line-through text-muted-foreground" : ""}>{subItem.title}</span>
+                    </div>
+                    {onSubItemNotesSave ? (
+                      <RunNotesEditor
+                        initialValue={subItem.notes}
+                        label={`Notes for ${subItem.title || `sub-task ${subItemIndex + 1}`}`}
+                        onSave={(notes) =>
+                          onSubItemNotesSave(contentIndex, subItemIndex, notes)
+                        }
+                      />
+                    ) : null}
                   </div>
                 ))}
               </div>

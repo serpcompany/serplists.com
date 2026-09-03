@@ -1,8 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { Button } from './button';
 import { Input } from './input';
+import { Textarea } from './textarea';
 import { Label } from './label';
-import { X, File, Image, Video, ExternalLink } from 'lucide-react';
+import { X, File, Image, Video } from 'lucide-react';
 import {
   deleteUploadedAsset,
   uploadFile,
@@ -11,7 +12,7 @@ import {
 } from '@/lib/utils/fileUpload';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { getYoutubeVideoId } from '@/utils/urlHelpers';
+import { VideoEmbed } from '@/components/shared/VideoEmbed';
 
 interface FileUploadProps {
   type: 'image' | 'video' | 'file';
@@ -32,6 +33,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const sourceInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const { toast } = useToast();
@@ -128,17 +130,28 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     <div className={`space-y-4 ${className}`}>
       {/* URL Input */}
       <div className="space-y-2">
-        <Label>
+        <Label htmlFor={sourceInputId}>
           {type === 'image' ? 'Image URL' : 
-           type === 'video' ? 'Video URL' : 
+           type === 'video' ? 'Video URL or embed code' :
            'File URL'}
         </Label>
-        <Input
-          type="url"
-          value={value}
-          onChange={(e) => onValueChange(e.target.value)}
-          placeholder={`Enter ${type} URL...`}
-        />
+        {type === 'video' ? (
+          <Textarea
+            id={sourceInputId}
+            value={value}
+            onChange={(event) => onValueChange(event.target.value)}
+            placeholder="Paste a video URL or iframe embed code..."
+            rows={3}
+          />
+        ) : (
+          <Input
+            id={sourceInputId}
+            type="url"
+            value={value}
+            onChange={(event) => onValueChange(event.target.value)}
+            placeholder={`Enter ${type} URL...`}
+          />
+        )}
       </div>
 
       {/* File Upload */}
@@ -220,42 +233,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       
       {/* Preview for videos */}
       {value && type === 'video' && (
-        <div className="border rounded-lg p-4">
-          {(() => {
-            const youtubeId = getYoutubeVideoId(value);
-            if (youtubeId) {
-              return (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-center">YouTube Video Preview</p>
-                  <div className="aspect-w-16 aspect-h-9 overflow-hidden rounded">
-                    <iframe
-                      src={`https://www.youtube.com/embed/${youtubeId}`}
-                      title="YouTube video preview"
-                      className="w-full h-96 rounded"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  </div>
-                </div>
-              );
-            } else {
-              return (
-                <div className="text-center">
-                  <Video className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm font-medium mb-1">Video URL Added</p>
-                  <a 
-                    href={value} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-xs text-primary hover:underline inline-flex items-center gap-1"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    Open video in new tab
-                  </a>
-                </div>
-              );
-            }
-          })()}
+        <div className="overflow-hidden rounded-lg border p-2">
+          <VideoEmbed className="h-72 w-full rounded" title="Video preview" url={value} />
         </div>
       )}
     </div>
