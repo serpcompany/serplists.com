@@ -181,8 +181,9 @@ const PublicTemplate = () => {
   return (
     <div className="pb-24">
       <SEOHead
-        title={displayTemplate.title}
+        title={displayTemplate.seoTitle?.trim() || displayTemplate.title}
         description={
+          displayTemplate.seoDescription?.trim() ||
           displayTemplate.description ||
           `${displayTemplate.title} - Interactive checklist template`
         }

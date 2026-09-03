@@ -183,4 +183,42 @@ describe('Clipy template generation', () => {
 
     expect(sourceText).toContain('Finish');
   });
+
+  it('keeps ready key-moment media in chronological order when captions do not overlap steps', async () => {
+    const context = completeContext();
+    context.keyMoments.moments = [
+      {
+        tMs: 30_000,
+        caption: 'A completely unrelated final frame',
+        frameUrl: 'https://cdn.clipy.online/key-moments/demo/third.jpg',
+      },
+      {
+        tMs: 10_000,
+        caption: 'A completely unrelated opening frame',
+        frameUrl: 'https://cdn.clipy.online/key-moments/demo/first.jpg',
+      },
+      {
+        tMs: 20_000,
+        caption: 'A completely unrelated middle frame',
+        frameUrl: 'https://cdn.clipy.online/key-moments/demo/second.jpg',
+      },
+    ];
+    const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
+      fetch: vi.fn().mockResolvedValue(Response.json(context)),
+      getUserId: vi.fn().mockResolvedValue('user-1'),
+    });
+    const payload = await response.json();
+
+    expect(
+      payload.draft.sections[0].items
+        .slice(1)
+        .flatMap((item: { contents: Array<{ type: string; value: string }> }) => item.contents)
+        .filter((content: { type: string }) => content.type === 'image')
+        .map((content: { value: string }) => content.value),
+    ).toEqual([
+      'https://cdn.clipy.online/key-moments/demo/first.jpg',
+      'https://cdn.clipy.online/key-moments/demo/second.jpg',
+      'https://cdn.clipy.online/key-moments/demo/third.jpg',
+    ]);
+  });
 });

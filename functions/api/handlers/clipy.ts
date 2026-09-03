@@ -245,6 +245,18 @@ function selectImages(keyPoints: string[], moments: ClipyMoment[]): Map<number, 
     usedMoments.add(candidate.momentIndex);
   }
 
+  const chronologicalMoments = moments
+    .map((moment, momentIndex) => ({ moment, momentIndex }))
+    .sort((left, right) => left.moment.tMs - right.moment.tMs || left.momentIndex - right.momentIndex);
+  for (const candidate of chronologicalMoments) {
+    if (selected.size >= MAX_IMAGES) break;
+    if (usedMoments.has(candidate.momentIndex)) continue;
+    const keyPointIndex = keyPoints.findIndex((_, index) => !selected.has(index));
+    if (keyPointIndex < 0) break;
+    selected.set(keyPointIndex, candidate.moment);
+    usedMoments.add(candidate.momentIndex);
+  }
+
   return selected;
 }
 

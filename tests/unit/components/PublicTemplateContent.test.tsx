@@ -59,4 +59,50 @@ describe('PublicTemplateContent', () => {
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="nofollow noopener noreferrer"');
   });
+
+  it('renders persisted Clipy summary, transcript, video, image, and exact source attribution', () => {
+    const html = renderToStaticMarkup(
+      <PublicTemplateContent
+        initialExpandedItems={{ '0-0': true }}
+        sections={[{
+          id: 'source',
+          title: 'Source',
+          items: [{
+            id: 'recording',
+            title: 'Watch the source recording',
+            description: '',
+            contents: [
+              {
+                id: 'text',
+                type: 'text',
+                value: '### Recording summary\nPersisted summary.\n\n### Transcript\nPersisted transcript.',
+              },
+              {
+                id: 'video',
+                type: 'video',
+                uploadType: 'url',
+                value: 'https://clipy.online/video/8fptqlnappr6',
+              },
+              {
+                id: 'image',
+                type: 'image',
+                uploadType: 'url',
+                value: 'https://cdn.clipy.online/key-moments/demo/issues.jpg',
+              },
+            ],
+          }],
+        }]}
+      />,
+    );
+
+    expect(html).toContain('Recording summary');
+    expect(html).toContain('Persisted summary.');
+    expect(html).toContain('Transcript');
+    expect(html).toContain('Persisted transcript.');
+    expect(html).toContain('src="https://clipy.online/embed/8fptqlnappr6?ref=serplists.com"');
+    expect(html).toContain('src="https://cdn.clipy.online/key-moments/demo/issues.jpg"');
+    expect(html).toContain('href="https://clipy.online/video/8fptqlnappr6?ref=serplists.com"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="nofollow noopener noreferrer"');
+  });
 });
