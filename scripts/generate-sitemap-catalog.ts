@@ -31,7 +31,6 @@ const outputPath = path.join(
 );
 const staticPageSources = [
   { path: '/', sources: ['src/pages/Index.tsx'] },
-  { path: '/docs', sources: ['src/pages/Docs.tsx'] },
   { path: '/features', sources: ['src/pages/Features.tsx'] },
   { path: '/features/template-builder', sources: ['src/pages/Features.tsx'] },
   { path: '/features/checklist-runs', sources: ['src/pages/Features.tsx'] },

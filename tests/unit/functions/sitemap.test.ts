@@ -101,12 +101,30 @@ describe('public sitemap HTTP responses', () => {
     const xml = await response.text();
 
     expect(response.status).toBe(200);
+    const indexedPages = Array.from(
+      xml.matchAll(/<loc>https:\/\/serplists\.com(\/(?!profile\/serp\/)[^<]*)<\/loc>/g),
+      (match) => match[1],
+    );
+    expect(indexedPages).toEqual([
+      '/',
+      '/features',
+      '/features/template-builder',
+      '/features/checklist-runs',
+      '/features/public-sharing',
+      '/features/import-export',
+      '/pricing',
+      '/about',
+      '/contact',
+      '/templates',
+      '/categories',
+    ]);
     expect(xml).toContain('<loc>https://serplists.com/</loc>');
     expect(xml).toContain('<loc>https://serplists.com/features/template-builder</loc>');
     expect(xml).toContain('<loc>https://serplists.com/profile/serp/ultimate-camping-checklist</loc>');
-    expect(xml.match(/<url>[\s\S]*?<lastmod>[^<]+<\/lastmod>[\s\S]*?<\/url>/g)).toHaveLength(13);
+    expect(xml.match(/<url>[\s\S]*?<lastmod>[^<]+<\/lastmod>[\s\S]*?<\/url>/g)).toHaveLength(12);
     expect(xml).not.toContain('/login');
     expect(xml).not.toContain('/checklists');
+    expect(xml).not.toContain('<loc>https://serplists.com/docs</loc>');
     expect(xml).not.toContain('<priority>');
     expect(xml).not.toContain('<changefreq>');
     await expectValidXml(xml, sitemapSchema, 'pages-sitemap.xml');
