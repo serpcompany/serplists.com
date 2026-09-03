@@ -1,4 +1,54 @@
 {
+  "staticPages": [
+    {
+      "path": "/",
+      "lastmod": "2026-04-24T11:10:33.000Z"
+    },
+    {
+      "path": "/docs",
+      "lastmod": "2026-04-24T08:58:26.000Z"
+    },
+    {
+      "path": "/features",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/features/template-builder",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/features/checklist-runs",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/features/public-sharing",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/features/import-export",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/pricing",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/about",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/contact",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/templates",
+      "lastmod": "2026-04-25T10:19:04.000Z"
+    },
+    {
+      "path": "/categories",
+      "lastmod": "2026-04-25T10:19:04.000Z"
+    }
+  ],
   "templates": [
     {
       "slug": "complete-wedding-planning-checklist",
@@ -6,7 +56,8 @@
         "wedding",
         "events",
         "planning"
-      ]
+      ],
+      "lastmod": "2026-03-22T00:00:00.000Z"
     },
     {
       "slug": "full-website-launch-qa-checklist",
@@ -14,7 +65,8 @@
         "Tech",
         "Website",
         "QA"
-      ]
+      ],
+      "lastmod": "2026-03-22T00:00:00.000Z"
     },
     {
       "slug": "ultimate-camping-checklist",
@@ -22,7 +74,8 @@
         "outdoor",
         "travel",
         "recreation"
-      ]
+      ],
+      "lastmod": "2026-03-22T00:00:00.000Z"
     }
   ]
 }

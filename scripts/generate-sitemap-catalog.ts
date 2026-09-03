@@ -1,10 +1,25 @@
+import { execFile } from 'node:child_process';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
 type SitemapTemplate = {
   slug: string;
   categories: string[];
+  lastmod: string;
 };
+
+type StaticPage = {
+  path: string;
+  lastmod: string;
+};
+
+type GeneratedCatalog = {
+  templates?: SitemapTemplate[];
+  staticPages?: StaticPage[];
+};
+
+const execFileAsync = promisify(execFile);
 
 const repoRoot = process.cwd();
 const packsDirectory = path.join(repoRoot, 'src/data/public-template-packs');
@@ -12,6 +27,54 @@ const outputPath = path.join(
   repoRoot,
   'functions/sitemap/bundled-catalog.generated.json',
 );
+const staticPageSources = [
+  { path: '/', sources: ['src/pages/Index.tsx'] },
+  { path: '/docs', sources: ['src/pages/Docs.tsx'] },
+  { path: '/features', sources: ['src/pages/Features.tsx'] },
+  { path: '/features/template-builder', sources: ['src/pages/Features.tsx'] },
+  { path: '/features/checklist-runs', sources: ['src/pages/Features.tsx'] },
+  { path: '/features/public-sharing', sources: ['src/pages/Features.tsx'] },
+  { path: '/features/import-export', sources: ['src/pages/Features.tsx'] },
+  { path: '/pricing', sources: ['src/pages/Pricing.tsx'] },
+  { path: '/about', sources: ['src/pages/About.tsx'] },
+  { path: '/contact', sources: ['src/pages/Contact.tsx'] },
+  { path: '/templates', sources: ['src/pages/ChecklistLibrary.tsx'] },
+  { path: '/categories', sources: ['src/pages/Categories.tsx'] },
+] as const;
+
+const normalizeDate = (value: unknown): string | null => {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+};
+
+let previousCatalog: GeneratedCatalog = {};
+try {
+  previousCatalog = JSON.parse(await readFile(outputPath, 'utf8')) as GeneratedCatalog;
+} catch {
+  // The first generation has no previous artifact to fall back to.
+}
+
+const gitLastmod = async (sources: readonly string[]): Promise<string | null> => {
+  try {
+    const { stdout } = await execFileAsync(
+      'git',
+      ['log', '-1', '--format=%cI', '--', ...sources],
+      { cwd: repoRoot },
+    );
+    return normalizeDate(stdout.trim());
+  } catch {
+    return null;
+  }
+};
+
+const staticPages: StaticPage[] = [];
+for (const page of staticPageSources) {
+  const previous = previousCatalog.staticPages?.find((entry) => entry.path === page.path);
+  const lastmod = await gitLastmod(page.sources) ?? normalizeDate(previous?.lastmod);
+  if (!lastmod) throw new Error(`Unable to determine lastmod for static page ${page.path}`);
+  staticPages.push({ path: page.path, lastmod });
+}
 
 const files = (await readdir(packsDirectory))
   .filter((fileName) => fileName.endsWith('.json'))
@@ -21,7 +84,11 @@ const templates: SitemapTemplate[] = [];
 for (const fileName of files) {
   const pack = JSON.parse(
     await readFile(path.join(packsDirectory, fileName), 'utf8'),
-  ) as { templates?: Array<Record<string, unknown>> };
+  ) as { exportedAt?: string; templates?: Array<Record<string, unknown>> };
+  const packLastmod = normalizeDate(pack.exportedAt) ?? await gitLastmod([
+    path.relative(repoRoot, path.join(packsDirectory, fileName)),
+  ]);
+  if (!packLastmod) throw new Error(`Unable to determine lastmod for ${fileName}`);
 
   for (const template of pack.templates ?? []) {
     const slug = typeof template.slug === 'string' ? template.slug.trim() : '';
@@ -33,10 +100,11 @@ for (const fileName of files) {
       categories: Array.isArray(template.categories)
         ? template.categories.filter((value): value is string => typeof value === 'string')
         : [],
+      lastmod: packLastmod,
     });
   }
 }
 
 templates.sort((left, right) => left.slug.localeCompare(right.slug));
-await writeFile(outputPath, `${JSON.stringify({ templates }, null, 2)}\n`, 'utf8');
+await writeFile(outputPath, `${JSON.stringify({ staticPages, templates }, null, 2)}\n`, 'utf8');
 console.log(`Generated sitemap catalog from ${files.length} public template pack(s)`);

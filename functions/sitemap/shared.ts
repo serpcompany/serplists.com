@@ -17,26 +17,19 @@ export type SitemapEntry = {
 type BundledTemplate = {
   slug?: string;
   categories?: string[];
+  lastmod?: string;
+};
+
+type StaticPage = {
+  path: string;
+  lastmod: string;
 };
 
 const bundledTemplates = (bundledTemplateCatalog.templates as BundledTemplate[]).filter(
   (template) => template.slug?.trim(),
 );
 
-const PUBLIC_STATIC_PATHS = [
-  '/',
-  '/docs',
-  '/features',
-  '/features/template-builder',
-  '/features/checklist-runs',
-  '/features/public-sharing',
-  '/features/import-export',
-  '/pricing',
-  '/about',
-  '/contact',
-  '/templates',
-  '/categories',
-];
+const staticPages = bundledTemplateCatalog.staticPages as StaticPage[];
 
 export const VALID_USERNAME_SQL = `
   LENGTH(TRIM(u.username)) BETWEEN 3 AND 30
@@ -89,9 +82,15 @@ export function renderUrlset(entries: SitemapEntry[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 }
 
-export function renderSitemapIndex(paths: string[]): string {
-  const sitemaps = paths
-    .map((path) => `  <sitemap>\n    <loc>${xmlEscape(canonicalUrl(path))}</loc>\n  </sitemap>`)
+export function renderSitemapIndex(entries: SitemapEntry[]): string {
+  const sitemaps = entries
+    .map(({ path, lastmod }) => {
+      const normalizedLastmod = validLastmod(lastmod);
+      const lastmodElement = normalizedLastmod
+        ? `\n    <lastmod>${normalizedLastmod}</lastmod>`
+        : '';
+      return `  <sitemap>\n    <loc>${xmlEscape(canonicalUrl(path))}</loc>${lastmodElement}\n  </sitemap>`;
+    })
     .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemaps}\n</sitemapindex>\n`;
@@ -118,23 +117,12 @@ export function parsePage(value: string | string[] | undefined): number | null {
   return Number.isSafeInteger(page) && page >= 1 ? page : null;
 }
 
-export function buildPagedPaths(kind: 'profiles' | 'templates', count: number): string[] {
-  return Array.from(
-    { length: Math.ceil(Math.max(0, count) / SITEMAP_PAGE_SIZE) },
-    (_, index) => `/sitemaps/${kind}/${index + 1}.xml`,
-  );
-}
-
-export function buildQueryPagedPaths(path: string, count: number): string[] {
-  return Array.from(
-    { length: Math.ceil(Math.max(0, count) / SITEMAP_PAGE_SIZE) },
-    (_, index) => (index === 0 ? path : `${path}?page=${index + 1}`),
-  );
-}
-
-export function requestPage(request: Request): number | null {
-  const value = new URL(request.url).searchParams.get('page') ?? '1';
-  return parsePage(value);
+export function latestLastmod(entries: SitemapEntry[]): string | null {
+  const timestamps = entries
+    .map((entry) => validLastmod(entry.lastmod))
+    .filter((value): value is string => value !== null)
+    .sort();
+  return timestamps.at(-1) ?? null;
 }
 
 export function paginateEntries<T>(entries: T[], page: number): T[] {
@@ -145,12 +133,13 @@ export function paginateEntries<T>(entries: T[], page: number): T[] {
 export function bundledTemplateEntries(): SitemapEntry[] {
   return bundledTemplates.filter((template) => isValidTemplateSlug(template.slug ?? '')).map((template) => ({
     path: `/profile/serp/${encodeURIComponent(template.slug!.trim())}`,
+    lastmod: template.lastmod,
   }));
 }
 
 export function staticSitemapEntries(): SitemapEntry[] {
   return [
-    ...PUBLIC_STATIC_PATHS.map((path) => ({ path })),
+    ...staticPages,
     ...bundledTemplateEntries(),
   ];
 }
@@ -163,8 +152,18 @@ export function isValidTemplateSlug(value: string): boolean {
   return value.length >= 1 && value.length <= 160 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
 }
 
-export function bundledCategories(): string[] {
-  return bundledTemplates.flatMap((template) => template.categories ?? []);
+export function buildInMemoryShardIndex(
+  kind: 'static' | 'categories',
+  entries: SitemapEntry[],
+): SitemapEntry[] {
+  const pages = Math.ceil(entries.length / SITEMAP_PAGE_SIZE);
+  return Array.from({ length: pages }, (_, index) => {
+    const page = index + 1;
+    return {
+      path: `/sitemaps/${kind}/${page}.xml`,
+      lastmod: latestLastmod(paginateEntries(entries, page)),
+    };
+  });
 }
 
 export function categorySlug(category: string): string {
@@ -198,10 +197,11 @@ export function requestSupportsSitemap(method: string): boolean {
 
 export async function handleInMemoryPagedSitemap(
   request: Request,
+  pageValue: string | string[] | undefined,
   loadEntries: () => SitemapEntry[] | Promise<SitemapEntry[]>,
 ): Promise<Response> {
   if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
-  const page = requestPage(request);
+  const page = parsePage(pageValue);
   if (!page) return xmlResponse(request, renderUrlset([]), 404);
   const pageEntries = paginateEntries(await loadEntries(), page);
 
@@ -210,21 +210,35 @@ export async function handleInMemoryPagedSitemap(
     : xmlResponse(request, renderUrlset(pageEntries));
 }
 
-export async function loadCategorySlugs(env: Env): Promise<string[]> {
+export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
   const result = await env.DB.prepare(
-    `SELECT t.category
+    `SELECT t.category, t.created_at, t.updated_at
        FROM templates AS t
       WHERE ${PUBLIC_TEMPLATE_SQL_WHERE}
         AND t.category IS NOT NULL AND TRIM(t.category) <> ''`,
-  ).all<{ category: string | null }>();
+  ).all<{ category: string | null; created_at: string; updated_at: string | null }>();
+  const lastmodBySlug = new Map<string, string | null>();
+  const addCategory = (category: string, lastmod: string | null | undefined) => {
+    const slug = categorySlug(category);
+    if (!slug) return;
+    const current = lastmodBySlug.get(slug);
+    const candidate = validLastmod(lastmod);
+    if (!current || (candidate && candidate > current)) lastmodBySlug.set(slug, candidate);
+  };
 
-  return Array.from(
-    new Set(
-      [...bundledCategories(), ...result.results.flatMap((row) => parseCategories(row.category))]
-        .map(categorySlug)
-        .filter(Boolean),
-    ),
-  ).sort();
+  bundledTemplates.forEach((template) => {
+    template.categories?.forEach((category) => addCategory(category, template.lastmod));
+  });
+  result.results.forEach((row) => {
+    parseCategories(row.category).forEach((category) => {
+      addCategory(category, row.updated_at || row.created_at);
+    });
+  });
+
+  return Array.from(lastmodBySlug, ([slug, lastmod]) => ({
+    path: `/categories/${encodeURIComponent(slug)}`,
+    lastmod,
+  })).sort((left, right) => left.path.localeCompare(right.path));
 }
 
 type PagedSitemapOptions<Row> = {

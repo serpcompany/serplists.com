@@ -123,6 +123,51 @@ test("@smoke public document installs the configured Google Tag Manager containe
   expect(csp).toContain("frame-src");
 });
 
+test("@smoke sitemap index and every listed shard pass the public XML audit", async ({ request }) => {
+  const pagesOrigin = new URL(
+    process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api",
+  ).origin;
+  const indexResponse = await request.get(`${pagesOrigin}/sitemap.xml`);
+  const indexXml = await indexResponse.text();
+  const childLocations = Array.from(
+    indexXml.matchAll(/<loc>(https:\/\/serplists\.com\/sitemaps\/(?:static|categories|profiles|templates)\/\d+\.xml)<\/loc>/g),
+    (match) => match[1],
+  );
+
+  expect(indexResponse.ok()).toBe(true);
+  expect(indexResponse.headers()["content-type"]).toContain("application/xml");
+  expect(indexXml).toContain("<sitemapindex");
+  expect(indexXml).not.toContain("?page=");
+  expect(childLocations.length).toBeGreaterThan(0);
+  expect(indexXml.match(/<lastmod>[^<]+<\/lastmod>/g)).toHaveLength(childLocations.length);
+
+  for (const childLocation of childLocations) {
+    const localLocation = childLocation.replace("https://serplists.com", pagesOrigin);
+    const childResponse = await request.get(localLocation);
+    const childXml = await childResponse.text();
+    const pageLocations = Array.from(
+      childXml.matchAll(/<loc>(https:\/\/serplists\.com\/[^<]*)<\/loc>/g),
+      (match) => match[1],
+    );
+    const lastmods = Array.from(
+      childXml.matchAll(/<lastmod>([^<]+)<\/lastmod>/g),
+      (match) => match[1],
+    );
+
+    expect(childResponse.ok(), childLocation).toBe(true);
+    expect(childResponse.headers()["content-type"]).toContain("application/xml");
+    expect(childXml).toContain("<urlset");
+    expect(childXml).not.toContain("<sitemapindex");
+    expect(pageLocations.length).toBeGreaterThan(0);
+    expect(pageLocations.length).toBeLessThanOrEqual(25_000);
+    expect(new TextEncoder().encode(childXml).byteLength).toBeLessThanOrEqual(50 * 1024 * 1024);
+    expect(lastmods).toHaveLength(pageLocations.length);
+    expect(lastmods.every((value) => Number.isFinite(Date.parse(value)))).toBe(true);
+    expect(childXml).not.toContain("<priority>");
+    expect(childXml).not.toContain("<changefreq>");
+  }
+});
+
 test("@smoke login link renders the login page without refresh", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: /^log in$/i }).click();
