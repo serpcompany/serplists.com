@@ -23,87 +23,24 @@ import { Input } from '@/components/ui/input';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { buildPublicCategoryPath } from '@/lib/routes';
+import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 
-const categoryMetadata = [
-  {
-    slug: 'business',
-    name: 'Business & Operations',
-    description: 'Templates for business processes, operations, and management',
-    icon: Briefcase,
-    color: 'text-blue-400',
-    bgColor: 'bg-blue-500/10',
-  },
-  {
-    slug: 'engineering',
-    name: 'Engineering & Development',
-    description:
-      'Checklists for code reviews, deployments, and development workflows',
-    icon: Code,
-    color: 'text-emerald-400',
-    bgColor: 'bg-emerald-500/10',
-  },
-  {
-    slug: 'design',
-    name: 'Design & Creative',
-    description:
-      'Templates for design processes, brand guidelines, and creative projects',
-    icon: Paintbrush,
-    color: 'text-pink-400',
-    bgColor: 'bg-pink-500/10',
-  },
-  {
-    slug: 'marketing',
-    name: 'Marketing & Growth',
-    description: 'Launch checklists, campaign templates, and growth strategies',
-    icon: TrendingUp,
-    color: 'text-orange-400',
-    bgColor: 'bg-orange-500/10',
-  },
-  {
-    slug: 'hr',
-    name: 'HR & People',
-    description:
-      'Onboarding, offboarding, and people management templates',
-    icon: Users,
-    color: 'text-cyan-400',
-    bgColor: 'bg-cyan-500/10',
-  },
-  {
-    slug: 'personal',
-    name: 'Personal & Lifestyle',
-    description:
-      'Personal productivity, wellness, and life management checklists',
-    icon: Heart,
-    color: 'text-rose-400',
-    bgColor: 'bg-rose-500/10',
-  },
-  {
-    slug: 'productivity',
-    name: 'Productivity',
-    description: 'Task management, time tracking, and workflow optimization',
-    icon: Zap,
-    color: 'text-yellow-400',
-    bgColor: 'bg-yellow-500/10',
-  },
-  {
-    slug: 'project-management',
-    name: 'Project Management',
-    description:
-      'Project planning, milestones, and team coordination templates',
-    icon: Layers,
-    color: 'text-indigo-400',
-    bgColor: 'bg-indigo-500/10',
-  },
-  {
-    slug: 'compliance',
-    name: 'Compliance & Legal',
-    description:
-      'Regulatory compliance, audits, and legal process checklists',
-    icon: FileText,
-    color: 'text-slate-400',
-    bgColor: 'bg-slate-500/10',
-  },
-] as const;
+const categoryStyles = {
+  business: { icon: Briefcase, color: 'text-blue-400', bgColor: 'bg-blue-500/10' },
+  engineering: { icon: Code, color: 'text-emerald-400', bgColor: 'bg-emerald-500/10' },
+  design: { icon: Paintbrush, color: 'text-pink-400', bgColor: 'bg-pink-500/10' },
+  marketing: { icon: TrendingUp, color: 'text-orange-400', bgColor: 'bg-orange-500/10' },
+  hr: { icon: Users, color: 'text-cyan-400', bgColor: 'bg-cyan-500/10' },
+  personal: { icon: Heart, color: 'text-rose-400', bgColor: 'bg-rose-500/10' },
+  productivity: { icon: Zap, color: 'text-yellow-400', bgColor: 'bg-yellow-500/10' },
+  'project-management': { icon: Layers, color: 'text-indigo-400', bgColor: 'bg-indigo-500/10' },
+  compliance: { icon: FileText, color: 'text-slate-400', bgColor: 'bg-slate-500/10' },
+} as const;
+
+const categoryMetadata = PUBLIC_CATEGORY_REGISTRY.map((category) => ({
+  ...category,
+  ...categoryStyles[category.slug],
+}));
 
 const defaultCategoryMeta = {
   description: 'Community templates for this workflow area',

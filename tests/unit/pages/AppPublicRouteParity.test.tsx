@@ -73,6 +73,15 @@ vi.mock('@/components/DevLoginBar', () => ({
   DevLoginBar: () => null,
 }));
 
+vi.mock('@/components/shared/SEOHead', () => ({
+  SEOHead: ({ robots, url }: { robots?: string; url?: string }) => (
+    <>
+      <meta content={robots ?? 'index, follow'} name="robots" />
+      <link href={url} rel="canonical" />
+    </>
+  ),
+}));
+
 vi.mock('@/components/ui/sonner', () => ({
   Toaster: () => null,
 }));
@@ -160,12 +169,14 @@ describe('App public route parity', () => {
     expect(html).not.toContain('Checklist Product Prototype');
   });
 
-  it('renders /docs inside the shared public shell instead of a standalone prototype header', () => {
+  it('treats the removed /docs prototype as a missing route', () => {
     const html = renderAppAt('/docs');
 
-    expect(html).toContain('Checklist &amp; Template Experience');
+    expect(html).toContain('That page does not exist');
+    expect(html).toContain('The route /docs could not be found.');
     expect(html).toContain('data-app-shell="public"');
-    expect(html).not.toContain('Checklist Product Prototype');
+    expect(html).not.toContain('Checklist &amp; Template Experience');
+    expect(html).not.toContain('Prototype map');
     expect((html.match(/<header/g) ?? []).length).toBe(1);
   });
 

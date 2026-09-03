@@ -38,6 +38,7 @@ import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
+import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 
 const categoryData: Record<
   string,
@@ -146,7 +147,11 @@ const CategoryDetail = () => {
   );
   const categoryStats = categories.find((item) => item.slug === slug);
   const isKnownCategory = Boolean(categoryStats || categoryData[slug]);
-  const category = categoryData[slug] ?? {
+  const canonicalCategory = PUBLIC_CATEGORY_REGISTRY.find((item) => item.slug === slug);
+  const category = canonicalCategory ? {
+    ...categoryData[slug],
+    ...canonicalCategory,
+  } : categoryData[slug] ?? {
     name: categoryStats?.name ?? 'Category',
     description: categoryStats
       ? `Templates filed under ${categoryStats.name}.`

@@ -1,0 +1,87 @@
+{
+  "staticPages": [
+    {
+      "path": "/",
+      "lastmod": "2026-04-24T11:10:33.000Z"
+    },
+    {
+      "path": "/features",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/features/template-builder",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/features/checklist-runs",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/features/public-sharing",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/features/import-export",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/pricing",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/about",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/contact",
+      "lastmod": "2026-03-26T10:29:33.000Z"
+    },
+    {
+      "path": "/templates",
+      "lastmod": "2026-04-25T10:19:04.000Z"
+    },
+    {
+      "path": "/categories",
+      "lastmod": "2026-09-03T17:19:31.000Z"
+    }
+  ],
+  "templates": [
+    {
+      "slug": "complete-wedding-planning-checklist",
+      "categories": [
+        "wedding",
+        "events",
+        "planning"
+      ],
+      "contentHash": "baa643e7a8e35c90c473203a925b1f656bd9e08c18d6becaba86f7aa62afae26",
+      "lastmod": "2026-04-24T11:10:33.000Z"
+    },
+    {
+      "slug": "full-website-launch-qa-checklist",
+      "categories": [
+        "Tech",
+        "Website",
+        "QA"
+      ],
+      "contentHash": "ee1cdbfb2822508817e84ea5d6372d22bacdd7a099fc72775c7cbf7ed13fa0b3",
+      "lastmod": "2026-04-24T11:10:33.000Z"
+    },
+    {
+      "slug": "ultimate-camping-checklist",
+      "categories": [
+        "outdoor",
+        "travel",
+        "recreation"
+      ],
+      "contentHash": "692ff5e3adb9599bf759376dfaba06a7148a27713787f76d3153bbf7ee5dc048",
+      "lastmod": "2026-04-24T11:10:33.000Z"
+    }
+  ],
+  "inventory": {
+    "templatesHash": "af23fd31cdcca19cadfdbc90d94fbd953022ceb755be35a8afa6ba83cb084ea7",
+    "templatesLastmod": "2026-04-24T11:10:33.000Z",
+    "categoriesHash": "c524c19bb5a926954d28391ebfbff0e0a90c576a69500a76b25d215fdd28f9f2",
+    "categoriesLastmod": "2026-09-03T17:14:00.641Z",
+    "implementationLastmod": "2026-09-03T17:19:31.000Z"
+  }
+}

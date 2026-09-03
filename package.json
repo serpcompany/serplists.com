@@ -8,8 +8,8 @@
     "dev:api": "node scripts/dev-auto.mjs api",
     "dev:all": "node scripts/dev-auto.mjs all",
     "dev:auto": "node scripts/dev-auto.mjs all",
-    "build": "dotenv -e .dev.vars -- vite build",
-    "build:dev": "dotenv -e .dev.vars -- vite build --mode development",
+    "build": "pnpm run sitemap:generate && dotenv -e .dev.vars -- vite build",
+    "build:dev": "pnpm run sitemap:generate && dotenv -e .dev.vars -- vite build --mode development",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "typecheck:env": "node scripts/check-env.mjs",
@@ -20,6 +20,8 @@
     "billing:set:official:serp": "node scripts/set-official-serp-plan.mjs",
     "schema:portable:generate": "tsx scripts/generate-portable-template-json-schema.ts",
     "schema:portable:check": "tsx scripts/generate-portable-template-json-schema.ts --check",
+    "sitemap:generate": "tsx scripts/generate-sitemap-catalog.ts",
+    "sitemap:check": "tsx scripts/generate-sitemap-catalog.ts --check",
     "templates:check": "tsx scripts/check-template-sources.ts",
     "templates:generate": "tsx scripts/generate-template-assets.ts",
     "templates:render-markdown": "tsx scripts/render-template-markdown.ts",
@@ -155,6 +157,7 @@
     "vite": "^5.4.1",
     "vitest": "^3.2.4",
     "wrangler": "^4.54.0",
+    "xmllint-wasm": "5.3.0",
     "zod-to-json-schema": "^3.25.1"
   },
   "packageManager": "pnpm@9.2.0+sha1.886364ebd6dae009284bebc56ed4296bb6dd557a"
