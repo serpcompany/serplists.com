@@ -36,6 +36,8 @@ import {
 } from '@/components/ui/select';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
+import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { useViewModePreference } from '@/hooks/useViewModePreference';
 
 const categoryData: Record<
   string,
@@ -128,9 +130,13 @@ const SEO_IMAGE_URL = 'https://serplists.com/placeholder.svg';
 
 const CategoryDetail = () => {
   const { categorySlug } = useParams<{ categorySlug: string }>();
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<DiscoverySort | 'name'>('popular');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useViewModePreference({
+    surface: 'category-templates',
+    userId: user?.id,
+  });
   const { allCategories, templates } = useTemplateLibrary();
 
   const slug = categorySlug ?? 'business';

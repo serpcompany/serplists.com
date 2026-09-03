@@ -84,6 +84,31 @@ function getTemplateSections(template: Record<string, unknown>) {
 }
 
 test.describe("template editor regressions", () => {
+  test('remembers the signed-in user layout independently on template screens', async ({ page }) => {
+    await loginAsSeedUser(page);
+    await page.goto('/dashboard/templates');
+
+    await page.getByRole('button', { name: 'Show templates in list view' }).click();
+    await expect(
+      page.getByRole('button', { name: 'Show templates in list view' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    await page.reload();
+    await expect(
+      page.getByRole('button', { name: 'Show templates in list view' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    await page.goto('/categories/seo');
+    await expect(
+      page.getByRole('button', { name: 'Show templates in grid view' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Show templates in list view' }).click();
+    await page.reload();
+    await expect(
+      page.getByRole('button', { name: 'Show templates in list view' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('supports full-size console navigation targets', async ({ page }) => {
     await loginAsSeedUser(page);
     await page.goto('/dashboard/templates');
