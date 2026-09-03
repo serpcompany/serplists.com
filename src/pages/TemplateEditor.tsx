@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,15 +10,20 @@ import { useTemplateEditorState } from "@/hooks/useTemplateEditorState";
 import { TemplateHeader } from "@/components/template-editor/TemplateHeader";
 import { OutlineSidebar } from "@/components/template-editor/OutlineSidebar";
 import { EditorPanels } from "@/components/template-editor/EditorPanels";
-import {
-  buildConsoleTemplatePath,
-  buildConsoleTemplatesPath,
-} from "@/lib/routes";
+import { buildConsoleTemplatesPath } from "@/lib/routes";
 import {
   templateEditorFormSchema,
   type TemplateEditorFormValues,
 } from "@/lib/forms/templateEditorForm";
 import { Form } from "@/components/ui/form";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
 import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
 import {
   applyTemplateBeforeUnloadWarning,
@@ -36,6 +41,7 @@ const TemplateEditor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const model = useTemplateEditorModel({ id });
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   
   const {
     selectedSectionIndex,
@@ -134,11 +140,7 @@ const TemplateEditor = () => {
         isEditing={!!id}
         isSaving={model.isSaving}
         onCancel={() => navigateWithEditorGuard(buildConsoleTemplatesPath())}
-        onPreview={
-          id
-            ? () => navigateWithEditorGuard(buildConsoleTemplatePath(id))
-            : undefined
-        }
+        onPreview={() => setIsPreviewOpen(true)}
         onSave={handleSave}
         templateSlug={model.templateSlug}
         title={templateForm.watch("title") || "New Template"}
@@ -182,6 +184,42 @@ const TemplateEditor = () => {
           />
         </div>
       </Form>
+
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Template preview</DialogTitle>
+            <DialogDescription>
+              This preview reflects the current draft. Saving is not required.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-border bg-card px-6">
+            <div className="border-b border-border py-6">
+              <h2 className="text-2xl font-semibold text-foreground">
+                {templateForm.watch("title") || "Untitled Template"}
+              </h2>
+              {templateForm.watch("description") ? (
+                <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
+                  {templateForm.watch("description")}
+                </p>
+              ) : null}
+            </div>
+            <PublicTemplateContent
+              initialExpandedItems={Object.fromEntries(
+                templateForm
+                  .watch("sections")
+                  .flatMap((section, sectionIndex) =>
+                    section.items.map((_, itemIndex) => [
+                      `${sectionIndex}-${itemIndex}`,
+                      true,
+                    ]),
+                  ),
+              )}
+              sections={templateForm.watch("sections")}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

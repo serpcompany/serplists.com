@@ -5,7 +5,6 @@ import {
   Image,
   Link2,
   ListTodo,
-  Video,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -23,6 +22,7 @@ import type {
   ChecklistItemContent,
   ChecklistSection,
 } from '@/types/checklist';
+import { VideoEmbed } from '@/components/shared/VideoEmbed';
 
 interface PublicTemplateContentProps {
   initialExpandedItems?: Record<string, boolean>;
@@ -63,11 +63,8 @@ export function PublicTemplateContent({
 
       case 'video':
         return content.value ? (
-          <div className="mt-3 border-l-2 border-border/70 pl-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Video className="h-4 w-4" />
-              Video content attached
-            </div>
+          <div className="mt-3 overflow-hidden rounded-md border border-border/70">
+            <VideoEmbed title="Template video preview" url={content.value} />
           </div>
         ) : null;
 

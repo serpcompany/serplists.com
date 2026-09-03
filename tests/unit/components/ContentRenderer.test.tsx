@@ -42,6 +42,11 @@ describe('ContentRenderer accessibility', () => {
             type: 'video',
             value: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
           },
+          {
+            id: 'video-2',
+            type: 'video',
+            value: 'https://clipy.online/video/tizg5pl1gkul',
+          },
         ]}
       />,
     );
@@ -49,6 +54,7 @@ describe('ContentRenderer accessibility', () => {
     expect(markup).toContain('aria-label="Download launch-plan.pdf"');
     expect(markup).toContain('aria-label="Open embedded content"');
     expect(markup).toContain('title="Task video content"');
+    expect(markup).toContain('src="https://clipy.online/embed/tizg5pl1gkul"');
     expect(markup).toContain('href="/api/uploads/file?key=template-files/launch-plan.pdf"');
   });
 });

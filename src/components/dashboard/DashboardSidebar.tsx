@@ -83,18 +83,21 @@ export function DashboardSidebar() {
 
             return (
               <li key={item.href}>
-                <Link
-                  to={item.href}
+                <Button
+                  asChild
+                  variant={active ? 'secondary' : 'ghost'}
                   className={cn(
-                    'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
+                    'min-h-11 w-full justify-start gap-2 px-3 text-sm',
                     active
-                      ? 'bg-secondary font-medium text-foreground'
-                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+                      ? 'font-medium text-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                </Link>
+                  <Link to={item.href}>
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </Link>
+                </Button>
               </li>
             );
           })}
@@ -108,18 +111,21 @@ export function DashboardSidebar() {
 
             return (
               <li key={item.href}>
-                <Link
-                  to={item.href}
+                <Button
+                  asChild
+                  variant={active ? 'secondary' : 'ghost'}
                   className={cn(
-                    'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
+                    'min-h-11 w-full justify-start gap-2 px-3 text-sm',
                     active
-                      ? 'bg-secondary font-medium text-foreground'
-                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+                      ? 'font-medium text-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                </Link>
+                  <Link to={item.href}>
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </Link>
+                </Button>
               </li>
             );
           })}

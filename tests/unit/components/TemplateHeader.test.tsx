@@ -19,6 +19,7 @@ describe('TemplateHeader', () => {
         templateSlug="piggyback-discovery-sop"
         title="New Employee Onboarding"
         onCancel={() => undefined}
+        onPreview={() => undefined}
         onSave={() => undefined}
       />,
     );
@@ -26,6 +27,7 @@ describe('TemplateHeader', () => {
     expect(html).toContain('New Employee Onboarding');
     expect(html).toContain('Editing');
     expect(html).toContain('Save');
+    expect(html).toContain('Preview');
     expect(html).toContain('sticky top-0 z-50');
     expect(html).not.toContain('Template editor');
     expect(html).not.toContain('Draft');

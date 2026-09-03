@@ -20,6 +20,7 @@ export type ChecklistItem = {
   description?: string;
   contents?: ChecklistItemContent[];
   isCompleted?: boolean;
+  notes?: string;
 };
 
 export type ChecklistSection = {

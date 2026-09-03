@@ -48,7 +48,15 @@ const baseRun: ChecklistRun = {
           description:
             'Check for typos and broken links.\nThen verify redirects.\\nFinally submit the report.',
           isCompleted: false,
-          contents: [],
+          contents: [
+            {
+              type: 'subItems',
+              value: '',
+              subItems: [
+                { id: 'sub-1', title: 'Send the approval email', isCompleted: false },
+              ],
+            },
+          ],
         },
       ],
     },
@@ -94,6 +102,7 @@ describe('ChecklistRunPage layout', () => {
       setSelectedItemId: vi.fn(),
       completeRun: vi.fn(),
       toggleItem: vi.fn(),
+      saveItemNotes: vi.fn(),
       toggleSubItem: vi.fn(),
     });
 
@@ -118,6 +127,9 @@ describe('ChecklistRunPage layout', () => {
     expect(html).toContain('Share');
     expect(html).toContain('Task 1 of 1');
     expect(html).toContain('Mark Complete');
+    expect(html).toContain('Task notes');
+    expect(html.match(/aria-label="Task notes"/g)).toHaveLength(1);
+    expect(html).not.toContain('Notes for Send the approval email');
     expect(html).toContain('whitespace-pre-line');
     expect(html).toContain(
       'Check for typos and broken links.\nThen verify redirects.\nFinally submit the report.',
@@ -157,6 +169,7 @@ describe('ChecklistRunPage layout', () => {
       setSelectedItemId: vi.fn(),
       completeRun: vi.fn(),
       toggleItem: vi.fn(),
+      saveItemNotes: vi.fn(),
       toggleSubItem: vi.fn(),
     });
 

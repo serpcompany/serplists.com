@@ -6,6 +6,7 @@ import type { ChecklistRun } from '@/types/checklist';
 import {
   createRunExecutionShare,
   loadRunExecutionData,
+  saveRunItemNotes,
   toggleRunItem,
   toggleRunSubItem,
 } from '@/features/run-execution/useRunExecutionModel';
@@ -185,6 +186,32 @@ describe('run execution model loading', () => {
 });
 
 describe('run execution model actions', () => {
+  it('persists task notes on the run without changing the template', async () => {
+    const updateRun = vi.fn();
+    const run = buildRun();
+
+    const result = await saveRunItemNotes(
+      { itemId: 'item-1', notes: 'Sent email: https://example.com/message/42', run },
+      {
+        apiClient: {
+          createChecklistRunShare: vi.fn(),
+          getChecklistById: vi.fn(),
+          getSharedChecklist: vi.fn(),
+          updateSharedChecklist: vi.fn(),
+        },
+        updateRun,
+      },
+    );
+
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') throw new Error('expected ok result');
+    expect(result.run?.sections[0]?.items[0]?.notes).toBe(
+      'Sent email: https://example.com/message/42',
+    );
+    expect(run.sections[0]?.items[0]?.notes).toBeUndefined();
+    expect(updateRun).toHaveBeenCalledOnce();
+  });
+
   it('toggling an item updates its sub-items and persists private runs', async () => {
     const updateRun = vi.fn();
     const apiClient = {
