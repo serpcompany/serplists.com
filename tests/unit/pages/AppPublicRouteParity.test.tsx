@@ -73,6 +73,15 @@ vi.mock('@/components/DevLoginBar', () => ({
   DevLoginBar: () => null,
 }));
 
+vi.mock('@/components/shared/SEOHead', () => ({
+  SEOHead: ({ robots, url }: { robots?: string; url?: string }) => (
+    <>
+      <meta content={robots ?? 'index, follow'} name="robots" />
+      <link href={url} rel="canonical" />
+    </>
+  ),
+}));
+
 vi.mock('@/components/ui/sonner', () => ({
   Toaster: () => null,
 }));
@@ -167,6 +176,8 @@ describe('App public route parity', () => {
     expect(html).toContain('data-app-shell="public"');
     expect(html).not.toContain('Checklist Product Prototype');
     expect((html.match(/<header/g) ?? []).length).toBe(1);
+    expect(html).toContain('<meta content="noindex, nofollow" name="robots"/>');
+    expect(html).toContain('<link href="https://serplists.com/docs" rel="canonical"/>');
   });
 
   it('renders /templates inside the shared public shell with detail-card href semantics', () => {

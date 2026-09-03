@@ -1,4 +1,9 @@
 export const REQUIRED_D1_SCHEMA = Object.freeze({
+  sitemap_revisions: ["kind", "revised_at"],
+  sitemap_profile_revisions: ["user_id", "revised_at"],
+  sitemap_owner_revisions: ["user_id", "revised_at"],
+  sitemap_category_revisions: ["category", "revised_at"],
+  sitemap_shard_revisions: ["kind", "page", "content_hash", "revised_at"],
   users: [
     "id",
     "email",

@@ -19,6 +19,13 @@ type StaticPage = {
 type GeneratedCatalog = {
   templates?: SitemapTemplate[];
   staticPages?: StaticPage[];
+  inventory?: {
+    templatesHash: string;
+    templatesLastmod: string;
+    categoriesHash: string;
+    categoriesLastmod: string;
+    implementationLastmod: string;
+  };
 };
 
 const execFileAsync = promisify(execFile);
@@ -60,7 +67,7 @@ const gitLastmod = async (sources: readonly string[]): Promise<string | null> =>
   try {
     const { stdout } = await execFileAsync(
       'git',
-      ['log', '-1', '--format=%cI', '--', ...sources],
+      ['log', '-1', '--format=%aI', '--', ...sources],
       { cwd: repoRoot },
     );
     return normalizeDate(stdout.trim());
@@ -116,5 +123,49 @@ for (const fileName of files) {
 }
 
 templates.sort((left, right) => left.slug.localeCompare(right.slug));
-await writeFile(outputPath, `${JSON.stringify({ staticPages, templates }, null, 2)}\n`, 'utf8');
+const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const templatesHash = hash(templates.map(({ slug, contentHash }) => ({ slug, contentHash })));
+const categoriesSource = await readFile(
+  path.join(repoRoot, 'src/data/publicCategories.ts'),
+  'utf8',
+);
+const categoriesHash = hash({
+  categoriesSource,
+  templateCategories: templates.map(({ slug, categories }) => ({ slug, categories })),
+});
+const templateSources = ['src/data/public-template-packs'] as const;
+const categorySources = [...templateSources, 'src/data/publicCategories.ts'] as const;
+const templateSourcesLastmod = await gitLastmod(templateSources);
+const categorySourcesLastmod = await gitLastmod(categorySources);
+const changedLastmod = (gitDate: string | null, previous?: string) =>
+  gitDate ?? normalizeDate(previous);
+const templatesLastmod = previousCatalog.inventory?.templatesHash === templatesHash
+  ? normalizeDate(previousCatalog.inventory.templatesLastmod)
+  : changedLastmod(templateSourcesLastmod, previousCatalog.inventory?.templatesLastmod);
+const categoriesLastmod = previousCatalog.inventory?.categoriesHash === categoriesHash
+  ? normalizeDate(previousCatalog.inventory.categoriesLastmod)
+  : changedLastmod(categorySourcesLastmod, previousCatalog.inventory?.categoriesLastmod);
+if (!templatesLastmod || !categoriesLastmod) {
+  throw new Error('Unable to determine sitemap inventory modification dates');
+}
+const implementationLastmod = await gitLastmod([
+  'functions/sitemap.xml.ts',
+  'functions/sitemap/shared.ts',
+  'functions/sitemaps/pages/[page].xml.ts',
+  'functions/sitemaps/categories/[page].xml.ts',
+  'functions/sitemaps/profiles/[page].xml.ts',
+  'functions/sitemaps/templates/[page].xml.ts',
+]) ?? normalizeDate(previousCatalog.inventory?.implementationLastmod);
+if (!implementationLastmod) throw new Error('Unable to determine sitemap implementation date');
+const output = `${JSON.stringify({
+  staticPages,
+  templates,
+  inventory: { templatesHash, templatesLastmod, categoriesHash, categoriesLastmod, implementationLastmod },
+}, null, 2)}\n`;
+if (process.argv.includes('--check')) {
+  const existing = await readFile(outputPath, 'utf8').catch(() => '');
+  if (existing !== output) throw new Error('Generated sitemap catalog is stale');
+} else {
+  await writeFile(outputPath, output, 'utf8');
+}
 console.log(`Generated sitemap catalog from ${files.length} public template pack(s)`);

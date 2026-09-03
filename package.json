@@ -21,6 +21,7 @@
     "schema:portable:generate": "tsx scripts/generate-portable-template-json-schema.ts",
     "schema:portable:check": "tsx scripts/generate-portable-template-json-schema.ts --check",
     "sitemap:generate": "tsx scripts/generate-sitemap-catalog.ts",
+    "sitemap:check": "tsx scripts/generate-sitemap-catalog.ts --check",
     "templates:check": "tsx scripts/check-template-sources.ts",
     "templates:generate": "tsx scripts/generate-template-assets.ts",
     "templates:render-markdown": "tsx scripts/render-template-markdown.ts",

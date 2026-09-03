@@ -1,4 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { validateXML } from "xmllint-wasm";
+
+const sitemapSchema = readFileSync(new URL("../fixtures/sitemap.xsd", import.meta.url), "utf8");
+const sitemapIndexSchema = readFileSync(new URL("../fixtures/siteindex.xsd", import.meta.url), "utf8");
+
+async function expectSchemaValid(xml: string, schema: string, fileName: string) {
+  const result = await validateXML({ xml: [{ fileName, contents: xml }], schema: [schema] });
+  expect(result.errors, result.rawOutput).toEqual([]);
+  expect(result.valid, result.rawOutput).toBe(true);
+}
 
 const apiTemplate = {
   id: "serp-template-technical-seo-audit",
@@ -140,9 +151,17 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
   expect(indexXml).not.toContain("?page=");
   expect(indexXml).not.toContain("/sitemaps/static/");
   expect(childLocations.length).toBeGreaterThan(0);
-  expect(indexXml).not.toContain("<lastmod>");
-  expect(indexXml.match(/<sitemap>/g)?.length ?? 0).toBeLessThanOrEqual(50_000);
+  const rootEntryCount = indexXml.match(/<sitemap>/g)?.length ?? 0;
+  expect(childLocations).toHaveLength(rootEntryCount);
+  expect(indexXml.match(/<lastmod>[^<]+<\/lastmod>/g)).toHaveLength(rootEntryCount);
+  expect(rootEntryCount).toBeLessThanOrEqual(50_000);
   expect(new TextEncoder().encode(indexXml).byteLength).toBeLessThanOrEqual(50 * 1024 * 1024);
+  await expectSchemaValid(indexXml, sitemapIndexSchema, "sitemap-index.xml");
+
+  const robotsResponse = await request.get(`${pagesOrigin}/robots.txt`);
+  expect(robotsResponse.ok()).toBe(true);
+  expect(await robotsResponse.text()).toContain("Sitemap: https://serplists.com/sitemap.xml");
+  const allPageLocations = new Set<string>();
 
   for (const childLocation of childLocations) {
     const localLocation = childLocation.replace("https://serplists.com", pagesOrigin);
@@ -164,18 +183,26 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     expect(pageLocations.length).toBeGreaterThan(0);
     expect(pageLocations.length).toBeLessThanOrEqual(25_000);
     expect(new TextEncoder().encode(childXml).byteLength).toBeLessThanOrEqual(50 * 1024 * 1024);
-    expect(lastmods.length).toBeLessThanOrEqual(pageLocations.length);
-    if (
-      childLocation.includes("/pages/") ||
-      childLocation.includes("/templates/") ||
-      childLocation.includes("/categories/")
-    ) {
-      expect(lastmods).toHaveLength(pageLocations.length);
+    expect(lastmods).toHaveLength(pageLocations.length);
+    for (const location of pageLocations) {
+      expect(allPageLocations.has(location), `duplicate URL ${location}`).toBe(false);
+      allPageLocations.add(location);
     }
     expect(lastmods.every((value) => Number.isFinite(Date.parse(value)))).toBe(true);
     expect(childXml).not.toContain("<priority>");
     expect(childXml).not.toContain("<changefreq>");
+    await expectSchemaValid(childXml, sitemapSchema, new URL(childLocation).pathname);
+
+    const headResponse = await request.head(localLocation);
+    expect(headResponse.status(), childLocation).toBe(200);
+    expect(headResponse.headers()["content-type"]).toContain("application/xml");
+    expect(headResponse.headers()["cache-control"]).toContain("s-maxage=86400");
+    expect(await headResponse.text()).toBe("");
   }
+
+  expect((await request.get(`${pagesOrigin}/sitemaps/profiles/999999.xml`)).status()).toBe(404);
+  expect((await request.get(`${pagesOrigin}/sitemaps/static.xml`, { maxRedirects: 0 })).status()).toBe(308);
+  expect((await request.get(`${pagesOrigin}/categories/sitemap.xml`, { maxRedirects: 0 })).status()).toBe(308);
 });
 
 test("@smoke login link renders the login page without refresh", async ({ page }) => {

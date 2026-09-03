@@ -1,0 +1,94 @@
+import { readFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
+import { describe, expect, it } from 'vitest';
+
+const migration = (name: string) => readFileSync(
+  new URL(`../../../db/migrations/${name}`, import.meta.url),
+  'utf8',
+);
+
+describe('sitemap revision migrations', () => {
+  it('backfills real content dates and records public visibility removal', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec(`
+      PRAGMA foreign_keys = ON;
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY, username TEXT, name TEXT, avatar_url TEXT, email TEXT,
+        email_verified INTEGER, created_at TEXT NOT NULL, updated_at TEXT, auth_updated_at INTEGER
+      );
+      CREATE TABLE templates (
+        id TEXT PRIMARY KEY, user_id TEXT NOT NULL, owner_type TEXT NOT NULL,
+        team_id TEXT, is_public INTEGER, deleted_at TEXT, created_at TEXT NOT NULL,
+        updated_at TEXT, category TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      INSERT INTO users VALUES ('u1', 'alice', 'Alice', NULL, 'alice@example.com', 0, '2026-09-03 10:00:00', '2026-09-03T00:00:00Z', 1788498000000);
+      INSERT INTO templates VALUES (
+        't1', 'u1', 'user', NULL, 1, NULL, '2026-09-03 23:59:59', NULL, 'SEO'
+      );
+      INSERT INTO templates VALUES (
+        't2', 'u1', 'user', NULL, 1, NULL, '2026-09-03T00:00:00Z', NULL, 'SEO'
+      );
+    `);
+
+    db.exec(migration('0023_add_sitemap_revision_state.sql'));
+
+    const seeded = db.prepare(
+      `SELECT revised_at FROM sitemap_profile_revisions WHERE user_id = 'u1'`,
+    ).get() as { revised_at: string };
+    expect(seeded.revised_at).toBe('2026-09-04 05:00:00');
+    const templateFamily = db.prepare(
+      `SELECT revised_at FROM sitemap_revisions WHERE kind = 'templates'`,
+    ).get() as { revised_at: string };
+    expect(templateFamily.revised_at).toBe('2026-09-04 05:00:00');
+
+    db.exec(`UPDATE sitemap_revisions SET revised_at = '2000-01-01 00:00:00.000'`);
+    db.exec(`UPDATE sitemap_profile_revisions SET revised_at = '2000-01-01 00:00:00.000'`);
+    db.exec(`UPDATE sitemap_owner_revisions SET revised_at = '2000-01-01 00:00:00.000'`);
+    db.exec(`UPDATE sitemap_category_revisions SET revised_at = '2000-01-01 00:00:00.000'`);
+    db.exec(`UPDATE users SET email='new@example.com', email_verified=1, auth_updated_at=1788584400000 WHERE id='u1'`);
+    db.exec(`INSERT INTO users VALUES ('u2', NULL, 'Private', NULL, 'private@example.com', 1, '2026-09-04 00:00:00', NULL, 1788584400000)`);
+    expect(db.prepare(`SELECT kind, revised_at FROM sitemap_revisions ORDER BY kind`).all()).toEqual([
+      { kind: 'categories', revised_at: '2000-01-01 00:00:00.000' },
+      { kind: 'profiles', revised_at: '2000-01-01 00:00:00.000' },
+      { kind: 'templates', revised_at: '2000-01-01 00:00:00.000' },
+    ]);
+    expect(db.prepare(`SELECT COUNT(*) count FROM sitemap_profile_revisions WHERE user_id='u2'`).get()).toEqual({ count: 0 });
+    expect(db.prepare(`SELECT revised_at FROM sitemap_owner_revisions WHERE user_id='u1'`).get()).toEqual({ revised_at: '2000-01-01 00:00:00.000' });
+
+    db.exec(`UPDATE users SET username='alice_new', name='Alice New', avatar_url='https://example.com/a.png' WHERE id='u1'`);
+    expect(db.prepare(`SELECT kind FROM sitemap_revisions WHERE revised_at > '2000-01-01 00:00:00.000' ORDER BY kind`).all().map((row) => row.kind)).toEqual([
+      'categories', 'profiles', 'templates',
+    ]);
+    expect((db.prepare(`SELECT revised_at FROM sitemap_owner_revisions WHERE user_id='u1'`).get() as { revised_at: string }).revised_at).not.toBe('2000-01-01 00:00:00.000');
+
+    db.exec(`UPDATE sitemap_revisions SET revised_at = '2000-01-01 00:00:00.000'`);
+    db.exec(`UPDATE sitemap_owner_revisions SET revised_at = '2000-01-01 00:00:00.000'`);
+    db.exec(`UPDATE users SET avatar_url='https://example.com/profile-only.png' WHERE id='u1'`);
+    expect(db.prepare(`SELECT kind FROM sitemap_revisions WHERE revised_at > '2000-01-01 00:00:00.000' ORDER BY kind`).all().map((row) => row.kind)).toEqual(['profiles']);
+    expect(db.prepare(`SELECT revised_at FROM sitemap_owner_revisions WHERE user_id='u1'`).get()).toEqual({ revised_at: '2000-01-01 00:00:00.000' });
+
+    db.exec(`UPDATE sitemap_revisions SET revised_at = '2000-01-01 00:00:00.000'`);
+    db.exec(`UPDATE sitemap_profile_revisions SET revised_at = '2000-01-01 00:00:00.000'`);
+    db.exec(`UPDATE sitemap_owner_revisions SET revised_at = '2000-01-01 00:00:00.000'`);
+    db.exec(`UPDATE templates SET is_public = 0 WHERE id = 't1'`);
+
+    const revisedKinds = db.prepare(
+      `SELECT kind FROM sitemap_revisions WHERE revised_at > '2000-01-01 00:00:00.000' ORDER BY kind`,
+    ).all().map((row) => row.kind);
+    const profileRevision = db.prepare(
+      `SELECT revised_at FROM sitemap_profile_revisions WHERE user_id = 'u1'`,
+    ).get() as { revised_at: string };
+
+    expect(revisedKinds).toEqual(['categories', 'profiles', 'templates']);
+    expect(profileRevision.revised_at).not.toBe('2000-01-01 00:00:00.000');
+    expect(db.prepare(`SELECT revised_at FROM sitemap_owner_revisions WHERE user_id='u1'`).get()).toEqual({ revised_at: '2000-01-01 00:00:00.000' });
+
+    db.exec(`DELETE FROM users WHERE id='u1'`);
+    expect(db.prepare(`SELECT COUNT(*) count FROM templates WHERE user_id='u1'`).get()).toEqual({ count: 0 });
+    expect(db.prepare(`SELECT COUNT(*) count FROM sitemap_profile_revisions WHERE user_id='u1'`).get()).toEqual({ count: 0 });
+    expect(db.prepare(`SELECT COUNT(*) count FROM sitemap_owner_revisions WHERE user_id='u1'`).get()).toEqual({ count: 0 });
+
+    db.close();
+  });
+});

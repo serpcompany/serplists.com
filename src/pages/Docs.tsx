@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { SEOHead } from '@/components/shared/SEOHead';
 import {
   IconBadge,
   PageHero,
@@ -125,7 +126,14 @@ const surfaces = [
 
 const Docs = () => {
   return (
-    <PageSection as="main" spacing="lg" width="content">
+    <>
+      <SEOHead
+        title="Internal Prototype Map"
+        description="Internal map of product prototype surfaces."
+        robots="noindex, nofollow"
+        url="https://serplists.com/docs"
+      />
+      <PageSection as="main" spacing="lg" width="content">
       <PageHero
         align="center"
         eyebrow="Prototype map"
@@ -187,7 +195,8 @@ const Docs = () => {
             );
           })}
       </div>
-    </PageSection>
+      </PageSection>
+    </>
   );
 };
 

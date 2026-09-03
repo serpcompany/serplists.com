@@ -42,7 +42,7 @@
     },
     {
       "path": "/categories",
-      "lastmod": "2026-04-25T10:19:04.000Z"
+      "lastmod": "2026-09-03T17:19:31.000Z"
     }
   ],
   "templates": [
@@ -76,5 +76,12 @@
       "contentHash": "692ff5e3adb9599bf759376dfaba06a7148a27713787f76d3153bbf7ee5dc048",
       "lastmod": "2026-04-24T11:10:33.000Z"
     }
-  ]
+  ],
+  "inventory": {
+    "templatesHash": "af23fd31cdcca19cadfdbc90d94fbd953022ceb755be35a8afa6ba83cb084ea7",
+    "templatesLastmod": "2026-04-24T11:10:33.000Z",
+    "categoriesHash": "c524c19bb5a926954d28391ebfbff0e0a90c576a69500a76b25d215fdd28f9f2",
+    "categoriesLastmod": "2026-09-03T17:14:00.641Z",
+    "implementationLastmod": "2026-09-03T17:19:31.000Z"
+  }
 }

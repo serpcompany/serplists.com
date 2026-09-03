@@ -1,6 +1,7 @@
 import type { Env } from '../../api/types';
 import {
   bundledTemplateEntries,
+  bundledInventoryLastmod,
   catalogPageEntry,
   handlePagedDatabaseSitemap,
   isValidTemplateSlug,
@@ -20,15 +21,30 @@ type TemplateRow = {
 };
 
 export const onRequest: PagesFunction<Env> = async ({ request, env, params }) => {
+  const revision = await env.DB.prepare(
+    `SELECT revised_at FROM sitemap_revisions WHERE kind = 'templates'`,
+  ).first<{ revised_at: string }>();
+  const landingPage = catalogPageEntry('/templates');
   return handlePagedDatabaseSitemap<TemplateRow>({
     request,
     env,
     params,
-    prefixEntries: [catalogPageEntry('/templates'), ...bundledTemplateEntries()],
+    prefixEntries: [
+      {
+        ...landingPage,
+        lastmod: mostRecentLastmod(
+          landingPage.lastmod,
+          bundledInventoryLastmod('templates'),
+          revision?.revised_at,
+        ),
+      },
+      ...bundledTemplateEntries(),
+    ],
     sql: `SELECT u.username, t.slug, t.created_at, t.updated_at,
-                u.updated_at AS owner_updated_at
+                r.revised_at AS owner_updated_at
        FROM templates AS t
        JOIN users AS u ON u.id = t.user_id
+       LEFT JOIN sitemap_owner_revisions AS r ON r.user_id = u.id
       WHERE ${PUBLIC_TEMPLATE_SQL_WHERE}
         AND ${VALID_TEMPLATE_SLUG_SQL}
         AND ${VALID_USERNAME_SQL}
