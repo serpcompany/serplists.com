@@ -161,7 +161,7 @@ export function isValidTemplateSlug(value: string): boolean {
 }
 
 export function buildInMemoryShardIndex(
-  kind: 'static' | 'categories',
+  kind: 'pages' | 'categories',
   entries: SitemapEntry[],
 ): SitemapEntry[] {
   const pages = Math.ceil(entries.length / SITEMAP_PAGE_SIZE);

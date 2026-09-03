@@ -49,7 +49,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   );
   const categoryEntries = await loadCategoryEntries(env);
   const entries = [
-    ...buildInMemoryShardIndex('static', staticSitemapEntries()),
+    ...buildInMemoryShardIndex('pages', staticSitemapEntries()),
     ...buildInMemoryShardIndex('categories', categoryEntries),
     ...buildDatabaseShardIndex('profiles', profileCount),
     ...buildDatabaseShardIndex('templates', templateCount),

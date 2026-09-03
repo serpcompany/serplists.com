@@ -5,7 +5,7 @@ import { validateXML } from 'xmllint-wasm';
 import { onRequest as sitemapIndex } from '../../../functions/sitemap.xml';
 import { onRequest as categoriesSitemap } from '../../../functions/sitemaps/categories/[page].xml';
 import { onRequest as profilesSitemap } from '../../../functions/sitemaps/profiles/[page].xml';
-import { onRequest as staticSitemap } from '../../../functions/sitemaps/static/[page].xml';
+import { onRequest as pagesSitemap } from '../../../functions/sitemaps/pages/[page].xml';
 import { onRequest as templatesSitemap } from '../../../functions/sitemaps/templates/[page].xml';
 
 const sitemapSchema = readFileSync(new URL('../../fixtures/sitemap.xsd', import.meta.url), 'utf8');
@@ -81,7 +81,8 @@ describe('public sitemap HTTP responses', () => {
     expect(response.headers.get('content-type')).toContain('application/xml');
     expect(response.headers.get('cache-control')).toContain('s-maxage=86400');
     expect(xml).toContain('<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
-    expect(xml).toContain('<loc>https://serplists.com/sitemaps/static/1.xml</loc>');
+    expect(xml).toContain('<loc>https://serplists.com/sitemaps/pages/1.xml</loc>');
+    expect(xml).not.toContain('/sitemaps/static/');
     expect(xml).toContain('<loc>https://serplists.com/sitemaps/categories/1.xml</loc>');
     expect(xml).toContain('<loc>https://serplists.com/sitemaps/profiles/1.xml</loc>');
     expect(xml).toContain('<loc>https://serplists.com/sitemaps/profiles/2.xml</loc>');
@@ -94,7 +95,7 @@ describe('public sitemap HTTP responses', () => {
   });
 
   it('publishes canonical static pages and bundled public templates', async () => {
-    const response = await request(staticSitemap, '/sitemaps/static/1.xml', {
+    const response = await request(pagesSitemap, '/sitemaps/pages/1.xml', {
       params: { page: '1' },
     });
     const xml = await response.text();
@@ -108,7 +109,7 @@ describe('public sitemap HTTP responses', () => {
     expect(xml).not.toContain('/checklists');
     expect(xml).not.toContain('<priority>');
     expect(xml).not.toContain('<changefreq>');
-    await expectValidXml(xml, sitemapSchema, 'static-sitemap.xml');
+    await expectValidXml(xml, sitemapSchema, 'pages-sitemap.xml');
   });
 
   it('publishes deduplicated database and bundled-template categories', async () => {
@@ -224,7 +225,7 @@ describe('public sitemap HTTP responses', () => {
   });
 
   it('supports HEAD without returning an XML body', async () => {
-    const response = await request(staticSitemap, '/sitemaps/static/1.xml', {
+    const response = await request(pagesSitemap, '/sitemaps/pages/1.xml', {
       method: 'HEAD',
       params: { page: '1' },
     });

@@ -130,7 +130,7 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
   const indexResponse = await request.get(`${pagesOrigin}/sitemap.xml`);
   const indexXml = await indexResponse.text();
   const childLocations = Array.from(
-    indexXml.matchAll(/<loc>(https:\/\/serplists\.com\/sitemaps\/(?:static|categories|profiles|templates)\/\d+\.xml)<\/loc>/g),
+    indexXml.matchAll(/<loc>(https:\/\/serplists\.com\/sitemaps\/(?:pages|categories|profiles|templates)\/\d+\.xml)<\/loc>/g),
     (match) => match[1],
   );
 
@@ -138,6 +138,7 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
   expect(indexResponse.headers()["content-type"]).toContain("application/xml");
   expect(indexXml).toContain("<sitemapindex");
   expect(indexXml).not.toContain("?page=");
+  expect(indexXml).not.toContain("/sitemaps/static/");
   expect(childLocations.length).toBeGreaterThan(0);
   expect(indexXml).not.toContain("<lastmod>");
   expect(indexXml.match(/<sitemap>/g)?.length ?? 0).toBeLessThanOrEqual(50_000);
@@ -164,7 +165,7 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     expect(pageLocations.length).toBeLessThanOrEqual(25_000);
     expect(new TextEncoder().encode(childXml).byteLength).toBeLessThanOrEqual(50 * 1024 * 1024);
     expect(lastmods.length).toBeLessThanOrEqual(pageLocations.length);
-    if (childLocation.includes("/static/") || childLocation.includes("/templates/")) {
+    if (childLocation.includes("/pages/") || childLocation.includes("/templates/")) {
       expect(lastmods.length).toBeGreaterThan(0);
     }
     expect(lastmods.every((value) => Number.isFinite(Date.parse(value)))).toBe(true);
