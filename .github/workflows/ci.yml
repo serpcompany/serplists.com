@@ -24,49 +24,91 @@ env:
 
 jobs:
   quality:
-    name: Quality Gate
+    name: Required / Quality
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: "22"
+          node-version-file: .node-version
           cache: pnpm
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Validate environment contract
         run: pnpm run typecheck:env
-
       - name: Lint
         run: pnpm run lint
-
       - name: Typecheck
         run: pnpm run typecheck
+      - name: Unit tests
+        run: pnpm run test:run
 
+  database:
+    name: Required / Database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify migration provenance
+        env:
+          MIGRATION_PROVENANCE_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'push' && github.event.before || format('{0}^', github.sha) }}
+        run: pnpm run check:data:migration-provenance -- --base "$MIGRATION_PROVENANCE_BASE_SHA" --report-dir tmp/data-reports/ci
       - name: Verify Drizzle D1 schema contract
         env:
           SCHEMA_CONTRACT_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'push' && github.event.before || format('{0}^', github.sha) }}
         run: pnpm run check:data:schema-contract -- --report-dir tmp/data-reports/ci
+      - name: Verify generated schema snapshot
+        run: pnpm run db:schema:snapshot:check
+      - name: Upload database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-gate-${{ github.run_id }}
+          path: tmp/data-reports/ci/
+          if-no-files-found: error
+          retention-days: 90
 
-      - name: Unit tests
-        run: pnpm run test:run
-
+  data-regressions:
+    name: Required / Data regressions
+    needs:
+      - quality
+      - database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
-
       - name: Data regression gate
         run: pnpm run test:data-regressions -- --report-dir tmp/data-reports/ci
-
       - name: Upload data regression evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,5 +121,24 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+  build:
+    name: Required / Build
+    needs:
+      - quality
+      - database
+      - data-regressions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
       - name: Build
         run: pnpm run build

@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": "22.x",
+    "pnpm": "9.2.0"
+  },
   "scripts": {
     "dev": "node scripts/dev-auto.mjs frontend",
     "dev:api": "node scripts/dev-auto.mjs api",
@@ -31,6 +35,7 @@
     "test:run": "vitest run",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:hooks": "vitest run scripts/hooks/hook-enforcement.test.mjs",
     "test:smoke": "node scripts/run-playwright-smoke.mjs",
     "test:data-regressions": "tsx scripts/data/run-data-regression-suite.ts",
     "test:e2e": "playwright test",

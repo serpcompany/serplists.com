@@ -23,14 +23,25 @@ pnpm run verify:prod:d1
 ### CI and automated deploy (GitHub Actions)
 `ci.yml` runs on pull requests and pushes to `main` or `staging`:
 
+- `Required / Quality`
+- `Required / Database`
+- `Required / Data regressions`
+- `Required / Build`
+
+Branch rules must require all four names exactly. The database and regression
+jobs run in GitHub Actions independently of local Git hooks, because
+`git commit --no-verify` and `git push --no-verify` can bypass local hooks.
+
 - frozen install
 - env contract validation
 - lint
 - typecheck
 - unit/integration tests
+- migration provenance and Drizzle/D1 schema contract
+- generated schema snapshot verification
+- data regressions with JSON, JUnit, and human-readable evidence
 - build
 - Playwright Chromium install
-- smoke tests
 
 `cloudflare-pages-deploy.yml` runs staging on pushes to `staging`. Production is
 manual-dispatch only from the exact reviewed `main` commit:

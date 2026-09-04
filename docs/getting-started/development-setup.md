@@ -158,9 +158,13 @@ pnpm run test:e2e -- tests/e2e/team-invite-flow.spec.ts
 ```
 
 ## Git hooks
-Hooks are installed via `pnpm install` (prepare). If needed:
+Use Node 22 (recorded in `.node-version`) and pnpm 9.2.0 (recorded in
+`package.json`). Hooks are installed and verified by `pnpm install` through the
+`prepare` script. The installer also removes the obsolete `.husky/_`
+`core.hooksPath` value before asking Lefthook to install into Git's standard
+hooks directory. If needed, rerun the repository installer:
 ```bash
-pnpm exec lefthook install
+pnpm run prepare
 ```
 
 If pnpm reports that lefthook build scripts were ignored, run:
@@ -168,3 +172,9 @@ If pnpm reports that lefthook build scripts were ignored, run:
 pnpm approve-builds
 ```
 Then re-run the install command above.
+
+Pre-commit includes migration provenance and schema-contract checks. Pre-push
+adds the generated schema snapshot and full data-regression suite. Git's
+`--no-verify` option can bypass local hooks, so local success is advisory; pull
+requests are independently enforced by the required CI checks documented in
+the operations playbook.

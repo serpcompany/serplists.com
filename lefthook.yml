@@ -9,6 +9,10 @@ pre-commit:
       run: pnpm typecheck
     typecheck-env:
       run: pnpm typecheck:env
+    migration-provenance:
+      run: pnpm run check:data:migration-provenance -- --base HEAD --report-dir tmp/data-reports/pre-commit
+    schema-contract:
+      run: pnpm run check:data:schema-contract -- --report-dir tmp/data-reports/pre-commit
     unit-tests:
       run: pnpm test:unit
 
@@ -23,8 +27,16 @@ pre-push:
       run: pnpm typecheck
     typecheck-env:
       run: pnpm typecheck:env
+    migration-provenance:
+      run: pnpm run check:data:migration-provenance -- --report-dir tmp/data-reports/pre-push
+    schema-contract:
+      run: pnpm run check:data:schema-contract -- --report-dir tmp/data-reports/pre-push
+    schema-snapshot:
+      run: pnpm run db:schema:snapshot:check
     unit-tests:
       run: pnpm test:unit
+    data-regressions:
+      run: pnpm run test:data-regressions -- --report-dir tmp/data-reports/pre-push
     smoke-tests:
       run: pnpm test:smoke
     e2e-tests:
