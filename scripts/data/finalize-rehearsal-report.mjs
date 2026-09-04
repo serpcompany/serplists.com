@@ -5,6 +5,7 @@ import { writeDataCheckReports } from "./reporting.mjs";
 import { validateRehearsalRecoveryEvidence } from "./rehearsal-recovery-lib.mjs";
 import { loadSanitizerPolicy, validateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
 import { resolveRehearsalPlan, validateCoverageMatch } from "./rehearsal-plan-lib.mjs";
+import { validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
 function arg(name) { const i = process.argv.indexOf(name); return i < 0 ? null : process.argv[i + 1]; }
 try {
   const source = JSON.parse(readFileSync(arg("--source"), "utf8"));
@@ -17,7 +18,8 @@ try {
   const invariants = JSON.parse(readFileSync(arg("--comparison"), "utf8"));
   const sanitizedManifest = JSON.parse(readFileSync(arg("--sanitizer-manifest"), "utf8"));
   const authenticated = source.authenticatedRehearsal;
-  if (authenticated?.verdict !== "pass" || authenticated.commit !== arg("--commit") || authenticated.target?.environment !== "local" || authenticated.sanitizerArtifactSha256 !== sanitizedManifest.artifact?.sha256 || authenticated.migrationRange?.from !== (arg("--migration-from") === "none" ? null : arg("--migration-from")) || authenticated.migrationRange?.to !== (arg("--migration-to") === "none" ? null : arg("--migration-to")) || !authenticated.checks?.templateRead || !authenticated.checks?.runRead || !authenticated.checks?.templateWrite || !authenticated.checks?.runWrite || authenticated.checks?.falseEmptyDetection !== "pass" || authenticated.checks?.apiErrorDetection !== "pass") throw new Error("Authenticated candidate-handler rehearsal evidence is incomplete or not bound to the sanitized artifact.");
+  validateAuthenticatedCandidateEvidence(authenticated, { requireDetectors: true });
+  if (authenticated.commit !== arg("--commit") || authenticated.target?.environment !== "local" || authenticated.sanitizerArtifactSha256 !== sanitizedManifest.artifact?.sha256 || authenticated.migrationRange?.from !== (arg("--migration-from") === "none" ? null : arg("--migration-from")) || authenticated.migrationRange?.to !== (arg("--migration-to") === "none" ? null : arg("--migration-to"))) throw new Error("Authenticated candidate-handler rehearsal evidence is incomplete or not bound to the sanitized artifact.");
   const recovery = validateRehearsalRecoveryEvidence({
     evidence: JSON.parse(readFileSync(arg("--recovery"), "utf8")),
     sourceDatabaseId: arg("--database-id"),

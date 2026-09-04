@@ -10,6 +10,7 @@ import { resolveRemoteD1Identity } from "./wrangler-identity-lib.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runRepositoryGit, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
+import { runProductionIdentityBoundCommand } from "./production-identity-bound-command-lib.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const childEnv = sanitizedGitEnvironment();
@@ -44,9 +45,11 @@ try {
   if (database === "unknown" || environment === "unknown" || local === remote) {
     throw new Error("Usage: check-pending-migrations --database NAME --label ENV (--local | --remote) [--preview] [--persist-to PATH]");
   }
-  const wranglerArguments = ["exec", "wrangler", "d1", "migrations", "list", database, local ? "--local" : "--remote"];
-  if (preview) wranglerArguments.push("--preview");
-  if (persistTo) wranglerArguments.push("--persist-to", persistTo);
+  const assertedDatabaseId = readArg("--database-id") ?? process.env.D1_DATABASE_ID;
+  if (environment === "production" && remote && !assertedDatabaseId) throw new Error("Production migration verification requires the exact allowlisted database UUID.");
+  const d1Arguments = ["d1", "migrations", "list", database, local ? "--local" : "--remote"];
+  if (preview) d1Arguments.push("--preview");
+  if (persistTo) d1Arguments.push("--persist-to", persistTo);
   resolvedIdentity = local
     ? { databaseId: `local:${database}`, databaseName: database }
     : resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
@@ -55,15 +58,18 @@ try {
     const adjacent = resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
     if (adjacent.databaseId !== resolvedIdentity.databaseId || adjacent.databaseName !== resolvedIdentity.databaseName) throw new Error("D1 identity changed during migration-list verification.");
   };
-  assertAdjacentIdentity();
-  const output = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", wranglerArguments, {
-    cwd: repoRoot,
-    encoding: "utf8",
-    env: childEnv,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  assertAdjacentIdentity();
-  const assertedDatabaseId = readArg("--database-id") ?? process.env.D1_DATABASE_ID;
+  const runWrangler = (args) => execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "wrangler", ...args], { cwd: repoRoot, encoding: "utf8", env: childEnv, stdio: ["ignore", "pipe", "pipe"] });
+  let output;
+  let identityChecks = [];
+  if (environment === "production" && remote) {
+    const bound = runProductionIdentityBoundCommand({ environment, database: { databaseName: database, databaseId: assertedDatabaseId }, operation: "pending-migration-list", commandArgs: d1Arguments, runWrangler });
+    output = bound.output;
+    identityChecks = [bound.observedIdentity];
+  } else {
+    assertAdjacentIdentity();
+    output = runWrangler(d1Arguments);
+    assertAdjacentIdentity();
+  }
   if (assertedDatabaseId && assertedDatabaseId !== resolvedIdentity.databaseId) {
     throw new Error(`Resolved database ID ${resolvedIdentity.databaseId} does not match asserted ID ${assertedDatabaseId}.`);
   }
@@ -80,6 +86,7 @@ try {
     mode: local ? "local" : preview ? "preview" : "remote",
     pendingMigrations: parsePendingMigrationNames(output),
   });
+  report.identityChecks = identityChecks;
   const summary = renderPendingMigrationSummary(report);
   const paths = writeDataCheckReports({ name: `pending-migrations-${environment}`, report, summary, reportDirectory });
   console.log(summary);

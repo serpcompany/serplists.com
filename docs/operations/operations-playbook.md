@@ -118,7 +118,7 @@ pnpm run db:reset
 pnpm run db:migrations:list:local
 pnpm run db:migrate:d1:local
 pnpm run db:migrations:list:staging
-pnpm run db:migrations:list:prod
+pnpm run db:migrations:check:prod
 ```
 
 Staging and production mutation commands intentionally exit non-zero outside

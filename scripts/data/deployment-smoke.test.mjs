@@ -104,6 +104,45 @@ describe("postdeploy authenticated data smoke", () => {
     expect(evidence.template.restoredTitle).toBe("Original");
   });
 
+  it("does not overwrite an intervening template update", async () => {
+    const state = { id: "template-1", title: "Original", version: 3 };
+    let templateGets = 0;
+    const request = async (requestPath, init = {}) => {
+      if (requestPath.includes("templates")) {
+        if (init.method === "PUT") { const body = JSON.parse(init.body); state.title = body.title; state.version += 1; return { status: 200, rows: { ...state } }; }
+        templateGets += 1;
+        if (templateGets === 2) { state.title = "Legitimate concurrent title"; state.version += 1; }
+        return { status: 200, rows: { ...state } };
+      }
+      return { status: 500, rows: {} };
+    };
+    const evidence = await exerciseControlledCanaryMutation({ template: { ...state }, run: { id: "run-1", progress: 10, revision: 2 }, request });
+    expect(state.title).toBe("Legitimate concurrent title");
+    expect(evidence.template.restoreError).toMatch(/concurrently/i);
+  });
+
+  it("does not overwrite an intervening run update", async () => {
+    const state = { template: { id: "template-1", title: "Original", version: 3 }, run: { id: "run-1", progress: 10, revision: 2 } };
+    let runGets = 0;
+    const request = async (requestPath, init = {}) => {
+      const record = requestPath.includes("templates") ? state.template : state.run;
+      if (init.method === "PUT") {
+        const body = JSON.parse(init.body);
+        if (record === state.template) { record.title = body.title; record.version += 1; }
+        else { record.progress = body.progress; record.revision += 1; }
+        return { status: 200, rows: { ...record } };
+      }
+      if (record === state.run) {
+        runGets += 1;
+        if (runGets === 2) { record.progress = 77; record.revision += 1; }
+      }
+      return { status: 200, rows: { ...record } };
+    };
+    const evidence = await exerciseControlledCanaryMutation({ template: { ...state.template }, run: { ...state.run }, request });
+    expect(state.run.progress).toBe(77);
+    expect(evidence.run.restoreError).toMatch(/concurrently/i);
+  });
+
   it("emits only privacy-safe canary checks and a keyed digest", () => {
     const serialized = JSON.stringify(evaluateDeploymentSmoke(passing));
     for (const sentinel of ["template-1", "run-1", "Canary [write probe]", "\"originalTitle\"", "\"originalProgress\""]) expect(serialized).not.toContain(sentinel);

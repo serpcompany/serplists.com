@@ -41,10 +41,12 @@ export async function exerciseControlledCanaryMutation({ template, run, request 
         const currentVersion = Number(current.rows?.version);
         evidence.template.readbackTitle ??= current.rows?.title ?? null;
         evidence.template.readbackVersion = Number.isFinite(evidence.template.readbackVersion) ? evidence.template.readbackVersion : currentVersion;
-        if (current.rows?.title !== evidence.template.originalTitle) {
+        if (current.rows?.title === evidence.template.originalTitle) {
+          evidence.template.restoreStatus = 200;
+        } else if (current.rows?.title === evidence.template.probeTitle && currentVersion === evidence.template.originalVersion + 1) {
           const restore = await request(`/api/templates/${evidence.template.id}`, { method: "PUT", body: JSON.stringify({ title: evidence.template.originalTitle, expected_version: currentVersion }) });
           evidence.template.restoreStatus = restore.status;
-        } else evidence.template.restoreStatus = 200;
+        } else throw new Error("Template canary state changed concurrently; automatic restoration refused.");
         evidence.template.restoredTitle = (await request(`/api/templates/${evidence.template.id}`)).rows?.title ?? null;
       } catch (error) { evidence.template.restoreError = error instanceof Error ? error.message : String(error); }
     }
@@ -54,10 +56,12 @@ export async function exerciseControlledCanaryMutation({ template, run, request 
         const currentRevision = Number(current.rows?.revision);
         evidence.run.readbackProgress = Number.isFinite(evidence.run.readbackProgress) ? evidence.run.readbackProgress : Number(current.rows?.progress);
         evidence.run.readbackRevision = Number.isFinite(evidence.run.readbackRevision) ? evidence.run.readbackRevision : currentRevision;
-        if (Number(current.rows?.progress) !== evidence.run.originalProgress) {
+        if (Number(current.rows?.progress) === evidence.run.originalProgress) {
+          evidence.run.restoreStatus = 200;
+        } else if (Number(current.rows?.progress) === evidence.run.probeProgress && currentRevision === evidence.run.originalRevision + 1) {
           const restore = await request(`/api/checklists/${evidence.run.id}`, { method: "PUT", body: JSON.stringify({ progress: evidence.run.originalProgress, expected_revision: currentRevision }) });
           evidence.run.restoreStatus = restore.status;
-        } else evidence.run.restoreStatus = 200;
+        } else throw new Error("Run canary state changed concurrently; automatic restoration refused.");
         evidence.run.restoredProgress = Number((await request(`/api/checklists/${evidence.run.id}`)).rows?.progress);
       } catch (error) { evidence.run.restoreError = error instanceof Error ? error.message : String(error); }
     }

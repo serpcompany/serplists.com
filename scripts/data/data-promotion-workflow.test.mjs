@@ -511,6 +511,7 @@ describe("protected staging and production data-promotion workflow", () => {
       expect(text).toContain("data_canary_template_id");
       expect(text).toContain("data_canary_run_id");
       expect(text).toContain("data_canary_mutation_approved");
+      expect(text).toContain("data_canary_evidence_hmac_key");
       expect(text).toMatch(/read write readback restore/i);
     }
   });

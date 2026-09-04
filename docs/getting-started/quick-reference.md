@@ -51,7 +51,7 @@ gh run list --workflow cloudflare-pages-deploy.yml --branch staging
 
 # Production readiness, non-destructive
 pnpm run verify:prod:d1
-pnpm run db:migrations:list:prod
+pnpm run db:migrations:check:prod
 pnpm run check:prod:d1-schema
 gh workflow view cloudflare-pages-deploy.yml
 gh run list --workflow cloudflare-pages-deploy.yml --branch main
