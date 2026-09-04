@@ -1,6 +1,9 @@
 export function buildDataRegressionReport({
   commit,
   workingTreeDirty = false,
+  workingTreeDirtyPaths = [],
+  workspaceCleanlinessVerdict = "not-enforced",
+  unexpectedFilesystemChanges = [],
   target,
   migrationRange,
   checks,
@@ -28,19 +31,24 @@ export function buildDataRegressionReport({
     invariants.verdict === "fail";
   const browserFailure = browserEvidence.applicable === true && browserEvidence.verdict !== "pass";
   const namedChecksPass = checks.every((check) => check.verdict === "pass");
-  const verdict = namedChecksPass && teardown.verdict === "pass" && !invariantFailure && !browserFailure
+  const workspaceFailure = workspaceCleanlinessVerdict === "fail";
+  const verdict = namedChecksPass && teardown.verdict === "pass" && !invariantFailure && !browserFailure && !workspaceFailure
     ? "pass"
     : "fail";
   const evidenceChecks = [
     { name: "invariant verdict", verdict: invariantFailure ? "fail" : "pass" },
     { name: "teardown verdict", verdict: teardown.verdict === "pass" ? "pass" : "fail" },
     { name: "browser evidence verdict", verdict: browserFailure ? "fail" : "pass" },
+    { name: "workspace cleanliness verdict", verdict: workspaceFailure ? "fail" : "pass" },
     { name: "overall verdict", verdict },
   ];
   return {
     check: "data-regression-suite",
     commit,
     workingTreeDirty,
+    workingTreeDirtyPaths,
+    workspaceCleanlinessVerdict,
+    unexpectedFilesystemChanges,
     target,
     migrationRange,
     checks,
@@ -62,6 +70,9 @@ export function renderDataRegressionMarkdown(report) {
     `- Database: ${report.target.databaseName} (${report.target.databaseId})`,
     `- Commit: ${report.commit}`,
     `- Working tree dirty: ${report.workingTreeDirty ? "yes" : "no"}`,
+    `- Dirty paths: ${report.workingTreeDirtyPaths.join(", ") || "none"}`,
+    `- CI workspace cleanliness: ${report.workspaceCleanlinessVerdict}`,
+    `- Unexpected filesystem changes: ${report.unexpectedFilesystemChanges.map((entry) => `${entry.change}:${entry.path}`).join(", ") || "none"}`,
     `- Migration range: ${report.migrationRange.from} -> ${report.migrationRange.to}`,
     "",
     "## Checks",

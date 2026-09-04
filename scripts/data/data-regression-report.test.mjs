@@ -17,6 +17,9 @@ describe("data regression evidence report", () => {
       const report = buildDataRegressionReport({
         commit: "0123456789abcdef0123456789abcdef01234567",
         workingTreeDirty: false,
+        workingTreeDirtyPaths: [],
+        workspaceCleanlinessVerdict: "pass",
+        unexpectedFilesystemChanges: [],
         target: {
           environment: "local",
           databaseName: "serp-checklists-db",
@@ -50,6 +53,8 @@ describe("data regression evidence report", () => {
       expect(JSON.parse(readFileSync(paths.json, "utf8"))).toMatchObject({
         target: { environment: "local", databaseId: "local:miniflare:DB@isolated-regression" },
         workingTreeDirty: false,
+        workingTreeDirtyPaths: [],
+        unexpectedFilesystemChanges: [],
         teardown: { verdict: "pass" },
       });
       expect(readFileSync(paths.junit, "utf8")).toContain('failures="0"');
@@ -84,6 +89,40 @@ describe("data regression evidence report", () => {
       expect(junit).toContain('name="browser evidence verdict"');
       expect(junit).toContain('name="invariant verdict"');
       expect(junit).toContain('name="overall verdict"');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("fails reports and JUnit when CI produced unexpected workspace changes", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "data-regression-dirty-report-"));
+    try {
+      const report = buildDataRegressionReport({
+        commit: "0123456789abcdef0123456789abcdef01234567",
+        workingTreeDirty: true,
+        workingTreeDirtyPaths: ["src/generated.ts"],
+        workspaceCleanlinessVerdict: "fail",
+        unexpectedFilesystemChanges: [{ path: ".env", change: "created" }],
+        target: { environment: "local", databaseName: "db", databaseId: "local:db", binding: "DB" },
+        migrationRange: { from: "0023.sql", to: "0024.sql" },
+        checks: [{ name: "named check", verdict: "pass" }],
+        invariants: { changedCounts: 0, foreignKeyViolations: 0, invalidJson: 0 },
+        teardown: { leakedUsers: 0, leakedTemplates: 0, leakedRuns: 0, leakedSmokeStatePaths: 0, verdict: "pass" },
+        browserEvidence: { applicable: false, failureArtifacts: [] },
+      });
+      const paths = writeDataCheckReports({
+        name: "data-regression-suite",
+        report,
+        summary: renderDataRegressionMarkdown(report),
+        reportDirectory: directory,
+      });
+      const junit = readFileSync(paths.junit, "utf8");
+
+      expect(report.verdict).toBe("fail");
+      expect(report.workingTreeDirtyPaths).toEqual(["src/generated.ts"]);
+      expect(report.unexpectedFilesystemChanges).toEqual([{ path: ".env", change: "created" }]);
+      expect(junit).toContain('name="workspace cleanliness verdict"');
+      expect(junit).toMatch(/failures="[1-9][0-9]*"/);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

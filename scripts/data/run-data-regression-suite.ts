@@ -8,6 +8,12 @@ import { loadEnvironmentInventory } from "./environment-identity-lib.mjs";
 import { runProductionShapedMigrationMatrix } from "./production-shaped-migration-matrix";
 import { writeDataCheckReports } from "./reporting.mjs";
 import { runFixtureTeardownProbe } from "./teardown-probe";
+import {
+  captureWorkspaceMetadata,
+  compareWorkspaceMetadata,
+  evaluateWorkspaceCleanliness,
+  parsePorcelainStatus,
+} from "./workspace-cleanliness-lib.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
@@ -20,6 +26,15 @@ const reportDirectory = path.resolve(
 const rawVitestReport = path.join(reportDirectory, "data-regression-vitest.json");
 const browserTeardownReportPath = path.join(reportDirectory, "browser-smoke-teardown.json");
 const browserJsonReportPath = path.join(reportDirectory, "browser-smoke-playwright.json");
+const reportRoot = path.join(repoRoot, "tmp", "data-reports");
+if (
+  reportDirectory !== reportRoot &&
+  !reportDirectory.startsWith(`${reportRoot}${path.sep}`)
+) {
+  throw new Error(`Report directory must stay under ${reportRoot}.`);
+}
+const reportDirectoryRelative = path.relative(repoRoot, reportDirectory);
+const filesystemBefore = captureWorkspaceMetadata({ repoRoot });
 
 interface VitestAssertionResult {
   fullName?: string;
@@ -222,10 +237,6 @@ const commit = execFileSync("git", ["rev-parse", "HEAD"], {
   cwd: repoRoot,
   encoding: "utf8",
 }).trim();
-const workingTreeDirty = execFileSync("git", ["status", "--porcelain"], {
-  cwd: repoRoot,
-  encoding: "utf8",
-}).trim().length > 0;
 let fixtureTeardown: {
   leakedUsers: number;
   leakedTemplates: number;
@@ -242,9 +253,37 @@ try {
 } catch {
   // Keep the fail-closed observed-state default.
 }
+const workingTreeDirtyPaths = parsePorcelainStatus(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], {
+  cwd: repoRoot,
+  encoding: "utf8",
+}));
+const filesystemChanges = compareWorkspaceMetadata({
+  before: filesystemBefore,
+  after: captureWorkspaceMetadata({ repoRoot }),
+});
+const workspaceCleanliness = evaluateWorkspaceCleanliness({
+  ci: process.env.CI === "1" || process.env.CI === "true",
+  paths: workingTreeDirtyPaths,
+  filesystemChanges,
+  allowedOutputRoots: [
+    reportDirectoryRelative,
+    "tests/test-results",
+    "playwright-report",
+    "dist",
+    ".wrangler/smoke-state",
+  ],
+});
+checks.push({
+  name: "CI workspace cleanliness",
+  test: "data regression execution leaves no unexpected tracked unignored or ignored paths",
+  verdict: workspaceCleanliness.verdict === "fail" ? "fail" : "pass",
+});
 const report = buildDataRegressionReport({
   commit,
-  workingTreeDirty,
+  workingTreeDirty: workspaceCleanliness.dirty,
+  workingTreeDirtyPaths: workspaceCleanliness.paths,
+  workspaceCleanlinessVerdict: workspaceCleanliness.verdict,
+  unexpectedFilesystemChanges: workspaceCleanliness.unexpectedFilesystemChanges,
   target: {
     environment: "local",
     databaseName: inventory.environments.local.databaseName,

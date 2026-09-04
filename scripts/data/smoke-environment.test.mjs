@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildSmokeExecutionPolicy,
   buildPlaywrightServerCommands,
   buildSmokeChildEnvironment,
 } from "./smoke-environment-lib.mjs";
@@ -37,11 +38,29 @@ describe("isolated smoke child environment", () => {
       persistPath: ".wrangler/smoke-state",
     });
 
+    expect(commands.setup).not.toContain("dotenv");
+    expect(commands.setup).toContain("sitemap:check");
+    expect(commands.setup).not.toContain("sitemap:generate");
+    expect(commands.setup).toContain("vite build --mode development");
     expect(commands.frontend).not.toContain("dotenv");
+    expect(commands.frontend).toContain("vite preview");
+    expect(commands.frontend).not.toContain("vite --host");
     expect(commands.api).not.toContain(".dev.vars");
     expect(commands.api).not.toContain("build:dev");
+    expect(commands.api).not.toContain("vite build");
     expect(commands.api).toContain("tests/fixtures/playwright-safe.env");
     expect(commands.api).toContain("-b USESEND_API_KEY=");
     expect(commands.api).toContain("-b RESEND_API_KEY=");
+  });
+
+  it("serializes the isolated shared-state browser matrix instead of load-testing a cold local server", () => {
+    expect(buildSmokeExecutionPolicy({ isolated: true })).toEqual({
+      fullyParallel: false,
+      workers: 1,
+    });
+    expect(buildSmokeExecutionPolicy({ isolated: false })).toEqual({
+      fullyParallel: true,
+      workers: undefined,
+    });
   });
 });

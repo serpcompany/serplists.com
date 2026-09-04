@@ -4,7 +4,10 @@ import { rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findOpenPortPair } from "./dev-auto-lib.mjs";
-import { buildSmokeChildEnvironment } from "./data/smoke-environment-lib.mjs";
+import {
+  buildPlaywrightServerCommands,
+  buildSmokeChildEnvironment,
+} from "./data/smoke-environment-lib.mjs";
 import { cleanupSmokeState } from "./data/smoke-teardown-lib.mjs";
 
 const DEFAULT_SMOKE_FRONTEND_PORT = 4173;
@@ -16,6 +19,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
 const smokePersistPath = path.join(".wrangler", "smoke-state");
 const smokePersistAbsolutePath = path.resolve(repoRoot, smokePersistPath);
+const smokeTransientAbsolutePath = path.resolve(repoRoot, ".wrangler", "tmp");
 const teardownReportPath = path.resolve(
   repoRoot,
   process.env.PLAYWRIGHT_TEARDOWN_REPORT ?? "tmp/data-reports/browser-smoke-teardown.json",
@@ -50,6 +54,7 @@ function prepareSmokeD1() {
   }
 
   rmSync(smokePersistAbsolutePath, { recursive: true, force: true });
+  rmSync(smokeTransientAbsolutePath, { recursive: true, force: true });
   run(
     NPX_COMMAND,
     [
@@ -117,10 +122,27 @@ if (shouldPickOpenPorts) {
 
 try {
   prepareSmokeD1();
+  const setupCommands = buildPlaywrightServerCommands({
+    isolated: true,
+    hasDevVars: false,
+    frontendHost: "localhost",
+    frontendPort: env.PLAYWRIGHT_FRONTEND_PORT,
+    apiPort: env.PLAYWRIGHT_API_PORT,
+    frontendUrlForApi: env.FRONTEND_URL,
+    corsAllowedOrigins: env.FRONTEND_URL,
+    betterAuthSecret: "playwright-local-better-auth-secret-32-chars",
+    persistPath: smokePersistPath,
+  });
+  if (!setupCommands.setup) throw new Error("Isolated smoke setup command is missing.");
+  run(process.platform === "win32" ? "cmd.exe" : "sh", [
+    ...(process.platform === "win32" ? ["/d", "/s", "/c"] : ["-c"]),
+    setupCommands.setup,
+  ]);
 } catch (error) {
   cleanupSmokeState({
     repoRoot,
     statePath: smokePersistAbsolutePath,
+    transientPaths: [smokeTransientAbsolutePath],
     reportPath: teardownReportPath,
   });
   throw error;
@@ -141,6 +163,7 @@ child.on("exit", (code, signal) => {
   const teardown = cleanupSmokeState({
     repoRoot,
     statePath: smokePersistAbsolutePath,
+    transientPaths: [smokeTransientAbsolutePath],
     reportPath: teardownReportPath,
   });
   if (signal) {
@@ -155,6 +178,7 @@ child.on("error", (error) => {
   cleanupSmokeState({
     repoRoot,
     statePath: smokePersistAbsolutePath,
+    transientPaths: [smokeTransientAbsolutePath],
     reportPath: teardownReportPath,
   });
   console.error(error instanceof Error ? error.message : String(error));

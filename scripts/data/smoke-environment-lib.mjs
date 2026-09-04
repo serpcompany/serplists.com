@@ -25,6 +25,12 @@ export function buildSmokeChildEnvironment(parentEnvironment) {
   );
 }
 
+export function buildSmokeExecutionPolicy({ isolated }) {
+  return isolated
+    ? { fullyParallel: false, workers: 1 }
+    : { fullyParallel: true, workers: undefined };
+}
+
 export function buildPlaywrightServerCommands({
   isolated,
   hasDevVars,
@@ -36,21 +42,24 @@ export function buildPlaywrightServerCommands({
   betterAuthSecret,
   persistPath,
 }) {
+  const setup = isolated
+    ? "pnpm run sitemap:check && pnpm exec vite build --mode development"
+    : null;
   const frontend = !isolated && hasDevVars
     ? `pnpm exec dotenv -e .dev.vars -- vite --host ${frontendHost} --port ${frontendPort} --strictPort`
-    : `pnpm exec vite --host ${frontendHost} --port ${frontendPort} --strictPort`;
-  const build = isolated
-    ? "pnpm run sitemap:generate && pnpm exec vite build --mode development"
-    : "pnpm run build:dev";
+    : isolated
+      ? `pnpm exec vite preview --host ${frontendHost} --port ${frontendPort} --strictPort`
+      : `pnpm exec vite --host ${frontendHost} --port ${frontendPort} --strictPort`;
+  const build = isolated ? "" : "pnpm run build:dev && ";
   const envFile = isolated
     ? " --env-file tests/fixtures/playwright-safe.env"
     : hasDevVars ? " --env-file .dev.vars" : "";
   const persist = persistPath ? ` --persist-to ${persistPath}` : "";
   const api =
-    `${build} && npx wrangler pages dev ./dist --local --port ${apiPort}${envFile}${persist} ` +
+    `${build}npx wrangler pages dev ./dist --local --port ${apiPort}${envFile}${persist} ` +
     `-b FRONTEND_URL=${frontendUrlForApi} ` +
     `-b CORS_ALLOWED_ORIGINS=${corsAllowedOrigins} ` +
     `-b BETTER_AUTH_SECRET=${betterAuthSecret} ` +
     `-b USESEND_API_KEY= -b RESEND_API_KEY=`;
-  return { frontend, api };
+  return { setup, frontend, api };
 }

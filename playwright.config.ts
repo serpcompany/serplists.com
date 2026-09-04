@@ -1,6 +1,9 @@
 import { defineConfig } from "@playwright/test";
 import { existsSync } from "node:fs";
-import { buildPlaywrightServerCommands } from "./scripts/data/smoke-environment-lib.mjs";
+import {
+  buildPlaywrightServerCommands,
+  buildSmokeExecutionPolicy,
+} from "./scripts/data/smoke-environment-lib.mjs";
 
 const frontendHost = process.env.PLAYWRIGHT_FRONTEND_HOST ?? "localhost";
 const frontendPort = process.env.PLAYWRIGHT_FRONTEND_PORT ?? "4173";
@@ -35,6 +38,9 @@ const serverCommands = buildPlaywrightServerCommands({
   betterAuthSecret,
   persistPath: wranglerPersistFlag,
 });
+const executionPolicy = buildSmokeExecutionPolicy({
+  isolated: process.env.PLAYWRIGHT_USE_DEV_VARS === "0",
+});
 const reporter = process.env.PLAYWRIGHT_JSON_REPORT
   ? [
       ["list"] as const,
@@ -47,7 +53,8 @@ process.env.VITE_API_URL ??= apiBaseUrl;
 export default defineConfig({
   testDir: "./tests/e2e",
   outputDir: "tests/test-results",
-  fullyParallel: true,
+  fullyParallel: executionPolicy.fullyParallel,
+  workers: executionPolicy.workers,
   reporter,
   use: {
     baseURL: frontendBaseUrl,

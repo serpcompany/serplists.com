@@ -10,18 +10,28 @@ describe("smoke state teardown", () => {
   it("removes isolated state and reports observed zero leaks", () => {
     const root = mkdtempSync(path.join(tmpdir(), "smoke-teardown-"));
     const statePath = path.join(root, ".wrangler/smoke-state");
+    const transientPath = path.join(root, ".wrangler/tmp");
     const reportPath = path.join(root, "tmp/data-reports/browser-smoke-teardown.json");
     mkdirSync(statePath, { recursive: true });
     writeFileSync(path.join(statePath, "state.sqlite"), "synthetic");
+    mkdirSync(transientPath, { recursive: true });
+    writeFileSync(path.join(transientPath, "bundle.js"), "synthetic");
     try {
-      const report = cleanupSmokeState({ repoRoot: root, statePath, reportPath });
+      const report = cleanupSmokeState({
+        repoRoot: root,
+        statePath,
+        transientPaths: [transientPath],
+        reportPath,
+      });
       expect(report).toMatchObject({
         existedBefore: true,
         existsAfter: false,
         leakedStatePaths: 0,
+        transientIdentities: [".wrangler/tmp"],
         verdict: "pass",
       });
       expect(existsSync(statePath)).toBe(false);
+      expect(existsSync(transientPath)).toBe(false);
       expect(JSON.parse(readFileSync(reportPath, "utf8"))).toEqual(report);
     } finally {
       rmSync(root, { recursive: true, force: true });

@@ -49,8 +49,12 @@ contains aggregate or synthetic evidence only.
 The command also runs learner-visible Playwright smoke journeys with isolated
 local state and an allowlisted child environment. Frontend, build, migration,
 and API child processes do not inherit developer secrets or load `.dev.vars`.
-Playwright retains a
-trace and screenshot on failure; their paths are listed in the report. When
+The runner builds the frontend once before either local server starts, serves
+that immutable artifact, and runs one browser worker against the suite's one
+shared D1 instance. This is a deterministic lifecycle matrix, not a load test;
+serial execution prevents cold compilation and concurrent shared-database load
+from consuming the test timeout. Playwright retains a trace and screenshot on
+failure; their paths are listed in the report. When
 #97 wires the promotion job, it must upload those browser artifacts alongside
 the database reports.
 
@@ -68,3 +72,18 @@ the browser execution. The later standalone build remains as the production
 build verification. Issue #97 still owns making staging and production deploy
 jobs depend on this required CI gate and installing the production execution
 boundary.
+
+The report records every tracked or unignored dirty workspace path. It also
+captures a before/after filesystem inventory using path, type, size, and
+modification-time metadata only; it never reads file contents. `.git/` and
+`node_modules/` are excluded as immutable repository/dependency internals, but
+ignored paths everywhere else remain visible to the comparison.
+
+Local runs show existing developer edits as `not-enforced`. CI starts from a
+clean checkout and fails the aggregate if the suite creates or changes any
+tracked, unignored, or ignored path outside this exact allowlist: the selected
+directory under `tmp/data-reports/`, `tests/test-results/`,
+`playwright-report/`, `dist/`, and `.wrangler/smoke-state/`. Broad ignored roots
+such as `tmp/`, `.env*`, `*.log`, `*.tmp`, `out/`, `.next/`, `coverage/`, and
+`.codex/` are not trusted. The smoke wrapper removes Wrangler's separate
+`.wrangler/tmp/` scratch output and reports a leak if cleanup fails.
