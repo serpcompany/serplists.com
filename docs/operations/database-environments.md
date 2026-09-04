@@ -1,141 +1,314 @@
-# Database Environments
+# Database Environment Operations
 
-SERP Lists uses Cloudflare D1 through the `DB` binding. Do not let preview
-deployments share the production D1 database.
+The binding rules in
+[`docs/agents/database-change-and-data-promotion.md`](../agents/database-change-and-data-promotion.md)
+are authoritative. This page documents how to operate the guarded tooling; it
+does not grant permission to mutate staging or production.
 
-## Environment Model
+## Inventory and identities
 
-- Local: Miniflare D1 state under `.wrangler/`, reset with `pnpm run db:reset`.
-- Staging: remote D1 database named `serp-checklists-staging-db`, used by Pages preview deployments.
-- Production: remote D1 database named `serp-checklists-db`, used only by production deployments.
+The non-secret inventory is
+[`scripts/data/environment-inventory.json`](../../scripts/data/environment-inventory.json).
+It records the `DB` binding, name/ID policy, purpose, desired migration level,
+data classification, and operator for local, staging, rehearsal, and
+production.
 
-## Source Of Truth
+- Local identity is the Miniflare storage mode plus its explicit persistence
+  path. It never needs Cloudflare credentials.
+- Staging is the checked-in preview UUID and must agree with both preview D1
+  fields in `wrangler.toml`.
+- Rehearsal is an ephemeral remote D1 whose exact name and UUID are supplied at
+  runtime. Names must start with `serp-checklists-rehearsal-`.
+- Production is the checked-in production UUID. The general data command
+  refuses production fixture, import, migration-apply, and teardown operations.
 
-- Runtime schema/types: `db/schema/*.ts`.
-- Applied database ledger: D1's `d1_migrations` table.
-- Migration files: numbered SQL files in `db/migrations/`.
-- Seed SQL: `db/seeds/`.
-- Maintenance SQL: `db/maintenance/`.
-- Snapshot reference only: `db/schema.sql`.
-
-Do not put seed data into `db/migrations/`. If a data migration must run as part
-of deploy history, make it idempotent, numbered, and name it clearly.
-
-## Create Staging D1
-
-```bash
-npx wrangler d1 create serp-checklists-staging-db
-```
-
-Paste the returned database UUID into both staging fields in `wrangler.toml`:
-
-- top-level `preview_database_id`, used by Wrangler `--preview` D1 commands
-- `[[env.preview.d1_databases]].database_id`, used by Cloudflare Pages preview deployments
-
-Cloudflare Pages supports only `production` and `preview` environment overrides
-in `wrangler.toml`, so this one staging database is the shared DB for all preview
-deployments.
-
-The Pages deploy workflow runs `pnpm run check:preview:d1-binding` for non-main
-branches and will fail preview/staging deploys until both preview D1 fields are
-set to the same staging UUID and that UUID differs from production.
-
-Staging DB commands intentionally target the `DB` binding with Wrangler's
-`--preview` flag. Do not change them back to the staging database name directly;
-that bypasses the preview binding configuration Wrangler uses for Pages preview
-deployments.
-
-## Apply Schema
-
-Local:
+All commands are dry runs unless `--execute` is present. Every invocation emits
+the environment, binding, database name, exact database identity, Git commit,
+and repository migration range before it can execute. Remote operations query
+D1 by the allowlisted name and compare the live name and UUID with the report.
+A mismatch stops the operation before the action command runs.
 
 ```bash
-pnpm run db:migrations:list:local
-pnpm run db:migrate:d1:local
+node scripts/data/data-command.mjs migration-ledger --environment local
+node scripts/data/data-command.mjs migration-ledger --environment staging
+node scripts/data/data-command.mjs identify --environment production
 ```
 
-Staging:
+The ledger command is evidence of applied/pending state; the repository range
+alone is not evidence that a database is current.
+
+## Deterministic fixtures
+
+The fixture contract is
+[`scripts/data/fixture-inventory.json`](../../scripts/data/fixture-inventory.json).
+Setup deletes and recreates exactly one reserved user, template, and run with
+fixed IDs and timestamps. It creates no password, credential account, or
+session. Teardown deletes only those exact IDs and fails if the returned counts
+are not all zero. Repeating setup produces the same logical data.
+
+For an isolated local run:
 
 ```bash
-pnpm run db:migrations:list:staging
-pnpm run db:migrate:d1:staging
-pnpm run db:seed:official:staging
-pnpm run check:staging:d1-schema
+node scripts/data/data-command.mjs migration-apply \
+  --environment local \
+  --persist-to .wrangler/rehearsals/issue-95
+
+node scripts/data/data-command.mjs migration-apply \
+  --environment local \
+  --persist-to .wrangler/rehearsals/issue-95 \
+  --execute
+
+node scripts/data/data-command.mjs fixture-setup \
+  --environment local \
+  --persist-to .wrangler/rehearsals/issue-95
+
+# Inspect the printed target and command, then opt in.
+node scripts/data/data-command.mjs fixture-setup \
+  --environment local \
+  --persist-to .wrangler/rehearsals/issue-95 \
+  --execute
+
+node scripts/data/data-command.mjs fixture-teardown \
+  --environment local \
+  --persist-to .wrangler/rehearsals/issue-95 \
+  --execute
 ```
 
-Production:
+The staging authenticated smoke identity is the non-secret label
+`staging-data-smoke-v1`. Its credential comes only from a protected staging
+environment secret and it may be provisioned only through the authenticated
+application API. Tests must not invent accounts, use arbitrary signups, reuse
+customer identities, or write production. The staging release operator owns
+its teardown.
+
+## Production-shaped rehearsal
+
+Raw production data must never enter Git, fixtures, logs, reports, or an
+ordinary local test. The separate #97 production executor will create two
+different exports:
+
+- `recovery-export` is the complete protected backup and never enters a
+  rehearsal or sanitizer input.
+- `sanitizer-source-export` uses Wrangler's verified `--no-schema` data-only
+  form and exists only long enough for the repo-owned sanitizer to read it.
+
+There is no caller-written safety declaration. The only accepted sanitizer is
+the allowlisted `synthetic-production-shaped-v1` implementation in
+[`scripts/data/sanitizer-policy.json`](../../scripts/data/sanitizer-policy.json).
+It deliberately carries no source values forward. It emits the fixed,
+reviewable synthetic lifecycle profile plus a strict manifest containing the
+source-export hash, hashed source database identity, Git commit, generator,
+source date, issue, generation time, requested approver identity, retention
+deadline, artifact hash, template hash, and manifest-integrity hash. These
+unkeyed hashes detect accidental or post-generation byte changes; they do not
+authenticate the author or authorize an operation.
+
+The generated SQL contains no email, UUID-like identifier, customer/person
+name, private content, authentication/billing table, password, or token. Import
+requires an exact byte match with the repo-owned profile and rejects unknown
+manifest fields, unknown sanitizer versions, non-allowlisted requested
+identities, expired retention, or changed integrity hashes. The supplied source
+database UUID must exactly equal the checked-in production inventory UUID; the
+manifest retains only its hash. An arbitrary manifest field such as
+`containsDirectIdentifiers=false` has no authority.
+
+Inside the protected staging workflow, generate the artifact rather than
+writing a manifest:
 
 ```bash
-pnpm run db:migrations:list:prod
-pnpm run db:migrate:d1:prod
-pnpm run check:prod:d1-schema
+node scripts/data/sanitize-rehearsal-export.mjs \
+  --input tmp/data-evidence/private-source-data.sql \
+  --output tmp/data-evidence/synthetic-rehearsal-data.sql \
+  --manifest tmp/data-evidence/synthetic-rehearsal-data.manifest.json \
+  --source-database-id PRODUCTION_UUID \
+  --source-date YYYY-MM-DD \
+  --issue 95 \
+  --approver-identity ALLOWLISTED_REQUESTED_IDENTITY \
+  --retention-deadline RFC3339_WITHIN_24_HOURS \
+  --execute
 ```
 
-Wrangler records applied migrations in `d1_migrations` and applies only pending
-migrations.
+The raw source input must be inside ignored `tmp/data-evidence/`. The sanitizer
+deletes that raw input after success and also on validation or request-context
+failure once it has safely resolved the contained path. Inputs outside that
+directory are refused and never deleted. The synthetic SQL and its generated
+manifest are the only import inputs.
 
-Seed policy:
-
-- Local: `pnpm run db:seed` includes test users, team fixtures, team invites, team entitlement overrides, audit fixtures, and official templates.
-- Staging: use `pnpm run db:seed:official:staging` for official templates only unless there is a deliberate test-data plan.
-- Production: do not seed test users or team fixtures.
-
-## Non-Destructive Release Checks
-
-Use these before promoting a branch. They verify bindings, list migration
-state, and check schema drift without applying migrations.
-
-Staging/preview:
+Create a unique rehearsal resource:
 
 ```bash
-pnpm run verify:staging
+node scripts/data/data-command.mjs rehearsal-create \
+  --database-name serp-checklists-rehearsal-issue-95
+
+node scripts/data/data-command.mjs rehearsal-create \
+  --database-name serp-checklists-rehearsal-issue-95 \
+  --execute
 ```
 
-Production:
+Record the returned UUID. Every later write requires that UUID twice: once as
+the target and once as explicit confirmation. First inspect the identity and
+ledger, then apply the migration chain and import the integrity-checked
+synthetic artifact:
 
 ```bash
-pnpm run verify:prod:d1
+node scripts/data/data-command.mjs migration-ledger \
+  --environment rehearsal \
+  --database-name serp-checklists-rehearsal-issue-95 \
+  --database-id REHEARSAL_UUID \
+  --execute
+
+node scripts/data/data-command.mjs migration-apply \
+  --environment rehearsal \
+  --database-name serp-checklists-rehearsal-issue-95 \
+  --database-id REHEARSAL_UUID \
+  --confirm-database-id REHEARSAL_UUID \
+  --execute
+
+node scripts/data/data-command.mjs rehearsal-import \
+  --environment rehearsal \
+  --database-name serp-checklists-rehearsal-issue-95 \
+  --database-id REHEARSAL_UUID \
+  --confirm-database-id REHEARSAL_UUID \
+  --input /protected/path/sanitized.sql \
+  --manifest /protected/path/manifest.json \
+  --execute
+
+node scripts/data/data-command.mjs invariant-capture \
+  --environment rehearsal \
+  --database-name serp-checklists-rehearsal-issue-95 \
+  --database-id REHEARSAL_UUID \
+  --execute
 ```
 
-## One-Time Baseline For Existing Databases
+The invariant query emits aggregate counts only: total/active/deleted rows,
+distinct-owner counts, JSON validity, and orphan counts. It never selects
+customer content or owner IDs.
 
-If a remote DB already has schema changes that were applied with
-`wrangler d1 execute`, it may not have D1 migration ledger rows yet. Do not run
-`db:migrate:d1:*` against that DB until the existing schema history is
-baselined.
+## Recovery evidence
 
-Example for production that already has everything through `0020`:
+D1 Time Travel is remote-only. Capture a bookmark for staging or an isolated
+rehearsal before a risky rehearsal step:
 
 ```bash
-pnpm run db:migrations:baseline:prod -- --through 0020
-pnpm run db:migrations:baseline:prod -- --through 0020 --execute
-pnpm run db:migrations:list:prod
-pnpm run db:migrate:d1:prod
-pnpm run check:prod:d1-schema
+node scripts/data/data-command.mjs recovery-bookmark \
+  --environment rehearsal \
+  --database-name serp-checklists-rehearsal-issue-95 \
+  --database-id REHEARSAL_UUID \
+  --execute
 ```
 
-Use `--through 0021` only if the teams/audit migration has already been applied
-outside Wrangler migrations. Fresh staging databases do not need a baseline.
-
-## Preview Deployment Checklist
-
-1. Confirm `wrangler.toml` has both `preview_database_id` and `[[env.preview.d1_databases]].database_id` pointing at staging, not production.
-2. Run `pnpm run verify:staging`.
-3. Run `pnpm run db:migrate:d1:staging` only when pending migrations are expected.
-4. Run `pnpm run check:staging:d1-schema`.
-5. Deploy a preview branch and verify new data lands in staging, not production.
-6. Exercise a team create/invite/accept flow in preview before promoting team-related changes.
-
-## Production Safety
-
-- Back up production before production migrations:
+Schema-only exports use `export`. Data exports use the separate
+`rehearsal-export` operation, which accepts only a sanitized rehearsal identity
+and requires exact UUID confirmation. Wrangler writes a temporary
+`--no-schema` export, the command verifies that it contains only the repo-owned
+synthetic identities and allowlisted tables, removes migration-ledger rows by
+normalizing back to the reviewed profile, and deletes the raw intermediate.
+The resulting file imports cleanly after migrations have already built a fresh
+schema. All exports must stay under ignored
+`tmp/data-evidence/` so data cannot be casually added to Git:
 
 ```bash
-npx wrangler d1 export serp-checklists-db --remote --output ./tmp/backups/serp-checklists-db-YYYY-MM-DD.sql
+node scripts/data/data-command.mjs rehearsal-export \
+  --environment rehearsal \
+  --database-name serp-checklists-rehearsal-issue-95 \
+  --database-id REHEARSAL_UUID \
+  --confirm-database-id REHEARSAL_UUID \
+  --approver-identity ALLOWLISTED_REQUESTED_IDENTITY \
+  --output tmp/data-evidence/issue-95-rehearsal.sql \
+  --execute
 ```
 
-- Never use ad hoc `wrangler d1 execute serp-checklists-db --remote --file=...`
-  for schema changes. Use `pnpm run db:migrate:d1:prod` so D1 records the migration.
-- Keep preview and production Pages secrets separate in Cloudflare.
-- Run `pnpm run verify:prod:d1` before promoting staging to production.
-- Confirm team audit/history tables exist before deploying code that writes team or template history.
+A production bookmark/export/source-export is never executable from the
+general data CLI. Even a caller that sets every GitHub-looking environment
+variable receives a blocking error before Wrangler runs. The general command
+may render the exact production plan for review only. Issue #97 must implement
+the separate executor whose non-forgeable credential/OIDC boundary and GitHub
+Environment approval authorize the production action.
+
+Remote rehearsal imports and sanitizer execution record workflow-request
+fields for the exact Git SHA, repository, environment label, run ID, workflow
+name, and requested approver. Those fields are explicitly
+`unverified-request-metadata`: environment variables can be imitated and are
+not proof of authorization, identity, or approval. They become trustworthy
+evidence only when #97 binds them to signed/OIDC-backed workflow evidence.
+
+Production recovery uses `recovery-bookmark` followed by `recovery-export`;
+the sanitizer source uses the distinct `sanitizer-source-export`. Schema-only
+inspection uses `export`. Plan all three and inspect their printed identities;
+never add `--execute` in the general CLI. Time Travel restore is
+intentionally absent from the general command because it overwrites a database
+in place and requires fresh approval for the exact recovery action.
+
+## Retention and teardown
+
+The operator named in the import manifest owns access and cleanup. Remove the
+sanitized SQL, manifest, exported evidence containing data, protected staging
+identity, and ephemeral D1 by the recorded deadline. Reports may retain only
+non-private aggregate evidence.
+
+```bash
+node scripts/data/data-command.mjs rehearsal-teardown \
+  --environment rehearsal \
+  --database-name serp-checklists-rehearsal-issue-95 \
+  --database-id REHEARSAL_UUID \
+  --confirm-database-id REHEARSAL_UUID
+
+node scripts/data/data-command.mjs rehearsal-teardown \
+  --environment rehearsal \
+  --database-name serp-checklists-rehearsal-issue-95 \
+  --database-id REHEARSAL_UUID \
+  --confirm-database-id REHEARSAL_UUID \
+  --execute
+```
+
+The live name/UUID check occurs before deletion, and the delete command uses
+Wrangler's documented database-name argument. An unknown name, wrong UUID,
+production UUID, expired manifest, missing confirmation, or leaked fixture row
+is a blocking error.
+
+Data retention semantics do not change by environment: `deleted_at` is the
+soft-deletion marker, restoration clears it through reviewed application or
+maintenance behavior, and archival/lifecycle state remains domain data rather
+than an instruction to delete rows. Hard deletion and Time Travel restore are
+separate approved operations under the binding standard.
+
+## Temporary remote rehearsal identity proof
+
+After code review, the #95 verifier may create one empty non-production D1 only
+to prove the name/identity/delete guards. Use a unique run suffix and do not
+apply migrations or import data during this identity-only proof:
+
+```bash
+node scripts/data/data-command.mjs rehearsal-create \
+  --database-name serp-checklists-rehearsal-issue-95-run-suffix
+
+node scripts/data/data-command.mjs rehearsal-create \
+  --database-name serp-checklists-rehearsal-issue-95-run-suffix \
+  --execute
+
+node scripts/data/data-command.mjs identify \
+  --environment rehearsal \
+  --database-name serp-checklists-rehearsal-issue-95-run-suffix \
+  --database-id RETURNED_UUID \
+  --execute
+
+node scripts/data/data-command.mjs rehearsal-teardown \
+  --environment rehearsal \
+  --database-name serp-checklists-rehearsal-issue-95-run-suffix \
+  --database-id RETURNED_UUID \
+  --confirm-database-id RETURNED_UUID
+
+node scripts/data/data-command.mjs rehearsal-teardown \
+  --environment rehearsal \
+  --database-name serp-checklists-rehearsal-issue-95-run-suffix \
+  --database-id RETURNED_UUID \
+  --confirm-database-id RETURNED_UUID \
+  --execute
+```
+
+Expected evidence is: the create report names `rehearsal` and records the UUID
+returned by Cloudflare; `identify` resolves the same name and UUID; teardown
+prints the same exact identity before deletion; Wrangler reports successful
+deletion; and a final read-only D1 info lookup for the unique name reports that
+the resource no longer exists. Preserve command output with Git SHA and run
+suffix, but no credentials or database content.

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "binding": "DB",
+  "environments": {
+    "local": {
+      "databaseName": "serp-checklists-db",
+      "databaseId": "local:miniflare:DB",
+      "purpose": "Disposable developer database with deterministic repository fixtures",
+      "migrationLevel": "repository-latest",
+      "dataClassification": "developer-private-no-production-data",
+      "owner": "developer-or-agent",
+      "isRemote": false
+    },
+    "staging": {
+      "databaseName": "serp-checklists-staging-db",
+      "databaseId": "fcaf4325-5be7-4ead-ab60-45932a04177b",
+      "purpose": "Shared preview validation with dedicated controlled test identities",
+      "migrationLevel": "ledger-inspected-at-runtime",
+      "dataClassification": "synthetic-or-approved-sanitized",
+      "owner": "staging-release-operator",
+      "isRemote": true
+    },
+    "rehearsal": {
+      "databaseName": "serp-checklists-rehearsal-<issue-or-run>",
+      "databaseNamePattern": "^serp-checklists-rehearsal-[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
+      "databaseId": "runtime-required",
+      "purpose": "Ephemeral isolated migration and recovery rehearsal",
+      "migrationLevel": "ledger-inspected-at-runtime",
+      "dataClassification": "approved-sanitized-production-shaped",
+      "owner": "staging-release-operator",
+      "retentionHours": 24,
+      "isRemote": true
+    },
+    "production": {
+      "databaseName": "serp-checklists-db",
+      "databaseId": "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1",
+      "purpose": "Customer production data and authoritative migration ledger",
+      "migrationLevel": "ledger-inspected-at-runtime",
+      "dataClassification": "customer-confidential",
+      "owner": "protected-workflow-service-identity",
+      "isRemote": true
+    }
+  }
+}

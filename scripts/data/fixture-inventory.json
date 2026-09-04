@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "fixtureSet": "data-safety-v1",
+  "allowedEnvironments": ["local", "staging", "rehearsal"],
+  "identity": {
+    "userId": "data-safety-fixture-user-v1",
+    "email": "data-safety-fixture@staging.serplists.invalid",
+    "templateId": "data-safety-fixture-template-v1",
+    "runId": "data-safety-fixture-run-v1"
+  },
+  "authenticatedTestIdentity": {
+    "label": "staging-data-smoke-v1",
+    "allowedEnvironments": ["staging", "rehearsal"],
+    "credentialSource": "protected-staging-environment-secret",
+    "provisioning": "authenticated-api-only",
+    "teardownOwner": "staging-release-operator"
+  },
+  "expectedCounts": {
+    "users": 1,
+    "templates": 1,
+    "checklistRuns": 1
+  },
+  "setupSql": "scripts/data/sql/deterministic-fixtures.sql",
+  "teardownSql": "scripts/data/sql/teardown-deterministic-fixtures.sql"
+}
