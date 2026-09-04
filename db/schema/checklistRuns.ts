@@ -7,7 +7,7 @@ export const checklist_runs = sqliteTable("checklist_runs", {
   template_id: text("template_id"),
   title: text("title").notNull(),
   items: text("items").notNull(),
-  status: text("status").notNull(),
+  status: text("status").default("in_progress"),
   started_at: text("started_at").notNull(),
   completed_at: text("completed_at"),
   created_by_user_id: text("created_by_user_id"),

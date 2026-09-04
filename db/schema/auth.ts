@@ -1,4 +1,7 @@
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+
+const currentTimestampMs = sql`(CAST(strftime('%s','now') AS INTEGER) * 1000)`;
 
 export const account = sqliteTable(
   "account",
@@ -14,8 +17,8 @@ export const account = sqliteTable(
     refreshTokenExpiresAt: integer("refresh_token_expires_at", { mode: "timestamp_ms" }),
     scope: text("scope"),
     password: text("password"),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(currentTimestampMs),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(currentTimestampMs),
   },
   (table) => [index("account_user_id_idx").on(table.userId)],
 );
@@ -26,8 +29,8 @@ export const session = sqliteTable(
     id: text("id").primaryKey(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
     token: text("token").notNull().unique(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(currentTimestampMs),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(currentTimestampMs),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
     userId: text("user_id").notNull(),
@@ -42,9 +45,8 @@ export const verification = sqliteTable(
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(currentTimestampMs),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(currentTimestampMs),
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
-

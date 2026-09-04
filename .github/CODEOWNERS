@@ -8,8 +8,6 @@
 /db/seeds/ @devinschumacher
 /db/maintenance/ @devinschumacher
 /scripts/check-preview-d1-binding.mjs @devinschumacher
-/scripts/check-production-d1-schema-lib.mjs @devinschumacher
-/scripts/check-production-d1-schema.mjs @devinschumacher
 /scripts/d1-baseline-migrations.mjs @devinschumacher
 /scripts/d1-reset-local.mjs @devinschumacher
 /scripts/cleanup-prod-test-users.sh @devinschumacher
