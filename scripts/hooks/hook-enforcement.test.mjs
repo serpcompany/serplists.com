@@ -9,6 +9,10 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
 const temporaryDirectories = [];
+// These cases intentionally launch real Git commits/pushes and Lefthook
+// subprocesses. Allow process startup contention without weakening timeouts for
+// the fast configuration-only assertion below.
+const gitIntegrationTimeout = 15_000;
 
 function run(command, args, { cwd, env = {} } = {}) {
   return spawnSync(command, args, {
@@ -115,7 +119,7 @@ describe("Git hook installation and enforcement", () => {
       env: { FAIL_PRE_PUSH: "1", HOOK_LOG: hookLog },
     });
     expect(blockedPush.status).not.toBe(0);
-  });
+  }, gitIntegrationTimeout);
 
   it("keeps remote database enforcement independent from bypassable local hooks", () => {
     const hooks = yaml.load(readFileSync(join(repositoryRoot, "lefthook.yml"), "utf8"));
@@ -160,5 +164,5 @@ describe("Git hook installation and enforcement", () => {
     expect(git(parent, ["config", "--local", "--list"]).stdout).toBe(parentConfigBefore);
     expect(readdirSync(join(parent, "parent-hooks"))).toEqual(parentHooksBefore);
     expect(readFileSync(join(parent, "parent-hooks", "sentinel"), "utf8")).toBe("parent must not change\n");
-  });
+  }, gitIntegrationTimeout);
 });
