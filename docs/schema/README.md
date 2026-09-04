@@ -6,7 +6,10 @@ User-facing examples live in [examples/README.md](/Users/devin/dev/repos/serplis
 
 ## Storage strategy (D1)
 - `templates.items` stores the full sections JSON today's UI uses (array of sections with nested items/contents).
-- `checklist_runs.items` stores the same sections JSON with completion state.
+- `checklist_runs.items` stores the current sections JSON with completion state.
+- Section, item, and sub-item `id` values are stable identities. Renaming or reordering must retain them.
+- `templates.content_version` advances only for checklist-structure changes. `checklist_runs.template_version` records the content version last applied; `revision` protects run writes from stale clients; `retired_items` preserves removed run state outside readiness calculations.
+- Migration `0024` first normalizes legacy flat item arrays into the canonical `Checklist` section, then backfills deterministic path identities into template/run JSON and marks linked legacy runs stale (`template_version = 0`) because historical divergence cannot be inferred safely.
 - `templates.category` and `templates.tags` store JSON arrays as text.
 - `templates.seo_title` and `templates.seo_description` store template SEO metadata.
 - Structured columns (`user_id`, `is_public`, `slug`, timestamps) remain relational for filtering and indexing.

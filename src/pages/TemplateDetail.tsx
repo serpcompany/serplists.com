@@ -154,6 +154,7 @@ const buildTemplateSavePayload = (
   categories: template.categories,
   tags: template.tags,
   slug: template.slug,
+  version: template.version,
 });
 
 const TemplateDetail = () => {

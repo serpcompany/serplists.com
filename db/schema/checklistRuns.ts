@@ -22,4 +22,7 @@ export const checklist_runs = sqliteTable("checklist_runs", {
   updated_at: text("updated_at"),
   deleted_at: text("deleted_at"),
   progress: integer("progress").default(0),
+  template_version: integer("template_version").notNull().default(1),
+  revision: integer("revision").notNull().default(1),
+  retired_items: text("retired_items").notNull().default("[]"),
 });

@@ -76,6 +76,7 @@ export const persistTemplateSave = async (
         tags,
         isPublic,
         rules: existingTemplate?.rules,
+        version: existingTemplate?.version,
       };
 
       await updateTemplate(updatePayload);

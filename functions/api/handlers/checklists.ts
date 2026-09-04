@@ -1,5 +1,5 @@
 import { Env } from '../types';
-import { and, desc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { checklistPayloadSchema, normalizeSectionsPayload, parseJsonArray } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
@@ -8,6 +8,7 @@ import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/enti
 import { buildAuditEventValues, type AuditSubject } from '../utils/audit';
 import { canManageTeam, canRunTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { z } from 'zod';
+import { calculateRunProgress, reconcileRunSections } from '../utils/template-reconciliation';
 
 function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: URL): string | null {
   return parsed.teamId ?? parsed.team_id ?? url.searchParams.get('teamId');
@@ -26,6 +27,32 @@ function parseOptionalJson(value: unknown): unknown {
   } catch {
     return null;
   }
+}
+
+const checklistRunSelect = {
+  ...getTableColumns(schema.checklist_runs),
+  current_template_version: sql<number | null>`(
+    SELECT content_version FROM templates WHERE templates.id = ${schema.checklist_runs.template_id}
+  )`,
+};
+
+function serializeChecklistRun(run: Record<string, unknown>) {
+  const templateVersion = typeof run.template_version === 'number' ? run.template_version : 1;
+  const currentTemplateVersion = typeof run.current_template_version === 'number'
+    ? run.current_template_version
+    : templateVersion;
+
+  return {
+    ...run,
+    current_template_version: currentTemplateVersion,
+    is_stale: currentTemplateVersion > templateVersion,
+  };
+}
+
+function batchUpdateMissed(result: unknown): boolean {
+  if (!isRecord(result)) return false;
+  const meta = result.meta;
+  return isRecord(meta) && typeof meta.changes === 'number' && meta.changes === 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -132,6 +159,7 @@ async function resolveTemplateRunSource(
     effectiveTeamId: string | null;
     sections: unknown[];
     title: string;
+    version: number;
   };
 }> {
   const db = createDb(env);
@@ -145,6 +173,7 @@ async function resolveTemplateRunSource(
       title: templates.title,
       items: templates.items,
       is_public: templates.is_public,
+      version: templates.content_version,
     })
     .from(templates)
     .where(and(eq(templates.id, templateId), isNull(templates.deleted_at)))
@@ -177,6 +206,7 @@ async function resolveTemplateRunSource(
       effectiveTeamId: isPrivateTeamTemplate ? sourceTeamId : requestedTeamId,
       sections: resetCompletionState(normalizedSections.sections) as unknown[],
       title: sourceTemplate.title || '',
+      version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
     },
   };
 }
@@ -198,7 +228,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
 
     if (request.method === 'GET') {
       const [checklist] = await db
-        .select()
+        .select(checklistRunSelect)
         .from(checklist_runs)
         .where(and(eq(checklist_runs.share_token, shareToken), eq(checklist_runs.is_public, true), isNull(checklist_runs.deleted_at)))
         .limit(1);
@@ -207,7 +237,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         return jsonError('Shared run not found', 404);
       }
 
-      return json(checklist);
+      return json(serializeChecklistRun(checklist as unknown as Record<string, unknown>));
     }
 
     if (request.method === 'PUT') {
@@ -223,7 +253,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
       }
 
-      const { sections, items, status, progress, completed_at } = parsed.data;
+      const { sections, items, status, progress, completed_at, expected_revision } = parsed.data;
       const rawBody = body as Record<string, unknown>;
 
       const updates: Record<string, unknown> = {};
@@ -262,7 +292,17 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         return jsonError('Shared run not found', 404);
       }
 
+      const currentRevision = typeof existingSharedRun.revision === 'number' ? existingSharedRun.revision : 1;
+      if (typeof expected_revision === 'number' && expected_revision !== currentRevision) {
+        return jsonError('Checklist run changed since it was loaded. Refresh before saving again.', 409, {
+          code: 'edit_conflict',
+          details: { expectedRevision: expected_revision, currentRevision },
+        });
+      }
+
       const now = new Date().toISOString();
+      updates.revision = currentRevision + 1;
+      updates.updated_at = now;
       const auditEvent = await buildAuditEventValues({
         actorUserId: userId,
         subject: getRunSubject(
@@ -278,15 +318,21 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         request,
         createdAt: now,
       });
-      await db.batch([
+      const batchResults = await db.batch([
         db
           .update(checklist_runs)
           .set(updates)
-          .where(and(eq(checklist_runs.id, existingSharedRun.id), eq(checklist_runs.share_token, shareToken), eq(checklist_runs.is_public, true), isNull(checklist_runs.deleted_at))),
+          .where(and(eq(checklist_runs.id, existingSharedRun.id), eq(checklist_runs.revision, currentRevision), eq(checklist_runs.share_token, shareToken), eq(checklist_runs.is_public, true), isNull(checklist_runs.deleted_at))),
         db.insert(audit_events).values(auditEvent),
       ]);
 
-      return json({ success: true });
+      if (batchUpdateMissed(batchResults[0])) {
+        return jsonError('Checklist run changed while it was being saved. Refresh before saving again.', 409, {
+          code: 'edit_conflict',
+        });
+      }
+
+      return json({ success: true, revision: currentRevision + 1 });
     }
 
     return new Response('Method Not Allowed', { status: 405 });
@@ -379,28 +425,28 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         }
 
         const checklists = await db
-          .select()
+          .select(checklistRunSelect)
           .from(checklist_runs)
           .where(and(eq(checklist_runs.team_id, teamId), isNotNull(checklist_runs.deleted_at)))
           .orderBy(desc(checklist_runs.updated_at));
 
-        return json(checklists);
+        return json(checklists.map((run) => serializeChecklistRun(run as unknown as Record<string, unknown>)));
       }
 
       const checklists = await db
-        .select()
+        .select(checklistRunSelect)
         .from(checklist_runs)
         .where(and(eq(checklist_runs.user_id, userId), isNull(checklist_runs.team_id), isNotNull(checklist_runs.deleted_at)))
         .orderBy(desc(checklist_runs.updated_at));
 
-      return json(checklists);
+      return json(checklists.map((run) => serializeChecklistRun(run as unknown as Record<string, unknown>)));
     }
 
     // GET /api/checklists/:id
     if (checklistsSubpath[0]) {
       const checklistId = checklistsSubpath[0];
       const [checklist] = await db
-        .select()
+        .select(checklistRunSelect)
         .from(checklist_runs)
         .where(and(eq(checklist_runs.id, checklistId), isNull(checklist_runs.deleted_at)))
         .limit(1);
@@ -409,7 +455,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         return jsonError('Checklist not found', 404);
       }
 
-      return json(checklist);
+      return json(serializeChecklistRun(checklist as unknown as Record<string, unknown>));
     }
 
     const teamId = url.searchParams.get('teamId');
@@ -420,21 +466,21 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
 
       const checklists = await db
-        .select()
+        .select(checklistRunSelect)
         .from(checklist_runs)
         .where(and(eq(checklist_runs.team_id, teamId), isNull(checklist_runs.deleted_at)))
         .orderBy(desc(checklist_runs.created_at));
 
-      return json(checklists);
+      return json(checklists.map((run) => serializeChecklistRun(run as unknown as Record<string, unknown>)));
     }
 
     const checklists = await db
-      .select()
+      .select(checklistRunSelect)
       .from(checklist_runs)
       .where(and(eq(checklist_runs.user_id, userId), isNull(checklist_runs.team_id), isNull(checklist_runs.deleted_at)))
       .orderBy(desc(checklist_runs.created_at));
 
-    return json(checklists);
+    return json(checklists.map((run) => serializeChecklistRun(run as unknown as Record<string, unknown>)));
   }
 
   if (request.method === 'POST') {
@@ -523,6 +569,107 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       return json({ success: true });
     }
 
+    // POST /api/checklists/:id/revalidate
+    if (checklistsSubpath[0] && checklistsSubpath[1] === 'revalidate') {
+      const checklistId = checklistsSubpath[0];
+      let body: unknown = {};
+      try {
+        body = await request.json();
+      } catch {
+        // An empty body is valid for explicit revalidation.
+      }
+      const revalidateBody = z.object({
+        expected_revision: z.number().int().positive().optional(),
+      }).safeParse(body);
+      if (!revalidateBody.success) {
+        return jsonError(revalidateBody.error.issues[0]?.message || 'Invalid revalidation payload', 400);
+      }
+
+      const [existingRun] = await db
+        .select()
+        .from(checklist_runs)
+        .where(and(eq(checklist_runs.id, checklistId), isNull(checklist_runs.deleted_at)))
+        .limit(1);
+      if (!existingRun || !(await canViewRun(env, existingRun as unknown as Record<string, unknown>, userId))) {
+        return jsonError('Checklist not found', 404);
+      }
+      if (!(await canUpdateRun(env, existingRun as unknown as Record<string, unknown>, userId))) {
+        return jsonError('Forbidden', 403);
+      }
+      if (existingRun.is_public) {
+        return jsonError('Shared runs must be made private before revalidation.', 409, { code: 'shared_run_conflict' });
+      }
+      if (!existingRun.template_id) {
+        return jsonError('Checklist run is not linked to a template.', 400);
+      }
+
+      const currentRevision = typeof existingRun.revision === 'number' ? existingRun.revision : 1;
+      if (typeof revalidateBody.data.expected_revision === 'number' && revalidateBody.data.expected_revision !== currentRevision) {
+        return jsonError('Checklist run changed since it was loaded. Refresh before revalidating.', 409, {
+          code: 'edit_conflict',
+          details: { expectedRevision: revalidateBody.data.expected_revision, currentRevision },
+        });
+      }
+
+      const [sourceTemplate] = await db
+        .select({ id: templates.id, items: templates.items, version: templates.content_version })
+        .from(templates)
+        .where(and(eq(templates.id, existingRun.template_id), isNull(templates.deleted_at)))
+        .limit(1);
+      if (!sourceTemplate) {
+        return jsonError('Source template not found', 404);
+      }
+
+      const previousSections = parseJsonArray(existingRun.items) ?? [];
+      const previousRetired = parseJsonArray(existingRun.retired_items) ?? [];
+      const templateSections = parseJsonArray(sourceTemplate.items) ?? [];
+      const reconciled = reconcileRunSections(previousSections, templateSections, previousRetired);
+      const now = new Date().toISOString();
+      const updates = {
+        items: JSON.stringify(reconciled.sections),
+        retired_items: JSON.stringify(reconciled.retired),
+        progress: calculateRunProgress(reconciled.sections),
+        template_version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
+        revision: currentRevision + 1,
+        status: 'in_progress',
+        completed_at: null,
+        completed_by_user_id: null,
+        updated_at: now,
+      };
+      const auditEvent = await buildAuditEventValues({
+        actorUserId: userId,
+        subject: getRunSubject(existingRun as unknown as Record<string, unknown>, userId),
+        resource: { type: 'checklist_run', id: checklistId },
+        action: 'checklist_run.revalidated',
+        before: existingRun as unknown as Record<string, unknown>,
+        after: { ...(existingRun as unknown as Record<string, unknown>), ...updates },
+        diff: updates,
+        request,
+        createdAt: now,
+      });
+      const batchResults = await db.batch([
+        db.update(checklist_runs).set(updates).where(and(
+          eq(checklist_runs.id, checklistId),
+          eq(checklist_runs.revision, currentRevision),
+          isNull(checklist_runs.deleted_at),
+        )),
+        db.insert(audit_events).values(auditEvent),
+      ]);
+
+      if (batchUpdateMissed(batchResults[0])) {
+        return jsonError('Checklist run changed while it was being revalidated. Refresh and try again.', 409, {
+          code: 'edit_conflict',
+        });
+      }
+
+      return json({
+        success: true,
+        progress: updates.progress,
+        revision: updates.revision,
+        template_version: updates.template_version,
+      });
+    }
+
     let body: unknown;
     try {
       body = await request.json();
@@ -560,6 +707,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
           title: templates.title,
           items: templates.items,
           is_public: templates.is_public,
+          version: templates.content_version,
         })
         .from(templates)
         .where(and(eq(templates.id, templateId), isNull(templates.deleted_at)))
@@ -657,6 +805,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         created_at: now,
         is_public: true,
         share_token: shareToken,
+        template_version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
+        revision: 1,
+        retired_items: '[]',
       };
       const subject: AuditSubject = effectiveTeamId
         ? { type: 'team', id: effectiveTeamId }
@@ -837,6 +988,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       created_by_user_id: userId,
       started_by_user_id: userId,
       created_at: now,
+      template_version: templateRunSource.source?.version ?? 1,
+      revision: 1,
+      retired_items: '[]',
     };
 
     const auditEvent = await buildAuditEventValues({
@@ -875,7 +1029,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
     }
 
-    const { title, items, sections, status, progress, completed_at } = parsed.data;
+    const { title, items, sections, status, progress, completed_at, expected_revision } = parsed.data;
     const rawBody = body as Record<string, unknown>;
 
     // Build dynamic update query
@@ -918,8 +1072,17 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       return jsonError('Forbidden', 403);
     }
 
+    const currentRevision = typeof existingRun.revision === 'number' ? existingRun.revision : 1;
+    if (typeof expected_revision === 'number' && expected_revision !== currentRevision) {
+      return jsonError('Checklist run changed since it was loaded. Refresh before saving again.', 409, {
+        code: 'edit_conflict',
+        details: { expectedRevision: expected_revision, currentRevision },
+      });
+    }
+
     const now = new Date().toISOString();
     updates.updated_at = now;
+    updates.revision = currentRevision + 1;
     if (status === 'completed') {
       updates.completed_by_user_id = userId;
       if (!Object.prototype.hasOwnProperty.call(rawBody, 'completed_at')) {
@@ -938,18 +1101,24 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       request,
       createdAt: now,
     });
-    await db.batch([
+    const batchResults = await db.batch([
       db.update(checklist_runs)
         .set(updates)
         .where(
           existingRun.team_id
-            ? and(eq(checklist_runs.id, checklistId), eq(checklist_runs.team_id, existingRun.team_id), isNull(checklist_runs.deleted_at))
-            : and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId), isNull(checklist_runs.deleted_at))
+            ? and(eq(checklist_runs.id, checklistId), eq(checklist_runs.team_id, existingRun.team_id), eq(checklist_runs.revision, currentRevision), isNull(checklist_runs.deleted_at))
+            : and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId), eq(checklist_runs.revision, currentRevision), isNull(checklist_runs.deleted_at))
         ),
       db.insert(audit_events).values(auditEvent),
     ]);
 
-    return json({ success: true });
+    if (batchUpdateMissed(batchResults[0])) {
+      return jsonError('Checklist run changed while it was being saved. Refresh before saving again.', 409, {
+        code: 'edit_conflict',
+      });
+    }
+
+    return json({ success: true, revision: currentRevision + 1 });
   }
 
   if (request.method === 'DELETE') {

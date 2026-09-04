@@ -76,6 +76,8 @@ pnpm run check:prod:d1-schema
 
 Template and run APIs accept `teamId` where workspace scoping is supported.
 
+Run responses include `template_version`, `current_template_version`, `revision`, and derived `is_stale`. Send `expected_revision` when updating a run and `expected_version` when updating a template. Reconcile and reopen a completed private run with `POST /api/checklists/:id/revalidate`.
+
 ## Dev login (dummy users)
 - Visible only in dev mode.
 - Seed users via `pnpm run db:seed` or `pnpm run db:reset`.
