@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
 
 export function extractD1Identity(output) {
   let parsed;
@@ -16,14 +17,14 @@ export function extractD1Identity(output) {
   return { databaseId, databaseName };
 }
 
-export function resolveRemoteD1Identity(database) {
+export function resolveRemoteD1Identity(database, { repoRoot = process.cwd(), env = process.env } = {}) {
   const output = execFileSync(
     process.platform === "win32" ? "pnpm.cmd" : "pnpm",
     ["exec", "wrangler", "d1", "info", database, "--json"],
     {
-      cwd: process.cwd(),
+      cwd: repoRoot,
       encoding: "utf8",
-      env: process.env,
+      env: sanitizedGitEnvironment(env),
       stdio: ["ignore", "pipe", "pipe"],
     },
   );

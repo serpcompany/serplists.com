@@ -15,6 +15,12 @@ import {
 import { buildFailureReport, writeDataCheckReports } from "./reporting.mjs";
 import { resolveRemoteD1Identity } from "./wrangler-identity-lib.mjs";
 import { compareMigrationLedger, parseAppliedMigrationLedger } from "./invariant-capture-lib.mjs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { runRepositoryGit, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const childEnv = sanitizedGitEnvironment();
 
 function readArg(name: string) {
   const inline = process.argv.find((argument) => argument.startsWith(`${name}=`));
@@ -31,7 +37,7 @@ const migrations = (() => {
   try { return listMigrationFiles().map((migration) => migration.name); } catch { return []; }
 })();
 const commit = (() => {
-  try { return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(); } catch { return "unknown"; }
+  try { return runRepositoryGit({ repoRoot, args: ["rev-parse", "HEAD"] }).trim(); } catch { return "unknown"; }
 })();
 let resolvedIdentity: { databaseId: string; databaseName: string } | null = null;
 
@@ -45,10 +51,10 @@ try {
   const migrationContract = buildCatalogContract(expectedMigrationCatalog);
   migrated.close();
   const expectedTableNames = [...new Set([...Object.keys(runtimeContract.tables), ...Object.keys(migrationContract.tables)])];
-  resolvedIdentity = resolveRemoteD1Identity(database);
+  resolvedIdentity = resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
   const targetArgs = ["exec", "wrangler", "d1", "execute", database, "--remote"];
   if (preview) targetArgs.push("--preview");
-  const inventoryOutput = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", [...targetArgs, "--json", "--command", "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name!='d1_migrations' ORDER BY name"], { cwd: process.cwd(), encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+  const inventoryOutput = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", [...targetArgs, "--json", "--command", "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name!='d1_migrations' ORDER BY name"], { cwd: repoRoot, encoding: "utf8", env: childEnv, stdio: ["ignore", "pipe", "pipe"] });
   const tableNames = [...new Set([...expectedTableNames, ...parseRemoteTableInventory(inventoryOutput)])].sort();
   const sql = [
     ...tableNames.map((name) => `PRAGMA table_info('${name.replaceAll("'", "''")}');`),
@@ -60,15 +66,15 @@ try {
   const args = [...targetArgs];
   args.push("--json", "--command", sql);
   const output = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", args, {
-    cwd: process.cwd(),
+    cwd: repoRoot,
     encoding: "utf8",
-    env: process.env,
+    env: childEnv,
     stdio: ["ignore", "pipe", "pipe"],
     maxBuffer: 10 * 1024 * 1024,
   });
   const results = JSON.parse(output) as Array<{ results?: Array<Record<string, unknown>> }>;
   const remoteCatalog = catalogFromPragmaResults(tableNames, results);
-  const ledgerOutput = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", [...targetArgs, "--json", "--command", "SELECT id, name FROM d1_migrations ORDER BY id"], { cwd: process.cwd(), encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+  const ledgerOutput = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", [...targetArgs, "--json", "--command", "SELECT id, name FROM d1_migrations ORDER BY id"], { cwd: repoRoot, encoding: "utf8", env: childEnv, stdio: ["ignore", "pipe", "pipe"] });
   const appliedMigrations = parseAppliedMigrationLedger(ledgerOutput);
   const ledger = compareMigrationLedger({ repositoryMigrations: migrations, appliedMigrations });
   const runtimeDiff = diffRuntimeSchema(drizzleSchema, remoteCatalog);

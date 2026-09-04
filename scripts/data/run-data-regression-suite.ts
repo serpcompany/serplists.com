@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { captureRepositoryGitState } from "./git-subprocess-env.mjs";
+import { captureRepositoryGitState, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
 
 import { buildDataRegressionReport, renderDataRegressionMarkdown } from "./data-regression-report-lib.mjs";
 import { loadEnvironmentInventory } from "./environment-identity-lib.mjs";
@@ -139,7 +139,7 @@ try {
       "exec", "vitest", "run", ...testFiles,
       "--reporter=json", `--outputFile=${rawVitestReport}`,
     ],
-    { cwd: repoRoot, env: { ...process.env, DATA_REPORT_DIR: reportDirectory, DATA_REGRESSION_START_COMMIT: startCommit }, stdio: ["ignore", "inherit", "inherit"] },
+    { cwd: repoRoot, env: { ...sanitizedGitEnvironment(), DATA_REPORT_DIR: reportDirectory, DATA_REGRESSION_START_COMMIT: startCommit }, stdio: ["ignore", "inherit", "inherit"] },
   );
   vitestResult = JSON.parse(readFileSync(rawVitestReport, "utf8"));
 } catch (error) {
@@ -188,7 +188,7 @@ try {
     {
       cwd: repoRoot,
       env: {
-        ...process.env,
+        ...sanitizedGitEnvironment(),
         PLAYWRIGHT_TEARDOWN_REPORT: browserTeardownReportPath,
         PLAYWRIGHT_JSON_REPORT: browserJsonReportPath,
         PLAYWRIGHT_SMOKE_LOCK_HELD: "1",

@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { runDataCommand } from "./data-command-lib.mjs";
+import { runRepositoryGit, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
@@ -11,17 +12,14 @@ const repoRoot = path.resolve(scriptDir, "../..");
 function runCommand(command) {
   return execFileSync(command[0], command.slice(1), {
     cwd: repoRoot,
-    env: process.env,
+    env: sanitizedGitEnvironment(),
     encoding: "utf8",
     stdio: ["inherit", "pipe", "inherit"],
   });
 }
 
 try {
-  const gitCommit = execFileSync("git", ["rev-parse", "HEAD"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-  }).trim();
+  const gitCommit = runRepositoryGit({ repoRoot, args: ["rev-parse", "HEAD"] }).trim();
   runDataCommand({
     argv: process.argv.slice(2),
     repoRoot,

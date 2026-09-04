@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { sanitizedGitEnvironment } from "./migration-provenance-lib.mjs";
 import { parsePendingMigrationNames } from "./pending-migrations-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { runRepositoryGit, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
 
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const reportDirectory = "tmp/data-reports/staging";
 const base = process.env.STAGING_BASE_SHA;
 const head = process.env.GITHUB_SHA;
@@ -13,11 +16,9 @@ try {
     throw new Error("Staging reviewed range requires exact nonzero GitHub push before/head SHAs.");
   }
   const gitEnvironment = sanitizedGitEnvironment();
-  execFileSync("git", ["merge-base", "--is-ancestor", base, head], { env: gitEnvironment, stdio: "ignore" });
-  const changed = execFileSync("git", ["diff", "--name-only", base, head, "--", "db/migrations"], {
-    encoding: "utf8",
-    env: gitEnvironment,
-  }).trim().split(/\r?\n/)
+  runRepositoryGit({ repoRoot, args: ["merge-base", "--is-ancestor", base, head], stdio: "ignore" });
+  const changed = runRepositoryGit({ repoRoot, args: ["diff", "--name-only", base, head, "--", "db/migrations"] })
+    .trim().split(/\r?\n/)
     .filter((name) => /^db\/migrations\/\d{4}_[a-z][a-z0-9_]*\.sql$/.test(name))
     .map((name) => name.split("/").at(-1))
     .sort();
@@ -29,8 +30,9 @@ try {
     base,
     "--report-dir",
     process.env.DATA_REPORT_DIR ?? "tmp/data-reports/staging-reviewed-range",
-  ], { env: gitEnvironment, stdio: "inherit" });
+  ], { cwd: repoRoot, env: gitEnvironment, stdio: "inherit" });
   const output = execFileSync(pnpm, ["exec", "wrangler", "d1", "migrations", "list", "DB", "--remote", "--preview"], {
+    cwd: repoRoot,
     encoding: "utf8",
     env: gitEnvironment,
   });

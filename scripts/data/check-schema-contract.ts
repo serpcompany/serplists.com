@@ -12,10 +12,15 @@ import {
   replayMigrations,
 } from "./schema-contract";
 import { buildFailureReport, writeDataCheckReports } from "./reporting.mjs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { runRepositoryGit, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 function gitCommit() {
   try {
-    return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    return runRepositoryGit({ repoRoot, args: ["rev-parse", "HEAD"] }).trim();
   } catch {
     return "unknown";
   }
@@ -30,7 +35,7 @@ const commit = gitCommit();
 const reportDirectory = readArg("--report-dir") ?? process.env.DATA_REPORT_DIR ?? "tmp/data-reports";
 let migrationNames: string[] = [];
 try {
-  execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "tsx", "scripts/data/check-contract-correction.ts", "--report-dir", reportDirectory], { cwd: process.cwd(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "tsx", "scripts/data/check-contract-correction.ts", "--report-dir", reportDirectory], { cwd: repoRoot, encoding: "utf8", env: sanitizedGitEnvironment(), stdio: ["ignore", "pipe", "pipe"] });
   const migrations = listMigrationFiles();
   migrationNames = migrations.map((migration) => migration.name);
   const migrated = replayMigrations();

@@ -7,6 +7,12 @@ import {
 } from "./pending-migrations-lib.mjs";
 import { buildFailureReport, writeDataCheckReports } from "./reporting.mjs";
 import { resolveRemoteD1Identity } from "./wrangler-identity-lib.mjs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { runRepositoryGit, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const childEnv = sanitizedGitEnvironment();
 
 function readArg(name) {
   const inline = process.argv.find((argument) => argument.startsWith(`${name}=`));
@@ -30,7 +36,7 @@ const migrationFiles = (() => {
   } catch { return []; }
 })();
 const commit = (() => {
-  try { return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(); } catch { return "unknown"; }
+  try { return runRepositoryGit({ repoRoot, args: ["rev-parse", "HEAD"] }).trim(); } catch { return "unknown"; }
 })();
 let resolvedIdentity = null;
 
@@ -43,11 +49,11 @@ try {
   if (persistTo) wranglerArguments.push("--persist-to", persistTo);
   resolvedIdentity = local
     ? { databaseId: `local:${database}`, databaseName: database }
-    : resolveRemoteD1Identity(database);
+    : resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
   const output = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", wranglerArguments, {
-    cwd: process.cwd(),
+    cwd: repoRoot,
     encoding: "utf8",
-    env: process.env,
+    env: childEnv,
     stdio: ["ignore", "pipe", "pipe"],
   });
   const assertedDatabaseId = readArg("--database-id") ?? process.env.D1_DATABASE_ID;
