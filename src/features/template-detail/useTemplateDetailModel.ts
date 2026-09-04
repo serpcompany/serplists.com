@@ -445,6 +445,7 @@ export const useTemplateDetailModel = (
       if (!nextTemplate.isPublic) {
         await api.updateTemplate(nextTemplate.id, {
           is_public: true,
+          expected_version: nextTemplate.version,
         });
         nextTemplate = {
           ...nextTemplate,

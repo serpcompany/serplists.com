@@ -49,6 +49,7 @@ const buildRun = (overrides: Partial<ChecklistRun> = {}): ChecklistRun => ({
   startedAt: '2026-04-18T00:00:00.000Z',
   userId: 'user-1',
   templateVersion: 1,
+  revision: 1,
   ...overrides,
 });
 
@@ -95,6 +96,7 @@ describe('run execution model loading', () => {
         status: 'in_progress',
         started_at: '2026-04-18T00:00:00.000Z',
         user_id: 'user-2',
+        is_public: true,
       }),
       updateChecklist: vi.fn(),
       updateSharedChecklist: vi.fn(),
@@ -113,6 +115,7 @@ describe('run execution model loading', () => {
     }
 
     expect(result.mode).toBe('shared');
+    expect(result.run.isPublic).toBe(true);
     expect(result.selectedItemId).toBe('item-2');
     expect(result.run.sections).toEqual([
       {
@@ -187,7 +190,7 @@ describe('run execution model loading', () => {
 
 describe('run execution model actions', () => {
   it('persists task notes on the run without changing the template', async () => {
-    const updateRun = vi.fn();
+    const updateRun = vi.fn(async (run: ChecklistRun) => ({ ...run, revision: 2 }));
     const run = buildRun();
 
     const result = await saveRunItemNotes(
@@ -210,6 +213,7 @@ describe('run execution model actions', () => {
     );
     expect(run.sections[0]?.items[0]?.notes).toBeUndefined();
     expect(updateRun).toHaveBeenCalledOnce();
+    expect(result.run?.revision).toBe(2);
   });
 
   it('toggling an item updates its sub-items and persists private runs', async () => {

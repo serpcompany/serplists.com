@@ -76,6 +76,7 @@ export type TemplateSavePayload = {
   categories?: string[];
   tags?: string[];
   slug?: string;
+  version?: number;
 };
 
 export type ChecklistRun = {
@@ -89,6 +90,9 @@ export type ChecklistRun = {
   completedAt?: string;
   userId: string;
   templateVersion?: number;
+  revision?: number;
+  isStale?: boolean;
+  isPublic?: boolean;
   teamId?: string;
 };
 
@@ -136,6 +140,7 @@ export interface TemplatesContextProps {
   deleteTemplate: (id: string) => Promise<void>;
   createRun: (params: { templateId: string; runName?: string }) => Promise<ChecklistRun | null>;
   updateRun: (run: ChecklistRun) => Promise<ChecklistRun>;
+  revalidateRun: (run: ChecklistRun) => Promise<void>;
   deleteRun: (id: string) => Promise<void>;
   importTemplates: (templates: ChecklistTemplate[], options?: TemplateImportOptions) => Promise<TemplateImportSummary>;
 }

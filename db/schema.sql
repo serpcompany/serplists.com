@@ -104,6 +104,7 @@ CREATE TABLE templates (
   description TEXT,
   items TEXT NOT NULL, -- JSON array of sections/items
   version INTEGER NOT NULL DEFAULT 1,
+  content_version INTEGER NOT NULL DEFAULT 1,
   type TEXT NOT NULL DEFAULT 'checklist',
   seo_title TEXT,
   seo_description TEXT,
@@ -153,6 +154,9 @@ CREATE TABLE checklist_runs (
   updated_at TEXT,
   deleted_at TEXT,
   progress INTEGER DEFAULT 0,
+  template_version INTEGER NOT NULL DEFAULT 1,
+  revision INTEGER NOT NULL DEFAULT 1,
+  retired_items TEXT NOT NULL DEFAULT '[]',
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE SET NULL
 );

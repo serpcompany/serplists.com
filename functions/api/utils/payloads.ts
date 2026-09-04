@@ -39,6 +39,7 @@ export const templatePayloadSchema = z.object({
     .max(160)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, numbers, and hyphens only")
     .optional(),
+  expected_version: z.number().int().positive().optional(),
 });
 
 export const checklistPayloadSchema = z.object({
@@ -51,6 +52,7 @@ export const checklistPayloadSchema = z.object({
   status: z.enum(["in_progress", "completed"]).optional(),
   progress: z.number().min(0).max(100).optional(),
   completed_at: z.string().datetime().nullable().optional(),
+  expected_revision: z.number().int().positive().optional(),
 });
 
 export function parseJsonArray(value: unknown): unknown[] | null {

@@ -54,6 +54,7 @@ const Dashboard = () => {
     runs,
     runsLoading,
     updateRun,
+    revalidateRun,
     deleteRun,
   } = useTemplates();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -118,6 +119,7 @@ const Dashboard = () => {
         runs={runs}
         templates={templates}
         onDeleteRun={deleteRun}
+        onRevalidateRun={revalidateRun}
         loading={runsLoading}
       />
     );

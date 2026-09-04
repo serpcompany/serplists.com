@@ -73,8 +73,8 @@ Core D1 tables:
 
 - `users`: auth identity, profile fields, and timestamps.
 - `account`, `session`, `verification`: Better Auth persistence.
-- `templates`: template metadata, content JSON, public/private state, ownership, team scope, soft-delete state, and attribution.
-- `checklist_runs`: run state, progress, share token fields, team scope, soft-delete state, and attribution.
+- `templates`: template metadata, content JSON, public/private state, ownership, team scope, soft-delete state, attribution, and a content-specific version used for run reconciliation.
+- `checklist_runs`: run state, progress, share token fields, team scope, soft-delete state, attribution, the reconciled template version, an optimistic-concurrency revision, and retired run history.
 - `template_likes`: user/template favorites.
 - `usage_analytics`: event log for template/run actions.
 - `stripe_customers`, `stripe_subscriptions`, `stripe_webhook_events`: billing state and webhook idempotency.
@@ -92,7 +92,8 @@ JSON fields:
 - `templates.category` stores a JSON array of category strings.
 - `templates.tags` stores a JSON array of tag strings.
 - `templates.rules` stores template rule metadata.
-- `checklist_runs.items` stores sectioned run content plus completion state.
+- `checklist_runs.items` stores the current sectioned run content plus completion state. `retired_items` stores removed sections/items/sub-items for history without counting them toward readiness.
+- Template changes reconcile only active private runs by stable section/item/sub-item ID. Completed, archived, and shared runs keep their snapshot and become stale when their `template_version` trails the source template.
 - `audit_events.before_json`, `after_json`, `diff_json`, and `metadata_json` store structured audit payloads.
 - `template_versions.snapshot_json` stores a point-in-time template snapshot.
 

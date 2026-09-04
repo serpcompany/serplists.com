@@ -73,6 +73,9 @@ export const mapChecklistToRun = (
       typeof checklist.template_version === 'number'
         ? checklist.template_version
         : 1,
+    revision: typeof checklist.revision === 'number' ? checklist.revision : 1,
+    isStale: checklist.is_stale === true,
+    isPublic: checklist.is_public === true || checklist.is_public === 1,
   };
 };
 

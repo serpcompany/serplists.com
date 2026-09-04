@@ -112,6 +112,8 @@ const runs: ChecklistRun[] = [
     startedAt: '2024-01-10T09:00:00Z',
     completedAt: '2024-01-14T16:00:00Z',
     userId: 'user-1',
+    revision: 2,
+    isStale: true,
   },
   {
     id: 'run-4',
@@ -166,6 +168,7 @@ describe('/dashboard/runs presentation', () => {
       runs,
       runsLoading: false,
       updateRun: vi.fn(),
+      revalidateRun: vi.fn(),
       deleteRun: vi.fn(),
     });
 
@@ -190,6 +193,8 @@ describe('/dashboard/runs presentation', () => {
     expect(html).toContain('Started Jan 16, 2024');
     expect(html).toContain('In Progress');
     expect(html).toContain('Completed');
+    expect(html).toContain('Needs revalidation');
+    expect(html).toContain('Revalidate');
     expect(html).toContain('href="/run/run-5"');
     expect(html).toContain('href="/run/run-2"');
     expect(html).toContain('data-run-actions="true"');
@@ -228,6 +233,33 @@ describe('/dashboard/runs presentation', () => {
     expect(html).toContain('role="combobox"');
     expect(html).toContain('aria-busy="true"');
     expect(html).not.toContain('No runs found');
+  });
+
+  it('does not offer the guaranteed-to-fail revalidation action for shared snapshots', () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
+      logout: vi.fn(),
+    });
+    mockUseTemplates.mockReturnValue({
+      templates,
+      templatesLoading: false,
+      runs: [{ ...runs[3], isStale: true, isPublic: true }],
+      runsLoading: false,
+      updateRun: vi.fn(),
+      revalidateRun: vi.fn(),
+      deleteRun: vi.fn(),
+    });
+
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/dashboard/runs">
+        <Routes>
+          <Route path="*" element={<Dashboard />} />
+        </Routes>
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('Shared snapshot is out of date');
+    expect(html).not.toContain('>Revalidate<');
   });
 
   it('creates real shared run URLs instead of exposing protected run URLs', async () => {

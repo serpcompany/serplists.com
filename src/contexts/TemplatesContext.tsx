@@ -226,7 +226,10 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           completedAt: checklist.completed_at || undefined,
           userId: checklist.user_id || '',
           teamId: typeof checklist.team_id === 'string' ? checklist.team_id : undefined,
-          templateVersion: typeof checklist.template_version === 'number' ? checklist.template_version : 1
+          templateVersion: typeof checklist.template_version === 'number' ? checklist.template_version : 1,
+          revision: typeof checklist.revision === 'number' ? checklist.revision : 1,
+          isStale: checklist.is_stale === true,
+          isPublic: checklist.is_public === true || checklist.is_public === 1,
         });
         });
 
@@ -327,7 +330,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         categories: template.categories,
         tags: template.tags,
         is_public: template.isPublic,
-        slug: template.seoUrl?.trim() || template.slug?.trim() || undefined
+        slug: template.seoUrl?.trim() || template.slug?.trim() || undefined,
+        expected_version: template.version,
       });
       
       if (!result) throw new Error('Failed to update template');
@@ -337,7 +341,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await queryClient.invalidateQueries({ queryKey: ['templates'] });
       await queryClient.invalidateQueries({ queryKey: ['user-templates'] });
       await queryClient.invalidateQueries({ queryKey: ['runs'] });
-      toast.success("Template updated successfully. Section and item changes are synced to existing runs.");
+      toast.success("Template updated. Checklist changes were reconciled into active private runs.");
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -389,7 +393,9 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         completedAt: undefined,
         userId: user.id,
         teamId: activeTeamId,
-        templateVersion: template.version || 1
+        templateVersion: template.version || 1,
+        revision: 1,
+        isPublic: false,
       };
     },
     onSuccess: async () => {
@@ -433,15 +439,19 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
       const runWithProgress = { ...run, progress };
       
-      await api.updateChecklist(runWithProgress.id, {
+      const result = await api.updateChecklist(runWithProgress.id, {
         title: runWithProgress.title,
         status: runWithProgress.status,
         progress: runWithProgress.progress,
         sections: runWithProgress.sections,
-        completed_at: runWithProgress.completedAt
+        completed_at: runWithProgress.completedAt,
+        expected_revision: runWithProgress.revision,
       });
       
-      return runWithProgress;
+      return {
+        ...runWithProgress,
+        revision: typeof result?.revision === 'number' ? result.revision : runWithProgress.revision,
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['runs'] });
@@ -458,6 +468,17 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['runs'] });
     }
+  });
+
+  const revalidateRunMutation = useMutation({
+    mutationFn: async (run: ChecklistRun) => {
+      if (!user) throw new Error('User must be logged in to revalidate a run');
+      await api.revalidateChecklist(run.id, run.revision);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['runs'] });
+      await queryClient.refetchQueries({ queryKey: ['runs'] });
+    },
   });
 
   const importTemplatesMutation = useMutation({
@@ -549,6 +570,9 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     },
     createRun: createRunMutation.mutateAsync,
     updateRun: updateRunMutation.mutateAsync,
+    revalidateRun: async (run: ChecklistRun) => {
+      await revalidateRunMutation.mutateAsync(run);
+    },
     deleteRun: async (id: string) => {
       await deleteRunMutation.mutateAsync(id);
     },

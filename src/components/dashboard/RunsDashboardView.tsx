@@ -7,6 +7,7 @@ import {
   Filter,
   MoreHorizontal,
   Play,
+  RefreshCw,
   Search,
   Share2,
   Trash2,
@@ -59,6 +60,7 @@ interface RunsDashboardViewProps {
   runs: ChecklistRun[];
   templates?: Pick<ChecklistTemplate, 'id' | 'ownerProfile' | 'title'>[];
   onDeleteRun: (runId: string) => void | Promise<void>;
+  onRevalidateRun?: (run: ChecklistRun) => void | Promise<void>;
   loading?: boolean;
 }
 
@@ -85,12 +87,14 @@ export function RunsDashboardView({
   runs,
   templates = [],
   onDeleteRun,
+  onRevalidateRun,
   loading = false,
 }: RunsDashboardViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeletingRun, setIsDeletingRun] = useState(false);
+  const [revalidatingRunId, setRevalidatingRunId] = useState<string | null>(null);
 
   const inProgressCount = runs.filter((run) => run.status === 'in_progress').length;
   const completedCount = runs.filter((run) => run.status === 'completed').length;
@@ -306,12 +310,38 @@ export function RunsDashboardView({
                     >
                       {isCompleted ? 'Completed' : 'In Progress'}
                     </span>
+                    {run.isStale ? (
+                      <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                        {run.isPublic ? 'Shared snapshot is out of date' : 'Needs revalidation'}
+                      </span>
+                    ) : null}
                   </div>
 
                   <div
                     className="flex flex-wrap items-center gap-2 opacity-100 transition-opacity xl:opacity-0 xl:group-hover:opacity-100 xl:focus-within:opacity-100"
                     data-run-actions="true"
                   >
+                    {run.isStale && !run.isPublic && onRevalidateRun ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={revalidatingRunId === run.id}
+                        onClick={async () => {
+                          setRevalidatingRunId(run.id);
+                          try {
+                            await onRevalidateRun(run);
+                            toast.success('Run revalidated against the latest template');
+                          } catch (error) {
+                            toast.error(error instanceof Error ? error.message : 'Unable to revalidate run');
+                          } finally {
+                            setRevalidatingRunId(null);
+                          }
+                        }}
+                      >
+                        <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                        {revalidatingRunId === run.id ? 'Revalidating...' : 'Revalidate'}
+                      </Button>
+                    ) : null}
                     {!isCompleted ? (
                       <Button asChild size="sm">
                         <Link to={buildRunPath(run.id)}>
