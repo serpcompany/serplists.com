@@ -94,7 +94,8 @@ try {
     } else comparisonBase = "HEAD";
     reportComparisonBase = comparisonBase;
     git(["rev-parse", "--verify", comparisonBase], { stdio: ["ignore", "pipe", "pipe"] });
-    changed = git(["diff", "--name-only", `${comparisonBase}...HEAD`]).trim().split(/\r?\n/).filter(Boolean);
+    git(["merge-base", "--is-ancestor", comparisonBase, "HEAD"], { stdio: ["ignore", "pipe", "pipe"] });
+    changed = git(["diff", "--name-only", `${comparisonBase}..HEAD`]).trim().split(/\r?\n/).filter(Boolean);
     if (eventName === "local-working-tree") {
       const working = git(["diff", "--name-only", "HEAD"]).trim().split(/\r?\n/).filter(Boolean);
       changed = [...new Set([...changed, ...working])];

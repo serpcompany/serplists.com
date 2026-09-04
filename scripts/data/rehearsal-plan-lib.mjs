@@ -47,7 +47,8 @@ export function resolveRehearsalPlan({ repoRoot, commit, migrationFrom, migratio
   let changedArtifacts = [];
   if (baseRef) {
     runRepositoryGit({ repoRoot, args: ["rev-parse", "--verify", baseRef], stdio: ["ignore", "pipe", "pipe"] });
-    changedArtifacts = runRepositoryGit({ repoRoot, args: ["diff", "--name-only", `${baseRef}...${commit}`, "--", "db/migrations", "db/maintenance"] }).trim().split(/\r?\n/).filter((name) => DATA_ARTIFACT.test(name));
+    runRepositoryGit({ repoRoot, args: ["merge-base", "--is-ancestor", baseRef, commit], stdio: ["ignore", "pipe", "pipe"] });
+    changedArtifacts = runRepositoryGit({ repoRoot, args: ["diff", "--name-only", `${baseRef}..${commit}`, "--", "db/migrations", "db/maintenance"] }).trim().split(/\r?\n/).filter((name) => DATA_ARTIFACT.test(name));
     const changedMigrations = changedArtifacts.filter((name) => name.startsWith("db/migrations/")).map((name) => path.basename(name)).sort();
     if (migrationFrom == null && changedMigrations.length) { requestedFrom = changedMigrations[0]; requestedTo = changedMigrations.at(-1); }
     if (migrationFrom == null && changedArtifacts.length && !changedMigrations.length) throw new Error("Maintenance-only data changes require an explicit exact rehearsal plan selection.");
