@@ -20,6 +20,22 @@ describe("reviewed rehearsal plan", () => {
     expect(affectedTablesFromSql(sql)).toEqual(["usage_analytics"]);
     expect(() => resolveRehearsalPlan({ repoRoot, commit, migrationFrom: "0025_other_table.sql", migrationTo: "0025_other_table.sql" })).toThrow(/no rehearsal plan/i);
   });
+  it("detects bracket-quoted DML and index target tables", () => {
+    const sql = "ALTER TABLE templates ADD COLUMN probe TEXT; CREATE INDEX audit_probe ON [audit_events](created_at); UPDATE [users] SET referral_count=0;";
+    expect(affectedTablesFromSql(sql)).toEqual(["audit_events", "templates", "users"]);
+    expect(() => affectedTablesFromSql("WITH changed AS (SELECT 1) UPDATE [users] SET referral_count=1;")).toThrow(/unsupported SQL/i);
+    expect(() => affectedTablesFromSql("DROP INDEX audit_probe;")).toThrow(/unsupported SQL/i);
+  });
+  it("rejects maintenance SQL declarations until a classified execution path exists", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "rehearsal-maintenance-"));
+    try {
+      const declaration = JSON.parse(readFileSync(path.join(repoRoot, "scripts/data/rehearsal-plans.json"), "utf8"));
+      declaration.plans[0].artifacts.push("db/maintenance/cleanup_seed_data.sql");
+      const planPath = path.join(directory, "plans.json");
+      writeFileSync(planPath, JSON.stringify(declaration));
+      expect(() => resolveRehearsalPlan({ repoRoot, commit, migrationFrom: "0024_safe_template_evolution.sql", migrationTo: "0024_safe_template_evolution.sql", planPath })).toThrow(/maintenance SQL.*blocked/i);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
   it("rejects fixed 0024 evidence for another range or affected domain", () => {
     const plan = resolveRehearsalPlan({ repoRoot, commit });
     const evidence = { commit, migrationRange: plan.migrationRange, coverage: { planId: plan.id, declarationSha256: plan.declarationSha256, affectedTables: plan.affectedTables, invariants: plan.invariants } };

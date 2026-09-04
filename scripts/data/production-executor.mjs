@@ -158,9 +158,13 @@ try {
           output = identityBound("post-apply-ledger", ["d1", "migrations", "list", database.databaseName, "--remote"]);
           if (parsePendingMigrationNames(output).length) throw new Error("Production ledger remains behind after migration apply.");
           break;
-        case "schema-contract":
+        case "schema-contract": {
           output = pnpm(["run", "check:prod:d1-schema", "--", "--database-id", database.databaseId, "--report-dir", reportDirectory]);
+          const schemaEvidence = JSON.parse(readFileSync(path.join(reportDirectory, "d1-schema-production.json"), "utf8"));
+          if (schemaEvidence.verdict !== "pass" || !Array.isArray(schemaEvidence.identityChecks) || schemaEvidence.identityChecks.length === 0) throw new Error("Production schema contract evidence lacks identity-bound D1 checks.");
+          identityChecks.push(...schemaEvidence.identityChecks);
           break;
+        }
         default:
           throw new Error(`Unknown protected data step: ${step}.`);
       }

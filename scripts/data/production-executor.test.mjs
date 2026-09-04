@@ -99,6 +99,23 @@ function validProductionSmoke() {
   };
 }
 
+function validApproval() {
+  return { environment: "production", source: "github-environment-review", approver: "independent-reviewer", changeAuthors: ["author"], classification: "backfill", decision: "Reviewed recovery and exact production evidence." };
+}
+
+function validIdentityCheck() {
+  return { environment: "production", binding: "DB", databaseName: production.databaseName, databaseId: production.databaseId, before: { databaseName: production.databaseName, databaseId: production.databaseId }, after: { databaseName: production.databaseName, databaseId: production.databaseId } };
+}
+
+function validProductionResults() {
+  const steps = ["identity", "recovery-bookmark", "recovery-export", "reviewed-pending-range", "pre-invariants", "migration-apply", "ledger-clean", "schema-contract", "post-invariants"];
+  return Object.fromEntries(steps.map((step) => [step, { verdict: "pass", artifact: `${step}.txt`, outputLength: 1, identityChecks: step === "identity" ? [] : [validIdentityCheck()] }]));
+}
+
+function validSignedProductionEvidence(request = validPromotionEvidence()) {
+  return createSignedEvidence({ payload: { verdict: "pass", commit, database: structuredClone(production), migrationRange: structuredClone(request.migrationRange), results: validProductionResults(), approval: validApproval() } });
+}
+
 describe("protected production executor", () => {
   it("rejects local, push, unprotected, mismatched-commit, and legacy credential contexts", () => {
     for (const env of [
@@ -431,9 +448,10 @@ esac
       commit,
       database: production,
       pendingMigrations: ["0024_safe_template_evolution.sql"],
+      approval: validApproval(),
       run: (step) => {
         calls.push(step);
-        return { verdict: "pass", artifact: `${step}.json` };
+        return { verdict: "pass", artifact: `${step}.json`, outputLength: 1, identityChecks: step === "identity" ? [] : [validIdentityCheck()] };
       },
     });
 
@@ -497,6 +515,10 @@ esac
     ["data commit", (fixture) => { fixture.signedEvidence.payload.commit = "f".repeat(40); fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["data database", (fixture) => { fixture.signedEvidence.payload.database.databaseId = "22222222-2222-4222-8222-222222222222"; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["data range", (fixture) => { fixture.signedEvidence.payload.migrationRange.to = "0025_other.sql"; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["missing production step", (fixture) => { delete fixture.signedEvidence.payload.results["recovery-export"]; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["failed production step", (fixture) => { fixture.signedEvidence.payload.results["pre-invariants"].verdict = "fail"; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["missing step identity", (fixture) => { fixture.signedEvidence.payload.results["migration-apply"].identityChecks = []; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["missing independent approval", (fixture) => { fixture.signedEvidence.payload.approval = {}; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["smoke commit", (fixture) => { fixture.smoke.commit = "f".repeat(40); }],
     ["smoke environment", (fixture) => { fixture.smoke.target.environment = "staging"; }],
     ["smoke database name", (fixture) => { fixture.smoke.target.databaseName = "other"; }],
@@ -509,9 +531,10 @@ esac
     ["nonliteral canary verdict", (fixture) => { fixture.smoke.checks[0].verdict = true; }],
     ["failed canary check", (fixture) => { fixture.smoke.checks[0].verdict = "fail"; }],
     ["privacy-unsafe canary payload", (fixture) => { fixture.smoke.canaryMutation = { originalTitle: "private" }; }],
+    ["contradictory smoke failures", (fixture) => { fixture.smoke.failures = ["hidden_failure"]; }],
   ])("final production release rejects mismatched %s", (_name, mutate) => {
     const request = validPromotionEvidence();
-    const signed = createSignedEvidence({ payload: { verdict: "pass", commit, database: structuredClone(production), migrationRange: structuredClone(request.migrationRange), results: {}, approval: {} } });
+    const signed = validSignedProductionEvidence(request);
     const smoke = validProductionSmoke();
     const fixture = { request, signedEvidence: signed, smoke, deploymentUrl: smoke.deploymentUrl };
     mutate(fixture);
@@ -520,7 +543,7 @@ esac
 
   it("final production release accepts only exact signed data and smoke evidence", () => {
     const request = validPromotionEvidence();
-    const signedEvidence = createSignedEvidence({ payload: { verdict: "pass", commit, database: production, migrationRange: request.migrationRange, results: {}, approval: {} } });
+    const signedEvidence = validSignedProductionEvidence(request);
     const deploymentUrl = "https://release.pages.dev";
     const smoke = { ...validProductionSmoke(), deploymentUrl };
     expect(validateFinalProductionRelease({ request, signedEvidence, smoke, deploymentUrl })).toMatchObject({ commit, database: production, migrationRange: request.migrationRange });

@@ -70,13 +70,11 @@ The local team seed creates data for verifying:
 - team entitlement behavior
 - team audit/activity history
 
-## Remote database commands
-Use the staging/preview database before production. Preview deployments must not point to production D1.
+## Remote database checks
+Local sessions may run the UUID-bound read-only readiness checks below. Remote migration, seed, baseline, and deployment aliases are intentionally blocked; mutations run only in the protected GitHub workflows.
 
 ```bash
 pnpm run verify:staging
-pnpm run db:migrate:d1:staging
-pnpm run db:seed:official:staging
 pnpm run check:staging:d1-schema
 ```
 
@@ -84,7 +82,6 @@ Production commands:
 
 ```bash
 pnpm run verify:prod:d1
-pnpm run db:migrate:d1:prod
 pnpm run check:prod:d1-schema
 ```
 

@@ -18,8 +18,24 @@ export const FIXTURE_PROFILE_CONTRACTS = Object.freeze({
 function exactArray(left, right) { return JSON.stringify(left) === JSON.stringify(right); }
 export function rehearsalPlanDigest(plan) { return createHash("sha256").update(JSON.stringify(plan)).digest("hex"); }
 export function affectedTablesFromSql(sql) {
-  const patterns = [/(?:ALTER|CREATE|DROP)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["'`]?([a-z_][a-z0-9_]*)/gi, /(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+["'`]?([a-z_][a-z0-9_]*)/gi];
-  return [...new Set(patterns.flatMap((pattern) => [...sql.matchAll(pattern)].map((match) => match[1])))].sort();
+  const source = sql.replace(/--[^\n]*/g, " ").replace(/\/\*[\s\S]*?\*\//g, " ");
+  const identifier = String.raw`(?:\[[^\]]+\]|["'\x60][^"'\x60]+["'\x60]|[a-z_][a-z0-9_]*)(?:\s*\.\s*(?:\[[^\]]+\]|["'\x60][^"'\x60]+["'\x60]|[a-z_][a-z0-9_]*))?`;
+  const patterns = [
+    new RegExp(String.raw`(?:ALTER|CREATE|DROP)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?(${identifier})`, "gi"),
+    new RegExp(String.raw`INSERT(?:\s+OR\s+[A-Z]+)?\s+INTO\s+(${identifier})`, "gi"),
+    new RegExp(String.raw`UPDATE(?:\s+OR\s+[A-Z]+)?\s+(${identifier})`, "gi"),
+    new RegExp(String.raw`DELETE\s+FROM\s+(${identifier})`, "gi"),
+    new RegExp(String.raw`CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?${identifier}\s+ON\s+(${identifier})`, "gi"),
+  ];
+  const normalize = (value) => value.split(".").at(-1).trim().replace(/^\[|\]$/g, "").replace(/^["'`]|["'`]$/g, "");
+  const tables = patterns.flatMap((pattern) => [...source.matchAll(pattern)].map((match) => normalize(match[1])));
+  const unsupported = source.split(";").map((statement) => statement.trim()).filter(Boolean).filter((statement) => {
+    if (/^WITH\b/i.test(statement)) return true;
+    return /^(?:CREATE\s+(?:UNIQUE\s+)?INDEX\b|DROP\s+INDEX\b|CREATE\s+TRIGGER\b|DROP\s+TRIGGER\b|ALTER\s+TABLE\b|CREATE\s+TABLE\b|DROP\s+TABLE\b|INSERT\b|UPDATE\b|DELETE\b)/i.test(statement) &&
+      !patterns.some((pattern) => { pattern.lastIndex = 0; return pattern.test(statement); });
+  });
+  if (unsupported.length) throw new Error(`Unsupported SQL statement prevents complete affected-table detection: ${unsupported[0].split(/\s+/).slice(0, 4).join(" ")}.`);
+  return [...new Set(tables)].sort();
 }
 
 export function loadRehearsalPlans({ repoRoot, planPath = path.join(repoRoot, "scripts/data/rehearsal-plans.json") }) {
@@ -29,6 +45,7 @@ export function loadRehearsalPlans({ repoRoot, planPath = path.join(repoRoot, "s
     if (!plan.id || !Array.isArray(plan.artifacts) || !Array.isArray(plan.affectedTables) || !plan.affectedTables.length || !Array.isArray(plan.invariants) || !plan.invariants.length || !plan.fixtureProfile || !plan.preMigration) throw new Error(`Rehearsal plan ${plan.id ?? "unknown"} is incomplete.`);
     if ((plan.migrationFrom == null) !== (plan.migrationTo == null) || (plan.migrationFrom != null && (!MIGRATION.test(plan.migrationFrom) || !MIGRATION.test(plan.migrationTo)))) throw new Error(`Rehearsal plan ${plan.id} has an invalid migration range.`);
     if (plan.artifacts.some((artifact) => !DATA_ARTIFACT.test(artifact))) throw new Error(`Rehearsal plan ${plan.id} contains an invalid data artifact.`);
+    if (plan.artifacts.some((artifact) => artifact.startsWith("db/maintenance/"))) throw new Error(`Rehearsal plan ${plan.id} contains maintenance SQL, which is blocked until a classified execution path exists.`);
     const fixtureContract = FIXTURE_PROFILE_CONTRACTS[plan.fixtureProfile];
     if (!fixtureContract || !exactArray(plan.affectedTables, fixtureContract.affectedTables) || !exactArray(plan.invariants, fixtureContract.invariants)) throw new Error(`Rehearsal plan ${plan.id} makes unsupported affected-table or invariant claims for fixture profile ${plan.fixtureProfile}.`);
   }
@@ -49,6 +66,7 @@ export function resolveRehearsalPlan({ repoRoot, commit, migrationFrom, migratio
     runRepositoryGit({ repoRoot, args: ["rev-parse", "--verify", baseRef], stdio: ["ignore", "pipe", "pipe"] });
     runRepositoryGit({ repoRoot, args: ["merge-base", "--is-ancestor", baseRef, commit], stdio: ["ignore", "pipe", "pipe"] });
     changedArtifacts = runRepositoryGit({ repoRoot, args: ["diff", "--name-only", `${baseRef}..${commit}`, "--", "db/migrations", "db/maintenance"] }).trim().split(/\r?\n/).filter((name) => DATA_ARTIFACT.test(name));
+    if (changedArtifacts.some((artifact) => artifact.startsWith("db/maintenance/"))) throw new Error("Maintenance SQL changes are blocked until a classified rehearsal and protected execution path exists.");
     const changedMigrations = changedArtifacts.filter((name) => name.startsWith("db/migrations/")).map((name) => path.basename(name)).sort();
     if (migrationFrom == null && changedMigrations.length) { requestedFrom = changedMigrations[0]; requestedTo = changedMigrations.at(-1); }
     if (migrationFrom == null && changedArtifacts.length && !changedMigrations.length) throw new Error("Maintenance-only data changes require an explicit exact rehearsal plan selection.");

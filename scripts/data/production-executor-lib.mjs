@@ -16,6 +16,8 @@ const REQUIRED_CONTEXT = {
   DATA_PROTECTED_ENVIRONMENT: "production",
 };
 const RISK = ["additive", "backfill", "destructive", "irreversible"];
+const REQUIRED_PRODUCTION_STEPS = ["identity", "recovery-bookmark", "recovery-export", "reviewed-pending-range", "pre-invariants", "migration-apply", "ledger-clean", "schema-contract", "post-invariants"];
+const IDENTITY_BOUND_STEPS = new Set(REQUIRED_PRODUCTION_STEPS.filter((step) => step !== "identity"));
 
 function sqlStatements(sqlTexts) {
   const source = sqlTexts.join("\n");
@@ -428,6 +430,19 @@ export function assertDeployEvidence({ signedEvidence, commit, database }) {
       payload.database?.databaseName !== database.databaseName || payload.database?.databaseId !== database.databaseId) {
     throw new Error("Signed production data evidence does not authorize this exact deploy.");
   }
+  const resultKeys = Object.keys(payload.results ?? {});
+  if (JSON.stringify(resultKeys) !== JSON.stringify(REQUIRED_PRODUCTION_STEPS)) throw new Error("Signed production data evidence does not contain the exact required step set.");
+  for (const step of REQUIRED_PRODUCTION_STEPS) {
+    const result = payload.results[step];
+    if (result?.verdict !== "pass" || typeof result.artifact !== "string" || !result.artifact || !Number.isInteger(result.outputLength) || result.outputLength < 0) throw new Error(`Signed production ${step} evidence is incomplete.`);
+    if (IDENTITY_BOUND_STEPS.has(step)) {
+      if (!Array.isArray(result.identityChecks) || result.identityChecks.length === 0 || result.identityChecks.some((check) =>
+        check?.environment !== "production" || check?.binding !== "DB" || check?.databaseName !== database.databaseName || check?.databaseId !== database.databaseId ||
+        check?.before?.databaseName !== database.databaseName || check?.before?.databaseId !== database.databaseId || check?.after?.databaseName !== database.databaseName || check?.after?.databaseId !== database.databaseId
+      )) throw new Error(`Signed production ${step} evidence lacks exact before/after D1 identity checks.`);
+    }
+  }
+  if (payload.approval?.environment !== "production" || payload.approval?.source !== "github-environment-review" || typeof payload.approval?.approver !== "string" || !payload.approval.approver || !Array.isArray(payload.approval.changeAuthors) || !payload.approval.changeAuthors.length) throw new Error("Signed production evidence lacks validated independent approval.");
   return payload;
 }
 
@@ -443,7 +458,7 @@ export function validateFinalProductionRelease({
   if (data.migrationRange?.from !== request.migrationRange?.from || data.migrationRange?.to !== request.migrationRange?.to) {
     throw new Error("Production data evidence migration range does not match the request.");
   }
-  if (!/^https:\/\//.test(deploymentUrl) || smoke?.verdict !== "pass" || smoke.commit !== request.commit ||
+  if (!/^https:\/\//.test(deploymentUrl) || smoke?.verdict !== "pass" || !Array.isArray(smoke.failures) || smoke.failures.length !== 0 || smoke.commit !== request.commit ||
       smoke.target?.environment !== "production" || smoke.target?.databaseName !== request.database.databaseName ||
       smoke.target?.databaseId !== request.database.databaseId || smoke.deploymentUrl !== deploymentUrl ||
       smoke.customDomain !== expectedCustomDomain) {
