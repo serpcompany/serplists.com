@@ -39,7 +39,7 @@ describe("isolated smoke child environment", () => {
     });
 
     expect(commands.setup).not.toContain("dotenv");
-    expect(commands.setup).toContain("sitemap:check");
+    expect(commands.setup).not.toContain("sitemap:check");
     expect(commands.setup).not.toContain("sitemap:generate");
     expect(commands.setup).toContain("vite build --mode development");
     expect(commands.frontend).not.toContain("dotenv");

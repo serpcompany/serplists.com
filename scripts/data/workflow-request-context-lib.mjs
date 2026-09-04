@@ -43,3 +43,45 @@ export function assertWorkflowRequestContext({
     verification: "unverified-request-metadata",
   };
 }
+
+export function assertSanitizerSourceWorkflowContext({ env, gitCommit }) {
+  for (const [name, expected] of Object.entries(REQUIRED_CONTEXT)) {
+    if (env?.[name] !== expected) {
+      throw new Error(`Sanitizer source workflow context requires ${name}=${expected}.`);
+    }
+  }
+  if (env.GITHUB_REF !== "refs/heads/main" || env.DATA_PROTECTED_ENVIRONMENT !== "production") {
+    throw new Error("Sanitizer source export requires the protected production environment on main.");
+  }
+  if (env.GITHUB_SHA !== gitCommit || !/^\d+$/.test(env.GITHUB_RUN_ID ?? "")) {
+    throw new Error("Sanitizer source workflow must name the exact GitHub run and commit.");
+  }
+  if (!env.CLOUDFLARE_API_TOKEN) {
+    throw new Error("Sanitizer source workflow requires the protected production D1 token.");
+  }
+  return {
+    repository: env.GITHUB_REPOSITORY,
+    runId: env.GITHUB_RUN_ID,
+    commit: env.GITHUB_SHA,
+    protectedEnvironment: env.DATA_PROTECTED_ENVIRONMENT,
+  };
+}
+
+export function assertStagingMutationWorkflowContext({ env, gitCommit }) {
+  const required = {
+    GITHUB_ACTIONS: "true",
+    GITHUB_REPOSITORY: "serpcompany/serplists.com",
+    GITHUB_REF_PROTECTED: "true",
+    GITHUB_EVENT_NAME: "push",
+    GITHUB_REF: "refs/heads/staging",
+    DATA_PROMOTION_WORKFLOW: "data-promotion",
+    DATA_PROTECTED_ENVIRONMENT: "staging",
+  };
+  for (const [name, expected] of Object.entries(required)) {
+    if (env?.[name] !== expected) throw new Error(`Staging mutation workflow context requires ${name}=${expected}.`);
+  }
+  if (env.GITHUB_SHA !== gitCommit || !/^\d+$/.test(env.GITHUB_RUN_ID ?? "")) {
+    throw new Error("Staging mutation workflow must name the exact GitHub run and commit.");
+  }
+  return { repository: env.GITHUB_REPOSITORY, runId: env.GITHUB_RUN_ID, commit: env.GITHUB_SHA };
+}

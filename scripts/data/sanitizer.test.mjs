@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { replayMigrations } from "./schema-contract.ts";
 
 import {
   generateSanitizedRehearsalArtifact,
@@ -28,6 +29,18 @@ function generate() {
 }
 
 describe("repo-owned rehearsal sanitizer", () => {
+  it("imports the sanitized production-shaped profile into the exact 0023 rehearsal baseline", () => {
+    const database = replayMigrations({ through: "0023_add_sitemap_revision_state.sql" });
+    try {
+      database.exec(generate().sql);
+      expect(database.prepare("SELECT COUNT(*) total FROM users WHERE id='rehearsal-owner-v1'").get()).toEqual({ total: 1 });
+      expect(database.prepare("SELECT COUNT(*) total FROM templates WHERE id='rehearsal-template-v1'").get()).toEqual({ total: 1 });
+      expect(database.prepare("SELECT COUNT(*) total FROM checklist_runs WHERE id='rehearsal-run-v1'").get()).toEqual({ total: 1 });
+    } finally {
+      database.close();
+    }
+  });
+
   it("normalizes Wrangler data-only output into a migration-compatible artifact", () => {
     const template = generate().sql;
     const rawExport = [

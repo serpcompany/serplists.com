@@ -104,13 +104,12 @@ pnpm run db:reset
 pnpm run db:migrations:list:local
 pnpm run db:migrate:d1:local
 pnpm run db:migrations:list:staging
-pnpm run db:migrate:d1:staging
-pnpm run db:seed:official:staging
 pnpm run db:migrations:list:prod
 ```
 
-Production mutation commands intentionally exit non-zero outside the protected
-workflow. Do not apply, baseline, seed, or clean production from a checkout.
+Staging and production mutation commands intentionally exit non-zero outside
+their protected workflows. Do not apply, baseline, seed, or clean remote data
+from a checkout.
 
 If production ever requires migration-ledger repair, treat it as break glass and
 obtain approval for the exact action through the incident procedure. The former
@@ -123,7 +122,6 @@ Preview deployments should not be enabled against production data. Create
 ```bash
 pnpm run check:preview:d1-binding
 pnpm run verify:staging
-pnpm run db:migrate:d1:staging
 pnpm run check:staging:d1-schema
 ```
 

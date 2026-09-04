@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { writeDataCheckReports } from "./reporting.mjs";
+import { validateRehearsalRecoveryEvidence } from "./rehearsal-recovery-lib.mjs";
+import { loadSanitizerPolicy, validateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
 function arg(name) { const i = process.argv.indexOf(name); return i < 0 ? null : process.argv[i + 1]; }
 try {
   const source = JSON.parse(readFileSync(arg("--source"), "utf8"));
@@ -9,7 +11,19 @@ try {
   if (source.verdict !== "pass" || required.some((file) => !file || !existsSync(file))) throw new Error("Rehearsal evidence is incomplete or failed.");
   const output = arg("--output");
   const invariants = JSON.parse(readFileSync(arg("--comparison"), "utf8"));
-  const recoveryPass = statSync(arg("--recovery")).size > 0;
+  const recovery = validateRehearsalRecoveryEvidence({
+    evidence: JSON.parse(readFileSync(arg("--recovery"), "utf8")),
+    sourceDatabaseId: arg("--database-id"),
+    recoveryDatabaseId: arg("--recovery-database-id"),
+  });
+  const recoveryPass = recovery.verdict === "pass";
+  const sanitizedManifest = JSON.parse(readFileSync(arg("--sanitizer-manifest"), "utf8"));
+  validateSanitizedRehearsalArtifact({
+    sql: readFileSync(arg("--sanitized"), "utf8"),
+    manifest: sanitizedManifest,
+    policy: loadSanitizerPolicy({ repoRoot: path.resolve(new URL("../..", import.meta.url).pathname) }),
+    now: new Date(),
+  });
   const teardownPass = /PASS rehearsal .* is absent/.test(readFileSync(arg("--teardown"), "utf8"));
   if (invariants.verdict !== "pass" || !recoveryPass || !teardownPass) throw new Error("Remote rehearsal invariants, recovery, or confirmed teardown failed.");
   const report = {
@@ -20,7 +34,14 @@ try {
       ? { from: null, to: null }
       : { from: arg("--migration-from"), to: arg("--migration-to") },
     remoteInvariants: invariants,
-    recovery: { verdict: recoveryPass ? "pass" : "fail", artifact: arg("--recovery") },
+    recovery,
+    sanitizedSource: {
+      verdict: "pass",
+      attestation: { verdict: "pass", verifier: "github-cli-before-import" },
+      sanitizerVersion: sanitizedManifest.sanitizerVersion,
+      artifactSha256: sanitizedManifest.artifact.sha256,
+      manifestIntegritySha256: sanitizedManifest.manifestIntegritySha256,
+    },
     teardown: { ...source.teardown, verdict: teardownPass ? "pass" : "fail", remoteEvidence: arg("--teardown") },
   };
   mkdirSync(path.dirname(output), { recursive: true });

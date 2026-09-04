@@ -9,6 +9,7 @@ import {
   buildSmokeChildEnvironment,
 } from "./data/smoke-environment-lib.mjs";
 import { cleanupSmokeState } from "./data/smoke-teardown-lib.mjs";
+import { acquireSmokeRunLock } from "./data/smoke-run-lock-lib.mjs";
 
 const DEFAULT_SMOKE_FRONTEND_PORT = 4173;
 const DEFAULT_SMOKE_API_PORT = 8788;
@@ -20,6 +21,7 @@ const repoRoot = path.resolve(scriptDir, "..");
 const smokePersistPath = path.join(".wrangler", "smoke-state");
 const smokePersistAbsolutePath = path.resolve(repoRoot, smokePersistPath);
 const smokeTransientAbsolutePath = path.resolve(repoRoot, ".wrangler", "tmp");
+const smokeLockAbsolutePath = path.resolve(repoRoot, ".wrangler", "smoke-state.lock");
 const teardownReportPath = path.resolve(
   repoRoot,
   process.env.PLAYWRIGHT_TEARDOWN_REPORT ?? "tmp/data-reports/browser-smoke-teardown.json",
@@ -120,6 +122,9 @@ if (shouldPickOpenPorts) {
   env.FRONTEND_URL ??= env.PLAYWRIGHT_BASE_URL;
 }
 
+const releaseSmokeLock = env.PLAYWRIGHT_SMOKE_LOCK_HELD === "1"
+  ? () => {}
+  : await acquireSmokeRunLock({ lockPath: smokeLockAbsolutePath });
 try {
   prepareSmokeD1();
   const setupCommands = buildPlaywrightServerCommands({
@@ -145,6 +150,7 @@ try {
     transientPaths: [smokeTransientAbsolutePath],
     reportPath: teardownReportPath,
   });
+  releaseSmokeLock();
   throw error;
 }
 
@@ -166,6 +172,7 @@ child.on("exit", (code, signal) => {
     transientPaths: [smokeTransientAbsolutePath],
     reportPath: teardownReportPath,
   });
+  releaseSmokeLock();
   if (signal) {
     console.error(`Smoke tests stopped by ${signal}`);
     process.exitCode = 1;
@@ -181,6 +188,7 @@ child.on("error", (error) => {
     transientPaths: [smokeTransientAbsolutePath],
     reportPath: teardownReportPath,
   });
+  releaseSmokeLock();
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 });

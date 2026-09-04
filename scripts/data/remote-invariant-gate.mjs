@@ -2,7 +2,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { compareProductionInvariants, parseInvariantOutput, privacySafeOwnershipDigest } from "./production-executor-lib.mjs";
+import { captureRemoteInvariantSnapshot, compareProductionInvariants } from "./invariant-capture-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
 function arg(name) { const i = process.argv.indexOf(name); return i < 0 ? null : process.argv[i + 1]; }
 const mode = process.argv[2];
@@ -12,16 +12,11 @@ const reportDirectory = arg("--report-dir") ?? "tmp/data-reports/remote-invarian
 const childEnv = Object.fromEntries(["PATH", "HOME", "CI", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"].filter((key) => process.env[key]).map((key) => [key, process.env[key]]));
 function wrangler(args) { return execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "wrangler", ...args], { encoding: "utf8", env: childEnv }); }
 function capture() {
-  const baseline = wrangler(["d1", "execute", database, "--remote", "--json", "--file", "scripts/data/sql/capture-invariants.sql"]);
-  const ledger = wrangler(["d1", "execute", database, "--remote", "--json", "--command", "SELECT name FROM d1_migrations WHERE name='0024_safe_template_evolution.sql'"]);
-  const hasEvolution = JSON.stringify(ledger).includes("0024_safe_template_evolution.sql");
-  let combined = JSON.parse(baseline);
-  if (hasEvolution) combined = [...combined, ...JSON.parse(wrangler(["d1", "execute", database, "--remote", "--json", "--file", "scripts/data/sql/capture-invariants-0024.sql"]))];
-  const invariants = parseInvariantOutput(JSON.stringify(combined));
-  const ownerSql = "SELECT 'template' kind,id,user_id,CASE WHEN deleted_at IS NULL THEN 'active' ELSE 'deleted' END deleted_state FROM templates UNION ALL SELECT 'run',id,user_id,CASE WHEN deleted_at IS NULL THEN 'active' ELSE 'deleted' END FROM checklist_runs";
-  const raw = JSON.parse(wrangler(["d1", "execute", database, "--remote", "--json", "--command", ownerSql]));
-  invariants.ownershipDigest = privacySafeOwnershipDigest({ rows: raw.flatMap((entry) => entry.results ?? []), key: process.env.INVARIANT_HMAC_KEY });
-  return { invariants, hasEvolution };
+  return captureRemoteInvariantSnapshot({
+    database,
+    key: process.env.INVARIANT_HMAC_KEY,
+    runWrangler: wrangler,
+  });
 }
 try {
   if (!database || !state || !["capture", "compare"].includes(mode)) throw new Error("Remote invariant gate arguments are incomplete.");

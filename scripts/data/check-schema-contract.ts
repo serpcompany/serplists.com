@@ -6,6 +6,7 @@ import {
   buildDrizzleContract,
   compareDatabaseSchemas,
   diffDrizzleContract,
+  diffUnapprovedSqlOnlyObjects,
   inspectDatabase,
   listMigrationFiles,
   replayMigrations,
@@ -26,9 +27,10 @@ function readArg(name: string) {
 }
 
 const commit = gitCommit();
-const reportDirectory = readArg("--report-dir") ?? "tmp/data-reports";
+const reportDirectory = readArg("--report-dir") ?? process.env.DATA_REPORT_DIR ?? "tmp/data-reports";
 let migrationNames: string[] = [];
 try {
+  execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "tsx", "scripts/data/check-contract-correction.ts", "--report-dir", reportDirectory], { cwd: process.cwd(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   const migrations = listMigrationFiles();
   migrationNames = migrations.map((migration) => migration.name);
   const migrated = replayMigrations();
@@ -37,8 +39,9 @@ try {
     snapshot.exec(readFileSync(new URL("../../db/schema.sql", import.meta.url), "utf8"));
     const migratedCatalog = inspectDatabase(migrated);
     const runtimeDiff = diffDrizzleContract(buildDrizzleContract(drizzleSchema), migratedCatalog);
+    const authorityDiff = diffUnapprovedSqlOnlyObjects(buildDrizzleContract(drizzleSchema), migratedCatalog);
     const snapshotDiff = compareDatabaseSchemas(migratedCatalog, inspectDatabase(snapshot));
-    const verdict = runtimeDiff.verdict === "pass" && snapshotDiff.verdict === "pass" ? "pass" : "fail";
+    const verdict = runtimeDiff.verdict === "pass" && authorityDiff.verdict === "pass" && snapshotDiff.verdict === "pass" ? "pass" : "fail";
     const report = {
       check: "schema-contract",
       commit,
@@ -52,6 +55,7 @@ try {
         to: migrationNames.at(-1) ?? null,
       },
       runtimeDiff,
+      authorityDiff,
       snapshotDiff,
       verdict,
     };

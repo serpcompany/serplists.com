@@ -21,7 +21,7 @@ const local = process.argv.includes("--local");
 const remote = process.argv.includes("--remote");
 const preview = process.argv.includes("--preview");
 const persistTo = readArg("--persist-to");
-const reportDirectory = readArg("--report-dir") ?? "tmp/data-reports";
+const reportDirectory = readArg("--report-dir") ?? process.env.DATA_REPORT_DIR ?? "tmp/data-reports";
 const migrationFiles = (() => {
   try {
     return readdirSync(new URL("../../db/migrations/", import.meta.url))

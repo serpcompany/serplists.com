@@ -73,12 +73,6 @@ build verification. Issue #97 still owns making staging and production deploy
 jobs depend on this required CI gate and installing the production execution
 boundary.
 
-CI checkout must retain full Git history (`fetch-depth: 0`). Sitemap static-page
-and implementation `lastmod` values come only from non-merge content-authoring
-commits and fail closed when that history is unavailable. Existing template and
-inventory dates may be retained only when their stored content/source hashes
-still match; changed sources require Git history and a regenerated catalog.
-
 The report records every tracked or unignored dirty workspace path. It also
 captures a before/after filesystem inventory using path, type, size, and
 modification-time metadata only; it never reads file contents. `.git/` and

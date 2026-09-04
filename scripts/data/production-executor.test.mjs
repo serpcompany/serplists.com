@@ -17,6 +17,7 @@ import {
   validateGitHubRunEvidence,
   validatePromotionEvidence,
   validateApprovalEvidence,
+  validateChangeProvenance,
 } from "./production-executor-lib.mjs";
 
 const commit = "0123456789abcdef0123456789abcdef01234567";
@@ -58,6 +59,8 @@ describe("protected production executor", () => {
       database: production,
       migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
       ci: { verdict: "pass", commit, workingTreeDirty: false },
+      ciContractCorrection: { verdict: "pass", commit, eventName: "push", comparisonBase: "base-sha" },
+      ciSchemaContract: { verdict: "pass", commit, runtimeDiff: { verdict: "pass" }, authorityDiff: { verdict: "pass" }, snapshotDiff: { verdict: "pass" }, migrationRange: { from: "0001_initial_schema.sql", to: "0024_safe_template_evolution.sql" } },
       rehearsal: {
         verdict: "pass",
         commit,
@@ -65,6 +68,7 @@ describe("protected production executor", () => {
         migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
         recovery: { verdict: "pass" },
         teardown: { verdict: "pass" },
+        sanitizedSource: { verdict: "pass", attestation: { verdict: "pass" } },
       },
     };
 
@@ -72,6 +76,9 @@ describe("protected production executor", () => {
     for (const invalid of [
       { ...evidence, classification: "unclassified" },
       { ...evidence, ci: { ...evidence.ci, verdict: "fail" } },
+      { ...evidence, ciContractCorrection: { ...evidence.ciContractCorrection, eventName: "local-working-tree" } },
+      { ...evidence, ciContractCorrection: { ...evidence.ciContractCorrection, comparisonBase: null } },
+      { ...evidence, ciSchemaContract: { ...evidence.ciSchemaContract, authorityDiff: { verdict: "fail" } } },
       { ...evidence, rehearsal: { ...evidence.rehearsal, commit: "f".repeat(40) } },
       { ...evidence, rehearsal: { ...evidence.rehearsal, target: { environment: "production", databaseId: production.databaseId } } },
       { ...evidence, rehearsal: { ...evidence.rehearsal, recovery: { verdict: "fail" } } },
@@ -83,7 +90,9 @@ describe("protected production executor", () => {
       commit, classification: "additive", database: production,
       migrationRange: { from: null, to: null }, pendingMigrations: [],
       ci: { verdict: "pass", commit, workingTreeDirty: false },
-      rehearsal: { verdict: "pass", commit, target: { environment: "staging", databaseId: "staging" }, migrationRange: { from: null, to: null }, recovery: { verdict: "pass" }, teardown: { verdict: "pass" } },
+      ciContractCorrection: { verdict: "pass", commit, eventName: "push", comparisonBase: "base-sha" },
+      ciSchemaContract: { verdict: "pass", commit, runtimeDiff: { verdict: "pass" }, authorityDiff: { verdict: "pass" }, snapshotDiff: { verdict: "pass" }, migrationRange: { from: "0001_initial_schema.sql", to: "0024_safe_template_evolution.sql" } },
+      rehearsal: { verdict: "pass", commit, target: { environment: "staging", databaseId: "staging" }, migrationRange: { from: null, to: null }, recovery: { verdict: "pass" }, teardown: { verdict: "pass" }, sanitizedSource: { verdict: "pass", attestation: { verdict: "pass" } } },
     };
     expect(validatePromotionEvidence(evidence).pendingMigrations).toEqual([]);
   });
@@ -104,12 +113,39 @@ describe("protected production executor", () => {
     expect(() => assertMigrationClassification({ requested: "additive", sqlTexts: ["DELETE FROM x;"] })).toThrow(/destructive/i);
   });
 
-  it("requires an independent recorded human approval and higher-risk decision evidence", () => {
-    const reviews = [{ state: "approved", user: { login: "independent-reviewer" } }];
-    expect(validateApprovalEvidence({ reviews, classification: "backfill", actor: "author", decision: "Reviewed recovery and invariants.", environment: "production" }).approver).toBe("independent-reviewer");
-    expect(() => validateApprovalEvidence({ reviews, classification: "destructive", actor: "author", decision: "", environment: "production" })).toThrow(/decision/i);
-    expect(() => validateApprovalEvidence({ reviews: [{ state: "approved", user: { login: "author" } }], classification: "additive", actor: "author", decision: "approved", environment: "production" })).toThrow(/independent/i);
-    expect(() => validateApprovalEvidence({ reviews, classification: "irreversible", actor: "author", decision: "Reviewed irreversible recovery decision.", environment: "production", repositoryOwnerApprover: "repo-owner" })).toThrow(/repository-owner/i);
+  it("binds approval independence to every actual change author, not the dispatcher", () => {
+    const productionReview = (login, comment = "Reviewed recovery and invariant evidence.") => ({
+      state: "approved", comment, user: { login, type: "User" }, environments: [{ name: "production" }],
+    });
+    const changeAuthors = ["pr-author", "commit-author"];
+    expect(validateApprovalEvidence({ reviews: [productionReview("independent-reviewer")], classification: "backfill", actor: "dispatcher", changeAuthors }).approver).toBe("independent-reviewer");
+    expect(() => validateApprovalEvidence({ reviews: [productionReview("pr-author")], classification: "additive", actor: "different-dispatcher", changeAuthors })).toThrow(/independent/i);
+    expect(() => validateApprovalEvidence({ reviews: [productionReview("COMMIT-AUTHOR")], classification: "additive", actor: "dispatcher", changeAuthors })).toThrow(/independent/i);
+    expect(() => validateApprovalEvidence({ reviews: [{ ...productionReview("independent"), environments: [{ name: "staging" }] }], classification: "additive", actor: "dispatcher", changeAuthors })).toThrow(/production/i);
+    expect(() => validateApprovalEvidence({ reviews: [productionReview("independent", "short")], classification: "destructive", actor: "dispatcher", changeAuthors })).toThrow(/decision/i);
+  });
+
+  it("requires distinct verified repository-admin production approval for irreversible changes", () => {
+    const review = (login, environment = "production") => ({ state: "approved", comment: "Reviewed irreversible recovery evidence.", user: { login, type: "User" }, environments: [{ name: environment }] });
+    const base = { reviews: [review("independent"), review("repo-owner", "production-owner-approval")], classification: "irreversible", actor: "dispatcher", changeAuthors: ["author"], repositoryOwnerApprover: "repo-owner" };
+    expect(validateApprovalEvidence({ ...base, ownerPermission: { permission: "admin", user: { login: "repo-owner" } } })).toMatchObject({ approver: "independent", repositoryOwnerApprover: "repo-owner" });
+    expect(() => validateApprovalEvidence({ ...base, ownerPermission: { permission: "write", user: { login: "repo-owner" } } })).toThrow(/admin/i);
+    expect(() => validateApprovalEvidence({ ...base, reviews: [review("repo-owner", "production-owner-approval")], ownerPermission: { permission: "admin", user: { login: "repo-owner" } } })).toThrow(/distinct/i);
+    expect(() => validateApprovalEvidence({ ...base, changeAuthors: ["repo-owner"], ownerPermission: { permission: "admin", user: { login: "repo-owner" } } })).toThrow(/author/i);
+  });
+
+  it("derives exact main PR and all human authors from GitHub change provenance", () => {
+    const pulls = [{ number: 100, merged_at: "2026-09-05T00:00:00Z", merge_commit_sha: commit, base: { ref: "main" }, user: { login: "PR-Author" } }];
+    const commits = [
+      { author: { login: "commit-author" }, committer: { login: "trusted-committer" }, commit: { message: "Change\n\nCo-authored-by: @co-author", verification: { verified: true } } },
+      { author: { login: "pr-author" }, committer: { login: "trusted-committer" }, commit: { message: "Other", verification: { verified: true } } },
+    ];
+    expect(validateChangeProvenance({ pulls, commits, expectedCommit: commit })).toEqual({ pullRequestNumber: 100, mergeCommit: commit, changeAuthors: ["co-author", "commit-author", "pr-author", "trusted-committer"] });
+    expect(() => validateChangeProvenance({ pulls: [], commits, expectedCommit: commit })).toThrow(/pull request/i);
+    expect(() => validateChangeProvenance({ pulls: [{ ...pulls[0], base: { ref: "staging" } }], commits, expectedCommit: commit })).toThrow(/pull request/i);
+    expect(() => validateChangeProvenance({ pulls, commits: [{ author: null, committer: { login: "committer" }, commit: { message: "Change", verification: { verified: true } } }], expectedCommit: commit })).toThrow(/author/i);
+    expect(() => validateChangeProvenance({ pulls, commits: [{ author: { login: "author" }, committer: { login: "committer" }, commit: { message: "Change", verification: { verified: false } } }], expectedCommit: commit })).toThrow(/verified/i);
+    expect(() => validateChangeProvenance({ pulls, commits: [{ author: { login: "author" }, committer: { login: "committer" }, commit: { message: "Change\n\nCo-authored-by: Person <private@example.test>", verification: { verified: true } } }], expectedCommit: commit })).toThrow(/co-author/i);
   });
 
   it.each([

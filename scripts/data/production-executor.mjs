@@ -5,14 +5,12 @@ import path from "node:path";
 import {
   assertDeployEvidence,
   assertProductionArtifactContext,
-  compareProductionInvariants,
-  parseInvariantOutput,
-  privacySafeOwnershipDigest,
   assertProductionWorkflowContext,
   runProductionDataPhase,
   validatePromotionEvidence,
   verifySignedEvidence,
 } from "./production-executor-lib.mjs";
+import { captureRemoteInvariantSnapshot, compareProductionInvariants } from "./invariant-capture-lib.mjs";
 import { extractD1Identity } from "./wrangler-identity-lib.mjs";
 import { parsePendingMigrationNames } from "./pending-migrations-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
@@ -63,14 +61,12 @@ try {
 
   const database = request.database;
   let pendingObserved = [];
-  let preInvariants = null;
-  const ownershipDigest = () => {
-    const ownerSql = "SELECT 'template' kind,id,user_id,CASE WHEN deleted_at IS NULL THEN 'active' ELSE 'deleted' END deleted_state FROM templates UNION ALL SELECT 'run',id,user_id,CASE WHEN deleted_at IS NULL THEN 'active' ELSE 'deleted' END FROM checklist_runs";
-    const raw = pnpm(["exec", "wrangler", "d1", "execute", database.databaseName, "--remote", "--json", "--command", ownerSql]);
-    const parsed = JSON.parse(raw);
-    const rows = (Array.isArray(parsed) ? parsed : [parsed]).flatMap((entry) => entry.results ?? []);
-    return privacySafeOwnershipDigest({ rows, key: process.env.PRODUCTION_BACKUP_ENCRYPTION_KEY });
-  };
+  let preInvariantSnapshot = null;
+  const captureInvariants = () => captureRemoteInvariantSnapshot({
+    database: database.databaseName,
+    key: process.env.PRODUCTION_BACKUP_ENCRYPTION_KEY,
+    runWrangler: (args) => pnpm(["exec", "wrangler", ...args]),
+  });
   const evidence = runProductionDataPhase({
     commit: request.commit,
     database,
@@ -106,22 +102,17 @@ try {
           if (JSON.stringify(pendingObserved) !== JSON.stringify(request.pendingMigrations)) throw new Error("Live pending migrations differ from the reviewed migration range.");
           break;
         case "pre-invariants":
-          output = pnpm(["exec", "wrangler", "d1", "execute", database.databaseName, "--remote", "--json", "--file", "scripts/data/sql/capture-invariants.sql"]);
-          if (!request.pendingMigrations.includes("0024_safe_template_evolution.sql")) {
-            const versionedPre = pnpm(["exec", "wrangler", "d1", "execute", database.databaseName, "--remote", "--json", "--file", "scripts/data/sql/capture-invariants-0024.sql"]);
-            output = JSON.stringify([...JSON.parse(output), ...JSON.parse(versionedPre)]);
-          }
-          preInvariants = parseInvariantOutput(output);
-          preInvariants.ownershipDigest = ownershipDigest();
-          output = JSON.stringify(preInvariants);
+          preInvariantSnapshot = captureInvariants();
+          output = JSON.stringify(preInvariantSnapshot);
           break;
         case "post-invariants": {
-          const baseline = pnpm(["exec", "wrangler", "d1", "execute", database.databaseName, "--remote", "--json", "--file", "scripts/data/sql/capture-invariants.sql"]);
-          const versioned = pnpm(["exec", "wrangler", "d1", "execute", database.databaseName, "--remote", "--json", "--file", "scripts/data/sql/capture-invariants-0024.sql"]);
-          output = JSON.stringify([...JSON.parse(baseline), ...JSON.parse(versioned)]);
-          const post = parseInvariantOutput(output);
-          post.ownershipDigest = ownershipDigest();
-          const comparison = compareProductionInvariants({ pre: preInvariants, post, preHasEvolution: !request.pendingMigrations.includes("0024_safe_template_evolution.sql"), postHasEvolution: true });
+          const post = captureInvariants();
+          const comparison = compareProductionInvariants({
+            pre: preInvariantSnapshot.invariants,
+            post: post.invariants,
+            preHasEvolution: preInvariantSnapshot.hasEvolution,
+            postHasEvolution: post.hasEvolution,
+          });
           if (comparison.verdict !== "pass") throw new Error(`Production invariant comparison failed: ${comparison.failures.join("; ")}`);
           output = JSON.stringify(comparison);
           break;

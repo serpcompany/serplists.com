@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "allowedFiles": ["db/schema/auth.ts", "db/schema/checklistRuns.ts", "db/schema/users.ts"],
+  "properties": [
+    { "table": "account", "column": "created_at", "attribute": "defaultValue", "expectedValue": "cast(strftime('%s','now') as integer) * 1000", "creatingMigration": "0008_better_auth.sql" },
+    { "table": "account", "column": "updated_at", "attribute": "defaultValue", "expectedValue": "cast(strftime('%s','now') as integer) * 1000", "creatingMigration": "0008_better_auth.sql" },
+    { "table": "session", "column": "created_at", "attribute": "defaultValue", "expectedValue": "cast(strftime('%s','now') as integer) * 1000", "creatingMigration": "0008_better_auth.sql" },
+    { "table": "session", "column": "updated_at", "attribute": "defaultValue", "expectedValue": "cast(strftime('%s','now') as integer) * 1000", "creatingMigration": "0008_better_auth.sql" },
+    { "table": "verification", "column": "created_at", "attribute": "defaultValue", "expectedValue": "cast(strftime('%s','now') as integer) * 1000", "creatingMigration": "0008_better_auth.sql" },
+    { "table": "verification", "column": "updated_at", "attribute": "defaultValue", "expectedValue": "cast(strftime('%s','now') as integer) * 1000", "creatingMigration": "0008_better_auth.sql" },
+    { "table": "checklist_runs", "column": "status", "attribute": "notNull", "expectedValue": false, "creatingMigration": "0001_initial_schema.sql" },
+    { "table": "checklist_runs", "column": "status", "attribute": "defaultValue", "expectedValue": "'in_progress'", "creatingMigration": "0001_initial_schema.sql" },
+    { "table": "users", "column": "email_verified", "attribute": "notNull", "expectedValue": true, "creatingMigration": "0008_better_auth.sql" },
+    { "table": "users", "column": "email_verified", "attribute": "defaultValue", "expectedValue": "0", "creatingMigration": "0008_better_auth.sql" },
+    { "table": "users", "column": "referral_count", "attribute": "defaultValue", "expectedValue": "0", "creatingMigration": "0002_add_username_and_profiles.sql" },
+    { "table": "users", "column": "total_earnings", "attribute": "defaultValue", "expectedValue": "0", "creatingMigration": "0002_add_username_and_profiles.sql" }
+  ],
+  "appliedThrough": "0024_safe_template_evolution.sql",
+  "contractFingerprint": "b3872058c6ceb5af90bcc5231093b12c3fbc4aa505c828a075a9a00a41a34666"
+}

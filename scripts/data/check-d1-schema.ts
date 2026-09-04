@@ -4,14 +4,17 @@ import {
   buildCatalogContract,
   buildDrizzleContract,
   catalogFromPragmaResults,
+  compareDatabaseSchemas,
   diffDrizzleContract,
   diffRuntimeSchema,
   inspectDatabase,
   listMigrationFiles,
+  parseRemoteTableInventory,
   replayMigrations,
 } from "./schema-contract";
 import { buildFailureReport, writeDataCheckReports } from "./reporting.mjs";
 import { resolveRemoteD1Identity } from "./wrangler-identity-lib.mjs";
+import { parseAppliedMigrationLedger } from "./invariant-capture-lib.mjs";
 
 function readArg(name: string) {
   const inline = process.argv.find((argument) => argument.startsWith(`${name}=`));
@@ -23,7 +26,7 @@ function readArg(name: string) {
 const database = readArg("--database") ?? "unknown";
 const environment = readArg("--label") ?? "unknown";
 const preview = process.argv.includes("--preview");
-const reportDirectory = readArg("--report-dir") ?? "tmp/data-reports";
+const reportDirectory = readArg("--report-dir") ?? process.env.DATA_REPORT_DIR ?? "tmp/data-reports";
 const migrations = (() => {
   try { return listMigrationFiles().map((migration) => migration.name); } catch { return []; }
 })();
@@ -38,20 +41,23 @@ try {
   }
   const runtimeContract = buildDrizzleContract(drizzleSchema);
   const migrated = replayMigrations();
-  const migrationContract = buildCatalogContract(inspectDatabase(migrated));
+  const expectedMigrationCatalog = inspectDatabase(migrated);
+  const migrationContract = buildCatalogContract(expectedMigrationCatalog);
   migrated.close();
-  const tableNames = [...new Set([
-    ...Object.keys(runtimeContract.tables),
-    ...Object.keys(migrationContract.tables),
-  ])].sort();
+  const expectedTableNames = [...new Set([...Object.keys(runtimeContract.tables), ...Object.keys(migrationContract.tables)])];
+  resolvedIdentity = resolveRemoteD1Identity(database);
+  const targetArgs = ["exec", "wrangler", "d1", "execute", database, "--remote"];
+  if (preview) targetArgs.push("--preview");
+  const inventoryOutput = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", [...targetArgs, "--json", "--command", "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name!='d1_migrations' ORDER BY name"], { cwd: process.cwd(), encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+  const tableNames = [...new Set([...expectedTableNames, ...parseRemoteTableInventory(inventoryOutput)])].sort();
   const sql = [
     ...tableNames.map((name) => `PRAGMA table_info('${name.replaceAll("'", "''")}');`),
     ...tableNames.map((name) => `PRAGMA index_list('${name.replaceAll("'", "''")}');`),
     ...tableNames.map((name) => `SELECT il.name AS index_name, ii.seqno, ii.name AS column_name, sm.sql AS index_sql FROM pragma_index_list('${name.replaceAll("'", "''")}') AS il JOIN pragma_index_info(il.name) AS ii LEFT JOIN sqlite_schema AS sm ON sm.type = 'index' AND sm.name = il.name ORDER BY il.name, ii.seqno;`),
+    ...tableNames.map((name) => `PRAGMA foreign_key_list('${name.replaceAll("'", "''")}');`),
+    "SELECT type AS object_type, name, tbl_name AS table_name, sql FROM sqlite_schema WHERE type IN ('trigger','view') ORDER BY type,name;",
   ].join(" ");
-  resolvedIdentity = resolveRemoteD1Identity(database);
-  const args = ["exec", "wrangler", "d1", "execute", database, "--remote"];
-  if (preview) args.push("--preview");
+  const args = [...targetArgs];
   args.push("--json", "--command", sql);
   const output = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", args, {
     cwd: process.cwd(),
@@ -62,9 +68,13 @@ try {
   });
   const results = JSON.parse(output) as Array<{ results?: Array<Record<string, unknown>> }>;
   const remoteCatalog = catalogFromPragmaResults(tableNames, results);
+  const ledgerOutput = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", [...targetArgs, "--json", "--command", "SELECT name FROM d1_migrations ORDER BY name"], { cwd: process.cwd(), encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+  const appliedMigrations = parseAppliedMigrationLedger(ledgerOutput);
+  const missingAppliedMigrations = migrations.filter((name) => !appliedMigrations.includes(name));
   const runtimeDiff = diffRuntimeSchema(drizzleSchema, remoteCatalog);
   const migrationDiff = diffDrizzleContract(migrationContract, remoteCatalog);
-  const verdict = runtimeDiff.verdict === "pass" && migrationDiff.verdict === "pass" ? "pass" : "fail";
+  const migrationObjectDiff = compareDatabaseSchemas(expectedMigrationCatalog, remoteCatalog);
+  const verdict = runtimeDiff.verdict === "pass" && migrationDiff.verdict === "pass" && migrationObjectDiff.verdict === "pass" && missingAppliedMigrations.length === 0 ? "pass" : "fail";
   const assertedDatabaseId = readArg("--database-id") ?? process.env.D1_DATABASE_ID;
   if (assertedDatabaseId && assertedDatabaseId !== resolvedIdentity.databaseId) {
     throw new Error(`Resolved database ID ${resolvedIdentity.databaseId} does not match asserted ID ${assertedDatabaseId}.`);
@@ -75,7 +85,8 @@ try {
     commit,
     target: { environment, database, databaseId, mode: preview ? "preview" : "remote" },
     migrationRange: { from: migrations[0] ?? null, to: migrations.at(-1) ?? null },
-    schemaDifferences: { runtime: runtimeDiff, migration: migrationDiff },
+    schemaDifferences: { runtime: runtimeDiff, migration: migrationDiff, migrationObjects: migrationObjectDiff },
+    ledger: { appliedThrough: appliedMigrations.at(-1) ?? null, missingAppliedMigrations },
     verdict,
   };
   const summary = verdict === "pass"

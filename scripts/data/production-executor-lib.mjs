@@ -1,4 +1,9 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
+export {
+  compareProductionInvariants,
+  parseInvariantOutput,
+  privacySafeOwnershipDigest,
+} from "./invariant-capture-lib.mjs";
 
 const REQUIRED_CONTEXT = {
   GITHUB_ACTIONS: "true",
@@ -71,6 +76,15 @@ export function validatePromotionEvidence(evidence) {
   if (evidence.ci?.verdict !== "pass" || evidence.ci.commit !== evidence.commit || evidence.ci.workingTreeDirty) {
     throw new Error("Exact-commit CI data-regression evidence is missing or failed.");
   }
+  if (evidence.ciContractCorrection?.verdict !== "pass" || evidence.ciContractCorrection.commit !== evidence.commit ||
+      !["pull_request", "push", "workflow_dispatch"].includes(evidence.ciContractCorrection.eventName) || !evidence.ciContractCorrection.comparisonBase) {
+    throw new Error("Exact-commit CI contract-correction comparison evidence is missing or untrusted.");
+  }
+  const schema = evidence.ciSchemaContract;
+  if (schema?.verdict !== "pass" || schema.commit !== evidence.commit || schema.runtimeDiff?.verdict !== "pass" ||
+      schema.authorityDiff?.verdict !== "pass" || schema.snapshotDiff?.verdict !== "pass" || !schema.migrationRange?.to) {
+    throw new Error("Exact-commit full schema-contract evidence is missing or failed.");
+  }
   const rehearsal = evidence.rehearsal;
   if (rehearsal?.verdict !== "pass" || rehearsal.commit !== evidence.commit) throw new Error("Exact-commit rehearsal evidence is missing or failed.");
   if (!['rehearsal', 'staging'].includes(rehearsal.target?.environment) || rehearsal.target.databaseId === evidence.database.databaseId) {
@@ -81,6 +95,9 @@ export function validatePromotionEvidence(evidence) {
   }
   if (rehearsal.recovery?.verdict !== "pass" || rehearsal.teardown?.verdict !== "pass") {
     throw new Error("Rehearsal recovery and teardown evidence must pass.");
+  }
+  if (rehearsal.sanitizedSource?.verdict !== "pass" || rehearsal.sanitizedSource?.attestation?.verdict !== "pass") {
+    throw new Error("Rehearsal must prove attested repository-sanitized production-shaped source import.");
   }
   return evidence;
 }
@@ -93,51 +110,112 @@ export function validateGitHubRunEvidence({ metadata, commit, workflowName }) {
   return metadata;
 }
 
-export function validateApprovalEvidence({ reviews, classification, actor, decision, environment, repositoryOwnerApprover }) {
-  if (environment !== "production") throw new Error("Approval evidence must be bound to the production environment.");
-  const approved = (reviews ?? []).find((review) => review?.state === "approved" && (review.user?.login ?? review.reviewer?.login) !== actor);
-  const approver = approved?.user?.login ?? approved?.reviewer?.login;
-  if (!approver) throw new Error("Independent protected-environment human approval is missing.");
-  if (["backfill", "destructive", "irreversible"].includes(classification) && String(decision ?? "").trim().length < 20) {
-    throw new Error(`${classification} approval requires written decision and recovery evidence.`);
+function normalizeLogin(value) {
+  return typeof value === "string" && value.trim() ? value.trim().replace(/^@/, "").toLowerCase() : null;
+}
+
+export function validateChangeProvenance({ pulls, commits, expectedCommit }) {
+  assertSha(expectedCommit, "Expected change commit");
+  const matches = (pulls ?? []).filter((pull) =>
+    pull?.merged_at && pull?.base?.ref === "main" && pull?.merge_commit_sha === expectedCommit,
+  );
+  if (matches.length !== 1) {
+    throw new Error("Exact merged main pull request provenance is missing or ambiguous.");
   }
-  const approvedLogins = (reviews ?? []).filter((review) => review?.state === "approved").map((review) => review.user?.login ?? review.reviewer?.login);
-  if (classification === "irreversible" && (!repositoryOwnerApprover || !approvedLogins.includes(repositoryOwnerApprover))) {
-    throw new Error("Irreversible migration requires separate repository-owner approval.");
+  const pull = matches[0];
+  const commitEntries = (commits ?? []).flat();
+  const commitLogins = [];
+  for (const commit of commitEntries) {
+    if (commit?.commit?.verification?.verified !== true) {
+      throw new Error("Every pull request commit requires verified GitHub signature provenance.");
+    }
+    commitLogins.push(commit?.author?.login, commit?.committer?.login);
+    for (const match of String(commit?.commit?.message ?? "").matchAll(/^Co-authored-by:\s*(.+)$/gim)) {
+      const login = /^@([a-z0-9-]+)$/i.exec(match[1].trim())?.[1];
+      if (!login) {
+        throw new Error("Pull request commit contains an unresolved co-author identity.");
+      }
+      commitLogins.push(login);
+    }
   }
-  return { approver, actor, classification, decision, environment, ...(classification === "irreversible" ? { repositoryOwnerApprover } : {}), source: "github-environment-review" };
+  const authorLogins = [pull.user?.login, ...commitLogins];
+  const normalized = authorLogins.map(normalizeLogin);
+  if (!Number.isInteger(pull.number) || !commitEntries.length || normalized.some((login) => !login)) {
+    throw new Error("Pull request provenance contains an unresolved human author.");
+  }
+  return {
+    pullRequestNumber: pull.number,
+    mergeCommit: expectedCommit,
+    changeAuthors: [...new Set(normalized)].sort(),
+  };
 }
 
-export function parseInvariantOutput(output) {
-  const parsed = JSON.parse(output);
-  const rows = (Array.isArray(parsed) ? parsed : [parsed]).flatMap((entry) => entry?.results ?? []);
-  const values = Object.fromEntries(rows.filter((row) => typeof row?.invariant === "string").map((row) => [row.invariant, Number(row.total_rows)]));
-  if (!Object.keys(values).length || Object.values(values).some((value) => !Number.isFinite(value))) throw new Error("Production invariant output is missing or malformed.");
-  return values;
+function isProductionHumanApproval(review) {
+  return String(review?.state).toLowerCase() === "approved" &&
+    review?.user?.type === "User" &&
+    (review.environments ?? []).some((environment) => environment?.name === "production");
 }
 
-export function compareProductionInvariants({ pre, post, preHasEvolution = true, postHasEvolution = true, requireOwnershipDigest = true }) {
-  const stable = ["users", "templates", "templates_active", "templates_deleted", "template_owners", "runs", "runs_active", "runs_deleted", "run_owners", ...(requireOwnershipDigest ? ["ownershipDigest"] : [])];
-  const baseline = [...stable, "templates_invalid_json", "templates_invalid_version", "runs_invalid_json", "orphaned_templates", "orphaned_runs"];
-  const evolution = ["templates_invalid_content_version", "runs_invalid_template_version", "runs_invalid_revision", "runs_invalid_retired_json"];
-  const omitted = [
-    ...baseline.filter((name) => pre[name] === undefined || post[name] === undefined),
-    ...(preHasEvolution ? evolution.filter((name) => pre[name] === undefined) : []),
-    ...(postHasEvolution ? evolution.filter((name) => post[name] === undefined) : []),
-  ];
-  const zero = Object.keys(post).filter((name) => name.includes("invalid") || name.startsWith("orphaned_"));
-  const failures = [
-    ...omitted.map((name) => `${name} omitted`),
-    ...stable.filter((name) => pre[name] !== undefined && post[name] !== pre[name]).map((name) => `${name} changed from ${pre[name]} to ${post[name]}`),
-    ...zero.filter((name) => post[name] !== 0).map((name) => `${name} is ${post[name]}`),
-  ];
-  return { pre, post, failures, verdict: failures.length ? "fail" : "pass" };
+function isProductionOwnerApproval(review) {
+  return String(review?.state).toLowerCase() === "approved" &&
+    review?.user?.type === "User" &&
+    (review.environments ?? []).some((environment) => environment?.name === "production-owner-approval");
 }
 
-export function privacySafeOwnershipDigest({ rows, key }) {
-  if ((key ?? "").length < 32 || !Array.isArray(rows)) throw new Error("Ownership digest requires protected key and rows.");
-  const canonical = rows.map((row) => [String(row.kind), String(row.id), String(row.user_id), String(row.deleted_state)].join("\u001f")).sort().join("\n");
-  return createHmac("sha256", key).update(canonical).digest("hex");
+export function validateApprovalEvidence({
+  reviews,
+  classification,
+  actor,
+  changeAuthors,
+  repositoryOwnerApprover,
+  ownerPermission,
+}) {
+  const authors = new Set((changeAuthors ?? []).map(normalizeLogin));
+  if (!authors.size || authors.has(null)) throw new Error("Verified change author provenance is required.");
+  const approved = (reviews ?? []).filter(isProductionHumanApproval);
+  const owner = normalizeLogin(repositoryOwnerApprover);
+  if (!approved.length) {
+    const hasOwnerOnly = classification === "irreversible" &&
+      (reviews ?? []).some((review) => isProductionOwnerApproval(review) && normalizeLogin(review.user.login) === owner);
+    throw new Error(hasOwnerOnly
+      ? "Irreversible migration requires a distinct independent production approver in addition to the repository owner."
+      : "Production protected-environment human approval is missing.");
+  }
+  const independent = approved.find((review) => {
+    const login = normalizeLogin(review.user.login);
+    return login && !authors.has(login) && (classification !== "irreversible" || login !== owner);
+  });
+  const approver = normalizeLogin(independent?.user?.login);
+  if (!approver) {
+    throw new Error(classification === "irreversible"
+      ? "Irreversible migration requires a distinct independent production approver in addition to the repository owner."
+      : "Independent production approval from a non-author is missing.");
+  }
+  const decision = String(independent.comment ?? "").trim();
+  if (["backfill", "destructive", "irreversible"].includes(classification) && decision.length < 20) {
+    throw new Error(`${classification} approval requires a written production review decision and recovery evidence.`);
+  }
+  if (classification === "irreversible") {
+    const permissionLogin = normalizeLogin(ownerPermission?.user?.login);
+    if (!owner || permissionLogin !== owner || ownerPermission?.permission !== "admin") {
+      throw new Error("Irreversible migration requires a verified repository-admin owner identity.");
+    }
+    if (authors.has(owner)) throw new Error("Irreversible repository-owner approver cannot be a change author.");
+    const ownerReview = (reviews ?? []).filter(isProductionOwnerApproval)
+      .find((review) => normalizeLogin(review.user.login) === owner);
+    if (!ownerReview) throw new Error("Irreversible migration requires repository-owner approval bound to production.");
+    if (owner === approver) throw new Error("Irreversible migration requires a distinct additional repository-owner approver.");
+  }
+  return {
+    approver,
+    dispatcher: normalizeLogin(actor),
+    changeAuthors: [...authors].sort(),
+    classification,
+    decision,
+    environment: "production",
+    ...(classification === "irreversible" ? { repositoryOwnerApprover: owner } : {}),
+    source: "github-environment-review",
+  };
 }
 
 function signatureFor(payload) {

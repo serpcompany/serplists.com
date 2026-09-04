@@ -16,4 +16,13 @@ describe("local production mutation guard", () => {
     expect(scripts[name]).toContain("production-path-blocked.mjs");
     expect(scripts[name]).not.toContain("wrangler");
   });
+
+  it.each([
+    "db:migrations:baseline:staging",
+    "db:migrate:d1:staging",
+    "db:seed:official:staging",
+  ])("routes %s through the guarded remote CLI instead of direct Wrangler", (name) => {
+    expect(scripts[name]).toContain("remote-path-blocked.mjs");
+    expect(scripts[name]).not.toContain("wrangler");
+  });
 });

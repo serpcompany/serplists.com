@@ -6,6 +6,8 @@ import { getTableConfig, SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 type Database = InstanceType<typeof DatabaseSync>;
 
 export interface DrizzleContract {
+  strictObjects?: boolean;
+  allowedForeignKeys?: Record<string, Array<{ columns: string[]; referencedTable: string; referencedColumns: string[]; onUpdate: string; onDelete: string }>>;
   tables: Record<string, {
     columns: Array<{
       name: string;
@@ -29,8 +31,10 @@ export interface DatabaseCatalog {
   tables: Record<string, {
     columns: Array<{ name: string; type: string; notNull: boolean; defaultValue: string | null; primaryKey: number }>;
     indexes: Array<{ name: string; unique: boolean; partial: boolean; columns: string[]; predicate: string | null }>;
+    foreignKeys: Array<{ columns: string[]; referencedTable: string; referencedColumns: string[]; onUpdate: string; onDelete: string }>;
   }>;
   triggers: Array<{ name: string; table: string; sql: string }>;
+  views: Array<{ name: string; sql: string }>;
 }
 
 interface PragmaResult {
@@ -38,6 +42,65 @@ interface PragmaResult {
 }
 
 const migrationsDirectory = fileURLToPath(new URL("../../db/migrations/", import.meta.url));
+export const SQL_ONLY_OBJECT_ALLOWLIST = Object.freeze({
+  tables: ["sitemap_revisions", "sitemap_profile_revisions", "sitemap_owner_revisions", "sitemap_category_revisions", "sitemap_shard_revisions"],
+  indexes: [
+    "idx_audit_events_actor", "idx_audit_events_resource", "idx_audit_events_subject",
+    "idx_checklist_runs_assigned_to_user_id", "idx_checklist_runs_share_token", "idx_checklist_runs_status", "idx_checklist_runs_team_id", "idx_checklist_runs_template_id", "idx_checklist_runs_user_id",
+    "idx_team_invites_email", "idx_team_invites_team_email", "idx_team_invites_token_hash_unique",
+    "idx_team_members_active_owner_unique", "idx_team_members_team_role", "idx_team_members_team_user_unique", "idx_team_members_user_id",
+    "idx_teams_created_by_user_id", "idx_teams_slug_unique", "idx_template_versions_subject", "idx_template_versions_template_version_unique",
+    "idx_templates_category", "idx_templates_owner", "idx_templates_public", "idx_templates_slug", "idx_templates_slug_unique", "idx_templates_team_id", "idx_templates_user_id",
+    "idx_usage_analytics_action", "idx_usage_analytics_user_id", "idx_users_email", "idx_users_username", "stripe_subscriptions_customer_id_idx", "stripe_subscriptions_user_id_idx",
+  ],
+  triggers: ["sitemap_owner_users_insert", "sitemap_templates_delete", "sitemap_templates_insert", "sitemap_templates_update", "sitemap_users_delete", "sitemap_users_delete_cleanup", "sitemap_users_insert", "sitemap_users_update_owner", "sitemap_users_update_profile"],
+  views: [],
+});
+
+// Historical D1 relations created before Drizzle relation metadata was adopted.
+// New relations must be declared in Drizzle; this list may only shrink.
+export const SQL_ONLY_RELATION_ALLOWLIST = Object.freeze({
+  account: [["user_id", "users", "id", "no action", "cascade"]],
+  audit_events: [["actor_user_id", "users", "id", "no action", "set null"]],
+  checklist_runs: [
+    ["template_id", "templates", "id", "no action", "set null"], ["user_id", "users", "id", "no action", "cascade"],
+    ["completed_by_user_id", "users", "id", "no action", "set null"], ["started_by_user_id", "users", "id", "no action", "set null"],
+    ["assigned_to_user_id", "users", "id", "no action", "set null"], ["created_by_user_id", "users", "id", "no action", "set null"], ["team_id", "teams", "id", "no action", "set null"],
+  ],
+  session: [["user_id", "users", "id", "no action", "cascade"]],
+  stripe_subscriptions: [["user_id", "users", "id", "no action", "cascade"]],
+  team_entitlement_overrides: [["team_id", "teams", "id", "no action", "cascade"]],
+  team_invites: [["accepted_by_user_id", "users", "id", "no action", "set null"], ["invited_by_user_id", "users", "id", "no action", "restrict"], ["team_id", "teams", "id", "no action", "cascade"]],
+  team_members: [["invited_by_user_id", "users", "id", "no action", "set null"], ["user_id", "users", "id", "no action", "cascade"], ["team_id", "teams", "id", "no action", "cascade"]],
+  teams: [["created_by_user_id", "users", "id", "no action", "restrict"], ["billing_owner_user_id", "users", "id", "no action", "set null"]],
+  template_likes: [["template_id", "templates", "id", "no action", "cascade"], ["user_id", "users", "id", "no action", "cascade"]],
+  template_versions: [["changed_by_user_id", "users", "id", "no action", "restrict"], ["template_id", "templates", "id", "no action", "cascade"]],
+  templates: [["user_id", "users", "id", "no action", "cascade"], ["updated_by_user_id", "users", "id", "no action", "set null"], ["created_by_user_id", "users", "id", "no action", "set null"], ["team_id", "teams", "id", "no action", "set null"]],
+  usage_analytics: [["user_id", "users", "id", "no action", "cascade"]],
+});
+
+function relationFromTuple(tuple: readonly string[]) {
+  return { columns: [tuple[0]], referencedTable: tuple[1], referencedColumns: [tuple[2]], onUpdate: tuple[3], onDelete: tuple[4] };
+}
+
+export function parseRemoteTableInventory(output: string) {
+  const parsed = JSON.parse(output);
+  const rows = (Array.isArray(parsed) ? parsed : [parsed]).flatMap((entry) => entry?.results ?? []);
+  const names = rows.map((row) => row?.name).filter((name) => typeof name === "string" && !name.startsWith("sqlite_")).sort();
+  if (!names.length) throw new Error("Remote table inventory is empty or malformed.");
+  return [...new Set(names)];
+}
+
+export function diffUnapprovedSqlOnlyObjects(contract: DrizzleContract, catalog: DatabaseCatalog, allowlist = SQL_ONLY_OBJECT_ALLOWLIST) {
+  const runtimeTables = new Set(Object.keys(contract.tables));
+  const expectedIndexes = new Set(Object.values(contract.tables).flatMap((table) => table.indexes.map((index) => index.name)));
+  const unexpectedTables = Object.keys(catalog.tables).filter((name) => !runtimeTables.has(name) && !allowlist.tables.includes(name));
+  const unexpectedIndexes = Object.values(catalog.tables).flatMap((table) => table.indexes.map((index) => index.name))
+    .filter((name) => !name.startsWith("sqlite_autoindex_") && !expectedIndexes.has(name) && !allowlist.indexes.includes(name));
+  const unexpectedTriggers = catalog.triggers.map((trigger) => trigger.name).filter((name) => !allowlist.triggers.includes(name));
+  const unexpectedViews = catalog.views.map((view) => view.name).filter((name) => !allowlist.views.includes(name));
+  return { unexpectedTables, unexpectedIndexes, unexpectedTriggers, unexpectedViews, verdict: unexpectedTables.length || unexpectedIndexes.length || unexpectedTriggers.length || unexpectedViews.length ? "fail" : "pass" } as const;
+}
 
 export function listMigrationFiles() {
   return readdirSync(migrationsDirectory)
@@ -81,6 +144,8 @@ export function buildDrizzleContract(schema: Record<string, unknown>): DrizzleCo
     .sort((left, right) => left.name.localeCompare(right.name, "en"));
 
   return {
+    strictObjects: true,
+    allowedForeignKeys: Object.fromEntries(Object.entries(SQL_ONLY_RELATION_ALLOWLIST).map(([table, relations]) => [table, relations.map(relationFromTuple)])),
     tables: Object.fromEntries(tables.map((table) => {
       const explicitIndexes = table.indexes.map((index) => ({
         name: index.config.name,
@@ -131,6 +196,16 @@ export function buildDrizzleContract(schema: Record<string, unknown>): DrizzleCo
           };
         }).sort((left, right) => left.name.localeCompare(right.name, "en")),
         indexes,
+        foreignKeys: table.foreignKeys.map((foreignKey) => {
+          const reference = foreignKey.reference();
+          return {
+            columns: reference.columns.map((column) => column.name),
+            referencedTable: getTableConfig(reference.foreignTable).name,
+            referencedColumns: reference.foreignColumns.map((column) => column.name),
+            onUpdate: (foreignKey.onUpdate ?? "no action").toLowerCase(),
+            onDelete: (foreignKey.onDelete ?? "no action").toLowerCase(),
+          };
+        }),
       },
     ];
     })),
@@ -139,6 +214,7 @@ export function buildDrizzleContract(schema: Record<string, unknown>): DrizzleCo
 
 export function buildCatalogContract(catalog: DatabaseCatalog): DrizzleContract {
   return {
+    strictObjects: true,
     tables: Object.fromEntries(Object.entries(catalog.tables).map(([name, table]) => [name, {
       columns: table.columns.map((column) => ({
         name: column.name,
@@ -153,6 +229,11 @@ export function buildCatalogContract(catalog: DatabaseCatalog): DrizzleContract 
         partial: index.partial,
         columns: index.columns,
         predicate: index.predicate,
+      })),
+      foreignKeys: table.foreignKeys.map((foreignKey) => ({
+        ...foreignKey,
+        columns: [...foreignKey.columns],
+        referencedColumns: [...foreignKey.referencedColumns],
       })),
     }])),
   };
@@ -249,7 +330,18 @@ export function inspectDatabase(database: Database): DatabaseCatalog {
       })
       .sort((left, right) => left.name.localeCompare(right.name, "en"));
 
-    return [tableName, { columns, indexes }];
+    const foreignKeyRows = database.prepare(`PRAGMA foreign_key_list('${escapedTableName}')`).all() as Array<Record<string, unknown>>;
+    const foreignKeys = [...new Set(foreignKeyRows.map((row) => Number(row.id)))].map((id) => {
+      const rows = foreignKeyRows.filter((row) => Number(row.id) === id).sort((a, b) => Number(a.seq) - Number(b.seq));
+      return {
+        columns: rows.map((row) => String(row.from)),
+        referencedTable: String(rows[0]?.table),
+        referencedColumns: rows.map((row) => String(row.to)),
+        onUpdate: String(rows[0]?.on_update ?? "no action").toLowerCase(),
+        onDelete: String(rows[0]?.on_delete ?? "no action").toLowerCase(),
+      };
+    });
+    return [tableName, { columns, indexes, foreignKeys }];
   }));
 
   const triggers = (database.prepare(
@@ -260,12 +352,13 @@ export function inspectDatabase(database: Database): DatabaseCatalog {
     sql: normalizeSql(trigger.sql),
   }));
 
-  return { tables, triggers };
+  const views = (database.prepare("SELECT name, sql FROM sqlite_schema WHERE type = 'view' ORDER BY name").all() as Array<{ name: string; sql: string }>).map((view) => ({ name: view.name, sql: normalizeSql(view.sql) ?? "" }));
+  return { tables, triggers, views };
 }
 
 export function catalogFromPragmaResults(tableNames: string[], results: PragmaResult[]): DatabaseCatalog {
-  if (results.length !== tableNames.length * 3 || results.some((result) => !Array.isArray(result?.results))) {
-    throw new Error(`Malformed or truncated Wrangler schema output: expected ${tableNames.length * 3} result sets, received ${results.length}.`);
+  if (results.length !== tableNames.length * 4 + 1 || results.some((result) => !Array.isArray(result?.results))) {
+    throw new Error(`Malformed or truncated Wrangler schema output: expected ${tableNames.length * 4 + 1} result sets, received ${results.length}.`);
   }
   const tables: DatabaseCatalog["tables"] = {};
 
@@ -273,6 +366,7 @@ export function catalogFromPragmaResults(tableNames: string[], results: PragmaRe
     const columns = results[index]?.results ?? [];
     const indexes = results[index + tableNames.length]?.results ?? [];
     const indexColumns = results[index + (tableNames.length * 2)]?.results ?? [];
+    const foreignKeyRows = results[index + (tableNames.length * 3)]?.results ?? [];
     tables[name] = {
       columns: columns.map((column) => ({
         name: String(column.name),
@@ -298,10 +392,16 @@ export function catalogFromPragmaResults(tableNames: string[], results: PragmaRe
             pragmaBoolean(entry.partial),
           ),
         })),
+      foreignKeys: [...new Set(foreignKeyRows.map((row) => Number(row.id)))].map((id) => {
+        const rows = foreignKeyRows.filter((row) => Number(row.id) === id).sort((a, b) => Number(a.seq) - Number(b.seq));
+        return { columns: rows.map((row) => String(row.from)), referencedTable: String(rows[0]?.table), referencedColumns: rows.map((row) => String(row.to)), onUpdate: String(rows[0]?.on_update ?? "no action").toLowerCase(), onDelete: String(rows[0]?.on_delete ?? "no action").toLowerCase() };
+      }),
     };
   });
-
-  return { tables, triggers: [] };
+  const objects = results.at(-1)?.results ?? [];
+  const triggers = objects.filter((row) => row.object_type === "trigger").map((row) => ({ name: String(row.name), table: String(row.table_name), sql: normalizeSql(row.sql) ?? "" }));
+  const views = objects.filter((row) => row.object_type === "view").map((row) => ({ name: String(row.name), sql: normalizeSql(row.sql) ?? "" }));
+  return { tables, triggers, views };
 }
 
 export function diffDrizzleContract(contract: DrizzleContract, catalog: DatabaseCatalog) {
@@ -311,6 +411,7 @@ export function diffDrizzleContract(contract: DrizzleContract, catalog: Database
   const unexpectedColumns: Record<string, string[]> = {};
   const missingIndexes: Record<string, string[]> = {};
   const invalidIndexes: Record<string, Array<{ name: string; issues: string[] }>> = {};
+  const invalidForeignKeys: Record<string, string[]> = {};
 
   for (const [tableName, expected] of Object.entries(contract.tables)) {
     const actual = catalog.tables[tableName];
@@ -375,18 +476,39 @@ export function diffDrizzleContract(contract: DrizzleContract, catalog: Database
     if (invalidColumnEntries.length) invalidColumns[tableName] = invalidColumnEntries;
     if (indexes.length) missingIndexes[tableName] = indexes.map((index) => index.name).sort();
     if (invalid.length) invalidIndexes[tableName] = invalid;
+    const relationKey = (relation: DatabaseCatalog["tables"][string]["foreignKeys"][number]) => JSON.stringify(relation);
+    const actualRelations = new Set((actual.foreignKeys ?? []).map(relationKey));
+    const missingRelations = (expected.foreignKeys ?? []).filter((relation) => !actualRelations.has(relationKey(relation)));
+    const allowedRelations = contract.allowedForeignKeys?.[tableName] ?? [];
+    const unexpectedRelations = contract.strictObjects
+      ? (actual.foreignKeys ?? []).filter((relation) => ![...(expected.foreignKeys ?? []), ...allowedRelations].some((candidate) => relationKey(candidate) === relationKey(relation)))
+      : [];
+    if (missingRelations.length || unexpectedRelations.length) invalidForeignKeys[tableName] = ["foreign-key relations differ"];
   }
 
   const verdict = missingTables.length || Object.keys(missingColumns).length || Object.keys(invalidColumns).length ||
-    Object.keys(unexpectedColumns).length || Object.keys(missingIndexes).length || Object.keys(invalidIndexes).length
+    Object.keys(unexpectedColumns).length || Object.keys(missingIndexes).length || Object.keys(invalidIndexes).length || Object.keys(invalidForeignKeys).length
     ? "fail"
     : "pass";
 
-  return { missingTables, missingColumns, invalidColumns, unexpectedColumns, missingIndexes, invalidIndexes, verdict } as const;
+  return { missingTables, missingColumns, invalidColumns, unexpectedColumns, missingIndexes, invalidIndexes, invalidForeignKeys, verdict } as const;
 }
 
 export function diffRuntimeSchema(schema: Record<string, unknown>, catalog: DatabaseCatalog) {
   return diffDrizzleContract(buildDrizzleContract(schema), catalog);
+}
+
+export function validateContractCorrection({ contract, migratedCatalog, changedMigrationFiles, appliedMigrationEvidence }: { contract: DrizzleContract; migratedCatalog: DatabaseCatalog; changedMigrationFiles: string[]; appliedMigrationEvidence: string[] }) {
+  if (changedMigrationFiles.length) throw new Error("Contract correction cannot include a new or modified migration.");
+  const migrations = listMigrationFiles().map((migration) => migration.name);
+  if (!migrations.every((name) => appliedMigrationEvidence.includes(name))) throw new Error("Contract correction requires evidence that the matching migration history was already applied.");
+  const diff = diffDrizzleContract(contract, migratedCatalog);
+  if (diff.verdict !== "pass") throw new Error("Contract correction cannot introduce database state absent from applied migrations.");
+  return { verdict: "pass", migrationRange: { from: migrations[0], to: migrations.at(-1) } };
+}
+
+export function contractFingerprint(contract: DrizzleContract) {
+  return createHash("sha256").update(JSON.stringify(contract)).digest("hex");
 }
 
 export function compareDatabaseSchemas(expected: DatabaseCatalog, actual: DatabaseCatalog) {
@@ -410,6 +532,7 @@ export function compareDatabaseSchemas(expected: DatabaseCatalog, actual: Databa
   if (JSON.stringify(expected.triggers) !== JSON.stringify(actual.triggers)) {
     differences.push("triggers differ");
   }
+  if (JSON.stringify(expected.views) !== JSON.stringify(actual.views)) differences.push("views differ");
 
   return { differences, verdict: differences.length ? "fail" : "pass" } as const;
 }
@@ -430,3 +553,4 @@ export function generateSchemaSnapshot(database: Database) {
     ...statements.flatMap((entry) => [entry.sql.replace(/;\s*$/, "") + ";", ""]),
   ].join("\n");
 }
+import { createHash } from "node:crypto";

@@ -12,9 +12,6 @@ on:
         required: true
         type: choice
         options: [additive, backfill, destructive, irreversible]
-      approval_decision:
-        description: Written recovery and approval decision for data-changing classes
-        required: true
       ci_run_id: { description: Exact-commit CI data-regression artifact run, required: true }
       rehearsal_run_id: { description: Exact-commit production-shaped rehearsal artifact run, required: true }
       confirm_production_database_id: { description: Exact allowlisted production D1 UUID, required: true }
@@ -35,6 +32,9 @@ jobs:
     if: github.event_name == 'push' && github.ref_name == 'staging'
     runs-on: ubuntu-latest
     environment: staging
+    env:
+      DATA_PROMOTION_WORKFLOW: data-promotion
+      DATA_PROTECTED_ENVIRONMENT: staging
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -146,29 +146,49 @@ jobs:
           node scripts/data/verify-github-run-evidence.mjs --metadata tmp-rehearsal-run.json --commit "$EXPECTED_COMMIT" --workflow "Data migration rehearsal"
           gh run download "$CI_RUN_ID" --dir tmp/evidence/ci
           gh run download "$REHEARSAL_RUN_ID" --dir tmp/evidence/rehearsal
+      - name: Capture exact merged-PR and change-author provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/commits/$EXPECTED_COMMIT/pulls" > tmp/change-pulls.json
+          PR_NUMBER=$(jq -er --arg sha "$EXPECTED_COMMIT" '[.[] | select(.merged_at != null and .base.ref == "main" and .merge_commit_sha == $sha)] | if length == 1 then .[0].number else error("missing or ambiguous merged PR") end' tmp/change-pulls.json)
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits?per_page=100" > tmp/change-commits.json
+          node scripts/data/capture-change-provenance.mjs --pulls tmp/change-pulls.json --commits tmp/change-commits.json --commit "$EXPECTED_COMMIT" --output tmp/change-provenance.json
       - name: Validate approved commit migration range and rehearsal artifact
         run: |
           CI_REPORT=$(find tmp/evidence/ci -name data-regression-suite.json -print -quit)
+          CORRECTION_REPORT=$(find tmp/evidence/ci -name contract-correction.json -print -quit)
+          SCHEMA_REPORT=$(find tmp/evidence/ci -name schema-contract.json -print -quit)
           REHEARSAL_REPORT=$(find tmp/evidence/rehearsal -name data-regression-suite.json -print -quit)
-          node scripts/data/production-request.mjs --commit "$EXPECTED_COMMIT" --classification "$MIGRATION_CLASSIFICATION" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --database-name serp-checklists-db --database-id "$CONFIRM_PRODUCTION_DATABASE_ID" --ci-report "$CI_REPORT" --rehearsal-report "$REHEARSAL_REPORT" --output tmp/production-request.json
+          node scripts/data/production-request.mjs --commit "$EXPECTED_COMMIT" --classification "$MIGRATION_CLASSIFICATION" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --database-name serp-checklists-db --database-id "$CONFIRM_PRODUCTION_DATABASE_ID" --ci-report "$CI_REPORT" --correction-report "$CORRECTION_REPORT" --schema-report "$SCHEMA_REPORT" --rehearsal-report "$REHEARSAL_REPORT" --output tmp/production-request.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: production-request-${{ github.run_id }}
           path: |
             tmp/production-request.json
+            tmp/change-provenance.json
             tmp/data-reports/production-request/
           if-no-files-found: error
           retention-days: 90
 
-  production_data:
+  production_owner_approval:
     needs: production_request
+    if: github.event_name == 'workflow_dispatch' && inputs.migration_classification == 'irreversible'
+    runs-on: ubuntu-latest
+    environment: production-owner-approval
+    steps:
+      - name: Record separate irreversible repository-owner environment gate
+        run: echo "Repository-owner production approval gate passed."
+
+  production_data:
+    needs: [production_request, production_owner_approval]
+    if: always() && needs.production_request.result == 'success' && (inputs.migration_classification != 'irreversible' || needs.production_owner_approval.result == 'success')
     runs-on: ubuntu-latest
     environment: production
     env:
       EXPECTED_COMMIT: ${{ inputs.expected_commit }}
       REQUEST_CLASSIFICATION: ${{ inputs.migration_classification }}
-      REQUEST_APPROVAL_DECISION: ${{ inputs.approval_decision }}
       REPOSITORY_OWNER_APPROVER: ${{ vars.PRODUCTION_REPOSITORY_OWNER_APPROVER }}
     permissions:
       contents: read
@@ -177,7 +197,7 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@v5
-      - name: Validate production dispatch inputs and approval decision
+      - name: Validate production dispatch inputs and approval classification
         run: node scripts/data/validate-workflow-inputs.mjs approval
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
@@ -192,7 +212,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" > tmp/production-approvals.json
-          node scripts/data/capture-production-approval.mjs --reviews tmp/production-approvals.json --output tmp/production-approval.json
+          if [ "$REQUEST_CLASSIFICATION" = irreversible ]; then
+            gh api "repos/$GITHUB_REPOSITORY/collaborators/$REPOSITORY_OWNER_APPROVER/permission" > tmp/repository-owner-permission.json
+          fi
+          node scripts/data/capture-production-approval.mjs --reviews tmp/production-approvals.json --provenance tmp/change-provenance.json --owner-permission tmp/repository-owner-permission.json --output tmp/production-approval.json
       - name: Protected identity recovery export reviewed migration ledger schema invariant executor
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}

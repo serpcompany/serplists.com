@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,6 +8,7 @@ import { loadEnvironmentInventory } from "./environment-identity-lib.mjs";
 import { runProductionShapedMigrationMatrix } from "./production-shaped-migration-matrix";
 import { writeDataCheckReports } from "./reporting.mjs";
 import { runFixtureTeardownProbe } from "./teardown-probe";
+import { acquireSmokeRunLock } from "./smoke-run-lock-lib.mjs";
 import {
   captureWorkspaceMetadata,
   compareWorkspaceMetadata,
@@ -34,7 +35,21 @@ if (
   throw new Error(`Report directory must stay under ${reportRoot}.`);
 }
 const reportDirectoryRelative = path.relative(repoRoot, reportDirectory);
+const releaseRegressionLock = await acquireSmokeRunLock({
+  lockPath: path.join(repoRoot, ".wrangler", "smoke-state.lock"),
+});
+process.once("exit", releaseRegressionLock);
 const filesystemBefore = captureWorkspaceMetadata({ repoRoot });
+
+function cleanupLocalRehearsalTestState() {
+  const root = path.join(repoRoot, ".wrangler", "rehearsals");
+  if (!existsSync(root)) return;
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (entry.isDirectory() && /^(?:vitest|roundtrip)-/.test(entry.name)) {
+      rmSync(path.join(root, entry.name), { recursive: true, force: true });
+    }
+  }
+}
 
 interface VitestAssertionResult {
   fullName?: string;
@@ -77,7 +92,6 @@ const testFiles = [
   "scripts/data/teardown-probe.test.ts",
   "scripts/data/smoke-environment.test.mjs",
   "scripts/data/smoke-teardown.test.mjs",
-  "scripts/sitemap-git-lastmod.test.mjs",
   "tests/unit/functions/api/templates-handler.test.ts",
   "tests/unit/functions/api/checklists-handler.test.ts",
   "tests/unit/functions/api/template-evolution-migration.test.ts",
@@ -104,7 +118,6 @@ const requiredChecks = [
   ["observed fixture teardown counts", "reports actual remaining fixture rows after exact cleanup"],
   ["smoke child secret allowlist", "allowlists runtime variables and drops every developer/cloud/email secret sentinel"],
   ["smoke state observed teardown", "removes isolated state and reports observed zero leaks"],
-  ["synthetic PR merge sitemap stability", "accepts unchanged full-history merges, rejects stale content, and blocks shallow merge history"],
 ] as const;
 
 mkdirSync(reportDirectory, { recursive: true });
@@ -117,7 +130,7 @@ try {
       "exec", "vitest", "run", ...testFiles,
       "--reporter=json", `--outputFile=${rawVitestReport}`,
     ],
-    { cwd: repoRoot, env: process.env, stdio: ["ignore", "inherit", "inherit"] },
+    { cwd: repoRoot, env: { ...process.env, DATA_REPORT_DIR: reportDirectory }, stdio: ["ignore", "inherit", "inherit"] },
   );
   vitestResult = JSON.parse(readFileSync(rawVitestReport, "utf8"));
 } catch (error) {
@@ -128,6 +141,7 @@ try {
     vitestResult = { success: false, testResults: [] };
   }
 }
+cleanupLocalRehearsalTestState();
 
 const assertions = (vitestResult.testResults ?? []).flatMap(
   (result) => result.assertionResults ?? [],
@@ -168,6 +182,7 @@ try {
         ...process.env,
         PLAYWRIGHT_TEARDOWN_REPORT: browserTeardownReportPath,
         PLAYWRIGHT_JSON_REPORT: browserJsonReportPath,
+        PLAYWRIGHT_SMOKE_LOCK_HELD: "1",
       },
       stdio: ["ignore", "inherit", "inherit"],
     },
@@ -359,4 +374,5 @@ const paths = writeDataCheckReports({
 });
 console.log(markdown);
 console.log(`Reports: ${paths.markdown}, ${paths.json}, ${paths.junit}; raw test report: ${rawVitestReport}`);
+releaseRegressionLock();
 if (report.verdict !== "pass") process.exitCode = 1;

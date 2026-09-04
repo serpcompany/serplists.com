@@ -151,6 +151,20 @@ describe("data command", () => {
     ).toThrow("--confirm-database-id");
   });
 
+  it("refuses a directly invoked staging migration before Wrangler", () => {
+    expect(() => runDataCommand({
+      argv: [
+        "migration-apply", "--environment", "staging",
+        "--confirm-database-id", stagingId, "--execute",
+      ],
+      repoRoot,
+      gitCommit: fullGitCommit,
+      env: {},
+      write: () => {},
+      runCommand: () => { throw new Error("Wrangler must not run"); },
+    })).toThrow(/staging mutation workflow context/i);
+  });
+
   it("refuses remote rehearsal import without complete workflow request metadata", () => {
     const generated = writeGeneratedArtifact();
     try {

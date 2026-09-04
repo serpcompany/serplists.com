@@ -53,6 +53,11 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
+      - name: Verify Drizzle D1 schema contract
+        env:
+          SCHEMA_CONTRACT_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'push' && github.event.before || format('{0}^', github.sha) }}
+        run: pnpm run check:data:schema-contract -- --report-dir tmp/data-reports/ci
+
       - name: Unit tests
         run: pnpm run test:run
 

@@ -4,11 +4,17 @@ import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
 describe("CI data regression gate ordering", () => {
-  it("checks out full Git history so sitemap lastmod can reject synthetic merges", () => {
+  it("checks out full history and runs the schema contract as a direct blocking step", () => {
     const workflow = yaml.load(readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8"));
-    const checkout = workflow.jobs.quality.steps.find((step) => step.name === "Checkout");
-
+    const steps = workflow.jobs.quality.steps;
+    const checkout = steps.find((step) => step.name === "Checkout");
+    const schema = steps.find((step) => step.name === "Verify Drizzle D1 schema contract");
     expect(checkout.with["fetch-depth"]).toBe(0);
+    expect(schema.run).toContain("pnpm run check:data:schema-contract");
+    expect(schema.run).toContain("tmp/data-reports/ci");
+    expect(schema.env.SCHEMA_CONTRACT_BASE_SHA).toContain("github.event.before");
+    expect(schema.env.SCHEMA_CONTRACT_BASE_SHA).toContain("pull_request.base.sha");
+    expect(schema["continue-on-error"]).not.toBe(true);
   });
 
   it("installs Chromium before the aggregate gate and does not run smoke twice", () => {

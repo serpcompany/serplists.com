@@ -65,6 +65,22 @@ describe("data operation plans", () => {
     ]);
   });
 
+  it("requires the protected staging execution boundary for staging mutations", () => {
+    const plan = buildDataOperationPlan({
+      operation: "migration-apply",
+      identity: identity("staging"),
+      repoRoot,
+      gitCommit: "0123456789abcdef",
+    });
+    expect(plan.requiresStagingExecutionBoundary).toBe(true);
+    expect(buildDataOperationPlan({
+      operation: "migration-ledger",
+      identity: identity("staging"),
+      repoRoot,
+      gitCommit: "0123456789abcdef",
+    }).requiresStagingExecutionBoundary).toBe(false);
+  });
+
   it("builds migration apply only for an exact non-production target", () => {
     expect(
       buildDataOperationPlan({
@@ -86,6 +102,32 @@ describe("data operation plans", () => {
       "serp-checklists-rehearsal-issue-95",
       "--remote",
     ]);
+  });
+
+  it("builds recovery restore only for rehearsal plaintext outside artifact directories", () => {
+    const rehearsal = identity("rehearsal", {
+      databaseId: rehearsalId,
+      databaseName: "serp-checklists-rehearsal-issue-95",
+    });
+    const plan = buildDataOperationPlan({
+      operation: "recovery-restore",
+      identity: rehearsal,
+      repoRoot,
+      gitCommit: "0123456789abcdef",
+      importPath: "tmp/rehearsal-sensitive/recovery.sql",
+    });
+    expect(plan.command).toEqual(expect.arrayContaining([
+      "--file", path.join(repoRoot, "tmp/rehearsal-sensitive/recovery.sql"),
+    ]));
+    expect(plan.requiresWorkflowRequestContext).toBe(true);
+    expect(plan.report.recoveryRestore.artifactUpload).toBe("forbidden");
+    expect(() => buildDataOperationPlan({
+      operation: "recovery-restore",
+      identity: rehearsal,
+      repoRoot,
+      gitCommit: "0123456789abcdef",
+      importPath: "tmp/data-reports/recovery.sql",
+    })).toThrow(/rehearsal-sensitive/i);
   });
 
   it("keeps isolated local rehearsal state under the ignored Wrangler directory", () => {

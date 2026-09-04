@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { replayMigrations } from "./schema-contract.ts";
 import {
   parseAppliedMigrationLedger,
+  captureRemoteInvariantSnapshot,
   selectInvariantSqlFiles,
 } from "./invariant-capture-lib.mjs";
 
@@ -66,5 +67,32 @@ describe("ledger-aware invariant capture", () => {
     for (const output of ["", "[]", JSON.stringify([{ results: [{}] }])]) {
       expect(() => parseAppliedMigrationLedger(output)).toThrow(/ledger/i);
     }
+  });
+
+  it("centralizes ledger-aware remote capture and privacy-safe ownership digest", () => {
+    const calls = [];
+    const snapshot = captureRemoteInvariantSnapshot({
+      database: "rehearsal-db",
+      key: "protected-invariant-key-1234567890",
+      runWrangler: (args) => {
+        calls.push(args);
+        const command = args[args.indexOf("--command") + 1];
+        const file = args[args.indexOf("--file") + 1];
+        if (command === "SELECT name FROM d1_migrations ORDER BY name") {
+          return JSON.stringify([{ results: [{ name: "0023_add_sitemap_revision_state.sql" }, { name: "0024_safe_template_evolution.sql" }] }]);
+        }
+        if (command?.includes("SELECT 'template'")) {
+          return JSON.stringify([{ results: [{ kind: "template", id: "t1", user_id: "u1", deleted_state: "active" }] }]);
+        }
+        const sql = readFileSync(file, "utf8");
+        const names = sql.match(/'([a-z_]+)'\s+AS invariant/g)?.map((match) => match.match(/'([^']+)'/)[1]) ?? [];
+        return JSON.stringify([{ results: names.map((invariant) => ({ invariant, total_rows: 0 })) }]);
+      },
+    });
+
+    expect(snapshot.hasEvolution).toBe(true);
+    expect(snapshot.sqlVersions).toEqual(["0001_initial_schema.sql", "0024_safe_template_evolution.sql"]);
+    expect(snapshot.invariants.ownershipDigest).toMatch(/^[0-9a-f]{64}$/);
+    expect(calls.filter((args) => args.includes("--file"))).toHaveLength(2);
   });
 });

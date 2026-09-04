@@ -155,6 +155,7 @@ describe("pending migration gate", () => {
           "--label", "test",
           "--local",
           "--persist-to", persistence,
+          "--report-dir", join(persistence, "reports"),
         ],
         { cwd: process.cwd(), encoding: "utf8" },
       );
@@ -187,6 +188,8 @@ describe("pending migration gate", () => {
         ...tableNames.map((name) => `PRAGMA table_info('${name}');`),
         ...tableNames.map((name) => `PRAGMA index_list('${name}');`),
         ...tableNames.map((name) => `SELECT il.name AS index_name, ii.seqno, ii.name AS column_name, sm.sql AS index_sql FROM pragma_index_list('${name}') AS il JOIN pragma_index_info(il.name) AS ii LEFT JOIN sqlite_schema AS sm ON sm.type = 'index' AND sm.name = il.name ORDER BY il.name, ii.seqno;`),
+        ...tableNames.map((name) => `PRAGMA foreign_key_list('${name}');`),
+        "SELECT type AS object_type, name, tbl_name AS table_name, sql FROM sqlite_schema WHERE type IN ('trigger','view') ORDER BY type,name;",
       ].join(" ");
       const schemaOutput = execFileSync(
         process.platform === "win32" ? "pnpm.cmd" : "pnpm",
@@ -204,6 +207,7 @@ describe("pending migration gate", () => {
           "--label", "test",
           "--local",
           "--persist-to", persistence,
+          "--report-dir", join(persistence, "reports"),
         ],
         { cwd: process.cwd(), encoding: "utf8" },
       );

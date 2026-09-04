@@ -112,12 +112,12 @@ database UUID must exactly equal the checked-in production inventory UUID; the
 manifest retains only its hash. An arbitrary manifest field such as
 `containsDirectIdentifiers=false` has no authority.
 
-Inside the protected staging workflow, generate the artifact rather than
+Inside the protected production-source job, generate the artifact rather than
 writing a manifest:
 
 ```bash
 node scripts/data/sanitize-rehearsal-export.mjs \
-  --input tmp/data-evidence/private-source-data.sql \
+  --input tmp/production-sensitive/private-source-data.sql \
   --output tmp/data-evidence/synthetic-rehearsal-data.sql \
   --manifest tmp/data-evidence/synthetic-rehearsal-data.manifest.json \
   --source-database-id PRODUCTION_UUID \
@@ -128,7 +128,7 @@ node scripts/data/sanitize-rehearsal-export.mjs \
   --execute
 ```
 
-The raw source input must be inside ignored `tmp/data-evidence/`. The sanitizer
+The raw source input must be inside non-artifact `tmp/production-sensitive/`. The sanitizer
 deletes that raw input after success and also on validation or request-context
 failure once it has safely resolved the contained path. Inputs outside that
 directory are refused and never deleted. The synthetic SQL and its generated
@@ -146,9 +146,11 @@ node scripts/data/data-command.mjs rehearsal-create \
 ```
 
 Record the returned UUID. Every later write requires that UUID twice: once as
-the target and once as explicit confirmation. First inspect the identity and
-ledger, then apply the migration chain and import the integrity-checked
-synthetic artifact:
+the target and once as explicit confirmation. The protected workflow verifies
+the attestation, imports the `0023`-compatible synthetic profile, captures
+pre-change invariants, and only then applies the reviewed migration range.
+The commands below document the guarded primitives, not an alternate manual
+remote runbook; their displayed order does not authorize execution.
 
 ```bash
 node scripts/data/data-command.mjs migration-ledger \

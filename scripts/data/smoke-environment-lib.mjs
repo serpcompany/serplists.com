@@ -15,6 +15,7 @@ const ALLOWED_PARENT_ENVIRONMENT = [
   "COREPACK_ENABLE_AUTO_PIN",
   "NODE_OPTIONS",
   "PLAYWRIGHT_JSON_REPORT",
+  "PLAYWRIGHT_SMOKE_LOCK_HELD",
 ];
 
 export function buildSmokeChildEnvironment(parentEnvironment) {
@@ -43,7 +44,7 @@ export function buildPlaywrightServerCommands({
   persistPath,
 }) {
   const setup = isolated
-    ? "pnpm run sitemap:check && pnpm exec vite build --mode development"
+    ? "pnpm exec vite build --mode development"
     : null;
   const frontend = !isolated && hasDevVars
     ? `pnpm exec dotenv -e .dev.vars -- vite --host ${frontendHost} --port ${frontendPort} --strictPort`

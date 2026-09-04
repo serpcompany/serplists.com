@@ -18,6 +18,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
 const script = path.join(repoRoot, "scripts/data/sanitize-rehearsal-export.mjs");
 const evidenceRoot = path.join(repoRoot, "tmp/data-evidence");
+const rawRoot = path.join(repoRoot, "tmp/production-sensitive");
 const productionDatabaseId = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1";
 const gitCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
 const sourceDate = new Date().toISOString().slice(0, 10);
@@ -46,17 +47,20 @@ function workflowRequestEnvironment() {
     GITHUB_EVENT_NAME: "workflow_dispatch",
     GITHUB_RUN_ID: "123456789",
     GITHUB_SHA: gitCommit,
+    GITHUB_REF: "refs/heads/main",
     DATA_PROMOTION_WORKFLOW: "data-promotion",
-    DATA_PROTECTED_ENVIRONMENT: "staging",
+    DATA_PROTECTED_ENVIRONMENT: "production",
     DATA_APPROVER_IDENTITY: "@devinschumacher",
+    CLOUDFLARE_API_TOKEN: "protected-production-token",
   };
 }
 
 describe("sanitizer command", () => {
-  it("is dry-run by default and constrains raw input to ignored evidence storage", () => {
+  it("is dry-run by default and constrains raw input to non-artifact sensitive storage", () => {
     mkdirSync(evidenceRoot, { recursive: true });
+    mkdirSync(rawRoot, { recursive: true });
     const output = execFileSync(process.execPath, commandArgs(
-      path.join(evidenceRoot, "not-read-in-dry-run.sql"),
+      path.join(rawRoot, "not-read-in-dry-run.sql"),
       path.join(evidenceRoot, "synthetic.sql"),
       path.join(evidenceRoot, "synthetic.manifest.json"),
     ), { cwd: repoRoot, env: process.env, encoding: "utf8" });
@@ -72,12 +76,13 @@ describe("sanitizer command", () => {
       path.join(evidenceRoot, "synthetic.manifest.json"),
     ), { cwd: repoRoot, env: process.env, encoding: "utf8" });
     expect(outside.status).toBe(1);
-    expect(outside.stderr).toMatch(/raw input.*tmp\/data-evidence/i);
+    expect(outside.stderr).toMatch(/raw input.*tmp\/production-sensitive/i);
   });
 
   it("deletes the constrained raw input when workflow request metadata is absent", () => {
     const tempDir = mkdtempSync(path.join(evidenceRoot, "sanitize-context-failure-"));
-    const inputPath = path.join(tempDir, "private-source.sql");
+    const rawDir = mkdtempSync(path.join(rawRoot, "sanitize-context-failure-"));
+    const inputPath = path.join(rawDir, "private-source.sql");
     writeFileSync(inputPath, "INSERT INTO users VALUES ('private');\n");
     try {
       const result = spawnSync(process.execPath, [
@@ -85,18 +90,20 @@ describe("sanitizer command", () => {
         "--execute",
       ], { cwd: repoRoot, env: { PATH: process.env.PATH }, encoding: "utf8" });
       expect(result.status).toBe(1);
-      expect(result.stderr).toMatch(/workflow request context/i);
+      expect(result.stderr).toMatch(/workflow.*context/i);
       expect(existsSync(inputPath)).toBe(false);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
+      rmSync(rawDir, { recursive: true, force: true });
     }
   });
 
   it("refuses an evidence-directory symlink that escapes to a raw file outside it", () => {
     const evidenceDir = mkdtempSync(path.join(evidenceRoot, "sanitize-symlink-"));
+    const rawDir = mkdtempSync(path.join(rawRoot, "sanitize-symlink-"));
     const outsideDir = mkdtempSync(path.join(tmpdir(), "sanitize-outside-"));
     const outsidePath = path.join(outsideDir, "private.sql");
-    const linkPath = path.join(evidenceDir, "private.sql");
+    const linkPath = path.join(rawDir, "private.sql");
     writeFileSync(outsidePath, "INSERT INTO users VALUES ('private');");
     symlinkSync(outsidePath, linkPath);
     try {
@@ -106,10 +113,11 @@ describe("sanitizer command", () => {
         path.join(evidenceDir, "manifest.json"),
       ), { cwd: repoRoot, env: process.env, encoding: "utf8" });
       expect(result.status).toBe(1);
-      expect(result.stderr).toMatch(/raw input.*tmp\/data-evidence/i);
+      expect(result.stderr).toMatch(/raw input.*tmp\/production-sensitive/i);
       expect(existsSync(outsidePath)).toBe(true);
     } finally {
       rmSync(evidenceDir, { recursive: true, force: true });
+      rmSync(rawDir, { recursive: true, force: true });
       rmSync(outsideDir, { recursive: true, force: true });
     }
   });
@@ -120,7 +128,8 @@ describe("sanitizer command", () => {
       ["success", "INSERT INTO users VALUES ('private');", 0],
     ]) {
       const tempDir = mkdtempSync(path.join(evidenceRoot, `sanitize-${name}-`));
-      const inputPath = path.join(tempDir, "private-source.sql");
+      const rawDir = mkdtempSync(path.join(rawRoot, `sanitize-${name}-`));
+      const inputPath = path.join(rawDir, "private-source.sql");
       const outputPath = path.join(tempDir, "out.sql");
       const manifestPath = path.join(tempDir, "manifest.json");
       writeFileSync(inputPath, rawExport);
@@ -139,6 +148,7 @@ describe("sanitizer command", () => {
         }
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
+        rmSync(rawDir, { recursive: true, force: true });
       }
     }
   });

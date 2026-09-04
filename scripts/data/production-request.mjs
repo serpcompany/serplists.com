@@ -35,6 +35,8 @@ try {
     sqlTexts: pendingMigrations.map((name) => readFileSync(path.join(repoRoot, "db/migrations", name), "utf8")),
   });
   const ci = JSON.parse(readFileSync(arg("--ci-report"), "utf8"));
+  const ciContractCorrection = JSON.parse(readFileSync(arg("--correction-report"), "utf8"));
+  const ciSchemaContract = JSON.parse(readFileSync(arg("--schema-report"), "utf8"));
   const rehearsal = JSON.parse(readFileSync(arg("--rehearsal-report"), "utf8"));
   if (!output) throw new Error("Production request requires --output.");
   const evidence = validatePromotionEvidence({
@@ -44,6 +46,8 @@ try {
     migrationRange: explicitNone ? { from: null, to: null } : { from, to },
     pendingMigrations,
     ci,
+    ciSchemaContract,
+    ciContractCorrection,
     rehearsal,
   });
   mkdirSync(path.dirname(output), { recursive: true });

@@ -12,7 +12,7 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { assertWorkflowRequestContext } from "./workflow-request-context-lib.mjs";
+import { assertSanitizerSourceWorkflowContext } from "./workflow-request-context-lib.mjs";
 import { generateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -50,16 +50,16 @@ function resolveOutput(value) {
 }
 
 function resolveRawInput(value) {
-  const allowedRoot = path.join(repoRoot, "tmp/data-evidence");
+  const allowedRoot = path.join(repoRoot, "tmp/production-sensitive");
   const resolved = path.resolve(repoRoot, value);
   if (resolved !== allowedRoot && !resolved.startsWith(`${allowedRoot}${path.sep}`)) {
-    throw new Error("Sanitizer raw input must stay under ignored tmp/data-evidence/.");
+    throw new Error("Sanitizer raw input must stay under non-artifact tmp/production-sensitive/.");
   }
   if (existsSync(resolved)) {
     const realPath = realpathSync(resolved);
     const realAllowedRoot = realpathSync(allowedRoot);
     if (realPath !== realAllowedRoot && !realPath.startsWith(`${realAllowedRoot}${path.sep}`)) {
-      throw new Error("Sanitizer raw input must stay under ignored tmp/data-evidence/.");
+      throw new Error("Sanitizer raw input must stay under non-artifact tmp/production-sensitive/.");
     }
   }
   return resolved;
@@ -101,12 +101,7 @@ try {
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
   if (!flags.has("--execute")) process.exit(0);
 
-  assertWorkflowRequestContext({
-    env: process.env,
-    gitCommit,
-    targetEnvironment: "rehearsal",
-    requestedApproverIdentity: approverIdentity,
-  });
+  assertSanitizerSourceWorkflowContext({ env: process.env, gitCommit });
   const artifact = generateSanitizedRehearsalArtifact({
     repoRoot,
     rawExport: readFileSync(inputPath, "utf8"),

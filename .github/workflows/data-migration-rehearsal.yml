@@ -5,6 +5,8 @@ on:
       expected_commit: { required: true, description: Exact reviewed commit SHA }
       database_name: { required: true, description: Allowlisted ephemeral rehearsal database name }
       database_id: { required: true, description: Exact ephemeral rehearsal D1 UUID }
+      recovery_database_name: { required: true, description: Separate allowlisted ephemeral recovery database name }
+      recovery_database_id: { required: true, description: Exact separate recovery D1 UUID }
       migration_from: { required: true, description: First reviewed migration; use none for an application-only release }
       migration_to: { required: true, description: Last reviewed migration; use none for an application-only release }
 concurrency:
@@ -14,9 +16,54 @@ permissions: { contents: read }
 env:
   CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 jobs:
+  sanitized_source:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      DATA_PROMOTION_WORKFLOW: data-promotion
+      DATA_PROTECTED_ENVIRONMENT: production
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: "${{ inputs.expected_commit }}" }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with: { node-version: "22", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Protected production source export through repository sanitizer
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
+        run: |
+          mkdir -p tmp/production-sensitive tmp/data-evidence
+          trap 'rm -f tmp/production-sensitive/rehearsal-source.sql' EXIT
+          node scripts/data/data-command.mjs identify --environment production --execute
+          pnpm exec wrangler d1 export serp-checklists-db --remote --no-schema --output tmp/production-sensitive/rehearsal-source.sql
+          node scripts/data/sanitize-rehearsal-export.mjs --input tmp/production-sensitive/rehearsal-source.sql --output tmp/data-evidence/production-shaped.sql --manifest tmp/data-evidence/production-shaped.manifest.json --source-database-id b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1 --source-date "$(date -u +%F)" --issue 95 --approver-identity @devinschumacher --retention-deadline "$(date -u -d '+23 hours' +%Y-%m-%dT%H:%M:%SZ)" --execute
+          test ! -e tmp/production-sensitive/rehearsal-source.sql
+      - name: Attest repository-sanitized production-shaped artifact
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: tmp/data-evidence/production-shaped*
+      - name: Upload only sanitized rehearsal source
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanitized-rehearsal-source-${{ github.run_id }}
+          path: tmp/data-evidence/production-shaped*
+          if-no-files-found: error
+          retention-days: 1
+
   rehearsal:
+    needs: sanitized_source
     runs-on: ubuntu-latest
     environment: staging
+    permissions:
+      contents: read
+      actions: read
+      attestations: read
     env:
       DATA_PROMOTION_WORKFLOW: data-promotion
       DATA_PROTECTED_ENVIRONMENT: staging
@@ -24,6 +71,8 @@ jobs:
       EXPECTED_COMMIT: ${{ inputs.expected_commit }}
       DATABASE_NAME: ${{ inputs.database_name }}
       DATABASE_ID: ${{ inputs.database_id }}
+      RECOVERY_DATABASE_NAME: ${{ inputs.recovery_database_name }}
+      RECOVERY_DATABASE_ID: ${{ inputs.recovery_database_id }}
       MIGRATION_FROM: ${{ inputs.migration_from }}
       MIGRATION_TO: ${{ inputs.migration_to }}
     steps:
@@ -33,18 +82,29 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version: "22", cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v5
+        with:
+          name: sanitized-rehearsal-source-${{ github.run_id }}
+          path: tmp/data-evidence
       - name: Validate rehearsal dispatch inputs
         run: node scripts/data/validate-workflow-inputs.mjs rehearsal
+      - name: Verify attestation and import repository-sanitized production-shaped data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+        run: |
+          gh attestation verify tmp/data-evidence/production-shaped.sql --repo "$GITHUB_REPOSITORY"
+          gh attestation verify tmp/data-evidence/production-shaped.manifest.json --repo "$GITHUB_REPOSITORY"
+          node scripts/data/data-command.mjs rehearsal-import --environment rehearsal --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --confirm-database-id "$DATABASE_ID" --approver-identity @devinschumacher --input tmp/data-evidence/production-shaped.sql --manifest tmp/data-evidence/production-shaped.manifest.json --execute
       - name: Verify pre-provisioned sanitized production-shaped rehearsal identity
         env: { CLOUDFLARE_API_TOKEN: "${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}" }
         run: node scripts/data/data-command.mjs identify --environment rehearsal --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --execute
-      - name: Capture recovery export and pre-invariants
+      - name: Capture pre-invariants
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
           INVARIANT_HMAC_KEY: ${{ secrets.STAGING_INVARIANT_HMAC_KEY }}
         run: |
           mkdir -p tmp/data-reports/rehearsal
-          pnpm exec wrangler d1 export "$DATABASE_NAME" --remote --output tmp/data-reports/rehearsal/recovery.sql
           node scripts/data/remote-invariant-gate.mjs capture --database "$DATABASE_NAME" --state tmp/rehearsal-pre-invariants.json --report-dir tmp/data-reports/rehearsal
       - name: Apply exact rehearsal migration and verify schema invariants
         env:
@@ -56,20 +116,53 @@ jobs:
           node scripts/data/check-reviewed-migration-range.mjs after
           pnpm exec tsx scripts/data/check-d1-schema.ts --database "$DATABASE_NAME" --database-id "$DATABASE_ID" --label rehearsal --report-dir tmp/data-reports/rehearsal
           node scripts/data/remote-invariant-gate.mjs compare --database "$DATABASE_NAME" --state tmp/rehearsal-pre-invariants.json --report-dir tmp/data-reports/rehearsal
+      - name: Restore data-bearing export into separate recovery database and verify invariants
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+          INVARIANT_HMAC_KEY: ${{ secrets.STAGING_INVARIANT_HMAC_KEY }}
+        run: |
+          mkdir -p tmp/rehearsal-sensitive
+          trap 'rm -f tmp/rehearsal-sensitive/recovery.sql' EXIT
+          node scripts/data/remote-invariant-gate.mjs capture --database "$DATABASE_NAME" --state tmp/rehearsal-restored-source.json --report-dir tmp/data-reports/rehearsal
+          pnpm exec wrangler d1 export "$DATABASE_NAME" --remote --output tmp/rehearsal-sensitive/recovery.sql
+          node scripts/data/data-command.mjs identify --environment rehearsal --database-name "$RECOVERY_DATABASE_NAME" --database-id "$RECOVERY_DATABASE_ID" --execute
+          node scripts/data/data-command.mjs recovery-restore --environment rehearsal --database-name "$RECOVERY_DATABASE_NAME" --database-id "$RECOVERY_DATABASE_ID" --confirm-database-id "$RECOVERY_DATABASE_ID" --approver-identity @devinschumacher --input tmp/rehearsal-sensitive/recovery.sql --execute
+          node scripts/data/remote-invariant-gate.mjs compare --database "$RECOVERY_DATABASE_NAME" --state tmp/rehearsal-restored-source.json --report-dir tmp/data-reports/rehearsal/recovery
+          rm -f tmp/rehearsal-sensitive/recovery.sql
+          test ! -e tmp/rehearsal-sensitive/recovery.sql
       - name: Install Chromium for regression suite
         run: pnpm exec playwright install --with-deps chromium
       - name: Run production-shaped regression suite
         run: pnpm run test:data-regressions -- --report-dir tmp/data-reports/rehearsal/local-suite
-      - name: Always teardown rehearsal and confirm absence
+      - name: Always teardown source rehearsal and confirm absence
         if: always()
         env: { CLOUDFLARE_API_TOKEN: "${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}" }
         run: |
-          node scripts/data/data-command.mjs rehearsal-teardown --environment rehearsal --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --confirm-database-id "$DATABASE_ID" --execute > tmp/data-reports/rehearsal/teardown.txt
-          node scripts/data/confirm-rehearsal-absent.mjs >> tmp/data-reports/rehearsal/teardown.txt
+          mkdir -p tmp/data-reports/rehearsal
+          set +e
+          node scripts/data/data-command.mjs rehearsal-teardown --environment rehearsal --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --confirm-database-id "$DATABASE_ID" --execute > tmp/data-reports/rehearsal/teardown.txt 2>&1
+          DELETE_STATUS=$?
+          node scripts/data/confirm-rehearsal-absent.mjs >> tmp/data-reports/rehearsal/teardown.txt 2>&1
+          ABSENCE_STATUS=$?
+          test "$DELETE_STATUS" -eq 0 -a "$ABSENCE_STATUS" -eq 0
+      - name: Always teardown recovery rehearsal and confirm absence
+        if: always()
+        env: { CLOUDFLARE_API_TOKEN: "${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}" }
+        run: |
+          mkdir -p tmp/data-reports/rehearsal
+          set +e
+          node scripts/data/data-command.mjs rehearsal-teardown --environment rehearsal --database-name "$RECOVERY_DATABASE_NAME" --database-id "$RECOVERY_DATABASE_ID" --confirm-database-id "$RECOVERY_DATABASE_ID" --execute >> tmp/data-reports/rehearsal/teardown.txt 2>&1
+          DELETE_STATUS=$?
+          DATABASE_NAME="$RECOVERY_DATABASE_NAME" node scripts/data/confirm-rehearsal-absent.mjs >> tmp/data-reports/rehearsal/teardown.txt 2>&1
+          ABSENCE_STATUS=$?
+          test "$DELETE_STATUS" -eq 0 -a "$ABSENCE_STATUS" -eq 0
+      - name: Finalize real recovery rehearsal evidence
+        if: always()
+        run: node scripts/data/finalize-recovery-rehearsal.mjs --comparison tmp/data-reports/rehearsal/recovery/remote-invariant-comparison.json --teardown tmp/data-reports/rehearsal/teardown.txt --raw tmp/rehearsal-sensitive/recovery.sql --source-database-name "$DATABASE_NAME" --source-database-id "$DATABASE_ID" --recovery-database-name "$RECOVERY_DATABASE_NAME" --recovery-database-id "$RECOVERY_DATABASE_ID" --output tmp/data-reports/rehearsal/recovery-rehearsal.json
       - name: Finalize only proven rehearsal evidence
         if: always()
         run: |
-          node scripts/data/finalize-rehearsal-report.mjs --source tmp/data-reports/rehearsal/local-suite/data-regression-suite.json --comparison tmp/data-reports/rehearsal/remote-invariant-comparison.json --recovery tmp/data-reports/rehearsal/recovery.sql --teardown tmp/data-reports/rehearsal/teardown.txt --commit "$GITHUB_SHA" --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --output tmp/data-reports/rehearsal/data-regression-suite.json
+          node scripts/data/finalize-rehearsal-report.mjs --source tmp/data-reports/rehearsal/local-suite/data-regression-suite.json --comparison tmp/data-reports/rehearsal/remote-invariant-comparison.json --recovery tmp/data-reports/rehearsal/recovery-rehearsal.json --teardown tmp/data-reports/rehearsal/teardown.txt --sanitized tmp/data-evidence/production-shaped.sql --sanitizer-manifest tmp/data-evidence/production-shaped.manifest.json --commit "$GITHUB_SHA" --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --recovery-database-id "$RECOVERY_DATABASE_ID" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --output tmp/data-reports/rehearsal/data-regression-suite.json
       - if: always()
         uses: actions/upload-artifact@v4
         with:

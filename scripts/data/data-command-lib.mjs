@@ -19,7 +19,10 @@ import {
   selectInvariantSqlFiles,
 } from "./invariant-capture-lib.mjs";
 import { extractD1Identity } from "./wrangler-identity-lib.mjs";
-import { assertWorkflowRequestContext } from "./workflow-request-context-lib.mjs";
+import {
+  assertStagingMutationWorkflowContext,
+  assertWorkflowRequestContext,
+} from "./workflow-request-context-lib.mjs";
 import {
   loadSanitizerPolicy,
   normalizeRehearsalDataExport,
@@ -148,6 +151,7 @@ export function runDataCommand({
       generalCliExecutable: plan.generalCliExecutable,
       requiresIssue97ExecutionBoundary: plan.requiresIssue97ExecutionBoundary,
       requiresWorkflowRequestContext: plan.requiresWorkflowRequestContext,
+      requiresStagingExecutionBoundary: plan.requiresStagingExecutionBoundary,
     }, null, 2));
     return { executed: false, plan };
   }
@@ -172,7 +176,6 @@ export function runDataCommand({
       requestedApproverIdentity: approverIdentity,
     });
   }
-
   if (
     (plan.mutates || plan.requiresConfirmation) &&
     plan.report.environment !== "local" &&
@@ -180,6 +183,9 @@ export function runDataCommand({
     values["--confirm-database-id"] !== plan.report.databaseId
   ) {
     throw new Error("Remote writes require --confirm-database-id matching the reported database ID.");
+  }
+  if (plan.requiresStagingExecutionBoundary) {
+    plan.report.stagingWorkflow = assertStagingMutationWorkflowContext({ env, gitCommit });
   }
 
   if (plan.preflightCommand) {

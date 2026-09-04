@@ -29,6 +29,7 @@ const requiredJobs = [
   "staging_deploy",
   "staging_postdeploy",
   "production_request",
+  "production_owner_approval",
   "production_data",
   "production_deploy",
   "production_postdeploy",
@@ -233,6 +234,8 @@ describe("protected staging and production data-promotion workflow", () => {
       EXPECTED_COMMIT: "b".repeat(40),
       DATABASE_NAME: "serplists-rehearsal-123",
       DATABASE_ID: "11111111-1111-4111-8111-111111111111",
+      RECOVERY_DATABASE_NAME: "serp-checklists-rehearsal-recovery-123",
+      RECOVERY_DATABASE_ID: "22222222-2222-4222-8222-222222222222",
       MIGRATION_FROM: "0024_safe_template_evolution.sql",
       MIGRATION_TO: "0024_safe_template_evolution.sql",
     };
@@ -366,5 +369,51 @@ describe("protected staging and production data-promotion workflow", () => {
     expect(text).toMatch(/(procedure|workflow|incident|route)/);
     expect(text).toMatch(/request_expected_commit/);
     expect(text).toMatch(/request_database_id/);
+  });
+
+  it("wires protected production export through sanitizer attestation and rehearsal import", () => {
+    const sourceJob = rehearsalWorkflow.jobs.sanitized_source;
+    const rehearsalJob = rehearsalWorkflow.jobs.rehearsal;
+    const sourceText = runText(sourceJob);
+    const rehearsalText = runText(rehearsalJob);
+    expect(environmentName(sourceJob)).toBe("production");
+    expect(sourceText).toContain("tmp/production-sensitive/rehearsal-source.sql");
+    expect(sourceText).toContain("sanitize-rehearsal-export.mjs");
+    expect(sourceText).toMatch(/trap .*production-sensitive/);
+    expect(jobText(sourceJob)).toContain("attest-build-provenance");
+    expect(String(sourceJob.steps.find((step) => String(step.uses ?? "").includes("upload-artifact"))?.with?.path)).not.toContain("production-sensitive");
+    expect(asArray(rehearsalJob.needs)).toContain("sanitized_source");
+    expect(rehearsalText).toContain("gh attestation verify");
+    expect(rehearsalText).toContain("rehearsal-import");
+  });
+
+  it("performs a real separate-database recovery restore and never uploads plaintext", () => {
+    const rehearsal = rehearsalWorkflow.jobs.rehearsal;
+    const text = runText(rehearsal);
+    expect(rehearsalWorkflow.on.workflow_dispatch.inputs.recovery_database_id.required).toBe(true);
+    expect(text).toContain("recovery-restore");
+    expect(text).toContain("$RECOVERY_DATABASE_ID");
+    expect(text).toContain("remote-invariant-gate.mjs compare");
+    expect(text).toContain("finalize-recovery-rehearsal.mjs");
+    expect(text).toMatch(/rm -f tmp\/rehearsal-sensitive\/recovery\.sql/);
+    const upload = rehearsal.steps.find((step) => String(step.uses ?? "").includes("upload-artifact"));
+    expect(String(upload.with.path)).not.toContain("rehearsal-sensitive");
+    const cleanupSteps = rehearsal.steps.filter((step) => /always teardown .* rehearsal/i.test(String(step.name)));
+    expect(cleanupSteps).toHaveLength(2);
+    expect(cleanupSteps.every((step) => step.if === "always()")).toBe(true);
+    expect(cleanupSteps.every((step) => String(step.run).includes("mkdir -p tmp/data-reports/rehearsal"))).toBe(true);
+  });
+
+  it("binds approvals to PR authors and a separate verified owner gate", () => {
+    expect(jobText(jobs.production_request)).toMatch(/commits.*pulls|change-pulls/);
+    expect(jobText(jobs.production_request)).toContain("change-provenance");
+    expect(environmentName(jobs.production_owner_approval)).toBe("production-owner-approval");
+    expectDependency("production_owner_approval", "production_request");
+    expectDependency("production_data", "production_owner_approval");
+    const dataText = runText(jobs.production_data);
+    expect(dataText).toContain("actions/runs/$GITHUB_RUN_ID/approvals");
+    expect(dataText).toContain("collaborators/$REPOSITORY_OWNER_APPROVER/permission");
+    expect(dataText).toContain("--provenance tmp/change-provenance.json");
+    expect(source).not.toContain("REQUEST_APPROVAL_DECISION");
   });
 });

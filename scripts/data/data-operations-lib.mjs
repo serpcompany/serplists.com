@@ -13,6 +13,7 @@ const MUTATING_OPERATIONS = new Set([
   "fixture-teardown",
   "migration-apply",
   "rehearsal-import",
+  "recovery-restore",
   "rehearsal-teardown",
 ]);
 const PRODUCTION_PLAN_ONLY_OPERATIONS = new Set([
@@ -233,6 +234,20 @@ export function buildDataOperationPlan({
         manifestIntegritySha256: importManifest.manifestIntegritySha256,
       };
       break;
+    case "recovery-restore": {
+      if (identity.environment !== "rehearsal") {
+        throw new Error("Recovery restore may target only an isolated rehearsal database.");
+      }
+      if (!importPath) throw new Error("Recovery restore requires --input.");
+      const allowedRoot = path.resolve(repoRoot, "tmp/rehearsal-sensitive");
+      const resolvedInput = path.resolve(repoRoot, importPath);
+      if (resolvedInput !== allowedRoot && !resolvedInput.startsWith(`${allowedRoot}${path.sep}`)) {
+        throw new Error("Recovery plaintext must stay under non-artifact tmp/rehearsal-sensitive/.");
+      }
+      command = commandForSql(identity, resolvedInput, resolvedPersistTo);
+      report.recoveryRestore = { plaintextRetention: "delete-after-restore", artifactUpload: "forbidden" };
+      break;
+    }
     case "rehearsal-teardown":
       if (identity.environment !== "rehearsal") {
         throw new Error("Rehearsal teardown may delete only an isolated rehearsal database.");
@@ -257,7 +272,9 @@ export function buildDataOperationPlan({
     mutates: MUTATING_OPERATIONS.has(operation),
     requiresConfirmation: operation === "rehearsal-export",
     requiresWorkflowRequestContext:
-      operation === "rehearsal-export" || operation === "rehearsal-import",
+      operation === "rehearsal-export" || operation === "rehearsal-import" || operation === "recovery-restore",
+    requiresStagingExecutionBoundary:
+      identity.environment === "staging" && MUTATING_OPERATIONS.has(operation),
     requiresIssue97ExecutionBoundary:
       identity.environment === "production" &&
       PRODUCTION_PLAN_ONLY_OPERATIONS.has(operation),
