@@ -1,0 +1,8 @@
+import { spawnSync } from "node:child_process";
+const result = spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "wrangler", "d1", "info", process.env.DATABASE_NAME, "--json"], { encoding: "utf8" });
+const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+if (result.status === 0 || !/(not found|could not find|does not exist|code.*7404)/i.test(output)) {
+  console.error("Rehearsal absence could not be proven.");
+  process.exit(1);
+}
+console.log(`PASS rehearsal ${process.env.DATABASE_NAME} is absent.`);

@@ -126,7 +126,7 @@ The atomic staging promotion path must run in this order:
 
 Staging completion requires the report and an independently reviewable preview result. A staging rehearsal never authorizes production.
 
-**Current enforcement gap:** `.github/workflows/cloudflare-pages-deploy.yml` currently performs check-only database readiness and then deploys a push to `staging`; it does not atomically migrate and verify D1 before deploying schema-dependent code. Therefore every staging merge or remote preview deployment that changes or depends on database schema or data is blocked until issue [#97](https://github.com/serpcompany/serplists.com/issues/97) installs and proves the ordered path above. Local implementation and isolated rehearsal may continue. A manual migration or a direct deploy is not a substitute for this missing guard.
+**Current enforcement status:** `.github/workflows/cloudflare-pages-deploy.yml` now orders staging migration, ledger/schema/invariant verification, deployment, authenticated account-owned checks, and custom-domain checks. Production is manual-dispatch only and consumes exact-commit CI/rehearsal evidence through the separate protected executor. The workflow remains unavailable for production authorization until the external GitHub Environment, branch rules, independent reviewer, scoped secrets, and Cloudflare credential revocation listed in `docs/operations/protected-data-promotion.md` are configured and independently proven. Local implementation and isolated rehearsal may continue; a manual migration or direct deploy is never a substitute.
 
 ### Production
 

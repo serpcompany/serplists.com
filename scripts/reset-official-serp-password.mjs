@@ -87,6 +87,9 @@ function printSummary(summary, asJson) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  if (options.execute) {
+    throw new Error("Production password mutation is blocked outside the protected workflow and approved break-glass procedure.");
+  }
 
   const beforeResults = runWranglerCommand(buildOfficialSerpInspectSql());
   const beforeState = assertOfficialSerpInspectResults(beforeResults);

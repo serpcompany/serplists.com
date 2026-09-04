@@ -1,0 +1,82 @@
+name: Data migration rehearsal
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit: { required: true, description: Exact reviewed commit SHA }
+      database_name: { required: true, description: Allowlisted ephemeral rehearsal database name }
+      database_id: { required: true, description: Exact ephemeral rehearsal D1 UUID }
+      migration_from: { required: true, description: First reviewed migration; use none for an application-only release }
+      migration_to: { required: true, description: Last reviewed migration; use none for an application-only release }
+concurrency:
+  group: data-rehearsal-${{ inputs.database_id }}
+  cancel-in-progress: false
+permissions: { contents: read }
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+jobs:
+  rehearsal:
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      DATA_PROMOTION_WORKFLOW: data-promotion
+      DATA_PROTECTED_ENVIRONMENT: staging
+      DATA_APPROVER_IDENTITY: "@devinschumacher"
+      EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      DATABASE_NAME: ${{ inputs.database_name }}
+      DATABASE_ID: ${{ inputs.database_id }}
+      MIGRATION_FROM: ${{ inputs.migration_from }}
+      MIGRATION_TO: ${{ inputs.migration_to }}
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: "${{ inputs.expected_commit }}" }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with: { node-version: "22", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Validate rehearsal dispatch inputs
+        run: node scripts/data/validate-workflow-inputs.mjs rehearsal
+      - name: Verify pre-provisioned sanitized production-shaped rehearsal identity
+        env: { CLOUDFLARE_API_TOKEN: "${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}" }
+        run: node scripts/data/data-command.mjs identify --environment rehearsal --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --execute
+      - name: Capture recovery export and pre-invariants
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+          INVARIANT_HMAC_KEY: ${{ secrets.STAGING_INVARIANT_HMAC_KEY }}
+        run: |
+          mkdir -p tmp/data-reports/rehearsal
+          pnpm exec wrangler d1 export "$DATABASE_NAME" --remote --output tmp/data-reports/rehearsal/recovery.sql
+          node scripts/data/remote-invariant-gate.mjs capture --database "$DATABASE_NAME" --state tmp/rehearsal-pre-invariants.json --report-dir tmp/data-reports/rehearsal
+      - name: Apply exact rehearsal migration and verify schema invariants
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+          INVARIANT_HMAC_KEY: ${{ secrets.STAGING_INVARIANT_HMAC_KEY }}
+        run: |
+          node scripts/data/check-reviewed-migration-range.mjs before
+          node scripts/data/data-command.mjs migration-apply --environment rehearsal --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --confirm-database-id "$DATABASE_ID" --execute
+          node scripts/data/check-reviewed-migration-range.mjs after
+          pnpm exec tsx scripts/data/check-d1-schema.ts --database "$DATABASE_NAME" --database-id "$DATABASE_ID" --label rehearsal --report-dir tmp/data-reports/rehearsal
+          node scripts/data/remote-invariant-gate.mjs compare --database "$DATABASE_NAME" --state tmp/rehearsal-pre-invariants.json --report-dir tmp/data-reports/rehearsal
+      - name: Install Chromium for regression suite
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run production-shaped regression suite
+        run: pnpm run test:data-regressions -- --report-dir tmp/data-reports/rehearsal/local-suite
+      - name: Always teardown rehearsal and confirm absence
+        if: always()
+        env: { CLOUDFLARE_API_TOKEN: "${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}" }
+        run: |
+          node scripts/data/data-command.mjs rehearsal-teardown --environment rehearsal --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --confirm-database-id "$DATABASE_ID" --execute > tmp/data-reports/rehearsal/teardown.txt
+          node scripts/data/confirm-rehearsal-absent.mjs >> tmp/data-reports/rehearsal/teardown.txt
+      - name: Finalize only proven rehearsal evidence
+        if: always()
+        run: |
+          node scripts/data/finalize-rehearsal-report.mjs --source tmp/data-reports/rehearsal/local-suite/data-regression-suite.json --comparison tmp/data-reports/rehearsal/remote-invariant-comparison.json --recovery tmp/data-reports/rehearsal/recovery.sql --teardown tmp/data-reports/rehearsal/teardown.txt --commit "$GITHUB_SHA" --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --output tmp/data-reports/rehearsal/data-regression-suite.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rehearsal-${{ github.run_id }}
+          path: |
+            tmp/data-reports/rehearsal/
+            tests/test-results/
+            playwright-report/
+          if-no-files-found: error
+          retention-days: 90

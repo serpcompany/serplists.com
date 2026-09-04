@@ -92,6 +92,9 @@ function toSummary(state) {
 
 function main() {
   const options = parseArgs(process.argv.slice(2));
+  if (options.execute) {
+    throw new Error("Production entitlement mutation is blocked outside the protected workflow and approved break-glass procedure.");
+  }
 
   const beforeResults = runWranglerCommand(buildOfficialSerpPlanInspectSql());
   const beforeState = assertOfficialSerpPlanInspectResults(beforeResults);

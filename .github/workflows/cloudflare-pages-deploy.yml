@@ -1,70 +1,338 @@
-name: Deploy to Cloudflare Pages
-
+name: Protected data promotion and Pages deploy
 on:
   push:
-    branches:
-      - main
-      - staging
+    branches: [staging]
   workflow_dispatch:
-
+    inputs:
+      expected_commit: { description: Exact reviewed main commit SHA, required: true }
+      migration_from: { description: First reviewed pending migration filename; use none for an application-only release, required: true }
+      migration_to: { description: Last reviewed pending migration filename; use none for an application-only release, required: true }
+      migration_classification:
+        description: Highest risk classification in the reviewed range; use additive with none/none
+        required: true
+        type: choice
+        options: [additive, backfill, destructive, irreversible]
+      approval_decision:
+        description: Written recovery and approval decision for data-changing classes
+        required: true
+      ci_run_id: { description: Exact-commit CI data-regression artifact run, required: true }
+      rehearsal_run_id: { description: Exact-commit production-shaped rehearsal artifact run, required: true }
+      confirm_production_database_id: { description: Exact allowlisted production D1 UUID, required: true }
 concurrency:
-  group: pages-deploy-${{ github.ref_name }}
-  cancel-in-progress: true
+  group: data-promotion-${{ github.event_name == 'workflow_dispatch' && 'production' || github.ref_name }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+  actions: read
+  attestations: read
+env:
+  COREPACK_ENABLE_AUTO_PIN: "0"
+  CLOUDFLARE_PAGES_PROJECT: serplists-com
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
 jobs:
-  deploy:
+  staging_data:
+    if: github.event_name == 'push' && github.ref_name == 'staging'
     runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with: { node-version: "22", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Install Playwright Chromium for data regressions
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Identity allowlist and recovery bookmark
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+          INVARIANT_HMAC_KEY: ${{ secrets.STAGING_INVARIANT_HMAC_KEY }}
+        run: |
+          mkdir -p tmp/data-reports/staging
+          node scripts/data/data-command.mjs identify --environment staging --execute > tmp/data-reports/staging/identity.txt
+          node scripts/data/data-command.mjs recovery-bookmark --environment staging --execute > tmp/data-reports/staging/recovery-bookmark.txt
+          node scripts/data/remote-invariant-gate.mjs capture --database serp-checklists-staging-db --state tmp/staging-pre-invariants.json --report-dir tmp/data-reports/staging
+      - name: Run data regression prerequisite
+        run: pnpm run test:data-regressions -- --report-dir tmp/data-reports/staging
+      - name: Apply reviewed staging migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+        run: |
+          node scripts/data/check-staging-reviewed-range.mjs
+          node scripts/data/data-command.mjs migration-apply --environment staging --confirm-database-id fcaf4325-5be7-4ead-ab60-45932a04177b --execute
+      - name: Verify ledger schema and invariants
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+          INVARIANT_HMAC_KEY: ${{ secrets.STAGING_INVARIANT_HMAC_KEY }}
+        run: |
+          pnpm run db:migrations:check:staging
+          pnpm run check:staging:d1-schema -- --report-dir tmp/data-reports/staging
+          node scripts/data/remote-invariant-gate.mjs compare --database serp-checklists-staging-db --state tmp/staging-pre-invariants.json --report-dir tmp/data-reports/staging
+      - name: Upload staging data reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-data-${{ github.run_id }}
+          path: |
+            tmp/data-reports/staging/
+            tests/test-results/
+            playwright-report/
+          if-no-files-found: error
+          retention-days: 90
+
+  staging_deploy:
+    needs: staging_data
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with: { node-version: "22", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: BETTER_AUTH_SECRET=ci-build-placeholder-secret-32-chars-minimum pnpm run build
+      - name: Deploy staging after data gates
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+        run: pnpm exec wrangler pages deploy ./dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch staging --commit-hash "$GITHUB_SHA"
+
+  staging_postdeploy:
+    needs: staging_deploy
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with: { node-version: "22", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Authenticated account-owned template/run and custom-domain postdeploy smoke
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+          DATA_CANARY_OWNER_ID: ${{ secrets.STAGING_DATA_CANARY_OWNER_ID }}
+          DATA_CANARY_COOKIE: ${{ secrets.STAGING_DATA_CANARY_COOKIE }}
+        run: node scripts/data/deployment-smoke.mjs --environment staging --database-name serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --deployment-url https://staging.serplists-com.pages.dev --custom-domain https://staging.serplists.com --report-dir tmp/data-reports/staging-postdeploy
+      - name: Upload staging postdeploy reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-postdeploy-${{ github.run_id }}
+          path: tmp/data-reports/staging-postdeploy/
+          if-no-files-found: error
+          retention-days: 90
+
+  production_request:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      MIGRATION_FROM: ${{ inputs.migration_from }}
+      MIGRATION_TO: ${{ inputs.migration_to }}
+      MIGRATION_CLASSIFICATION: ${{ inputs.migration_classification }}
+      CI_RUN_ID: ${{ inputs.ci_run_id }}
+      REHEARSAL_RUN_ID: ${{ inputs.rehearsal_run_id }}
+      CONFIRM_PRODUCTION_DATABASE_ID: ${{ inputs.confirm_production_database_id }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate production dispatch inputs
+        run: node scripts/data/validate-workflow-inputs.mjs production
+      - name: Download exact-commit CI and rehearsal artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID" > tmp-ci-run.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$REHEARSAL_RUN_ID" > tmp-rehearsal-run.json
+          node scripts/data/verify-github-run-evidence.mjs --metadata tmp-ci-run.json --commit "$EXPECTED_COMMIT" --workflow CI
+          node scripts/data/verify-github-run-evidence.mjs --metadata tmp-rehearsal-run.json --commit "$EXPECTED_COMMIT" --workflow "Data migration rehearsal"
+          gh run download "$CI_RUN_ID" --dir tmp/evidence/ci
+          gh run download "$REHEARSAL_RUN_ID" --dir tmp/evidence/rehearsal
+      - name: Validate approved commit migration range and rehearsal artifact
+        run: |
+          CI_REPORT=$(find tmp/evidence/ci -name data-regression-suite.json -print -quit)
+          REHEARSAL_REPORT=$(find tmp/evidence/rehearsal -name data-regression-suite.json -print -quit)
+          node scripts/data/production-request.mjs --commit "$EXPECTED_COMMIT" --classification "$MIGRATION_CLASSIFICATION" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --database-name serp-checklists-db --database-id "$CONFIRM_PRODUCTION_DATABASE_ID" --ci-report "$CI_REPORT" --rehearsal-report "$REHEARSAL_REPORT" --output tmp/production-request.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-request-${{ github.run_id }}
+          path: |
+            tmp/production-request.json
+            tmp/data-reports/production-request/
+          if-no-files-found: error
+          retention-days: 90
+
+  production_data:
+    needs: production_request
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      REQUEST_CLASSIFICATION: ${{ inputs.migration_classification }}
+      REQUEST_APPROVAL_DECISION: ${{ inputs.approval_decision }}
+      REPOSITORY_OWNER_APPROVER: ${{ vars.PRODUCTION_REPOSITORY_OWNER_APPROVER }}
     permissions:
       contents: read
-    env:
-      # Runtime auth secrets live in Cloudflare Pages. CI only needs a valid
-      # placeholder so `pnpm run typecheck:env` can validate the contract
-      # without duplicating the production secret into GitHub Actions.
-      BETTER_AUTH_SECRET: ci-build-placeholder-secret-32-chars-minimum
-      # Cloudflare Pages project names are not secrets. This must be the Pages
-      # Project Name, not the pages.dev domain or the wrangler.toml `name`.
-      CLOUDFLARE_PAGES_PROJECT: serplists-com
+      actions: read
+      id-token: write
+      attestations: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v5
+      - uses: actions/checkout@v5
+      - name: Validate production dispatch inputs and approval decision
+        run: node scripts/data/validate-workflow-inputs.mjs approval
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with: { node-version: "22", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v5
         with:
-          node-version: "22"
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Validate environment contract
-        run: pnpm run typecheck:env
-
-      - name: Verify production D1 readiness
-        if: github.ref_name == 'main'
+          name: production-request-${{ github.run_id }}
+          path: tmp
+      - name: Capture independent protected-environment approval identity and decision
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
-          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
-        run: pnpm run verify:prod:d1
-
-      - name: Verify preview D1 readiness
-        if: github.ref_name != 'main'
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" > tmp/production-approvals.json
+          node scripts/data/capture-production-approval.mjs --reviews tmp/production-approvals.json --output tmp/production-approval.json
+      - name: Protected identity recovery export reviewed migration ledger schema invariant executor
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
-          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
-        run: pnpm run verify:staging
+          CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
+          PRODUCTION_BACKUP_ENCRYPTION_KEY: ${{ secrets.PRODUCTION_BACKUP_ENCRYPTION_KEY }}
+          DATA_PROTECTED_ENVIRONMENT: production
+        run: node scripts/data/production-executor.mjs data --request tmp/production-request.json --approval tmp/production-approval.json --output tmp/production-data-evidence.json --report-dir tmp/data-reports/production
+      - name: Attest GitHub-produced production data evidence
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: tmp/production-data-evidence.json
+      - name: Always remove plaintext recovery material
+        if: always()
+        run: rm -f tmp/production-sensitive/*.sql
+      - name: Upload production data reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-data-${{ github.run_id }}
+          path: |
+            tmp/production-data-evidence.json
+            tmp/production-approval.json
+            tmp/data-reports/production/*.json
+            tmp/data-reports/production/*.xml
+            tmp/data-reports/production/*.txt
+            tmp/data-reports/production/*.enc
+          if-no-files-found: error
+          retention-days: 90
 
-      - name: Build site
-        run: pnpm run build
-
-      - name: Deploy to Cloudflare Pages
+  production_deploy:
+    needs: production_data
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with: { node-version: "22", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v5
+        with:
+          name: production-request-${{ github.run_id }}
+          path: tmp
+      - uses: actions/download-artifact@v5
+        with:
+          name: production-data-${{ github.run_id }}
+          path: tmp
+      - name: Verify signed non-forgeable data evidence before deploy
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
-          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
-        run: npx wrangler pages deploy ./dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch "$GITHUB_REF_NAME" --commit-hash "$GITHUB_SHA"
+          GH_TOKEN: ${{ github.token }}
+          DATA_PROTECTED_ENVIRONMENT: production
+        run: |
+          gh attestation verify tmp/production-data-evidence.json --repo "$GITHUB_REPOSITORY"
+          node scripts/data/production-executor.mjs verify-deploy --request tmp/production-request.json --evidence tmp/production-data-evidence.json
+      - run: BETTER_AUTH_SECRET=ci-build-placeholder-secret-32-chars-minimum pnpm run build
+      - name: Deploy exact compatible production commit
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
+        run: pnpm exec wrangler pages deploy ./dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch main --commit-hash "$GITHUB_SHA" | tee tmp/production-deploy.txt
+      - name: Record exact deployment URL
+        run: |
+          grep -Eo 'https://[a-zA-Z0-9.-]+\.pages\.dev' tmp/production-deploy.txt | tail -1 > tmp/production-deployment-url.txt
+          test -s tmp/production-deployment-url.txt
+      - name: Upload exact deployment report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-deploy-${{ github.run_id }}
+          path: |
+            tmp/production-deploy.txt
+            tmp/production-deployment-url.txt
+          if-no-files-found: error
+          retention-days: 90
+
+  production_postdeploy:
+    needs: production_deploy
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CONFIRM_PRODUCTION_DATABASE_ID: ${{ inputs.confirm_production_database_id }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with: { node-version: "22", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v5
+        with:
+          name: production-request-${{ github.run_id }}
+          path: tmp
+      - uses: actions/download-artifact@v5
+        with:
+          name: production-data-${{ github.run_id }}
+          path: tmp
+      - uses: actions/download-artifact@v5
+        with:
+          name: production-deploy-${{ github.run_id }}
+          path: tmp
+      - name: Reverify signed data evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DATA_PROTECTED_ENVIRONMENT: production
+        run: |
+          gh attestation verify tmp/production-data-evidence.json --repo "$GITHUB_REPOSITORY"
+          node scripts/data/production-executor.mjs verify-deploy --request tmp/production-request.json --evidence tmp/production-data-evidence.json
+      - name: Authenticated account-owned template/run and custom-domain postdeploy smoke
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
+          DATA_CANARY_OWNER_ID: ${{ secrets.PRODUCTION_DATA_CANARY_OWNER_ID }}
+          DATA_CANARY_COOKIE: ${{ secrets.PRODUCTION_DATA_CANARY_COOKIE }}
+        run: node scripts/data/deployment-smoke.mjs --environment production --database-name serp-checklists-db --database-id "$CONFIRM_PRODUCTION_DATABASE_ID" --deployment-url "$(cat tmp/production-deployment-url.txt)" --custom-domain https://serplists.com --report-dir tmp/data-reports/production-postdeploy
+      - name: Publish complete production release report
+        run: node scripts/data/finalize-production-release.mjs --request tmp/production-request.json --evidence tmp/production-data-evidence.json --smoke tmp/data-reports/production-postdeploy/production-postdeploy-smoke.json --deployment-url-file tmp/production-deployment-url.txt --report-dir tmp/data-reports/production-postdeploy
+      - name: Upload production postdeploy reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-postdeploy-${{ github.run_id }}
+          path: tmp/data-reports/production-postdeploy/
+          if-no-files-found: error
+          retention-days: 90
+
+  rollback_route:
+    needs: [production_request, production_data, production_deploy, production_postdeploy]
+    if: always() && github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && needs.production_request.result == 'success' && (needs.production_data.result == 'failure' || needs.production_data.result == 'cancelled' || needs.production_data.result == 'skipped' || needs.production_deploy.result == 'failure' || needs.production_deploy.result == 'cancelled' || needs.production_deploy.result == 'skipped' || needs.production_postdeploy.result == 'failure' || needs.production_postdeploy.result == 'cancelled' || needs.production_postdeploy.result == 'skipped')
+    runs-on: ubuntu-latest
+    env:
+      REQUEST_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      REQUEST_DATABASE_ID: ${{ inputs.confirm_production_database_id }}
+    steps:
+      - name: Route to reviewed rollback or roll-forward incident procedure
+        run: |
+          mkdir -p tmp/data-reports/rollback
+          printf '{"verdict":"fail","commit":"%s","databaseId":"%s","route":"docs/knowledge/incident-response-runbook.md","decision":"human rollback-or-roll-forward required"}\n' "$REQUEST_EXPECTED_COMMIT" "$REQUEST_DATABASE_ID" > tmp/data-reports/rollback/rollback-route.json
+          printf 'BLOCKED production promotion for commit %s and database %s. Follow the incident recovery procedure; no automatic data restore is authorized.\n' "$REQUEST_EXPECTED_COMMIT" "$REQUEST_DATABASE_ID" > tmp/data-reports/rollback/rollback-route.txt
+          printf '%s\n' '<testsuite name="rollback-route" tests="1" failures="1"><testcase name="promotion"><failure message="manual recovery decision required"/></testcase></testsuite>' > tmp/data-reports/rollback/rollback-route.junit.xml
+      - name: Upload rollback route reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollback-route-${{ github.run_id }}
+          path: tmp/data-reports/rollback/
+          if-no-files-found: error
+          retention-days: 90

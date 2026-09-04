@@ -1,0 +1,370 @@
+import fs from "node:fs";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+import yaml from "js-yaml";
+import { describe, expect, it } from "vitest";
+
+const repositoryRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../..",
+);
+const workflowPath = path.join(
+  repositoryRoot,
+  ".github/workflows/cloudflare-pages-deploy.yml",
+);
+const source = fs.readFileSync(workflowPath, "utf8");
+const workflow = yaml.load(source);
+const jobs = workflow.jobs ?? {};
+const rehearsalWorkflowPath = path.join(
+  repositoryRoot,
+  ".github/workflows/data-migration-rehearsal.yml",
+);
+const rehearsalSource = fs.readFileSync(rehearsalWorkflowPath, "utf8");
+const rehearsalWorkflow = yaml.load(rehearsalSource);
+
+const requiredJobs = [
+  "staging_data",
+  "staging_deploy",
+  "staging_postdeploy",
+  "production_request",
+  "production_data",
+  "production_deploy",
+  "production_postdeploy",
+  "rollback_route",
+];
+
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function jobText(job) {
+  return JSON.stringify(job ?? {}).toLowerCase();
+}
+
+function environmentName(job) {
+  if (typeof job?.environment === "string") return job.environment;
+  return job?.environment?.name;
+}
+
+function expectDependency(jobId, dependencyId) {
+  expect(asArray(jobs[jobId]?.needs), `${jobId} must need ${dependencyId}`).toContain(
+    dependencyId,
+  );
+}
+
+function expectFailClosed(jobId) {
+  const job = jobs[jobId];
+  expect(job?.["continue-on-error"], `${jobId} must fail closed`).not.toBe(true);
+  for (const step of job?.steps ?? []) {
+    expect(
+      step?.["continue-on-error"],
+      `${jobId}/${step?.name ?? "unnamed step"} must fail closed`,
+    ).not.toBe(true);
+  }
+}
+
+function expectAlwaysUploadedEvidence(jobId) {
+  const uploads = (jobs[jobId]?.steps ?? []).filter((step) =>
+    String(step?.uses ?? "").startsWith("actions/upload-artifact@"),
+  );
+
+  expect(uploads, `${jobId} must upload evidence`).not.toHaveLength(0);
+  for (const upload of uploads) {
+    expect(String(upload.if ?? ""), `${jobId} evidence must upload on failure`).toMatch(
+      /always\(\)/,
+    );
+    expect(
+      Number(upload.with?.["retention-days"]),
+      `${jobId} evidence must be retained for 90 days`,
+    ).toBeGreaterThanOrEqual(90);
+    expect(upload.with?.["if-no-files-found"], `${jobId} cannot omit evidence`).toBe(
+      "error",
+    );
+  }
+}
+
+function runText(job) {
+  return (job?.steps ?? [])
+    .map((step) => String(step?.run ?? ""))
+    .join("\n");
+}
+
+function stepIndex(job, pattern) {
+  return (job?.steps ?? []).findIndex((step) => pattern.test(String(step?.name ?? "")));
+}
+
+describe("protected staging and production data-promotion workflow", () => {
+  it("has the complete, fail-closed job graph", () => {
+    expect(Object.keys(jobs)).toEqual(expect.arrayContaining(requiredJobs));
+
+    expectDependency("staging_deploy", "staging_data");
+    expectDependency("staging_postdeploy", "staging_deploy");
+    expectDependency("production_data", "production_request");
+    expectDependency("production_deploy", "production_data");
+    expectDependency("production_postdeploy", "production_deploy");
+
+    for (const prerequisite of [
+      "production_data",
+      "production_deploy",
+      "production_postdeploy",
+    ]) {
+      expectDependency("rollback_route", prerequisite);
+    }
+
+    for (const jobId of requiredJobs) expectFailClosed(jobId);
+  });
+
+  it("allows automatic pushes only to staging", () => {
+    const triggers = workflow.on ?? {};
+    const pushBranches = asArray(triggers.push?.branches);
+
+    expect(triggers.workflow_dispatch).toBeDefined();
+    expect(pushBranches).toContain("staging");
+    expect(pushBranches).not.toContain("main");
+    expect(pushBranches).not.toContain("**");
+
+    expect(jobText(jobs.production_request)).toMatch(/workflow_dispatch/);
+  });
+
+  it("serializes promotions without cancelling a production run", () => {
+    const concurrency = workflow.concurrency;
+
+    expect(String(concurrency?.group ?? "")).toMatch(
+      /(ref_name|environment|target_environment)/,
+    );
+    const cancellation = concurrency?.["cancel-in-progress"];
+    if (typeof cancellation === "boolean") {
+      expect(cancellation).toBe(false);
+    } else {
+      expect(String(cancellation ?? "")).toMatch(/(main|production|staging)/);
+    }
+  });
+
+  it("keeps production credentials inside protected production jobs", () => {
+    expect(jobText({ env: workflow.env })).not.toMatch(/secrets\./);
+    expect(jobText(jobs.production_request)).not.toMatch(/secrets\./);
+
+    for (const jobId of [
+      "production_data",
+      "production_deploy",
+      "production_postdeploy",
+    ]) {
+      expect(environmentName(jobs[jobId]), `${jobId} must use protected production`).toBe(
+        "production",
+      );
+    }
+
+    for (const [jobId, job] of Object.entries(jobs)) {
+      if (!jobText(job).includes("secrets.")) continue;
+      expect(
+        ["staging", "production"],
+        `${jobId} uses credentials without a protected environment`,
+      ).toContain(environmentName(job));
+    }
+
+    const permissions = workflow.permissions ?? {};
+    expect(permissions.contents).toBe("read");
+    for (const [scope, access] of Object.entries(permissions)) {
+      if (access === "write") expect(scope).toBe("id-token");
+    }
+    for (const [jobId, job] of Object.entries(jobs)) {
+      for (const [scope, access] of Object.entries(job.permissions ?? {})) {
+        if (access === "write") {
+          expect(
+            scope === "id-token" ||
+              (jobId === "production_data" && scope === "attestations"),
+            `${jobId} requests an unnecessary write permission`,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("maps dispatch inputs through environment variables and validates them before shell use", () => {
+    for (const [name, candidate] of [
+      ["production", workflow],
+      ["rehearsal", rehearsalWorkflow],
+    ]) {
+      const allRunScripts = Object.values(candidate.jobs ?? {}).map(runText).join("\n");
+      expect(allRunScripts, `${name} shell must not interpolate dispatch inputs`).not.toMatch(
+        /\$\{\{\s*inputs\./,
+      );
+
+      const validationJobs = Object.values(candidate.jobs ?? {}).filter((job) =>
+        runText(job).includes("validate-workflow-inputs.mjs"),
+      );
+      expect(validationJobs.length, `${name} must consume mapped dispatch inputs`).toBeGreaterThan(0);
+      for (const job of validationJobs) {
+        expect(Object.values(job.env ?? {}).map(String)).toContain(
+          "${{ inputs.expected_commit }}",
+        );
+        expect(jobText(job), `${name} inputs must be validated before use`).toMatch(
+          /validate (production |rehearsal )?dispatch inputs/,
+        );
+      }
+    }
+  });
+
+  it("rejects malicious production and rehearsal dispatch values before they reach commands", () => {
+    const validator = path.join(repositoryRoot, "scripts/data/validate-workflow-inputs.mjs");
+    const productionEnv = {
+      ...process.env,
+      GITHUB_SHA: "a".repeat(40),
+      EXPECTED_COMMIT: "a".repeat(40),
+      MIGRATION_FROM: "0024_safe_template_evolution.sql",
+      MIGRATION_TO: "0024_safe_template_evolution.sql",
+      MIGRATION_CLASSIFICATION: "backfill",
+      CI_RUN_ID: "123",
+      REHEARSAL_RUN_ID: "456",
+      CONFIRM_PRODUCTION_DATABASE_ID: "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1",
+    };
+    expect(spawnSync(process.execPath, [validator, "production"], { env: productionEnv }).status).toBe(0);
+    expect(spawnSync(process.execPath, [validator, "production"], {
+      env: { ...productionEnv, CI_RUN_ID: "123; touch /tmp/unsafe" },
+    }).status).not.toBe(0);
+
+    const rehearsalEnv = {
+      ...process.env,
+      GITHUB_SHA: "b".repeat(40),
+      GITHUB_REF_PROTECTED: "true",
+      EXPECTED_COMMIT: "b".repeat(40),
+      DATABASE_NAME: "serplists-rehearsal-123",
+      DATABASE_ID: "11111111-1111-4111-8111-111111111111",
+      MIGRATION_FROM: "0024_safe_template_evolution.sql",
+      MIGRATION_TO: "0024_safe_template_evolution.sql",
+    };
+    expect(spawnSync(process.execPath, [validator, "rehearsal"], { env: rehearsalEnv }).status).toBe(0);
+    expect(spawnSync(process.execPath, [validator, "rehearsal"], {
+      env: { ...rehearsalEnv, DATABASE_NAME: "safe; touch /tmp/unsafe" },
+    }).status).not.toBe(0);
+  });
+
+  it("grants attestation write only to the job that produces provenance", () => {
+    expect(jobs.production_data?.permissions?.attestations).toBe("write");
+    expect(jobs.production_data?.permissions?.["id-token"]).toBe("write");
+    for (const [jobId, job] of Object.entries(jobs)) {
+      if (jobId === "production_data") continue;
+      expect(job?.permissions?.attestations, `${jobId} must not mint attestations`).not.toBe(
+        "write",
+      );
+    }
+  });
+
+  it("installs Chromium before the Playwright-backed regression suite in staging and rehearsal", () => {
+    for (const [name, job] of [
+      ["staging", jobs.staging_data],
+      ["rehearsal", rehearsalWorkflow.jobs?.rehearsal],
+    ]) {
+      const installIndex = stepIndex(job, /install (playwright )?chromium/i);
+      const regressionIndex = (job?.steps ?? []).findIndex((step) =>
+        String(step?.run ?? "").includes("test:data-regressions"),
+      );
+      expect(installIndex, `${name} must install Chromium`).toBeGreaterThan(-1);
+      expect(regressionIndex, `${name} must run data regressions`).toBeGreaterThan(-1);
+      expect(installIndex, `${name} must install Chromium before regressions`).toBeLessThan(
+        regressionIndex,
+      );
+      expect(String(job.steps[installIndex].run)).toContain(
+        "playwright install --with-deps chromium",
+      );
+    }
+  });
+
+  it("proves recovery and data readiness before production deploy", () => {
+    const request = jobText(jobs.production_request);
+    const data = jobText(jobs.production_data);
+
+    expect(request).toMatch(/(rehearsal|approved.*commit|artifact)/);
+    expect(data).toMatch(/(identity|allowlist)/);
+    expect(data).toMatch(/(bookmark|time travel|export|recovery)/);
+    expect(data).toMatch(/migrat/);
+    expect(data).toMatch(/(ledger|pending)/);
+    expect(data).toMatch(/schema/);
+    expect(data).toMatch(/invariant/);
+    expect(data).toMatch(/report/);
+
+    expectDependency("production_deploy", "production_data");
+    expect(jobText(jobs.production_deploy)).not.toMatch(/continue-on-error[^}]*true/);
+  });
+
+  it("runs account-owned and custom-domain canaries after each deploy", () => {
+    for (const jobId of ["staging_postdeploy", "production_postdeploy"]) {
+      const text = jobText(jobs[jobId]);
+      expect(text, `${jobId} must run after deploy`).toMatch(/(postdeploy|post-deploy|smoke)/);
+      expect(text, `${jobId} must authenticate`).toMatch(/auth/);
+      expect(text, `${jobId} must verify account-owned data`).toMatch(
+        /(account-owned|visibility|template.*run|run.*template)/,
+      );
+      expect(text, `${jobId} must check the custom domain`).toMatch(/custom[- ]domain/);
+    }
+  });
+
+  it("always retains machine and human evidence for at least 90 days", () => {
+    for (const jobId of [
+      "staging_data",
+      "staging_postdeploy",
+      "production_data",
+      "production_postdeploy",
+      "rollback_route",
+    ]) {
+      expectAlwaysUploadedEvidence(jobId);
+    }
+
+    const evidence = [
+      jobs.production_data,
+      jobs.production_postdeploy,
+      jobs.rollback_route,
+    ]
+      .map(jobText)
+      .join(" ");
+    expect(evidence).toMatch(/\.json/);
+    expect(evidence).toMatch(/(junit|\.xml)/);
+    expect(evidence).toMatch(/(\.txt|\.md|human-readable)/);
+  });
+
+  it("retains Playwright test results and reports for staging and rehearsal", () => {
+    for (const [name, job] of [["staging", jobs.staging_data], ["rehearsal", rehearsalWorkflow.jobs.rehearsal]]) {
+      const upload = job.steps.find((step) => String(step.uses ?? "").startsWith("actions/upload-artifact@"));
+      expect(String(upload.with.path), `${name} must retain test results`).toContain("tests/test-results/");
+      expect(String(upload.with.path), `${name} must retain Playwright reports`).toContain("playwright-report/");
+      expect(upload.if).toBe("always()");
+      expect(upload.with["retention-days"]).toBeGreaterThanOrEqual(90);
+    }
+  });
+
+  it("documents the explicit application-only none/none additive release without weakening gates", () => {
+    const productionInputs = workflow.on.workflow_dispatch.inputs;
+    const rehearsalInputs = rehearsalWorkflow.on.workflow_dispatch.inputs;
+    expect(productionInputs.migration_from.description).toMatch(/none.*application-only/i);
+    expect(productionInputs.migration_to.description).toMatch(/none.*application-only/i);
+    expect(productionInputs.migration_classification.description).toMatch(/additive.*none\/none/i);
+    expect(rehearsalInputs.migration_from.description).toMatch(/none.*application-only/i);
+    expect(rehearsalInputs.migration_to.description).toMatch(/none.*application-only/i);
+    expect(jobText(jobs.production_data)).toMatch(/ledger/);
+    expect(jobText(jobs.production_data)).toMatch(/schema/);
+    expect(jobText(jobs.production_data)).toMatch(/invariant/);
+    expect(jobText(jobs.production_postdeploy)).toMatch(/authenticated/);
+    expect(jobText(jobs.production_postdeploy)).toMatch(/custom-domain/);
+  });
+
+  it("routes any failed production stage to the rollback procedure", () => {
+    const rollback = jobs.rollback_route;
+    const condition = String(rollback?.if ?? "");
+    const text = jobText(rollback);
+
+    expect(condition).toMatch(/always\(\)/);
+    expect(condition).toMatch(/github\.event_name == 'workflow_dispatch'/);
+    expect(condition).toMatch(/github\.ref_name == 'main'/);
+    expect(condition).toMatch(/needs\.production_request\.result == 'success'/);
+    expect(condition).not.toMatch(/needs\.production_request\.result != 'success'/);
+    expect(condition).not.toMatch(/\.result != 'success'/);
+    expect(condition).toMatch(/needs\.production_data\.result == '(failure|cancelled)'/);
+    expect(text).toMatch(/(rollback|roll-forward|recovery)/);
+    expect(text).toMatch(/(procedure|workflow|incident|route)/);
+    expect(text).toMatch(/request_expected_commit/);
+    expect(text).toMatch(/request_database_id/);
+  });
+});

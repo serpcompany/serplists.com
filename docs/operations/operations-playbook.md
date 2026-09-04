@@ -1,10 +1,10 @@
 # Operations
 
 ## Build and deploy (Cloudflare Pages)
-```bash
-pnpm run build
-npx wrangler pages deploy ./dist
-```
+
+Local production deployment is blocked. Use the protected GitHub workflow and
+follow [Protected data promotion](protected-data-promotion.md). Local builds are
+verification only and do not authorize a deploy.
 
 ## One-command release verification
 Run this before deploying (or immediately after a hotfix):
@@ -32,22 +32,24 @@ pnpm run verify:prod:d1
 - Playwright Chromium install
 - smoke tests
 
-`cloudflare-pages-deploy.yml` runs on pushes to `main` or `staging`:
+`cloudflare-pages-deploy.yml` runs staging on pushes to `staging`. Production is
+manual-dispatch only from the exact reviewed `main` commit:
 
-- validates env
-- verifies production D1 readiness with `pnpm run verify:prod:d1` for `main`
-- verifies preview/staging D1 readiness with `pnpm run verify:staging` for non-main branches
-- builds with `pnpm run build`
-- deploys `dist` to Cloudflare Pages with the current branch name
+- protected identity and recovery checks;
+- exact CI and rehearsal evidence;
+- migration, ledger, schema, and invariant gates before deploy;
+- authenticated account-owned template/run and custom-domain checks afterward;
+- 90-day reports and rollback/roll-forward routing.
 
 Preview deployments use the `[[env.preview.d1_databases]]` D1 binding, which
 must match the top-level `preview_database_id`. Production deployments use the
 production D1 database id.
 
-Required GitHub secrets:
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_EMAIL`
-- `CLOUDFLARE_API_KEY`
+Required protected-environment secrets:
+- staging: `STAGING_CLOUDFLARE_API_TOKEN`, `STAGING_INVARIANT_HMAC_KEY`, `STAGING_DATA_CANARY_OWNER_ID`, `STAGING_DATA_CANARY_COOKIE`
+- production: `PRODUCTION_CLOUDFLARE_API_TOKEN`, `PRODUCTION_BACKUP_ENCRYPTION_KEY`, `PRODUCTION_DATA_CANARY_OWNER_ID`, `PRODUCTION_DATA_CANARY_COOKIE`
+
+Legacy global API-key credentials are rejected by the production executor.
 
 Cloudflare Pages project:
 - Project name: `serplists-com`
@@ -105,16 +107,14 @@ pnpm run db:migrations:list:staging
 pnpm run db:migrate:d1:staging
 pnpm run db:seed:official:staging
 pnpm run db:migrations:list:prod
-pnpm run db:migrate:d1:prod
 ```
 
-If a remote DB predates native D1 migration tracking, baseline its existing
-history before applying new migrations:
+Production mutation commands intentionally exit non-zero outside the protected
+workflow. Do not apply, baseline, seed, or clean production from a checkout.
 
-```bash
-pnpm run db:migrations:baseline:prod -- --through 0020
-pnpm run db:migrations:baseline:prod -- --through 0020 --execute
-```
+If production ever requires migration-ledger repair, treat it as break glass and
+obtain approval for the exact action through the incident procedure. The former
+local production-baseline entrypoint is blocked.
 
 Preview deployments should not be enabled against production data. Create
 `serp-checklists-staging-db`, paste its UUID into `preview_database_id` in
@@ -134,8 +134,13 @@ Drizzle Kit config lives at `db/drizzle.config.ts` and expects these env vars:
 
 ```bash
 pnpm run db:generate
-pnpm run db:migrate
+pnpm run db:generate
 ```
+
+`drizzle-kit migrate` is blocked because Wrangler numbered migrations are the
+only D1 ledger. Production export and restore commands are executed only by the
+protected workflow or an explicitly approved break-glass action; they are not
+checkout runbook commands.
 
 Production schema gate:
 ```bash
@@ -146,13 +151,12 @@ pnpm run check:prod:d1-schema
 If this fails, production D1 is missing one or more required tables/columns for the deployed API. Apply pending D1 migrations before shipping the frontend deploy.
 
 ### D1 backup and restore
-**Backups (recommended):** use `wrangler d1 export` to generate a `.sql` file containing schema + data.
 
-Remote (production/staging):
-```bash
-mkdir -p ./tmp/backups
-npx wrangler d1 export serp-checklists-db --remote --output ./tmp/backups/serp-checklists-db-$(date +%F).sql
-```
+Production backup and restore are protected workflow or explicitly approved
+break-glass actions. Never run a production export, Time Travel restore, import,
+or replacement-database command from a checkout. The protected workflow writes
+plaintext outside artifact directories, encrypts the recovery export, removes
+plaintext on exit/cancellation, and uploads only the encrypted artifact.
 
 Local (Miniflare DB used by `wrangler pages dev`):
 ```bash
@@ -160,23 +164,8 @@ mkdir -p ./tmp/backups
 npx wrangler d1 export serp-checklists-db --local --output ./tmp/backups/serp-checklists-db-local-$(date +%F).sql
 ```
 
-**Remote restore (fastest):** use D1 Time Travel (last ~30 days):
-```bash
-# Find a bookmark for a point-in-time
-npx wrangler d1 time-travel info serp-checklists-db --timestamp 2025-01-01T00:00:00.000Z
-
-# Restore to that point-in-time
-npx wrangler d1 time-travel restore serp-checklists-db --timestamp 2025-01-01T00:00:00.000Z
-```
-
-**Restore from a `.sql` backup (disaster recovery):** create a new D1 DB, then execute the export file against it.
-```bash
-# Create a fresh DB and update `wrangler.toml` binding/id accordingly
-npx wrangler d1 create serp-checklists-db-restored
-
-# Ingest backup SQL
-npx wrangler d1 execute serp-checklists-db-restored --remote --file=./tmp/backups/serp-checklists-db-YYYY-MM-DD.sql
-```
+The exact restore target and recovery point require a fresh human approval and
+a non-production restore rehearsal before any production action.
 
 ## R2 uploads
 The R2 binding is configured in `wrangler.toml`:

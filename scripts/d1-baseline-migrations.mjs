@@ -110,7 +110,6 @@ const isLocal = hasArg("--local") || !isRemote;
 const databaseName = readArg("--database") || process.env.D1_DATABASE_NAME;
 const throughMigration = readArg("--through");
 const shouldExecute = hasArg("--execute");
-const allowProduction = hasArg("--allow-production");
 const usePreviewDatabase = hasArg("--preview");
 
 if (!databaseName) {
@@ -123,9 +122,9 @@ if (!throughMigration) {
   process.exit(1);
 }
 
-if (isRemote && databaseName === PRODUCTION_DATABASE_NAME && !allowProduction) {
+if (isRemote && databaseName === PRODUCTION_DATABASE_NAME) {
   console.error(
-    `Refusing to baseline ${PRODUCTION_DATABASE_NAME} without --allow-production.`,
+    `Refusing to baseline ${PRODUCTION_DATABASE_NAME}; production mutations require the protected workflow.`,
   );
   process.exit(1);
 }
