@@ -32,7 +32,8 @@ pnpm run db:migrate:d1:local
 pnpm run db:seed
 pnpm run db:reset
 pnpm run db:reset:test-user-passwords
-pnpm run db:generate
+pnpm run db:generate -- --name descriptive_schema_change
+pnpm run check:data:migration-provenance -- --base origin/staging
 pnpm run db:migrate
 pnpm run db:query "SELECT * FROM templates LIMIT 5"
 ```

@@ -142,8 +142,8 @@ Drizzle Kit config lives at `db/drizzle.config.ts` and expects these env vars:
 - `CLOUDFLARE_D1_TOKEN`
 
 ```bash
-pnpm run db:generate
-pnpm run db:generate
+pnpm run db:generate -- --name descriptive_schema_change
+pnpm run check:data:migration-provenance -- --base origin/staging
 ```
 
 `drizzle-kit migrate` is blocked because Wrangler numbered migrations are the

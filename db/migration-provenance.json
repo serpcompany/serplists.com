@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "baseline": {
+    "through": "0024_safe_template_evolution.sql",
+    "snapshot": "0024_snapshot.json",
+    "snapshotSha256": "1a591c31f09b976eae3f1809082f4887d1317e77b502f8bc4fad53442b3e9170",
+    "migrationCount": 24,
+    "note": "Existing Wrangler history baselined at incident remediation commit ff5e816; these SQL files remain the D1 apply authority."
+  },
+  "migrations": [
+    { "file": "0001_initial_schema.sql", "sha256": "3fe7c49176299cf4ed3b651e473fed4236e83f1cfacc6e3b70de06163ef13d1d", "provenance": "legacy-baseline" },
+    { "file": "0002_add_slug_to_templates.sql", "sha256": "b4b9263bffef6f824de551a4d9f688c1edb703dba1ad3ac181812ada80718990", "provenance": "legacy-baseline" },
+    { "file": "0002_add_username_and_profiles.sql", "sha256": "9691eb209d35094852be8275fe75656b1710153a9fd8ea806b7112e487a9a171", "provenance": "legacy-baseline" },
+    { "file": "0003_unique_template_slugs.sql", "sha256": "2de05faf0ddc2686171991915490d8e185185289505b28a67acaae0811e32640", "provenance": "legacy-baseline" },
+    { "file": "0004_remove_affiliate_and_pages.sql", "sha256": "f6ea3791215cb70ee0f936b242a2549a28ea863c7f8a80b5ab271f08a42bca2a", "provenance": "legacy-baseline" },
+    { "file": "0005_backfill_template_slugs.sql", "sha256": "7e58630f1e630a5eb0ed1b5ec944348e57895006f29fb204c6d82f9be552fe2a", "provenance": "legacy-baseline" },
+    { "file": "0007_add_checklist_run_progress.sql", "sha256": "75b07ee6b3fffe4a66707d20b7245be83f86896acc740e906d97c85acaf6d839", "provenance": "legacy-baseline" },
+    { "file": "0008_better_auth.sql", "sha256": "ce6080f3f8ff2fd894eb4f3044b43b70505c4d336e8b69aac8bba786e042436f", "provenance": "legacy-baseline" },
+    { "file": "0009_stripe_billing.sql", "sha256": "d9b9cdb6624e1823e2a9779a6fe0071d88c1060cc1f81cc01ebb4c587446b7c7", "provenance": "legacy-baseline" },
+    { "file": "0010_entitlement_overrides.sql", "sha256": "2149b81cd386f1c292275a2a4f6218435c4f300b4b44ebcda4dd855b32fc226b", "provenance": "legacy-baseline" },
+    { "file": "0011_add_template_version.sql", "sha256": "507e744cb312fe41a72109314350ddbf92ee2f32a80293d0482f160f613e110b", "provenance": "legacy-baseline" },
+    { "file": "0012_cleanup_junk_templates.sql", "sha256": "1ff96ba4d1f314b33059f39eb54bd9ab2b8c0ad2835655d457ae87d743a40bd1", "provenance": "legacy-baseline" },
+    { "file": "0013_add_template_type.sql", "sha256": "c80c95247b8f5439b1022f3d8b08c100fb4249cb7fd803edc2e4e942308470a9", "provenance": "legacy-baseline" },
+    { "file": "0014_make_users_password_hash_nullable.sql", "sha256": "55856be2166567818a82f6745f84860458702e0d3d7f1cd9e0180e96730ca038", "provenance": "legacy-baseline" },
+    { "file": "0015_add_users_created_at_default.sql", "sha256": "aafce6a4af6ed6b56f8b966731f49955486176fab3c53169942a91362e6de4bd", "provenance": "legacy-baseline" },
+    { "file": "0016_users_password_hash_nullable_live_safe.sql", "sha256": "06205498343e0bcd3343d58b35c6ce91d846e7736329b179adde547ca75133ce", "provenance": "legacy-baseline" },
+    { "file": "0017_add_checklist_run_sharing_fields.sql", "sha256": "6113c33f41ac95cc213016fae3347d72a53c1a8d473a118100c79941c64c650c", "provenance": "legacy-baseline" },
+    { "file": "0018_rename_test_users.sql", "sha256": "c7cf9c1affae949ee15667d93fba984d50141304eb34468951e4864438929489", "provenance": "legacy-baseline" },
+    { "file": "0019_add_template_seo_fields.sql", "sha256": "ee890be910fff0d6df575dc3aa163635493ec2cd8eff50c36c3f6d2fabcd09a7", "provenance": "legacy-baseline" },
+    { "file": "0020_add_template_rules.sql", "sha256": "b99aca517b0ce753e25d1702d38968c5923387018cce148a694964b24b037735", "provenance": "legacy-baseline" },
+    { "file": "0021_add_teams_audit_history.sql", "sha256": "beabbac3046640217f02e547df4d546e2554e0ebb6f37a2b149583ff92bbedcd", "provenance": "legacy-baseline" },
+    { "file": "0022_enforce_single_active_team_owner.sql", "sha256": "8f8dd24f2c9c89052a6be510573f564886f1188518f9302935b999446cc95a41", "provenance": "legacy-baseline" },
+    { "file": "0023_add_sitemap_revision_state.sql", "sha256": "3cc8f27f13d8ed0a15e79bc68e8468979005525607eb642b75d1ebb85ab80985", "provenance": "legacy-baseline" },
+    { "file": "0024_safe_template_evolution.sql", "sha256": "cf103505618e0bf000eaf3609ec686c12d50839ead38b563c706fd7a389fe1eb", "provenance": "legacy-baseline", "snapshot": "0024_snapshot.json", "snapshotSha256": "1a591c31f09b976eae3f1809082f4887d1317e77b502f8bc4fad53442b3e9170", "journalIndex": 24 }
+  ]
+}
