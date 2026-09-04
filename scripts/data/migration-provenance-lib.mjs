@@ -18,6 +18,11 @@ export const META_DIRECTORY = "db/migrations/meta";
 export const PROVENANCE_FILE = "db/migration-provenance.json";
 export const JOURNAL_FILE = "db/migrations/meta/_journal.json";
 
+const TRUSTED_LEGACY_HEADER_SHA256 = "28bf4e0dd485e16d9ec2ae5d74ede9ff2f804e34485da54f310af2dc6537d32b";
+const TRUSTED_LEGACY_ENTRIES_SHA256 = "1481cb93b761a1c4252ac7866d39dcfd72ada0515dedc92ed46555a9b6676ff5";
+const TRUSTED_LEGACY_THROUGH = "0024_safe_template_evolution.sql";
+const TRUSTED_LEGACY_COUNT = 24;
+
 const REQUIRED_GIT_LOCAL_ENV_VARS = [
   "GIT_ALTERNATE_OBJECT_DIRECTORIES",
   "GIT_COMMON_DIR",
@@ -115,6 +120,17 @@ export function validateProvenanceState(state) {
   }
 
   const baselineEntries = provenance.migrations.filter((entry) => entry.provenance === "legacy-baseline");
+  if (sha256(JSON.stringify(provenance.baseline)) !== TRUSTED_LEGACY_HEADER_SHA256) {
+    failures.push(failure("trusted-baseline-header", `Legacy baseline header is immutable at ${TRUSTED_LEGACY_COUNT} files through ${TRUSTED_LEGACY_THROUGH}.`));
+  }
+  if (
+    baselineEntries.length !== TRUSTED_LEGACY_COUNT ||
+    sha256(JSON.stringify(baselineEntries)) !== TRUSTED_LEGACY_ENTRIES_SHA256 ||
+    provenance.migrations.slice(0, TRUSTED_LEGACY_COUNT).some((entry) => entry.provenance !== "legacy-baseline") ||
+    provenance.migrations.slice(TRUSTED_LEGACY_COUNT).some((entry) => entry.provenance === "legacy-baseline")
+  ) {
+    failures.push(failure("trusted-legacy-baseline", `Only the exact ordered, hashed legacy history through ${TRUSTED_LEGACY_THROUGH} is trusted; later migrations require Drizzle provenance.`));
+  }
   if (baselineEntries.length !== provenance.baseline.migrationCount) {
     failures.push(failure("baseline-count", `Baseline declares ${provenance.baseline.migrationCount} files but records ${baselineEntries.length}.`));
   }

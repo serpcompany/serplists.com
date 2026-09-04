@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, cpSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -54,6 +54,83 @@ test("a handwritten metadata-less migration fails", () => {
   try {
     writeFileSync(path.join(root, "db/migrations/0025_handwritten.sql"), "ALTER TABLE users ADD COLUMN unsafe TEXT;\n");
     assert.ok(errors(root).includes("migration-order"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a no-op cannot extend the legacy baseline when the comparison base has no manifest", () => {
+  const root = fixture();
+  try {
+    runGit(root, ["init", "-q"]);
+    runGit(root, ["config", "user.email", "test@example.invalid"]);
+    runGit(root, ["config", "user.name", "Migration Test"]);
+    rmSync(path.join(root, "db/migration-provenance.json"));
+    rmSync(path.join(root, "db/migrations/meta"), { recursive: true, force: true });
+    runGit(root, ["add", "db"]);
+    runGit(root, ["commit", "-qm", "pre-provenance base"]);
+    const base = runGit(root, ["rev-parse", "HEAD"]);
+
+    cpSync(path.join(repoRoot, "db/migration-provenance.json"), path.join(root, "db/migration-provenance.json"));
+    cpSync(path.join(repoRoot, "db/migrations/meta"), path.join(root, "db/migrations/meta"), { recursive: true });
+    const sql = path.join(root, "db/migrations/0025_handwritten_noop.sql");
+    writeFileSync(sql, "SELECT 1;\n");
+    editManifest(root, (manifest) => {
+      manifest.baseline.migrationCount = 25;
+      manifest.baseline.through = "0025_handwritten_noop.sql";
+      manifest.migrations.push({
+        file: "0025_handwritten_noop.sql",
+        sha256: sha256File(sql),
+        provenance: "legacy-baseline",
+      });
+    });
+
+    const state = loadProvenanceState(root);
+    assert.deepEqual(validateAgainstBase(state, base), []);
+    const names = validateProvenanceState(state).map((item) => item.name);
+    assert.ok(names.includes("trusted-baseline-header"));
+    assert.ok(names.includes("trusted-legacy-baseline"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("renumbering a trusted legacy migration cannot redefine the boundary", () => {
+  const root = fixture();
+  try {
+    renameSync(
+      path.join(root, "db/migrations/0024_safe_template_evolution.sql"),
+      path.join(root, "db/migrations/0025_safe_template_evolution.sql"),
+    );
+    editManifest(root, (manifest) => {
+      manifest.baseline.through = "0025_safe_template_evolution.sql";
+      manifest.migrations.at(-1).file = "0025_safe_template_evolution.sql";
+    });
+    const names = errors(root);
+    assert.ok(names.includes("trusted-baseline-header"));
+    assert.ok(names.includes("trusted-legacy-baseline"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an extra schema-changing migration cannot be labeled as legacy", () => {
+  const root = fixture();
+  try {
+    const sql = path.join(root, "db/migrations/0025_extra_legacy.sql");
+    writeFileSync(sql, "ALTER TABLE users ADD COLUMN untrusted TEXT;\n");
+    editManifest(root, (manifest) => {
+      manifest.baseline.migrationCount = 25;
+      manifest.baseline.through = "0025_extra_legacy.sql";
+      manifest.migrations.push({
+        file: "0025_extra_legacy.sql",
+        sha256: sha256File(sql),
+        provenance: "legacy-baseline",
+      });
+    });
+    const names = errors(root);
+    assert.ok(names.includes("trusted-baseline-header"));
+    assert.ok(names.includes("trusted-legacy-baseline"));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
