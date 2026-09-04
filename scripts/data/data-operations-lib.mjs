@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import { getRepositoryMigrationRange } from "./environment-identity-lib.mjs";
@@ -12,6 +12,7 @@ const MUTATING_OPERATIONS = new Set([
   "fixture-setup",
   "fixture-teardown",
   "migration-apply",
+  "rehearsal-baseline",
   "rehearsal-import",
   "recovery-restore",
   "rehearsal-teardown",
@@ -98,6 +99,7 @@ export function buildDataOperationPlan({
   importManifest,
   confirmationDatabaseId,
   persistTo,
+  beforeMigration,
   now = new Date(),
 }) {
   if (identity.environment === "production" && MUTATING_OPERATIONS.has(operation)) {
@@ -127,6 +129,9 @@ export function buildDataOperationPlan({
   let versionedInvariantCommands = [];
   let outputPathForReport;
   let rawOutputPath;
+  let commands;
+  let preconditionCommand;
+  let expectedAppliedMigrations;
 
   switch (operation) {
     case "identify":
@@ -144,6 +149,31 @@ export function buildDataOperationPlan({
     case "migration-apply": {
       const [database, ...mode] = wranglerTargetArgs(identity, resolvedPersistTo);
       command = ["pnpm", "exec", "wrangler", "d1", "migrations", "apply", database, ...mode];
+      break;
+    }
+    case "rehearsal-baseline": {
+      if (identity.environment !== "rehearsal" || !identity.isRemote) {
+        throw new Error("A migration baseline may be built only in an isolated remote rehearsal database.");
+      }
+      const migrationFiles = readdirSync(path.join(repoRoot, "db/migrations"))
+        .filter((name) => /^\d{4}_.+\.sql$/.test(name))
+        .sort((left, right) => left.localeCompare(right, "en"));
+      if (!beforeMigration) throw new Error("Rehearsal baseline requires --before <migration filename|none>.");
+      const boundary = beforeMigration === "none" ? migrationFiles.length : migrationFiles.indexOf(beforeMigration);
+      if (boundary < 0) throw new Error(`Rehearsal baseline boundary is not a repository migration: ${beforeMigration}.`);
+      expectedAppliedMigrations = migrationFiles.slice(0, boundary);
+      preconditionCommand = commandForQuery(
+        identity,
+        "SELECT COUNT(*) AS total_objects FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name <> 'd1_migrations'",
+      );
+      const ledgerSetup = commandForQuery(identity, "CREATE TABLE IF NOT EXISTS d1_migrations(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
+      commands = [ledgerSetup];
+      for (const fileName of expectedAppliedMigrations) {
+        commands.push(commandForSql(identity, path.join(repoRoot, "db/migrations", fileName)));
+        commands.push(commandForQuery(identity, `INSERT INTO d1_migrations (name) VALUES ('${fileName}')`));
+      }
+      invariantLedgerCommand = commandForQuery(identity, "SELECT id, name FROM d1_migrations ORDER BY id");
+      report.baseline = { beforeMigration, appliedMigrations: expectedAppliedMigrations };
       break;
     }
     case "export":
@@ -185,7 +215,7 @@ export function buildDataOperationPlan({
       command = commandForSql(identity, path.join(repoRoot, "scripts/data/sql/capture-invariants.sql"), resolvedPersistTo);
       invariantLedgerCommand = commandForQuery(
         identity,
-        "SELECT name FROM d1_migrations ORDER BY name",
+        "SELECT id, name FROM d1_migrations ORDER BY id",
         resolvedPersistTo,
       );
       versionedInvariantCommands = selectInvariantSqlFiles({
@@ -265,6 +295,9 @@ export function buildDataOperationPlan({
     report,
     preflightCommand,
     command,
+    commands,
+    preconditionCommand,
+    expectedAppliedMigrations,
     invariantLedgerCommand,
     versionedInvariantCommands,
     outputPath: outputPathForReport,
@@ -272,7 +305,7 @@ export function buildDataOperationPlan({
     mutates: MUTATING_OPERATIONS.has(operation),
     requiresConfirmation: operation === "rehearsal-export",
     requiresWorkflowRequestContext:
-      operation === "rehearsal-export" || operation === "rehearsal-import" || operation === "recovery-restore",
+      operation === "rehearsal-export" || operation === "rehearsal-import" || operation === "recovery-restore" || operation === "rehearsal-baseline",
     requiresStagingExecutionBoundary:
       identity.environment === "staging" && MUTATING_OPERATIONS.has(operation),
     requiresIssue97ExecutionBoundary:

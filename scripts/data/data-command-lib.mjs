@@ -15,6 +15,7 @@ import {
 } from "./environment-identity-lib.mjs";
 import { buildDataOperationPlan, buildRehearsalCreatePlan } from "./data-operations-lib.mjs";
 import {
+  compareMigrationLedger,
   parseAppliedMigrationLedger,
   selectInvariantSqlFiles,
 } from "./invariant-capture-lib.mjs";
@@ -135,6 +136,7 @@ export function runDataCommand({
       importManifest: manifest,
       confirmationDatabaseId: values["--confirm-database-id"],
       persistTo: values["--persist-to"],
+      beforeMigration: values["--before"],
       now,
     });
   }
@@ -147,6 +149,7 @@ export function runDataCommand({
       preflightCommand: plan.preflightCommand,
       invariantLedgerCommand: plan.invariantLedgerCommand,
       command: plan.command,
+      commands: plan.commands,
       versionedInvariantCommands: plan.versionedInvariantCommands,
       generalCliExecutable: plan.generalCliExecutable,
       requiresIssue97ExecutionBoundary: plan.requiresIssue97ExecutionBoundary,
@@ -192,6 +195,13 @@ export function runDataCommand({
     const identityOutput = runCommand(plan.preflightCommand);
     assertLiveIdentity({ output: identityOutput, expected: plan.report });
   }
+  if (plan.preconditionCommand) {
+    const parsed = JSON.parse(runCommand(plan.preconditionCommand));
+    const rows = (Array.isArray(parsed) ? parsed : [parsed]).flatMap((entry) => entry?.results ?? []);
+    if (rows.length !== 1 || Number(rows[0]?.total_objects) !== 0) {
+      throw new Error("Rehearsal baseline requires a newly created empty database.");
+    }
+  }
   if (plan.rawOutputPath) mkdirSync(path.dirname(plan.rawOutputPath), { recursive: true });
   let invariantContext;
   let output;
@@ -214,6 +224,17 @@ export function runDataCommand({
       return Array.isArray(parsed) ? parsed : [parsed];
     });
     output = JSON.stringify(combined, null, 2);
+  } else if (operation === "rehearsal-baseline") {
+    for (const command of plan.commands) runCommand(command);
+    const appliedMigrations = parseAppliedMigrationLedger(runCommand(plan.invariantLedgerCommand), {
+      allowEmpty: plan.expectedAppliedMigrations.length === 0,
+    });
+    const ledger = compareMigrationLedger({
+      repositoryMigrations: plan.expectedAppliedMigrations,
+      appliedMigrations,
+    });
+    if (ledger.verdict !== "pass") throw new Error(`Rehearsal baseline ledger verification failed: ${JSON.stringify(ledger)}.`);
+    output = JSON.stringify({ baseline: plan.report.baseline, ledger }, null, 2);
   } else {
     output = plan.command ? runCommand(plan.command) : "";
   }

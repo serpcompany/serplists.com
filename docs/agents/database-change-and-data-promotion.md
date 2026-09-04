@@ -23,7 +23,7 @@ Any change to the Drizzle runtime contract must include the matching Wrangler mi
 
 The only exception is a **contract correction**: Drizzle metadata may be corrected without a new no-op migration when generated evidence proves the exact tables, columns, affinities, nullability, defaults, primary keys, foreign keys, and indexes already exist throughout the applied Wrangler history. A contract-correction change must contain no new or modified migration, must name the already-applied migrations that created the state, and must pass the complete replay, remote catalog, and snapshot comparisons. It cannot add a runtime object or constraint absent from the applied migration catalog; automation must reject that as a real database change requiring a new migration.
 
-CI fetches full Git history and verifies every correction property against its exact creating migration as it existed on the base branch, replaying only through that migration before comparing the expected value. Staging and production checks separately read the live `d1_migrations` ledger, record `appliedThrough`, and fail when any repository migration is absent; local replay evidence alone never claims a remote migration was applied.
+CI fetches full Git history and verifies every correction property against its exact creating migration as it existed on the base branch, replaying only through that migration before comparing the expected value. Staging and production checks separately read the live `d1_migrations` ledger, record `appliedThrough`, and fail when any repository migration is absent; local replay evidence alone never claims a remote migration was applied. The remote ledger must exactly match the ordered repository history: malformed, duplicate, reordered, or Git-unknown applied entries are blocking drift even when the live schema happens to match.
 
 Legacy foreign keys that predate Drizzle relation declarations are temporarily enumerated in `SQL_ONLY_RELATION_ALLOWLIST`. The allowlist records exact local columns, referenced tables/columns, and update/delete actions; it exists only to represent already-applied historical constraints and may only shrink as relations move into Drizzle. Any relation not declared by Drizzle or exactly present in that allowlist is blocking drift. New relations must be declared in Drizzle and introduced by a numbered migration.
 
@@ -96,6 +96,7 @@ Database-affecting changes are incomplete until automation proves all applicable
 - compare the replayed schema with the Drizzle runtime contract and generated `db/schema.sql`;
 - upgrade a fixture database from the current shared-environment migration level to the proposed level;
 - verify table and owner-scoped row counts, ownership, active/deleted state, foreign keys, orphan absence, JSON validity, expected version values, and domain-specific lifecycle state;
+- compare privacy-safe per-row HMAC projections for templates and runs so notes, progress, frozen/shared content, lifecycle fields, versions, and deletion state cannot be hidden by unchanged aggregate counts; reports may contain only digests and generic differences, never customer content or direct identifiers;
 - verify migrations and maintenance operations are restartable or have a documented checkpoint/recovery boundary;
 - run authenticated API tests proving account-owned templates and runs remain visible and writable as specified;
 - exercise concurrency controls when template or run revisions change;
@@ -131,6 +132,8 @@ The atomic staging promotion path must run in this order:
 7. publish the staging report and link it from the pull request and issue.
 
 Staging completion requires the report and an independently reviewable preview result. A staging rehearsal never authorizes production.
+
+An ephemeral migration rehearsal must start with a newly created empty database, build and ledger the exact repository schema immediately before the reviewed migration range, import only the attested sanitized data, and then apply the reviewed range. Direct remote use of the legacy baseline helper is prohibited.
 
 **Current enforcement status:** `.github/workflows/cloudflare-pages-deploy.yml` now orders staging migration, ledger/schema/invariant verification, deployment, authenticated account-owned checks, and custom-domain checks. Production is manual-dispatch only and consumes exact-commit CI/rehearsal evidence through the separate protected executor. The workflow remains unavailable for production authorization until the external GitHub Environment, branch rules, independent reviewer, scoped secrets, and Cloudflare credential revocation listed in `docs/operations/protected-data-promotion.md` are configured and independently proven. Local implementation and isolated rehearsal may continue; a manual migration or direct deploy is never a substitute.
 

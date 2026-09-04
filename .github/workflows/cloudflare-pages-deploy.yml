@@ -37,6 +37,7 @@ jobs:
       DATA_PROTECTED_ENVIRONMENT: staging
     steps:
       - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with: { node-version: "22", cache: pnpm }
@@ -57,6 +58,7 @@ jobs:
       - name: Apply reviewed staging migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+          STAGING_BASE_SHA: ${{ github.event.before }}
         run: |
           node scripts/data/check-staging-reviewed-range.mjs
           node scripts/data/data-command.mjs migration-apply --environment staging --confirm-database-id fcaf4325-5be7-4ead-ab60-45932a04177b --execute

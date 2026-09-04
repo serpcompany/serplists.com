@@ -14,7 +14,7 @@ import {
 } from "./schema-contract";
 import { buildFailureReport, writeDataCheckReports } from "./reporting.mjs";
 import { resolveRemoteD1Identity } from "./wrangler-identity-lib.mjs";
-import { parseAppliedMigrationLedger } from "./invariant-capture-lib.mjs";
+import { compareMigrationLedger, parseAppliedMigrationLedger } from "./invariant-capture-lib.mjs";
 
 function readArg(name: string) {
   const inline = process.argv.find((argument) => argument.startsWith(`${name}=`));
@@ -68,13 +68,13 @@ try {
   });
   const results = JSON.parse(output) as Array<{ results?: Array<Record<string, unknown>> }>;
   const remoteCatalog = catalogFromPragmaResults(tableNames, results);
-  const ledgerOutput = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", [...targetArgs, "--json", "--command", "SELECT name FROM d1_migrations ORDER BY name"], { cwd: process.cwd(), encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+  const ledgerOutput = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", [...targetArgs, "--json", "--command", "SELECT id, name FROM d1_migrations ORDER BY id"], { cwd: process.cwd(), encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] });
   const appliedMigrations = parseAppliedMigrationLedger(ledgerOutput);
-  const missingAppliedMigrations = migrations.filter((name) => !appliedMigrations.includes(name));
+  const ledger = compareMigrationLedger({ repositoryMigrations: migrations, appliedMigrations });
   const runtimeDiff = diffRuntimeSchema(drizzleSchema, remoteCatalog);
   const migrationDiff = diffDrizzleContract(migrationContract, remoteCatalog);
   const migrationObjectDiff = compareDatabaseSchemas(expectedMigrationCatalog, remoteCatalog);
-  const verdict = runtimeDiff.verdict === "pass" && migrationDiff.verdict === "pass" && migrationObjectDiff.verdict === "pass" && missingAppliedMigrations.length === 0 ? "pass" : "fail";
+  const verdict = runtimeDiff.verdict === "pass" && migrationDiff.verdict === "pass" && migrationObjectDiff.verdict === "pass" && ledger.verdict === "pass" ? "pass" : "fail";
   const assertedDatabaseId = readArg("--database-id") ?? process.env.D1_DATABASE_ID;
   if (assertedDatabaseId && assertedDatabaseId !== resolvedIdentity.databaseId) {
     throw new Error(`Resolved database ID ${resolvedIdentity.databaseId} does not match asserted ID ${assertedDatabaseId}.`);
@@ -86,7 +86,7 @@ try {
     target: { environment, database, databaseId, mode: preview ? "preview" : "remote" },
     migrationRange: { from: migrations[0] ?? null, to: migrations.at(-1) ?? null },
     schemaDifferences: { runtime: runtimeDiff, migration: migrationDiff, migrationObjects: migrationObjectDiff },
-    ledger: { appliedThrough: appliedMigrations.at(-1) ?? null, missingAppliedMigrations },
+    ledger,
     verdict,
   };
   const summary = verdict === "pass"
@@ -94,6 +94,7 @@ try {
     : [
         `BLOCKED ${environment}:${database} (${databaseId}) has Drizzle/D1 schema drift at ${commit}.`,
         JSON.stringify(report.schemaDifferences),
+        `Ledger differences: ${JSON.stringify(ledger)}.`,
         "Apply the required reviewed Wrangler migrations before deploying compatible application code.",
       ].join("\n");
   const paths = writeDataCheckReports({ name: `d1-schema-${environment}`, report, summary, reportDirectory });

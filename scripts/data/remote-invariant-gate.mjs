@@ -27,7 +27,7 @@ try {
   } else {
     const pre = JSON.parse(readFileSync(state, "utf8"));
     const post = capture();
-    const comparison = compareProductionInvariants({ pre: pre.invariants, post: post.invariants, preHasEvolution: pre.hasEvolution, postHasEvolution: post.hasEvolution });
+    const comparison = compareProductionInvariants({ pre: pre.invariants, post: post.invariants, preHasEvolution: pre.hasEvolution, postHasEvolution: post.hasEvolution, preDomain: pre.domain, postDomain: post.domain });
     const summary = `${comparison.verdict.toUpperCase()} remote pre/post invariant and ownership-digest comparison.`;
     writeDataCheckReports({ name: "remote-invariant-comparison", report: { ...comparison, check: "remote-invariant-comparison" }, summary, reportDirectory });
     console.log(summary);

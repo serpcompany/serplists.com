@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const PRODUCTION_DATABASE_NAME = "serp-checklists-db";
 const MIGRATION_FILE_PATTERN = /^\d{4}_.+\.sql$/;
 const NPX_COMMAND = process.platform === "win32" ? "cmd.exe" : "npx";
 const NPX_ARGS_PREFIX = process.platform === "win32" ? ["/d", "/s", "/c", "npx"] : [];
@@ -122,9 +121,9 @@ if (!throughMigration) {
   process.exit(1);
 }
 
-if (isRemote && databaseName === PRODUCTION_DATABASE_NAME) {
+if (isRemote) {
   console.error(
-    `Refusing to baseline ${PRODUCTION_DATABASE_NAME}; production mutations require the protected workflow.`,
+    `Refusing direct remote baseline for ${databaseName}; remote schema creation must use the protected promotion or rehearsal workflow.`,
   );
   process.exit(1);
 }

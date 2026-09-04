@@ -147,8 +147,11 @@ node scripts/data/data-command.mjs rehearsal-create \
 
 Record the returned UUID. Every later write requires that UUID twice: once as
 the target and once as explicit confirmation. The protected workflow verifies
-the attestation, imports the `0023`-compatible synthetic profile, captures
-pre-change invariants, and only then applies the reviewed migration range.
+that the target is newly created and empty, builds and ledgers the exact schema
+immediately before the reviewed range, verifies the attestation, imports the
+`0023`-compatible synthetic profile, captures pre-change invariants, and only
+then applies the reviewed migration range. The legacy baseline helper refuses
+every remote target.
 The commands below document the guarded primitives, not an alternate manual
 remote runbook; their displayed order does not authorize execution.
 
@@ -159,11 +162,12 @@ node scripts/data/data-command.mjs migration-ledger \
   --database-id REHEARSAL_UUID \
   --execute
 
-node scripts/data/data-command.mjs migration-apply \
+node scripts/data/data-command.mjs rehearsal-baseline \
   --environment rehearsal \
   --database-name serp-checklists-rehearsal-issue-95 \
   --database-id REHEARSAL_UUID \
   --confirm-database-id REHEARSAL_UUID \
+  --before 0024_safe_template_evolution.sql \
   --execute
 
 node scripts/data/data-command.mjs rehearsal-import \
@@ -175,6 +179,13 @@ node scripts/data/data-command.mjs rehearsal-import \
   --manifest /protected/path/manifest.json \
   --execute
 
+node scripts/data/data-command.mjs migration-apply \
+  --environment rehearsal \
+  --database-name serp-checklists-rehearsal-issue-95 \
+  --database-id REHEARSAL_UUID \
+  --confirm-database-id REHEARSAL_UUID \
+  --execute
+
 node scripts/data/data-command.mjs invariant-capture \
   --environment rehearsal \
   --database-name serp-checklists-rehearsal-issue-95 \
@@ -182,9 +193,11 @@ node scripts/data/data-command.mjs invariant-capture \
   --execute
 ```
 
-The invariant query emits aggregate counts only: total/active/deleted rows,
-distinct-owner counts, JSON validity, and orphan counts. It never selects
-customer content or owner IDs.
+The invariant query emits aggregate counts plus privacy-safe per-row HMAC
+proofs: total/active/deleted rows, distinct-owner counts, JSON validity,
+orphans, notes, progress, versions, lifecycle/frozen snapshots, ownership, and
+deletion state. Customer content and direct identifiers are processed only to
+derive protected digests and are never written to reports.
 
 ## Recovery evidence
 

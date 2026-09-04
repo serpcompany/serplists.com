@@ -39,7 +39,7 @@ describe("data operation plans", () => {
     expect(plan.command).toContain("--preview");
     expect(plan.invariantLedgerCommand).toEqual(expect.arrayContaining([
       "--command",
-      "SELECT name FROM d1_migrations ORDER BY name",
+      "SELECT id, name FROM d1_migrations ORDER BY id",
     ]));
     expect(plan.versionedInvariantCommands).toHaveLength(1);
   });

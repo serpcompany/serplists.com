@@ -112,6 +112,8 @@ try {
             post: post.invariants,
             preHasEvolution: preInvariantSnapshot.hasEvolution,
             postHasEvolution: post.hasEvolution,
+            preDomain: preInvariantSnapshot.domain,
+            postDomain: post.domain,
           });
           if (comparison.verdict !== "pass") throw new Error(`Production invariant comparison failed: ${comparison.failures.join("; ")}`);
           output = JSON.stringify(comparison);

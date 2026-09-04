@@ -109,8 +109,61 @@ describe("protected production executor", () => {
   });
 
   it("derives the highest migration risk and rejects under-classification", () => {
+    expect(assertMigrationClassification({ requested: "additive", sqlTexts: [] })).toBe("additive");
     expect(assertMigrationClassification({ requested: "backfill", sqlTexts: ["ALTER TABLE x ADD COLUMN y TEXT; UPDATE x SET y='a';"] })).toBe("backfill");
     expect(() => assertMigrationClassification({ requested: "additive", sqlTexts: ["DELETE FROM x;"] })).toThrow(/destructive/i);
+  });
+
+  it("classifies only positively allowlisted compatible schema additions as additive", () => {
+    for (const sql of [
+      "CREATE TABLE IF NOT EXISTS audit_events (id TEXT PRIMARY KEY, value TEXT NOT NULL);",
+      "CREATE INDEX IF NOT EXISTS idx_events_value ON audit_events(value);",
+      "ALTER TABLE templates ADD COLUMN subtitle TEXT;",
+      "ALTER TABLE templates ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;",
+      "PRAGMA defer_foreign_keys=TRUE; BEGIN TRANSACTION; COMMIT;",
+      "-- DROP TABLE ignored_comment\nALTER TABLE templates ADD COLUMN note TEXT DEFAULT 'semi;colon';",
+    ]) {
+      expect(assertMigrationClassification({ requested: "additive", sqlTexts: [sql] })).toBe("additive");
+    }
+  });
+
+  it("classifies CREATE TABLE AS SELECT as a data backfill", () => {
+    for (const sql of [
+      "CREATE TABLE copied_templates AS SELECT * FROM templates;",
+      "CREATE TABLE copied AS WITH source(v) AS (SELECT 7) SELECT v FROM source;",
+      "CREATE TABLE copied AS/*split*/SELECT 9 AS v;",
+    ]) {
+      expect(() => assertMigrationClassification({ requested: "additive", sqlTexts: [sql] })).toThrow(/backfill/i);
+      expect(assertMigrationClassification({ requested: "backfill", sqlTexts: [sql] })).toBe("backfill");
+    }
+  });
+
+  it("elevates unique indexes and required columns without safe defaults", () => {
+    for (const sql of [
+      "CREATE UNIQUE INDEX idx_templates_slug ON templates(slug);",
+      "ALTER TABLE templates ADD COLUMN required_value TEXT NOT NULL;",
+      "ALTER TABLE templates ADD COLUMN required_value TEXT NOT NULL DEFAULT NULL;",
+      "PRAGMA foreign_keys=OFF;",
+    ]) {
+      expect(() => assertMigrationClassification({ requested: "additive", sqlTexts: [sql] })).toThrow(/destructive/i);
+      expect(assertMigrationClassification({ requested: "destructive", sqlTexts: [sql] })).toBe("destructive");
+    }
+  });
+
+  it("fails unknown executable syntax closed as irreversible and uses highest mixed risk", () => {
+    expect(() => assertMigrationClassification({ requested: "destructive", sqlTexts: ["VACUUM;"] })).toThrow(/irreversible/i);
+    expect(assertMigrationClassification({ requested: "irreversible", sqlTexts: ["VACUUM;"] })).toBe("irreversible");
+    expect(assertMigrationClassification({
+      requested: "destructive",
+      sqlTexts: [
+        "CREATE TABLE safe_new (id TEXT); UPDATE templates SET title='changed';",
+        "ALTER TABLE templates RENAME COLUMN title TO old_title;",
+      ],
+    })).toBe("destructive");
+    expect(assertMigrationClassification({
+      requested: "destructive",
+      sqlTexts: ["CREATE TABLE safe_new (id TEXT);", "DELETE FROM templates;"],
+    })).toBe("destructive");
   });
 
   it("binds approval independence to every actual change author, not the dispatcher", () => {
@@ -224,12 +277,14 @@ describe("protected production executor", () => {
     const output = JSON.stringify([{ results: Object.entries(values).map(([invariant, total_rows]) => ({ invariant, total_rows })) }]);
     const pre = parseInvariantOutput(output);
     pre.ownershipDigest = "digest";
-    expect(compareProductionInvariants({ pre, post: pre }).verdict).toBe("pass");
-    expect(compareProductionInvariants({ pre, post: { ...pre, templates: 3 } }).verdict).toBe("fail");
-    expect(compareProductionInvariants({ pre, post: { ...pre, orphaned_templates: 1 } }).verdict).toBe("fail");
+    const domain = { templates: [], runs: [], emptyRetiredItemsDigest: "empty", digest: "domain" };
+    expect(compareProductionInvariants({ pre, post: pre, preDomain: domain, postDomain: domain }).verdict).toBe("pass");
+    expect(compareProductionInvariants({ pre, post: { ...pre, templates: 3 }, preDomain: domain, postDomain: domain }).verdict).toBe("fail");
+    expect(compareProductionInvariants({ pre, post: { ...pre, orphaned_templates: 1 }, preDomain: domain, postDomain: domain }).verdict).toBe("fail");
     const omitted = { ...pre };
     delete omitted.runs;
-    expect(compareProductionInvariants({ pre, post: omitted }).verdict).toBe("fail");
+    expect(compareProductionInvariants({ pre, post: omitted, preDomain: domain, postDomain: domain }).verdict).toBe("fail");
+    expect(compareProductionInvariants({ pre, post: pre }).failures).toContain("per-row domain snapshot omitted");
   });
 
   it("detects privacy-safe owner and deletion-state swaps without exposing identifiers", () => {

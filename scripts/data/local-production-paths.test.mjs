@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
@@ -24,5 +25,12 @@ describe("local production mutation guard", () => {
   ])("routes %s through the guarded remote CLI instead of direct Wrangler", (name) => {
     expect(scripts[name]).toContain("remote-path-blocked.mjs");
     expect(scripts[name]).not.toContain("wrangler");
+  });
+
+  it("refuses the legacy baseline helper for every remote database before invoking Wrangler", () => {
+    expect(() => execFileSync(process.execPath, [
+      "scripts/d1-baseline-migrations.mjs", "--remote", "--database", "serp-checklists-staging-db",
+      "--through", "0023_add_sitemap_revision_state.sql", "--execute",
+    ], { cwd: new URL("../../", import.meta.url), encoding: "utf8", stdio: "pipe" })).toThrow(/remote baseline/i);
   });
 });

@@ -15,11 +15,101 @@ const REQUIRED_CONTEXT = {
 };
 const RISK = ["additive", "backfill", "destructive", "irreversible"];
 
+function sqlStatements(sqlTexts) {
+  const source = sqlTexts.join("\n");
+  const statements = [];
+  let current = "";
+  let quote = null;
+  let lineComment = false;
+  let blockComment = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    const next = source[index + 1];
+    if (lineComment) {
+      if (character === "\n") lineComment = false;
+      continue;
+    }
+    if (blockComment) {
+      if (character === "*" && next === "/") {
+        blockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+    if (!quote && character === "-" && next === "-") {
+      current += " ";
+      lineComment = true;
+      index += 1;
+      continue;
+    }
+    if (!quote && character === "/" && next === "*") {
+      current += " ";
+      blockComment = true;
+      index += 1;
+      continue;
+    }
+    if (quote) {
+      current += character;
+      if (character === quote) {
+        if (next === quote) {
+          current += next;
+          index += 1;
+        } else {
+          quote = null;
+        }
+      }
+      continue;
+    }
+    if (["'", '"', "`"].includes(character)) {
+      quote = character;
+      current += character;
+      continue;
+    }
+    if (character === ";") {
+      if (current.trim()) statements.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  if (quote || blockComment) throw new Error("Migration SQL is unterminated; classification fails closed as irreversible.");
+  if (current.trim()) statements.push(current.trim());
+  return statements;
+}
+
+function statementRisk(statement) {
+  const normalized = statement.replace(/\s+/g, " ").trim();
+  if (/^(begin(?: transaction)?|commit|end(?: transaction)?|rollback)$/i.test(normalized)) return "additive";
+  if (/^pragma\s+defer_foreign_keys\s*=\s*(?:true|false|on|off|0|1)$/i.test(normalized)) return "additive";
+  if (/^pragma\s+foreign_keys\s*=\s*(?:true|on|1)$/i.test(normalized)) return "additive";
+  if (/^pragma\s+foreign_keys\s*=\s*(?:false|off|0)$/i.test(normalized)) return "destructive";
+  if (/^create\s+table\b/i.test(normalized)) {
+    const schemaDefinition = /^create\s+table\s+(?:if\s+not\s+exists\s+)?(?:"(?:[^"]|"")+"|`(?:[^`]|``)+`|\[[^\]]+\]|[a-z_][a-z0-9_$]*(?:\.[a-z_][a-z0-9_$]*)?)\s*\(/i.test(normalized);
+    return schemaDefinition ? "additive" : "backfill";
+  }
+  if (/^create\s+(?!unique\b)index\b/i.test(normalized)) return "additive";
+  if (/^alter\s+table\s+\S+\s+add\s+(?:column\s+)?/i.test(normalized)) {
+    const required = /\bnot\s+null\b/i.test(normalized);
+    const safeDefault = /\bdefault\s+(?!null\b)(?:[-+]?\d+(?:\.\d+)?|'(?:''|[^'])*'|"(?:""|[^"])*")\s*$/i.test(normalized);
+    return required && !safeDefault ? "destructive" : "additive";
+  }
+  if (/^(insert|update|replace)\b/i.test(normalized)) return "backfill";
+  if (/^(delete|drop)\b/i.test(normalized) || /^alter\s+table\b/i.test(normalized) || /^create\s+unique\s+index\b/i.test(normalized)) {
+    return "destructive";
+  }
+  return "irreversible";
+}
+
 export function assertMigrationClassification({ requested, sqlTexts }) {
-  let derived = "additive";
-  const sql = sqlTexts.join("\n").replace(/^\s*--.*$/gm, " ");
-  if (/\b(update|insert|replace)\b/i.test(sql)) derived = "backfill";
-  if (/\b(drop|delete|alter\s+table\s+\S+\s+(rename|drop))\b/i.test(sql)) derived = "destructive";
+  const statements = sqlStatements(sqlTexts);
+  if (!statements.length) {
+    if (sqlTexts.length === 0 && requested === "additive") return "additive";
+    throw new Error("Migration SQL has no classifiable statements; classification fails closed as irreversible.");
+  }
+  const derived = statements.reduce((highest, statement) => {
+    const risk = statementRisk(statement);
+    return RISK.indexOf(risk) > RISK.indexOf(highest) ? risk : highest;
+  }, "additive");
   if (!RISK.includes(requested) || RISK.indexOf(requested) < RISK.indexOf(derived)) {
     throw new Error(`Migration range is at least ${derived}; requested classification ${requested ?? "missing"} is unsafe.`);
   }

@@ -88,7 +88,13 @@ jobs:
           path: tmp/data-evidence
       - name: Validate rehearsal dispatch inputs
         run: node scripts/data/validate-workflow-inputs.mjs rehearsal
-      - name: Verify attestation and import repository-sanitized production-shaped data
+      - name: Verify pre-provisioned empty rehearsal identity and build the pre-change schema
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+        run: |
+          node scripts/data/data-command.mjs identify --environment rehearsal --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --execute
+          node scripts/data/data-command.mjs rehearsal-baseline --environment rehearsal --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --confirm-database-id "$DATABASE_ID" --approver-identity @devinschumacher --before "$MIGRATION_FROM" --execute
+      - name: Verify attestation and import repository-sanitized production-shaped data into the baseline
         env:
           GH_TOKEN: ${{ github.token }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
@@ -96,9 +102,6 @@ jobs:
           gh attestation verify tmp/data-evidence/production-shaped.sql --repo "$GITHUB_REPOSITORY"
           gh attestation verify tmp/data-evidence/production-shaped.manifest.json --repo "$GITHUB_REPOSITORY"
           node scripts/data/data-command.mjs rehearsal-import --environment rehearsal --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --confirm-database-id "$DATABASE_ID" --approver-identity @devinschumacher --input tmp/data-evidence/production-shaped.sql --manifest tmp/data-evidence/production-shaped.manifest.json --execute
-      - name: Verify pre-provisioned sanitized production-shaped rehearsal identity
-        env: { CLOUDFLARE_API_TOKEN: "${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}" }
-        run: node scripts/data/data-command.mjs identify --environment rehearsal --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --execute
       - name: Capture pre-invariants
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}

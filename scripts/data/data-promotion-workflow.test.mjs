@@ -385,6 +385,18 @@ describe("protected staging and production data-promotion workflow", () => {
     expect(asArray(rehearsalJob.needs)).toContain("sanitized_source");
     expect(rehearsalText).toContain("gh attestation verify");
     expect(rehearsalText).toContain("rehearsal-import");
+    const baselineIndex = rehearsalJob.steps.findIndex((step) => String(step.run ?? "").includes("rehearsal-baseline"));
+    const importIndex = rehearsalJob.steps.findIndex((step) => String(step.run ?? "").includes("rehearsal-import"));
+    expect(baselineIndex).toBeGreaterThan(-1);
+    expect(baselineIndex).toBeLessThan(importIndex);
+    expect(String(rehearsalJob.steps[baselineIndex].run)).toContain('--before "$MIGRATION_FROM"');
+  });
+
+  it("fetches full history before calculating the exact staging migration range", () => {
+    const checkout = jobs.staging_data.steps.find((step) => String(step.uses ?? "").startsWith("actions/checkout@"));
+    expect(checkout?.with?.["fetch-depth"]).toBe(0);
+    expect(runText(jobs.staging_data)).toContain("check-staging-reviewed-range.mjs");
+    expect(jobs.staging_data.steps.find((step) => String(step.run ?? "").includes("check-staging-reviewed-range.mjs"))?.env?.STAGING_BASE_SHA).toBe("${{ github.event.before }}");
   });
 
   it("performs a real separate-database recovery restore and never uploads plaintext", () => {

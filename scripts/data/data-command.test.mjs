@@ -65,8 +65,8 @@ describe("data command", () => {
         if (command.includes("info")) {
           return JSON.stringify({ uuid: stagingId, name: "serp-checklists-staging-db" });
         }
-        if (command.includes("SELECT name FROM d1_migrations ORDER BY name")) {
-          return JSON.stringify([{ results: [{ name: "0023_add_sitemap_revision_state.sql" }] }]);
+        if (command.includes("SELECT id, name FROM d1_migrations ORDER BY id")) {
+          return JSON.stringify([{ results: [{ id: 1, name: "0023_add_sitemap_revision_state.sql" }] }]);
         }
         return JSON.stringify([{ results: [{ invariant: "templates", total_rows: 20 }] }]);
       },
@@ -100,10 +100,10 @@ describe("data command", () => {
         if (command.includes("info")) {
           return JSON.stringify({ uuid: stagingId, name: "serp-checklists-staging-db" });
         }
-        if (command.includes("SELECT name FROM d1_migrations ORDER BY name")) {
+        if (command.includes("SELECT id, name FROM d1_migrations ORDER BY id")) {
           return JSON.stringify([{ results: [
-            { name: "0023_add_sitemap_revision_state.sql" },
-            { name: "0024_safe_template_evolution.sql" },
+            { id: 1, name: "0023_add_sitemap_revision_state.sql" },
+            { id: 2, name: "0024_safe_template_evolution.sql" },
           ] }]);
         }
         return JSON.stringify([{ results: [{ invariant: "ok", total_rows: 0 }] }]);
@@ -221,6 +221,93 @@ describe("data command", () => {
     } finally {
       rmSync(generated.tempDir, { recursive: true, force: true });
     }
+  });
+
+  it("builds an empty rehearsal database through the migration before the reviewed range", () => {
+    const commands = [];
+    const expectedLedger = [
+      "0001_initial_schema.sql", "0002_add_slug_to_templates.sql",
+      "0002_add_username_and_profiles.sql", "0003_unique_template_slugs.sql",
+      "0004_remove_affiliate_and_pages.sql", "0005_backfill_template_slugs.sql",
+      "0007_add_checklist_run_progress.sql", "0008_better_auth.sql",
+      "0009_stripe_billing.sql", "0010_entitlement_overrides.sql",
+      "0011_add_template_version.sql", "0012_cleanup_junk_templates.sql",
+      "0013_add_template_type.sql", "0014_make_users_password_hash_nullable.sql",
+      "0015_add_users_created_at_default.sql", "0016_users_password_hash_nullable_live_safe.sql",
+      "0017_add_checklist_run_sharing_fields.sql", "0018_rename_test_users.sql",
+      "0019_add_template_seo_fields.sql", "0020_add_template_rules.sql",
+      "0021_add_teams_audit_history.sql", "0022_enforce_single_active_team_owner.sql",
+      "0023_add_sitemap_revision_state.sql",
+    ];
+    const result = runDataCommand({
+      argv: [
+        "rehearsal-baseline", "--environment", "rehearsal",
+        "--database-name", "serp-checklists-rehearsal-issue-95",
+        "--database-id", rehearsalId, "--confirm-database-id", rehearsalId,
+        "--approver-identity", "@devinschumacher", "--before", "0024_safe_template_evolution.sql",
+        "--execute",
+      ],
+      repoRoot,
+      gitCommit: fullGitCommit,
+      env: protectedEnvironment(),
+      write: () => {},
+      runCommand: (command) => {
+        commands.push(command);
+        if (command.includes("info")) return JSON.stringify({ uuid: rehearsalId, name: "serp-checklists-rehearsal-issue-95" });
+        if (command.some((part) => String(part).includes("total_objects"))) return JSON.stringify([{ results: [{ total_objects: 0 }] }]);
+        if (command.some((part) => String(part).includes("SELECT id, name FROM d1_migrations ORDER BY id"))) {
+          return JSON.stringify([{ results: expectedLedger.map((name, index) => ({ id: index + 1, name })) }]);
+        }
+        return JSON.stringify([{ results: [] }]);
+      },
+    });
+    expect(result.executed).toBe(true);
+    expect(result.plan.expectedAppliedMigrations).toEqual(expectedLedger);
+    expect(commands.some((command) => command.some((part) => String(part).endsWith("0023_add_sitemap_revision_state.sql")))).toBe(true);
+    expect(commands.some((command) => command.some((part) => String(part).endsWith("0024_safe_template_evolution.sql")))).toBe(false);
+  });
+
+  it("refuses to baseline a nonempty rehearsal database", () => {
+    expect(() => runDataCommand({
+      argv: [
+        "rehearsal-baseline", "--environment", "rehearsal",
+        "--database-name", "serp-checklists-rehearsal-issue-95",
+        "--database-id", rehearsalId, "--confirm-database-id", rehearsalId,
+        "--approver-identity", "@devinschumacher", "--before", "0024_safe_template_evolution.sql",
+        "--execute",
+      ],
+      repoRoot,
+      gitCommit: fullGitCommit,
+      env: protectedEnvironment(),
+      write: () => {},
+      runCommand: (command) => {
+        if (command.includes("info")) return JSON.stringify({ uuid: rehearsalId, name: "serp-checklists-rehearsal-issue-95" });
+        if (command.some((part) => String(part).includes("total_objects"))) return JSON.stringify([{ results: [{ total_objects: 1 }] }]);
+        return JSON.stringify([{ results: [{ total_objects: 1 }] }]);
+      },
+    })).toThrow(/newly created empty database/i);
+  });
+
+  it("supports a first-migration rehearsal with an explicitly empty baseline ledger", () => {
+    const result = runDataCommand({
+      argv: [
+        "rehearsal-baseline", "--environment", "rehearsal",
+        "--database-name", "serp-checklists-rehearsal-issue-95",
+        "--database-id", rehearsalId, "--confirm-database-id", rehearsalId,
+        "--approver-identity", "@devinschumacher", "--before", "0001_initial_schema.sql",
+        "--execute",
+      ],
+      repoRoot,
+      gitCommit: fullGitCommit,
+      env: protectedEnvironment(),
+      write: () => {},
+      runCommand: (command) => {
+        if (command.includes("info")) return JSON.stringify({ uuid: rehearsalId, name: "serp-checklists-rehearsal-issue-95" });
+        if (command.some((part) => String(part).includes("total_objects"))) return JSON.stringify([{ results: [{ total_objects: 0 }] }]);
+        return JSON.stringify([{ results: [] }]);
+      },
+    });
+    expect(result.plan.expectedAppliedMigrations).toEqual([]);
   });
 
   it("keeps production recovery plan-only outside the issue 97 executor", () => {
