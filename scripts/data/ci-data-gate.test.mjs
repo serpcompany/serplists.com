@@ -4,6 +4,13 @@ import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
 describe("CI data regression gate ordering", () => {
+  it("checks out full Git history so sitemap lastmod can reject synthetic merges", () => {
+    const workflow = yaml.load(readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8"));
+    const checkout = workflow.jobs.quality.steps.find((step) => step.name === "Checkout");
+
+    expect(checkout.with["fetch-depth"]).toBe(0);
+  });
+
   it("installs Chromium before the aggregate gate and does not run smoke twice", () => {
     const workflow = yaml.load(readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8"));
     const steps = workflow.jobs.quality.steps;

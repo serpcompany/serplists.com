@@ -77,6 +77,7 @@ const testFiles = [
   "scripts/data/teardown-probe.test.ts",
   "scripts/data/smoke-environment.test.mjs",
   "scripts/data/smoke-teardown.test.mjs",
+  "scripts/sitemap-git-lastmod.test.mjs",
   "tests/unit/functions/api/templates-handler.test.ts",
   "tests/unit/functions/api/checklists-handler.test.ts",
   "tests/unit/functions/api/template-evolution-migration.test.ts",
@@ -103,6 +104,7 @@ const requiredChecks = [
   ["observed fixture teardown counts", "reports actual remaining fixture rows after exact cleanup"],
   ["smoke child secret allowlist", "allowlists runtime variables and drops every developer/cloud/email secret sentinel"],
   ["smoke state observed teardown", "removes isolated state and reports observed zero leaks"],
+  ["synthetic PR merge sitemap stability", "accepts unchanged full-history merges, rejects stale content, and blocks shallow merge history"],
 ] as const;
 
 mkdirSync(reportDirectory, { recursive: true });

@@ -1,8 +1,8 @@
-import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
+
+import { gitLastmod as readGitLastmod, normalizeGitDate } from './sitemap-git-lastmod.mjs';
 
 type SitemapTemplate = {
   slug: string;
@@ -28,8 +28,6 @@ type GeneratedCatalog = {
   };
 };
 
-const execFileAsync = promisify(execFile);
-
 const repoRoot = process.cwd();
 const packsDirectory = path.join(repoRoot, 'src/data/public-template-packs');
 const outputPath = path.join(
@@ -50,11 +48,7 @@ const staticPageSources = [
   { path: '/categories', sources: ['src/pages/Categories.tsx'] },
 ] as const;
 
-const normalizeDate = (value: unknown): string | null => {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
-};
+const normalizeDate = (value: unknown): string | null => normalizeGitDate(value);
 
 let previousCatalog: GeneratedCatalog = {};
 try {
@@ -64,23 +58,15 @@ try {
 }
 
 const gitLastmod = async (sources: readonly string[]): Promise<string | null> => {
-  try {
-    const { stdout } = await execFileAsync(
-      'git',
-      ['log', '-1', '--format=%aI', '--', ...sources],
-      { cwd: repoRoot },
-    );
-    return normalizeDate(stdout.trim());
-  } catch {
-    return null;
-  }
+  return readGitLastmod({ repoRoot, sources });
 };
 
 const staticPages: StaticPage[] = [];
 for (const page of staticPageSources) {
-  const previous = previousCatalog.staticPages?.find((entry) => entry.path === page.path);
-  const lastmod = await gitLastmod(page.sources) ?? normalizeDate(previous?.lastmod);
-  if (!lastmod) throw new Error(`Unable to determine lastmod for static page ${page.path}`);
+  const lastmod = await gitLastmod(page.sources);
+  if (!lastmod) {
+    throw new Error(`Full Git history is required for sitemap lastmod: static page ${page.path}`);
+  }
   staticPages.push({ path: page.path, lastmod });
 }
 
@@ -92,11 +78,10 @@ const templates: SitemapTemplate[] = [];
 for (const fileName of files) {
   const pack = JSON.parse(
     await readFile(path.join(packsDirectory, fileName), 'utf8'),
-  ) as { exportedAt?: string; templates?: Array<Record<string, unknown>> };
+  ) as { templates?: Array<Record<string, unknown>> };
   const packGitLastmod = await gitLastmod([
     path.relative(repoRoot, path.join(packsDirectory, fileName)),
   ]);
-  const packFallbackLastmod = normalizeDate(pack.exportedAt);
 
   for (const template of pack.templates ?? []) {
     const slug = typeof template.slug === 'string' ? template.slug.trim() : '';
@@ -108,8 +93,10 @@ for (const fileName of files) {
     const previous = previousCatalog.templates?.find((entry) => entry.slug === slug);
     const lastmod = previous?.contentHash === contentHash
       ? normalizeDate(previous.lastmod)
-      : packGitLastmod ?? packFallbackLastmod;
-    if (!lastmod) throw new Error(`Unable to determine lastmod for ${slug}`);
+      : packGitLastmod;
+    if (!lastmod) {
+      throw new Error(`Full Git history is required for sitemap lastmod: template ${slug}`);
+    }
 
     templates.push({
       slug,
@@ -137,16 +124,14 @@ const templateSources = ['src/data/public-template-packs'] as const;
 const categorySources = [...templateSources, 'src/data/publicCategories.ts'] as const;
 const templateSourcesLastmod = await gitLastmod(templateSources);
 const categorySourcesLastmod = await gitLastmod(categorySources);
-const changedLastmod = (gitDate: string | null, previous?: string) =>
-  gitDate ?? normalizeDate(previous);
 const templatesLastmod = previousCatalog.inventory?.templatesHash === templatesHash
   ? normalizeDate(previousCatalog.inventory.templatesLastmod)
-  : changedLastmod(templateSourcesLastmod, previousCatalog.inventory?.templatesLastmod);
+  : templateSourcesLastmod;
 const categoriesLastmod = previousCatalog.inventory?.categoriesHash === categoriesHash
   ? normalizeDate(previousCatalog.inventory.categoriesLastmod)
-  : changedLastmod(categorySourcesLastmod, previousCatalog.inventory?.categoriesLastmod);
+  : categorySourcesLastmod;
 if (!templatesLastmod || !categoriesLastmod) {
-  throw new Error('Unable to determine sitemap inventory modification dates');
+  throw new Error('Full Git history is required for sitemap lastmod: changed inventory');
 }
 const implementationLastmod = await gitLastmod([
   'functions/sitemap.xml.ts',
@@ -155,8 +140,10 @@ const implementationLastmod = await gitLastmod([
   'functions/sitemaps/categories/[page].xml.ts',
   'functions/sitemaps/profiles/[page].xml.ts',
   'functions/sitemaps/templates/[page].xml.ts',
-]) ?? normalizeDate(previousCatalog.inventory?.implementationLastmod);
-if (!implementationLastmod) throw new Error('Unable to determine sitemap implementation date');
+]);
+if (!implementationLastmod) {
+  throw new Error('Full Git history is required for sitemap lastmod: sitemap implementation');
+}
 const output = `${JSON.stringify({
   staticPages,
   templates,
