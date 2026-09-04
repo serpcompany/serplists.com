@@ -363,6 +363,10 @@ test("a fresh clone generates and stages the complete next Drizzle provenance se
     const stub = path.join(parent, "pnpm");
     writeFileSync(stub, [
       "#!/bin/sh",
+      'if [ "$1" = "exec" ] && [ "$2" = "wrangler" ] && [ "$4" = "info" ]; then',
+      "  printf '%s\\n' '[{\"name\":\"serp-checklists-staging-db\",\"uuid\":\"fcaf4325-5be7-4ead-ab60-45932a04177b\"}]'",
+      "  exit 0",
+      "fi",
       'if [ "$1" = "exec" ] && [ "$2" = "wrangler" ]; then',
       "  printf 'Migrations to be applied:\\n┌────┐\\n│ %s │\\n└────┘\\n' \"$FAKE_PENDING_MIGRATION\"",
       "  exit 0",
