@@ -15,9 +15,10 @@ export function validateRehearsalRecoveryEvidence({ evidence, sourceDatabaseId, 
     (expectedMigrationTo && evidence.migration?.to !== expectedMigrationTo) ||
     (expectedSanitizerVersion && evidence.sanitizer?.version !== expectedSanitizerVersion) ||
     !evidence.sourceDatabase?.name || !evidence.recoveryDatabase?.name ||
-    !evidence.migration?.from || !evidence.migration?.to || !evidence.sanitizer?.version || !evidence.sanitizer?.artifactSha256 ||
+    !evidence.migration?.from || !evidence.migration?.to || !evidence.migration?.appliedThrough || !/^[0-9a-f]{64}$/.test(evidence.migration?.ledgerSha256 ?? "") || !evidence.sanitizer?.version || !/^[0-9a-f]{64}$/.test(evidence.sanitizer?.artifactSha256 ?? "") ||
+    evidence.creation?.verdict !== "pass" || !/^\d+$/.test(evidence.creation?.runId ?? "") || !/^[0-9a-f]{64}$/.test(evidence.creation?.sourceEvidenceSha256 ?? "") || !/^[0-9a-f]{64}$/.test(evidence.creation?.recoveryEvidenceSha256 ?? "") ||
     evidence.import?.verdict !== "pass" ||
-    evidence.invariants?.verdict !== "pass" ||
+    evidence.invariants?.verdict !== "pass" || !/^[0-9a-f]{64}$/.test(evidence.invariants?.evidenceSha256 ?? "") || !/^[0-9a-f]{64}$/.test(evidence.invariants?.domainDigest ?? "") ||
     evidence.absence?.verdict !== "pass" ||
     evidence.rawPlaintextRetained !== false
   ) {

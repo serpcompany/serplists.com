@@ -47,6 +47,20 @@ function parseArgs(argv) {
   return { operation, values, flags };
 }
 
+function resolveEvidencePath(repoRoot, value) {
+  if (!value) throw new Error("Remote rehearsal mutation requires --creation-evidence.");
+  const resolved = path.resolve(repoRoot, value);
+  const root = path.join(repoRoot, "tmp/data-reports");
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw new Error("Creation evidence must stay under tmp/data-reports/.");
+  return resolved;
+}
+
+export function validateRehearsalCreationEvidence({ evidence, expected, gitCommit, runId, now }) {
+  const createdAt = new Date(evidence?.createdAt);
+  if (evidence?.schemaVersion !== 1 || evidence?.verdict !== "pass" || evidence?.commit !== gitCommit || evidence?.runId !== runId || evidence?.target?.environment !== "rehearsal" || evidence?.target?.binding !== "DB" || evidence?.target?.databaseName !== expected.databaseName || evidence?.target?.databaseId !== expected.databaseId || !Number.isFinite(createdAt.getTime()) || createdAt > now || createdAt < new Date(now.getTime() - 60 * 60 * 1000)) throw new Error("Rehearsal database creation evidence is missing, stale, or does not match this run, commit, and target.");
+  return evidence;
+}
+
 export function assertLiveIdentity({ output, expected }) {
   let liveIdentity;
   try {
@@ -125,6 +139,10 @@ export function runDataCommand({
     const importSql = values["--input"]
       ? readFileSync(path.resolve(values["--input"]), "utf8")
       : undefined;
+    if (["rehearsal-baseline", "recovery-restore"].includes(operation)) {
+      const evidencePath = resolveEvidencePath(repoRoot, values["--creation-evidence"]);
+      validateRehearsalCreationEvidence({ evidence: JSON.parse(readFileSync(evidencePath, "utf8")), expected: identity, gitCommit, runId: env.GITHUB_RUN_ID, now });
+    }
     plan = buildDataOperationPlan({
       operation,
       identity,
@@ -199,7 +217,7 @@ export function runDataCommand({
     const parsed = JSON.parse(runCommand(plan.preconditionCommand));
     const rows = (Array.isArray(parsed) ? parsed : [parsed]).flatMap((entry) => entry?.results ?? []);
     if (rows.length !== 1 || Number(rows[0]?.total_objects) !== 0) {
-      throw new Error("Rehearsal baseline requires a newly created empty database.");
+      throw new Error("Remote rehearsal mutation requires a newly created empty database catalog and migration ledger.");
     }
   }
   if (plan.rawOutputPath) mkdirSync(path.dirname(plan.rawOutputPath), { recursive: true });
@@ -268,6 +286,11 @@ export function runDataCommand({
     if (!createdDatabaseId) {
       throw new Error("Wrangler created a rehearsal but its exact database UUID could not be recorded.");
     }
+    if (values["--expected-database-id"] && values["--expected-database-id"] !== createdDatabaseId) throw new Error("Created rehearsal database ID does not match --expected-database-id.");
+    const evidencePath = resolveEvidencePath(repoRoot, values["--evidence"]);
+    const creationEvidence = { schemaVersion: 1, verdict: "pass", commit: gitCommit, runId: env.GITHUB_RUN_ID, createdAt: now.toISOString(), target: { environment: "rehearsal", binding: "DB", databaseName: plan.report.databaseName, databaseId: createdDatabaseId } };
+    mkdirSync(path.dirname(evidencePath), { recursive: true });
+    writeFileSync(evidencePath, `${JSON.stringify(creationEvidence, null, 2)}\n`, { mode: 0o600 });
     write(JSON.stringify({
       createdIdentity: {
         environment: "rehearsal",

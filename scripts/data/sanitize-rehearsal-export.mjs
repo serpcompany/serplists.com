@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 
 import { assertSanitizerSourceWorkflowContext } from "./workflow-request-context-lib.mjs";
 import { generateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
+import { writeDataCheckReports } from "./reporting.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
@@ -67,9 +68,18 @@ function resolveRawInput(value) {
 
 let rawInputPathForCleanup;
 let shouldCleanupRawInput = false;
+let reportDirectory = path.join(repoRoot, "tmp/data-reports/sanitizer");
+let reportContext = { commit: "unknown", target: { environment: "production", binding: "DB", databaseName: "unknown", databaseId: "unknown" }, migrationRange: { from: "unknown", to: "unknown" }, sanitizerVersion: "source-derived-shape-v2" };
 
 try {
   const { values, flags } = parseArgs(process.argv.slice(2));
+  const gitCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
+  const productionIdentity = JSON.parse(readFileSync(path.join(repoRoot, "scripts/data/environment-inventory.json"), "utf8")).environments.production;
+  reportContext = { commit: gitCommit, target: { environment: "production", binding: "DB", databaseName: productionIdentity.databaseName, databaseId: values["--source-database-id"] ?? "unknown" }, migrationRange: { from: values["--migration-from"] ?? "unknown", to: values["--migration-to"] ?? "unknown" }, sanitizerVersion: "source-derived-shape-v2" };
+  const requestedReportDirectory = path.resolve(repoRoot, values["--report-dir"] ?? "tmp/data-reports/sanitizer");
+  const allowedReportRoot = path.join(repoRoot, "tmp/data-reports");
+  if (requestedReportDirectory !== allowedReportRoot && !requestedReportDirectory.startsWith(`${allowedReportRoot}${path.sep}`)) throw new Error("Sanitizer report directory must stay under ignored tmp/data-reports/.");
+  reportDirectory = requestedReportDirectory;
   const inputPath = resolveRawInput(requireValue(values, "--input"));
   rawInputPathForCleanup = inputPath;
   shouldCleanupRawInput = flags.has("--execute");
@@ -80,10 +90,8 @@ try {
   const approverIdentity = requireValue(values, "--approver-identity");
   const retentionDeadline = requireValue(values, "--retention-deadline");
   const issueNumber = Number(requireValue(values, "--issue"));
-  const gitCommit = execFileSync("git", ["rev-parse", "HEAD"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-  }).trim();
+  const migrationFrom = requireValue(values, "--migration-from");
+  const migrationTo = requireValue(values, "--migration-to");
   if (new Set([inputPath, outputPath, manifestPath]).size !== 3) {
     throw new Error("Sanitizer input, output, and manifest paths must be distinct.");
   }
@@ -127,8 +135,12 @@ try {
     manifestIntegritySha256: artifact.manifest.manifestIntegritySha256,
     retentionDeadline: artifact.manifest.handling.retentionDeadline,
   }, null, 2)}\n`);
+  const report = { check: "sanitize-production-export", verdict: "pass", ...reportContext, sourceDate: artifact.manifest.provenance.sourceDate, accessOwner: artifact.manifest.handling.accessOwner, retentionDeadline: artifact.manifest.handling.retentionDeadline, selectedCounts: artifact.manifest.selection.selectedCounts, coveredShapes: artifact.manifest.selection.coveredShapes, artifactSha256: artifact.manifest.artifact.sha256 };
+  writeDataCheckReports({ name: "sanitize-production-export", report, summary: `PASS sanitizer commit=${report.commit} environment=production binding=DB database=${report.target.databaseName} databaseId=${report.target.databaseId} migration=${migrationFrom}->${migrationTo} sanitizer=${report.sanitizerVersion}.`, reportDirectory });
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
+  const message = error instanceof Error ? error.message : String(error);
+  writeDataCheckReports({ name: "sanitize-production-export", report: { check: "sanitize-production-export", verdict: "fail", ...reportContext, error: message }, summary: `BLOCKED sanitizer commit=${reportContext.commit} environment=${reportContext.target.environment} binding=${reportContext.target.binding} database=${reportContext.target.databaseName} databaseId=${reportContext.target.databaseId} migration=${reportContext.migrationRange.from}->${reportContext.migrationRange.to} sanitizer=${reportContext.sanitizerVersion}: ${message}`, reportDirectory });
+  console.error(message);
   process.exitCode = 1;
 } finally {
   if (

@@ -553,7 +553,9 @@ describe("protected staging and production data-promotion workflow", () => {
   it("performs a real separate-database recovery restore and never uploads plaintext", () => {
     const rehearsal = rehearsalWorkflow.jobs.rehearsal;
     const text = runText(rehearsal);
-    expect(rehearsalWorkflow.on.workflow_dispatch.inputs.recovery_database_id.required).toBe(true);
+    expect(rehearsalWorkflow.on.workflow_dispatch.inputs.recovery_database_id).toBeUndefined();
+    expect(text).toContain("rehearsal-create");
+    expect(text).toContain("recovery-creation.json");
     expect(text).toContain("recovery-restore");
     expect(text).toContain("$RECOVERY_DATABASE_ID");
     expect(text).toContain("remote-invariant-gate.mjs compare");

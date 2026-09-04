@@ -12,12 +12,16 @@ import { acquireSmokeRunLock } from "./smoke-run-lock-lib.mjs";
 import {
   captureWorkspaceMetadata,
   compareWorkspaceMetadata,
+  evaluateImmutableRunContext,
   evaluateWorkspaceCleanliness,
   parsePorcelainStatus,
 } from "./workspace-cleanliness-lib.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
+const nonGating = process.argv.includes("--non-gating");
+const startCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
+const startDirtyPaths = parsePorcelainStatus(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: repoRoot, encoding: "utf8" }));
 const reportDirectory = path.resolve(
   repoRoot,
   process.argv.includes("--report-dir")
@@ -92,6 +96,7 @@ const testFiles = [
   "scripts/data/teardown-probe.test.ts",
   "scripts/data/smoke-environment.test.mjs",
   "scripts/data/smoke-teardown.test.mjs",
+  "scripts/data/workspace-cleanliness.test.mjs",
   "tests/unit/functions/api/templates-handler.test.ts",
   "tests/unit/functions/api/checklists-handler.test.ts",
   "tests/unit/functions/api/template-evolution-migration.test.ts",
@@ -118,6 +123,7 @@ const requiredChecks = [
   ["observed fixture teardown counts", "reports actual remaining fixture rows after exact cleanup"],
   ["smoke child secret allowlist", "allowlists runtime variables and drops every developer/cloud/email secret sentinel"],
   ["smoke state observed teardown", "removes isolated state and reports observed zero leaks"],
+  ["concurrent HEAD and worktree mutation detection", "deterministically fails a concurrent HEAD move and worktree mutation"],
 ] as const;
 
 mkdirSync(reportDirectory, { recursive: true });
@@ -130,7 +136,7 @@ try {
       "exec", "vitest", "run", ...testFiles,
       "--reporter=json", `--outputFile=${rawVitestReport}`,
     ],
-    { cwd: repoRoot, env: { ...process.env, DATA_REPORT_DIR: reportDirectory }, stdio: ["ignore", "inherit", "inherit"] },
+    { cwd: repoRoot, env: { ...process.env, DATA_REPORT_DIR: reportDirectory, DATA_REGRESSION_START_COMMIT: startCommit }, stdio: ["ignore", "inherit", "inherit"] },
   );
   vitestResult = JSON.parse(readFileSync(rawVitestReport, "utf8"));
 } catch (error) {
@@ -183,6 +189,7 @@ try {
         PLAYWRIGHT_TEARDOWN_REPORT: browserTeardownReportPath,
         PLAYWRIGHT_JSON_REPORT: browserJsonReportPath,
         PLAYWRIGHT_SMOKE_LOCK_HELD: "1",
+        DATA_REGRESSION_START_COMMIT: startCommit,
       },
       stdio: ["ignore", "inherit", "inherit"],
     },
@@ -250,7 +257,7 @@ try {
   });
 }
 const inventory = loadEnvironmentInventory({ repoRoot });
-const commit = execFileSync("git", ["rev-parse", "HEAD"], {
+const endCommit = execFileSync("git", ["rev-parse", "HEAD"], {
   cwd: repoRoot,
   encoding: "utf8",
 }).trim();
@@ -270,16 +277,18 @@ try {
 } catch {
   // Keep the fail-closed observed-state default.
 }
-const workingTreeDirtyPaths = parsePorcelainStatus(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], {
+const endDirtyPaths = parsePorcelainStatus(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], {
   cwd: repoRoot,
   encoding: "utf8",
 }));
+const workingTreeDirtyPaths = [...new Set([...startDirtyPaths, ...endDirtyPaths])].sort();
+const immutableRun = evaluateImmutableRunContext({ startCommit, endCommit, startPaths: startDirtyPaths, endPaths: endDirtyPaths, nonGating });
 const filesystemChanges = compareWorkspaceMetadata({
   before: filesystemBefore,
   after: captureWorkspaceMetadata({ repoRoot }),
 });
 const workspaceCleanliness = evaluateWorkspaceCleanliness({
-  ci: process.env.CI === "1" || process.env.CI === "true",
+  nonGating,
   paths: workingTreeDirtyPaths,
   filesystemChanges,
   allowedOutputRoots: [
@@ -291,12 +300,14 @@ const workspaceCleanliness = evaluateWorkspaceCleanliness({
   ],
 });
 checks.push({
-  name: "CI workspace cleanliness",
+  name: "gating workspace cleanliness",
   test: "data regression execution leaves no unexpected tracked unignored or ignored paths",
   verdict: workspaceCleanliness.verdict === "fail" ? "fail" : "pass",
 });
-const report = buildDataRegressionReport({
-  commit,
+checks.push({ name: "immutable regression commit", test: "HEAD and the tracked/untracked worktree remain unchanged for the complete run", verdict: immutableRun.verdict === "fail" ? "fail" : "pass" });
+const report = {
+  ...buildDataRegressionReport({
+  commit: startCommit,
   workingTreeDirty: workspaceCleanliness.dirty,
   workingTreeDirtyPaths: workspaceCleanliness.paths,
   workspaceCleanlinessVerdict: workspaceCleanliness.verdict,
@@ -364,7 +375,9 @@ const report = buildDataRegressionReport({
       ? collectBrowserFailureArtifacts(path.join(repoRoot, "tests/test-results"))
       : [],
   },
-});
+  }),
+  runContext: { mode: nonGating ? "non-gating" : "gating", ...immutableRun },
+};
 const markdown = renderDataRegressionMarkdown(report);
 const paths = writeDataCheckReports({
   name: "data-regression-suite",

@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import path from "node:path";
+import { writeDataCheckReports } from "./reporting.mjs";
 
 function arg(name) { const index = process.argv.indexOf(name); return index < 0 ? null : process.argv[index + 1]; }
 
@@ -10,27 +13,44 @@ try {
   const recoveryDatabaseName = arg("--recovery-database-name");
   const rawPath = arg("--raw");
   const manifest = JSON.parse(readFileSync(arg("--sanitizer-manifest"), "utf8"));
+  const sourceCreationBytes = readFileSync(arg("--source-creation"));
+  const recoveryCreationBytes = readFileSync(arg("--recovery-creation"));
+  const sourceCreation = JSON.parse(sourceCreationBytes);
+  const recoveryCreation = JSON.parse(recoveryCreationBytes);
+  const commit = arg("--commit");
+  const environment = arg("--environment");
+  const migrationFrom = arg("--migration-from");
+  const migrationTo = arg("--migration-to");
   const absencePass = [sourceDatabaseName, recoveryDatabaseName].every((name) =>
     teardown.includes(`PASS rehearsal ${name} is absent.`),
   );
-  if (comparison.verdict !== "pass" || !absencePass || existsSync(rawPath)) {
+  const comparisonBound = comparison.verdict === "pass" && comparison.check === "remote-invariant-comparison" && comparison.comparisonKind === "recovery" && comparison.commit === commit && comparison.target?.environment === environment && comparison.target?.binding === "DB" && comparison.target?.databaseName === recoveryDatabaseName && comparison.target?.databaseId === arg("--recovery-database-id") && comparison.sourceTarget?.databaseName === sourceDatabaseName && comparison.sourceTarget?.databaseId === arg("--source-database-id") && comparison.migrationRange?.from === migrationFrom && comparison.migrationRange?.to === migrationTo && comparison.ledger?.verdict === "pass" && comparison.preDomainDigest && comparison.preDomainDigest === comparison.postDomainDigest;
+  const sanitizerBound = manifest.provenance?.gitCommit === commit && manifest.sanitizerVersion && manifest.artifact?.sha256;
+  const creationBound = sourceCreation.verdict === "pass" && recoveryCreation.verdict === "pass" && sourceCreation.commit === commit && recoveryCreation.commit === commit && sourceCreation.runId === recoveryCreation.runId && sourceCreation.target?.databaseName === sourceDatabaseName && sourceCreation.target?.databaseId === arg("--source-database-id") && recoveryCreation.target?.databaseName === recoveryDatabaseName && recoveryCreation.target?.databaseId === arg("--recovery-database-id");
+  if (!comparisonBound || !sanitizerBound || !creationBound || !absencePass || existsSync(rawPath)) {
     throw new Error("Recovery restore, invariant comparison, absence, or plaintext cleanup was not proven.");
   }
   const evidence = {
     verdict: "pass",
-    commit: arg("--commit"),
-    environment: arg("--environment"),
+    commit,
+    environment,
     sourceDatabase: { name: sourceDatabaseName, id: arg("--source-database-id") },
     recoveryDatabase: { name: recoveryDatabaseName, id: arg("--recovery-database-id") },
-    migration: { from: arg("--migration-from"), to: arg("--migration-to") },
+    migration: { from: migrationFrom, to: migrationTo, appliedThrough: comparison.ledger.appliedThrough, ledgerSha256: comparison.ledger.afterSha256 },
     sanitizer: { version: manifest.sanitizerVersion, artifactSha256: manifest.artifact.sha256 },
+    creation: { verdict: "pass", runId: sourceCreation.runId, sourceEvidenceSha256: createHash("sha256").update(sourceCreationBytes).digest("hex"), recoveryEvidenceSha256: createHash("sha256").update(recoveryCreationBytes).digest("hex") },
     import: { verdict: "pass", target: recoveryDatabaseName },
-    invariants: { verdict: "pass", comparison: arg("--comparison") },
+    invariants: { verdict: "pass", comparison: arg("--comparison"), evidenceSha256: createHash("sha256").update(readFileSync(arg("--comparison"))).digest("hex"), domainDigest: comparison.postDomainDigest },
     absence: { verdict: "pass", evidence: arg("--teardown") },
     rawPlaintextRetained: false,
   };
   writeFileSync(arg("--output"), `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600 });
+  writeDataCheckReports({ name: "recovery-rehearsal", report: { check: "recovery-rehearsal", ...evidence, target: { environment, binding: "DB", databaseName: recoveryDatabaseName, databaseId: arg("--recovery-database-id") }, migrationRange: evidence.migration, sanitizerVersion: evidence.sanitizer.version }, summary: `PASS recovery rehearsal commit=${commit} environment=${environment} binding=DB database=${recoveryDatabaseName} databaseId=${arg("--recovery-database-id")} migration=${migrationFrom}->${migrationTo} sanitizer=${evidence.sanitizer.version}.`, reportDirectory: path.dirname(arg("--output")) });
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
+  const message = error instanceof Error ? error.message : String(error);
+  const output = arg("--output") ?? "tmp/data-reports/rehearsal/recovery-rehearsal.json";
+  const failure = { check: "recovery-rehearsal", verdict: "fail", commit: arg("--commit") ?? "unknown", target: { environment: arg("--environment") ?? "unknown", binding: "DB", databaseName: arg("--recovery-database-name") ?? "unknown", databaseId: arg("--recovery-database-id") ?? "unknown" }, sourceDatabase: { name: arg("--source-database-name"), id: arg("--source-database-id") }, migrationRange: { from: arg("--migration-from"), to: arg("--migration-to") }, sanitizerVersion: "unknown", error: message };
+  writeDataCheckReports({ name: "recovery-rehearsal", report: failure, summary: `BLOCKED recovery rehearsal commit=${failure.commit} environment=${failure.target.environment} binding=DB database=${failure.target.databaseName} databaseId=${failure.target.databaseId} migration=${failure.migrationRange.from}->${failure.migrationRange.to}: ${message}`, reportDirectory: path.dirname(output) });
+  console.error(message);
   process.exitCode = 1;
 }

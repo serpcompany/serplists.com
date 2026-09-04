@@ -9,10 +9,11 @@ const evidence = {
   environment: "rehearsal",
   sourceDatabase: { name: "rehearsal-source", id: sourceDatabaseId },
   recoveryDatabase: { name: "rehearsal-restore", id: recoveryDatabaseId },
-  migration: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
+  migration: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql", appliedThrough: "0024_safe_template_evolution.sql", ledgerSha256: "b".repeat(64) },
   sanitizer: { version: "source-derived-shape-v2", artifactSha256: "a".repeat(64) },
+  creation: { verdict: "pass", runId: "123", sourceEvidenceSha256: "e".repeat(64), recoveryEvidenceSha256: "f".repeat(64) },
   import: { verdict: "pass" },
-  invariants: { verdict: "pass" },
+  invariants: { verdict: "pass", evidenceSha256: "c".repeat(64), domainDigest: "d".repeat(64) },
   absence: { verdict: "pass" },
   rawPlaintextRetained: false,
 };

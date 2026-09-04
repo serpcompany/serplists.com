@@ -18,6 +18,7 @@ const SAFE_JSON_KEYS = new Set([
   "id", "title", "description", "notes", "items", "subItems", "contents", "isCompleted",
   "completed", "type", "url", "label", "value", "required", "order", "version", "rules",
 ]);
+const SEMANTIC_NUMERIC_KEYS = new Set(["order", "version", "progress", "position", "sortOrder", "duration", "quantity"]);
 const SOURCE_TABLES = new Set([
   "account", "audit_events", "checklist_runs", "d1_migrations", "entitlement_overrides",
   "session", "sitemap_category_revisions", "sitemap_owner_revisions", "sitemap_profile_revisions",
@@ -122,6 +123,11 @@ function sanitizeJson(value, pathParts = []) {
     return [safeKey, sanitizeJson(entry, [...pathParts, safeKey])];
   }));
   if (typeof value === "string") return value === "" ? "" : `sanitized-${pathParts.at(-1) ?? "value"}`;
+  if (typeof value === "number") {
+    const key = pathParts.at(-1);
+    if (SEMANTIC_NUMERIC_KEYS.has(key)) return Math.max(-1000000, Math.min(value, 1000000));
+    return Number.parseInt(sha256(pathParts.join("/")).slice(0, 8), 16) % 1000000 + 1;
+  }
   return value;
 }
 function sanitizedJsonText(value, fallback) { const parsed = parseJson(value); return JSON.stringify(parsed === null ? fallback : sanitizeJson(parsed)); }

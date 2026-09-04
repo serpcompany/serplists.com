@@ -79,8 +79,11 @@ modification-time metadata only; it never reads file contents. `.git/` and
 `node_modules/` are excluded as immutable repository/dependency internals, but
 ignored paths everywhere else remain visible to the comparison.
 
-Local runs show existing developer edits as `not-enforced`. CI starts from a
-clean checkout and fails the aggregate if the suite creates or changes any
+The command is gating by default locally, from pre-push, and in CI. It captures
+the starting commit and worktree before any child test, fails if HEAD changes,
+and fails if the run starts or ends dirty. Only an explicit `--non-gating`
+diagnostic run may downgrade those findings to warnings, and that evidence is
+not eligible for promotion. CI starts from a clean checkout and fails the aggregate if the suite creates or changes any
 tracked, unignored, or ignored path outside this exact allowlist: the selected
 directory under `tmp/data-reports/`, `tests/test-results/`,
 `playwright-report/`, `dist/`, and `.wrangler/smoke-state/`. Broad ignored roots

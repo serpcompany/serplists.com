@@ -8,7 +8,7 @@ function arg(name) { const i = process.argv.indexOf(name); return i < 0 ? null :
 try {
   const source = JSON.parse(readFileSync(arg("--source"), "utf8"));
   const required = [arg("--comparison"), arg("--recovery"), arg("--teardown")];
-  if (source.verdict !== "pass" || required.some((file) => !file || !existsSync(file))) throw new Error("Rehearsal evidence is incomplete or failed.");
+  if (source.verdict !== "pass" || source.commit !== arg("--commit") || source.target?.environment !== "local" || required.some((file) => !file || !existsSync(file))) throw new Error("Exact-commit local prerequisite evidence is incomplete, mislabeled, or failed.");
   const output = arg("--output");
   const invariants = JSON.parse(readFileSync(arg("--comparison"), "utf8"));
   const sanitizedManifest = JSON.parse(readFileSync(arg("--sanitizer-manifest"), "utf8"));
@@ -30,15 +30,19 @@ try {
     now: new Date(),
   });
   const teardownPass = /PASS rehearsal .* is absent/.test(readFileSync(arg("--teardown"), "utf8"));
-  if (invariants.verdict !== "pass" || !recoveryPass || !teardownPass) throw new Error("Remote rehearsal invariants, recovery, or confirmed teardown failed.");
+  const remoteTarget = { environment: "rehearsal", binding: "DB", databaseName: arg("--database-name"), databaseId: arg("--database-id") };
+  const remoteBound = invariants.verdict === "pass" && invariants.commit === arg("--commit") && invariants.comparisonKind === "migration" && JSON.stringify(invariants.target) === JSON.stringify(remoteTarget) && invariants.migrationRange?.from === arg("--migration-from") && invariants.migrationRange?.to === arg("--migration-to") && invariants.ledger?.verdict === "pass";
+  if (!remoteBound || !recoveryPass || !teardownPass) throw new Error("Remote rehearsal identity, migration ledger, invariants, recovery, or confirmed teardown failed.");
   const report = {
-    ...source,
+    check: "production-shaped-rehearsal",
+    verdict: "pass",
     commit: arg("--commit"),
-    target: { environment: "rehearsal", binding: "DB", databaseName: arg("--database-name"), databaseId: arg("--database-id") },
+    target: remoteTarget,
     migrationRange: arg("--migration-from") === "none"
       ? { from: null, to: null }
       : { from: arg("--migration-from"), to: arg("--migration-to") },
-    remoteInvariants: invariants,
+    localPrerequisite: source,
+    remoteRehearsal: { target: remoteTarget, migrationRange: invariants.migrationRange, invariants },
     recovery,
     sanitizedSource: {
       verdict: "pass",
@@ -53,7 +57,7 @@ try {
       selectedCounts: sanitizedManifest.selection.selectedCounts,
       coveredShapes: sanitizedManifest.selection.coveredShapes,
     },
-    teardown: { ...source.teardown, verdict: teardownPass ? "pass" : "fail", remoteEvidence: arg("--teardown") },
+    teardown: { verdict: teardownPass ? "pass" : "fail", environment: "rehearsal", sourceDatabaseId: arg("--database-id"), recoveryDatabaseId: arg("--recovery-database-id"), remoteEvidence: arg("--teardown") },
   };
   mkdirSync(path.dirname(output), { recursive: true });
   writeFileSync(output, JSON.stringify(report, null, 2) + "\n");

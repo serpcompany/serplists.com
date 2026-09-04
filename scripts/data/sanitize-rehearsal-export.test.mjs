@@ -24,6 +24,7 @@ const gitCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, en
 const sourceDate = new Date().toISOString().slice(0, 10);
 const retentionDeadline = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
 const validRawExport = readFileSync(path.join(repoRoot, "scripts/data/fixtures/production-export-edge-cases.sql"), "utf8");
+const sanitizerReportRoot = path.join(repoRoot, "tmp/data-reports/sanitizer");
 
 function commandArgs(inputPath, outputPath, manifestPath) {
   return [
@@ -36,6 +37,8 @@ function commandArgs(inputPath, outputPath, manifestPath) {
     "--issue", "95",
     "--approver-identity", "@devinschumacher",
     "--retention-deadline", retentionDeadline,
+    "--migration-from", "0024_safe_template_evolution.sql",
+    "--migration-to", "0024_safe_template_evolution.sql",
   ];
 }
 
@@ -93,9 +96,13 @@ describe("sanitizer command", () => {
       expect(result.status).toBe(1);
       expect(result.stderr).toMatch(/workflow.*context/i);
       expect(existsSync(inputPath)).toBe(false);
+      const report = JSON.parse(readFileSync(path.join(sanitizerReportRoot, "sanitize-production-export.json"), "utf8"));
+      expect(report).toMatchObject({ verdict: "fail", commit: gitCommit, target: { environment: "production", binding: "DB", databaseId: productionDatabaseId }, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, sanitizerVersion: "source-derived-shape-v2" });
+      for (const name of ["sanitize-production-export.md", "sanitize-production-export.junit.xml"]) expect(readFileSync(path.join(sanitizerReportRoot, name), "utf8")).toContain(gitCommit);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
       rmSync(rawDir, { recursive: true, force: true });
+      rmSync(sanitizerReportRoot, { recursive: true, force: true });
     }
   });
 
@@ -126,6 +133,7 @@ describe("sanitizer command", () => {
   it("deletes raw input on sanitizer failure and on success", () => {
     for (const [name, rawExport, expectedStatus] of [
       ["failure", "CREATE TABLE private_data (value TEXT);", 1],
+      ["incomplete", "INSERT INTO users (id,email) VALUES ('owner','sanitized-owner');", 1],
       ["success", validRawExport, 0],
     ]) {
       const tempDir = mkdtempSync(path.join(evidenceRoot, `sanitize-${name}-`));
@@ -146,6 +154,10 @@ describe("sanitizer command", () => {
           expect(JSON.parse(readFileSync(manifestPath, "utf8"))).toHaveProperty(
             "manifestIntegritySha256",
           );
+        } else {
+          const report = JSON.parse(readFileSync(path.join(sanitizerReportRoot, "sanitize-production-export.json"), "utf8"));
+          expect(report).toMatchObject({ verdict: "fail", commit: gitCommit, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" } });
+          expect(readFileSync(path.join(sanitizerReportRoot, "sanitize-production-export.junit.xml"), "utf8")).toContain(gitCommit);
         }
       } finally {
         rmSync(tempDir, { recursive: true, force: true });

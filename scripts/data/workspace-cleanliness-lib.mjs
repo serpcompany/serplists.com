@@ -64,7 +64,7 @@ export function parsePorcelainStatus(output) {
 }
 
 export function evaluateWorkspaceCleanliness({
-  ci,
+  nonGating = false,
   paths,
   filesystemChanges = [],
   allowedOutputRoots = [],
@@ -84,6 +84,14 @@ export function evaluateWorkspaceCleanliness({
     paths: dirtyPaths,
     filesystemChanges,
     unexpectedFilesystemChanges,
-    verdict: ci && dirty ? "fail" : ci ? "pass" : "not-enforced",
+    verdict: dirty ? (nonGating ? "warning" : "fail") : "pass",
   };
+}
+
+export function evaluateImmutableRunContext({ startCommit, endCommit, startPaths, endPaths, nonGating = false }) {
+  const failures = [];
+  if (!/^[0-9a-f]{40}$/.test(startCommit ?? "") || endCommit !== startCommit) failures.push(`HEAD changed from ${startCommit ?? "unknown"} to ${endCommit ?? "unknown"}`);
+  if (startPaths.length) failures.push(`run started with dirty paths: ${startPaths.join(", ")}`);
+  if (endPaths.length) failures.push(`run ended with dirty paths: ${endPaths.join(", ")}`);
+  return { startCommit, endCommit, startPaths, endPaths, failures, verdict: failures.length ? (nonGating ? "warning" : "fail") : "pass" };
 }

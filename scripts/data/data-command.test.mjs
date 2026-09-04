@@ -3,11 +3,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import {
   assertFixtureResults,
   runDataCommand,
+  validateRehearsalCreationEvidence,
 } from "./data-command-lib.mjs";
 import { generateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
 
@@ -18,6 +19,10 @@ const productionId = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1";
 const rehearsalId = "8ab2b7e9-0ce8-4d1e-b42f-8601eb256b67";
 const fullGitCommit = "0123456789abcdef0123456789abcdef01234567";
 const productionExportFixture = readFileSync(path.join(repoRoot, "scripts/data/fixtures/production-export-edge-cases.sql"), "utf8");
+const creationEvidencePath = path.join(repoRoot, "tmp/data-reports/unit-creation.json");
+mkdirSync(path.dirname(creationEvidencePath), { recursive: true });
+writeFileSync(creationEvidencePath, JSON.stringify({ schemaVersion: 1, verdict: "pass", commit: fullGitCommit, runId: "123456789", createdAt: "2026-09-05T00:00:00.000Z", target: { environment: "rehearsal", binding: "DB", databaseName: "serp-checklists-rehearsal-issue-95", databaseId: rehearsalId } }));
+afterAll(() => rmSync(creationEvidencePath, { force: true }));
 
 function writeGeneratedArtifact() {
   const tempDir = mkdtempSync(path.join(tmpdir(), "serp-generated-import-"));
@@ -246,10 +251,12 @@ describe("data command", () => {
         "--database-name", "serp-checklists-rehearsal-issue-95",
         "--database-id", rehearsalId, "--confirm-database-id", rehearsalId,
         "--approver-identity", "@devinschumacher", "--before", "0024_safe_template_evolution.sql",
+        "--creation-evidence", path.relative(repoRoot, creationEvidencePath),
         "--execute",
       ],
       repoRoot,
       gitCommit: fullGitCommit,
+      now: new Date("2026-09-05T00:30:00.000Z"),
       env: protectedEnvironment(),
       write: () => {},
       runCommand: (command) => {
@@ -275,10 +282,12 @@ describe("data command", () => {
         "--database-name", "serp-checklists-rehearsal-issue-95",
         "--database-id", rehearsalId, "--confirm-database-id", rehearsalId,
         "--approver-identity", "@devinschumacher", "--before", "0024_safe_template_evolution.sql",
+        "--creation-evidence", path.relative(repoRoot, creationEvidencePath),
         "--execute",
       ],
       repoRoot,
       gitCommit: fullGitCommit,
+      now: new Date("2026-09-05T00:30:00.000Z"),
       env: protectedEnvironment(),
       write: () => {},
       runCommand: (command) => {
@@ -296,10 +305,12 @@ describe("data command", () => {
         "--database-name", "serp-checklists-rehearsal-issue-95",
         "--database-id", rehearsalId, "--confirm-database-id", rehearsalId,
         "--approver-identity", "@devinschumacher", "--before", "0001_initial_schema.sql",
+        "--creation-evidence", path.relative(repoRoot, creationEvidencePath),
         "--execute",
       ],
       repoRoot,
       gitCommit: fullGitCommit,
+      now: new Date("2026-09-05T00:30:00.000Z"),
       env: protectedEnvironment(),
       write: () => {},
       runCommand: (command) => {
@@ -437,10 +448,13 @@ describe("data command", () => {
         "rehearsal-create",
         "--database-name",
         "serp-checklists-rehearsal-issue-95",
+        "--evidence", "tmp/data-reports/unit-create-output.json",
         "--execute",
       ],
       repoRoot,
-      gitCommit: "0123456789abcdef",
+      gitCommit: fullGitCommit,
+      now: new Date("2026-09-05T00:30:00.000Z"),
+      env: protectedEnvironment(),
       write: (value) => output.push(value),
       runCommand: () => `database_name = "serp-checklists-rehearsal-issue-95"\ndatabase_id = "${rehearsalId}"`,
     });
@@ -452,6 +466,15 @@ describe("data command", () => {
         databaseId: rehearsalId,
       },
     });
+    rmSync(path.join(repoRoot, "tmp/data-reports/unit-create-output.json"), { force: true });
+  });
+
+  it("rejects stale, cross-run, cross-commit, and mismatched database creation evidence", () => {
+    const expected = { environment: "rehearsal", binding: "DB", databaseName: "serp-checklists-rehearsal-issue-95", databaseId: rehearsalId };
+    const evidence = { schemaVersion: 1, verdict: "pass", commit: fullGitCommit, runId: "123456789", createdAt: "2026-09-05T00:00:00.000Z", target: expected };
+    const options = { evidence, expected, gitCommit: fullGitCommit, runId: "123456789", now: new Date("2026-09-05T00:30:00.000Z") };
+    expect(validateRehearsalCreationEvidence(options)).toEqual(evidence);
+    for (const changed of [{ ...evidence, commit: "f".repeat(40) }, { ...evidence, runId: "999" }, { ...evidence, createdAt: "2026-09-04T00:00:00.000Z" }, { ...evidence, target: { ...expected, databaseId: stagingId } }]) expect(() => validateRehearsalCreationEvidence({ ...options, evidence: changed })).toThrow();
   });
 
   it("fails when fixture teardown reports leaked rows", () => {

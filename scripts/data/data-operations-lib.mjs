@@ -164,7 +164,7 @@ export function buildDataOperationPlan({
       expectedAppliedMigrations = migrationFiles.slice(0, boundary);
       preconditionCommand = commandForQuery(
         identity,
-        "SELECT COUNT(*) AS total_objects FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name <> 'd1_migrations'",
+        "SELECT COUNT(*) AS total_objects FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'",
       );
       const ledgerSetup = commandForQuery(identity, "CREATE TABLE IF NOT EXISTS d1_migrations(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
       commands = [ledgerSetup];
@@ -271,6 +271,7 @@ export function buildDataOperationPlan({
         throw new Error("Recovery restore may target only an isolated rehearsal database.");
       }
       if (!importPath) throw new Error("Recovery restore requires --input.");
+      preconditionCommand = commandForQuery(identity, "SELECT COUNT(*) AS total_objects FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'");
       const allowedRoot = path.resolve(repoRoot, "tmp/rehearsal-sensitive");
       const resolvedInput = path.resolve(repoRoot, importPath);
       if (resolvedInput !== allowedRoot && !resolvedInput.startsWith(`${allowedRoot}${path.sep}`)) {

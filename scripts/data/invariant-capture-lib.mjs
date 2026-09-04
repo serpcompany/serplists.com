@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 
 const MIGRATION_PATTERN = /^\d{4}_[a-z0-9_]+\.sql$/;
 const BASELINE_FILE = fileURLToPath(new URL("./sql/capture-invariants.sql", import.meta.url));
@@ -336,6 +336,8 @@ export function captureRemoteInvariantSnapshot({ database, key, runWrangler }) {
     domain: privacySafeDomainSnapshot({ templateRows, runRows, key, hasEvolution }),
     hasEvolution,
     appliedThrough: ledger.at(-1),
+    appliedMigrations: ledger,
+    ledgerSha256: createHash("sha256").update(JSON.stringify(ledger)).digest("hex"),
     sqlVersions: selected.map((definition) => definition.minimumMigration),
   };
 }

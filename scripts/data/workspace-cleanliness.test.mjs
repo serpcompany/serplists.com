@@ -8,6 +8,7 @@ import {
   captureWorkspaceMetadata,
   compareWorkspaceMetadata,
   evaluateWorkspaceCleanliness,
+  evaluateImmutableRunContext,
   parsePorcelainStatus,
 } from "./workspace-cleanliness-lib.mjs";
 
@@ -25,7 +26,7 @@ describe("data regression workspace cleanliness", () => {
       "unexpected.txt",
       "old.ts -> renamed.ts",
     ]);
-    expect(evaluateWorkspaceCleanliness({ ci: true, paths })).toEqual({
+    expect(evaluateWorkspaceCleanliness({ paths })).toEqual({
       dirty: true,
       paths,
       filesystemChanges: [],
@@ -35,7 +36,7 @@ describe("data regression workspace cleanliness", () => {
   });
 
   it("permits ignored evidence artifacts because porcelain status never reports them", () => {
-    expect(evaluateWorkspaceCleanliness({ ci: true, paths: [] })).toEqual({
+    expect(evaluateWorkspaceCleanliness({ paths: [] })).toEqual({
       dirty: false,
       paths: [],
       filesystemChanges: [],
@@ -44,14 +45,14 @@ describe("data regression workspace cleanliness", () => {
     });
   });
 
-  it("reports developer edits without making a local regression run fail", () => {
-    expect(evaluateWorkspaceCleanliness({ ci: false, paths: ["scripts/data/local-edit.ts"] }))
+  it("allows dirty developer runs only through explicit non-gating mode", () => {
+    expect(evaluateWorkspaceCleanliness({ nonGating: true, paths: ["scripts/data/local-edit.ts"] }))
       .toEqual({
         dirty: true,
         paths: ["scripts/data/local-edit.ts"],
         filesystemChanges: [],
         unexpectedFilesystemChanges: [],
-        verdict: "not-enforced",
+        verdict: "warning",
       });
   });
 
@@ -85,7 +86,6 @@ describe("data regression workspace cleanliness", () => {
         after: captureWorkspaceMetadata({ repoRoot }),
       });
       const result = evaluateWorkspaceCleanliness({
-        ci: true,
         paths: [],
         filesystemChanges: changes,
         allowedOutputRoots: [
@@ -142,7 +142,6 @@ describe("data regression workspace cleanliness", () => {
         after: captureWorkspaceMetadata({ repoRoot }),
       });
       const result = evaluateWorkspaceCleanliness({
-        ci: true,
         paths: [],
         filesystemChanges: changes,
         allowedOutputRoots: [
@@ -160,5 +159,12 @@ describe("data regression workspace cleanliness", () => {
     } finally {
       rmSync(repoRoot, { recursive: true, force: true });
     }
+  });
+
+  it("deterministically fails a concurrent HEAD move and worktree mutation", () => {
+    const result = evaluateImmutableRunContext({ startCommit: "a".repeat(40), endCommit: "b".repeat(40), startPaths: [], endPaths: ["scripts/data/concurrent-edit.mjs"] });
+    expect(result.verdict).toBe("fail");
+    expect(result.failures).toEqual(expect.arrayContaining([expect.stringMatching(/HEAD changed/), expect.stringMatching(/concurrent-edit/)]));
+    expect(evaluateImmutableRunContext({ ...result, nonGating: true }).verdict).toBe("warning");
   });
 });

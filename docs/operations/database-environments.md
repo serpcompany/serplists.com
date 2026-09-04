@@ -128,31 +128,33 @@ node scripts/data/sanitize-rehearsal-export.mjs \
   --issue 95 \
   --approver-identity ALLOWLISTED_REQUESTED_IDENTITY \
   --retention-deadline RFC3339_WITHIN_24_HOURS \
+  --migration-from 0024_safe_template_evolution.sql \
+  --migration-to 0024_safe_template_evolution.sql \
   --execute
 ```
 
 The raw source input must be inside non-artifact `tmp/production-sensitive/`. The sanitizer
 deletes that raw input after success and also on validation or request-context
 failure once it has safely resolved the contained path. Inputs outside that
-directory are refused and never deleted. The synthetic SQL and its generated
+directory are refused and never deleted. The source-derived, content-free SQL and its generated
 manifest are the only import inputs.
 
 Create a unique rehearsal resource:
 
 ```bash
 node scripts/data/data-command.mjs rehearsal-create \
-  --database-name serp-checklists-rehearsal-issue-95
-
-node scripts/data/data-command.mjs rehearsal-create \
   --database-name serp-checklists-rehearsal-issue-95 \
+  --evidence tmp/data-reports/rehearsal/source-creation.json \
   --execute
 ```
 
-Record the returned UUID. Every later write requires that UUID twice: once as
+The protected workflow creates both source and recovery databases during the
+same run, records commit- and run-bound creation evidence, and propagates each
+returned UUID. Every later write requires that UUID twice: once as
 the target and once as explicit confirmation. The protected workflow verifies
 that the target is newly created and empty, builds and ledgers the exact schema
 immediately before the reviewed range, verifies the attestation, imports the
-`0023`-compatible synthetic profile, captures pre-change invariants, and only
+`0023`-compatible sanitized profile, captures pre-change invariants, and only
 then applies the reviewed migration range. The legacy baseline helper refuses
 every remote target.
 The commands below document the guarded primitives, not an alternate manual
@@ -170,6 +172,8 @@ node scripts/data/data-command.mjs rehearsal-baseline \
   --database-name serp-checklists-rehearsal-issue-95 \
   --database-id REHEARSAL_UUID \
   --confirm-database-id REHEARSAL_UUID \
+  --creation-evidence tmp/data-reports/rehearsal/source-creation.json \
+  --approver-identity @devinschumacher \
   --before 0024_safe_template_evolution.sql \
   --execute
 

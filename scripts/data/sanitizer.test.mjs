@@ -17,7 +17,8 @@ describe("source-derived rehearsal sanitizer", () => {
     const artifact = generate();
     expect(artifact.manifest).toMatchObject({ schemaVersion: 2, artifactType: "sanitized-production-shaped", sanitizerVersion: "source-derived-shape-v2", selection: { sourceCounts: { users: 1, templates: 2, checklistRuns: 2 }, selectedCounts: { users: 1, templates: 2, checklistRuns: 2 } }, privacy: { directIdentifiers: "removed", customerContent: "removed", credentialsAndSessions: "excluded", passwordMaterial: "excluded" }, handling: { accessOwner: "@devinschumacher", retentionDeadline } });
     expect(artifact.manifest.selection.coveredShapes).toEqual(expect.arrayContaining(artifact.manifest.selection.requiredShapes));
-    for (const secret of ["private.person@example.com", "Private Person", "Customer", "Confidential", "secret note", "private-access-token", "private-session-token", "private-share-token", "8ab2b7e9"]) expect(artifact.sql).not.toContain(secret);
+    for (const secret of ["private.person@example.com", "Private Person", "Customer", "Confidential", "secret note", "private-access-token", "private-session-token", "private-share-token", "8ab2b7e9", "987654321012345"]) expect(artifact.sql).not.toContain(secret);
+    expect(artifact.sql).toContain('"order":17');
     expect(artifact.sql).toContain("rehearsal-template-1");
     expect(artifact.sql).toContain("rehearsal-run-1");
   });
