@@ -272,7 +272,13 @@ checks.push({
   test: "Playwright smoke journeys completed with isolated local data and no developer secrets",
   verdict: browserFailure ? "fail" : "pass",
 });
-checks.push({ name: "authenticated sanitized candidate handlers", test: "exact sanitized representative rows pass authenticated candidate template and run reads and writes", verdict: authenticatedRehearsal.applicable === true ? (authenticatedRehearsal.verdict === "pass" ? "pass" : "fail") : "pass" });
+if (authenticatedRehearsal.applicable === true) {
+  checks.push({
+    name: "authenticated sanitized candidate handlers",
+    test: "exact sanitized representative rows pass authenticated candidate template and run reads and writes",
+    verdict: authenticatedRehearsal.verdict === "pass" ? "pass" : "fail",
+  });
+}
 checks.push({
   name: "actual Better Auth cookie and application visibility",
   test: "account-owned D1 template is visible through the actual /api/templates handler and dashboard",
