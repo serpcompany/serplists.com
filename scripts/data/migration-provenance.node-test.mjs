@@ -6,6 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  allPassingChecks,
   loadProvenanceState,
   sanitizedGitEnvironment,
   sha256File,
@@ -233,6 +234,10 @@ test("base history cannot be rewritten by updating the candidate manifest hash",
     });
     const failures = validateAgainstBase(loadProvenanceState(root), "HEAD");
     assert.ok(failures.some((item) => item.name === "base-history-modified"));
+    assert.deepEqual(
+      allPassingChecks(failures).find((item) => item.name === "base-history-immutable"),
+      { name: "base-history-immutable", verdict: "fail" },
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

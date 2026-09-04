@@ -360,16 +360,19 @@ export function appendGeneratedProvenance(repoRoot, { migrationFile, snapshotFil
 }
 
 export function allPassingChecks(failures) {
-  const names = [
-    "migration-order",
-    "migration-immutable",
-    "duplicate-sequence",
-    "snapshot-pairing",
-    "snapshot-lineage",
-    "journal-pairing",
-    "schema-snapshot-drift",
-    "base-history-immutable",
-    "generated-reproduction",
+  const checks = [
+    { name: "migration-order", failureNames: ["migration-order"] },
+    { name: "migration-immutable", failureNames: ["migration-immutable"] },
+    { name: "duplicate-sequence", failureNames: ["duplicate-sequence"] },
+    { name: "snapshot-pairing", failureNames: ["snapshot-pairing"] },
+    { name: "snapshot-lineage", failureNames: ["snapshot-lineage"] },
+    { name: "journal-pairing", failureNames: ["journal-pairing"] },
+    { name: "schema-snapshot-drift", failureNames: ["schema-snapshot-drift"] },
+    { name: "base-history-immutable", failureNames: ["base-history-immutable", "base-history-modified"] },
+    { name: "generated-reproduction", failureNames: ["generated-reproduction"] },
   ];
-  return names.map((name) => ({ name, verdict: failures.some((item) => item.name === name) ? "fail" : "pass" }));
+  return checks.map(({ name, failureNames }) => ({
+    name,
+    verdict: failures.some((item) => failureNames.includes(item.name)) ? "fail" : "pass",
+  }));
 }
