@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { captureRepositoryGitState } from "./git-subprocess-env.mjs";
 
 import { buildDataRegressionReport, renderDataRegressionMarkdown } from "./data-regression-report-lib.mjs";
 import { loadEnvironmentInventory } from "./environment-identity-lib.mjs";
@@ -14,14 +15,14 @@ import {
   compareWorkspaceMetadata,
   evaluateImmutableRunContext,
   evaluateWorkspaceCleanliness,
-  parsePorcelainStatus,
 } from "./workspace-cleanliness-lib.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
 const nonGating = process.argv.includes("--non-gating");
-const startCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
-const startDirtyPaths = parsePorcelainStatus(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: repoRoot, encoding: "utf8" }));
+const startGitState = captureRepositoryGitState({ repoRoot });
+const startCommit = startGitState.commit;
+const startDirtyPaths = startGitState.paths;
 const reportDirectory = path.resolve(
   repoRoot,
   process.argv.includes("--report-dir")
@@ -97,6 +98,7 @@ const testFiles = [
   "scripts/data/smoke-environment.test.mjs",
   "scripts/data/smoke-teardown.test.mjs",
   "scripts/data/workspace-cleanliness.test.mjs",
+  "scripts/data/git-subprocess-env.test.mjs",
   "tests/unit/functions/api/templates-handler.test.ts",
   "tests/unit/functions/api/checklists-handler.test.ts",
   "tests/unit/functions/api/template-evolution-migration.test.ts",
@@ -124,6 +126,7 @@ const requiredChecks = [
   ["smoke child secret allowlist", "allowlists runtime variables and drops every developer/cloud/email secret sentinel"],
   ["smoke state observed teardown", "removes isolated state and reports observed zero leaks"],
   ["concurrent HEAD and worktree mutation detection", "deterministically fails a concurrent HEAD move and worktree mutation"],
+  ["poisoned Git context isolation", "ignores poisoned repository, worktree, and index variables for HEAD and cleanliness"],
 ] as const;
 
 mkdirSync(reportDirectory, { recursive: true });
@@ -257,10 +260,8 @@ try {
   });
 }
 const inventory = loadEnvironmentInventory({ repoRoot });
-const endCommit = execFileSync("git", ["rev-parse", "HEAD"], {
-  cwd: repoRoot,
-  encoding: "utf8",
-}).trim();
+const endGitState = captureRepositoryGitState({ repoRoot });
+const endCommit = endGitState.commit;
 let fixtureTeardown: {
   leakedUsers: number;
   leakedTemplates: number;
@@ -277,10 +278,7 @@ try {
 } catch {
   // Keep the fail-closed observed-state default.
 }
-const endDirtyPaths = parsePorcelainStatus(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], {
-  cwd: repoRoot,
-  encoding: "utf8",
-}));
+const endDirtyPaths = endGitState.paths;
 const workingTreeDirtyPaths = [...new Set([...startDirtyPaths, ...endDirtyPaths])].sort();
 const immutableRun = evaluateImmutableRunContext({ startCommit, endCommit, startPaths: startDirtyPaths, endPaths: endDirtyPaths, nonGating });
 const filesystemChanges = compareWorkspaceMetadata({
@@ -376,7 +374,7 @@ const report = {
       : [],
   },
   }),
-  runContext: { mode: nonGating ? "non-gating" : "gating", ...immutableRun },
+  runContext: { mode: nonGating ? "non-gating" : "gating", repositoryRoot: startGitState.repositoryRoot, ...immutableRun },
 };
 const markdown = renderDataRegressionMarkdown(report);
 const paths = writeDataCheckReports({
