@@ -23,6 +23,7 @@ const productionDatabaseId = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1";
 const gitCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
 const sourceDate = new Date().toISOString().slice(0, 10);
 const retentionDeadline = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+const validRawExport = readFileSync(path.join(repoRoot, "scripts/data/fixtures/production-export-edge-cases.sql"), "utf8");
 
 function commandArgs(inputPath, outputPath, manifestPath) {
   return [
@@ -65,7 +66,7 @@ describe("sanitizer command", () => {
       path.join(evidenceRoot, "synthetic.manifest.json"),
     ), { cwd: repoRoot, env: process.env, encoding: "utf8" });
     expect(JSON.parse(output)).toMatchObject({
-      sanitizer: "synthetic-production-shaped-v1",
+      sanitizer: "source-derived-shape-v2",
       issueNumber: 95,
       requestedApproverIdentity: "@devinschumacher",
     });
@@ -125,7 +126,7 @@ describe("sanitizer command", () => {
   it("deletes raw input on sanitizer failure and on success", () => {
     for (const [name, rawExport, expectedStatus] of [
       ["failure", "CREATE TABLE private_data (value TEXT);", 1],
-      ["success", "INSERT INTO users VALUES ('private');", 0],
+      ["success", validRawExport, 0],
     ]) {
       const tempDir = mkdtempSync(path.join(evidenceRoot, `sanitize-${name}-`));
       const rawDir = mkdtempSync(path.join(rawRoot, `sanitize-${name}-`));
@@ -141,7 +142,7 @@ describe("sanitizer command", () => {
         expect(result.status, result.stderr).toBe(expectedStatus);
         expect(existsSync(inputPath)).toBe(false);
         if (expectedStatus === 0) {
-          expect(readFileSync(outputPath, "utf8")).toMatch(/repo-owned synthetic/i);
+          expect(readFileSync(outputPath, "utf8")).toMatch(/source-derived, content-free/i);
           expect(JSON.parse(readFileSync(manifestPath, "utf8"))).toHaveProperty(
             "manifestIntegritySha256",
           );

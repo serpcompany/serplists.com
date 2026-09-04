@@ -167,10 +167,10 @@ export function runDataCommand({
 
   if (plan.requiresWorkflowRequestContext) {
     const policy = loadSanitizerPolicy({ repoRoot });
-    const approverIdentity = plan.report.sanitizedImport?.requestedApproverIdentity
+    const approverIdentity = plan.report.sanitizedImport?.accessOwner
       ?? values["--approver-identity"];
-    if (!policy.allowedRequestedApproverIdentities.includes(approverIdentity)) {
-      throw new Error("Workflow request metadata requires an allowlisted requested approver identity.");
+    if (!policy.allowedAccessOwners.includes(approverIdentity)) {
+      throw new Error("Workflow request metadata requires an allowlisted sanitizer access owner.");
     }
     plan.report.workflowRequestMetadata = assertWorkflowRequestContext({
       env,
@@ -255,7 +255,7 @@ export function runDataCommand({
         outputPath: plan.outputPath,
         sourceSha256: normalized.sourceSha256,
         artifactSha256: normalized.artifactSha256,
-        format: "data-only-repo-owned-synthetic",
+        format: "data-only-source-derived-content-free",
       },
     }, null, 2));
   }

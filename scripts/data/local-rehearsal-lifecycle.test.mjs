@@ -116,7 +116,7 @@ describe("isolated local rehearsal lifecycle", () => {
       wrangler(sourceConfig, ["migrations", "apply", "serp-data-roundtrip", "--local"]);
       wrangler(sourceConfig, [
         "execute", "serp-data-roundtrip", "--local", "--file",
-        path.join(repoRoot, "scripts/data/sanitizers/synthetic-production-shaped-v1.sql"),
+        path.join(repoRoot, "scripts/data/fixtures/production-export-edge-cases.sql"),
         "--yes", "--json",
       ]);
       wrangler(sourceConfig, [

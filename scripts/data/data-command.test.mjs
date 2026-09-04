@@ -17,6 +17,7 @@ const stagingId = "fcaf4325-5be7-4ead-ab60-45932a04177b";
 const productionId = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1";
 const rehearsalId = "8ab2b7e9-0ce8-4d1e-b42f-8601eb256b67";
 const fullGitCommit = "0123456789abcdef0123456789abcdef01234567";
+const productionExportFixture = readFileSync(path.join(repoRoot, "scripts/data/fixtures/production-export-edge-cases.sql"), "utf8");
 
 function writeGeneratedArtifact() {
   const tempDir = mkdtempSync(path.join(tmpdir(), "serp-generated-import-"));
@@ -24,7 +25,7 @@ function writeGeneratedArtifact() {
   const manifestPath = path.join(tempDir, "manifest.json");
   const artifact = generateSanitizedRehearsalArtifact({
     repoRoot,
-    rawExport: "PRAGMA defer_foreign_keys=TRUE;\nINSERT INTO users VALUES ('private');\n",
+    rawExport: productionExportFixture,
     sourceDatabaseId: productionId,
     sourceDate: "2026-09-05",
     gitCommit: fullGitCommit,
@@ -402,7 +403,10 @@ describe("data command", () => {
         },
       });
 
-      expect(readFileSync(outputPath, "utf8")).toBe(generated.artifact.sql);
+      const normalized = readFileSync(outputPath, "utf8");
+      expect(normalized).toContain("Source-derived, content-free production-shaped rehearsal artifact");
+      expect(normalized).toContain("rehearsal-owner-1");
+      expect(normalized).not.toContain("private.person@example.com");
       expect(existsSync(`${outputPath}.wrangler-raw.sql`)).toBe(false);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });

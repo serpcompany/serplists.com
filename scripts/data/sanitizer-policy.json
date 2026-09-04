@@ -1,8 +1,7 @@
 {
-  "schemaVersion": 1,
-  "sanitizerVersion": "synthetic-production-shaped-v1",
-  "templatePath": "scripts/data/sanitizers/synthetic-production-shaped-v1.sql",
-  "allowedRequestedApproverIdentities": ["@devinschumacher"],
+  "schemaVersion": 2,
+  "sanitizerVersion": "source-derived-shape-v2",
+  "allowedAccessOwners": ["@devinschumacher"],
   "maximumRetentionHours": 24,
   "sourceKind": "protected-d1-data-only-export",
   "generator": "scripts/data/sanitize-rehearsal-export.mjs"

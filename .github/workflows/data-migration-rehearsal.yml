@@ -161,7 +161,7 @@ jobs:
           test "$DELETE_STATUS" -eq 0 -a "$ABSENCE_STATUS" -eq 0
       - name: Finalize real recovery rehearsal evidence
         if: always()
-        run: node scripts/data/finalize-recovery-rehearsal.mjs --comparison tmp/data-reports/rehearsal/recovery/remote-invariant-comparison.json --teardown tmp/data-reports/rehearsal/teardown.txt --raw tmp/rehearsal-sensitive/recovery.sql --source-database-name "$DATABASE_NAME" --source-database-id "$DATABASE_ID" --recovery-database-name "$RECOVERY_DATABASE_NAME" --recovery-database-id "$RECOVERY_DATABASE_ID" --output tmp/data-reports/rehearsal/recovery-rehearsal.json
+        run: node scripts/data/finalize-recovery-rehearsal.mjs --comparison tmp/data-reports/rehearsal/recovery/remote-invariant-comparison.json --teardown tmp/data-reports/rehearsal/teardown.txt --raw tmp/rehearsal-sensitive/recovery.sql --source-database-name "$DATABASE_NAME" --source-database-id "$DATABASE_ID" --recovery-database-name "$RECOVERY_DATABASE_NAME" --recovery-database-id "$RECOVERY_DATABASE_ID" --commit "$GITHUB_SHA" --environment rehearsal --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --sanitizer-manifest tmp/data-evidence/production-shaped.manifest.json --output tmp/data-reports/rehearsal/recovery-rehearsal.json
       - name: Finalize only proven rehearsal evidence
         if: always()
         run: |

@@ -258,8 +258,10 @@ export function buildDataOperationPlan({
         sourceDate: importManifest.provenance.sourceDate,
         sanitizerVersion: importManifest.sanitizerVersion,
         sourceExportSha256: importManifest.provenance.sourceExportSha256,
-        requestedApproverIdentity: importManifest.requestMetadata.requestedApproverIdentity,
-        retentionDeadline: importManifest.retentionDeadline,
+        accessOwner: importManifest.handling.accessOwner,
+        retentionDeadline: importManifest.handling.retentionDeadline,
+        selectedCounts: importManifest.selection.selectedCounts,
+        coveredShapes: importManifest.selection.coveredShapes,
         sha256: importManifest.artifact.sha256,
         manifestIntegritySha256: importManifest.manifestIntegritySha256,
       };

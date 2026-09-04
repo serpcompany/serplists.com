@@ -5,8 +5,12 @@ const sourceDatabaseId = "11111111-1111-4111-8111-111111111111";
 const recoveryDatabaseId = "22222222-2222-4222-8222-222222222222";
 const evidence = {
   verdict: "pass",
-  sourceDatabaseId,
-  recoveryDatabaseId,
+  commit: "0123456789abcdef0123456789abcdef01234567",
+  environment: "rehearsal",
+  sourceDatabase: { name: "rehearsal-source", id: sourceDatabaseId },
+  recoveryDatabase: { name: "rehearsal-restore", id: recoveryDatabaseId },
+  migration: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
+  sanitizer: { version: "source-derived-shape-v2", artifactSha256: "a".repeat(64) },
   import: { verdict: "pass" },
   invariants: { verdict: "pass" },
   absence: { verdict: "pass" },
@@ -23,5 +27,7 @@ describe("remote recovery rehearsal evidence", () => {
       { ...evidence, rawPlaintextRetained: true },
     ]) expect(() => validateRehearsalRecoveryEvidence({ evidence: invalid, sourceDatabaseId, recoveryDatabaseId })).toThrow();
     expect(() => validateRehearsalRecoveryEvidence({ evidence, sourceDatabaseId, recoveryDatabaseId: sourceDatabaseId })).toThrow(/separate/i);
+    expect(() => validateRehearsalRecoveryEvidence({ evidence, sourceDatabaseId, recoveryDatabaseId, expectedCommit: "f".repeat(40) })).toThrow();
+    expect(() => validateRehearsalRecoveryEvidence({ evidence: { ...evidence, migration: { from: "0023", to: "0023" } }, sourceDatabaseId, recoveryDatabaseId, expectedMigrationFrom: "0024_safe_template_evolution.sql" })).toThrow();
   });
 });

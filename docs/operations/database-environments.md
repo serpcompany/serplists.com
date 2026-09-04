@@ -93,21 +93,24 @@ different exports:
   form and exists only long enough for the repo-owned sanitizer to read it.
 
 There is no caller-written safety declaration. The only accepted sanitizer is
-the allowlisted `synthetic-production-shaped-v1` implementation in
+the allowlisted `source-derived-shape-v2` implementation in
 [`scripts/data/sanitizer-policy.json`](../../scripts/data/sanitizer-policy.json).
-It deliberately carries no source values forward. It emits the fixed,
-reviewable synthetic lifecycle profile plus a strict manifest containing the
-source-export hash, hashed source database identity, Git commit, generator,
-source date, issue, generation time, requested approver identity, retention
-deadline, artifact hash, template hash, and manifest-integrity hash. These
-unkeyed hashes detect accidental or post-generation byte changes; they do not
-authenticate the author or authorize an operation.
+It loads the protected data-only export into an in-memory replay of the
+repository schema, selects a bounded set of real user-template-run
+relationships covering every `0024` migration edge shape, and replaces all
+identifiers and customer-authored strings with deterministic rehearsal values.
+It excludes authentication, billing, session, password, credential, and share
+token material. It fails closed when the source does not provide the required
+relationships or edge-case coverage; it never substitutes a fixed fixture.
 
-The generated SQL contains no email, UUID-like identifier, customer/person
-name, private content, authentication/billing table, password, or token. Import
-requires an exact byte match with the repo-owned profile and rejects unknown
-manifest fields, unknown sanitizer versions, non-allowlisted requested
-identities, expired retention, or changed integrity hashes. The supplied source
+The strict manifest records source-export and database-identity hashes, exact
+Git commit, source date, sanitizer version, access owner, retention deadline,
+source and selected row counts, covered edge shapes, teardown requirements,
+artifact hash, and manifest-integrity hash. These unkeyed hashes detect
+accidental or post-generation byte changes; they do not authenticate the author
+or authorize an operation. Import rejects unknown manifest fields, unknown
+sanitizer versions, non-allowlisted access owners, expired retention, missing
+edge coverage, privacy-unsafe output, or changed integrity hashes. The supplied source
 database UUID must exactly equal the checked-in production inventory UUID; the
 manifest retains only its hash. An arbitrary manifest field such as
 `containsDirectIdentifiers=false` has no authority.
@@ -118,8 +121,8 @@ writing a manifest:
 ```bash
 node scripts/data/sanitize-rehearsal-export.mjs \
   --input tmp/production-sensitive/private-source-data.sql \
-  --output tmp/data-evidence/synthetic-rehearsal-data.sql \
-  --manifest tmp/data-evidence/synthetic-rehearsal-data.manifest.json \
+  --output tmp/data-evidence/production-shaped.sql \
+  --manifest tmp/data-evidence/production-shaped.manifest.json \
   --source-database-id PRODUCTION_UUID \
   --source-date YYYY-MM-DD \
   --issue 95 \

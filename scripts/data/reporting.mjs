@@ -17,9 +17,16 @@ export function writeDataCheckReports({ name, report, summary, reportDirectory =
     ? [...report.checks, ...(Array.isArray(report.evidenceChecks) ? report.evidenceChecks : [])]
     : [{ name, verdict: failed ? "fail" : "pass" }];
   const failureCount = junitChecks.filter((check) => check.verdict !== "pass").length;
+  const reportProperties = [
+    ["commit", report.commit], ["environment", report.target?.environment],
+    ["database", report.target?.databaseName], ["databaseId", report.target?.databaseId],
+    ["migrationFrom", report.migrationRange?.from], ["migrationTo", report.migrationRange?.to],
+    ["sanitizer", report.sanitizerVersion ?? report.sanitizedSource?.sanitizerVersion],
+  ].filter(([, value]) => value != null);
   const junit = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     `<testsuite name="${escapeXml(name)}" tests="${junitChecks.length}" failures="${failureCount}">`,
+    ...(reportProperties.length ? ["  <properties>", ...reportProperties.map(([key, value]) => `    <property name="${escapeXml(key)}" value="${escapeXml(value)}"/>`), "  </properties>"] : []),
     ...junitChecks.flatMap((check) => [
       `  <testcase classname="data-safety" name="${escapeXml(check.name)}">`,
       ...(check.verdict !== "pass"

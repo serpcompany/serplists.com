@@ -89,7 +89,7 @@ try {
   }
 
   const plan = {
-    sanitizer: "synthetic-production-shaped-v1",
+    sanitizer: "source-derived-shape-v2",
     inputPath,
     outputPath,
     manifestPath,
@@ -125,7 +125,7 @@ try {
     verdict: "pass",
     artifactSha256: artifact.manifest.artifact.sha256,
     manifestIntegritySha256: artifact.manifest.manifestIntegritySha256,
-    retentionDeadline: artifact.manifest.retentionDeadline,
+    retentionDeadline: artifact.manifest.handling.retentionDeadline,
   }, null, 2)}\n`);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
