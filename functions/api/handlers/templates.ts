@@ -2,7 +2,7 @@ import { Env } from '../types';
 import { generateSlug } from '../utils/slug';
 import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
-import { normalizeSectionsPayload, normalizeStringArray, templatePayloadSchema } from '../utils/payloads';
+import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
@@ -18,6 +18,12 @@ import {
   portableTemplatePackEnvelopeSchema,
   portableTemplateRuleSchema,
 } from '../../../src/lib/schemas/checklistSchema';
+import {
+  assignMissingStableTemplateIdentities,
+  calculateRunProgress,
+  reconcileRunSections,
+  validateStableTemplateIdentities,
+} from '../utils/template-reconciliation';
 
 const junkTemplateTitles = new Set(['Test Template', 'Updated Template Title']);
 
@@ -42,6 +48,7 @@ function getTemplateSelectColumns(includeRules: boolean) {
     description: templates.description,
     items: templates.items,
     version: templates.version,
+    content_version: templates.content_version,
     type: templates.type,
     seo_title: templates.seo_title,
     seo_description: templates.seo_description,
@@ -111,8 +118,16 @@ async function updateTemplateWithHistoryFallback(
   whereClause: SQL | undefined,
   auditEventValues: AuditEventValues,
   versionValues?: TemplateVersionValues,
-  syncedItemsUpdate?: { items: string; whereClause: SQL | undefined; updatedAt: string },
-): Promise<void> {
+  reconciledRunUpdates: Array<{
+    items: string;
+    retiredItems: string;
+    progress: number;
+    templateVersion: number;
+    revision: number;
+    whereClause: SQL | undefined;
+    updatedAt: string;
+  }> = [],
+): Promise<unknown[]> {
   const { audit_events, checklist_runs, template_versions, templates } = schema;
 
   const runBatch = (templateValues: TemplateUpdateValues) => {
@@ -120,28 +135,39 @@ async function updateTemplateWithHistoryFallback(
       db.update(templates).set(templateValues).where(whereClause),
       ...(versionValues ? [db.insert(template_versions).values(versionValues)] : []),
       db.insert(audit_events).values(auditEventValues),
-      ...(syncedItemsUpdate
-        ? [
-            db
-              .update(checklist_runs)
-              .set({ items: syncedItemsUpdate.items, updated_at: syncedItemsUpdate.updatedAt })
-              .where(syncedItemsUpdate.whereClause),
-          ]
-        : []),
+      ...reconciledRunUpdates.map((runUpdate) =>
+        db
+          .update(checklist_runs)
+          .set({
+            items: runUpdate.items,
+            retired_items: runUpdate.retiredItems,
+            progress: runUpdate.progress,
+            template_version: runUpdate.templateVersion,
+            revision: runUpdate.revision + 1,
+            updated_at: runUpdate.updatedAt,
+          })
+          .where(runUpdate.whereClause),
+      ),
     ] as const;
 
     return db.batch(statements);
   };
 
   try {
-    await runBatch(values);
+    return await runBatch(values);
   } catch (error) {
     if (!isMissingRulesColumnError(error)) {
       throw error;
     }
 
-    await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateUpdateValues);
+    return await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateUpdateValues);
   }
+}
+
+function batchUpdateMissed(result: unknown): boolean {
+  if (!isRecord(result)) return false;
+  const meta = result.meta;
+  return isRecord(meta) && typeof meta.changes === 'number' && meta.changes === 0;
 }
 
 async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
@@ -274,7 +300,7 @@ function shouldCreateTemplateVersion(rawBody: Record<string, unknown>, nextSlug:
 }
 
 function changedTemplateFields(updates: Record<string, unknown>): Record<string, unknown> {
-  const { updated_at: _updatedAt, updated_by_user_id: _updatedByUserId, version: _version, ...diff } = updates;
+  const { updated_at: _updatedAt, updated_by_user_id: _updatedByUserId, version: _version, content_version: _contentVersion, ...diff } = updates;
   return diff;
 }
 
@@ -598,6 +624,17 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             index,
             title: template.title,
             reason: normalizedSections.error,
+            code: 'invalid_sections',
+          });
+          continue;
+        }
+        normalizedSections.sections = assignMissingStableTemplateIdentities(normalizedSections.sections);
+        const identityError = validateStableTemplateIdentities(normalizedSections.sections);
+        if (identityError) {
+          summary.failed.push({
+            index,
+            title: template.title,
+            reason: identityError,
             code: 'invalid_sections',
           });
           continue;
@@ -1195,6 +1232,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     if (normalizedSections.error) {
       return jsonError(normalizedSections.error, 400);
     }
+    normalizedSections.sections = assignMissingStableTemplateIdentities(normalizedSections.sections);
+    const identityError = validateStableTemplateIdentities(normalizedSections.sections);
+    if (identityError) {
+      return jsonError(identityError, 400);
+    }
 
     const templateId = crypto.randomUUID();
     const slugSource = typeof requestedSlug === 'string' && requestedSlug.trim() ? requestedSlug.trim() : title || '';
@@ -1278,7 +1320,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
     }
 
-    const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
+    const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems, expected_version } = parsed.data;
     const rawBody = body as Record<string, unknown>;
 
     // Only update slug if explicitly provided (avoid breaking shared URLs on title edits).
@@ -1292,6 +1334,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       updated_by_user_id: userId,
     };
     let syncedItems: string | null = null;
+    let incomingSections: unknown[] | null = null;
 
     if (typeof title !== 'undefined') {
       updates.title = title || '';
@@ -1316,9 +1359,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       if (normalizedSections.error) {
         return jsonError(normalizedSections.error, 400);
       }
-      const nextItems = JSON.stringify(normalizedSections.sections);
-      updates.items = nextItems;
-      syncedItems = nextItems;
+      incomingSections = normalizedSections.sections;
+      updates.items = JSON.stringify(normalizedSections.sections);
     }
     if (Object.prototype.hasOwnProperty.call(rawBody, 'is_public') && typeof is_public === 'boolean') {
       updates.is_public = is_public;
@@ -1350,6 +1392,22 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     if (!(await canEditTemplate(env, existingTemplate as unknown as Record<string, unknown>, userId))) {
       return jsonError('Forbidden', 403);
     }
+    if (incomingSections) {
+      const previousSections = parseJsonArray(existingTemplate.items) ?? [];
+      const stableSections = assignMissingStableTemplateIdentities(incomingSections, previousSections);
+      const identityError = validateStableTemplateIdentities(stableSections);
+      if (identityError) {
+        return jsonError(identityError, 400);
+      }
+      syncedItems = JSON.stringify(stableSections);
+      updates.items = syncedItems;
+    }
+    if (typeof expected_version === 'number' && expected_version !== existingTemplate.version) {
+      return jsonError('Template changed since it was loaded. Refresh before saving again.', 409, {
+        code: 'edit_conflict',
+        details: { expectedVersion: expected_version, currentVersion: existingTemplate.version },
+      });
+    }
 
     let nextSlug: string | null = null;
     if (requestedSlugValue) {
@@ -1370,8 +1428,15 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     const shouldVersion = shouldCreateTemplateVersion(rawBody, nextSlug);
     const currentVersion = typeof existingTemplate.version === 'number' ? existingTemplate.version : 1;
     const nextVersion = shouldVersion ? currentVersion + 1 : currentVersion;
+    const currentContentVersion = typeof existingTemplate.content_version === 'number'
+      ? existingTemplate.content_version
+      : currentVersion;
+    const nextContentVersion = syncedItems === null ? currentContentVersion : currentContentVersion + 1;
     if (shouldVersion) {
       updates.version = nextVersion;
+    }
+    if (syncedItems !== null) {
+      updates.content_version = nextContentVersion;
     }
 
     if (typeof title === 'string' && junkTemplateTitles.has(title)) {
@@ -1379,8 +1444,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     }
 
     const templateUpdateWhere = existingTemplate.owner_type === 'team' && existingTemplate.team_id
-      ? and(eq(templates.id, templateId), eq(templates.team_id, existingTemplate.team_id))
-      : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id));
+      ? and(eq(templates.id, templateId), eq(templates.team_id, existingTemplate.team_id), eq(templates.version, currentVersion))
+      : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), eq(templates.version, currentVersion));
 
     const subject = getTemplateSubject(existingTemplate as unknown as Record<string, unknown>, userId);
     const updatedTemplate = {
@@ -1411,22 +1476,83 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       createdAt: now,
     });
 
-    await updateTemplateWithHistoryFallback(
-      db,
-      updates as TemplateUpdateValues,
-      templateUpdateWhere,
-      auditEvent,
-      versionValues,
-      syncedItems === null
-        ? undefined
-        : {
-            items: syncedItems,
-            updatedAt: now,
-            whereClause: existingTemplate.owner_type === 'team' && existingTemplate.team_id
-              ? and(eq(checklist_runs.template_id, templateId), eq(checklist_runs.team_id, existingTemplate.team_id))
-              : and(eq(checklist_runs.template_id, templateId), eq(checklist_runs.user_id, userId)),
-          },
+    const matchingRuns = syncedItems === null
+      ? []
+      : await db
+          .select()
+          .from(checklist_runs)
+          .where(
+            existingTemplate.owner_type === 'team' && existingTemplate.team_id
+              ? and(
+                  eq(checklist_runs.template_id, templateId),
+                  eq(checklist_runs.team_id, existingTemplate.team_id),
+                  eq(checklist_runs.status, 'in_progress'),
+                  or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
+                  isNull(checklist_runs.deleted_at),
+                )
+              : and(
+                  eq(checklist_runs.template_id, templateId),
+                  eq(checklist_runs.user_id, userId),
+                  isNull(checklist_runs.team_id),
+                  eq(checklist_runs.status, 'in_progress'),
+                  or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
+                  isNull(checklist_runs.deleted_at),
+                ),
+          )
+          .orderBy(checklist_runs.created_at);
+    const activeRuns = matchingRuns.filter((run) =>
+      run.status === 'in_progress'
+      && !run.is_public
+      && !run.deleted_at
     );
+
+    const nextTemplateSections = syncedItems === null ? [] : (parseJsonArray(syncedItems) ?? []);
+    const reconciledRunUpdates = activeRuns.map((run) => {
+      const previousSections = parseJsonArray(run.items) ?? [];
+      const previousRetired = parseJsonArray(run.retired_items) ?? [];
+      const reconciled = reconcileRunSections(previousSections, nextTemplateSections, previousRetired);
+      const revision = typeof run.revision === 'number' ? run.revision : 1;
+
+      return {
+        items: JSON.stringify(reconciled.sections),
+        retiredItems: JSON.stringify(reconciled.retired),
+        progress: calculateRunProgress(reconciled.sections),
+        templateVersion: nextContentVersion,
+        revision,
+        updatedAt: now,
+        whereClause: and(
+          eq(checklist_runs.id, run.id),
+          eq(checklist_runs.revision, revision),
+          eq(checklist_runs.status, 'in_progress'),
+          or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
+          isNull(checklist_runs.deleted_at),
+        ),
+      };
+    });
+
+    try {
+      const batchResults = await updateTemplateWithHistoryFallback(
+        db,
+        updates as TemplateUpdateValues,
+        templateUpdateWhere,
+        auditEvent,
+        versionValues,
+        reconciledRunUpdates,
+      );
+      if (batchUpdateMissed(batchResults[0])) {
+        return jsonError('Template changed while it was being saved. Refresh before saving again.', 409, {
+          code: 'edit_conflict',
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/unique constraint failed:.*template_versions|template_versions.*unique/i.test(message)) {
+        return jsonError('Template changed while it was being saved. Refresh before saving again.', 409, {
+          code: 'edit_conflict',
+        });
+      }
+      throw error;
+    }
 
     return json({ success: true, slug: typeof updates.slug === 'string' ? updates.slug : undefined });
   }

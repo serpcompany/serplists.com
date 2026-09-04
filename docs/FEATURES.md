@@ -28,7 +28,7 @@ Canonical private routes:
 
 - Users can create, edit, archive, restore, import, and export templates.
 - Template detail pages render a read-only preview first. Editing happens on `/dashboard/templates/:id/edit`.
-- Template content updates propagate to matching active runs for the same owner/workspace.
+- Template content updates reconcile into matching active, private runs for the same owner/workspace. Stable section, item, and sub-item IDs preserve run completion and notes across renames and reordering; new work arrives incomplete, and retired work leaves readiness calculations while remaining in run history.
 - Public templates can be shared at `/profile/{username}/{templateSlug}`.
 - Other users can copy public templates into their account or an authorized team workspace when their active entitlement context allows it.
 - Template history is stored in `template_versions`; related actor/action history is stored in `audit_events`.
@@ -37,6 +37,10 @@ Canonical private routes:
 
 - Users can start checklist runs from templates.
 - Runs store progress independently from templates.
+- Runs record both the template content version last reconciled and a run revision. API responses expose `is_stale` when the source checklist structure is newer; metadata-only template edits do not stale runs.
+- Completed, archived, and publicly shared runs are frozen when a template changes. A completed private run can be explicitly reconciled and reopened with `POST /api/checklists/:id/revalidate`.
+- Runs that predate stable identities are conservatively marked stale during migration. Their legacy IDs are backfilled deterministically, and their completion/notes remain intact until explicit reconciliation.
+- Run and template saves use optimistic revision/version markers. A stale editor receives `409 edit_conflict` instead of overwriting newer work.
 - Run-level sharing creates public `/share/:token` links.
 - Guests can open shared runs without logging in and update checklist completion state.
 - Shared runs do not expose owner-only title editing or destructive actions.
@@ -87,5 +91,6 @@ Password for all seeded users: `password123`.
 - `403 Forbidden`: the user is signed in but lacks the required role or permission.
 - `503 billing_unavailable`: paid action cannot be started because billing config is unavailable.
 - `503 auth_email_unavailable`: auth email delivery is unavailable for flows that require outbound email.
+- `409 edit_conflict`: a template or run changed after the editor loaded it; refresh before retrying.
 
 The client preserves API `status`, `code`, and `details` so UI behavior does not depend on string matching generic error messages.

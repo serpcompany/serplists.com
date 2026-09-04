@@ -132,6 +132,7 @@ describe('Checklists Handlers', () => {
             },
           ]),
           is_public: false,
+          version: 7,
         },
       ])
       .mockResolvedValueOnce([{ count: 0 }]);
@@ -159,6 +160,8 @@ describe('Checklists Handlers', () => {
     expect(storedItems[0].items[0].title).toBe('Stored item');
     expect(storedItems[0].items[0].isCompleted).toBe(false);
     expect(storedItems[0].items[0].subItems[0].isCompleted).toBe(false);
+    expect(inserted.template_version).toBe(7);
+    expect(inserted.revision).toBe(1);
   });
 
   it('should reject checklist runs from inaccessible private templates', async () => {
@@ -814,6 +817,9 @@ describe('Checklists Handlers', () => {
         user_id: 'owner-123',
         share_token: 'shared-run',
         is_public: true,
+        revision: 3,
+        template_version: 1,
+        current_template_version: 2,
       },
     ]);
 
@@ -827,6 +833,9 @@ describe('Checklists Handlers', () => {
     expect(response.status).toBe(200);
     expect(data.id).toBe('shared-run');
     expect(data.title).toBe('Shared Run');
+    expect(data.is_stale).toBe(true);
+    expect(data.template_version).toBe(1);
+    expect(data.current_template_version).toBe(2);
   });
 
   it('should update shared checklist runs', async () => {
@@ -844,6 +853,7 @@ describe('Checklists Handlers', () => {
         team_id: null,
         share_token: 'shared-run',
         is_public: true,
+        revision: 3,
       },
     ]);
 
@@ -852,6 +862,7 @@ describe('Checklists Handlers', () => {
       body: JSON.stringify({
         sections: [{ id: '1', title: 'Checklist', items: [] }],
         status: 'completed',
+        expected_revision: 3,
       }),
     });
 
@@ -860,6 +871,7 @@ describe('Checklists Handlers', () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
+    expect(data.revision).toBe(4);
     expect(dbMocks.updateChain.set).toHaveBeenCalled();
     const batchStatements = dbMocks.db.batch.mock.calls[0][0];
     expect(batchStatements).toHaveLength(2);
@@ -889,5 +901,131 @@ describe('Checklists Handlers', () => {
 
     expect(response.status).toBe(404);
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+  });
+
+  it('rejects stale private run writes before they can discard template evolution', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'run-1',
+        user_id: 'user-123',
+        team_id: null,
+        title: 'Run',
+        items: '[]',
+        status: 'in_progress',
+        revision: 5,
+        started_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      },
+    ]);
+
+    const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1', {
+      method: 'PUT',
+      body: JSON.stringify({
+        sections: [{ id: 'section-1', title: 'Stale', items: [] }],
+        expected_revision: 4,
+      }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.code).toBe('edit_conflict');
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+  });
+
+  it('reports a conflict when a run changes between the read and conditional write', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'run-1',
+        user_id: 'user-123',
+        team_id: null,
+        title: 'Run',
+        items: '[]',
+        status: 'in_progress',
+        revision: 5,
+        started_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      },
+    ]);
+    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }]);
+
+    const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1', {
+      method: 'PUT',
+      body: JSON.stringify({ title: 'Concurrent edit', expected_revision: 5 }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.code).toBe('edit_conflict');
+  });
+
+  it('explicitly revalidates a completed run against the current template', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        {
+          id: 'run-1',
+          user_id: 'user-123',
+          team_id: null,
+          template_id: 'template-1',
+          title: 'Completed run',
+          items: JSON.stringify([
+            {
+              id: 'section-1',
+              title: 'Old',
+              items: [{ id: 'item-1', title: 'Old title', isCompleted: true, notes: 'Preserve' }],
+            },
+          ]),
+          retired_items: '[]',
+          status: 'completed',
+          template_version: 1,
+          revision: 2,
+          is_public: false,
+          started_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'template-1',
+          version: 3,
+          items: JSON.stringify([
+            {
+              id: 'section-1',
+              title: 'Current',
+              items: [
+                { id: 'item-1', title: 'Renamed' },
+                { id: 'item-2', title: 'New requirement' },
+              ],
+            },
+          ]),
+        },
+      ]);
+
+    const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1/revalidate', {
+      method: 'POST',
+      body: JSON.stringify({ expected_revision: 2 }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toEqual(expect.objectContaining({
+      success: true,
+      progress: 50,
+      revision: 3,
+      template_version: 3,
+    }));
+    const update = dbMocks.updateChain.set.mock.calls[0][0];
+    expect(update).toEqual(expect.objectContaining({
+      status: 'in_progress',
+      completed_at: null,
+      template_version: 3,
+    }));
+    expect(JSON.parse(update.items)[0].items).toEqual([
+      expect.objectContaining({ id: 'item-1', title: 'Renamed', isCompleted: true, notes: 'Preserve' }),
+      expect.objectContaining({ id: 'item-2', isCompleted: false }),
+    ]);
   });
 });

@@ -380,9 +380,10 @@ describe('Templates Handlers', () => {
         slug: 'updated-template-slug',
       }),
     );
+    expect(dbMocks.updateChain.set.mock.calls[0][0]).not.toHaveProperty('content_version');
   });
 
-  it('should update related checklist runs when template sections change', async () => {
+  it('should reconcile active private runs without losing completion or notes', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([
       {
@@ -390,12 +391,83 @@ describe('Templates Handlers', () => {
         user_id: 'user-123',
         title: 'Existing Template',
         description: '',
-        items: '[]',
+        items: JSON.stringify([
+          {
+            id: 'section-1',
+            title: 'Old checklist',
+            items: [{ id: 'item-1', title: 'Old title', isCompleted: true, notes: 'Keep me' }],
+          },
+        ]),
         version: 1,
         is_public: false,
         slug: 'existing-template',
         created_at: new Date().toISOString(),
         updated_at: null,
+      },
+    ]);
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+      {
+        id: 'run-1',
+        user_id: 'user-123',
+        team_id: null,
+        template_id: 'template-1',
+        title: 'Active run',
+        items: JSON.stringify([
+          {
+            id: 'section-1',
+            title: 'Old checklist',
+            items: [{ id: 'item-1', title: 'Old title', isCompleted: true, notes: 'Keep me' }],
+          },
+        ]),
+        retired_items: '[]',
+        status: 'in_progress',
+        is_public: false,
+        revision: 4,
+      },
+      {
+        id: 'run-2',
+        user_id: 'user-123',
+        team_id: null,
+        template_id: 'template-1',
+        title: 'Second active run',
+        items: JSON.stringify([
+          {
+            id: 'section-1',
+            title: 'Old checklist',
+            items: [{ id: 'item-1', title: 'Old title', isCompleted: false, notes: 'Different progress' }],
+          },
+        ]),
+        retired_items: '[]',
+        status: 'in_progress',
+        is_public: false,
+        revision: 8,
+      },
+      {
+        id: 'completed-run',
+        template_id: 'template-1',
+        items: '[]',
+        status: 'completed',
+        is_public: false,
+        deleted_at: null,
+        revision: 2,
+      },
+      {
+        id: 'archived-run',
+        template_id: 'template-1',
+        items: '[]',
+        status: 'in_progress',
+        is_public: false,
+        deleted_at: '2026-09-01T00:00:00Z',
+        revision: 3,
+      },
+      {
+        id: 'shared-run',
+        template_id: 'template-1',
+        items: '[]',
+        status: 'in_progress',
+        is_public: true,
+        deleted_at: null,
+        revision: 4,
       },
     ]);
 
@@ -408,9 +480,11 @@ describe('Templates Handlers', () => {
             title: 'Checklist',
             items: [{
               id: 'item-1',
-              title: 'Start with your project',
-              isCompleted: false,
+              title: 'Start with the renamed project',
               contents: [],
+            }, {
+              id: 'item-2',
+              title: 'New requirement',
             }],
           },
         ],
@@ -422,7 +496,94 @@ describe('Templates Handlers', () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(dbMocks.updateChain.set).toHaveBeenCalledTimes(2);
+    expect(dbMocks.updateChain.set).toHaveBeenCalledTimes(3);
+    const runUpdate = dbMocks.updateChain.set.mock.calls[1][0];
+    const reconciledItems = JSON.parse(runUpdate.items);
+    expect(reconciledItems[0].items).toEqual([
+      expect.objectContaining({
+        id: 'item-1',
+        title: 'Start with the renamed project',
+        isCompleted: true,
+        notes: 'Keep me',
+      }),
+      expect.objectContaining({ id: 'item-2', isCompleted: false }),
+    ]);
+    expect(runUpdate).toEqual(expect.objectContaining({
+      progress: 50,
+      template_version: 2,
+      revision: 5,
+    }));
+    const secondRunUpdate = dbMocks.updateChain.set.mock.calls[2][0];
+    expect(secondRunUpdate).toEqual(expect.objectContaining({
+      progress: 0,
+      template_version: 2,
+      revision: 9,
+    }));
+    expect(JSON.parse(secondRunUpdate.items)[0].items[0]).toEqual(expect.objectContaining({
+      id: 'item-1',
+      isCompleted: false,
+      notes: 'Different progress',
+    }));
+    expect(dbMocks.updateChain.set.mock.calls).toHaveLength(3);
+
+    const lifecyclePredicate = dbMocks.selectChain.where.mock.calls.at(-1)?.[0];
+    const predicateColumns = collectSqlColumnNames(lifecyclePredicate);
+    expect(predicateColumns).toContain('status');
+    expect(predicateColumns).toContain('is_public');
+    expect(predicateColumns).toContain('deleted_at');
+  });
+
+  it('rejects a stale template editor version before writing', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        user_id: 'user-123',
+        owner_type: 'user',
+        team_id: null,
+        title: 'Current template',
+        items: '[]',
+        version: 3,
+        is_public: false,
+      },
+    ]);
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({ title: 'Stale edit', expected_version: 2 }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.code).toBe('edit_conflict');
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+  });
+
+  it('reports a conflict when a template changes between the read and conditional write', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        user_id: 'user-123',
+        owner_type: 'user',
+        team_id: null,
+        title: 'Current template',
+        items: '[]',
+        version: 3,
+        content_version: 2,
+        is_public: false,
+      },
+    ]);
+    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({ title: 'Concurrent edit', expected_version: 3 }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.code).toBe('edit_conflict');
   });
 
   it('should return saved SEO metadata in template responses', async () => {

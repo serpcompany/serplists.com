@@ -268,6 +268,7 @@ class ApiClient {
     tags?: string[];
     is_public?: boolean;
     slug?: string;
+    expected_version?: number;
   }) {
     return this.request(`/templates/${id}`, {
       method: 'PUT',
@@ -384,6 +385,7 @@ class ApiClient {
       status?: string;
       progress?: number;
       completed_at?: string;
+      expected_revision?: number;
     }
   ) {
     return this.request(`/checklists/shared/${encodeURIComponent(shareToken)}`, {
@@ -400,10 +402,18 @@ class ApiClient {
     status?: string;
     progress?: number;
     completed_at?: string;
+    expected_revision?: number;
   }) {
     return this.request(`/checklists/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
+    });
+  }
+
+  async revalidateChecklist(id: string, expectedRevision?: number) {
+    return this.request(`/checklists/${encodeURIComponent(id)}/revalidate`, {
+      method: 'POST',
+      body: JSON.stringify(expectedRevision ? { expected_revision: expectedRevision } : {}),
     });
   }
 

@@ -146,17 +146,24 @@ const persistRun = async (
   const nextRun = { ...params.run, progress };
 
   if (params.shareToken) {
-    await apiClient.updateSharedChecklist(params.shareToken, {
+    const result = await apiClient.updateSharedChecklist(params.shareToken, {
       completed_at: nextRun.completedAt,
+      expected_revision: nextRun.revision,
       progress,
       sections: nextRun.sections,
       status: nextRun.status,
     });
-    return nextRun;
+    return {
+      ...nextRun,
+      revision:
+        typeof (result as { revision?: unknown })?.revision === 'number'
+          ? (result as { revision: number }).revision
+          : nextRun.revision,
+    };
   }
 
-  await dependencies.updateRun(nextRun);
-  return nextRun;
+  const persisted = await dependencies.updateRun(nextRun);
+  return persisted ?? nextRun;
 };
 
 const withClonedRun = (run: ChecklistRun): ChecklistRun => ({

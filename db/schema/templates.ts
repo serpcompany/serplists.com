@@ -7,6 +7,7 @@ export const templates = sqliteTable("templates", {
   description: text("description"),
   items: text("items").notNull(),
   version: integer("version").notNull().default(1),
+  content_version: integer("content_version").notNull().default(1),
   type: text("type").notNull().default("checklist"),
   seo_title: text("seo_title"),
   seo_description: text("seo_description"),
