@@ -460,6 +460,33 @@ describe("protected staging and production data-promotion workflow", () => {
     }
   });
 
+  it("runs every repository JavaScript command only after checkout and pinned Node setup", () => {
+    const workflows = [
+      ["ci", ciWorkflow],
+      ["promotion", workflow],
+      ["rehearsal", rehearsalWorkflow],
+    ];
+    const executesRepositoryJavaScript = (step) => {
+      const run = String(step.run ?? "");
+      return /\bpnpm\s+(?:install|run|exec)\b/.test(run) || /\bnode\s+(?:\.\/)?scripts\//.test(run);
+    };
+
+    for (const [workflowName, candidate] of workflows) {
+      for (const [jobId, job] of Object.entries(candidate.jobs ?? {})) {
+        const steps = job.steps ?? [];
+        const checkoutIndex = steps.findIndex((step) => String(step.uses ?? "").startsWith("actions/checkout@"));
+        const nodeIndex = steps.findIndex((step) => String(step.uses ?? "").startsWith("actions/setup-node@"));
+        for (const [stepIndex, step] of steps.entries()) {
+          if (!executesRepositoryJavaScript(step)) continue;
+          expect(checkoutIndex, `${workflowName}/${jobId} must checkout before ${step.name ?? stepIndex}`).toBeGreaterThanOrEqual(0);
+          expect(nodeIndex, `${workflowName}/${jobId} must setup Node before ${step.name ?? stepIndex}`).toBeGreaterThan(checkoutIndex);
+          expect(stepIndex, `${workflowName}/${jobId}/${step.name ?? stepIndex} ran before pinned Node`).toBeGreaterThan(nodeIndex);
+          expect(steps[nodeIndex].with?.["node-version-file"], `${workflowName}/${jobId} must use .node-version`).toBe(".node-version");
+        }
+      }
+    }
+  });
+
   it("runs account-owned and custom-domain canaries after each deploy", () => {
     for (const jobId of ["staging_postdeploy", "production_postdeploy"]) {
       const text = jobText(jobs[jobId]);
