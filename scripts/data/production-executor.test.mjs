@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,6 +40,28 @@ const context = {
   PRODUCTION_INVARIANT_HMAC_KEY: "protected-invariant-hmac-key-123456789",
 };
 
+function validPromotionEvidence() {
+  return {
+    commit,
+    classification: "backfill",
+    database: production,
+    pendingMigrations: ["0024_safe_template_evolution.sql"],
+    migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
+    ci: { verdict: "pass", commit, workingTreeDirty: false },
+    ciContractCorrection: { verdict: "pass", commit, eventName: "push", comparisonBase: "base-sha" },
+    ciSchemaContract: { verdict: "pass", commit, runtimeDiff: { verdict: "pass" }, authorityDiff: { verdict: "pass" }, snapshotDiff: { verdict: "pass" }, migrationRange: { from: "0001_initial_schema.sql", to: "0024_safe_template_evolution.sql" } },
+    rehearsal: {
+      verdict: "pass",
+      commit,
+      target: { environment: "rehearsal", databaseId: "11111111-1111-4111-8111-111111111111" },
+      migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
+      recovery: { verdict: "pass" },
+      teardown: { verdict: "pass" },
+      sanitizedSource: { verdict: "pass", attestation: { verdict: "pass" } },
+    },
+  };
+}
+
 describe("protected production executor", () => {
   it("rejects local, push, unprotected, mismatched-commit, and legacy credential contexts", () => {
     for (const env of [
@@ -72,24 +94,7 @@ describe("protected production executor", () => {
   });
 
   it("requires exact passing CI and rehearsal evidence for the requested commit and migration range", () => {
-    const evidence = {
-      commit,
-      classification: "backfill",
-      database: production,
-      migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
-      ci: { verdict: "pass", commit, workingTreeDirty: false },
-      ciContractCorrection: { verdict: "pass", commit, eventName: "push", comparisonBase: "base-sha" },
-      ciSchemaContract: { verdict: "pass", commit, runtimeDiff: { verdict: "pass" }, authorityDiff: { verdict: "pass" }, snapshotDiff: { verdict: "pass" }, migrationRange: { from: "0001_initial_schema.sql", to: "0024_safe_template_evolution.sql" } },
-      rehearsal: {
-        verdict: "pass",
-        commit,
-        target: { environment: "rehearsal", databaseId: "11111111-1111-4111-8111-111111111111" },
-        migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
-        recovery: { verdict: "pass" },
-        teardown: { verdict: "pass" },
-        sanitizedSource: { verdict: "pass", attestation: { verdict: "pass" } },
-      },
-    };
+    const evidence = validPromotionEvidence();
 
     expect(validatePromotionEvidence(evidence)).toEqual(evidence);
     for (const invalid of [
@@ -249,6 +254,82 @@ describe("protected production executor", () => {
       for (const suffix of ["json", "junit.xml", "txt"]) {
         expect(existsSync(path.join(cwd, "tmp/data-reports/production", `production-approval.${suffix}`))).toBe(true);
       }
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves exact request identity and range when evidence validation fails", () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), "production-prevalidation-failure-"));
+    const reportDirectory = path.join(cwd, "reports");
+    const requestPath = path.join(cwd, "request.json");
+    const approvalPath = path.join(cwd, "approval.json");
+    try {
+      const request = validPromotionEvidence();
+      request.ci.verdict = "fail";
+      writeFileSync(requestPath, JSON.stringify(request));
+      writeFileSync(approvalPath, "{}\n");
+      const result = spawnSync(process.execPath, [
+        fileURLToPath(new URL("./production-executor.mjs", import.meta.url)),
+        "data", "--request", requestPath, "--approval", approvalPath,
+        "--output", path.join(cwd, "evidence.json"), "--report-dir", reportDirectory,
+      ], { cwd, env: { ...process.env, ...context } });
+      expect(result.status).toBe(1);
+      const report = JSON.parse(readFileSync(path.join(reportDirectory, "production-data-promotion.json"), "utf8"));
+      expect(report).toMatchObject({
+        verdict: "fail",
+        commit,
+        target: { environment: "production", ...production },
+        migrationRange: request.migrationRange,
+        operations: { activeStep: null, attemptedSteps: [], completedSteps: [], results: {} },
+      });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves completed and attempted operation results when a later production step fails", () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), "production-partial-failure-"));
+    const reportDirectory = path.join(cwd, "reports");
+    const requestPath = path.join(cwd, "request.json");
+    const approvalPath = path.join(cwd, "approval.json");
+    const fakeBin = path.join(cwd, "bin");
+    const fakePnpm = path.join(fakeBin, "pnpm");
+    try {
+      mkdirSync(fakeBin);
+      writeFileSync(requestPath, JSON.stringify(validPromotionEvidence()));
+      writeFileSync(approvalPath, "{}\n");
+      writeFileSync(fakePnpm, `#!/bin/sh
+case "$*" in
+  *"d1 info"*) printf '%s\\n' '[{"uuid":"${production.databaseId}","name":"${production.databaseName}"}]' ;;
+  *) exit 23 ;;
+esac
+`);
+      chmodSync(fakePnpm, 0o755);
+      const result = spawnSync(process.execPath, [
+        fileURLToPath(new URL("./production-executor.mjs", import.meta.url)),
+        "data", "--request", requestPath, "--approval", approvalPath,
+        "--output", path.join(cwd, "evidence.json"), "--report-dir", reportDirectory,
+      ], {
+        cwd,
+        env: { ...process.env, ...context, PATH: `${fakeBin}:${process.env.PATH}` },
+      });
+      expect(result.status).toBe(1);
+      const report = JSON.parse(readFileSync(path.join(reportDirectory, "production-data-promotion.json"), "utf8"));
+      expect(report).toMatchObject({
+        verdict: "fail",
+        commit,
+        target: { environment: "production", ...production },
+        operations: {
+          activeStep: "recovery-bookmark",
+          attemptedSteps: ["identity", "recovery-bookmark"],
+          completedSteps: ["identity"],
+          results: {
+            identity: { verdict: "pass" },
+            "recovery-bookmark": { verdict: "fail" },
+          },
+        },
+      });
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

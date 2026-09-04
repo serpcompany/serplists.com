@@ -34,7 +34,8 @@ pnpm run db:reset
 pnpm run db:reset:test-user-passwords
 pnpm run db:generate -- --name descriptive_schema_change
 pnpm run check:data:migration-provenance -- --base origin/staging
-pnpm run db:migrate
+pnpm run check:data:schema-contract
+pnpm run db:schema:snapshot:check
 pnpm run db:query "SELECT * FROM templates LIMIT 5"
 ```
 
@@ -44,19 +45,21 @@ pnpm run db:query "SELECT * FROM templates LIMIT 5"
 pnpm run verify:staging
 pnpm run check:preview:d1-binding
 pnpm run db:migrations:list:staging
-pnpm run db:migrate:d1:staging
-pnpm run db:seed:official:staging
 pnpm run check:staging:d1-schema
+gh workflow view cloudflare-pages-deploy.yml
+gh run list --workflow cloudflare-pages-deploy.yml --branch staging
 
 # Production readiness, non-destructive
 pnpm run verify:prod:d1
 pnpm run db:migrations:list:prod
-
-# One-time only if prod predates native D1 migration tracking:
-pnpm run db:migrations:baseline:prod -- --through 0020 --execute
-pnpm run db:migrate:d1:prod
 pnpm run check:prod:d1-schema
+gh workflow view cloudflare-pages-deploy.yml
+gh run list --workflow cloudflare-pages-deploy.yml --branch main
 ```
+
+Remote migrations, seeds, baselines, and deploys are blocked from local package
+commands. Use the protected GitHub promotion workflow after its required review
+and evidence gates; the commands above inspect readiness and prior runs only.
 
 ## Ports and base URLs
 - Frontend (Vite): http://localhost:8080

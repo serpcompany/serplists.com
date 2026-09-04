@@ -38,9 +38,26 @@ const cleanupPlaintext = () => { if (existsSync(plaintextBackup)) unlinkSync(pla
 process.once("SIGINT", () => { cleanupPlaintext(); process.exit(130); });
 process.once("SIGTERM", () => { cleanupPlaintext(); process.exit(143); });
 let report;
+let requestSnapshot = {
+  commit: process.env.GITHUB_SHA ?? "unknown",
+  target: { environment: "production", databaseName: "unread-request", databaseId: null },
+  migrationRange: { from: null, to: null },
+};
+const operationState = {
+  activeStep: null,
+  attemptedSteps: [],
+  completedSteps: [],
+  results: {},
+};
 try {
   if (!requestPath) throw new Error("Protected executor requires --request.");
-  const request = validatePromotionEvidence(JSON.parse(readFileSync(requestPath, "utf8")));
+  const requestInput = JSON.parse(readFileSync(requestPath, "utf8"));
+  requestSnapshot = {
+    commit: requestInput?.commit ?? process.env.GITHUB_SHA ?? "unknown",
+    target: { environment: "production", ...(requestInput?.database ?? {}) },
+    migrationRange: requestInput?.migrationRange ?? { from: null, to: null },
+  };
+  const request = validatePromotionEvidence(requestInput);
   const context = mode === "data"
     ? assertProductionWorkflowContext({ env: process.env, expectedCommit: request.commit })
     : assertProductionArtifactContext({ env: process.env, expectedCommit: request.commit });
@@ -73,6 +90,8 @@ try {
     pendingMigrations: request.pendingMigrations,
     approval,
     run: (step) => {
+      operationState.activeStep = step;
+      operationState.attemptedSteps.push(step);
       let output = "";
       switch (step) {
         case "identity": {
@@ -135,7 +154,11 @@ try {
       mkdirSync(reportDirectory, { recursive: true });
       const artifact = path.join(reportDirectory, `${step}.txt`);
       writeFileSync(artifact, output, { mode: 0o600 });
-      return { verdict: "pass", artifact, outputLength: output.length };
+      const result = { verdict: "pass", artifact, outputLength: output.length };
+      operationState.results[step] = result;
+      operationState.completedSteps.push(step);
+      operationState.activeStep = null;
+      return result;
     },
   });
   mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -149,19 +172,25 @@ try {
     recovery: { bookmark: "captured", export: "captured" },
     pendingMigrations: pendingObserved,
     context,
+    operations: operationState,
   };
   const summary = `PASS protected production data promotion for ${request.commit}; recovery captured and ${request.migrationRange.from} -> ${request.migrationRange.to} verified.`;
   writeDataCheckReports({ name: "production-data-promotion", report, summary, reportDirectory });
   console.log(summary);
 } catch (error) {
   cleanupPlaintext();
+  const message = error instanceof Error ? error.message : String(error);
+  if (operationState.activeStep) {
+    operationState.results[operationState.activeStep] = { verdict: "fail", error: message };
+  }
   report = {
     check: "protected-production-data-promotion",
     verdict: "fail",
-    commit: process.env.GITHUB_SHA ?? "unknown",
-    target: { environment: "production", databaseName: "requested-in-evidence", databaseId: null },
-    migrationRange: { from: null, to: null },
-    error: error instanceof Error ? error.message : String(error),
+    commit: requestSnapshot.commit,
+    target: requestSnapshot.target,
+    migrationRange: requestSnapshot.migrationRange,
+    operations: operationState,
+    error: message,
   };
   const summary = `BLOCKED protected production executor: ${report.error}`;
   writeDataCheckReports({ name: "production-data-promotion", report, summary, reportDirectory });

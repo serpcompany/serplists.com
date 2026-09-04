@@ -28,8 +28,21 @@ jobs:
       DATA_PROMOTION_WORKFLOW: data-promotion
       DATA_PROTECTED_ENVIRONMENT: production
     steps:
+      - name: Reject untrusted rehearsal commit before checkout
+        shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -eu
+          if ! [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "expected_commit must be a lowercase 40-character commit SHA" >&2
+            exit 1
+          fi
+          test "$GITHUB_REF" = refs/heads/main
+          test "${GITHUB_REF_PROTECTED:-false}" = true
+          test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with: { ref: "${{ inputs.expected_commit }}" }
+        with: { ref: "${{ github.sha }}" }
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version: "22", cache: pnpm }
@@ -76,8 +89,19 @@ jobs:
       MIGRATION_FROM: ${{ inputs.migration_from }}
       MIGRATION_TO: ${{ inputs.migration_to }}
     steps:
+      - name: Reject untrusted rehearsal commit before checkout
+        shell: bash
+        run: |
+          set -eu
+          if ! [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "expected_commit must be a lowercase 40-character commit SHA" >&2
+            exit 1
+          fi
+          test "$GITHUB_REF" = refs/heads/main
+          test "${GITHUB_REF_PROTECTED:-false}" = true
+          test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with: { ref: "${{ inputs.expected_commit }}" }
+        with: { ref: "${{ github.sha }}" }
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version: "22", cache: pnpm }

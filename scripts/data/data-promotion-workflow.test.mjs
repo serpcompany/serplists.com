@@ -127,6 +127,61 @@ describe("protected staging and production data-promotion workflow", () => {
     }
   });
 
+  it("rejects arbitrary rehearsal commits before checkout, install, or protected secrets", () => {
+    for (const [jobId, job] of Object.entries(rehearsalWorkflow.jobs ?? {})) {
+      const steps = job.steps ?? [];
+      const gate = steps[0];
+      expect(gate?.name, `${jobId} must gate the commit first`).toMatch(/untrusted rehearsal commit/i);
+      expect(gate?.shell).toBe("bash");
+      expect(String(gate?.run ?? "")).toMatch(/\^\[0-9a-f\]\{40\}\$/);
+      expect(String(gate?.run ?? "")).toContain('test "$GITHUB_REF" = refs/heads/main');
+      expect(String(gate?.run ?? "")).toContain('test "${GITHUB_REF_PROTECTED:-false}" = true');
+      expect(String(gate?.run ?? "")).toContain('test "$EXPECTED_COMMIT" = "$GITHUB_SHA"');
+
+      const checkoutIndex = steps.findIndex((step) => String(step.uses ?? "").startsWith("actions/checkout@"));
+      const installIndex = steps.findIndex((step) => String(step.run ?? "").includes("pnpm install"));
+      const secretIndex = steps.findIndex((step) => JSON.stringify(step.env ?? {}).includes("secrets."));
+      expect(checkoutIndex, `${jobId} checkout must follow the inline gate`).toBeGreaterThan(0);
+      expect(installIndex, `${jobId} install must follow the inline gate`).toBeGreaterThan(checkoutIndex);
+      expect(secretIndex, `${jobId} secrets must follow the inline gate`).toBeGreaterThan(installIndex);
+      expect(steps[checkoutIndex].with?.ref).toBe("${{ github.sha }}");
+      expect(JSON.stringify(steps[checkoutIndex])).not.toContain("inputs.expected_commit");
+
+      const trustedCommit = "a".repeat(40);
+      const inlineGate = `${gate.run}\nprintf 'reached-privileged-steps\\n'`;
+      const baseEnv = {
+        ...process.env,
+        EXPECTED_COMMIT: trustedCommit,
+        GITHUB_SHA: trustedCommit,
+        GITHUB_REF: "refs/heads/main",
+        GITHUB_REF_PROTECTED: "true",
+      };
+      expect(spawnSync("bash", ["-c", inlineGate], { env: baseEnv }).stdout.toString()).toContain(
+        "reached-privileged-steps",
+      );
+      for (const env of [
+        { ...baseEnv, EXPECTED_COMMIT: "b".repeat(40) },
+        { ...baseEnv, EXPECTED_COMMIT: "main" },
+        { ...baseEnv, GITHUB_REF_PROTECTED: "false" },
+      ]) {
+        const result = spawnSync("bash", ["-c", inlineGate], { env });
+        expect(result.status, `${jobId} must reject the untrusted context`).not.toBe(0);
+        expect(result.stdout.toString()).not.toContain("reached-privileged-steps");
+      }
+    }
+
+    for (const candidate of [workflow, rehearsalWorkflow]) {
+      for (const job of Object.values(candidate.jobs ?? {})) {
+        for (const step of job.steps ?? []) {
+          if (!String(step.uses ?? "").startsWith("actions/checkout@")) continue;
+          expect(JSON.stringify(step), "privileged checkout cannot select a caller-provided commit").not.toContain(
+            "inputs.expected_commit",
+          );
+        }
+      }
+    }
+  });
+
   it("has the complete, fail-closed job graph", () => {
     expect(Object.keys(jobs)).toEqual(expect.arrayContaining(requiredJobs));
 
