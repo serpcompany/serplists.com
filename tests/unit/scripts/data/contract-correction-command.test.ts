@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -95,4 +95,22 @@ describe("contract-correction command", () => {
       expect(JSON.parse(readFileSync(path.join(temp, "contract-correction.json"), "utf8"))).toMatchObject({ verdict: "fail", error: expect.stringMatching(/outside.*manifest/i) });
     } finally { rmSync(temp, { recursive: true, force: true }); }
   });
+
+  it("replays immutable base-ref migration bytes instead of modified working-tree history", () => {
+    const temp = mkdtempSync(path.join(tmpdir(), "contract-base-bytes-"));
+    const clone = path.join(temp, "repo");
+    try {
+      execFileSync("git", ["clone", "--quiet", "--local", "--no-hardlinks", process.cwd(), clone], { env: sanitizedGitEnvironment() });
+      const cloneBaseRef = "refs/remotes/upstream/staging";
+      execFileSync("git", ["fetch", "--quiet", process.cwd(), `refs/remotes/origin/staging:${cloneBaseRef}`], { cwd: clone, env: sanitizedGitEnvironment() });
+      symlinkSync(path.join(process.cwd(), "node_modules"), path.join(clone, "node_modules"), "dir");
+      const historicalMigration = path.join(clone, "db/migrations/0008_better_auth.sql");
+      writeFileSync(historicalMigration, `${readFileSync(historicalMigration, "utf8")}\nDROP TABLE account;\n`);
+      const changed = path.join(temp, "changed.txt");
+      writeFileSync(changed, contractCorrectionFiles);
+      const result = spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "tsx", "scripts/data/check-contract-correction.ts", "--changed-files-file", changed, "--base-ref", cloneBaseRef, "--report-dir", path.join(temp, "reports")], { cwd: clone, encoding: "utf8", env: sanitizedGitEnvironment() });
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(readFileSync(path.join(temp, "reports/contract-correction.json"), "utf8"))).toMatchObject({ verdict: "pass", comparisonBase: cloneBaseRef });
+    } finally { rmSync(temp, { recursive: true, force: true }); }
+  }, 30_000);
 });
