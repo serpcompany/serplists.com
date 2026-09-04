@@ -54,11 +54,23 @@ jobs:
       - name: Unit tests
         run: pnpm run test:run
 
-      - name: Build
-        run: pnpm run build
-
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Smoke tests
-        run: pnpm run test:smoke
+      - name: Data regression gate
+        run: pnpm run test:data-regressions -- --report-dir tmp/data-reports/ci
+
+      - name: Upload data regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-regression-${{ github.run_id }}
+          path: |
+            tmp/data-reports/ci/
+            tests/test-results/
+            playwright-report/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Build
+        run: pnpm run build

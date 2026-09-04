@@ -1,0 +1,70 @@
+# Data Regression Suite
+
+The database promotion standard defines the required evidence. Run the local,
+deterministic implementation with:
+
+```bash
+pnpm run test:data-regressions
+```
+
+Use `--report-dir PATH` to choose an ignored artifact directory. The default is
+`tmp/data-reports/`. The command runs the named migration, data, authenticated
+HTTP, lifecycle, concurrency, recovery, and teardown checks as one blocking
+suite.
+
+## Required matrix
+
+The report fails unless it finds a passing named test for every row:
+
+| Area | Automated behavior |
+| --- | --- |
+| Fresh schema | Complete Wrangler chain produces the Drizzle runtime contract. |
+| Upgrade | Exact `0023` production baseline upgrades through `0024`. |
+| Invariants | Counts, ownership, active/deleted state, foreign keys, JSON, versions, progress, notes, and orphan checks remain valid. |
+| Identity migration | Existing section/item/sub-item IDs remain byte-for-byte stable, while legacy missing IDs receive the exact deterministic `legacy-*` values in both templates and linked runs. |
+| Structure evolution | Section, item, and sub-item add, rename, reorder, retirement, and removal preserve run-owned completion and notes. |
+| Active runs | Multiple active runs with different completion states reconcile independently. |
+| Frozen lifecycle | Completed, shared, archived, and already-stale runs are not silently rewritten. |
+| Revalidation | Explicit revalidation reconciles a completed run and advances its revision/template version. |
+| Concurrency | Stale template and run revisions return public HTTP conflict responses. |
+| Authenticated visibility | A real local Better Auth registration/session cookie creates an account-owned D1 template through the actual handler, lists it through `/api/templates`, and renders it on the dashboard. The evaluator also fails false-empty and error responses. |
+| Recovery | A Wrangler data-only export imports into a separately migrated database and passes invariants. |
+| Teardown | Repeated deterministic fixture setup followed by cleanup leaves zero users, templates, and runs. |
+
+## Evidence
+
+Each successful run writes:
+
+- `data-regression-suite.md` for human review;
+- `data-regression-suite.json` for automation;
+- `data-regression-suite.junit.xml` for CI test reporting; and
+- `data-regression-vitest.json` as the raw named-test result;
+- `browser-smoke-playwright.json` for learner-visible journeys; and
+- `browser-smoke-teardown.json` for observed isolated-state cleanup.
+
+The summary records the environment, binding, exact database identity, commit,
+migration range, check verdicts, invariant deltas, and teardown counts. It
+contains aggregate or synthetic evidence only.
+
+The command also runs learner-visible Playwright smoke journeys with isolated
+local state and an allowlisted child environment. Frontend, build, migration,
+and API child processes do not inherit developer secrets or load `.dev.vars`.
+Playwright retains a
+trace and screenshot on failure; their paths are listed in the report. When
+#97 wires the promotion job, it must upload those browser artifacts alongside
+the database reports.
+
+Smoke cleanup runs on success, test failure, process error, and migration setup
+failure. `browser-smoke-teardown.json` records whether isolated state existed,
+whether it remained, and the observed leaked-path count. The aggregate report
+also executes the exact fixture teardown and queries the remaining user,
+template, and run counts; it never substitutes assumed zeroes.
+
+CI runs this command as a blocking step and uploads Markdown, text, JSON, JUnit,
+raw Vitest, browser JSON, teardown, trace, screenshot, and failure-context
+evidence for 90 days. Chromium is installed before the aggregate gate, and CI
+does not run a second redundant smoke step because the aggregate already owns
+the browser execution. The later standalone build remains as the production
+build verification. Issue #97 still owns making staging and production deploy
+jobs depend on this required CI gate and installing the production execution
+boundary.

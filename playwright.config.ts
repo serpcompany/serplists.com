@@ -1,5 +1,6 @@
 import { defineConfig } from "@playwright/test";
 import { existsSync } from "node:fs";
+import { buildPlaywrightServerCommands } from "./scripts/data/smoke-environment-lib.mjs";
 
 const frontendHost = process.env.PLAYWRIGHT_FRONTEND_HOST ?? "localhost";
 const frontendPort = process.env.PLAYWRIGHT_FRONTEND_PORT ?? "4173";
@@ -20,13 +21,26 @@ const reuseExistingServer =
   process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER != null
     ? process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1"
     : !process.env.CI;
-const devVarsFlag = existsSync(".dev.vars") ? " --env-file .dev.vars" : "";
 const wranglerPersistFlag = process.env.PLAYWRIGHT_WRANGLER_PERSIST_TO
-  ? ` --persist-to ${process.env.PLAYWRIGHT_WRANGLER_PERSIST_TO}`
+  ? process.env.PLAYWRIGHT_WRANGLER_PERSIST_TO
   : "";
-const frontendCommand = existsSync(".dev.vars")
-  ? `pnpm exec dotenv -e .dev.vars -- vite --host ${frontendHost} --port ${frontendPort} --strictPort`
-  : `pnpm exec vite --host ${frontendHost} --port ${frontendPort} --strictPort`;
+const serverCommands = buildPlaywrightServerCommands({
+  isolated: process.env.PLAYWRIGHT_USE_DEV_VARS === "0",
+  hasDevVars: existsSync(".dev.vars"),
+  frontendHost,
+  frontendPort,
+  apiPort,
+  frontendUrlForApi,
+  corsAllowedOrigins,
+  betterAuthSecret,
+  persistPath: wranglerPersistFlag,
+});
+const reporter = process.env.PLAYWRIGHT_JSON_REPORT
+  ? [
+      ["list"] as const,
+      ["json", { outputFile: process.env.PLAYWRIGHT_JSON_REPORT }] as const,
+    ]
+  : "list";
 
 process.env.VITE_API_URL ??= apiBaseUrl;
 
@@ -34,15 +48,16 @@ export default defineConfig({
   testDir: "./tests/e2e",
   outputDir: "tests/test-results",
   fullyParallel: true,
-  reporter: "list",
+  reporter,
   use: {
     baseURL: frontendBaseUrl,
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
   },
   webServer: [
     {
       name: "frontend",
-      command: frontendCommand,
+      command: serverCommands.frontend,
       url: frontendBaseUrl,
       reuseExistingServer,
       timeout: 120000,
@@ -51,11 +66,7 @@ export default defineConfig({
     },
     {
       name: "api",
-      command:
-        `pnpm run build:dev && npx wrangler pages dev ./dist --local --port ${apiPort}${devVarsFlag}${wranglerPersistFlag} ` +
-        `-b FRONTEND_URL=${frontendUrlForApi} ` +
-        `-b CORS_ALLOWED_ORIGINS=${corsAllowedOrigins} ` +
-        `-b BETTER_AUTH_SECRET=${betterAuthSecret}`,
+      command: serverCommands.api,
       url: `http://localhost:${apiPort}/api/health`,
       reuseExistingServer,
       timeout: 180000,

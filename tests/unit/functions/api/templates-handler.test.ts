@@ -533,6 +533,130 @@ describe('Templates Handlers', () => {
     expect(predicateColumns).toContain('deleted_at');
   });
 
+  it('applies section item and sub-item add rename reorder retire and remove only to active private runs', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const previousSections = [
+      {
+        id: 'section-active',
+        title: 'Old active section',
+        items: [
+          {
+            id: 'item-keep',
+            title: 'Old kept item',
+            isCompleted: true,
+            notes: 'Preserve item note',
+            contents: [{
+              type: 'subItems',
+              value: '',
+              subItems: [
+                { id: 'sub-first', title: 'Old first', isCompleted: true },
+                { id: 'sub-second', title: 'Old second', isCompleted: false },
+                { id: 'sub-remove', title: 'Remove me', isCompleted: true },
+              ],
+            }],
+          },
+          { id: 'item-remove', title: 'Retire item', isCompleted: true, notes: 'Audit item' },
+        ],
+      },
+      {
+        id: 'section-remove',
+        title: 'Retire section',
+        items: [{ id: 'section-remove-item', title: 'Historical', isCompleted: true }],
+      },
+    ];
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{
+      id: 'template-1',
+      user_id: 'user-123',
+      owner_type: 'user',
+      team_id: null,
+      title: 'Lifecycle Template',
+      items: JSON.stringify(previousSections),
+      version: 4,
+      content_version: 7,
+      is_public: false,
+      slug: 'lifecycle-template',
+      created_at: '2026-09-05T00:00:00Z',
+    }]);
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+      {
+        id: 'active-private',
+        user_id: 'user-123',
+        team_id: null,
+        template_id: 'template-1',
+        items: JSON.stringify(previousSections),
+        retired_items: '[]',
+        status: 'in_progress',
+        is_public: false,
+        deleted_at: null,
+        template_version: 7,
+        revision: 3,
+      },
+      { id: 'completed-frozen', status: 'completed', is_public: false, deleted_at: null, revision: 2 },
+      { id: 'shared-frozen', status: 'in_progress', is_public: true, deleted_at: null, revision: 2 },
+      { id: 'archived-frozen', status: 'in_progress', is_public: false, deleted_at: '2026-09-01', revision: 2 },
+      { id: 'stale-completed-frozen', status: 'completed', is_public: false, deleted_at: null, template_version: 1, revision: 2 },
+    ]);
+
+    const nextSections = [
+      {
+        id: 'section-added',
+        title: 'Added section',
+        items: [{ id: 'section-added-item', title: 'Added section item' }],
+      },
+      {
+        id: 'section-active',
+        title: 'Renamed active section',
+        items: [
+          { id: 'item-added', title: 'Added item' },
+          {
+            id: 'item-keep',
+            title: 'Renamed kept item',
+            contents: [{
+              type: 'subItems',
+              value: '',
+              subItems: [
+                { id: 'sub-second', title: 'Renamed second' },
+                { id: 'sub-added', title: 'Added sub-item' },
+                { id: 'sub-first', title: 'Renamed first' },
+              ],
+            }],
+          },
+        ],
+      },
+    ];
+    const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({ sections: nextSections, expected_version: 4 }),
+    }), mockEnv);
+
+    expect(response.status).toBe(200);
+    expect(dbMocks.updateChain.set).toHaveBeenCalledTimes(2);
+    const runUpdate = dbMocks.updateChain.set.mock.calls[1][0];
+    const updated = JSON.parse(runUpdate.items);
+    expect(updated.map((section: { id: string }) => section.id)).toEqual([
+      'section-added',
+      'section-active',
+    ]);
+    expect(updated[1]).toMatchObject({ id: 'section-active', title: 'Renamed active section' });
+    expect(updated[1].items.map((item: { id: string }) => item.id)).toEqual(['item-added', 'item-keep']);
+    expect(updated[1].items[1]).toMatchObject({
+      title: 'Renamed kept item',
+      isCompleted: true,
+      notes: 'Preserve item note',
+    });
+    expect(updated[1].items[1].contents[0].subItems).toEqual([
+      expect.objectContaining({ id: 'sub-second', title: 'Renamed second', isCompleted: false }),
+      expect.objectContaining({ id: 'sub-added', isCompleted: false }),
+      expect.objectContaining({ id: 'sub-first', title: 'Renamed first', isCompleted: true }),
+    ]);
+    expect(JSON.parse(runUpdate.retired_items)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'subItem', subItem: expect.objectContaining({ id: 'sub-remove' }) }),
+      expect.objectContaining({ kind: 'item', item: expect.objectContaining({ id: 'item-remove' }) }),
+      expect.objectContaining({ kind: 'section', section: expect.objectContaining({ id: 'section-remove' }) }),
+    ]));
+    expect(runUpdate).toEqual(expect.objectContaining({ template_version: 8, revision: 4 }));
+  });
+
   it('rejects a stale template editor version before writing', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([

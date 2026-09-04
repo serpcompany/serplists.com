@@ -4,6 +4,8 @@ import { rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findOpenPortPair } from "./dev-auto-lib.mjs";
+import { buildSmokeChildEnvironment } from "./data/smoke-environment-lib.mjs";
+import { cleanupSmokeState } from "./data/smoke-teardown-lib.mjs";
 
 const DEFAULT_SMOKE_FRONTEND_PORT = 4173;
 const DEFAULT_SMOKE_API_PORT = 8788;
@@ -14,6 +16,11 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
 const smokePersistPath = path.join(".wrangler", "smoke-state");
 const smokePersistAbsolutePath = path.resolve(repoRoot, smokePersistPath);
+const teardownReportPath = path.resolve(
+  repoRoot,
+  process.env.PLAYWRIGHT_TEARDOWN_REPORT ?? "tmp/data-reports/browser-smoke-teardown.json",
+);
+const env = buildSmokeChildEnvironment(process.env);
 
 function parsePort(value, fallback) {
   const port = Number(value);
@@ -28,7 +35,7 @@ function run(command, args, options = {}) {
   execFileSync(command, args, {
     cwd: repoRoot,
     env: {
-      ...process.env,
+      ...env,
       ...options.env,
     },
     stdio: "inherit",
@@ -64,9 +71,10 @@ function prepareSmokeD1() {
   );
 }
 
-const env = { ...process.env };
-
-env.PLAYWRIGHT_REUSE_EXISTING_SERVER ??= "0";
+env.PLAYWRIGHT_REUSE_EXISTING_SERVER = "0";
+// Smoke accounts and data must be deterministic and must never call developer-
+// configured external email providers from .dev.vars.
+env.PLAYWRIGHT_USE_DEV_VARS = "0";
 
 const shouldPickOpenPorts =
   env.PLAYWRIGHT_REUSE_EXISTING_SERVER !== "1" &&
@@ -107,8 +115,15 @@ if (shouldPickOpenPorts) {
   env.FRONTEND_URL ??= env.PLAYWRIGHT_BASE_URL;
 }
 
-if (env.PLAYWRIGHT_REUSE_EXISTING_SERVER !== "1") {
+try {
   prepareSmokeD1();
+} catch (error) {
+  cleanupSmokeState({
+    repoRoot,
+    statePath: smokePersistAbsolutePath,
+    reportPath: teardownReportPath,
+  });
+  throw error;
 }
 
 const pnpmBin = "pnpm";
@@ -123,10 +138,25 @@ const child = spawn(
 );
 
 child.on("exit", (code, signal) => {
+  const teardown = cleanupSmokeState({
+    repoRoot,
+    statePath: smokePersistAbsolutePath,
+    reportPath: teardownReportPath,
+  });
   if (signal) {
     console.error(`Smoke tests stopped by ${signal}`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
+  process.exitCode = teardown.verdict === "pass" ? (code ?? 1) : 1;
+});
 
-  process.exit(code ?? 1);
+child.on("error", (error) => {
+  cleanupSmokeState({
+    repoRoot,
+    statePath: smokePersistAbsolutePath,
+    reportPath: teardownReportPath,
+  });
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
 });
