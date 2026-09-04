@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { captureRemoteInvariantSnapshot, compareProductionInvariants } from "./invariant-capture-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
@@ -12,13 +12,21 @@ const mode = process.argv[2];
 const database = arg("--database");
 const state = arg("--state");
 const reportDirectory = arg("--report-dir") ?? "tmp/data-reports/remote-invariants";
+const rangeValue = (name) => { const value = arg(name); return value === "none" ? null : value; };
 const context = {
   commit: arg("--commit"),
   target: { environment: arg("--environment"), binding: arg("--binding"), databaseName: database, databaseId: arg("--database-id") },
-  expectedMigrationRange: { from: arg("--migration-from"), to: arg("--migration-to") },
+  expectedMigrationRange: { from: rangeValue("--migration-from"), to: rangeValue("--migration-to") },
   comparisonKind: arg("--comparison-kind") ?? "migration",
 };
 const childEnv = Object.fromEntries(["PATH", "HOME", "CI", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"].filter((key) => process.env[key]).map((key) => [key, process.env[key]]));
+function expectedMigrations() {
+  if (context.expectedMigrationRange.from == null) return [];
+  const files = readdirSync(new URL("../../db/migrations/", import.meta.url)).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
+  const from = files.indexOf(context.expectedMigrationRange.from); const to = files.indexOf(context.expectedMigrationRange.to);
+  if (from < 0 || to < from) throw new Error("Reviewed invariant migration range is not a contiguous repository range.");
+  return files.slice(from, to + 1);
+}
 function wrangler(args) { return execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "wrangler", ...args], { encoding: "utf8", env: childEnv }); }
 function verifyLiveIdentity(target) {
   const live = extractD1Identity(wrangler(["d1", "info", target.databaseName, "--json"]));
@@ -26,7 +34,9 @@ function verifyLiveIdentity(target) {
 }
 function capture(target) {
   verifyLiveIdentity(target);
-  return captureRemoteInvariantSnapshot({ database: target.databaseName, key: process.env.INVARIANT_HMAC_KEY, runWrangler: wrangler });
+  const snapshot = captureRemoteInvariantSnapshot({ database: target.databaseName, key: process.env.INVARIANT_HMAC_KEY, runWrangler: wrangler });
+  verifyLiveIdentity(target);
+  return snapshot;
 }
 try {
   validateRemoteInvariantContext(context);
@@ -42,7 +52,7 @@ try {
     validatePreInvariantEvidence({ pre, context });
     const post = capture(context.target);
     const comparison = compareProductionInvariants({ pre: pre.snapshot.invariants, post: post.invariants, preHasEvolution: pre.snapshot.hasEvolution, postHasEvolution: post.hasEvolution, preDomain: pre.snapshot.domain, postDomain: post.domain });
-    const transition = evaluateInvariantLedgerTransition({ before: pre.snapshot.appliedMigrations, after: post.appliedMigrations, comparisonKind: context.comparisonKind, expectedRange: context.expectedMigrationRange });
+    const transition = evaluateInvariantLedgerTransition({ before: pre.snapshot.appliedMigrations, after: post.appliedMigrations, comparisonKind: context.comparisonKind, expectedRange: context.expectedMigrationRange, expectedMigrations: expectedMigrations() });
     const { added, removed, observedRange } = transition;
     const ledgerMatches = transition.verdict === "pass";
     const report = { ...comparison, check: "remote-invariant-comparison", commit: context.commit, target: context.target, sourceTarget: pre.target, comparisonKind: context.comparisonKind, migrationRange: observedRange, ledger: { before: pre.snapshot.appliedMigrations, after: post.appliedMigrations, beforeSha256: pre.snapshot.ledgerSha256, afterSha256: post.ledgerSha256, added, removed, appliedThrough: post.appliedThrough, verdict: ledgerMatches ? "pass" : "fail" } };

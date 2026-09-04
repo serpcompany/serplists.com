@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { writeDataCheckReports } from "./reporting.mjs";
+import { evaluateInvariantLedgerTransition } from "./remote-invariant-evidence-lib.mjs";
 
 function arg(name) { const index = process.argv.indexOf(name); return index < 0 ? null : process.argv[index + 1]; }
 function read(name) { return JSON.parse(readFileSync(arg(name), "utf8")); }
@@ -19,14 +20,17 @@ try {
   const invariants = read("--invariants");
   const deploy = read("--deploy");
   const smoke = read("--smoke");
-  const exactCommit = [data.commit, range.commit, schema.commit, deploy.commit, smoke.commit].every((value) => value === commit);
+  const exactCommit = [data.commit, range.commit, schema.commit, invariants.commit, deploy.commit, smoke.commit].every((value) => value === commit);
   const exactTarget = range.target?.environment === "staging" && range.target?.databaseName === databaseName &&
     range.target?.databaseId === databaseId && schema.target?.environment === "staging" && schema.target?.database === databaseName &&
     schema.target?.databaseId === databaseId && deploy.target?.environment === "staging" &&
+    invariants.target?.environment === "staging" && invariants.target?.binding === "DB" && invariants.target?.databaseName === databaseName && invariants.target?.databaseId === databaseId &&
     deploy.target?.databaseName === databaseName && deploy.target?.databaseId === databaseId &&
     smoke.target?.environment === "staging" && smoke.target?.databaseName === databaseName &&
     smoke.target?.databaseId === databaseId;
-  if (!exactCommit || !exactTarget || deploy.tree !== tree) throw new Error("Staging evidence identity does not match the exact commit, tree, environment, and database.");
+  const exactInvariantRange = invariants.comparisonKind === "migration" && invariants.migrationRange?.from === range.migrationRange?.from && invariants.migrationRange?.to === range.migrationRange?.to;
+  const ledgerTransition = evaluateInvariantLedgerTransition({ before: invariants.ledger?.before ?? [], after: invariants.ledger?.after ?? [], comparisonKind: "migration", expectedRange: range.migrationRange, expectedMigrations: range.pendingMigrations ?? [] });
+  if (!exactCommit || !exactTarget || !exactInvariantRange || ledgerTransition.verdict !== "pass" || invariants.ledger?.verdict !== "pass" || deploy.tree !== tree) throw new Error("Staging evidence identity, invariant range, or ordered ledger transition does not match the exact commit, tree, environment, and database.");
   if (data.verdict !== "pass" || data.teardown?.verdict !== "pass" || range.verdict !== "pass" || schema.verdict !== "pass" ||
       schema.ledger?.verdict !== "pass" || invariants.verdict !== "pass" || deploy.verdict !== "pass" || smoke.verdict !== "pass" ||
       !Array.isArray(smoke.failures) || smoke.failures.length) {
@@ -43,7 +47,7 @@ try {
     pendingMigrations: range.pendingMigrations,
     data: { verdict: data.verdict, teardown: data.teardown },
     schema: { verdict: schema.verdict, ledger: schema.ledger },
-    invariants: { verdict: invariants.verdict },
+    invariants: { verdict: invariants.verdict, migrationRange: invariants.migrationRange, ledger: invariants.ledger },
     deploy: { verdict: deploy.verdict },
     smoke: { verdict: smoke.verdict, failures: smoke.failures },
     teardown: data.teardown,

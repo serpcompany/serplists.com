@@ -22,10 +22,10 @@
       "migrationTo": null,
       "preMigration": "0024_safe_template_evolution.sql",
       "artifacts": [],
-      "fixtureProfile": "template-evolution-v1",
+      "fixtureProfile": "application-template-run-v1",
       "affectedTables": ["templates", "checklist_runs"],
       "invariants": [
-        "row-counts", "ownership", "active-deleted", "foreign-keys", "json-validity",
+        "row-counts", "ownership", "active-deleted", "foreign-keys", "json-validity", "stable-structure-identities",
         "authenticated-owned-template-read-write", "authenticated-owned-run-read-write",
         "authenticated-false-empty", "authenticated-api-error"
       ]

@@ -52,9 +52,15 @@ try {
   migrated.close();
   const expectedTableNames = [...new Set([...Object.keys(runtimeContract.tables), ...Object.keys(migrationContract.tables)])];
   resolvedIdentity = resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
+  const assertAdjacentIdentity = () => {
+    const adjacent = resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
+    if (adjacent.databaseId !== resolvedIdentity?.databaseId || adjacent.databaseName !== resolvedIdentity?.databaseName) throw new Error("D1 identity changed during schema verification.");
+  };
   const targetArgs = ["exec", "wrangler", "d1", "execute", database, "--remote"];
   if (preview) targetArgs.push("--preview");
+  assertAdjacentIdentity();
   const inventoryOutput = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", [...targetArgs, "--json", "--command", "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name!='d1_migrations' ORDER BY name"], { cwd: repoRoot, encoding: "utf8", env: childEnv, stdio: ["ignore", "pipe", "pipe"] });
+  assertAdjacentIdentity();
   const tableNames = [...new Set([...expectedTableNames, ...parseRemoteTableInventory(inventoryOutput)])].sort();
   const sql = [
     ...tableNames.map((name) => `PRAGMA table_info('${name.replaceAll("'", "''")}');`),
@@ -65,6 +71,7 @@ try {
   ].join(" ");
   const args = [...targetArgs];
   args.push("--json", "--command", sql);
+  assertAdjacentIdentity();
   const output = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", args, {
     cwd: repoRoot,
     encoding: "utf8",
@@ -72,9 +79,12 @@ try {
     stdio: ["ignore", "pipe", "pipe"],
     maxBuffer: 10 * 1024 * 1024,
   });
+  assertAdjacentIdentity();
   const results = JSON.parse(output) as Array<{ results?: Array<Record<string, unknown>> }>;
   const remoteCatalog = catalogFromPragmaResults(tableNames, results);
+  assertAdjacentIdentity();
   const ledgerOutput = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", [...targetArgs, "--json", "--command", "SELECT id, name FROM d1_migrations ORDER BY id"], { cwd: repoRoot, encoding: "utf8", env: childEnv, stdio: ["ignore", "pipe", "pipe"] });
+  assertAdjacentIdentity();
   const appliedMigrations = parseAppliedMigrationLedger(ledgerOutput);
   const ledger = compareMigrationLedger({ repositoryMigrations: migrations, appliedMigrations });
   const runtimeDiff = diffRuntimeSchema(drizzleSchema, remoteCatalog);

@@ -2,9 +2,11 @@
 import { execFileSync } from "node:child_process";
 import { parsePendingMigrationNames } from "./pending-migrations-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
+import { appendFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runRepositoryGit, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
+import { resolveRemoteD1Identity } from "./wrangler-identity-lib.mjs";
 
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -31,11 +33,18 @@ try {
     "--report-dir",
     process.env.DATA_REPORT_DIR ?? "tmp/data-reports/staging-reviewed-range",
   ], { cwd: repoRoot, env: gitEnvironment, stdio: "inherit" });
+  const expectedIdentity = { databaseName: "serp-checklists-staging-db", databaseId: "fcaf4325-5be7-4ead-ab60-45932a04177b" };
+  const assertIdentity = () => {
+    const identity = resolveRemoteD1Identity(expectedIdentity.databaseName, { repoRoot, env: gitEnvironment });
+    if (identity.databaseName !== expectedIdentity.databaseName || identity.databaseId !== expectedIdentity.databaseId) throw new Error("Staging database identity changed during reviewed-range verification.");
+  };
+  assertIdentity();
   const output = execFileSync(pnpm, ["exec", "wrangler", "d1", "migrations", "list", "DB", "--remote", "--preview"], {
     cwd: repoRoot,
     encoding: "utf8",
     env: gitEnvironment,
   });
+  assertIdentity();
   const pending = parsePendingMigrationNames(output);
   if (JSON.stringify(changed) !== JSON.stringify(pending)) {
     throw new Error(`Staging pending migrations ${pending.join(", ") || "none"} do not exactly match reviewed commit migrations ${changed.join(", ") || "none"}.`);
@@ -51,6 +60,7 @@ try {
   };
   const summary = `PASS exact staging commit/range: ${pending.join(", ") || "no migration"}.`;
   writeDataCheckReports({ name: "staging-reviewed-range", report, summary, reportDirectory });
+  if (process.env.GITHUB_ENV) appendFileSync(process.env.GITHUB_ENV, `MIGRATION_FROM=${pending[0] ?? "none"}\nMIGRATION_TO=${pending.at(-1) ?? "none"}\n`);
   console.log(summary);
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);

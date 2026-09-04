@@ -349,6 +349,17 @@ const workspaceCleanliness = evaluateWorkspaceCleanliness({
     ".wrangler/smoke-state",
   ],
 });
+const executedAssertions = new Map((migration?.assertions ?? []).map((assertion) => [assertion.name, assertion.verdict]));
+executedAssertions.set("authenticated-owned-template-read-write", authenticatedRehearsal.verdict === "pass" || actualApplicationVisibilityPassed ? "pass" : "fail");
+executedAssertions.set("authenticated-owned-run-read-write", authenticatedRehearsal.verdict === "pass" || checks.find((check) => check.name === "run optimistic concurrency")?.verdict === "pass" ? "pass" : "fail");
+executedAssertions.set("authenticated-false-empty", checks.find((check) => check.name === "authenticated false-empty detection")?.verdict ?? "fail");
+executedAssertions.set("authenticated-api-error", checks.find((check) => check.name === "authenticated API error detection")?.verdict ?? "fail");
+const coverage = rehearsalPlan && migration ? {
+  ...migration.coverage,
+  executedAssertions: [...executedAssertions].map(([name, verdict]) => ({ name, verdict })),
+  verdict: rehearsalPlan.invariants.every((name) => executedAssertions.get(name) === "pass") ? "pass" : "fail",
+} : { verdict: "fail", error: rehearsalPlanFailure, planId: null, affectedTables: [], invariants: [], declarationSha256: null };
+checks.push({ name: "executed fixture-profile assertions", test: "every claimed fixture-profile invariant is an actually executed passing named assertion", verdict: coverage.verdict === "pass" ? "pass" : "fail" });
 checks.push({
   name: "gating workspace cleanliness",
   test: "data regression execution leaves no unexpected tracked unignored or ignored paths",
@@ -426,7 +437,7 @@ const report = {
       : [],
   },
   }),
-  coverage: migration?.coverage ?? { verdict: "fail", error: rehearsalPlanFailure, planId: null, affectedTables: [], invariants: [], declarationSha256: null },
+  coverage,
   authenticatedRehearsal,
   runContext: { mode: nonGating ? "non-gating" : "gating", repositoryRoot: startGitState.repositoryRoot, ...immutableRun },
 };

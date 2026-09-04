@@ -52,12 +52,17 @@ jobs:
           mkdir -p tmp/data-reports/staging
           node scripts/data/data-command.mjs identify --environment staging --execute > tmp/data-reports/staging/identity.txt
           node scripts/data/data-command.mjs recovery-bookmark --environment staging --execute > tmp/data-reports/staging/recovery-bookmark.txt
+      - name: Resolve exact reviewed staging range
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+          STAGING_BASE_SHA: ${{ github.event.before }}
+        run: node scripts/data/check-staging-reviewed-range.mjs
       - name: Capture staging pre-invariants
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
           INVARIANT_HMAC_KEY: ${{ secrets.STAGING_INVARIANT_HMAC_KEY }}
         run: |
-          node scripts/data/remote-invariant-gate.mjs capture --database serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --environment staging --binding DB --commit "$GITHUB_SHA" --state tmp/staging-pre-invariants.json --report-dir tmp/data-reports/staging
+          node scripts/data/remote-invariant-gate.mjs capture --database serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --environment staging --binding DB --commit "$GITHUB_SHA" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --state tmp/staging-pre-invariants.json --report-dir tmp/data-reports/staging
       - name: Run data regression prerequisite
         env:
           DATA_REGRESSION_BASE_SHA: ${{ github.event.before }}
@@ -65,10 +70,7 @@ jobs:
       - name: Apply reviewed staging migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
-          STAGING_BASE_SHA: ${{ github.event.before }}
-        run: |
-          node scripts/data/check-staging-reviewed-range.mjs
-          node scripts/data/data-command.mjs migration-apply --environment staging --confirm-database-id fcaf4325-5be7-4ead-ab60-45932a04177b --execute
+        run: node scripts/data/data-command.mjs migration-apply --environment staging --confirm-database-id fcaf4325-5be7-4ead-ab60-45932a04177b --execute
       - name: Verify ledger schema and invariants
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
@@ -76,7 +78,7 @@ jobs:
         run: |
           pnpm run db:migrations:check:staging
           pnpm run check:staging:d1-schema -- --report-dir tmp/data-reports/staging
-          node scripts/data/remote-invariant-gate.mjs compare --database serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --environment staging --binding DB --commit "$GITHUB_SHA" --state tmp/staging-pre-invariants.json --report-dir tmp/data-reports/staging
+          node scripts/data/remote-invariant-gate.mjs compare --database serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --environment staging --binding DB --commit "$GITHUB_SHA" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --state tmp/staging-pre-invariants.json --report-dir tmp/data-reports/staging
       - name: Upload staging data reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

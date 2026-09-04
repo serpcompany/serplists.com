@@ -5,6 +5,17 @@ import { runRepositoryGit } from "./git-subprocess-env.mjs";
 
 const MIGRATION = /^\d{4}_[a-z0-9_]+\.sql$/;
 const DATA_ARTIFACT = /^(?:db\/migrations\/\d{4}_[a-z0-9_]+\.sql|db\/maintenance\/[a-z0-9_.-]+\.sql)$/;
+export const FIXTURE_PROFILE_CONTRACTS = Object.freeze({
+  "template-evolution-v1": Object.freeze({
+    affectedTables: ["templates", "checklist_runs"],
+    invariants: ["row-counts", "ownership", "active-deleted", "foreign-keys", "json-validity", "template-version-transition", "run-version-transition", "stable-structure-identities", "authenticated-owned-template-read-write", "authenticated-owned-run-read-write", "authenticated-false-empty", "authenticated-api-error"],
+  }),
+  "application-template-run-v1": Object.freeze({
+    affectedTables: ["templates", "checklist_runs"],
+    invariants: ["row-counts", "ownership", "active-deleted", "foreign-keys", "json-validity", "stable-structure-identities", "authenticated-owned-template-read-write", "authenticated-owned-run-read-write", "authenticated-false-empty", "authenticated-api-error"],
+  }),
+});
+function exactArray(left, right) { return JSON.stringify(left) === JSON.stringify(right); }
 export function rehearsalPlanDigest(plan) { return createHash("sha256").update(JSON.stringify(plan)).digest("hex"); }
 export function affectedTablesFromSql(sql) {
   const patterns = [/(?:ALTER|CREATE|DROP)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["'`]?([a-z_][a-z0-9_]*)/gi, /(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+["'`]?([a-z_][a-z0-9_]*)/gi];
@@ -18,6 +29,8 @@ export function loadRehearsalPlans({ repoRoot, planPath = path.join(repoRoot, "s
     if (!plan.id || !Array.isArray(plan.artifacts) || !Array.isArray(plan.affectedTables) || !plan.affectedTables.length || !Array.isArray(plan.invariants) || !plan.invariants.length || !plan.fixtureProfile || !plan.preMigration) throw new Error(`Rehearsal plan ${plan.id ?? "unknown"} is incomplete.`);
     if ((plan.migrationFrom == null) !== (plan.migrationTo == null) || (plan.migrationFrom != null && (!MIGRATION.test(plan.migrationFrom) || !MIGRATION.test(plan.migrationTo)))) throw new Error(`Rehearsal plan ${plan.id} has an invalid migration range.`);
     if (plan.artifacts.some((artifact) => !DATA_ARTIFACT.test(artifact))) throw new Error(`Rehearsal plan ${plan.id} contains an invalid data artifact.`);
+    const fixtureContract = FIXTURE_PROFILE_CONTRACTS[plan.fixtureProfile];
+    if (!fixtureContract || !exactArray(plan.affectedTables, fixtureContract.affectedTables) || !exactArray(plan.invariants, fixtureContract.invariants)) throw new Error(`Rehearsal plan ${plan.id} makes unsupported affected-table or invariant claims for fixture profile ${plan.fixtureProfile}.`);
   }
   return declaration;
 }
@@ -54,8 +67,7 @@ export function resolveRehearsalPlan({ repoRoot, commit, migrationFrom, migratio
   const uncovered = changedArtifacts.filter((artifact) => !plan.artifacts.includes(artifact));
   if (uncovered.length) throw new Error(`Changed database artifacts lack affected-table/invariant coverage: ${uncovered.join(", ")}.`);
   const observedAffectedTables = [...new Set(plan.artifacts.flatMap((artifact) => affectedTablesFromSql(readFileSync(path.join(repoRoot, artifact), "utf8"))))].sort();
-  const undeclaredTables = observedAffectedTables.filter((table) => !plan.affectedTables.includes(table));
-  if (undeclaredTables.length) throw new Error(`Rehearsal plan ${plan.id} omits affected tables: ${undeclaredTables.join(", ")}.`);
+  if (plan.artifacts.length && !exactArray(observedAffectedTables, [...plan.affectedTables].sort())) throw new Error(`Rehearsal plan ${plan.id} affected tables do not exactly match executable SQL: declared=${plan.affectedTables.join(",")}; observed=${observedAffectedTables.join(",")}.`);
   return { ...plan, commit, migrationRange: { from: plan.migrationFrom, to: plan.migrationTo }, changedArtifacts, observedAffectedTables, declarationSha256: rehearsalPlanDigest(declaration) };
 }
 

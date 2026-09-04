@@ -143,6 +143,22 @@ describe("data command", () => {
     expect(commands).toHaveLength(1);
   });
 
+  it("fails closed when a remote database identity changes immediately after mutation", () => {
+    let infoCalls = 0;
+    expect(() => runDataCommand({
+      argv: ["migration-apply", "--environment", "staging", "--confirm-database-id", stagingId, "--execute"],
+      repoRoot, gitCommit: fullGitCommit, env: { ...protectedEnvironment("staging"), GITHUB_EVENT_NAME: "push", GITHUB_REF: "refs/heads/staging" }, write: () => {},
+      runCommand: (command) => {
+        if (command.includes("info")) {
+          infoCalls += 1;
+          return JSON.stringify({ uuid: infoCalls === 1 ? stagingId : rehearsalId, name: "serp-checklists-staging-db" });
+        }
+        return "migration applied";
+      },
+    })).toThrow(/identity mismatch/i);
+    expect(infoCalls).toBe(2);
+  });
+
   it("requires exact confirmation for a remote write", () => {
     expect(() =>
       runDataCommand({
@@ -223,7 +239,8 @@ describe("data command", () => {
         },
       });
       expect(result.executed).toBe(true);
-      expect(commands).toHaveLength(2);
+      expect(commands).toHaveLength(3);
+      expect(commands.filter((command) => command.includes("info"))).toHaveLength(2);
     } finally {
       rmSync(generated.tempDir, { recursive: true, force: true });
     }
@@ -456,7 +473,9 @@ describe("data command", () => {
       now: new Date("2026-09-05T00:30:00.000Z"),
       env: protectedEnvironment(),
       write: (value) => output.push(value),
-      runCommand: () => `database_name = "serp-checklists-rehearsal-issue-95"\ndatabase_id = "${rehearsalId}"`,
+      runCommand: (command) => command.includes("info")
+        ? JSON.stringify({ uuid: rehearsalId, name: "serp-checklists-rehearsal-issue-95" })
+        : `database_name = "serp-checklists-rehearsal-issue-95"\ndatabase_id = "${rehearsalId}"`,
     });
 
     expect(JSON.parse(output.at(-1))).toMatchObject({

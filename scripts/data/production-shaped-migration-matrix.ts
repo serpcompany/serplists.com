@@ -261,7 +261,7 @@ export function compareMigrationSnapshots(
 }
 
 export function runProductionShapedMigrationMatrix({ plan }: { plan: { id: string; fixtureProfile: string; preMigration: string; migrationRange: { from: string | null; to: string | null }; affectedTables: string[]; invariants: string[]; declarationSha256: string } }) {
-  if (plan.fixtureProfile !== "template-evolution-v1") throw new Error(`Rehearsal fixture profile ${plan.fixtureProfile} is not implemented.`);
+  if (!["template-evolution-v1", "application-template-run-v1"].includes(plan.fixtureProfile)) throw new Error(`Rehearsal fixture profile ${plan.fixtureProfile} is not implemented.`);
   const database = replayMigrations({ through: plan.preMigration });
   database.exec("PRAGMA foreign_keys = ON");
   seed(database);
@@ -279,14 +279,27 @@ export function runProductionShapedMigrationMatrix({ plan }: { plan: { id: strin
   database.close();
 
   const comparison = compareMigrationSnapshots(pre, post);
+  const assertions = [
+    { name: "row-counts", verdict: JSON.stringify(pre.rows) === JSON.stringify(post.rows) ? "pass" : "fail" },
+    { name: "ownership", verdict: JSON.stringify(pre.owners) === JSON.stringify(post.owners) ? "pass" : "fail" },
+    { name: "active-deleted", verdict: JSON.stringify(pre.activeDeleted) === JSON.stringify(post.activeDeleted) ? "pass" : "fail" },
+    { name: "foreign-keys", verdict: post.foreignKeyViolations === 0 ? "pass" : "fail" },
+    { name: "json-validity", verdict: post.invalidJson === 0 ? "pass" : "fail" },
+    { name: "stable-structure-identities", verdict: pre.identityHash === post.identityHash ? "pass" : "fail" },
+    ...(plan.fixtureProfile === "template-evolution-v1" ? [
+      { name: "template-version-transition", verdict: post.templateVersions.every((row) => row.version === row.contentVersion) ? "pass" : "fail" },
+      { name: "run-version-transition", verdict: post.lifecycle.every((row) => row.templateVersion === 0) ? "pass" : "fail" },
+    ] : []),
+  ];
 
   return {
     check: `production-shaped-${plan.id}`,
     migrationRange: plan.migrationRange,
-    coverage: { verdict: "pass", planId: plan.id, fixtureProfile: plan.fixtureProfile, affectedTables: plan.affectedTables, invariants: plan.invariants, declarationSha256: plan.declarationSha256 },
+    coverage: { planId: plan.id, fixtureProfile: plan.fixtureProfile, affectedTables: plan.affectedTables, invariants: plan.invariants, declarationSha256: plan.declarationSha256 },
+    assertions,
     pre,
     post,
     comparison,
-    verdict: comparison.verdict,
+    verdict: comparison.verdict === "pass" && assertions.every((assertion) => assertion.verdict === "pass") ? "pass" : "fail",
   } as const;
 }

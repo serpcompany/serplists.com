@@ -16,7 +16,7 @@ function runFinalizer({ mutate = () => {} } = {}) {
     data: { verdict: "pass", commit, teardown: { verdict: "pass", leakedUsers: 0, leakedTemplates: 0, leakedRuns: 0 } },
     range: { verdict: "pass", commit, baseCommit: "c".repeat(40), target: { environment: "staging", databaseName, databaseId }, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, pendingMigrations: ["0024_safe_template_evolution.sql"] },
     schema: { verdict: "pass", commit, target: { environment: "staging", database: databaseName, databaseId }, ledger: { verdict: "pass" } },
-    invariants: { verdict: "pass" },
+    invariants: { verdict: "pass", commit, comparisonKind: "migration", target: { environment: "staging", binding: "DB", databaseName, databaseId }, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, ledger: { verdict: "pass", before: ["0023_add_sitemap_revision_state.sql"], after: ["0023_add_sitemap_revision_state.sql", "0024_safe_template_evolution.sql"] } },
     deploy: { verdict: "pass", commit, tree, target: { environment: "staging", databaseName, databaseId } },
     smoke: { verdict: "pass", commit, target: { environment: "staging", databaseName, databaseId }, failures: [] },
   };
@@ -56,5 +56,15 @@ describe("staging promotion finalizer", () => {
       expect(readFileSync(run.output.replace(/\.json$/, ".junit.xml"), "utf8")).toContain('failures="1"');
       expect(readFileSync(run.output.replace(/\.json$/, ".txt"), "utf8")).toContain(commit);
     } finally { rmSync(run.directory, { recursive: true, force: true }); }
+  });
+  it.each([
+    ["wrong invariant commit", (reports) => { reports.invariants.commit = "f".repeat(40); }],
+    ["wrong invariant database", (reports) => { reports.invariants.target.databaseId = "11111111-1111-4111-8111-111111111111"; }],
+    ["wrong invariant range", (reports) => { reports.invariants.migrationRange.to = "0023_add_sitemap_revision_state.sql"; }],
+    ["reordered ledger", (reports) => { reports.invariants.ledger.after = ["0024_safe_template_evolution.sql", "0023_add_sitemap_revision_state.sql"]; }],
+  ])("rejects %s", (_name, mutate) => {
+    const run = runFinalizer({ mutate });
+    try { expect(run.result.status).toBe(1); expect(JSON.parse(readFileSync(run.output, "utf8")).verdict).toBe("fail"); }
+    finally { rmSync(run.directory, { recursive: true, force: true }); }
   });
 });

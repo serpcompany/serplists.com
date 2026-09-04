@@ -624,6 +624,10 @@ describe("protected staging and production data-promotion workflow", () => {
     expect(checkout?.with?.["fetch-depth"]).toBe(0);
     expect(runText(jobs.staging_data)).toContain("check-staging-reviewed-range.mjs");
     expect(jobs.staging_data.steps.find((step) => String(step.run ?? "").includes("check-staging-reviewed-range.mjs"))?.env?.STAGING_BASE_SHA).toBe("${{ github.event.before }}");
+    const rangeIndex = jobs.staging_data.steps.findIndex((step) => String(step.run ?? "").includes("check-staging-reviewed-range.mjs"));
+    const captureIndex = jobs.staging_data.steps.findIndex((step) => String(step.run ?? "").includes("remote-invariant-gate.mjs capture"));
+    expect(rangeIndex).toBeLessThan(captureIndex);
+    expect(String(jobs.staging_data.steps[captureIndex].run)).toContain('--migration-from "$MIGRATION_FROM"');
   });
 
   it("performs a real separate-database recovery restore and never uploads plaintext", () => {
@@ -637,6 +641,7 @@ describe("protected staging and production data-promotion workflow", () => {
     expect(text).toContain("remote-invariant-gate.mjs compare");
     expect(text).toContain("finalize-recovery-rehearsal.mjs");
     expect(text).toMatch(/rm -f tmp\/rehearsal-sensitive\/recovery\.sql/);
+    expect(text).toMatch(/recovery-export-identity-before[\s\S]*wrangler d1 export[\s\S]*recovery-export-identity-after/);
     const upload = rehearsal.steps.find((step) => String(step.uses ?? "").includes("upload-artifact"));
     expect(String(upload.with.path)).not.toContain("rehearsal-sensitive");
     const cleanupSteps = rehearsal.steps.filter((step) => /always teardown .* rehearsal/i.test(String(step.name)));

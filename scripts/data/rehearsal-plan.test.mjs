@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { captureRepositoryGitState } from "./git-subprocess-env.mjs";
@@ -24,5 +25,18 @@ describe("reviewed rehearsal plan", () => {
     const evidence = { commit, migrationRange: plan.migrationRange, coverage: { planId: plan.id, declarationSha256: plan.declarationSha256, affectedTables: plan.affectedTables, invariants: plan.invariants } };
     expect(validateCoverageMatch({ evidence, expected: plan })).toEqual(evidence);
     expect(() => validateCoverageMatch({ evidence, expected: { ...plan, migrationRange: { from: "0025_other_table.sql", to: "0025_other_table.sql" }, affectedTables: ["usage_analytics"] } })).toThrow(/range.*coverage/i);
+  });
+  it.each([
+    ["usage_analytics table", (value) => value.plans[0].affectedTables.push("usage_analytics")],
+    ["nonexistent invariant", (value) => value.plans[0].invariants.push("nonexistent-invariant")],
+  ])("rejects a fixture profile that falsely claims %s coverage", (_name, mutate) => {
+    const directory = mkdtempSync(path.join(tmpdir(), "rehearsal-plan-claims-"));
+    try {
+      const declaration = JSON.parse(readFileSync(path.join(repoRoot, "scripts/data/rehearsal-plans.json"), "utf8"));
+      mutate(declaration);
+      const planPath = path.join(directory, "plans.json");
+      writeFileSync(planPath, JSON.stringify(declaration));
+      expect(() => resolveRehearsalPlan({ repoRoot, commit, migrationFrom: "0024_safe_template_evolution.sql", migrationTo: "0024_safe_template_evolution.sql", planPath })).toThrow(/unsupported affected-table or invariant claims/i);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 });

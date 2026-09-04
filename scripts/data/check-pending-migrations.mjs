@@ -50,12 +50,19 @@ try {
   resolvedIdentity = local
     ? { databaseId: `local:${database}`, databaseName: database }
     : resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
+  const assertAdjacentIdentity = () => {
+    if (local) return;
+    const adjacent = resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
+    if (adjacent.databaseId !== resolvedIdentity.databaseId || adjacent.databaseName !== resolvedIdentity.databaseName) throw new Error("D1 identity changed during migration-list verification.");
+  };
+  assertAdjacentIdentity();
   const output = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", wranglerArguments, {
     cwd: repoRoot,
     encoding: "utf8",
     env: childEnv,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  assertAdjacentIdentity();
   const assertedDatabaseId = readArg("--database-id") ?? process.env.D1_DATABASE_ID;
   if (assertedDatabaseId && assertedDatabaseId !== resolvedIdentity.databaseId) {
     throw new Error(`Resolved database ID ${resolvedIdentity.databaseId} does not match asserted ID ${assertedDatabaseId}.`);

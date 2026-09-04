@@ -12,11 +12,13 @@ export function validatePreInvariantEvidence({ pre, context }) {
   return pre;
 }
 
-export function evaluateInvariantLedgerTransition({ before, after, comparisonKind, expectedRange }) {
-  const added = after.filter((name) => !before.includes(name));
-  const removed = before.filter((name) => !after.includes(name));
+export function evaluateInvariantLedgerTransition({ before, after, comparisonKind, expectedRange, expectedMigrations = [] }) {
+  const added = after.slice(before.length);
+  const removed = before.filter((name, index) => after[index] !== name);
   const observedRange = comparisonKind === "migration" && added.length ? { from: added[0], to: added.at(-1) } : expectedRange;
-  const expectedMatches = expectedRange.from == null || (expectedRange.from === observedRange.from && expectedRange.to === observedRange.to);
-  const verdict = removed.length === 0 && (comparisonKind === "recovery" ? added.length === 0 : expectedMatches) ? "pass" : "fail";
-  return { added, removed, observedRange, verdict };
+  const exactRecovery = JSON.stringify(after) === JSON.stringify(before);
+  const exactMigration = expectedRange.from == null
+    ? exactRecovery
+    : JSON.stringify(after) === JSON.stringify([...before, ...expectedMigrations]) && expectedMigrations[0] === expectedRange.from && expectedMigrations.at(-1) === expectedRange.to;
+  return { added, removed, observedRange, verdict: (comparisonKind === "recovery" ? exactRecovery : exactMigration) ? "pass" : "fail" };
 }

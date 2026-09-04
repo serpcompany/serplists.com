@@ -209,12 +209,19 @@ export function runDataCommand({
     plan.report.stagingWorkflow = assertStagingMutationWorkflowContext({ env, gitCommit });
   }
 
-  if (plan.preflightCommand) {
+  const assertCurrentIdentity = () => {
+    if (!plan.preflightCommand) return;
     const identityOutput = runCommand(plan.preflightCommand);
     assertLiveIdentity({ output: identityOutput, expected: plan.report });
-  }
+  };
+  const runIdentityBound = (command, { after = true } = {}) => {
+    assertCurrentIdentity();
+    const result = runCommand(command);
+    if (after) assertCurrentIdentity();
+    return result;
+  };
   if (plan.preconditionCommand) {
-    const parsed = JSON.parse(runCommand(plan.preconditionCommand));
+    const parsed = JSON.parse(runIdentityBound(plan.preconditionCommand));
     const rows = (Array.isArray(parsed) ? parsed : [parsed]).flatMap((entry) => entry?.results ?? []);
     if (rows.length !== 1 || Number(rows[0]?.total_objects) !== 0) {
       throw new Error("Remote rehearsal mutation requires a newly created empty database catalog and migration ledger.");
@@ -224,17 +231,17 @@ export function runDataCommand({
   let invariantContext;
   let output;
   if (operation === "invariant-capture") {
-    const appliedMigrations = parseAppliedMigrationLedger(runCommand(plan.invariantLedgerCommand));
+    const appliedMigrations = parseAppliedMigrationLedger(runIdentityBound(plan.invariantLedgerCommand));
     const selectedFiles = selectInvariantSqlFiles({ appliedMigrations });
     invariantContext = {
       appliedThrough: appliedMigrations.at(-1),
       sqlVersions: selectedFiles.map((entry) => entry.minimumMigration),
     };
     write(JSON.stringify({ invariantContext }, null, 2));
-    const outputs = [runCommand(plan.command)];
+    const outputs = [runIdentityBound(plan.command)];
     for (const definition of plan.versionedInvariantCommands) {
       if (appliedMigrations.includes(definition.minimumMigration)) {
-        outputs.push(runCommand(definition.command));
+        outputs.push(runIdentityBound(definition.command));
       }
     }
     const combined = outputs.flatMap((entry) => {
@@ -243,8 +250,8 @@ export function runDataCommand({
     });
     output = JSON.stringify(combined, null, 2);
   } else if (operation === "rehearsal-baseline") {
-    for (const command of plan.commands) runCommand(command);
-    const appliedMigrations = parseAppliedMigrationLedger(runCommand(plan.invariantLedgerCommand), {
+    for (const command of plan.commands) runIdentityBound(command);
+    const appliedMigrations = parseAppliedMigrationLedger(runIdentityBound(plan.invariantLedgerCommand), {
       allowEmpty: plan.expectedAppliedMigrations.length === 0,
     });
     const ledger = compareMigrationLedger({
@@ -254,7 +261,7 @@ export function runDataCommand({
     if (ledger.verdict !== "pass") throw new Error(`Rehearsal baseline ledger verification failed: ${JSON.stringify(ledger)}.`);
     output = JSON.stringify({ baseline: plan.report.baseline, ledger }, null, 2);
   } else {
-    output = plan.command ? runCommand(plan.command) : "";
+    output = plan.command ? runIdentityBound(plan.command, { after: operation !== "rehearsal-teardown" && operation !== "rehearsal-create" }) : "";
   }
   if (operation === "rehearsal-export") {
     let normalized;
@@ -287,6 +294,8 @@ export function runDataCommand({
       throw new Error("Wrangler created a rehearsal but its exact database UUID could not be recorded.");
     }
     if (values["--expected-database-id"] && values["--expected-database-id"] !== createdDatabaseId) throw new Error("Created rehearsal database ID does not match --expected-database-id.");
+    const createdIdentityOutput = runCommand(["pnpm", "exec", "wrangler", "d1", "info", plan.report.databaseName, "--json"]);
+    assertLiveIdentity({ output: createdIdentityOutput, expected: { ...plan.report, databaseId: createdDatabaseId } });
     const evidencePath = resolveEvidencePath(repoRoot, values["--evidence"]);
     const creationEvidence = { schemaVersion: 1, verdict: "pass", commit: gitCommit, runId: env.GITHUB_RUN_ID, createdAt: now.toISOString(), target: { environment: "rehearsal", binding: "DB", databaseName: plan.report.databaseName, databaseId: createdDatabaseId } };
     mkdirSync(path.dirname(evidencePath), { recursive: true });

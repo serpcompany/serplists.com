@@ -5,6 +5,7 @@ import { parsePendingMigrationNames } from "./pending-migrations-lib.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
+import { resolveRemoteD1Identity } from "./wrangler-identity-lib.mjs";
 const mode = process.argv[2];
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 try {
@@ -13,7 +14,14 @@ try {
   const to = process.env.MIGRATION_TO;
   const expected = from === "none" && to === "none" ? [] : files.slice(files.indexOf(from), files.indexOf(to) + 1);
   if ((from !== "none" && (files.indexOf(from) < 0 || files.indexOf(to) < files.indexOf(from))) || ((expected.length === 0) !== (from === "none" && to === "none"))) throw new Error("Reviewed migration range is invalid.");
-  const output = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "wrangler", "d1", "migrations", "list", process.env.DATABASE_NAME, "--remote"], { cwd: repoRoot, encoding: "utf8", env: sanitizedGitEnvironment() });
+  const childEnv = sanitizedGitEnvironment();
+  const assertIdentity = () => {
+    const identity = resolveRemoteD1Identity(process.env.DATABASE_NAME, { repoRoot, env: childEnv });
+    if (identity.databaseName !== process.env.DATABASE_NAME || identity.databaseId !== process.env.DATABASE_ID) throw new Error("Rehearsal database identity changed during reviewed-range verification.");
+  };
+  assertIdentity();
+  const output = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "wrangler", "d1", "migrations", "list", process.env.DATABASE_NAME, "--remote"], { cwd: repoRoot, encoding: "utf8", env: childEnv });
+  assertIdentity();
   const pending = parsePendingMigrationNames(output);
   if (mode === "before" && JSON.stringify(pending) !== JSON.stringify(expected)) throw new Error("Live pending migrations differ from reviewed range.");
   if (mode === "after" && pending.length) throw new Error("Migration ledger is not clean after apply.");
