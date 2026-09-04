@@ -14,6 +14,7 @@ const passing = {
   designatedTemplateId: "template-1",
   designatedRunId: "run-1",
   controlledCanaryMutationApproved: true,
+  canaryEvidenceDigest: "a".repeat(64),
   canaryMutation: {
     template: { id: "template-1", originalTitle: "Canary", originalVersion: 3, probeTitle: "Canary [write probe]", writeStatus: 200, readbackTitle: "Canary [write probe]", readbackVersion: 4, restoreStatus: 200, restoredTitle: "Canary" },
     run: { id: "run-1", originalProgress: 10, originalRevision: 2, probeProgress: 42, writeStatus: 200, readbackProgress: 42, readbackRevision: 3, restoreStatus: 200, restoredProgress: 10 },
@@ -24,6 +25,7 @@ describe("postdeploy authenticated data smoke", () => {
   it("passes only when account-owned templates/runs and both domains are visible", () => {
     const report = evaluateDeploymentSmoke(passing);
     expect(report.verdict).toBe("pass");
+    expect(report).not.toHaveProperty("canaryMutation");
     expect(validateControlledCanaryChecks(report)).toEqual(report);
   });
 
@@ -44,6 +46,8 @@ describe("postdeploy authenticated data smoke", () => {
   it("rejects missing, failed, or extra canary mutation claims", () => {
     const report = evaluateDeploymentSmoke(passing);
     for (const checks of [report.checks.slice(1), report.checks.map((check, index) => index === 0 ? { ...check, verdict: "fail" } : check), [...report.checks, { name: "invented", verdict: "pass" }]]) expect(() => validateControlledCanaryChecks({ ...report, checks })).toThrow();
+    expect(() => validateControlledCanaryChecks({ ...report, canaryEvidenceDigest: null })).toThrow();
+    expect(() => validateControlledCanaryChecks({ ...report, canaryMutation: passing.canaryMutation })).toThrow(/privacy-unsafe/i);
   });
 
   it("updates, reads back, and restores only the designated canary records", async () => {
@@ -77,5 +81,31 @@ describe("postdeploy authenticated data smoke", () => {
     const evidence = await exerciseControlledCanaryMutation({ template: { id: "template-1", title: "Original", version: 3 }, run: { id: "run-1", progress: 10, revision: 2 }, request });
     expect(evidence.error).toMatch(/readback failed/);
     expect(state.title).toBe("Original");
+  });
+
+  it("restores a write that commits before the network response throws", async () => {
+    const state = { id: "template-1", title: "Original", version: 3 };
+    let firstPut = true;
+    const request = async (requestPath, init = {}) => {
+      if (requestPath.includes("templates")) {
+        if (init.method === "PUT") {
+          const body = JSON.parse(init.body);
+          state.title = body.title;
+          state.version += 1;
+          if (firstPut) { firstPut = false; throw new Error("response lost after commit"); }
+        }
+        return { status: 200, rows: { ...state } };
+      }
+      return { status: 500, rows: {} };
+    };
+    const evidence = await exerciseControlledCanaryMutation({ template: { ...state }, run: { id: "run-1", progress: 10, revision: 2 }, request });
+    expect(evidence.error).toMatch(/response lost after commit/);
+    expect(state.title).toBe("Original");
+    expect(evidence.template.restoredTitle).toBe("Original");
+  });
+
+  it("emits only privacy-safe canary checks and a keyed digest", () => {
+    const serialized = JSON.stringify(evaluateDeploymentSmoke(passing));
+    for (const sentinel of ["template-1", "run-1", "Canary [write probe]", "\"originalTitle\"", "\"originalProgress\""]) expect(serialized).not.toContain(sentinel);
   });
 });

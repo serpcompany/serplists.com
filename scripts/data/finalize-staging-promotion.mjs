@@ -51,7 +51,7 @@ try {
     schema: { verdict: schema.verdict, ledger: schema.ledger },
     invariants: { verdict: invariants.verdict, migrationRange: invariants.migrationRange, ledger: invariants.ledger },
     deploy: { verdict: deploy.verdict },
-    smoke: { verdict: smoke.verdict, failures: smoke.failures, controlledCanaryMutationApproved: smoke.controlledCanaryMutationApproved, checks: smoke.checks, canaryMutation: smoke.canaryMutation },
+    smoke: { verdict: smoke.verdict, failures: smoke.failures, controlledCanaryMutationApproved: smoke.controlledCanaryMutationApproved, checks: smoke.checks, canaryEvidenceDigest: smoke.canaryEvidenceDigest },
     teardown: data.teardown,
   };
 } catch (error) {

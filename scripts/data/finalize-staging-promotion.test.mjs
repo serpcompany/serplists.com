@@ -18,7 +18,7 @@ function runFinalizer({ mutate = () => {} } = {}) {
     schema: { verdict: "pass", commit, target: { environment: "staging", database: databaseName, databaseId }, ledger: { verdict: "pass" } },
     invariants: { verdict: "pass", commit, comparisonKind: "migration", target: { environment: "staging", binding: "DB", databaseName, databaseId }, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, ledger: { verdict: "pass", before: ["0023_add_sitemap_revision_state.sql"], after: ["0023_add_sitemap_revision_state.sql", "0024_safe_template_evolution.sql"] } },
     deploy: { verdict: "pass", commit, tree, target: { environment: "staging", databaseName, databaseId } },
-    smoke: { verdict: "pass", commit, target: { environment: "staging", databaseName, databaseId }, failures: [], controlledCanaryMutationApproved: true, checks: ["template_canary_designated", "template_write", "template_write_readback", "template_restore", "run_canary_designated", "run_write", "run_write_readback", "run_restore"].map((name) => ({ name, verdict: "pass" })) },
+    smoke: { verdict: "pass", commit, target: { environment: "staging", databaseName, databaseId }, failures: [], controlledCanaryMutationApproved: true, canaryEvidenceDigest: "a".repeat(64), checks: ["template_canary_designated", "template_write", "template_write_readback", "template_restore", "run_canary_designated", "run_write", "run_write_readback", "run_restore"].map((name) => ({ name, verdict: "pass" })) },
   };
   mutate(reports);
   const args = [];

@@ -1,4 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
+import { validateControlledCanaryChecks } from "./deployment-smoke-lib.mjs";
 export {
   compareProductionInvariants,
   parseInvariantOutput,
@@ -203,7 +205,8 @@ export function validatePromotionEvidence(evidence) {
     throw new Error("Rehearsal must prove attested repository-sanitized production-shaped source import.");
   }
   const authenticated = rehearsal.authenticatedRehearsal;
-  if (authenticated?.verdict !== "pass" || authenticated.commit !== evidence.commit || authenticated.sanitizerArtifactSha256 !== rehearsal.sanitizedSource.artifactSha256 || authenticated.migrationRange?.from !== evidence.migrationRange.from || authenticated.migrationRange?.to !== evidence.migrationRange.to || !authenticated.checks?.templateRead || !authenticated.checks?.runRead || !authenticated.checks?.templateWrite || !authenticated.checks?.runWrite || authenticated.checks?.falseEmptyDetection !== "pass" || authenticated.checks?.apiErrorDetection !== "pass") throw new Error("Authenticated sanitized candidate-handler evidence is missing or mismatched.");
+  validateAuthenticatedCandidateEvidence(authenticated, { requireDetectors: true });
+  if (authenticated.commit !== evidence.commit || authenticated.sanitizerArtifactSha256 !== rehearsal.sanitizedSource.artifactSha256 || authenticated.migrationRange?.from !== evidence.migrationRange.from || authenticated.migrationRange?.to !== evidence.migrationRange.to) throw new Error("Authenticated sanitized candidate-handler evidence is missing or mismatched.");
   const staging = evidence.staging;
   const provenance = evidence.changeProvenance;
   if (evidence.mergeContext?.commit !== evidence.commit || !/^[0-9a-f]{40}$/.test(evidence.mergeContext?.tree ?? "") ||
@@ -216,6 +219,7 @@ export function validatePromotionEvidence(evidence) {
       staging.smoke.failures.length || staging?.teardown?.verdict !== "pass") {
     throw new Error("Exact-tree staging data, deploy, smoke, and teardown evidence is missing or failed.");
   }
+  validateControlledCanaryChecks(staging.smoke);
   validateGitHubRunEvidence({ metadata: evidence.stagingRun, commit: staging.commit, workflowName: "Protected data promotion and Pages deploy", eventName: "push", headBranch: "staging", workflowPath: ".github/workflows/cloudflare-pages-deploy.yml" });
   return evidence;
 }
@@ -435,6 +439,7 @@ export function validateFinalProductionRelease({
   expectedCustomDomain = "https://serplists.com",
 }) {
   const data = assertDeployEvidence({ signedEvidence, commit: request.commit, database: request.database });
+  validateControlledCanaryChecks(smoke);
   if (data.migrationRange?.from !== request.migrationRange?.from || data.migrationRange?.to !== request.migrationRange?.to) {
     throw new Error("Production data evidence migration range does not match the request.");
   }

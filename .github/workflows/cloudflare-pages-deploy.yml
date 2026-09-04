@@ -146,6 +146,7 @@ jobs:
           DATA_CANARY_COOKIE: ${{ secrets.STAGING_DATA_CANARY_COOKIE }}
           DATA_CANARY_TEMPLATE_ID: ${{ vars.STAGING_DATA_CANARY_TEMPLATE_ID }}
           DATA_CANARY_RUN_ID: ${{ vars.STAGING_DATA_CANARY_RUN_ID }}
+          DATA_CANARY_EVIDENCE_HMAC_KEY: ${{ secrets.STAGING_CANARY_EVIDENCE_HMAC_KEY }}
           DATA_CANARY_MUTATION_APPROVED: "true"
         run: node scripts/data/deployment-smoke.mjs --environment staging --database-name serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --deployment-url https://staging.serplists-com.pages.dev --custom-domain https://staging.serplists.com --report-dir tmp/data-reports/staging-postdeploy
       - name: Finalize exact staging promotion evidence
@@ -432,6 +433,7 @@ jobs:
           DATA_CANARY_COOKIE: ${{ secrets.PRODUCTION_DATA_CANARY_COOKIE }}
           DATA_CANARY_TEMPLATE_ID: ${{ vars.PRODUCTION_DATA_CANARY_TEMPLATE_ID }}
           DATA_CANARY_RUN_ID: ${{ vars.PRODUCTION_DATA_CANARY_RUN_ID }}
+          DATA_CANARY_EVIDENCE_HMAC_KEY: ${{ secrets.PRODUCTION_CANARY_EVIDENCE_HMAC_KEY }}
           DATA_CANARY_MUTATION_APPROVED: "true"
         run: node scripts/data/deployment-smoke.mjs --environment production --database-name serp-checklists-db --database-id "$CONFIRM_PRODUCTION_DATABASE_ID" --deployment-url "$(cat tmp/production-deployment-url.txt)" --custom-domain https://serplists.com --report-dir tmp/data-reports/production-postdeploy
       - name: Publish complete production release report

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { captureRepositoryGitState, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
 import { resolveRehearsalPlan } from "./rehearsal-plan-lib.mjs";
 import { loadSanitizerPolicy, validateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
-import { authenticatedCoverageAssertions } from "./authenticated-coverage-lib.mjs";
+import { authenticatedCoverageAssertions, validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
 
 import { buildDataRegressionReport, renderDataRegressionMarkdown } from "./data-regression-report-lib.mjs";
 import { loadEnvironmentInventory } from "./environment-identity-lib.mjs";
@@ -264,7 +264,9 @@ try {
     const falseEmptyDetection = checks.find((check) => check.name === "authenticated false-empty detection")?.verdict;
     const apiErrorDetection = checks.find((check) => check.name === "authenticated API error detection")?.verdict;
     const combinedChecks = { ...proof.checks, falseEmptyDetection, apiErrorDetection };
-    const bound = proof.verdict === "pass" && proof.commit === startCommit && proof.sanitizerArtifactSha256 === sanitizedArtifactSha256 && proof.migrationRange?.from === rehearsalPlan.migrationRange.from && proof.migrationRange?.to === rehearsalPlan.migrationRange.to && combinedChecks.templateRead && combinedChecks.runRead && combinedChecks.templateWrite && combinedChecks.runWrite && falseEmptyDetection === "pass" && apiErrorDetection === "pass";
+    let strictChecks = false;
+    try { validateAuthenticatedCandidateEvidence({ ...proof, checks: combinedChecks }, { requireDetectors: true }); strictChecks = true; } catch { strictChecks = false; }
+    const bound = strictChecks && proof.commit === startCommit && proof.sanitizerArtifactSha256 === sanitizedArtifactSha256 && proof.migrationRange?.from === rehearsalPlan.migrationRange.from && proof.migrationRange?.to === rehearsalPlan.migrationRange.to;
     authenticatedRehearsal = { ...proof, checks: combinedChecks, applicable: true, verdict: bound ? "pass" : "fail" };
     if (!bound) browserFailure = "Authenticated sanitized candidate-handler evidence is incomplete or mismatched.";
   }

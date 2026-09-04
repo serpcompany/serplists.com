@@ -4,8 +4,10 @@ function visibleIds(rows, ownerId) {
 }
 const REQUIRED_MUTATION_CHECKS = ["template_canary_designated", "template_write", "template_write_readback", "template_restore", "run_canary_designated", "run_write", "run_write_readback", "run_restore"];
 export function validateControlledCanaryChecks(report) {
-  const checks = new Map((report?.checks ?? []).map((check) => [check.name, check.verdict]));
-  if (report?.controlledCanaryMutationApproved !== true || REQUIRED_MUTATION_CHECKS.some((name) => checks.get(name) !== "pass") || checks.size !== REQUIRED_MUTATION_CHECKS.length) throw new Error("Controlled canary write, readback, and restoration evidence is incomplete.");
+  const claims = Array.isArray(report?.checks) ? report.checks : [];
+  const checks = new Map(claims.map((check) => [check.name, check.verdict]));
+  if ("canaryMutation" in (report ?? {}) || !/^[0-9a-f]{64}$/.test(report?.canaryEvidenceDigest ?? "")) throw new Error("Controlled canary evidence is privacy-unsafe or missing its keyed digest.");
+  if (report?.controlledCanaryMutationApproved !== true || claims.length !== REQUIRED_MUTATION_CHECKS.length || REQUIRED_MUTATION_CHECKS.some((name) => checks.get(name) !== "pass") || checks.size !== REQUIRED_MUTATION_CHECKS.length) throw new Error("Controlled canary write, readback, and restoration evidence is incomplete.");
   return report;
 }
 
@@ -14,15 +16,17 @@ export async function exerciseControlledCanaryMutation({ template, run, request 
   const originalProgress = Number(run.progress);
   const probeProgress = originalProgress === 42 ? 43 : 42;
   const evidence = {
-    template: { id: String(template.id), originalTitle: String(template.title), originalVersion: Number(template.version), probeTitle, writeStatus: null, readbackTitle: null, readbackVersion: null, restoreStatus: null, restoredTitle: null },
-    run: { id: String(run.id), originalProgress, originalRevision: Number(run.revision), probeProgress, writeStatus: null, readbackProgress: null, readbackRevision: null, restoreStatus: null, restoredProgress: null },
+    template: { id: String(template.id), originalTitle: String(template.title), originalVersion: Number(template.version), probeTitle, writeAttempted: false, writeStatus: null, readbackTitle: null, readbackVersion: null, restoreStatus: null, restoredTitle: null },
+    run: { id: String(run.id), originalProgress, originalRevision: Number(run.revision), probeProgress, writeAttempted: false, writeStatus: null, readbackProgress: null, readbackRevision: null, restoreStatus: null, restoredProgress: null },
   };
   try {
+    evidence.template.writeAttempted = true;
     const templateWrite = await request(`/api/templates/${evidence.template.id}`, { method: "PUT", body: JSON.stringify({ title: probeTitle, expected_version: evidence.template.originalVersion }) });
     evidence.template.writeStatus = templateWrite.status;
     const templateReadback = await request(`/api/templates/${evidence.template.id}`);
     evidence.template.readbackTitle = templateReadback.rows?.title ?? null;
     evidence.template.readbackVersion = Number(templateReadback.rows?.version);
+    evidence.run.writeAttempted = true;
     const runWrite = await request(`/api/checklists/${evidence.run.id}`, { method: "PUT", body: JSON.stringify({ progress: probeProgress, expected_revision: evidence.run.originalRevision }) });
     evidence.run.writeStatus = runWrite.status;
     const runReadback = await request(`/api/checklists/${evidence.run.id}`);
@@ -31,17 +35,29 @@ export async function exerciseControlledCanaryMutation({ template, run, request 
   } catch (error) {
     evidence.error = error instanceof Error ? error.message : String(error);
   } finally {
-    if (evidence.template.writeStatus >= 200 && evidence.template.writeStatus < 300) {
+    if (evidence.template.writeAttempted) {
       try {
-        const restore = await request(`/api/templates/${evidence.template.id}`, { method: "PUT", body: JSON.stringify({ title: evidence.template.originalTitle, expected_version: typeof evidence.template.readbackVersion === "number" && Number.isFinite(evidence.template.readbackVersion) ? evidence.template.readbackVersion : evidence.template.originalVersion + 1 }) });
-        evidence.template.restoreStatus = restore.status;
+        const current = await request(`/api/templates/${evidence.template.id}`);
+        const currentVersion = Number(current.rows?.version);
+        evidence.template.readbackTitle ??= current.rows?.title ?? null;
+        evidence.template.readbackVersion = Number.isFinite(evidence.template.readbackVersion) ? evidence.template.readbackVersion : currentVersion;
+        if (current.rows?.title !== evidence.template.originalTitle) {
+          const restore = await request(`/api/templates/${evidence.template.id}`, { method: "PUT", body: JSON.stringify({ title: evidence.template.originalTitle, expected_version: currentVersion }) });
+          evidence.template.restoreStatus = restore.status;
+        } else evidence.template.restoreStatus = 200;
         evidence.template.restoredTitle = (await request(`/api/templates/${evidence.template.id}`)).rows?.title ?? null;
       } catch (error) { evidence.template.restoreError = error instanceof Error ? error.message : String(error); }
     }
-    if (evidence.run.writeStatus >= 200 && evidence.run.writeStatus < 300) {
+    if (evidence.run.writeAttempted) {
       try {
-        const restore = await request(`/api/checklists/${evidence.run.id}`, { method: "PUT", body: JSON.stringify({ progress: evidence.run.originalProgress, expected_revision: typeof evidence.run.readbackRevision === "number" && Number.isFinite(evidence.run.readbackRevision) ? evidence.run.readbackRevision : evidence.run.originalRevision + 1 }) });
-        evidence.run.restoreStatus = restore.status;
+        const current = await request(`/api/checklists/${evidence.run.id}`);
+        const currentRevision = Number(current.rows?.revision);
+        evidence.run.readbackProgress = Number.isFinite(evidence.run.readbackProgress) ? evidence.run.readbackProgress : Number(current.rows?.progress);
+        evidence.run.readbackRevision = Number.isFinite(evidence.run.readbackRevision) ? evidence.run.readbackRevision : currentRevision;
+        if (Number(current.rows?.progress) !== evidence.run.originalProgress) {
+          const restore = await request(`/api/checklists/${evidence.run.id}`, { method: "PUT", body: JSON.stringify({ progress: evidence.run.originalProgress, expected_revision: currentRevision }) });
+          evidence.run.restoreStatus = restore.status;
+        } else evidence.run.restoreStatus = 200;
         evidence.run.restoredProgress = Number((await request(`/api/checklists/${evidence.run.id}`)).rows?.progress);
       } catch (error) { evidence.run.restoreError = error instanceof Error ? error.message : String(error); }
     }
@@ -82,7 +98,7 @@ export function evaluateDeploymentSmoke(input) {
     deploymentHealthStatus: input.deploymentHealthStatus,
     customDomainHealthStatus: input.customDomainHealthStatus,
     controlledCanaryMutationApproved: input.controlledCanaryMutationApproved === true,
-    canaryMutation: input.canaryMutation,
+    canaryEvidenceDigest: input.canaryEvidenceDigest,
     checks: mutationChecks,
     failures,
     verdict: failures.length ? "fail" : "pass",

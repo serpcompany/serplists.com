@@ -18,6 +18,7 @@ import { compareMigrationLedger, parseAppliedMigrationLedger } from "./invariant
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runRepositoryGit, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
+import { runProductionIdentityBoundCommand } from "./production-identity-bound-command-lib.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const childEnv = sanitizedGitEnvironment();
@@ -40,6 +41,7 @@ const commit = (() => {
   try { return runRepositoryGit({ repoRoot, args: ["rev-parse", "HEAD"] }).trim(); } catch { return "unknown"; }
 })();
 let resolvedIdentity: { databaseId: string; databaseName: string } | null = null;
+const identityChecks: unknown[] = [];
 
 try {
   if (database === "unknown" || environment === "unknown") {
@@ -51,16 +53,29 @@ try {
   const migrationContract = buildCatalogContract(expectedMigrationCatalog);
   migrated.close();
   const expectedTableNames = [...new Set([...Object.keys(runtimeContract.tables), ...Object.keys(migrationContract.tables)])];
+  const assertedDatabaseId = readArg("--database-id") ?? process.env.D1_DATABASE_ID;
+  if (environment === "production" && !assertedDatabaseId) throw new Error("Production schema verification requires the exact asserted database UUID.");
   resolvedIdentity = resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
+  if (assertedDatabaseId && assertedDatabaseId !== resolvedIdentity.databaseId) throw new Error(`Resolved database ID ${resolvedIdentity.databaseId} does not match asserted ID ${assertedDatabaseId}.`);
   const assertAdjacentIdentity = () => {
     const adjacent = resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
     if (adjacent.databaseId !== resolvedIdentity?.databaseId || adjacent.databaseName !== resolvedIdentity?.databaseName) throw new Error("D1 identity changed during schema verification.");
   };
-  const targetArgs = ["exec", "wrangler", "d1", "execute", database, "--remote"];
+  const targetArgs = ["d1", "execute", database, "--remote"];
   if (preview) targetArgs.push("--preview");
-  assertAdjacentIdentity();
-  const inventoryOutput = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", [...targetArgs, "--json", "--command", "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name!='d1_migrations' ORDER BY name"], { cwd: repoRoot, encoding: "utf8", env: childEnv, stdio: ["ignore", "pipe", "pipe"] });
-  assertAdjacentIdentity();
+  const runWrangler = (args: string[]) => execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "wrangler", ...args], { cwd: repoRoot, encoding: "utf8", env: childEnv, stdio: ["ignore", "pipe", "pipe"], maxBuffer: 10 * 1024 * 1024 });
+  const executeRemote = (operation: string, args: string[]) => {
+    if (environment === "production") {
+      const result = runProductionIdentityBoundCommand({ environment, database: { databaseName: database, databaseId: assertedDatabaseId }, operation, commandArgs: args, runWrangler });
+      identityChecks.push(result.observedIdentity);
+      return result.output;
+    }
+    assertAdjacentIdentity();
+    const output = runWrangler(args);
+    assertAdjacentIdentity();
+    return output;
+  };
+  const inventoryOutput = executeRemote("schema-table-inventory", [...targetArgs, "--json", "--command", "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name!='d1_migrations' ORDER BY name"]);
   const tableNames = [...new Set([...expectedTableNames, ...parseRemoteTableInventory(inventoryOutput)])].sort();
   const sql = [
     ...tableNames.map((name) => `PRAGMA table_info('${name.replaceAll("'", "''")}');`),
@@ -71,30 +86,16 @@ try {
   ].join(" ");
   const args = [...targetArgs];
   args.push("--json", "--command", sql);
-  assertAdjacentIdentity();
-  const output = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", args, {
-    cwd: repoRoot,
-    encoding: "utf8",
-    env: childEnv,
-    stdio: ["ignore", "pipe", "pipe"],
-    maxBuffer: 10 * 1024 * 1024,
-  });
-  assertAdjacentIdentity();
+  const output = executeRemote("schema-catalog", args);
   const results = JSON.parse(output) as Array<{ results?: Array<Record<string, unknown>> }>;
   const remoteCatalog = catalogFromPragmaResults(tableNames, results);
-  assertAdjacentIdentity();
-  const ledgerOutput = execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", [...targetArgs, "--json", "--command", "SELECT id, name FROM d1_migrations ORDER BY id"], { cwd: repoRoot, encoding: "utf8", env: childEnv, stdio: ["ignore", "pipe", "pipe"] });
-  assertAdjacentIdentity();
+  const ledgerOutput = executeRemote("schema-ledger", [...targetArgs, "--json", "--command", "SELECT id, name FROM d1_migrations ORDER BY id"]);
   const appliedMigrations = parseAppliedMigrationLedger(ledgerOutput);
   const ledger = compareMigrationLedger({ repositoryMigrations: migrations, appliedMigrations });
   const runtimeDiff = diffRuntimeSchema(drizzleSchema, remoteCatalog);
   const migrationDiff = diffDrizzleContract(migrationContract, remoteCatalog);
   const migrationObjectDiff = compareDatabaseSchemas(expectedMigrationCatalog, remoteCatalog);
   const verdict = runtimeDiff.verdict === "pass" && migrationDiff.verdict === "pass" && migrationObjectDiff.verdict === "pass" && ledger.verdict === "pass" ? "pass" : "fail";
-  const assertedDatabaseId = readArg("--database-id") ?? process.env.D1_DATABASE_ID;
-  if (assertedDatabaseId && assertedDatabaseId !== resolvedIdentity.databaseId) {
-    throw new Error(`Resolved database ID ${resolvedIdentity.databaseId} does not match asserted ID ${assertedDatabaseId}.`);
-  }
   const databaseId = resolvedIdentity.databaseId;
   const report = {
     check: "d1-schema-contract",
@@ -103,6 +104,7 @@ try {
     migrationRange: { from: migrations[0] ?? null, to: migrations.at(-1) ?? null },
     schemaDifferences: { runtime: runtimeDiff, migration: migrationDiff, migrationObjects: migrationObjectDiff },
     ledger,
+    identityChecks,
     verdict,
   };
   const summary = verdict === "pass"

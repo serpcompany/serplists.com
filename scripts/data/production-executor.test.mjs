@@ -62,7 +62,7 @@ function validPromotionEvidence() {
       recovery: { verdict: "pass" },
       teardown: { verdict: "pass" },
       sanitizedSource: { verdict: "pass", attestation: { verdict: "pass" }, artifactSha256: "b".repeat(64) },
-      authenticatedRehearsal: { verdict: "pass", commit, sanitizerArtifactSha256: "b".repeat(64), migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, checks: { templateRead: true, runRead: true, templateWrite: true, runWrite: true, falseEmptyDetection: "pass", apiErrorDetection: "pass" } },
+      authenticatedRehearsal: { verdict: "pass", commit, sanitizerArtifactSha256: "b".repeat(64), migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, checks: { templateRead: true, runRead: true, templateWriteReadback: true, runWriteReadback: true, falseEmptyDetection: "pass", apiErrorDetection: "pass" } },
       coverage: { verdict: "pass", planId: "safe-template-evolution-0024", fixtureProfile: "template-evolution-v1", affectedTables: ["templates", "checklist_runs"], invariants: ["row-counts"], declarationSha256: "a".repeat(64) },
     },
     ciRun: { id: 101, head_sha: commit, conclusion: "success", name: "CI", event: "push", head_branch: "main", path: ".github/workflows/ci.yml", repository: { full_name: "serpcompany/serplists.com" } },
@@ -79,9 +79,23 @@ function validPromotionEvidence() {
       schema: { verdict: "pass", ledger: { verdict: "pass" } },
       invariants: { verdict: "pass" },
       deploy: { verdict: "pass" },
-      smoke: { verdict: "pass", failures: [] },
+      smoke: { verdict: "pass", failures: [], controlledCanaryMutationApproved: true, canaryEvidenceDigest: "a".repeat(64), checks: ["template_canary_designated", "template_write", "template_write_readback", "template_restore", "run_canary_designated", "run_write", "run_write_readback", "run_restore"].map((name) => ({ name, verdict: "pass" })) },
       teardown: { verdict: "pass" },
     },
+  };
+}
+
+function validProductionSmoke() {
+  return {
+    verdict: "pass",
+    commit,
+    target: { environment: "production", ...production },
+    deploymentUrl: "https://release.pages.dev",
+    customDomain: "https://serplists.com",
+    controlledCanaryMutationApproved: true,
+    canaryEvidenceDigest: "a".repeat(64),
+    failures: [],
+    checks: ["template_canary_designated", "template_write", "template_write_readback", "template_restore", "run_canary_designated", "run_write", "run_write_readback", "run_restore"].map((name) => ({ name, verdict: "pass" })),
   };
 }
 
@@ -489,10 +503,16 @@ esac
     ["smoke database id", (fixture) => { fixture.smoke.target.databaseId = "22222222-2222-4222-8222-222222222222"; }],
     ["smoke deployment URL", (fixture) => { fixture.smoke.deploymentUrl = "https://other.pages.dev"; }],
     ["smoke custom domain", (fixture) => { fixture.smoke.customDomain = "https://other.example"; }],
+    ["missing canary check", (fixture) => { fixture.smoke.checks.pop(); }],
+    ["duplicate canary check", (fixture) => { fixture.smoke.checks.push({ ...fixture.smoke.checks[0] }); }],
+    ["extra canary check", (fixture) => { fixture.smoke.checks.push({ name: "invented", verdict: "pass" }); }],
+    ["nonliteral canary verdict", (fixture) => { fixture.smoke.checks[0].verdict = true; }],
+    ["failed canary check", (fixture) => { fixture.smoke.checks[0].verdict = "fail"; }],
+    ["privacy-unsafe canary payload", (fixture) => { fixture.smoke.canaryMutation = { originalTitle: "private" }; }],
   ])("final production release rejects mismatched %s", (_name, mutate) => {
     const request = validPromotionEvidence();
     const signed = createSignedEvidence({ payload: { verdict: "pass", commit, database: structuredClone(production), migrationRange: structuredClone(request.migrationRange), results: {}, approval: {} } });
-    const smoke = { verdict: "pass", commit, target: { environment: "production", ...production }, deploymentUrl: "https://release.pages.dev", customDomain: "https://serplists.com" };
+    const smoke = validProductionSmoke();
     const fixture = { request, signedEvidence: signed, smoke, deploymentUrl: smoke.deploymentUrl };
     mutate(fixture);
     expect(() => validateFinalProductionRelease(fixture)).toThrow();
@@ -502,7 +522,7 @@ esac
     const request = validPromotionEvidence();
     const signedEvidence = createSignedEvidence({ payload: { verdict: "pass", commit, database: production, migrationRange: request.migrationRange, results: {}, approval: {} } });
     const deploymentUrl = "https://release.pages.dev";
-    const smoke = { verdict: "pass", commit, target: { environment: "production", ...production }, deploymentUrl, customDomain: "https://serplists.com" };
+    const smoke = { ...validProductionSmoke(), deploymentUrl };
     expect(validateFinalProductionRelease({ request, signedEvidence, smoke, deploymentUrl })).toMatchObject({ commit, database: production, migrationRange: request.migrationRange });
   });
 });

@@ -159,7 +159,7 @@ try {
           if (parsePendingMigrationNames(output).length) throw new Error("Production ledger remains behind after migration apply.");
           break;
         case "schema-contract":
-          output = pnpm(["run", "check:prod:d1-schema", "--", "--report-dir", reportDirectory]);
+          output = pnpm(["run", "check:prod:d1-schema", "--", "--database-id", database.databaseId, "--report-dir", reportDirectory]);
           break;
         default:
           throw new Error(`Unknown protected data step: ${step}.`);
