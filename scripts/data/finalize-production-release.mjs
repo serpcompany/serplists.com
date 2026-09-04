@@ -2,11 +2,13 @@
 import { readFileSync } from "node:fs";
 import { validateFinalProductionRelease, validatePromotionEvidence } from "./production-executor-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
+import { validateControlledCanaryChecks } from "./deployment-smoke-lib.mjs";
 function arg(name) { const index = process.argv.indexOf(name); return index < 0 ? null : process.argv[index + 1]; }
 try {
   const request = validatePromotionEvidence(JSON.parse(readFileSync(arg("--request"), "utf8")));
   const signedEvidence = JSON.parse(readFileSync(arg("--evidence"), "utf8"));
   const smoke = JSON.parse(readFileSync(arg("--smoke"), "utf8"));
+  validateControlledCanaryChecks(smoke);
   const deploymentUrl = readFileSync(arg("--deployment-url-file"), "utf8").trim();
   const data = validateFinalProductionRelease({ request, signedEvidence, smoke, deploymentUrl });
   const report = {

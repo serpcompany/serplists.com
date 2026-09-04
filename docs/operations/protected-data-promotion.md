@@ -22,7 +22,7 @@ from the protected-environment review event. Irreversible changes additionally
 require a distinct approval through `production-owner-approval` by the configured
 login, whose repository permission must resolve to `admin`.
 
-After deployment, a controlled account must own at least one active template and one active run. Protected canary credentials verify both records through authenticated APIs on the deployed Pages URL, then verify `/api/health` through the custom domain. A failure routes to the incident recovery procedure; it never performs an automatic data restore.
+After deployment, a controlled account must own one specifically designated active template and run. `STAGING_DATA_CANARY_TEMPLATE_ID` / `STAGING_DATA_CANARY_RUN_ID` and their production equivalents identify only those mutation-safe records. As part of the approved staging or production action, protected canary credentials capture original values plus optimistic version/revision, update each designated record, read it back, restore the original value using the new optimistic counter, and verify restoration. JSON, JUnit, and human reports record template/run designation, write, read-back, and restore separately. No other owned record is eligible for mutation. Protected canaries then verify `/api/health` through the custom domain. A write, read-back, restoration, visibility, or health failure blocks completion and routes to the incident recovery procedure; it never performs an automatic data restore.
 
 Reports are uploaded even on failure and retained for 90 days. The production summary must record the commit, database UUID, migration range, recovery artifacts, invariant results, deployment result, authenticated visibility, custom-domain result, and rollback/roll-forward route.
 

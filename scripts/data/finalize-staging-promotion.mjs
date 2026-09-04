@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { writeDataCheckReports } from "./reporting.mjs";
 import { evaluateInvariantLedgerTransition } from "./remote-invariant-evidence-lib.mjs";
+import { validateControlledCanaryChecks } from "./deployment-smoke-lib.mjs";
 
 function arg(name) { const index = process.argv.indexOf(name); return index < 0 ? null : process.argv[index + 1]; }
 function read(name) { return JSON.parse(readFileSync(arg(name), "utf8")); }
@@ -20,6 +21,7 @@ try {
   const invariants = read("--invariants");
   const deploy = read("--deploy");
   const smoke = read("--smoke");
+  validateControlledCanaryChecks(smoke);
   const exactCommit = [data.commit, range.commit, schema.commit, invariants.commit, deploy.commit, smoke.commit].every((value) => value === commit);
   const exactTarget = range.target?.environment === "staging" && range.target?.databaseName === databaseName &&
     range.target?.databaseId === databaseId && schema.target?.environment === "staging" && schema.target?.database === databaseName &&
@@ -49,7 +51,7 @@ try {
     schema: { verdict: schema.verdict, ledger: schema.ledger },
     invariants: { verdict: invariants.verdict, migrationRange: invariants.migrationRange, ledger: invariants.ledger },
     deploy: { verdict: deploy.verdict },
-    smoke: { verdict: smoke.verdict, failures: smoke.failures },
+    smoke: { verdict: smoke.verdict, failures: smoke.failures, controlledCanaryMutationApproved: smoke.controlledCanaryMutationApproved, checks: smoke.checks, canaryMutation: smoke.canaryMutation },
     teardown: data.teardown,
   };
 } catch (error) {

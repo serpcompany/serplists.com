@@ -18,7 +18,7 @@ function runFinalizer({ mutate = () => {} } = {}) {
     schema: { verdict: "pass", commit, target: { environment: "staging", database: databaseName, databaseId }, ledger: { verdict: "pass" } },
     invariants: { verdict: "pass", commit, comparisonKind: "migration", target: { environment: "staging", binding: "DB", databaseName, databaseId }, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, ledger: { verdict: "pass", before: ["0023_add_sitemap_revision_state.sql"], after: ["0023_add_sitemap_revision_state.sql", "0024_safe_template_evolution.sql"] } },
     deploy: { verdict: "pass", commit, tree, target: { environment: "staging", databaseName, databaseId } },
-    smoke: { verdict: "pass", commit, target: { environment: "staging", databaseName, databaseId }, failures: [] },
+    smoke: { verdict: "pass", commit, target: { environment: "staging", databaseName, databaseId }, failures: [], controlledCanaryMutationApproved: true, checks: ["template_canary_designated", "template_write", "template_write_readback", "template_restore", "run_canary_designated", "run_write", "run_write_readback", "run_restore"].map((name) => ({ name, verdict: "pass" })) },
   };
   mutate(reports);
   const args = [];
@@ -62,6 +62,7 @@ describe("staging promotion finalizer", () => {
     ["wrong invariant database", (reports) => { reports.invariants.target.databaseId = "11111111-1111-4111-8111-111111111111"; }],
     ["wrong invariant range", (reports) => { reports.invariants.migrationRange.to = "0023_add_sitemap_revision_state.sql"; }],
     ["reordered ledger", (reports) => { reports.invariants.ledger.after = ["0024_safe_template_evolution.sql", "0023_add_sitemap_revision_state.sql"]; }],
+    ["missing canary restore", (reports) => { reports.smoke.checks = reports.smoke.checks.filter((check) => check.name !== "run_restore"); }],
   ])("rejects %s", (_name, mutate) => {
     const run = runFinalizer({ mutate });
     try { expect(run.result.status).toBe(1); expect(JSON.parse(readFileSync(run.output, "utf8")).verdict).toBe("fail"); }

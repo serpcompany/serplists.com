@@ -139,11 +139,14 @@ jobs:
         with:
           name: staging-deploy-${{ github.run_id }}
           path: tmp/staging-evidence/deploy
-      - name: Authenticated account-owned template/run and custom-domain postdeploy smoke
+      - name: Approved authenticated account-owned designated-canary read write readback restore and custom-domain smoke
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
           DATA_CANARY_OWNER_ID: ${{ secrets.STAGING_DATA_CANARY_OWNER_ID }}
           DATA_CANARY_COOKIE: ${{ secrets.STAGING_DATA_CANARY_COOKIE }}
+          DATA_CANARY_TEMPLATE_ID: ${{ vars.STAGING_DATA_CANARY_TEMPLATE_ID }}
+          DATA_CANARY_RUN_ID: ${{ vars.STAGING_DATA_CANARY_RUN_ID }}
+          DATA_CANARY_MUTATION_APPROVED: "true"
         run: node scripts/data/deployment-smoke.mjs --environment staging --database-name serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --deployment-url https://staging.serplists-com.pages.dev --custom-domain https://staging.serplists.com --report-dir tmp/data-reports/staging-postdeploy
       - name: Finalize exact staging promotion evidence
         if: always()
@@ -422,11 +425,14 @@ jobs:
         run: |
           gh attestation verify tmp/production-data-evidence.json --repo "$GITHUB_REPOSITORY"
           node scripts/data/production-executor.mjs verify-deploy --request tmp/production-request.json --evidence tmp/production-data-evidence.json
-      - name: Authenticated account-owned template/run and custom-domain postdeploy smoke
+      - name: Approved authenticated account-owned designated-canary read write readback restore and custom-domain smoke
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
           DATA_CANARY_OWNER_ID: ${{ secrets.PRODUCTION_DATA_CANARY_OWNER_ID }}
           DATA_CANARY_COOKIE: ${{ secrets.PRODUCTION_DATA_CANARY_COOKIE }}
+          DATA_CANARY_TEMPLATE_ID: ${{ vars.PRODUCTION_DATA_CANARY_TEMPLATE_ID }}
+          DATA_CANARY_RUN_ID: ${{ vars.PRODUCTION_DATA_CANARY_RUN_ID }}
+          DATA_CANARY_MUTATION_APPROVED: "true"
         run: node scripts/data/deployment-smoke.mjs --environment production --database-name serp-checklists-db --database-id "$CONFIRM_PRODUCTION_DATABASE_ID" --deployment-url "$(cat tmp/production-deployment-url.txt)" --custom-domain https://serplists.com --report-dir tmp/data-reports/production-postdeploy
       - name: Publish complete production release report
         run: node scripts/data/finalize-production-release.mjs --request tmp/production-request.json --evidence tmp/production-data-evidence.json --smoke tmp/data-reports/production-postdeploy/production-postdeploy-smoke.json --deployment-url-file tmp/production-deployment-url.txt --report-dir tmp/data-reports/production-postdeploy

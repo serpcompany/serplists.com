@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { captureRepositoryGitState, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
 import { resolveRehearsalPlan } from "./rehearsal-plan-lib.mjs";
 import { loadSanitizerPolicy, validateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
+import { authenticatedCoverageAssertions } from "./authenticated-coverage-lib.mjs";
 
 import { buildDataRegressionReport, renderDataRegressionMarkdown } from "./data-regression-report-lib.mjs";
 import { loadEnvironmentInventory } from "./environment-identity-lib.mjs";
@@ -41,6 +42,7 @@ const rawVitestReport = path.join(reportDirectory, "data-regression-vitest.json"
 const browserTeardownReportPath = path.join(reportDirectory, "browser-smoke-teardown.json");
 const browserJsonReportPath = path.join(reportDirectory, "browser-smoke-playwright.json");
 const authenticatedRehearsalProofPath = path.join(reportDirectory, "authenticated-rehearsal-handler.json");
+const candidateAuthenticatedProofPath = path.join(reportDirectory, "candidate-authenticated-handler.json");
 const reportRoot = path.join(repoRoot, "tmp", "data-reports");
 if (
   reportDirectory !== reportRoot &&
@@ -187,6 +189,7 @@ if (commandFailure) checks.push({
 
 let browserFailure: string | null = null;
 let actualApplicationVisibilityPassed = false;
+let candidateAuthenticated = { verdict: "fail", checks: {} } as Record<string, unknown>;
 let authenticatedRehearsal = { applicable: false, verdict: "not-applicable" } as Record<string, unknown>;
 const sanitizedPathArg = valueAfter("--sanitized");
 const sanitizerManifestArg = valueAfter("--sanitizer-manifest");
@@ -221,6 +224,7 @@ try {
         PLAYWRIGHT_JSON_REPORT: browserJsonReportPath,
         PLAYWRIGHT_SMOKE_LOCK_HELD: "1",
         DATA_REGRESSION_START_COMMIT: startCommit,
+        PLAYWRIGHT_CANDIDATE_AUTH_PROOF: candidateAuthenticatedProofPath,
         ...(sanitizedArtifactSha256 && rehearsalPlan ? {
           PLAYWRIGHT_SANITIZED_REHEARSAL_SQL: path.resolve(repoRoot, sanitizedPathArg),
           PLAYWRIGHT_SANITIZER_SHA256: sanitizedArtifactSha256,
@@ -250,6 +254,11 @@ try {
   if (!visibilityPassed) {
     browserFailure = "Actual Better Auth cookie/API/dashboard visibility journey was missing or failed.";
   }
+  const candidateProof = JSON.parse(readFileSync(candidateAuthenticatedProofPath, "utf8"));
+  const candidateChecks = candidateProof.checks ?? {};
+  const candidateBound = candidateProof.verdict === "pass" && candidateProof.commit === startCommit && candidateChecks.templateRead === true && candidateChecks.templateWriteReadback === true && candidateChecks.runRead === true && candidateChecks.runWriteReadback === true;
+  candidateAuthenticated = { ...candidateProof, verdict: candidateBound ? "pass" : "fail" };
+  if (!candidateBound) browserFailure = "Authenticated candidate template/run read-write proof is incomplete.";
   if (sanitizedArtifactSha256 && rehearsalPlan) {
     const proof = JSON.parse(readFileSync(authenticatedRehearsalProofPath, "utf8"));
     const falseEmptyDetection = checks.find((check) => check.name === "authenticated false-empty detection")?.verdict;
@@ -272,6 +281,7 @@ checks.push({
   test: "Playwright smoke journeys completed with isolated local data and no developer secrets",
   verdict: browserFailure ? "fail" : "pass",
 });
+checks.push({ name: "authenticated candidate template and run read-write", test: "authenticated candidate API proves template read template write readback run read and run write readback", verdict: candidateAuthenticated.verdict === "pass" ? "pass" : "fail" });
 if (authenticatedRehearsal.applicable === true) {
   checks.push({
     name: "authenticated sanitized candidate handlers",
@@ -350,10 +360,7 @@ const workspaceCleanliness = evaluateWorkspaceCleanliness({
   ],
 });
 const executedAssertions = new Map((migration?.assertions ?? []).map((assertion) => [assertion.name, assertion.verdict]));
-executedAssertions.set("authenticated-owned-template-read-write", authenticatedRehearsal.verdict === "pass" || actualApplicationVisibilityPassed ? "pass" : "fail");
-executedAssertions.set("authenticated-owned-run-read-write", authenticatedRehearsal.verdict === "pass" || checks.find((check) => check.name === "run optimistic concurrency")?.verdict === "pass" ? "pass" : "fail");
-executedAssertions.set("authenticated-false-empty", checks.find((check) => check.name === "authenticated false-empty detection")?.verdict ?? "fail");
-executedAssertions.set("authenticated-api-error", checks.find((check) => check.name === "authenticated API error detection")?.verdict ?? "fail");
+for (const assertion of authenticatedCoverageAssertions({ candidateAuthenticated, falseEmptyVerdict: checks.find((check) => check.name === "authenticated false-empty detection")?.verdict, apiErrorVerdict: checks.find((check) => check.name === "authenticated API error detection")?.verdict })) executedAssertions.set(assertion.name, assertion.verdict);
 const coverage = rehearsalPlan && migration ? {
   ...migration.coverage,
   executedAssertions: [...executedAssertions].map(([name, verdict]) => ({ name, verdict })),
@@ -439,6 +446,7 @@ const report = {
   }),
   coverage,
   authenticatedRehearsal,
+  candidateAuthenticated,
   runContext: { mode: nonGating ? "non-gating" : "gating", repositoryRoot: startGitState.repositoryRoot, ...immutableRun },
 };
 const markdown = renderDataRegressionMarkdown(report);

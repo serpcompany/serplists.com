@@ -33,7 +33,7 @@ The report fails unless it finds a passing named test for every row:
 | Frozen lifecycle | Completed, shared, archived, and already-stale runs are not silently rewritten. |
 | Revalidation | Explicit revalidation reconciles a completed run and advances its revision/template version. |
 | Concurrency | Stale template and run revisions return public HTTP conflict responses. |
-| Authenticated visibility | Rehearsal imports byte-verified sanitized rows into isolated local D1, attaches a local-only login to the sanitized owner, then exercises the candidate `/api/templates` and `/api/checklists` handlers for owned reads and writes. The separate evaluator tests must also pass false-empty and API-error cases. |
+| Authenticated visibility | Every ordinary CI run uses a real Better Auth browser session and candidate APIs to prove four independent outcomes: template read, template update plus read-back, run read, and run update plus read-back. Unit concurrency cannot substitute for these journeys. Rehearsal additionally imports byte-verified sanitized rows into isolated local D1 and exercises the same candidate handlers against those representative rows. The separate evaluator tests must also pass false-empty and API-error cases. |
 | Recovery | A Wrangler data-only export imports into a separately migrated database and passes invariants. |
 | Teardown | Repeated deterministic fixture setup followed by cleanup leaves zero users, templates, and runs. |
 

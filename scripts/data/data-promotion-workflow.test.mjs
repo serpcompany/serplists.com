@@ -508,6 +508,10 @@ describe("protected staging and production data-promotion workflow", () => {
         /(account-owned|visibility|template.*run|run.*template)/,
       );
       expect(text, `${jobId} must check the custom domain`).toMatch(/custom[- ]domain/);
+      expect(text).toContain("data_canary_template_id");
+      expect(text).toContain("data_canary_run_id");
+      expect(text).toContain("data_canary_mutation_approved");
+      expect(text).toMatch(/read write readback restore/i);
     }
   });
 

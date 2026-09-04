@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { evaluateDeploymentSmoke } from "./deployment-smoke-lib.mjs";
+import { evaluateDeploymentSmoke, exerciseControlledCanaryMutation } from "./deployment-smoke-lib.mjs";
 import { extractD1Identity } from "./wrangler-identity-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
 
@@ -9,8 +9,8 @@ function rowsFromD1(output) {
   const parsed = JSON.parse(output);
   return (Array.isArray(parsed) ? parsed : [parsed]).flatMap((entry) => entry.results ?? []);
 }
-async function fetchJson(url, cookie) {
-  const response = await fetch(url, { headers: { cookie, accept: "application/json" }, redirect: "error" });
+async function fetchJson(url, cookie, init = {}) {
+  const response = await fetch(url, { ...init, headers: { cookie, accept: "application/json", "content-type": "application/json", ...(init.headers ?? {}) }, redirect: "error" });
   let rows = null;
   try { rows = await response.json(); } catch { rows = null; }
   return { status: response.status, rows };
@@ -23,15 +23,21 @@ const deploymentUrl = arg("--deployment-url") ?? "";
 const customDomain = arg("--custom-domain") ?? "";
 const ownerId = process.env.DATA_CANARY_OWNER_ID;
 const cookie = process.env.DATA_CANARY_COOKIE;
+const templateId = process.env.DATA_CANARY_TEMPLATE_ID;
+const runId = process.env.DATA_CANARY_RUN_ID;
+const mutationApproved = process.env.DATA_CANARY_MUTATION_APPROVED === "true";
 const reportDirectory = arg("--report-dir") ?? `tmp/data-reports/${environment}`;
 try {
-  if (!ownerId || !cookie || !deploymentUrl || !customDomain) throw new Error("Protected canary identity, cookie, deployment URL, and custom domain are required.");
+  if (!ownerId || !cookie || !templateId || !runId || !mutationApproved || !deploymentUrl || !customDomain) throw new Error("Protected canary identity, designated records, mutation approval, cookie, deployment URL, and custom domain are required.");
   const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
   const childEnv = Object.fromEntries(["PATH", "HOME", "CI", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"].filter((key) => process.env[key]).map((key) => [key, process.env[key]]));
   const identityOutput = execFileSync(pnpm, ["exec", "wrangler", "d1", "info", databaseName, "--json"], { encoding: "utf8", env: childEnv });
   const identity = extractD1Identity(identityOutput);
   if (identity.databaseId !== databaseId || identity.databaseName !== databaseName) throw new Error("Postdeploy D1 identity mismatch.");
-  const sql = `SELECT 'template' AS kind, id FROM templates WHERE user_id='${ownerId.replaceAll("'", "''")}' AND deleted_at IS NULL UNION ALL SELECT 'run', id FROM checklist_runs WHERE user_id='${ownerId.replaceAll("'", "''")}' AND deleted_at IS NULL;`;
+  const quotedOwner = ownerId.replaceAll("'", "''");
+  const quotedTemplate = templateId.replaceAll("'", "''");
+  const quotedRun = runId.replaceAll("'", "''");
+  const sql = `SELECT 'template' AS kind, id, title, version, NULL AS progress, NULL AS revision FROM templates WHERE id='${quotedTemplate}' AND user_id='${quotedOwner}' AND deleted_at IS NULL UNION ALL SELECT 'run', id, title, NULL, progress, revision FROM checklist_runs WHERE id='${quotedRun}' AND user_id='${quotedOwner}' AND deleted_at IS NULL;`;
   const dbOutput = execFileSync(pnpm, ["exec", "wrangler", "d1", "execute", databaseName, "--remote", "--json", "--command", sql], { encoding: "utf8", env: childEnv });
   const dbRows = rowsFromD1(dbOutput);
   const [templates, runs, deploymentHealth, customHealth] = await Promise.all([
@@ -40,6 +46,10 @@ try {
     fetch(new URL("/api/health", deploymentUrl), { redirect: "error" }),
     fetch(new URL("/api/health", customDomain), { redirect: "error" }),
   ]);
+  const originalTemplate = Array.isArray(templates.rows) ? templates.rows.find((row) => String(row.id) === templateId && row.user_id === ownerId) : null;
+  const originalRun = Array.isArray(runs.rows) ? runs.rows.find((row) => String(row.id) === runId && row.user_id === ownerId) : null;
+  if (!originalTemplate || !originalRun) throw new Error("Designated canary rows are not visible to the authenticated canary owner.");
+  const mutation = await exerciseControlledCanaryMutation({ template: originalTemplate, run: originalRun, request: (apiPath, init) => fetchJson(new URL(apiPath, deploymentUrl), cookie, init) });
   const result = evaluateDeploymentSmoke({
     databaseTemplateIds: dbRows.filter((row) => row.kind === "template").map((row) => row.id),
     databaseRunIds: dbRows.filter((row) => row.kind === "run").map((row) => row.id),
@@ -50,9 +60,13 @@ try {
     ownerId,
     deploymentHealthStatus: deploymentHealth.status,
     customDomainHealthStatus: customHealth.status,
+    designatedTemplateId: templateId,
+    designatedRunId: runId,
+    controlledCanaryMutationApproved: mutationApproved,
+    canaryMutation: mutation,
   });
   const report = { ...result, commit: process.env.GITHUB_SHA ?? "unknown", target: { environment, databaseName, databaseId }, deploymentUrl, customDomain };
-  const summary = `${report.verdict.toUpperCase()} ${environment} authenticated account-owned template/run visibility and custom-domain smoke.`;
+  const summary = [`${report.verdict.toUpperCase()} ${environment} authenticated account-owned template/run visibility, controlled canary writability/restoration, and custom-domain smoke.`, ...report.checks.map((check) => `${check.verdict.toUpperCase()} ${check.name}`)].join("\n");
   writeDataCheckReports({ name: `${environment}-postdeploy-smoke`, report, summary, reportDirectory });
   console.log(summary);
   if (report.verdict !== "pass") process.exitCode = 1;
