@@ -173,8 +173,9 @@ pnpm approve-builds
 ```
 Then re-run the install command above.
 
-Pre-commit includes migration provenance and schema-contract checks. Pre-push
-adds the generated schema snapshot and full data-regression suite. Git's
+Pre-commit includes the fast migration-provenance and schema-contract checks.
+Pre-push adds the adversarial provenance tests, generated schema snapshot, and
+full data-regression suite. Git's
 `--no-verify` option can bypass local hooks, so local success is advisory; pull
 requests are independently enforced by the required CI checks documented in
 the operations playbook.

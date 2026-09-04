@@ -37,7 +37,7 @@ jobs run in GitHub Actions independently of local Git hooks, because
 - lint
 - typecheck
 - unit/integration tests
-- migration provenance and Drizzle/D1 schema contract
+- migration provenance, its adversarial Node tests, and Drizzle/D1 schema contract
 - generated schema snapshot verification
 - data regressions with JSON, JUnit, and human-readable evidence
 - build

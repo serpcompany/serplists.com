@@ -29,6 +29,8 @@ pre-push:
       run: pnpm typecheck:env
     migration-provenance:
       run: pnpm run check:data:migration-provenance -- --report-dir tmp/data-reports/pre-push
+    migration-provenance-tests:
+      run: pnpm run test:data:migration-provenance
     schema-contract:
       run: pnpm run check:data:schema-contract -- --report-dir tmp/data-reports/pre-push
     schema-snapshot:

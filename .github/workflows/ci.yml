@@ -70,6 +70,8 @@ jobs:
         env:
           MIGRATION_PROVENANCE_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'push' && github.event.before || format('{0}^', github.sha) }}
         run: pnpm run check:data:migration-provenance -- --base "$MIGRATION_PROVENANCE_BASE_SHA" --report-dir tmp/data-reports/ci
+      - name: Test migration provenance enforcement
+        run: pnpm run test:data:migration-provenance
       - name: Verify Drizzle D1 schema contract
         env:
           SCHEMA_CONTRACT_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'push' && github.event.before || format('{0}^', github.sha) }}

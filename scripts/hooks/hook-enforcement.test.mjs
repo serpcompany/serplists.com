@@ -122,8 +122,11 @@ describe("Git hook installation and enforcement", () => {
     const workflow = yaml.load(readFileSync(join(repositoryRoot, ".github/workflows/ci.yml"), "utf8"));
 
     expect(hooks["pre-commit"].commands["migration-provenance"].run).toContain("check:data:migration-provenance");
+    expect(hooks["pre-commit"].commands["migration-provenance-tests"]).toBeUndefined();
+    expect(hooks["pre-push"].commands["migration-provenance-tests"].run).toBe("pnpm run test:data:migration-provenance");
     expect(hooks["pre-push"].commands["data-regressions"].run).toContain("test:data-regressions");
     expect(workflow.jobs.database.steps.some((step) => step.run?.includes("check:data:migration-provenance"))).toBe(true);
+    expect(workflow.jobs.database.steps.some((step) => step.run === "pnpm run test:data:migration-provenance")).toBe(true);
     expect(workflow.jobs.database.steps.some((step) => step.run?.includes("check:data:schema-contract"))).toBe(true);
     expect(workflow.jobs["data-regressions"].steps.some((step) => step.run?.includes("test:data-regressions"))).toBe(true);
   });

@@ -22,6 +22,7 @@ describe("CI blocking gates", () => {
     const database = workflow().jobs.database;
     const checkout = database.steps.find((step) => step.name === "Checkout");
     const provenance = database.steps.find((step) => step.name === "Verify migration provenance");
+    const provenanceTests = database.steps.find((step) => step.name === "Test migration provenance enforcement");
     const schema = database.steps.find((step) => step.name === "Verify Drizzle D1 schema contract");
     const snapshot = database.steps.find((step) => step.name === "Verify generated schema snapshot");
 
@@ -30,11 +31,12 @@ describe("CI blocking gates", () => {
     expect(provenance.run).toContain("--base");
     expect(provenance.env.MIGRATION_PROVENANCE_BASE_SHA).toContain("pull_request.base.sha");
     expect(provenance.env.MIGRATION_PROVENANCE_BASE_SHA).toContain("github.event.before");
+    expect(provenanceTests.run).toBe("pnpm run test:data:migration-provenance");
     expect(schema.run).toContain("check:data:schema-contract");
     expect(schema.run).toContain("tmp/data-reports/ci");
     expect(schema.env.SCHEMA_CONTRACT_BASE_SHA).toContain("pull_request.base.sha");
     expect(snapshot.run).toContain("db:schema:snapshot:check");
-    for (const step of [provenance, schema, snapshot]) expect(step["continue-on-error"]).not.toBe(true);
+    for (const step of [provenance, provenanceTests, schema, snapshot]) expect(step["continue-on-error"]).not.toBe(true);
   });
 
   it("orders regression and build checks after their prerequisites", () => {
