@@ -17,6 +17,13 @@
 /scripts/set-official-serp-plan.mjs @devinschumacher
 /scripts/set-official-serp-plan-lib.mjs @devinschumacher
 /scripts/data/ @devinschumacher
+/scripts/hooks/ @devinschumacher
+/scripts/install-lefthook.mjs @devinschumacher
+/scripts/run-playwright-smoke.mjs @devinschumacher
+/lefthook.yml @devinschumacher
+/playwright.config.ts @devinschumacher
+/tests/e2e/data-visibility-regression.spec.ts @devinschumacher
+/tests/e2e/sanitized-rehearsal-handler.spec.ts @devinschumacher
 /package.json @devinschumacher
 /wrangler.toml @devinschumacher
 /.github/workflows/ @devinschumacher

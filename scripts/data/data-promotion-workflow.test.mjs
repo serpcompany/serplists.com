@@ -131,6 +131,18 @@ describe("protected staging and production data-promotion workflow", () => {
 
   it("routes the migration provenance manifest to the existing accountable owner", () => {
     expect(codeownersSource).toMatch(/^\/db\/migration-provenance\.json\s+@devinschumacher$/m);
+    const codeownerLines = new Set(codeownersSource.split(/\r?\n/).map((line) => line.trim()));
+    for (const safetyPath of [
+      "/scripts/hooks/",
+      "/scripts/install-lefthook.mjs",
+      "/scripts/run-playwright-smoke.mjs",
+      "/lefthook.yml",
+      "/playwright.config.ts",
+      "/tests/e2e/data-visibility-regression.spec.ts",
+      "/tests/e2e/sanitized-rehearsal-handler.spec.ts",
+    ]) {
+      expect(codeownerLines.has(`${safetyPath} @devinschumacher`), `${safetyPath} must route to the accountable owner`).toBe(true);
+    }
   });
 
   it("rejects arbitrary rehearsal commits before checkout, install, or protected secrets", () => {

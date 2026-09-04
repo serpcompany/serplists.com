@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getTableConfig, SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 
@@ -102,19 +103,19 @@ export function diffUnapprovedSqlOnlyObjects(contract: DrizzleContract, catalog:
   return { unexpectedTables, unexpectedIndexes, unexpectedTriggers, unexpectedViews, verdict: unexpectedTables.length || unexpectedIndexes.length || unexpectedTriggers.length || unexpectedViews.length ? "fail" : "pass" } as const;
 }
 
-export function listMigrationFiles() {
-  return readdirSync(migrationsDirectory)
+export function listMigrationFiles(directory = migrationsDirectory) {
+  return readdirSync(directory)
     .filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name))
     .sort((left, right) => left.localeCompare(right, "en"))
     .map((name) => ({
       name,
-      sql: readFileSync(new URL(`../../db/migrations/${name}`, import.meta.url), "utf8"),
+      sql: readFileSync(path.join(directory, name), "utf8"),
     }));
 }
 
-export function replayMigrations(options: { through?: string } = {}) {
+export function replayMigrations(options: { through?: string; migrationDirectory?: string } = {}) {
   const database = new DatabaseSync(":memory:");
-  const migrations = listMigrationFiles();
+  const migrations = listMigrationFiles(options.migrationDirectory);
   const endIndex = options.through
     ? migrations.findIndex((migration) => migration.name === options.through)
     : migrations.length - 1;
