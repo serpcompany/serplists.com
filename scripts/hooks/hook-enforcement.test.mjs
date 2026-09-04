@@ -24,7 +24,11 @@ function run(command, args, { cwd, env = {} } = {}) {
 }
 
 function git(repository, args, options = {}) {
-  return run("git", args, { cwd: repository, ...options });
+  return run("git", args, {
+    cwd: repository,
+    ...options,
+    env: sanitizedGitEnvironment({ ...process.env, ...(options.env ?? {}) }),
+  });
 }
 
 function createHookFixture() {
@@ -107,7 +111,7 @@ describe("Git hook installation and enforcement", () => {
 
     const remote = mkdtempSync(join(tmpdir(), "serplists-hook-remote-"));
     temporaryDirectories.push(remote);
-    expect(run("git", ["init", "--bare"], { cwd: remote }).status).toBe(0);
+    expect(git(remote, ["init", "--bare"]).status).toBe(0);
     expect(git(repository, ["remote", "add", "origin", remote]).status).toBe(0);
     const firstPush = git(repository, ["push", "-u", "origin", "staging"], { env: { HOOK_LOG: hookLog } });
     expect(firstPush.status, firstPush.stderr).toBe(0);
