@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -126,5 +126,36 @@ describe("Git hook installation and enforcement", () => {
     expect(workflow.jobs.database.steps.some((step) => step.run?.includes("check:data:migration-provenance"))).toBe(true);
     expect(workflow.jobs.database.steps.some((step) => step.run?.includes("check:data:schema-contract"))).toBe(true);
     expect(workflow.jobs["data-regressions"].steps.some((step) => step.run?.includes("test:data-regressions"))).toBe(true);
+  });
+
+  it("ignores poisoned Git-local environment and never mutates the parent repository", () => {
+    const { repository: target } = createHookFixture();
+    const parent = mkdtempSync(join(tmpdir(), "serplists-hook-parent-"));
+    temporaryDirectories.push(parent);
+    expect(git(parent, ["init", "-b", "staging"]).status).toBe(0);
+    expect(git(parent, ["config", "core.hooksPath", "parent-hooks"]).status).toBe(0);
+    mkdirSync(join(parent, "parent-hooks"));
+    writeFileSync(join(parent, "parent-hooks", "sentinel"), "parent must not change\n");
+    const parentConfigBefore = git(parent, ["config", "--local", "--list"]).stdout;
+    const parentHooksBefore = readdirSync(join(parent, "parent-hooks"));
+
+    const install = run(process.execPath, [join(repositoryRoot, "scripts/install-lefthook.mjs")], {
+      cwd: target,
+      env: {
+        CI: "",
+        GIT_DIR: join(parent, ".git"),
+        GIT_INDEX_FILE: join(parent, ".git", "index"),
+        GIT_WORK_TREE: parent,
+        PATH: `${join(repositoryRoot, "node_modules", ".bin")}${delimiter}${process.env.PATH}`,
+      },
+    });
+
+    expect(install.status, install.stderr).toBe(0);
+    expect(git(target, ["config", "--local", "--get-all", "core.hooksPath"]).status).toBe(1);
+    expect(existsSync(join(target, ".git", "hooks", "pre-commit"))).toBe(true);
+    expect(existsSync(join(target, ".git", "hooks", "pre-push"))).toBe(true);
+    expect(git(parent, ["config", "--local", "--list"]).stdout).toBe(parentConfigBefore);
+    expect(readdirSync(join(parent, "parent-hooks"))).toEqual(parentHooksBefore);
+    expect(readFileSync(join(parent, "parent-hooks", "sentinel"), "utf8")).toBe("parent must not change\n");
   });
 });
