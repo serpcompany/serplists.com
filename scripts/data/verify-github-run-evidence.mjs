@@ -7,6 +7,9 @@ try {
     metadata: JSON.parse(readFileSync(arg("--metadata"), "utf8")),
     commit: arg("--commit"),
     workflowName: arg("--workflow"),
+    eventName: arg("--event"),
+    headBranch: arg("--branch"),
+    workflowPath: arg("--path"),
   });
   console.log(`Verified GitHub-produced ${arg("--workflow")} evidence for ${arg("--commit")}.`);
 } catch (error) {

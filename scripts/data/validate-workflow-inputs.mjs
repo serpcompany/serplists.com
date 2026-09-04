@@ -5,6 +5,7 @@ const productionPatterns = {
   MIGRATION_TO: /^(?:none|\d{4}_[a-z0-9_]+\.sql)$/,
   MIGRATION_CLASSIFICATION: /^(?:additive|backfill|destructive|irreversible)$/,
   CI_RUN_ID: /^\d+$/,
+  STAGING_RUN_ID: /^\d+$/,
   REHEARSAL_RUN_ID: /^\d+$/,
   CONFIRM_PRODUCTION_DATABASE_ID: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
 };

@@ -4,7 +4,7 @@ The only normal production path is the GitHub Actions workflow **Protected data 
 
 ## Required repository inputs and evidence
 
-Dispatch the workflow from the exact reviewed `main` commit and provide its full SHA, the highest migration risk classification, the exact first and last reviewed migration filenames, the successful exact-commit CI run, the successful production-shaped rehearsal run, and the allowlisted production database UUID. The workflow verifies GitHub run metadata before reading either artifact. The rehearsal workflow exports production data only inside its protected production job, deletes raw plaintext on every exit, derives a bounded content-free relationship/edge-shape sample, emits attributed failure or success reports, attests the sanitized artifact plus strict manifest, and verifies that attestation before import. It creates both rehearsal databases during the same workflow run, proves their user catalogs and ledgers are empty, restores into the separate recovery database, compares commit/database/range/ledger-bound invariants, deletes plaintext, and proves both databases absent.
+Dispatch the workflow from the exact reviewed `main` commit and provide its full SHA, the highest migration risk classification, the exact first and last reviewed migration filenames, the successful protected-`main` push CI run, the successful staging-promotion run for the merged pull request head, the successful production-shaped rehearsal run, and the allowlisted production database UUID. The workflow verifies each GitHub run's repository, event, branch, canonical workflow path, conclusion, and commit before reading its artifact. CI's comparison base must equal the verified merge commit's first parent. Staging evidence must match the main pull request head and merge tree and prove the exact migration range, data regression and teardown, clean ledger/schema, invariants, deployment, authenticated account-owned data, and custom domain before production can be requested. The rehearsal workflow exports production data only inside its protected production job, deletes raw plaintext on every exit, derives a bounded content-free relationship and edge-shape sample, emits attributed failure or success reports, attests the sanitized artifact plus strict manifest, and verifies that attestation before import. It creates both rehearsal databases during the same workflow run, proves their user catalogs and ledgers are empty, restores into the separate recovery database, compares commit/database/range/ledger-bound invariants, deletes plaintext, and proves both databases absent.
 
 For an application-only release with no database migration, dispatch both the rehearsal and production workflows with `migration_from=none`, `migration_to=none`, and `migration_classification=additive`. This is an explicit reviewed no-migration range, not a bypass: the workflow must still prove a clean migration ledger, matching Drizzle/migration schema contracts, complete invariants, successful exact-commit CI and rehearsal evidence, protected deployment approval, authenticated account-owned template/run visibility, and custom-domain health.
 
@@ -14,8 +14,9 @@ Production approval is checked against the exact merged `main` pull request and
 the exact verified, attributed GitHub merge commit. Every resolvable pull-request
 author, constituent commit author and committer, merge author and committer, and
 resolved co-author is excluded from serving as the independent approver.
-Constituent commits do not need individual signatures, but missing GitHub author
-attribution or unresolved co-author trailers block promotion. The dispatcher is
+Constituent commits do not need individual signatures, but every author and
+co-author must resolve to a GitHub user through GitHub's commit-author API or
+promotion blocks. The dispatcher is
 audit metadata and cannot establish independence. High-risk approval text comes
 from the protected-environment review event. Irreversible changes additionally
 require a distinct approval through `production-owner-approval` by the configured

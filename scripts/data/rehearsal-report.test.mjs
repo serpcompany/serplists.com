@@ -37,7 +37,7 @@ describe("rehearsal report finalization", () => {
 
       const failed = spawnSync(process.execPath, args.map((value) => value === commit ? "f".repeat(40) : value), { cwd: repoRoot, encoding: "utf8" });
       expect(failed.status).toBe(1);
-      for (const extension of ["json", "md", "junit.xml"]) expect(readFileSync(path.join(directory, `data-regression-suite.${extension}`), "utf8")).toContain("f".repeat(40));
+      for (const extension of ["json", "md", "junit.xml"]) expect(readFileSync(path.join(directory, `rehearsal-promotion.${extension}`), "utf8")).toContain("f".repeat(40));
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 });

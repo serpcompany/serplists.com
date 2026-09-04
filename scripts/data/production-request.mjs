@@ -38,6 +38,11 @@ try {
   const ciContractCorrection = JSON.parse(readFileSync(arg("--correction-report"), "utf8"));
   const ciSchemaContract = JSON.parse(readFileSync(arg("--schema-report"), "utf8"));
   const rehearsal = JSON.parse(readFileSync(arg("--rehearsal-report"), "utf8"));
+  const staging = JSON.parse(readFileSync(arg("--staging-report"), "utf8"));
+  const ciRun = JSON.parse(readFileSync(arg("--ci-run-metadata"), "utf8"));
+  const stagingRun = JSON.parse(readFileSync(arg("--staging-run-metadata"), "utf8"));
+  const mergeCommit = JSON.parse(readFileSync(arg("--merge-commit"), "utf8"));
+  const changeProvenance = JSON.parse(readFileSync(arg("--change-provenance"), "utf8"));
   if (!output) throw new Error("Production request requires --output.");
   const evidence = validatePromotionEvidence({
     commit,
@@ -49,13 +54,31 @@ try {
     ciSchemaContract,
     ciContractCorrection,
     rehearsal,
+    staging,
+    ciRun,
+    stagingRun,
+    changeProvenance,
+    mergeContext: { commit: mergeCommit.sha, tree: mergeCommit.commit?.tree?.sha, baseCommit: mergeCommit.parents?.[0]?.sha },
   });
   mkdirSync(path.dirname(output), { recursive: true });
   writeFileSync(output, JSON.stringify(evidence, null, 2) + "\n", { mode: 0o600 });
   console.log(`Validated exact-commit production request for ${commit}.`);
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
-  writeDataCheckReports({ name: "production-request", report: { check: "production-request", verdict: "fail", commit: arg("--commit") ?? "unknown", error: message }, summary: `BLOCKED production request: ${message}`, reportDirectory: "tmp/data-reports/production-request" });
+  writeDataCheckReports({
+    name: "production-request",
+    report: {
+      check: "production-request",
+      verdict: "fail",
+      commit: arg("--commit") ?? "unknown",
+      target: { environment: "production", databaseName: arg("--database-name") ?? "unknown", databaseId: arg("--database-id") ?? "unknown" },
+      migrationRange: { from: arg("--migration-from") ?? "unknown", to: arg("--migration-to") ?? "unknown" },
+      failedStage: "production-request-validation",
+      error: message,
+    },
+    summary: `BLOCKED production request: ${message}`,
+    reportDirectory: "tmp/data-reports/production-request",
+  });
   console.error(message);
   process.exitCode = 1;
 }

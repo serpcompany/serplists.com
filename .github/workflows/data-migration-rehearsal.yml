@@ -29,6 +29,7 @@ jobs:
       MIGRATION_TO: ${{ inputs.migration_to }}
     steps:
       - name: Reject untrusted rehearsal commit before checkout
+        id: commit_gate
         shell: bash
         env:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
@@ -41,11 +42,34 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           test "${GITHUB_REF_PROTECTED:-false}" = true
           test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+      - name: Finalize production-source pre-checkout failure
+        if: always() && steps.commit_gate.outcome != 'success'
+        env:
+          REPORT_COMMIT: ${{ github.sha }}
+          REPORT_ENVIRONMENT: production
+          REPORT_DATABASE_NAME: serp-checklists-db
+          REPORT_DATABASE_ID: b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1
+          REPORT_MIGRATION_FROM: ${{ inputs.migration_from }}
+          REPORT_MIGRATION_TO: ${{ inputs.migration_to }}
+        run: |
+          mkdir -p tmp/early-failure/production-source
+          jq -n --arg commit "$REPORT_COMMIT" --arg environment "$REPORT_ENVIRONMENT" --arg databaseName "$REPORT_DATABASE_NAME" --arg databaseId "$REPORT_DATABASE_ID" --arg from "$REPORT_MIGRATION_FROM" --arg to "$REPORT_MIGRATION_TO" '{check:"workflow-early-failure",verdict:"fail",commit:$commit,target:{environment:$environment,databaseName:$databaseName,databaseId:$databaseId},migrationRange:{from:$from,to:$to},failedStage:"pre-checkout-commit-validation"}' > tmp/early-failure/production-source/early-failure.json
+          printf 'BLOCKED %s pre-checkout-commit-validation; commit=%s; database=%s (%s); migration=%s -> %s.\n' "$REPORT_ENVIRONMENT" "$REPORT_COMMIT" "$REPORT_DATABASE_NAME" "$REPORT_DATABASE_ID" "$REPORT_MIGRATION_FROM" "$REPORT_MIGRATION_TO" > tmp/early-failure/production-source/early-failure.txt
+          COMMIT_XML=$(jq -rn --arg v "$REPORT_COMMIT" '$v|@html'); ENV_XML=$(jq -rn --arg v "$REPORT_ENVIRONMENT" '$v|@html'); NAME_XML=$(jq -rn --arg v "$REPORT_DATABASE_NAME" '$v|@html'); ID_XML=$(jq -rn --arg v "$REPORT_DATABASE_ID" '$v|@html'); FROM_XML=$(jq -rn --arg v "$REPORT_MIGRATION_FROM" '$v|@html'); TO_XML=$(jq -rn --arg v "$REPORT_MIGRATION_TO" '$v|@html')
+          printf '<testsuite name="workflow-early-failure" tests="1" failures="1"><properties><property name="commit" value="%s"/><property name="environment" value="%s"/><property name="databaseName" value="%s"/><property name="databaseId" value="%s"/><property name="migrationFrom" value="%s"/><property name="migrationTo" value="%s"/></properties><testcase name="pre-checkout-commit-validation"><failure message="workflow stopped before privileged execution"/></testcase></testsuite>\n' "$COMMIT_XML" "$ENV_XML" "$NAME_XML" "$ID_XML" "$FROM_XML" "$TO_XML" > tmp/early-failure/production-source/early-failure.junit.xml
+      - name: Upload production-source pre-checkout failure
+        if: always() && steps.commit_gate.outcome != 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-source-early-failure-${{ github.run_id }}
+          path: tmp/early-failure/production-source/
+          if-no-files-found: error
+          retention-days: 90
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with: { ref: "${{ github.sha }}" }
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
-        with: { node-version: "22", cache: pnpm }
+        with: { node-version-file: .node-version, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: Protected production source export through repository sanitizer
         env:
@@ -101,6 +125,7 @@ jobs:
       MIGRATION_TO: ${{ inputs.migration_to }}
     steps:
       - name: Reject untrusted rehearsal commit before checkout
+        id: commit_gate
         shell: bash
         run: |
           set -eu
@@ -111,11 +136,34 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           test "${GITHUB_REF_PROTECTED:-false}" = true
           test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+      - name: Finalize rehearsal pre-checkout failure
+        if: always() && steps.commit_gate.outcome != 'success'
+        env:
+          REPORT_COMMIT: ${{ github.sha }}
+          REPORT_ENVIRONMENT: rehearsal
+          REPORT_DATABASE_NAME: ${{ inputs.database_name }}
+          REPORT_DATABASE_ID: ${{ inputs.database_id }}
+          REPORT_MIGRATION_FROM: ${{ inputs.migration_from }}
+          REPORT_MIGRATION_TO: ${{ inputs.migration_to }}
+        run: |
+          mkdir -p tmp/early-failure/rehearsal
+          jq -n --arg commit "$REPORT_COMMIT" --arg environment "$REPORT_ENVIRONMENT" --arg databaseName "$REPORT_DATABASE_NAME" --arg databaseId "$REPORT_DATABASE_ID" --arg from "$REPORT_MIGRATION_FROM" --arg to "$REPORT_MIGRATION_TO" '{check:"workflow-early-failure",verdict:"fail",commit:$commit,target:{environment:$environment,databaseName:$databaseName,databaseId:$databaseId},migrationRange:{from:$from,to:$to},failedStage:"pre-checkout-commit-validation"}' > tmp/early-failure/rehearsal/early-failure.json
+          printf 'BLOCKED %s pre-checkout-commit-validation; commit=%s; database=%s (%s); migration=%s -> %s.\n' "$REPORT_ENVIRONMENT" "$REPORT_COMMIT" "$REPORT_DATABASE_NAME" "$REPORT_DATABASE_ID" "$REPORT_MIGRATION_FROM" "$REPORT_MIGRATION_TO" > tmp/early-failure/rehearsal/early-failure.txt
+          COMMIT_XML=$(jq -rn --arg v "$REPORT_COMMIT" '$v|@html'); ENV_XML=$(jq -rn --arg v "$REPORT_ENVIRONMENT" '$v|@html'); NAME_XML=$(jq -rn --arg v "$REPORT_DATABASE_NAME" '$v|@html'); ID_XML=$(jq -rn --arg v "$REPORT_DATABASE_ID" '$v|@html'); FROM_XML=$(jq -rn --arg v "$REPORT_MIGRATION_FROM" '$v|@html'); TO_XML=$(jq -rn --arg v "$REPORT_MIGRATION_TO" '$v|@html')
+          printf '<testsuite name="workflow-early-failure" tests="1" failures="1"><properties><property name="commit" value="%s"/><property name="environment" value="%s"/><property name="databaseName" value="%s"/><property name="databaseId" value="%s"/><property name="migrationFrom" value="%s"/><property name="migrationTo" value="%s"/></properties><testcase name="pre-checkout-commit-validation"><failure message="workflow stopped before privileged execution"/></testcase></testsuite>\n' "$COMMIT_XML" "$ENV_XML" "$NAME_XML" "$ID_XML" "$FROM_XML" "$TO_XML" > tmp/early-failure/rehearsal/early-failure.junit.xml
+      - name: Upload rehearsal pre-checkout failure
+        if: always() && steps.commit_gate.outcome != 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rehearsal-early-failure-${{ github.run_id }}
+          path: tmp/early-failure/rehearsal/
+          if-no-files-found: error
+          retention-days: 90
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with: { ref: "${{ github.sha }}" }
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
-        with: { node-version: "22", cache: pnpm }
+        with: { node-version-file: .node-version, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
@@ -208,7 +256,7 @@ jobs:
       - name: Finalize only proven rehearsal evidence
         if: always()
         run: |
-          node scripts/data/finalize-rehearsal-report.mjs --source tmp/data-reports/rehearsal/local-suite/data-regression-suite.json --comparison tmp/data-reports/rehearsal/remote-migration/remote-invariant-comparison.json --recovery tmp/data-reports/rehearsal/recovery-rehearsal.json --teardown tmp/data-reports/rehearsal/teardown.txt --sanitized tmp/data-evidence/production-shaped.sql --sanitizer-manifest tmp/data-evidence/production-shaped.manifest.json --commit "$GITHUB_SHA" --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --recovery-database-id "$RECOVERY_DATABASE_ID" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --output tmp/data-reports/rehearsal/data-regression-suite.json
+          node scripts/data/finalize-rehearsal-report.mjs --source tmp/data-reports/rehearsal/local-suite/data-regression-suite.json --comparison tmp/data-reports/rehearsal/remote-migration/remote-invariant-comparison.json --recovery tmp/data-reports/rehearsal/recovery-rehearsal.json --teardown tmp/data-reports/rehearsal/teardown.txt --sanitized tmp/data-evidence/production-shaped.sql --sanitizer-manifest tmp/data-evidence/production-shaped.manifest.json --commit "$GITHUB_SHA" --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --recovery-database-id "$RECOVERY_DATABASE_ID" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --output tmp/data-reports/rehearsal/rehearsal-promotion.json
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

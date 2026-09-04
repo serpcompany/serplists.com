@@ -1,0 +1,60 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+const commit = "a".repeat(40);
+const tree = "b".repeat(40);
+const databaseName = "serp-checklists-staging-db";
+const databaseId = "fcaf4325-5be7-4ead-ab60-45932a04177b";
+
+function runFinalizer({ mutate = () => {} } = {}) {
+  const directory = mkdtempSync(path.join(tmpdir(), "staging-finalizer-"));
+  const reports = {
+    data: { verdict: "pass", commit, teardown: { verdict: "pass", leakedUsers: 0, leakedTemplates: 0, leakedRuns: 0 } },
+    range: { verdict: "pass", commit, baseCommit: "c".repeat(40), target: { environment: "staging", databaseName, databaseId }, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, pendingMigrations: ["0024_safe_template_evolution.sql"] },
+    schema: { verdict: "pass", commit, target: { environment: "staging", database: databaseName, databaseId }, ledger: { verdict: "pass" } },
+    invariants: { verdict: "pass" },
+    deploy: { verdict: "pass", commit, tree, target: { environment: "staging", databaseName, databaseId } },
+    smoke: { verdict: "pass", commit, target: { environment: "staging", databaseName, databaseId }, failures: [] },
+  };
+  mutate(reports);
+  const args = [];
+  for (const [name, value] of Object.entries(reports)) {
+    const file = path.join(directory, `${name}.json`);
+    writeFileSync(file, JSON.stringify(value));
+    args.push(`--${name}`, file);
+  }
+  const output = path.join(directory, "output", "staging-promotion.json");
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(new URL("./finalize-staging-promotion.mjs", import.meta.url)),
+    ...args, "--commit", commit, "--tree", tree, "--database-name", databaseName,
+    "--database-id", databaseId, "--output", output,
+  ]);
+  return { directory, output, result };
+}
+
+describe("staging promotion finalizer", () => {
+  it("binds passing data, ledger, invariant, deploy, smoke, and teardown evidence to one commit and tree", () => {
+    const run = runFinalizer();
+    try {
+      expect(run.result.status).toBe(0);
+      expect(JSON.parse(readFileSync(run.output, "utf8"))).toMatchObject({
+        verdict: "pass", commit, tree, target: { environment: "staging", databaseName, databaseId },
+        teardown: { verdict: "pass" }, smoke: { verdict: "pass" }, deploy: { verdict: "pass" },
+      });
+    } finally { rmSync(run.directory, { recursive: true, force: true }); }
+  });
+
+  it("fails closed on a tree mismatch or failed teardown and still writes JSON JUnit and text", () => {
+    const run = runFinalizer({ mutate: (reports) => { reports.deploy.tree = "d".repeat(40); reports.data.teardown.verdict = "fail"; } });
+    try {
+      expect(run.result.status).toBe(1);
+      expect(JSON.parse(readFileSync(run.output, "utf8"))).toMatchObject({ verdict: "fail", commit, tree, failedStage: "finalize-staging-promotion" });
+      expect(readFileSync(run.output.replace(/\.json$/, ".junit.xml"), "utf8")).toContain('failures="1"');
+      expect(readFileSync(run.output.replace(/\.json$/, ".txt"), "utf8")).toContain(commit);
+    } finally { rmSync(run.directory, { recursive: true, force: true }); }
+  });
+});

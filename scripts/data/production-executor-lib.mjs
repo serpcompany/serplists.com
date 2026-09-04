@@ -173,9 +173,10 @@ export function validatePromotionEvidence(evidence) {
     throw new Error("Exact-commit CI data-regression evidence is missing or failed.");
   }
   if (evidence.ciContractCorrection?.verdict !== "pass" || evidence.ciContractCorrection.commit !== evidence.commit ||
-      !["pull_request", "push", "workflow_dispatch"].includes(evidence.ciContractCorrection.eventName) || !evidence.ciContractCorrection.comparisonBase) {
+      evidence.ciContractCorrection.eventName !== "push" || evidence.ciContractCorrection.comparisonBase !== evidence.mergeContext?.baseCommit) {
     throw new Error("Exact-commit CI contract-correction comparison evidence is missing or untrusted.");
   }
+  validateGitHubRunEvidence({ metadata: evidence.ciRun, commit: evidence.commit, workflowName: "CI", eventName: "push", headBranch: "main", workflowPath: ".github/workflows/ci.yml" });
   const schema = evidence.ciSchemaContract;
   if (schema?.verdict !== "pass" || schema.commit !== evidence.commit || schema.runtimeDiff?.verdict !== "pass" ||
       schema.authorityDiff?.verdict !== "pass" || schema.snapshotDiff?.verdict !== "pass" || !schema.migrationRange?.to) {
@@ -195,12 +196,27 @@ export function validatePromotionEvidence(evidence) {
   if (rehearsal.sanitizedSource?.verdict !== "pass" || rehearsal.sanitizedSource?.attestation?.verdict !== "pass") {
     throw new Error("Rehearsal must prove attested repository-sanitized production-shaped source import.");
   }
+  const staging = evidence.staging;
+  const provenance = evidence.changeProvenance;
+  if (evidence.mergeContext?.commit !== evidence.commit || !/^[0-9a-f]{40}$/.test(evidence.mergeContext?.tree ?? "") ||
+      provenance?.mergeCommit !== evidence.commit || staging?.commit !== provenance?.pullRequestHeadCommit ||
+      staging?.tree !== evidence.mergeContext.tree || staging?.verdict !== "pass" || staging?.target?.environment !== "staging" ||
+      staging?.target?.databaseId === evidence.database.databaseId || staging?.migrationRange?.from !== evidence.migrationRange.from ||
+      staging?.migrationRange?.to !== evidence.migrationRange.to || staging?.data?.verdict !== "pass" ||
+      staging?.schema?.verdict !== "pass" || staging?.schema?.ledger?.verdict !== "pass" || staging?.invariants?.verdict !== "pass" ||
+      staging?.deploy?.verdict !== "pass" || staging?.smoke?.verdict !== "pass" || !Array.isArray(staging?.smoke?.failures) ||
+      staging.smoke.failures.length || staging?.teardown?.verdict !== "pass") {
+    throw new Error("Exact-tree staging data, deploy, smoke, and teardown evidence is missing or failed.");
+  }
+  validateGitHubRunEvidence({ metadata: evidence.stagingRun, commit: staging.commit, workflowName: "Protected data promotion and Pages deploy", eventName: "push", headBranch: "staging", workflowPath: ".github/workflows/cloudflare-pages-deploy.yml" });
   return evidence;
 }
 
-export function validateGitHubRunEvidence({ metadata, commit, workflowName }) {
-  if (metadata?.repository?.full_name !== "serpcompany/serplists.com" || metadata.head_sha !== commit ||
-      metadata.conclusion !== "success" || metadata.name !== workflowName || !Number.isInteger(metadata.id)) {
+export function validateGitHubRunEvidence({ metadata, commit, workflowName, eventName, headBranch, workflowPath }) {
+  if (metadata?.repository?.full_name !== "serpcompany/serplists.com" || (commit && metadata.head_sha !== commit) ||
+      metadata.conclusion !== "success" || metadata.name !== workflowName ||
+      (eventName && metadata.event !== eventName) || (headBranch && metadata.head_branch !== headBranch) ||
+      (workflowPath && metadata.path !== workflowPath) || !Number.isInteger(metadata.id)) {
     throw new Error(`GitHub run is not successful exact-commit evidence from ${workflowName}.`);
   }
   return metadata;
@@ -210,7 +226,7 @@ function normalizeLogin(value) {
   return typeof value === "string" && value.trim() ? value.trim().replace(/^@/, "").toLowerCase() : null;
 }
 
-export function validateChangeProvenance({ pulls, commits, mergeCommit, expectedCommit }) {
+export function validateChangeProvenance({ pulls, commits, commitAuthors, mergeCommit, mergeAuthors, expectedCommit }) {
   assertSha(expectedCommit, "Expected change commit");
   const matches = (pulls ?? []).filter((pull) =>
     pull?.merged_at && pull?.base?.ref === "main" && pull?.merge_commit_sha === expectedCommit,
@@ -219,6 +235,9 @@ export function validateChangeProvenance({ pulls, commits, mergeCommit, expected
     throw new Error("Exact merged main pull request provenance is missing or ambiguous.");
   }
   const pull = matches[0];
+  if (!/^[0-9a-f]{40}$/.test(pull.head?.sha ?? "")) {
+    throw new Error("Exact merged main pull request head commit provenance is missing.");
+  }
   if (mergeCommit?.sha !== expectedCommit || mergeCommit?.commit?.verification?.verified !== true) {
     throw new Error("Exact merged main commit requires verified GitHub merge provenance.");
   }
@@ -227,31 +246,58 @@ export function validateChangeProvenance({ pulls, commits, mergeCommit, expected
   if (!mergeAuthor || !mergeCommitter) {
     throw new Error("Exact merged main commit requires attributed GitHub author and committer provenance.");
   }
+  const mergeAuthorNode = mergeAuthors?.data?.repository?.object;
+  const mergeAuthorNodes = mergeAuthorNode?.authors?.nodes;
+  const mergeAuthorLogins = Array.isArray(mergeAuthorNodes)
+    ? mergeAuthorNodes.map((author) => normalizeLogin(author?.user?.login))
+    : [];
+  if (mergeAuthorNode?.oid !== expectedCommit || !mergeAuthorLogins.length ||
+      mergeAuthorLogins.some((login) => !login) || mergeAuthorNode?.authors?.pageInfo?.hasNextPage) {
+    throw new Error("Exact merged main commit contains unresolved GitHub author or co-author attribution.");
+  }
   const commitEntries = (commits ?? []).flat();
-  const commitLogins = [];
-  for (const commit of commitEntries) {
-    commitLogins.push(commit?.author?.login, commit?.committer?.login);
-    for (const match of String(commit?.commit?.message ?? "").matchAll(/^Co-authored-by:\s*(.+)$/gim)) {
-      const login = /^@([a-z0-9-]+)$/i.exec(match[1].trim())?.[1];
-      if (!login) {
-        throw new Error("Pull request commit contains an unresolved co-author identity.");
+  const attributedAuthors = new Map();
+  for (const page of Array.isArray(commitAuthors) ? commitAuthors : []) {
+    const nodes = page?.data?.repository?.pullRequest?.commits?.nodes;
+    if (!Array.isArray(nodes)) throw new Error("Trusted GitHub commit-author attribution is incomplete.");
+    for (const node of nodes) {
+      const oid = node?.commit?.oid;
+      const authors = node?.commit?.authors;
+      if (!/^[0-9a-f]{40}$/.test(oid ?? "") || !Array.isArray(authors?.nodes) || authors?.pageInfo?.hasNextPage) {
+        throw new Error("Trusted GitHub commit-author attribution is incomplete.");
       }
-      commitLogins.push(login);
+      const logins = authors.nodes.map((author) => normalizeLogin(author?.user?.login));
+      if (!logins.length || logins.some((login) => !login)) {
+        throw new Error("Pull request commit contains an unresolved GitHub author or co-author.");
+      }
+      attributedAuthors.set(oid, logins);
     }
   }
-  const authorLogins = [pull.user?.login, mergeAuthor, mergeCommitter, ...commitLogins];
+  const commitLogins = [];
+  for (const commit of commitEntries) {
+    const oid = commit?.sha;
+    const authors = attributedAuthors.get(oid);
+    if (!authors) throw new Error("Trusted GitHub commit-author attribution does not match every pull request commit.");
+    commitLogins.push(commit?.author?.login, commit?.committer?.login, ...authors);
+  }
+  if (attributedAuthors.size !== new Set(commitEntries.map((commit) => commit?.sha)).size) {
+    throw new Error("Trusted GitHub commit-author attribution does not match the pull request commit set.");
+  }
+  const authorLogins = [pull.user?.login, mergeAuthor, mergeCommitter, ...mergeAuthorLogins, ...commitLogins];
   const normalized = authorLogins.map(normalizeLogin);
   if (!Number.isInteger(pull.number) || !commitEntries.length || normalized.some((login) => !login)) {
     throw new Error("Pull request provenance contains an unresolved human author.");
   }
   return {
     pullRequestNumber: pull.number,
+    pullRequestHeadCommit: pull.head?.sha,
     mergeCommit: expectedCommit,
     changeAuthors: [...new Set(normalized)].sort(),
     mergeProvenance: {
       verification: "verified",
       author: mergeAuthor,
       committer: mergeCommitter,
+      authors: [...new Set(mergeAuthorLogins)].sort(),
     },
   };
 }

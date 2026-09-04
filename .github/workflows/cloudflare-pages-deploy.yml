@@ -13,6 +13,7 @@ on:
         type: choice
         options: [additive, backfill, destructive, irreversible]
       ci_run_id: { description: Exact-commit CI data-regression artifact run, required: true }
+      staging_run_id: { description: Successful staging promotion run for the exact main PR head tree, required: true }
       rehearsal_run_id: { description: Exact-commit production-shaped rehearsal artifact run, required: true }
       confirm_production_database_id: { description: Exact allowlisted production D1 UUID, required: true }
 concurrency:
@@ -40,7 +41,7 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
-        with: { node-version: "22", cache: pnpm }
+        with: { node-version-file: .node-version, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: Install Playwright Chromium for data regressions
         run: pnpm exec playwright install --with-deps chromium
@@ -94,13 +95,27 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
-        with: { node-version: "22", cache: pnpm }
+        with: { node-version-file: .node-version, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: BETTER_AUTH_SECRET=ci-build-placeholder-secret-32-chars-minimum pnpm run build
       - name: Deploy staging after data gates
+        id: staging_pages_deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
-        run: pnpm exec wrangler pages deploy ./dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch staging --commit-hash "$GITHUB_SHA"
+        run: |
+          mkdir -p tmp/data-reports/staging-deploy
+          pnpm exec wrangler pages deploy ./dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch staging --commit-hash "$GITHUB_SHA" | tee tmp/data-reports/staging-deploy/deploy-output.txt
+      - name: Record exact staging deployment result
+        if: always()
+        run: node scripts/data/record-deployment.mjs --environment staging --commit "$GITHUB_SHA" --tree "$(git rev-parse 'HEAD^{tree}')" --database-name serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --outcome "${{ steps.staging_pages_deploy.outcome }}" --raw-output tmp/data-reports/staging-deploy/deploy-output.txt --report-dir tmp/data-reports/staging-deploy
+      - name: Upload staging deployment evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: staging-deploy-${{ github.run_id }}
+          path: tmp/data-reports/staging-deploy/
+          if-no-files-found: error
+          retention-days: 90
 
   staging_postdeploy:
     needs: staging_deploy
@@ -110,14 +125,31 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
-        with: { node-version: "22", cache: pnpm }
+        with: { node-version-file: .node-version, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: staging-data-${{ github.run_id }}
+          path: tmp/staging-evidence/data
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: staging-deploy-${{ github.run_id }}
+          path: tmp/staging-evidence/deploy
       - name: Authenticated account-owned template/run and custom-domain postdeploy smoke
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
           DATA_CANARY_OWNER_ID: ${{ secrets.STAGING_DATA_CANARY_OWNER_ID }}
           DATA_CANARY_COOKIE: ${{ secrets.STAGING_DATA_CANARY_COOKIE }}
         run: node scripts/data/deployment-smoke.mjs --environment staging --database-name serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --deployment-url https://staging.serplists-com.pages.dev --custom-domain https://staging.serplists.com --report-dir tmp/data-reports/staging-postdeploy
+      - name: Finalize exact staging promotion evidence
+        if: always()
+        run: |
+          DATA_REPORT=$(find tmp/staging-evidence/data -name data-regression-suite.json -print -quit)
+          RANGE_REPORT=$(find tmp/staging-evidence/data -name staging-reviewed-range.json -print -quit)
+          SCHEMA_REPORT=$(find tmp/staging-evidence/data -name d1-schema-staging.json -print -quit)
+          INVARIANT_REPORT=$(find tmp/staging-evidence/data -name remote-invariant-comparison.json -print -quit)
+          DEPLOY_REPORT=$(find tmp/staging-evidence/deploy -name staging-deploy.json -print -quit)
+          node scripts/data/finalize-staging-promotion.mjs --data "$DATA_REPORT" --range "$RANGE_REPORT" --schema "$SCHEMA_REPORT" --invariants "$INVARIANT_REPORT" --deploy "$DEPLOY_REPORT" --smoke tmp/data-reports/staging-postdeploy/staging-postdeploy-smoke.json --commit "$GITHUB_SHA" --tree "$(git rev-parse 'HEAD^{tree}')" --database-name serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --output tmp/data-reports/staging-postdeploy/staging-promotion.json
       - name: Upload staging postdeploy reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -166,21 +198,41 @@ jobs:
       MIGRATION_TO: ${{ inputs.migration_to }}
       MIGRATION_CLASSIFICATION: ${{ inputs.migration_classification }}
       CI_RUN_ID: ${{ inputs.ci_run_id }}
+      STAGING_RUN_ID: ${{ inputs.staging_run_id }}
       REHEARSAL_RUN_ID: ${{ inputs.rehearsal_run_id }}
       CONFIRM_PRODUCTION_DATABASE_ID: ${{ inputs.confirm_production_database_id }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Validate production dispatch inputs
+        id: production_input_gate
         run: node scripts/data/validate-workflow-inputs.mjs production
+      - name: Finalize production-request input failure
+        if: always() && steps.production_input_gate.outcome != 'success'
+        env:
+          REPORT_COMMIT: ${{ github.sha }}
+          REPORT_ENVIRONMENT: production
+          REPORT_DATABASE_NAME: serp-checklists-db
+          REPORT_DATABASE_ID: ${{ inputs.confirm_production_database_id }}
+          REPORT_MIGRATION_FROM: ${{ inputs.migration_from }}
+          REPORT_MIGRATION_TO: ${{ inputs.migration_to }}
+        run: |
+          mkdir -p tmp/data-reports/production-request
+          jq -n --arg commit "$REPORT_COMMIT" --arg environment "$REPORT_ENVIRONMENT" --arg databaseName "$REPORT_DATABASE_NAME" --arg databaseId "$REPORT_DATABASE_ID" --arg from "$REPORT_MIGRATION_FROM" --arg to "$REPORT_MIGRATION_TO" '{check:"workflow-early-failure",verdict:"fail",commit:$commit,target:{environment:$environment,databaseName:$databaseName,databaseId:$databaseId},migrationRange:{from:$from,to:$to},failedStage:"production-request-input-validation"}' > tmp/data-reports/production-request/early-failure.json
+          printf 'BLOCKED %s production-request-input-validation; commit=%s; database=%s (%s); migration=%s -> %s.\n' "$REPORT_ENVIRONMENT" "$REPORT_COMMIT" "$REPORT_DATABASE_NAME" "$REPORT_DATABASE_ID" "$REPORT_MIGRATION_FROM" "$REPORT_MIGRATION_TO" > tmp/data-reports/production-request/early-failure.txt
+          COMMIT_XML=$(jq -rn --arg v "$REPORT_COMMIT" '$v|@html'); ENV_XML=$(jq -rn --arg v "$REPORT_ENVIRONMENT" '$v|@html'); NAME_XML=$(jq -rn --arg v "$REPORT_DATABASE_NAME" '$v|@html'); ID_XML=$(jq -rn --arg v "$REPORT_DATABASE_ID" '$v|@html'); FROM_XML=$(jq -rn --arg v "$REPORT_MIGRATION_FROM" '$v|@html'); TO_XML=$(jq -rn --arg v "$REPORT_MIGRATION_TO" '$v|@html')
+          printf '<testsuite name="workflow-early-failure" tests="1" failures="1"><properties><property name="commit" value="%s"/><property name="environment" value="%s"/><property name="databaseName" value="%s"/><property name="databaseId" value="%s"/><property name="migrationFrom" value="%s"/><property name="migrationTo" value="%s"/></properties><testcase name="production-request-input-validation"><failure message="workflow stopped before evidence download"/></testcase></testsuite>\n' "$COMMIT_XML" "$ENV_XML" "$NAME_XML" "$ID_XML" "$FROM_XML" "$TO_XML" > tmp/data-reports/production-request/early-failure.junit.xml
       - name: Download exact-commit CI and rehearsal artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID" > tmp-ci-run.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGING_RUN_ID" > tmp-staging-run.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$REHEARSAL_RUN_ID" > tmp-rehearsal-run.json
-          node scripts/data/verify-github-run-evidence.mjs --metadata tmp-ci-run.json --commit "$EXPECTED_COMMIT" --workflow CI
-          node scripts/data/verify-github-run-evidence.mjs --metadata tmp-rehearsal-run.json --commit "$EXPECTED_COMMIT" --workflow "Data migration rehearsal"
+          node scripts/data/verify-github-run-evidence.mjs --metadata tmp-ci-run.json --commit "$EXPECTED_COMMIT" --workflow CI --event push --branch main --path .github/workflows/ci.yml
+          node scripts/data/verify-github-run-evidence.mjs --metadata tmp-staging-run.json --workflow "Protected data promotion and Pages deploy" --event push --branch staging --path .github/workflows/cloudflare-pages-deploy.yml
+          node scripts/data/verify-github-run-evidence.mjs --metadata tmp-rehearsal-run.json --commit "$EXPECTED_COMMIT" --workflow "Data migration rehearsal" --event workflow_dispatch --branch main --path .github/workflows/data-migration-rehearsal.yml
           gh run download "$CI_RUN_ID" --dir tmp/evidence/ci
+          gh run download "$STAGING_RUN_ID" --dir tmp/evidence/staging
           gh run download "$REHEARSAL_RUN_ID" --dir tmp/evidence/rehearsal
       - name: Capture exact merged-PR and change-author provenance
         env:
@@ -189,15 +241,20 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/commits/$EXPECTED_COMMIT/pulls" > tmp/change-pulls.json
           PR_NUMBER=$(jq -er --arg sha "$EXPECTED_COMMIT" '[.[] | select(.merged_at != null and .base.ref == "main" and .merge_commit_sha == $sha)] | if length == 1 then .[0].number else error("missing or ambiguous merged PR") end' tmp/change-pulls.json)
           gh api "repos/$GITHUB_REPOSITORY/commits/$EXPECTED_COMMIT" > tmp/change-merge-commit.json
+          gh api graphql -F owner="${GITHUB_REPOSITORY%%/*}" -F name="${GITHUB_REPOSITORY#*/}" -F oid="$EXPECTED_COMMIT" -f query='query($owner:String!,$name:String!,$oid:GitObjectID!){repository(owner:$owner,name:$name){object(oid:$oid){... on Commit{oid authors(first:100){nodes{user{login}} pageInfo{hasNextPage}}}}}}' > tmp/change-merge-authors.json
           gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits?per_page=100" > tmp/change-commits.json
-          node scripts/data/capture-change-provenance.mjs --pulls tmp/change-pulls.json --commits tmp/change-commits.json --merge-commit tmp/change-merge-commit.json --commit "$EXPECTED_COMMIT" --output tmp/change-provenance.json
+          gh api graphql --paginate --slurp -F owner="${GITHUB_REPOSITORY%%/*}" -F name="${GITHUB_REPOSITORY#*/}" -F number="$PR_NUMBER" -f query='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){commits(first:100,after:$endCursor){nodes{commit{oid authors(first:100){nodes{user{login}} pageInfo{hasNextPage}}}} pageInfo{hasNextPage endCursor}}}}}' > tmp/change-commit-authors.json
+          node scripts/data/capture-change-provenance.mjs --pulls tmp/change-pulls.json --commits tmp/change-commits.json --commit-authors tmp/change-commit-authors.json --merge-commit tmp/change-merge-commit.json --merge-authors tmp/change-merge-authors.json --commit "$EXPECTED_COMMIT" --output tmp/change-provenance.json
       - name: Validate approved commit migration range and rehearsal artifact
         run: |
           CI_REPORT=$(find tmp/evidence/ci -name data-regression-suite.json -print -quit)
           CORRECTION_REPORT=$(find tmp/evidence/ci -name contract-correction.json -print -quit)
           SCHEMA_REPORT=$(find tmp/evidence/ci -name schema-contract.json -print -quit)
-          REHEARSAL_REPORT=$(find tmp/evidence/rehearsal -name data-regression-suite.json -print -quit)
-          node scripts/data/production-request.mjs --commit "$EXPECTED_COMMIT" --classification "$MIGRATION_CLASSIFICATION" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --database-name serp-checklists-db --database-id "$CONFIRM_PRODUCTION_DATABASE_ID" --ci-report "$CI_REPORT" --correction-report "$CORRECTION_REPORT" --schema-report "$SCHEMA_REPORT" --rehearsal-report "$REHEARSAL_REPORT" --output tmp/production-request.json
+          STAGING_REPORT=$(find tmp/evidence/staging -name staging-promotion.json -print)
+          test "$(printf '%s\n' "$STAGING_REPORT" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1
+          REHEARSAL_REPORT=$(find tmp/evidence/rehearsal -name rehearsal-promotion.json -print)
+          test "$(printf '%s\n' "$REHEARSAL_REPORT" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1
+          node scripts/data/production-request.mjs --commit "$EXPECTED_COMMIT" --classification "$MIGRATION_CLASSIFICATION" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --database-name serp-checklists-db --database-id "$CONFIRM_PRODUCTION_DATABASE_ID" --ci-report "$CI_REPORT" --correction-report "$CORRECTION_REPORT" --schema-report "$SCHEMA_REPORT" --staging-report "$STAGING_REPORT" --rehearsal-report "$REHEARSAL_REPORT" --ci-run-metadata tmp-ci-run.json --staging-run-metadata tmp-staging-run.json --merge-commit tmp/change-merge-commit.json --change-provenance tmp/change-provenance.json --output tmp/production-request.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -238,7 +295,7 @@ jobs:
         run: node scripts/data/validate-workflow-inputs.mjs approval
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
-        with: { node-version: "22", cache: pnpm }
+        with: { node-version-file: .node-version, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
@@ -290,7 +347,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
-        with: { node-version: "22", cache: pnpm }
+        with: { node-version-file: .node-version, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
@@ -337,7 +394,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
-        with: { node-version: "22", cache: pnpm }
+        with: { node-version-file: .node-version, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:

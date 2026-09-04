@@ -4,6 +4,7 @@
 
 /db/schema/ @devinschumacher
 /db/migrations/ @devinschumacher
+/db/migration-provenance.json @devinschumacher
 /db/schema.sql @devinschumacher
 /db/seeds/ @devinschumacher
 /db/maintenance/ @devinschumacher

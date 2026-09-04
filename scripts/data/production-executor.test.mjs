@@ -41,6 +41,9 @@ const context = {
 };
 
 function validPromotionEvidence() {
+  const baseCommit = "b".repeat(40);
+  const stagingCommit = "c".repeat(40);
+  const tree = "d".repeat(40);
   return {
     commit,
     classification: "backfill",
@@ -48,7 +51,7 @@ function validPromotionEvidence() {
     pendingMigrations: ["0024_safe_template_evolution.sql"],
     migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
     ci: { verdict: "pass", commit, workingTreeDirty: false },
-    ciContractCorrection: { verdict: "pass", commit, eventName: "push", comparisonBase: "base-sha" },
+    ciContractCorrection: { verdict: "pass", commit, eventName: "push", comparisonBase: baseCommit },
     ciSchemaContract: { verdict: "pass", commit, runtimeDiff: { verdict: "pass" }, authorityDiff: { verdict: "pass" }, snapshotDiff: { verdict: "pass" }, migrationRange: { from: "0001_initial_schema.sql", to: "0024_safe_template_evolution.sql" } },
     rehearsal: {
       verdict: "pass",
@@ -58,6 +61,23 @@ function validPromotionEvidence() {
       recovery: { verdict: "pass" },
       teardown: { verdict: "pass" },
       sanitizedSource: { verdict: "pass", attestation: { verdict: "pass" } },
+    },
+    ciRun: { id: 101, head_sha: commit, conclusion: "success", name: "CI", event: "push", head_branch: "main", path: ".github/workflows/ci.yml", repository: { full_name: "serpcompany/serplists.com" } },
+    stagingRun: { id: 102, head_sha: stagingCommit, conclusion: "success", name: "Protected data promotion and Pages deploy", event: "push", head_branch: "staging", path: ".github/workflows/cloudflare-pages-deploy.yml", repository: { full_name: "serpcompany/serplists.com" } },
+    mergeContext: { commit, tree, baseCommit },
+    changeProvenance: { mergeCommit: commit, pullRequestNumber: 100, pullRequestHeadCommit: stagingCommit, changeAuthors: ["author"] },
+    staging: {
+      verdict: "pass",
+      commit: stagingCommit,
+      tree,
+      target: { environment: "staging", databaseName: "serp-checklists-staging-db", databaseId: "fcaf4325-5be7-4ead-ab60-45932a04177b" },
+      migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
+      data: { verdict: "pass" },
+      schema: { verdict: "pass", ledger: { verdict: "pass" } },
+      invariants: { verdict: "pass" },
+      deploy: { verdict: "pass" },
+      smoke: { verdict: "pass", failures: [] },
+      teardown: { verdict: "pass" },
     },
   };
 }
@@ -102,6 +122,9 @@ describe("protected production executor", () => {
       { ...evidence, ci: { ...evidence.ci, verdict: "fail" } },
       { ...evidence, ciContractCorrection: { ...evidence.ciContractCorrection, eventName: "local-working-tree" } },
       { ...evidence, ciContractCorrection: { ...evidence.ciContractCorrection, comparisonBase: null } },
+      { ...evidence, ciRun: { ...evidence.ciRun, event: "workflow_dispatch" } },
+      { ...evidence, staging: { ...evidence.staging, tree: "e".repeat(40) } },
+      { ...evidence, staging: { ...evidence.staging, teardown: { verdict: "fail" } } },
       { ...evidence, ciSchemaContract: { ...evidence.ciSchemaContract, authorityDiff: { verdict: "fail" } } },
       { ...evidence, rehearsal: { ...evidence.rehearsal, commit: "f".repeat(40) } },
       { ...evidence, rehearsal: { ...evidence.rehearsal, target: { environment: "production", databaseId: production.databaseId } } },
@@ -110,26 +133,28 @@ describe("protected production executor", () => {
   });
 
   it("supports an explicit no-migrations release only with a proven clean ledger", () => {
-    const evidence = {
-      commit, classification: "additive", database: production,
-      migrationRange: { from: null, to: null }, pendingMigrations: [],
-      ci: { verdict: "pass", commit, workingTreeDirty: false },
-      ciContractCorrection: { verdict: "pass", commit, eventName: "push", comparisonBase: "base-sha" },
-      ciSchemaContract: { verdict: "pass", commit, runtimeDiff: { verdict: "pass" }, authorityDiff: { verdict: "pass" }, snapshotDiff: { verdict: "pass" }, migrationRange: { from: "0001_initial_schema.sql", to: "0024_safe_template_evolution.sql" } },
-      rehearsal: { verdict: "pass", commit, target: { environment: "staging", databaseId: "staging" }, migrationRange: { from: null, to: null }, recovery: { verdict: "pass" }, teardown: { verdict: "pass" }, sanitizedSource: { verdict: "pass", attestation: { verdict: "pass" } } },
-    };
+    const evidence = validPromotionEvidence();
+    evidence.classification = "additive";
+    evidence.migrationRange = { from: null, to: null };
+    evidence.pendingMigrations = [];
+    evidence.rehearsal.migrationRange = { from: null, to: null };
+    evidence.staging.migrationRange = { from: null, to: null };
     expect(validatePromotionEvidence(evidence).pendingMigrations).toEqual([]);
   });
 
   it("rejects artifacts unless GitHub identifies the exact successful workflow and commit", () => {
-    const metadata = { id: 123, head_sha: commit, conclusion: "success", name: "CI", event: "push", repository: { full_name: "serpcompany/serplists.com" } };
-    expect(validateGitHubRunEvidence({ metadata, commit, workflowName: "CI" })).toEqual(metadata);
+    const metadata = { id: 123, head_sha: commit, conclusion: "success", name: "CI", event: "push", head_branch: "main", path: ".github/workflows/ci.yml", repository: { full_name: "serpcompany/serplists.com" } };
+    const options = { metadata, commit, workflowName: "CI", eventName: "push", headBranch: "main", workflowPath: ".github/workflows/ci.yml" };
+    expect(validateGitHubRunEvidence(options)).toEqual(metadata);
     for (const invalid of [
       { ...metadata, head_sha: "f".repeat(40) },
       { ...metadata, conclusion: "failure" },
       { ...metadata, name: "Untrusted workflow" },
+      { ...metadata, event: "workflow_dispatch" },
+      { ...metadata, head_branch: "staging" },
+      { ...metadata, path: ".github/workflows/untrusted.yml" },
       { ...metadata, repository: { full_name: "other/repo" } },
-    ]) expect(() => validateGitHubRunEvidence({ metadata: invalid, commit, workflowName: "CI" })).toThrow();
+    ]) expect(() => validateGitHubRunEvidence({ ...options, metadata: invalid })).toThrow();
   });
 
   it("derives the highest migration risk and rejects under-classification", () => {
@@ -212,23 +237,31 @@ describe("protected production executor", () => {
   });
 
   it("accepts ordinary unsigned constituent commits while binding exact verified merge provenance and every author", () => {
-    const pulls = [{ number: 100, merged_at: "2026-09-05T00:00:00Z", merge_commit_sha: commit, base: { ref: "main" }, user: { login: "PR-Author" } }];
+    const pulls = [{ number: 100, merged_at: "2026-09-05T00:00:00Z", merge_commit_sha: commit, base: { ref: "main" }, head: { sha: "c".repeat(40) }, user: { login: "PR-Author" } }];
     const mergeCommit = {
       sha: commit,
       author: { login: "merge-author", type: "User" },
       committer: { login: "web-flow", type: "User" },
       commit: { verification: { verified: true, reason: "valid" } },
     };
+    const mergeAuthors = { data: { repository: { object: { oid: commit, authors: { nodes: [{ user: { login: "merge-author" } }], pageInfo: { hasNextPage: false } } } } } };
     const commits = [
-      { author: { login: "commit-author" }, committer: { login: "trusted-committer" }, commit: { message: "Change\n\nCo-authored-by: @co-author", verification: { verified: false } } },
-      { author: { login: "pr-author" }, committer: { login: "trusted-committer" }, commit: { message: "Other", verification: { verified: false } } },
+      { sha: "1".repeat(40), author: { login: "commit-author" }, committer: { login: "trusted-committer" }, commit: { message: "Change\n\nCo-authored-by: Human <human@example.test>", verification: { verified: false } } },
+      { sha: "2".repeat(40), author: { login: "pr-author" }, committer: { login: "trusted-committer" }, commit: { message: "Other", verification: { verified: false } } },
     ];
-    const provenance = validateChangeProvenance({ pulls, commits, mergeCommit, expectedCommit: commit });
+    const commitAuthors = [{
+      data: { repository: { pullRequest: { commits: { nodes: [
+        { commit: { oid: "1".repeat(40), authors: { nodes: [{ user: { login: "commit-author" } }, { user: { login: "co-author" } }], pageInfo: { hasNextPage: false } } } },
+        { commit: { oid: "2".repeat(40), authors: { nodes: [{ user: { login: "pr-author" } }], pageInfo: { hasNextPage: false } } } },
+      ] } } } },
+    }];
+    const provenance = validateChangeProvenance({ pulls, commits, commitAuthors, mergeCommit, mergeAuthors, expectedCommit: commit });
     expect(provenance).toEqual({
       pullRequestNumber: 100,
+      pullRequestHeadCommit: "c".repeat(40),
       mergeCommit: commit,
       changeAuthors: ["co-author", "commit-author", "merge-author", "pr-author", "trusted-committer", "web-flow"],
-      mergeProvenance: { verification: "verified", author: "merge-author", committer: "web-flow" },
+      mergeProvenance: { verification: "verified", author: "merge-author", committer: "web-flow", authors: ["merge-author"] },
     });
 
     const productionReview = (login) => ({
@@ -246,13 +279,18 @@ describe("protected production executor", () => {
       })).toThrow(/independent/i);
     }
 
-    expect(() => validateChangeProvenance({ pulls: [], commits, mergeCommit, expectedCommit: commit })).toThrow(/pull request/i);
-    expect(() => validateChangeProvenance({ pulls: [{ ...pulls[0], base: { ref: "staging" } }], commits, mergeCommit, expectedCommit: commit })).toThrow(/pull request/i);
-    expect(() => validateChangeProvenance({ pulls, commits, mergeCommit: { ...mergeCommit, sha: "f".repeat(40) }, expectedCommit: commit })).toThrow(/merge provenance/i);
-    expect(() => validateChangeProvenance({ pulls, commits, mergeCommit: { ...mergeCommit, commit: { verification: { verified: false } } }, expectedCommit: commit })).toThrow(/merge provenance/i);
-    expect(() => validateChangeProvenance({ pulls, commits, mergeCommit: { ...mergeCommit, author: null }, expectedCommit: commit })).toThrow(/attributed/i);
-    expect(() => validateChangeProvenance({ pulls, commits: [{ author: null, committer: { login: "committer" }, commit: { message: "Change", verification: { verified: false } } }], mergeCommit, expectedCommit: commit })).toThrow(/author/i);
-    expect(() => validateChangeProvenance({ pulls, commits: [{ author: { login: "author" }, committer: { login: "committer" }, commit: { message: "Change\n\nCo-authored-by: Person <private@example.test>", verification: { verified: false } } }], mergeCommit, expectedCommit: commit })).toThrow(/co-author/i);
+    expect(() => validateChangeProvenance({ pulls: [], commits, commitAuthors, mergeCommit, mergeAuthors, expectedCommit: commit })).toThrow(/pull request/i);
+    expect(() => validateChangeProvenance({ pulls: [{ ...pulls[0], base: { ref: "staging" } }], commits, commitAuthors, mergeCommit, mergeAuthors, expectedCommit: commit })).toThrow(/pull request/i);
+    expect(() => validateChangeProvenance({ pulls, commits, commitAuthors, mergeCommit: { ...mergeCommit, sha: "f".repeat(40) }, mergeAuthors, expectedCommit: commit })).toThrow(/merge provenance/i);
+    expect(() => validateChangeProvenance({ pulls, commits, commitAuthors, mergeCommit: { ...mergeCommit, commit: { verification: { verified: false } } }, mergeAuthors, expectedCommit: commit })).toThrow(/merge provenance/i);
+    expect(() => validateChangeProvenance({ pulls, commits, commitAuthors, mergeCommit: { ...mergeCommit, author: null }, mergeAuthors, expectedCommit: commit })).toThrow(/attributed/i);
+    expect(() => validateChangeProvenance({ pulls, commits: [{ ...commits[0], author: null }, commits[1]], commitAuthors, mergeCommit, mergeAuthors, expectedCommit: commit })).toThrow(/author/i);
+    const unresolvedCoauthor = structuredClone(commitAuthors);
+    unresolvedCoauthor[0].data.repository.pullRequest.commits.nodes[0].commit.authors.nodes.push({ user: null });
+    expect(() => validateChangeProvenance({ pulls, commits, commitAuthors: unresolvedCoauthor, mergeCommit, mergeAuthors, expectedCommit: commit })).toThrow(/co-author/i);
+    const unresolvedMergeCoauthor = structuredClone(mergeAuthors);
+    unresolvedMergeCoauthor.data.repository.object.authors.nodes.push({ user: null });
+    expect(() => validateChangeProvenance({ pulls, commits, commitAuthors, mergeCommit, mergeAuthors: unresolvedMergeCoauthor, expectedCommit: commit })).toThrow(/co-author/i);
   });
 
   it.each([

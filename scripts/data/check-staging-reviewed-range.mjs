@@ -2,11 +2,13 @@
 import { execFileSync } from "node:child_process";
 import { sanitizedGitEnvironment } from "./migration-provenance-lib.mjs";
 import { parsePendingMigrationNames } from "./pending-migrations-lib.mjs";
+import { writeDataCheckReports } from "./reporting.mjs";
 
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const reportDirectory = "tmp/data-reports/staging";
+const base = process.env.STAGING_BASE_SHA;
+const head = process.env.GITHUB_SHA;
 try {
-  const base = process.env.STAGING_BASE_SHA;
-  const head = process.env.GITHUB_SHA;
   if (!/^[0-9a-f]{40}$/.test(base ?? "") || /^0{40}$/.test(base) || !/^[0-9a-f]{40}$/.test(head ?? "")) {
     throw new Error("Staging reviewed range requires exact nonzero GitHub push before/head SHAs.");
   }
@@ -36,8 +38,26 @@ try {
   if (JSON.stringify(changed) !== JSON.stringify(pending)) {
     throw new Error(`Staging pending migrations ${pending.join(", ") || "none"} do not exactly match reviewed commit migrations ${changed.join(", ") || "none"}.`);
   }
-  console.log(`PASS exact staging commit/range: ${pending.join(", ") || "no migration"}.`);
+  const report = {
+    check: "staging-reviewed-range",
+    verdict: "pass",
+    commit: head,
+    baseCommit: base,
+    target: { environment: "staging", databaseName: "serp-checklists-staging-db", databaseId: "fcaf4325-5be7-4ead-ab60-45932a04177b" },
+    migrationRange: { from: pending[0] ?? null, to: pending.at(-1) ?? null },
+    pendingMigrations: pending,
+  };
+  const summary = `PASS exact staging commit/range: ${pending.join(", ") || "no migration"}.`;
+  writeDataCheckReports({ name: "staging-reviewed-range", report, summary, reportDirectory });
+  console.log(summary);
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
+  const message = error instanceof Error ? error.message : String(error);
+  writeDataCheckReports({
+    name: "staging-reviewed-range",
+    report: { check: "staging-reviewed-range", verdict: "fail", commit: head ?? "unknown", baseCommit: base ?? "unknown", target: { environment: "staging", databaseName: "serp-checklists-staging-db", databaseId: "fcaf4325-5be7-4ead-ab60-45932a04177b" }, migrationRange: { from: null, to: null }, error: message },
+    summary: `BLOCKED staging reviewed range: ${message}`,
+    reportDirectory,
+  });
+  console.error(message);
   process.exit(1);
 }

@@ -66,12 +66,12 @@ try {
   writeFileSync(output.replace(/\.json$/, ".junit.xml"), `<testsuite name="production-shaped-rehearsal" tests="1" failures="0"><properties><property name="commit" value="${xml(report.commit)}"/><property name="environment" value="rehearsal"/><property name="database" value="${xml(report.target.databaseName)}"/><property name="databaseId" value="${xml(report.target.databaseId)}"/><property name="recoveryDatabaseId" value="${xml(recovery.recoveryDatabase.id)}"/><property name="migration" value="${xml(`${report.migrationRange.from}->${report.migrationRange.to}`)}"/><property name="sanitizer" value="${xml(sanitizedManifest.sanitizerVersion)}"/></properties><testcase name="rehearsal-and-separate-database-restore"/></testsuite>\n`);
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
-  const output = arg("--output") ?? "tmp/data-reports/rehearsal/data-regression-suite.json";
+  const output = arg("--output") ?? "tmp/data-reports/rehearsal/rehearsal-promotion.json";
   let sanitizerVersion = "unknown";
   try { sanitizerVersion = JSON.parse(readFileSync(arg("--sanitizer-manifest"), "utf8")).sanitizerVersion ?? "unknown"; } catch {}
   const failure = { check: "production-shaped-rehearsal", verdict: "fail", commit: arg("--commit") ?? "unknown", target: { environment: "rehearsal", databaseName: arg("--database-name"), databaseId: arg("--database-id") }, migrationRange: { from: arg("--migration-from"), to: arg("--migration-to") }, sanitizerVersion, error: message };
   const identity = `commit=${failure.commit} environment=rehearsal database=${failure.target.databaseName} databaseId=${failure.target.databaseId} migration=${failure.migrationRange.from}->${failure.migrationRange.to} sanitizer=${failure.sanitizerVersion}`;
-  writeDataCheckReports({ name: "data-regression-suite", report: failure, summary: `BLOCKED production-shaped rehearsal: ${identity}: ${message}`, reportDirectory: path.dirname(output) });
+  writeDataCheckReports({ name: "rehearsal-promotion", report: failure, summary: `BLOCKED production-shaped rehearsal: ${identity}: ${message}`, reportDirectory: path.dirname(output) });
   console.error(message);
   process.exitCode = 1;
 }

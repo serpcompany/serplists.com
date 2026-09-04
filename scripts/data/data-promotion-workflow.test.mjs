@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
@@ -26,6 +27,7 @@ const rehearsalWorkflow = yaml.load(rehearsalSource);
 const ciWorkflowPath = path.join(repositoryRoot, ".github/workflows/ci.yml");
 const ciSource = fs.readFileSync(ciWorkflowPath, "utf8");
 const ciWorkflow = yaml.load(ciSource);
+const codeownersSource = fs.readFileSync(path.join(repositoryRoot, ".github/CODEOWNERS"), "utf8");
 
 const requiredJobs = [
   "staging_data",
@@ -125,6 +127,10 @@ describe("protected staging and production data-promotion workflow", () => {
         expect(reviewedPins.get(action), `${file} uses an unreviewed action ${action}`).toEqual([sha, version]);
       }
     }
+  });
+
+  it("routes the migration provenance manifest to the existing accountable owner", () => {
+    expect(codeownersSource).toMatch(/^\/db\/migration-provenance\.json\s+@devinschumacher$/m);
   });
 
   it("rejects arbitrary rehearsal commits before checkout, install, or protected secrets", () => {
@@ -352,6 +358,7 @@ describe("protected staging and production data-promotion workflow", () => {
       MIGRATION_TO: "0024_safe_template_evolution.sql",
       MIGRATION_CLASSIFICATION: "backfill",
       CI_RUN_ID: "123",
+      STAGING_RUN_ID: "234",
       REHEARSAL_RUN_ID: "456",
       CONFIRM_PRODUCTION_DATABASE_ID: "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1",
     };
@@ -426,6 +433,33 @@ describe("protected staging and production data-promotion workflow", () => {
     expect(jobText(jobs.production_deploy)).not.toMatch(/continue-on-error[^}]*true/);
   });
 
+  it("requires exact staging promotion and protected-main push CI evidence before production request", () => {
+    const request = jobs.production_request;
+    const text = runText(request);
+    expect(workflow.on.workflow_dispatch.inputs.staging_run_id.required).toBe(true);
+    expect(request.env.STAGING_RUN_ID).toBe("${{ inputs.staging_run_id }}");
+    expect(text).toContain('gh run download "$STAGING_RUN_ID"');
+    expect(text).toContain("staging-promotion.json");
+    expect(text).toContain("--staging-report");
+    expect(text).toContain("--staging-run-metadata");
+    expect(text).toMatch(/--event push --branch main --path \.github\/workflows\/ci\.yml/);
+    expect(text).toMatch(/--event push --branch staging --path \.github\/workflows\/cloudflare-pages-deploy\.yml/);
+    expect(text).toContain("--merge-commit tmp/change-merge-commit.json");
+    expect(text).toContain("--change-provenance tmp/change-provenance.json");
+  });
+
+  it("uses the repository patch-pinned Node version in every workflow job", () => {
+    for (const [name, candidate] of [["ci", ciWorkflow], ["promotion", workflow], ["rehearsal", rehearsalWorkflow]]) {
+      for (const [jobId, job] of Object.entries(candidate.jobs ?? {})) {
+        for (const step of job.steps ?? []) {
+          if (!String(step.uses ?? "").startsWith("actions/setup-node@")) continue;
+          expect(step.with?.["node-version-file"], `${name}/${jobId}`).toBe(".node-version");
+          expect(step.with?.["node-version"], `${name}/${jobId} cannot float a major`).toBeUndefined();
+        }
+      }
+    }
+  });
+
   it("runs account-owned and custom-domain canaries after each deploy", () => {
     for (const jobId of ["staging_postdeploy", "production_postdeploy"]) {
       const text = jobText(jobs[jobId]);
@@ -463,7 +497,10 @@ describe("protected staging and production data-promotion workflow", () => {
 
   it("retains Playwright test results and reports for staging and rehearsal", () => {
     for (const [name, job] of [["staging", jobs.staging_data], ["rehearsal", rehearsalWorkflow.jobs.rehearsal]]) {
-      const upload = job.steps.find((step) => String(step.uses ?? "").startsWith("actions/upload-artifact@"));
+      const upload = job.steps.find((step) =>
+        String(step.uses ?? "").startsWith("actions/upload-artifact@") &&
+        String(step.with?.path ?? "").includes("tests/test-results/"),
+      );
       expect(String(upload.with.path), `${name} must retain test results`).toContain("tests/test-results/");
       expect(String(upload.with.path), `${name} must retain Playwright reports`).toContain("playwright-report/");
       expect(upload.if).toBe("always()");
@@ -573,6 +610,8 @@ describe("protected staging and production data-promotion workflow", () => {
     expect(jobText(jobs.production_request)).toMatch(/commits.*pulls|change-pulls/);
     expect(runText(jobs.production_request)).toContain("commits/$EXPECTED_COMMIT");
     expect(runText(jobs.production_request)).toContain("--merge-commit tmp/change-merge-commit.json");
+    expect(runText(jobs.production_request)).toContain("--commit-authors tmp/change-commit-authors.json");
+    expect(runText(jobs.production_request)).toContain("--merge-authors tmp/change-merge-authors.json");
     expect(jobText(jobs.production_request)).toContain("change-provenance");
     expect(environmentName(jobs.production_owner_approval)).toBe("production-owner-approval");
     expectDependency("production_owner_approval", "production_request");
@@ -582,5 +621,60 @@ describe("protected staging and production data-promotion workflow", () => {
     expect(dataText).toContain("collaborators/$REPOSITORY_OWNER_APPROVER/permission");
     expect(dataText).toContain("--provenance tmp/change-provenance.json");
     expect(source).not.toContain("REQUEST_APPROVAL_DECISION");
+  });
+
+  it("always writes early failure triads before rehearsal checkout and production evidence download", () => {
+    const executableFinalizers = [];
+    for (const [jobId, job] of Object.entries(rehearsalWorkflow.jobs)) {
+      const gateIndex = job.steps.findIndex((step) => step.id === "commit_gate");
+      const finalizerIndex = job.steps.findIndex((step) => /Finalize .*pre-checkout failure/.test(String(step.name)));
+      const uploadIndex = job.steps.findIndex((step) => /Upload .*pre-checkout failure/.test(String(step.name)));
+      const checkoutIndex = job.steps.findIndex((step) => String(step.uses ?? "").startsWith("actions/checkout@"));
+      expect(gateIndex, jobId).toBe(0);
+      expect(finalizerIndex, jobId).toBeGreaterThan(gateIndex);
+      expect(uploadIndex, jobId).toBeGreaterThan(finalizerIndex);
+      expect(checkoutIndex, jobId).toBeGreaterThan(uploadIndex);
+      const evidence = jobText({ steps: [job.steps[finalizerIndex], job.steps[uploadIndex]] });
+      for (const required of ["commit", "environment", "databasename", "databaseid", "migrationrange", "failedstage", "junit", ".json", ".txt"]) {
+        expect(evidence, `${jobId} early report missing ${required}`).toContain(required);
+      }
+      executableFinalizers.push([jobId, job.steps[finalizerIndex], jobId === "sanitized_source" ? "tmp/early-failure/production-source" : "tmp/early-failure/rehearsal"]);
+    }
+    const productionGate = jobs.production_request.steps.findIndex((step) => step.id === "production_input_gate");
+    const productionFinalizer = jobs.production_request.steps.findIndex((step) => /Finalize production-request input failure/.test(String(step.name)));
+    const download = jobs.production_request.steps.findIndex((step) => String(step.name).includes("Download exact-commit"));
+    expect(productionGate).toBeGreaterThan(-1);
+    expect(productionFinalizer).toBeGreaterThan(productionGate);
+    expect(download).toBeGreaterThan(productionFinalizer);
+    expect(jobText({ steps: [jobs.production_request.steps[productionFinalizer]] })).toMatch(/commit.*environment.*databasename.*databaseid.*migrationrange.*failedstage/);
+    executableFinalizers.push(["production_request", jobs.production_request.steps[productionFinalizer], "tmp/data-reports/production-request"]);
+
+    for (const [name, finalizer, relativeDirectory] of executableFinalizers) {
+      const cwd = fs.mkdtempSync(path.join(tmpdir(), "early-workflow-report-"));
+      try {
+        const env = {
+          ...process.env,
+          REPORT_DIRECTORY: relativeDirectory,
+          REPORT_COMMIT: "a".repeat(40),
+          REPORT_ENVIRONMENT: name === "production_request" ? "production" : name,
+          REPORT_DATABASE_NAME: "db<&name",
+          REPORT_DATABASE_ID: "11111111-1111-4111-8111-111111111111",
+          REPORT_MIGRATION_FROM: "0024_safe_template_evolution.sql",
+          REPORT_MIGRATION_TO: "0024_safe_template_evolution.sql",
+        };
+        expect(spawnSync("bash", ["-c", finalizer.run], { cwd, env }).status, name).toBe(0);
+        const directory = path.join(cwd, relativeDirectory);
+        expect(JSON.parse(fs.readFileSync(path.join(directory, "early-failure.json"), "utf8"))).toMatchObject({
+          verdict: "fail",
+          commit: "a".repeat(40),
+          target: { databaseName: "db<&name", databaseId: "11111111-1111-4111-8111-111111111111" },
+          migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
+        });
+        expect(fs.readFileSync(path.join(directory, "early-failure.junit.xml"), "utf8")).toContain("db&lt;&amp;name");
+        expect(fs.readFileSync(path.join(directory, "early-failure.txt"), "utf8")).toContain("db<&name");
+      } finally {
+        fs.rmSync(cwd, { recursive: true, force: true });
+      }
+    }
   });
 });
