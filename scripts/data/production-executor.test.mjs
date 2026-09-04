@@ -37,6 +37,7 @@ const context = {
   DATA_PROTECTED_ENVIRONMENT: "production",
   CLOUDFLARE_API_TOKEN: "environment-scoped-token",
   PRODUCTION_BACKUP_ENCRYPTION_KEY: "protected-backup-encryption-key-123456",
+  PRODUCTION_INVARIANT_HMAC_KEY: "protected-invariant-hmac-key-123456789",
 };
 
 describe("protected production executor", () => {
@@ -50,6 +51,24 @@ describe("protected production executor", () => {
     ]) {
       expect(() => assertProductionWorkflowContext({ env, expectedCommit: commit })).toThrow();
     }
+  });
+
+  it("requires distinct production invariant and backup keys", () => {
+    expect(assertProductionWorkflowContext({ env: context, expectedCommit: commit })).toMatchObject({
+      commit,
+      protectedEnvironment: "production",
+    });
+    expect(() => assertProductionWorkflowContext({
+      env: { ...context, PRODUCTION_INVARIANT_HMAC_KEY: "" },
+      expectedCommit: commit,
+    })).toThrow(/invariant HMAC key is missing/i);
+    expect(() => assertProductionWorkflowContext({
+      env: {
+        ...context,
+        PRODUCTION_INVARIANT_HMAC_KEY: context.PRODUCTION_BACKUP_ENCRYPTION_KEY,
+      },
+      expectedCommit: commit,
+    })).toThrow(/must be separate/i);
   });
 
   it("requires exact passing CI and rehearsal evidence for the requested commit and migration range", () => {

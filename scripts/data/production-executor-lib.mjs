@@ -135,6 +135,12 @@ export function assertProductionWorkflowContext({ env, expectedCommit }) {
   if ((env.PRODUCTION_BACKUP_ENCRYPTION_KEY ?? "").length < 32) {
     throw new Error("Protected production backup encryption key is missing.");
   }
+  if ((env.PRODUCTION_INVARIANT_HMAC_KEY ?? "").length < 32) {
+    throw new Error("Protected production invariant HMAC key is missing.");
+  }
+  if (env.PRODUCTION_BACKUP_ENCRYPTION_KEY === env.PRODUCTION_INVARIANT_HMAC_KEY) {
+    throw new Error("Production backup encryption and invariant HMAC keys must be separate.");
+  }
   return {
     repository: env.GITHUB_REPOSITORY,
     runId: env.GITHUB_RUN_ID,

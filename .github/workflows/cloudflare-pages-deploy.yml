@@ -36,10 +36,10 @@ jobs:
       DATA_PROMOTION_WORKFLOW: data-promotion
       DATA_PROTECTED_ENVIRONMENT: staging
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with: { fetch-depth: 0 }
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version: "22", cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: Install Playwright Chromium for data regressions
@@ -47,11 +47,15 @@ jobs:
       - name: Identity allowlist and recovery bookmark
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
-          INVARIANT_HMAC_KEY: ${{ secrets.STAGING_INVARIANT_HMAC_KEY }}
         run: |
           mkdir -p tmp/data-reports/staging
           node scripts/data/data-command.mjs identify --environment staging --execute > tmp/data-reports/staging/identity.txt
           node scripts/data/data-command.mjs recovery-bookmark --environment staging --execute > tmp/data-reports/staging/recovery-bookmark.txt
+      - name: Capture staging pre-invariants
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
+          INVARIANT_HMAC_KEY: ${{ secrets.STAGING_INVARIANT_HMAC_KEY }}
+        run: |
           node scripts/data/remote-invariant-gate.mjs capture --database serp-checklists-staging-db --state tmp/staging-pre-invariants.json --report-dir tmp/data-reports/staging
       - name: Run data regression prerequisite
         run: pnpm run test:data-regressions -- --report-dir tmp/data-reports/staging
@@ -72,7 +76,7 @@ jobs:
           node scripts/data/remote-invariant-gate.mjs compare --database serp-checklists-staging-db --state tmp/staging-pre-invariants.json --report-dir tmp/data-reports/staging
       - name: Upload staging data reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: staging-data-${{ github.run_id }}
           path: |
@@ -87,9 +91,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version: "22", cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: BETTER_AUTH_SECRET=ci-build-placeholder-secret-32-chars-minimum pnpm run build
@@ -103,9 +107,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version: "22", cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: Authenticated account-owned template/run and custom-domain postdeploy smoke
@@ -116,12 +120,42 @@ jobs:
         run: node scripts/data/deployment-smoke.mjs --environment staging --database-name serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --deployment-url https://staging.serplists-com.pages.dev --custom-domain https://staging.serplists.com --report-dir tmp/data-reports/staging-postdeploy
       - name: Upload staging postdeploy reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: staging-postdeploy-${{ github.run_id }}
           path: tmp/data-reports/staging-postdeploy/
           if-no-files-found: error
           retention-days: 90
+
+  staging_failure_report:
+    needs: [staging_data, staging_deploy, staging_postdeploy]
+    if: always() && github.event_name == 'push' && github.ref_name == 'staging' && (needs.staging_data.result != 'success' || needs.staging_deploy.result != 'success' || needs.staging_postdeploy.result != 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      REPORT_COMMIT: ${{ github.sha }}
+      REPORT_ENVIRONMENT: staging
+      STAGING_DATA_RESULT: ${{ needs.staging_data.result }}
+      STAGING_DEPLOY_RESULT: ${{ needs.staging_deploy.result }}
+      STAGING_POSTDEPLOY_RESULT: ${{ needs.staging_postdeploy.result }}
+    steps:
+      - name: Record fail-closed staging promotion result
+        run: |
+          mkdir -p tmp/data-reports/staging-failure
+          printf '{"verdict":"fail","commit":"%s","environment":"%s","jobs":{"data":"%s","deploy":"%s","postdeploy":"%s"}}\n' "$REPORT_COMMIT" "$REPORT_ENVIRONMENT" "$STAGING_DATA_RESULT" "$STAGING_DEPLOY_RESULT" "$STAGING_POSTDEPLOY_RESULT" > tmp/data-reports/staging-failure/staging-failure.json
+          printf 'BLOCKED staging promotion for commit %s in environment %s. Results: data=%s deploy=%s postdeploy=%s.\n' "$REPORT_COMMIT" "$REPORT_ENVIRONMENT" "$STAGING_DATA_RESULT" "$STAGING_DEPLOY_RESULT" "$STAGING_POSTDEPLOY_RESULT" > tmp/data-reports/staging-failure/staging-failure.txt
+          printf '<testsuite name="staging-promotion" tests="1" failures="1"><properties><property name="commit" value="%s"/><property name="environment" value="%s"/></properties><testcase name="promotion"><failure message="data=%s deploy=%s postdeploy=%s"/></testcase></testsuite>\n' "$REPORT_COMMIT" "$REPORT_ENVIRONMENT" "$STAGING_DATA_RESULT" "$STAGING_DEPLOY_RESULT" "$STAGING_POSTDEPLOY_RESULT" > tmp/data-reports/staging-failure/staging-failure.junit.xml
+      - name: Upload staging failure reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: staging-failure-${{ github.run_id }}
+          path: tmp/data-reports/staging-failure/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Fail the promotion after preserving reports
+        run: exit 1
 
   production_request:
     if: github.event_name == 'workflow_dispatch' && github.ref_name == 'main'
@@ -135,7 +169,7 @@ jobs:
       REHEARSAL_RUN_ID: ${{ inputs.rehearsal_run_id }}
       CONFIRM_PRODUCTION_DATABASE_ID: ${{ inputs.confirm_production_database_id }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Validate production dispatch inputs
         run: node scripts/data/validate-workflow-inputs.mjs production
       - name: Download exact-commit CI and rehearsal artifacts
@@ -163,7 +197,7 @@ jobs:
           SCHEMA_REPORT=$(find tmp/evidence/ci -name schema-contract.json -print -quit)
           REHEARSAL_REPORT=$(find tmp/evidence/rehearsal -name data-regression-suite.json -print -quit)
           node scripts/data/production-request.mjs --commit "$EXPECTED_COMMIT" --classification "$MIGRATION_CLASSIFICATION" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --database-name serp-checklists-db --database-id "$CONFIRM_PRODUCTION_DATABASE_ID" --ci-report "$CI_REPORT" --correction-report "$CORRECTION_REPORT" --schema-report "$SCHEMA_REPORT" --rehearsal-report "$REHEARSAL_REPORT" --output tmp/production-request.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: production-request-${{ github.run_id }}
@@ -198,14 +232,14 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Validate production dispatch inputs and approval classification
         run: node scripts/data/validate-workflow-inputs.mjs approval
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version: "22", cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: production-request-${{ github.run_id }}
           path: tmp
@@ -222,10 +256,11 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
           PRODUCTION_BACKUP_ENCRYPTION_KEY: ${{ secrets.PRODUCTION_BACKUP_ENCRYPTION_KEY }}
+          PRODUCTION_INVARIANT_HMAC_KEY: ${{ secrets.PRODUCTION_INVARIANT_HMAC_KEY }}
           DATA_PROTECTED_ENVIRONMENT: production
         run: node scripts/data/production-executor.mjs data --request tmp/production-request.json --approval tmp/production-approval.json --output tmp/production-data-evidence.json --report-dir tmp/data-reports/production
       - name: Attest GitHub-produced production data evidence
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-path: tmp/production-data-evidence.json
       - name: Always remove plaintext recovery material
@@ -233,7 +268,7 @@ jobs:
         run: rm -f tmp/production-sensitive/*.sql
       - name: Upload production data reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: production-data-${{ github.run_id }}
           path: |
@@ -251,16 +286,16 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version: "22", cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: production-request-${{ github.run_id }}
           path: tmp
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: production-data-${{ github.run_id }}
           path: tmp
@@ -282,7 +317,7 @@ jobs:
           test -s tmp/production-deployment-url.txt
       - name: Upload exact deployment report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: production-deploy-${{ github.run_id }}
           path: |
@@ -298,20 +333,20 @@ jobs:
     env:
       CONFIRM_PRODUCTION_DATABASE_ID: ${{ inputs.confirm_production_database_id }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version: "22", cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: production-request-${{ github.run_id }}
           path: tmp
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: production-data-${{ github.run_id }}
           path: tmp
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: production-deploy-${{ github.run_id }}
           path: tmp
@@ -332,7 +367,7 @@ jobs:
         run: node scripts/data/finalize-production-release.mjs --request tmp/production-request.json --evidence tmp/production-data-evidence.json --smoke tmp/data-reports/production-postdeploy/production-postdeploy-smoke.json --deployment-url-file tmp/production-deployment-url.txt --report-dir tmp/data-reports/production-postdeploy
       - name: Upload production postdeploy reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: production-postdeploy-${{ github.run_id }}
           path: tmp/data-reports/production-postdeploy/
@@ -350,12 +385,12 @@ jobs:
       - name: Route to reviewed rollback or roll-forward incident procedure
         run: |
           mkdir -p tmp/data-reports/rollback
-          printf '{"verdict":"fail","commit":"%s","databaseId":"%s","route":"docs/knowledge/incident-response-runbook.md","decision":"human rollback-or-roll-forward required"}\n' "$REQUEST_EXPECTED_COMMIT" "$REQUEST_DATABASE_ID" > tmp/data-reports/rollback/rollback-route.json
-          printf 'BLOCKED production promotion for commit %s and database %s. Follow the incident recovery procedure; no automatic data restore is authorized.\n' "$REQUEST_EXPECTED_COMMIT" "$REQUEST_DATABASE_ID" > tmp/data-reports/rollback/rollback-route.txt
-          printf '%s\n' '<testsuite name="rollback-route" tests="1" failures="1"><testcase name="promotion"><failure message="manual recovery decision required"/></testcase></testsuite>' > tmp/data-reports/rollback/rollback-route.junit.xml
+          printf '{"verdict":"fail","commit":"%s","environment":"production","databaseId":"%s","route":"docs/knowledge/incident-response-runbook.md","decision":"human rollback-or-roll-forward required"}\n' "$REQUEST_EXPECTED_COMMIT" "$REQUEST_DATABASE_ID" > tmp/data-reports/rollback/rollback-route.json
+          printf 'BLOCKED production promotion for commit %s in environment production and database %s. Follow the incident recovery procedure; no automatic data restore is authorized.\n' "$REQUEST_EXPECTED_COMMIT" "$REQUEST_DATABASE_ID" > tmp/data-reports/rollback/rollback-route.txt
+          printf '<testsuite name="rollback-route" tests="1" failures="1"><properties><property name="commit" value="%s"/><property name="environment" value="production"/></properties><testcase name="promotion"><failure message="manual recovery decision required"/></testcase></testsuite>\n' "$REQUEST_EXPECTED_COMMIT" > tmp/data-reports/rollback/rollback-route.junit.xml
       - name: Upload rollback route reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: rollback-route-${{ github.run_id }}
           path: tmp/data-reports/rollback/

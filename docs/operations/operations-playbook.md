@@ -58,9 +58,12 @@ production D1 database id.
 
 Required protected-environment secrets:
 - staging: `STAGING_CLOUDFLARE_API_TOKEN`, `STAGING_INVARIANT_HMAC_KEY`, `STAGING_DATA_CANARY_OWNER_ID`, `STAGING_DATA_CANARY_COOKIE`
-- production: `PRODUCTION_CLOUDFLARE_API_TOKEN`, `PRODUCTION_BACKUP_ENCRYPTION_KEY`, `PRODUCTION_DATA_CANARY_OWNER_ID`, `PRODUCTION_DATA_CANARY_COOKIE`
+- production: `PRODUCTION_CLOUDFLARE_API_TOKEN`, `PRODUCTION_INVARIANT_HMAC_KEY`, `PRODUCTION_BACKUP_ENCRYPTION_KEY`, `PRODUCTION_DATA_CANARY_OWNER_ID`, `PRODUCTION_DATA_CANARY_COOKIE`
 
-Legacy global API-key credentials are rejected by the production executor.
+`PRODUCTION_INVARIANT_HMAC_KEY` and `PRODUCTION_BACKUP_ENCRYPTION_KEY` must each
+be at least 32 characters and must be different values. The executor rejects
+missing or reused keys before contacting production. Legacy global API-key
+credentials are also rejected.
 
 Cloudflare Pages project:
 - Project name: `serplists-com`

@@ -28,10 +28,10 @@ jobs:
       DATA_PROMOTION_WORKFLOW: data-promotion
       DATA_PROTECTED_ENVIRONMENT: production
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with: { ref: "${{ inputs.expected_commit }}" }
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version: "22", cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: Protected production source export through repository sanitizer
@@ -45,11 +45,11 @@ jobs:
           node scripts/data/sanitize-rehearsal-export.mjs --input tmp/production-sensitive/rehearsal-source.sql --output tmp/data-evidence/production-shaped.sql --manifest tmp/data-evidence/production-shaped.manifest.json --source-database-id b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1 --source-date "$(date -u +%F)" --issue 95 --approver-identity @devinschumacher --retention-deadline "$(date -u -d '+23 hours' +%Y-%m-%dT%H:%M:%SZ)" --execute
           test ! -e tmp/production-sensitive/rehearsal-source.sql
       - name: Attest repository-sanitized production-shaped artifact
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-path: tmp/data-evidence/production-shaped*
       - name: Upload only sanitized rehearsal source
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: sanitized-rehearsal-source-${{ github.run_id }}
           path: tmp/data-evidence/production-shaped*
@@ -76,13 +76,13 @@ jobs:
       MIGRATION_FROM: ${{ inputs.migration_from }}
       MIGRATION_TO: ${{ inputs.migration_to }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with: { ref: "${{ inputs.expected_commit }}" }
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version: "22", cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: sanitized-rehearsal-source-${{ github.run_id }}
           path: tmp/data-evidence
@@ -167,7 +167,7 @@ jobs:
         run: |
           node scripts/data/finalize-rehearsal-report.mjs --source tmp/data-reports/rehearsal/local-suite/data-regression-suite.json --comparison tmp/data-reports/rehearsal/remote-invariant-comparison.json --recovery tmp/data-reports/rehearsal/recovery-rehearsal.json --teardown tmp/data-reports/rehearsal/teardown.txt --sanitized tmp/data-evidence/production-shaped.sql --sanitizer-manifest tmp/data-evidence/production-shaped.manifest.json --commit "$GITHUB_SHA" --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --recovery-database-id "$RECOVERY_DATABASE_ID" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --output tmp/data-reports/rehearsal/data-regression-suite.json
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: rehearsal-${{ github.run_id }}
           path: |

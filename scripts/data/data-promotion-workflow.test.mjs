@@ -23,11 +23,15 @@ const rehearsalWorkflowPath = path.join(
 );
 const rehearsalSource = fs.readFileSync(rehearsalWorkflowPath, "utf8");
 const rehearsalWorkflow = yaml.load(rehearsalSource);
+const ciWorkflowPath = path.join(repositoryRoot, ".github/workflows/ci.yml");
+const ciSource = fs.readFileSync(ciWorkflowPath, "utf8");
+const ciWorkflow = yaml.load(ciSource);
 
 const requiredJobs = [
   "staging_data",
   "staging_deploy",
   "staging_postdeploy",
+  "staging_failure_report",
   "production_request",
   "production_owner_approval",
   "production_data",
@@ -98,11 +102,39 @@ function stepIndex(job, pattern) {
 }
 
 describe("protected staging and production data-promotion workflow", () => {
+  it("pins every external action to the reviewed immutable commit with a readable version comment", () => {
+    const reviewedPins = new Map([
+      ["actions/checkout", ["fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09", "v5"]],
+      ["actions/setup-node", ["a0853c24544627f65ddf259abe73b1d18a591444", "v5"]],
+      ["actions/upload-artifact", ["ea165f8d65b6e75b540449e92b4886f43607fa02", "v4"]],
+      ["actions/download-artifact", ["634f93cb2916e3fdff6788551b99b062d0335ce0", "v5"]],
+      ["actions/attest-build-provenance", ["977bb373ede98d70efdf65b84cb5f73e068dcc2a", "v3"]],
+      ["pnpm/action-setup", ["b906affcce14559ad1aafd4ab0e942779e9f58b1", "v4"]],
+    ]);
+    for (const [file, workflowSource] of [
+      ["ci.yml", ciSource],
+      ["cloudflare-pages-deploy.yml", source],
+      ["data-migration-rehearsal.yml", rehearsalSource],
+    ]) {
+      const actionLines = workflowSource.split("\n").filter((line) => /\buses:\s*[^.\/][^\s]+@/.test(line));
+      expect(actionLines.length, `${file} must contain reviewed actions`).toBeGreaterThan(0);
+      for (const line of actionLines) {
+        const match = /uses:\s*([^@\s]+)@([0-9a-f]{40})\s+#\s+(v\d+)\s*$/.exec(line);
+        expect(match, `${file} action must use an immutable SHA and version comment: ${line.trim()}`).not.toBeNull();
+        const [, action, sha, version] = match;
+        expect(reviewedPins.get(action), `${file} uses an unreviewed action ${action}`).toEqual([sha, version]);
+      }
+    }
+  });
+
   it("has the complete, fail-closed job graph", () => {
     expect(Object.keys(jobs)).toEqual(expect.arrayContaining(requiredJobs));
 
     expectDependency("staging_deploy", "staging_data");
     expectDependency("staging_postdeploy", "staging_deploy");
+    for (const dependency of ["staging_data", "staging_deploy", "staging_postdeploy"]) {
+      expectDependency("staging_failure_report", dependency);
+    }
     expectDependency("production_data", "production_request");
     expectDependency("production_deploy", "production_data");
     expectDependency("production_postdeploy", "production_deploy");
@@ -116,6 +148,22 @@ describe("protected staging and production data-promotion workflow", () => {
     }
 
     for (const jobId of requiredJobs) expectFailClosed(jobId);
+  });
+
+  it("keeps the local and PR checks ordered before build eligibility", () => {
+    const ciJobs = ciWorkflow.jobs ?? {};
+    expect(asArray(ciJobs["data-regressions"]?.needs)).toEqual(
+      expect.arrayContaining(["quality", "database"]),
+    );
+    expect(asArray(ciJobs.build?.needs)).toEqual(
+      expect.arrayContaining(["quality", "database", "data-regressions"]),
+    );
+    for (const [jobId, job] of Object.entries(ciJobs)) {
+      expect(job?.["continue-on-error"], `${jobId} must fail closed`).not.toBe(true);
+      for (const step of job?.steps ?? []) {
+        expect(step?.["continue-on-error"], `${jobId}/${step?.name ?? "unnamed"} must fail closed`).not.toBe(true);
+      }
+    }
   });
 
   it("allows automatic pushes only to staging", () => {
@@ -182,6 +230,36 @@ describe("protected staging and production data-promotion workflow", () => {
         }
       }
     }
+  });
+
+  it("separates production invariant and backup keys and exposes them only to the protected executor step", () => {
+    const secretNames = [
+      "PRODUCTION_INVARIANT_HMAC_KEY",
+      "PRODUCTION_BACKUP_ENCRYPTION_KEY",
+    ];
+    const dataSteps = jobs.production_data.steps ?? [];
+    const executor = dataSteps.find((step) => String(step.run ?? "").includes("production-executor.mjs data"));
+    expect(executor).toBeDefined();
+    expect(executor.env?.PRODUCTION_INVARIANT_HMAC_KEY).toBe(
+      "${{ secrets.PRODUCTION_INVARIANT_HMAC_KEY }}",
+    );
+    expect(executor.env?.PRODUCTION_BACKUP_ENCRYPTION_KEY).toBe(
+      "${{ secrets.PRODUCTION_BACKUP_ENCRYPTION_KEY }}",
+    );
+
+    for (const [jobId, job] of Object.entries(jobs)) {
+      for (const step of job.steps ?? []) {
+        if (jobId === "production_data" && step === executor) continue;
+        for (const secret of secretNames) {
+          expect(JSON.stringify(step), `${secret} leaked to ${jobId}/${step.name ?? "unnamed"}`).not.toContain(secret);
+        }
+      }
+    }
+
+    const stagingIdentity = jobs.staging_data.steps.find((step) =>
+      String(step.name ?? "").includes("Identity allowlist"),
+    );
+    expect(JSON.stringify(stagingIdentity)).not.toContain("INVARIANT_HMAC_KEY");
   });
 
   it("maps dispatch inputs through environment variables and validates them before shell use", () => {
@@ -369,6 +447,24 @@ describe("protected staging and production data-promotion workflow", () => {
     expect(text).toMatch(/(procedure|workflow|incident|route)/);
     expect(text).toMatch(/request_expected_commit/);
     expect(text).toMatch(/request_database_id/);
+    expect(text).toMatch(/environment.*production|production.*environment/);
+  });
+
+  it("reports every failed, cancelled, or skipped staging path with exact commit and environment", () => {
+    const failure = jobs.staging_failure_report;
+    const condition = String(failure?.if ?? "");
+    const text = jobText(failure);
+    expect(condition).toMatch(/always\(\)/);
+    for (const jobId of ["staging_data", "staging_deploy", "staging_postdeploy"]) {
+      expect(condition).toContain(`needs.${jobId}.result != 'success'`);
+    }
+    expect(text).toContain("report_commit");
+    expect(text).toContain("report_environment");
+    expect(text).toContain("staging");
+    expect(text).toContain(".json");
+    expect(text).toContain(".junit.xml");
+    expect(text).toContain(".txt");
+    expectAlwaysUploadedEvidence("staging_failure_report");
   });
 
   it("wires protected production export through sanitizer attestation and rehearsal import", () => {

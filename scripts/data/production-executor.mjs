@@ -64,7 +64,7 @@ try {
   let preInvariantSnapshot = null;
   const captureInvariants = () => captureRemoteInvariantSnapshot({
     database: database.databaseName,
-    key: process.env.PRODUCTION_BACKUP_ENCRYPTION_KEY,
+    key: process.env.PRODUCTION_INVARIANT_HMAC_KEY,
     runWrangler: (args) => pnpm(["exec", "wrangler", ...args]),
   });
   const evidence = runProductionDataPhase({
