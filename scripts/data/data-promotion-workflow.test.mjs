@@ -569,6 +569,8 @@ describe("protected staging and production data-promotion workflow", () => {
 
   it("binds approvals to PR authors and a separate verified owner gate", () => {
     expect(jobText(jobs.production_request)).toMatch(/commits.*pulls|change-pulls/);
+    expect(runText(jobs.production_request)).toContain("commits/$EXPECTED_COMMIT");
+    expect(runText(jobs.production_request)).toContain("--merge-commit tmp/change-merge-commit.json");
     expect(jobText(jobs.production_request)).toContain("change-provenance");
     expect(environmentName(jobs.production_owner_approval)).toBe("production-owner-approval");
     expectDependency("production_owner_approval", "production_request");

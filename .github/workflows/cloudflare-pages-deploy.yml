@@ -188,8 +188,9 @@ jobs:
         run: |
           gh api "repos/$GITHUB_REPOSITORY/commits/$EXPECTED_COMMIT/pulls" > tmp/change-pulls.json
           PR_NUMBER=$(jq -er --arg sha "$EXPECTED_COMMIT" '[.[] | select(.merged_at != null and .base.ref == "main" and .merge_commit_sha == $sha)] | if length == 1 then .[0].number else error("missing or ambiguous merged PR") end' tmp/change-pulls.json)
+          gh api "repos/$GITHUB_REPOSITORY/commits/$EXPECTED_COMMIT" > tmp/change-merge-commit.json
           gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits?per_page=100" > tmp/change-commits.json
-          node scripts/data/capture-change-provenance.mjs --pulls tmp/change-pulls.json --commits tmp/change-commits.json --commit "$EXPECTED_COMMIT" --output tmp/change-provenance.json
+          node scripts/data/capture-change-provenance.mjs --pulls tmp/change-pulls.json --commits tmp/change-commits.json --merge-commit tmp/change-merge-commit.json --commit "$EXPECTED_COMMIT" --output tmp/change-provenance.json
       - name: Validate approved commit migration range and rehearsal artifact
         run: |
           CI_REPORT=$(find tmp/evidence/ci -name data-regression-suite.json -print -quit)

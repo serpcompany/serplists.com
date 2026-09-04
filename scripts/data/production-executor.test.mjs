@@ -211,18 +211,48 @@ describe("protected production executor", () => {
     expect(() => validateApprovalEvidence({ ...base, changeAuthors: ["repo-owner"], ownerPermission: { permission: "admin", user: { login: "repo-owner" } } })).toThrow(/author/i);
   });
 
-  it("derives exact main PR and all human authors from GitHub change provenance", () => {
+  it("accepts ordinary unsigned constituent commits while binding exact verified merge provenance and every author", () => {
     const pulls = [{ number: 100, merged_at: "2026-09-05T00:00:00Z", merge_commit_sha: commit, base: { ref: "main" }, user: { login: "PR-Author" } }];
+    const mergeCommit = {
+      sha: commit,
+      author: { login: "merge-author", type: "User" },
+      committer: { login: "web-flow", type: "User" },
+      commit: { verification: { verified: true, reason: "valid" } },
+    };
     const commits = [
-      { author: { login: "commit-author" }, committer: { login: "trusted-committer" }, commit: { message: "Change\n\nCo-authored-by: @co-author", verification: { verified: true } } },
-      { author: { login: "pr-author" }, committer: { login: "trusted-committer" }, commit: { message: "Other", verification: { verified: true } } },
+      { author: { login: "commit-author" }, committer: { login: "trusted-committer" }, commit: { message: "Change\n\nCo-authored-by: @co-author", verification: { verified: false } } },
+      { author: { login: "pr-author" }, committer: { login: "trusted-committer" }, commit: { message: "Other", verification: { verified: false } } },
     ];
-    expect(validateChangeProvenance({ pulls, commits, expectedCommit: commit })).toEqual({ pullRequestNumber: 100, mergeCommit: commit, changeAuthors: ["co-author", "commit-author", "pr-author", "trusted-committer"] });
-    expect(() => validateChangeProvenance({ pulls: [], commits, expectedCommit: commit })).toThrow(/pull request/i);
-    expect(() => validateChangeProvenance({ pulls: [{ ...pulls[0], base: { ref: "staging" } }], commits, expectedCommit: commit })).toThrow(/pull request/i);
-    expect(() => validateChangeProvenance({ pulls, commits: [{ author: null, committer: { login: "committer" }, commit: { message: "Change", verification: { verified: true } } }], expectedCommit: commit })).toThrow(/author/i);
-    expect(() => validateChangeProvenance({ pulls, commits: [{ author: { login: "author" }, committer: { login: "committer" }, commit: { message: "Change", verification: { verified: false } } }], expectedCommit: commit })).toThrow(/verified/i);
-    expect(() => validateChangeProvenance({ pulls, commits: [{ author: { login: "author" }, committer: { login: "committer" }, commit: { message: "Change\n\nCo-authored-by: Person <private@example.test>", verification: { verified: true } } }], expectedCommit: commit })).toThrow(/co-author/i);
+    const provenance = validateChangeProvenance({ pulls, commits, mergeCommit, expectedCommit: commit });
+    expect(provenance).toEqual({
+      pullRequestNumber: 100,
+      mergeCommit: commit,
+      changeAuthors: ["co-author", "commit-author", "merge-author", "pr-author", "trusted-committer", "web-flow"],
+      mergeProvenance: { verification: "verified", author: "merge-author", committer: "web-flow" },
+    });
+
+    const productionReview = (login) => ({
+      state: "approved",
+      comment: "Reviewed exact merge and recovery evidence.",
+      user: { login, type: "User" },
+      environments: [{ name: "production" }],
+    });
+    for (const author of ["pr-author", "commit-author", "merge-author"]) {
+      expect(() => validateApprovalEvidence({
+        reviews: [productionReview(author)],
+        classification: "backfill",
+        actor: "dispatcher",
+        changeAuthors: provenance.changeAuthors,
+      })).toThrow(/independent/i);
+    }
+
+    expect(() => validateChangeProvenance({ pulls: [], commits, mergeCommit, expectedCommit: commit })).toThrow(/pull request/i);
+    expect(() => validateChangeProvenance({ pulls: [{ ...pulls[0], base: { ref: "staging" } }], commits, mergeCommit, expectedCommit: commit })).toThrow(/pull request/i);
+    expect(() => validateChangeProvenance({ pulls, commits, mergeCommit: { ...mergeCommit, sha: "f".repeat(40) }, expectedCommit: commit })).toThrow(/merge provenance/i);
+    expect(() => validateChangeProvenance({ pulls, commits, mergeCommit: { ...mergeCommit, commit: { verification: { verified: false } } }, expectedCommit: commit })).toThrow(/merge provenance/i);
+    expect(() => validateChangeProvenance({ pulls, commits, mergeCommit: { ...mergeCommit, author: null }, expectedCommit: commit })).toThrow(/attributed/i);
+    expect(() => validateChangeProvenance({ pulls, commits: [{ author: null, committer: { login: "committer" }, commit: { message: "Change", verification: { verified: false } } }], mergeCommit, expectedCommit: commit })).toThrow(/author/i);
+    expect(() => validateChangeProvenance({ pulls, commits: [{ author: { login: "author" }, committer: { login: "committer" }, commit: { message: "Change\n\nCo-authored-by: Person <private@example.test>", verification: { verified: false } } }], mergeCommit, expectedCommit: commit })).toThrow(/co-author/i);
   });
 
   it.each([

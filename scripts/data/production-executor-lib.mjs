@@ -210,7 +210,7 @@ function normalizeLogin(value) {
   return typeof value === "string" && value.trim() ? value.trim().replace(/^@/, "").toLowerCase() : null;
 }
 
-export function validateChangeProvenance({ pulls, commits, expectedCommit }) {
+export function validateChangeProvenance({ pulls, commits, mergeCommit, expectedCommit }) {
   assertSha(expectedCommit, "Expected change commit");
   const matches = (pulls ?? []).filter((pull) =>
     pull?.merged_at && pull?.base?.ref === "main" && pull?.merge_commit_sha === expectedCommit,
@@ -219,12 +219,17 @@ export function validateChangeProvenance({ pulls, commits, expectedCommit }) {
     throw new Error("Exact merged main pull request provenance is missing or ambiguous.");
   }
   const pull = matches[0];
+  if (mergeCommit?.sha !== expectedCommit || mergeCommit?.commit?.verification?.verified !== true) {
+    throw new Error("Exact merged main commit requires verified GitHub merge provenance.");
+  }
+  const mergeAuthor = normalizeLogin(mergeCommit.author?.login);
+  const mergeCommitter = normalizeLogin(mergeCommit.committer?.login);
+  if (!mergeAuthor || !mergeCommitter) {
+    throw new Error("Exact merged main commit requires attributed GitHub author and committer provenance.");
+  }
   const commitEntries = (commits ?? []).flat();
   const commitLogins = [];
   for (const commit of commitEntries) {
-    if (commit?.commit?.verification?.verified !== true) {
-      throw new Error("Every pull request commit requires verified GitHub signature provenance.");
-    }
     commitLogins.push(commit?.author?.login, commit?.committer?.login);
     for (const match of String(commit?.commit?.message ?? "").matchAll(/^Co-authored-by:\s*(.+)$/gim)) {
       const login = /^@([a-z0-9-]+)$/i.exec(match[1].trim())?.[1];
@@ -234,7 +239,7 @@ export function validateChangeProvenance({ pulls, commits, expectedCommit }) {
       commitLogins.push(login);
     }
   }
-  const authorLogins = [pull.user?.login, ...commitLogins];
+  const authorLogins = [pull.user?.login, mergeAuthor, mergeCommitter, ...commitLogins];
   const normalized = authorLogins.map(normalizeLogin);
   if (!Number.isInteger(pull.number) || !commitEntries.length || normalized.some((login) => !login)) {
     throw new Error("Pull request provenance contains an unresolved human author.");
@@ -243,6 +248,11 @@ export function validateChangeProvenance({ pulls, commits, expectedCommit }) {
     pullRequestNumber: pull.number,
     mergeCommit: expectedCommit,
     changeAuthors: [...new Set(normalized)].sort(),
+    mergeProvenance: {
+      verification: "verified",
+      author: mergeAuthor,
+      committer: mergeCommitter,
+    },
   };
 }
 

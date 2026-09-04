@@ -10,7 +10,16 @@ For an application-only release with no database migration, dispatch both the re
 
 The protected data job resolves the live immutable D1 name and UUID, captures a Time Travel recovery point and full export, proves the live pending list exactly equals the reviewed contiguous range, captures pre-change invariants, applies migrations, proves the ledger is clean, verifies the Drizzle and migration schema contracts, and captures post-change invariants. Remote invariant capture is ledger-aware and shared by staging, rehearsal, recovery, and production. It combines aggregate checks with privacy-safe per-row HMAC projections so unchanged totals cannot conceal altered notes, progress, versions, lifecycle/frozen snapshots, ownership, or deletion state. GitHub produces an OIDC-backed artifact attestation that supplies provenance. The deploy and postdeploy jobs reject missing, modified, wrong-commit, wrong-database, or unattested evidence.
 
-Production approval is checked against the exact merged `main` pull request and every resolvable PR author, verified commit author, verified committer, and resolved co-author; unsigned commits or unresolved co-author trailers block promotion. The dispatcher is audit metadata and cannot establish independence. High-risk approval text comes from the protected-environment review event. Irreversible changes additionally require a distinct approval through `production-owner-approval` by the configured login, whose repository permission must resolve to `admin`.
+Production approval is checked against the exact merged `main` pull request and
+the exact verified, attributed GitHub merge commit. Every resolvable pull-request
+author, constituent commit author and committer, merge author and committer, and
+resolved co-author is excluded from serving as the independent approver.
+Constituent commits do not need individual signatures, but missing GitHub author
+attribution or unresolved co-author trailers block promotion. The dispatcher is
+audit metadata and cannot establish independence. High-risk approval text comes
+from the protected-environment review event. Irreversible changes additionally
+require a distinct approval through `production-owner-approval` by the configured
+login, whose repository permission must resolve to `admin`.
 
 After deployment, a controlled account must own at least one active template and one active run. Protected canary credentials verify both records through authenticated APIs on the deployed Pages URL, then verify `/api/health` through the custom domain. A failure routes to the incident recovery procedure; it never performs an automatic data restore.
 
