@@ -18,6 +18,45 @@ export const META_DIRECTORY = "db/migrations/meta";
 export const PROVENANCE_FILE = "db/migration-provenance.json";
 export const JOURNAL_FILE = "db/migrations/meta/_journal.json";
 
+const REQUIRED_GIT_LOCAL_ENV_VARS = [
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_COMMON_DIR",
+  "GIT_CONFIG",
+  "GIT_CONFIG_COUNT",
+  "GIT_CONFIG_PARAMETERS",
+  "GIT_DIR",
+  "GIT_GRAFT_FILE",
+  "GIT_IMPLICIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_INTERNAL_SUPER_PREFIX",
+  "GIT_NO_REPLACE_OBJECTS",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_PREFIX",
+  "GIT_REPLACE_REF_BASE",
+  "GIT_SHALLOW_FILE",
+  "GIT_SUPER_PREFIX",
+  "GIT_WORK_TREE",
+];
+
+export function sanitizedGitEnvironment(source = process.env) {
+  const environment = { ...source };
+  for (const name of REQUIRED_GIT_LOCAL_ENV_VARS) delete environment[name];
+  for (const name of Object.keys(environment)) {
+    if (/^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name)) delete environment[name];
+  }
+  try {
+    const discovered = execFileSync("git", ["rev-parse", "--local-env-vars"], {
+      encoding: "utf8",
+      env: environment,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    for (const name of discovered.split("\n").filter(Boolean)) delete environment[name];
+  } catch {
+    // The explicit fail-safe list above covers Git's documented repository-local variables.
+  }
+  return environment;
+}
+
 export function sha256(content) {
   return createHash("sha256").update(content).digest("hex");
 }
@@ -185,7 +224,12 @@ export function verifySchemaMatchesLatestSnapshot(repoRoot) {
 
 function gitShow(repoRoot, ref, relativePath) {
   try {
-    return execFileSync("git", ["show", `${ref}:${relativePath}`], { cwd: repoRoot, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    return execFileSync("git", ["show", `${ref}:${relativePath}`], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: sanitizedGitEnvironment(),
+      stdio: ["ignore", "pipe", "ignore"],
+    });
   } catch {
     return null;
   }

@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 
 import {
   loadProvenanceState,
+  sanitizedGitEnvironment,
   sha256File,
   validateAgainstBase,
   validateProvenanceState,
@@ -30,6 +31,14 @@ function editManifest(root, mutate) {
   const manifest = JSON.parse(readFileSync(file, "utf8"));
   mutate(manifest);
   writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+function runGit(cwd, args, sourceEnvironment = process.env) {
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    env: sanitizedGitEnvironment(sourceEnvironment),
+  }).trim();
 }
 
 test("the checked-in legacy baseline is internally valid", () => {
@@ -135,11 +144,11 @@ test("journal additions without manifest pairing fail", () => {
 test("base history cannot be rewritten by updating the candidate manifest hash", () => {
   const root = fixture();
   try {
-    execFileSync("git", ["init", "-q"], { cwd: root });
-    execFileSync("git", ["config", "user.email", "test@example.invalid"], { cwd: root });
-    execFileSync("git", ["config", "user.name", "Migration Test"], { cwd: root });
-    execFileSync("git", ["add", "db"], { cwd: root });
-    execFileSync("git", ["commit", "-qm", "baseline"], { cwd: root });
+    runGit(root, ["init", "-q"]);
+    runGit(root, ["config", "user.email", "test@example.invalid"]);
+    runGit(root, ["config", "user.name", "Migration Test"]);
+    runGit(root, ["add", "db"]);
+    runGit(root, ["commit", "-qm", "baseline"]);
     const sql = path.join(root, "db/migrations/0024_safe_template_evolution.sql");
     writeFileSync(sql, `${readFileSync(sql, "utf8")}\n-- rewrite\n`);
     editManifest(root, (manifest) => {
@@ -149,5 +158,36 @@ test("base history cannot be rewritten by updating the candidate manifest hash",
     assert.ok(failures.some((item) => item.name === "base-history-modified"));
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("fixture Git commands ignore hook-inherited parent repository pointers", () => {
+  const parent = mkdtempSync(path.join(tmpdir(), "migration-provenance-parent-"));
+  const child = fixture();
+  try {
+    runGit(parent, ["init", "-q"]);
+    runGit(parent, ["config", "user.email", "parent@example.invalid"]);
+    runGit(parent, ["config", "user.name", "Parent Identity"]);
+    runGit(parent, ["config", "core.bare", "false"]);
+    const poisoned = {
+      ...process.env,
+      GIT_DIR: path.join(parent, ".git"),
+      GIT_WORK_TREE: parent,
+      GIT_INDEX_FILE: path.join(parent, ".git", "index"),
+    };
+
+    runGit(child, ["init", "-q"], poisoned);
+    runGit(child, ["config", "user.email", "child@example.invalid"], poisoned);
+    runGit(child, ["config", "user.name", "Migration Test"], poisoned);
+    runGit(child, ["add", "db"], poisoned);
+    runGit(child, ["commit", "-qm", "child baseline"], poisoned);
+
+    assert.equal(runGit(parent, ["config", "user.name"]), "Parent Identity");
+    assert.equal(runGit(parent, ["config", "core.bare"]), "false");
+    assert.equal(runGit(child, ["config", "user.name"]), "Migration Test");
+    assert.notEqual(runGit(child, ["rev-parse", "--git-dir"]), path.join(parent, ".git"));
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+    rmSync(child, { recursive: true, force: true });
   }
 });

@@ -8,6 +8,7 @@ import { writeDataCheckReports } from "./reporting.mjs";
 import {
   allPassingChecks,
   loadProvenanceState,
+  sanitizedGitEnvironment,
   validateAgainstBase,
   validateProvenanceState,
   verifyNewMigrationGeneratedFromBase,
@@ -23,7 +24,12 @@ function argument(name) {
 
 function git(args, fallback = "unknown") {
   try {
-    return execFileSync("git", args, { cwd: repoRoot, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return execFileSync("git", args, {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: sanitizedGitEnvironment(),
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
   } catch {
     return fallback;
   }

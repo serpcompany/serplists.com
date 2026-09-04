@@ -11,6 +11,7 @@ import {
   appendGeneratedProvenance,
   listMigrationFiles,
   loadProvenanceState,
+  sanitizedGitEnvironment,
   validateProvenanceState,
 } from "./migration-provenance-lib.mjs";
 
@@ -23,7 +24,12 @@ function argument(name) {
 
 function git(args, fallback = "unknown") {
   try {
-    return execFileSync("git", args, { cwd: repoRoot, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return execFileSync("git", args, {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: sanitizedGitEnvironment(),
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
   } catch {
     return fallback;
   }
