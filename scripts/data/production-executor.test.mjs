@@ -18,6 +18,7 @@ import {
   validatePromotionEvidence,
   validateApprovalEvidence,
   validateChangeProvenance,
+  validateFinalProductionRelease,
 } from "./production-executor-lib.mjs";
 
 const commit = "0123456789abcdef0123456789abcdef01234567";
@@ -476,5 +477,32 @@ esac
     });
     signed.payload.commit = "f".repeat(40);
     expect(() => assertDeployEvidence({ signedEvidence: signed, commit, database: production })).toThrow(/digest/i);
+  });
+
+  it.each([
+    ["data commit", (fixture) => { fixture.signedEvidence.payload.commit = "f".repeat(40); fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["data database", (fixture) => { fixture.signedEvidence.payload.database.databaseId = "22222222-2222-4222-8222-222222222222"; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["data range", (fixture) => { fixture.signedEvidence.payload.migrationRange.to = "0025_other.sql"; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["smoke commit", (fixture) => { fixture.smoke.commit = "f".repeat(40); }],
+    ["smoke environment", (fixture) => { fixture.smoke.target.environment = "staging"; }],
+    ["smoke database name", (fixture) => { fixture.smoke.target.databaseName = "other"; }],
+    ["smoke database id", (fixture) => { fixture.smoke.target.databaseId = "22222222-2222-4222-8222-222222222222"; }],
+    ["smoke deployment URL", (fixture) => { fixture.smoke.deploymentUrl = "https://other.pages.dev"; }],
+    ["smoke custom domain", (fixture) => { fixture.smoke.customDomain = "https://other.example"; }],
+  ])("final production release rejects mismatched %s", (_name, mutate) => {
+    const request = validPromotionEvidence();
+    const signed = createSignedEvidence({ payload: { verdict: "pass", commit, database: structuredClone(production), migrationRange: structuredClone(request.migrationRange), results: {}, approval: {} } });
+    const smoke = { verdict: "pass", commit, target: { environment: "production", ...production }, deploymentUrl: "https://release.pages.dev", customDomain: "https://serplists.com" };
+    const fixture = { request, signedEvidence: signed, smoke, deploymentUrl: smoke.deploymentUrl };
+    mutate(fixture);
+    expect(() => validateFinalProductionRelease(fixture)).toThrow();
+  });
+
+  it("final production release accepts only exact signed data and smoke evidence", () => {
+    const request = validPromotionEvidence();
+    const signedEvidence = createSignedEvidence({ payload: { verdict: "pass", commit, database: production, migrationRange: request.migrationRange, results: {}, approval: {} } });
+    const deploymentUrl = "https://release.pages.dev";
+    const smoke = { verdict: "pass", commit, target: { environment: "production", ...production }, deploymentUrl, customDomain: "https://serplists.com" };
+    expect(validateFinalProductionRelease({ request, signedEvidence, smoke, deploymentUrl })).toMatchObject({ commit, database: production, migrationRange: request.migrationRange });
   });
 });

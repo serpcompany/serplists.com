@@ -1,16 +1,14 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { validatePromotionEvidence, verifySignedEvidence } from "./production-executor-lib.mjs";
+import { validateFinalProductionRelease, validatePromotionEvidence } from "./production-executor-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
 function arg(name) { const index = process.argv.indexOf(name); return index < 0 ? null : process.argv[index + 1]; }
 try {
   const request = validatePromotionEvidence(JSON.parse(readFileSync(arg("--request"), "utf8")));
-  const data = verifySignedEvidence({ signedEvidence: JSON.parse(readFileSync(arg("--evidence"), "utf8")) });
+  const signedEvidence = JSON.parse(readFileSync(arg("--evidence"), "utf8"));
   const smoke = JSON.parse(readFileSync(arg("--smoke"), "utf8"));
   const deploymentUrl = readFileSync(arg("--deployment-url-file"), "utf8").trim();
-  if (data.verdict !== "pass" || smoke.verdict !== "pass" || data.commit !== request.commit || !/^https:\/\//.test(deploymentUrl)) {
-    throw new Error("Production release evidence is incomplete or failed.");
-  }
+  const data = validateFinalProductionRelease({ request, signedEvidence, smoke, deploymentUrl });
   const report = {
     check: "production-release",
     verdict: "pass",

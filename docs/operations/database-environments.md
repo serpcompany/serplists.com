@@ -110,8 +110,9 @@ artifact hash, and manifest-integrity hash. These unkeyed hashes detect
 accidental or post-generation byte changes; they do not authenticate the author
 or authorize an operation. Import rejects unknown manifest fields, unknown
 sanitizer versions, non-allowlisted access owners, expired retention, missing
-edge coverage, privacy-unsafe output, or changed integrity hashes. The supplied source
-database UUID must exactly equal the checked-in production inventory UUID; the
+edge coverage, privacy-unsafe output, or changed integrity hashes. The identity-bound
+export evidence must record matching before/after source database UUIDs that
+exactly equal the checked-in production inventory UUID; the
 manifest retains only its hash. An arbitrary manifest field such as
 `containsDirectIdentifiers=false` has no authority.
 
@@ -119,11 +120,17 @@ Inside the protected production-source job, generate the artifact rather than
 writing a manifest:
 
 ```bash
+node scripts/data/production-identity-bound-command.mjs sanitizer-export \
+  --database-name serp-checklists-db \
+  --database-id PRODUCTION_UUID \
+  --output tmp/production-sensitive/private-source-data.sql \
+  --evidence tmp/data-evidence/production-shaped.identity.json
+
 node scripts/data/sanitize-rehearsal-export.mjs \
   --input tmp/production-sensitive/private-source-data.sql \
   --output tmp/data-evidence/production-shaped.sql \
   --manifest tmp/data-evidence/production-shaped.manifest.json \
-  --source-database-id PRODUCTION_UUID \
+  --source-identity-evidence tmp/data-evidence/production-shaped.identity.json \
   --source-date YYYY-MM-DD \
   --issue 95 \
   --approver-identity ALLOWLISTED_REQUESTED_IDENTITY \

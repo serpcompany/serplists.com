@@ -27,12 +27,15 @@ const validRawExport = readFileSync(path.join(repoRoot, "scripts/data/fixtures/p
 const sanitizerReportRoot = path.join(repoRoot, "tmp/data-reports/sanitizer");
 
 function commandArgs(inputPath, outputPath, manifestPath) {
+  mkdirSync(evidenceRoot, { recursive: true });
+  const sourceIdentityPath = path.join(evidenceRoot, "production-source.identity.json");
+  writeFileSync(sourceIdentityPath, JSON.stringify({ verdict: "pass", commit: gitCommit, environment: "production", binding: "DB", databaseName: "serp-checklists-db", databaseId: productionDatabaseId, before: { databaseName: "serp-checklists-db", databaseId: productionDatabaseId }, after: { databaseName: "serp-checklists-db", databaseId: productionDatabaseId } }));
   return [
     script,
     "--input", inputPath,
     "--output", path.relative(repoRoot, outputPath),
     "--manifest", path.relative(repoRoot, manifestPath),
-    "--source-database-id", productionDatabaseId,
+    "--source-identity-evidence", sourceIdentityPath,
     "--source-date", sourceDate,
     "--issue", "95",
     "--approver-identity", "@devinschumacher",
@@ -103,6 +106,30 @@ describe("sanitizer command", () => {
       rmSync(tempDir, { recursive: true, force: true });
       rmSync(rawDir, { recursive: true, force: true });
       rmSync(sanitizerReportRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects sanitizer execution when identity-bound export evidence changes UUID", () => {
+    const tempDir = mkdtempSync(path.join(evidenceRoot, "sanitize-identity-mismatch-"));
+    const rawDir = mkdtempSync(path.join(rawRoot, "sanitize-identity-mismatch-"));
+    const inputPath = path.join(rawDir, "private-source.sql");
+    const outputPath = path.join(tempDir, "out.sql");
+    const manifestPath = path.join(tempDir, "manifest.json");
+    writeFileSync(inputPath, validRawExport);
+    try {
+      const args = commandArgs(inputPath, outputPath, manifestPath);
+      const evidencePath = args[args.indexOf("--source-identity-evidence") + 1];
+      const evidence = JSON.parse(readFileSync(evidencePath, "utf8"));
+      evidence.after.databaseId = "22222222-2222-4222-8222-222222222222";
+      writeFileSync(evidencePath, JSON.stringify(evidence));
+      const result = spawnSync(process.execPath, [...args, "--execute"], { cwd: repoRoot, env: workflowRequestEnvironment(), encoding: "utf8" });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toMatch(/identity-bound production export evidence/i);
+      expect(existsSync(inputPath)).toBe(false);
+      expect(existsSync(manifestPath)).toBe(false);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+      rmSync(rawDir, { recursive: true, force: true });
     }
   });
 

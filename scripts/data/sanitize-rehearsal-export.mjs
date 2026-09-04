@@ -75,7 +75,12 @@ try {
   const { values, flags } = parseArgs(process.argv.slice(2));
   const gitCommit = runRepositoryGit({ repoRoot, args: ["rev-parse", "HEAD"] }).trim();
   const productionIdentity = JSON.parse(readFileSync(path.join(repoRoot, "scripts/data/environment-inventory.json"), "utf8")).environments.production;
-  reportContext = { commit: gitCommit, target: { environment: "production", binding: "DB", databaseName: productionIdentity.databaseName, databaseId: values["--source-database-id"] ?? "unknown" }, migrationRange: { from: values["--migration-from"] ?? "unknown", to: values["--migration-to"] ?? "unknown" }, sanitizerVersion: "source-derived-shape-v2" };
+  let sourceIdentity = null;
+  const requestedSourceIdentityPath = values["--source-identity-evidence"] ? resolveOutput(values["--source-identity-evidence"]) : null;
+  if (requestedSourceIdentityPath && existsSync(requestedSourceIdentityPath)) {
+    sourceIdentity = JSON.parse(readFileSync(requestedSourceIdentityPath, "utf8"));
+  }
+  reportContext = { commit: gitCommit, target: { environment: "production", binding: "DB", databaseName: productionIdentity.databaseName, databaseId: sourceIdentity?.databaseId ?? "unknown" }, migrationRange: { from: values["--migration-from"] ?? "unknown", to: values["--migration-to"] ?? "unknown" }, sanitizerVersion: "source-derived-shape-v2" };
   const requestedReportDirectory = path.resolve(repoRoot, values["--report-dir"] ?? "tmp/data-reports/sanitizer");
   const allowedReportRoot = path.join(repoRoot, "tmp/data-reports");
   if (requestedReportDirectory !== allowedReportRoot && !requestedReportDirectory.startsWith(`${allowedReportRoot}${path.sep}`)) throw new Error("Sanitizer report directory must stay under ignored tmp/data-reports/.");
@@ -85,7 +90,6 @@ try {
   shouldCleanupRawInput = flags.has("--execute");
   const outputPath = resolveOutput(requireValue(values, "--output"));
   const manifestPath = resolveOutput(requireValue(values, "--manifest"));
-  const sourceDatabaseId = requireValue(values, "--source-database-id");
   const sourceDate = requireValue(values, "--source-date");
   const approverIdentity = requireValue(values, "--approver-identity");
   const retentionDeadline = requireValue(values, "--retention-deadline");
@@ -111,6 +115,16 @@ try {
   if (!flags.has("--execute")) process.exit(0);
 
   assertSanitizerSourceWorkflowContext({ env: process.env, gitCommit });
+  const sourceIdentityPath = requestedSourceIdentityPath ?? resolveOutput(requireValue(values, "--source-identity-evidence"));
+  sourceIdentity = JSON.parse(readFileSync(sourceIdentityPath, "utf8"));
+  if (sourceIdentity.verdict !== "pass" || sourceIdentity.commit !== gitCommit || sourceIdentity.environment !== "production" ||
+      sourceIdentity.binding !== "DB" || sourceIdentity.databaseName !== productionIdentity.databaseName ||
+      sourceIdentity.databaseId !== productionIdentity.databaseId || sourceIdentity.before?.databaseId !== productionIdentity.databaseId ||
+      sourceIdentity.after?.databaseId !== productionIdentity.databaseId) {
+    throw new Error("Sanitizer requires exact identity-bound production export evidence.");
+  }
+  const sourceDatabaseId = sourceIdentity.databaseId;
+  reportContext.target.databaseId = sourceDatabaseId;
   const artifact = generateSanitizedRehearsalArtifact({
     repoRoot,
     rawExport: readFileSync(inputPath, "utf8"),

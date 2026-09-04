@@ -605,6 +605,9 @@ describe("protected staging and production data-promotion workflow", () => {
     const rehearsalText = runText(rehearsalJob);
     expect(environmentName(sourceJob)).toBe("production");
     expect(sourceText).toContain("tmp/production-sensitive/rehearsal-source.sql");
+    expect(sourceText).toContain("production-identity-bound-command.mjs sanitizer-export");
+    expect(sourceText).toContain("--source-identity-evidence tmp/data-evidence/production-shaped.identity.json");
+    expect(sourceText).not.toContain("pnpm exec wrangler d1 export serp-checklists-db");
     expect(sourceText).toContain("sanitize-rehearsal-export.mjs");
     expect(sourceText).toMatch(/trap .*production-sensitive/);
     expect(jobText(sourceJob)).toContain("attest-build-provenance");

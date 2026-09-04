@@ -14,6 +14,7 @@ import { captureRemoteInvariantSnapshot, compareProductionInvariants } from "./i
 import { extractD1Identity } from "./wrangler-identity-lib.mjs";
 import { parsePendingMigrationNames } from "./pending-migrations-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
+import { runProductionIdentityBoundCommand } from "./production-identity-bound-command-lib.mjs";
 
 function arg(name) {
   const index = process.argv.indexOf(name);
@@ -79,11 +80,6 @@ try {
   const database = request.database;
   let pendingObserved = [];
   let preInvariantSnapshot = null;
-  const captureInvariants = () => captureRemoteInvariantSnapshot({
-    database: database.databaseName,
-    key: process.env.PRODUCTION_INVARIANT_HMAC_KEY,
-    runWrangler: (args) => pnpm(["exec", "wrangler", ...args]),
-  });
   const evidence = runProductionDataPhase({
     commit: request.commit,
     database,
@@ -93,6 +89,23 @@ try {
       operationState.activeStep = step;
       operationState.attemptedSteps.push(step);
       let output = "";
+      const identityChecks = [];
+      const identityBound = (operation, args) => {
+        const result = runProductionIdentityBoundCommand({
+          environment: "production",
+          database,
+          operation,
+          commandArgs: args,
+          runWrangler: (wranglerArgs) => pnpm(["exec", "wrangler", ...wranglerArgs]),
+        });
+        identityChecks.push(result.observedIdentity);
+        return result.output;
+      };
+      const captureInvariants = (phase) => captureRemoteInvariantSnapshot({
+        database: database.databaseName,
+        key: process.env.PRODUCTION_INVARIANT_HMAC_KEY,
+        runWrangler: (args) => identityBound(`${phase}-invariant-query`, args),
+      });
       switch (step) {
         case "identity": {
           output = pnpm(["exec", "wrangler", "d1", "info", database.databaseName, "--json"]);
@@ -101,13 +114,13 @@ try {
           break;
         }
         case "recovery-bookmark":
-          output = pnpm(["exec", "wrangler", "d1", "time-travel", "info", database.databaseName, "--json"]);
+          output = identityBound("recovery-bookmark", ["d1", "time-travel", "info", database.databaseName, "--json"]);
           break;
         case "recovery-export": {
           const encryptedBackup = path.join(reportDirectory, `production-recovery-${request.commit}.sql.enc`);
           mkdirSync(reportDirectory, { recursive: true });
           mkdirSync(sensitiveDirectory, { recursive: true });
-          output = pnpm(["exec", "wrangler", "d1", "export", database.databaseName, "--remote", "--output", plaintextBackup]);
+          output = identityBound("recovery-export", ["d1", "export", database.databaseName, "--remote", "--output", plaintextBackup]);
           try {
             output += run("openssl", ["enc", "-aes-256-cbc", "-pbkdf2", "-salt", "-in", plaintextBackup, "-out", encryptedBackup, "-pass", "env:PRODUCTION_BACKUP_ENCRYPTION_KEY"], { ...baseChildEnv, PRODUCTION_BACKUP_ENCRYPTION_KEY: process.env.PRODUCTION_BACKUP_ENCRYPTION_KEY });
           } finally {
@@ -116,16 +129,16 @@ try {
           break;
         }
         case "reviewed-pending-range":
-          output = pnpm(["exec", "wrangler", "d1", "migrations", "list", database.databaseName, "--remote"]);
+          output = identityBound("reviewed-pending-range", ["d1", "migrations", "list", database.databaseName, "--remote"]);
           pendingObserved = parsePendingMigrationNames(output);
           if (JSON.stringify(pendingObserved) !== JSON.stringify(request.pendingMigrations)) throw new Error("Live pending migrations differ from the reviewed migration range.");
           break;
         case "pre-invariants":
-          preInvariantSnapshot = captureInvariants();
+          preInvariantSnapshot = captureInvariants("pre");
           output = JSON.stringify(preInvariantSnapshot);
           break;
         case "post-invariants": {
-          const post = captureInvariants();
+          const post = captureInvariants("post");
           const comparison = compareProductionInvariants({
             pre: preInvariantSnapshot.invariants,
             post: post.invariants,
@@ -139,10 +152,10 @@ try {
           break;
         }
         case "migration-apply":
-          output = pnpm(["exec", "wrangler", "d1", "migrations", "apply", database.databaseName, "--remote"]);
+          output = identityBound("migration-apply", ["d1", "migrations", "apply", database.databaseName, "--remote"]);
           break;
         case "ledger-clean":
-          output = pnpm(["exec", "wrangler", "d1", "migrations", "list", database.databaseName, "--remote"]);
+          output = identityBound("post-apply-ledger", ["d1", "migrations", "list", database.databaseName, "--remote"]);
           if (parsePendingMigrationNames(output).length) throw new Error("Production ledger remains behind after migration apply.");
           break;
         case "schema-contract":
@@ -154,7 +167,7 @@ try {
       mkdirSync(reportDirectory, { recursive: true });
       const artifact = path.join(reportDirectory, `${step}.txt`);
       writeFileSync(artifact, output, { mode: 0o600 });
-      const result = { verdict: "pass", artifact, outputLength: output.length };
+      const result = { verdict: "pass", artifact, outputLength: output.length, identityChecks };
       operationState.results[step] = result;
       operationState.completedSteps.push(step);
       operationState.activeStep = null;

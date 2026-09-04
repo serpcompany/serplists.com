@@ -426,3 +426,23 @@ export function assertDeployEvidence({ signedEvidence, commit, database }) {
   }
   return payload;
 }
+
+export function validateFinalProductionRelease({
+  request,
+  signedEvidence,
+  smoke,
+  deploymentUrl,
+  expectedCustomDomain = "https://serplists.com",
+}) {
+  const data = assertDeployEvidence({ signedEvidence, commit: request.commit, database: request.database });
+  if (data.migrationRange?.from !== request.migrationRange?.from || data.migrationRange?.to !== request.migrationRange?.to) {
+    throw new Error("Production data evidence migration range does not match the request.");
+  }
+  if (!/^https:\/\//.test(deploymentUrl) || smoke?.verdict !== "pass" || smoke.commit !== request.commit ||
+      smoke.target?.environment !== "production" || smoke.target?.databaseName !== request.database.databaseName ||
+      smoke.target?.databaseId !== request.database.databaseId || smoke.deploymentUrl !== deploymentUrl ||
+      smoke.customDomain !== expectedCustomDomain) {
+    throw new Error("Production smoke evidence does not match the exact commit, environment, database, deployment URL, and custom domain.");
+  }
+  return data;
+}

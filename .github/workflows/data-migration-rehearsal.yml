@@ -78,13 +78,13 @@ jobs:
           mkdir -p tmp/production-sensitive tmp/data-evidence
           trap 'rm -f tmp/production-sensitive/rehearsal-source.sql' EXIT
           node scripts/data/data-command.mjs identify --environment production --execute
-          if ! pnpm exec wrangler d1 export serp-checklists-db --remote --no-schema --output tmp/production-sensitive/rehearsal-source.sql; then
+          if ! node scripts/data/production-identity-bound-command.mjs sanitizer-export --database-name serp-checklists-db --database-id b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1 --output tmp/production-sensitive/rehearsal-source.sql --evidence tmp/data-evidence/production-shaped.identity.json; then
             set +e
-            node scripts/data/sanitize-rehearsal-export.mjs --input tmp/production-sensitive/rehearsal-source.sql --output tmp/data-evidence/production-shaped.sql --manifest tmp/data-evidence/production-shaped.manifest.json --source-database-id b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1 --source-date "$(date -u +%F)" --issue 95 --approver-identity @devinschumacher --retention-deadline "$(date -u -d '+23 hours' +%Y-%m-%dT%H:%M:%SZ)" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --report-dir tmp/data-reports/sanitizer --execute
+            node scripts/data/sanitize-rehearsal-export.mjs --input tmp/production-sensitive/rehearsal-source.sql --output tmp/data-evidence/production-shaped.sql --manifest tmp/data-evidence/production-shaped.manifest.json --source-identity-evidence tmp/data-evidence/production-shaped.identity.json --source-date "$(date -u +%F)" --issue 95 --approver-identity @devinschumacher --retention-deadline "$(date -u -d '+23 hours' +%Y-%m-%dT%H:%M:%SZ)" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --report-dir tmp/data-reports/sanitizer --execute
             set -e
             exit 1
           fi
-          node scripts/data/sanitize-rehearsal-export.mjs --input tmp/production-sensitive/rehearsal-source.sql --output tmp/data-evidence/production-shaped.sql --manifest tmp/data-evidence/production-shaped.manifest.json --source-database-id b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1 --source-date "$(date -u +%F)" --issue 95 --approver-identity @devinschumacher --retention-deadline "$(date -u -d '+23 hours' +%Y-%m-%dT%H:%M:%SZ)" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --report-dir tmp/data-reports/sanitizer --execute
+          node scripts/data/sanitize-rehearsal-export.mjs --input tmp/production-sensitive/rehearsal-source.sql --output tmp/data-evidence/production-shaped.sql --manifest tmp/data-evidence/production-shaped.manifest.json --source-identity-evidence tmp/data-evidence/production-shaped.identity.json --source-date "$(date -u +%F)" --issue 95 --approver-identity @devinschumacher --retention-deadline "$(date -u -d '+23 hours' +%Y-%m-%dT%H:%M:%SZ)" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --report-dir tmp/data-reports/sanitizer --execute
           test ! -e tmp/production-sensitive/rehearsal-source.sql
       - name: Attest repository-sanitized production-shaped artifact
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
