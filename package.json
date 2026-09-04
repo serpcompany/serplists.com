@@ -62,7 +62,7 @@
     "db:reset:test-user-passwords": "npx wrangler d1 execute serp-checklists-db --local --file=./db/maintenance/reset-test-user-passwords.sql",
     "db:generate": "node scripts/data/generate-drizzle-migration.mjs",
     "check:data:migration-provenance": "node scripts/data/check-migration-provenance.mjs",
-    "test:data:migration-provenance": "node --test scripts/data/migration-provenance.test.mjs",
+    "test:data:migration-provenance": "node --test scripts/data/migration-provenance.node-test.mjs",
     "db:schema:snapshot": "tsx scripts/data/generate-schema-snapshot.ts",
     "db:schema:snapshot:check": "tsx scripts/data/generate-schema-snapshot.ts --check",
     "db:migrate": "node scripts/data/production-path-blocked.mjs",
