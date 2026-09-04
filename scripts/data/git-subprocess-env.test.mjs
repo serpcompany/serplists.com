@@ -10,7 +10,7 @@ function createRepository(root, name) {
   execFileSync("git", ["init", "-q", directory], { env: sanitizedGitEnvironment() });
   writeFileSync(path.join(directory, "tracked.txt"), name);
   runRepositoryGit({ repoRoot: directory, args: ["add", "tracked.txt"] });
-  runRepositoryGit({ repoRoot: directory, args: ["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", `create ${name}`] });
+  runRepositoryGit({ repoRoot: directory, args: ["-c", "core.hooksPath=/dev/null", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", `create ${name}`] });
   return directory;
 }
 

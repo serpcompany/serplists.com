@@ -4,6 +4,7 @@ import path from "node:path";
 import { assertMigrationClassification, validatePromotionEvidence } from "./production-executor-lib.mjs";
 import { loadEnvironmentInventory } from "./environment-identity-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
+import { resolveRehearsalPlan, validateCoverageMatch } from "./rehearsal-plan-lib.mjs";
 
 function arg(name) {
   const index = process.argv.indexOf(name);
@@ -43,6 +44,9 @@ try {
   const stagingRun = JSON.parse(readFileSync(arg("--staging-run-metadata"), "utf8"));
   const mergeCommit = JSON.parse(readFileSync(arg("--merge-commit"), "utf8"));
   const changeProvenance = JSON.parse(readFileSync(arg("--change-provenance"), "utf8"));
+  const expectedPlan = resolveRehearsalPlan({ repoRoot, commit, migrationFrom: explicitNone ? "none" : from, migrationTo: explicitNone ? "none" : to });
+  validateCoverageMatch({ evidence: ci, expected: expectedPlan });
+  validateCoverageMatch({ evidence: rehearsal, expected: expectedPlan });
   if (!output) throw new Error("Production request requires --output.");
   const evidence = validatePromotionEvidence({
     commit,

@@ -7,7 +7,13 @@ deterministic implementation with:
 pnpm run test:data-regressions
 ```
 
-Use `--report-dir PATH` to choose an ignored artifact directory. The default is
+Use `--migration-from` and `--migration-to` for an explicit reviewed range, or
+`DATA_REGRESSION_BASE_SHA` in CI to derive changed migration/maintenance
+artifacts from the trusted comparison base. Every database artifact must be
+covered by [`rehearsal-plans.json`](../../scripts/data/rehearsal-plans.json),
+which names its actual pre-change migration, affected tables, invariant set,
+and implemented fixture profile. Unknown ranges and maintenance artifacts fail
+closed. Use `--report-dir PATH` to choose an ignored artifact directory. The default is
 `tmp/data-reports/`. The command runs the named migration, data, authenticated
 HTTP, lifecycle, concurrency, recovery, and teardown checks as one blocking
 suite.
@@ -19,7 +25,7 @@ The report fails unless it finds a passing named test for every row:
 | Area | Automated behavior |
 | --- | --- |
 | Fresh schema | Complete Wrangler chain produces the Drizzle runtime contract. |
-| Upgrade | Exact `0023` production baseline upgrades through `0024`. |
+| Upgrade | The declared actual pre-change level upgrades through only the exact reviewed range. The legacy `0023` → `0024` profile remains mandatory for template evolution. |
 | Invariants | Counts, ownership, active/deleted state, foreign keys, JSON, versions, progress, notes, and orphan checks remain valid. |
 | Identity migration | Existing section/item/sub-item IDs remain byte-for-byte stable, while legacy missing IDs receive the exact deterministic `legacy-*` values in both templates and linked runs. |
 | Structure evolution | Section, item, and sub-item add, rename, reorder, retirement, and removal preserve run-owned completion and notes. |
@@ -27,7 +33,7 @@ The report fails unless it finds a passing named test for every row:
 | Frozen lifecycle | Completed, shared, archived, and already-stale runs are not silently rewritten. |
 | Revalidation | Explicit revalidation reconciles a completed run and advances its revision/template version. |
 | Concurrency | Stale template and run revisions return public HTTP conflict responses. |
-| Authenticated visibility | A real local Better Auth registration/session cookie creates an account-owned D1 template through the actual handler, lists it through `/api/templates`, and renders it on the dashboard. The evaluator also fails false-empty and error responses. |
+| Authenticated visibility | Rehearsal imports byte-verified sanitized rows into isolated local D1, attaches a local-only login to the sanitized owner, then exercises the candidate `/api/templates` and `/api/checklists` handlers for owned reads and writes. The separate evaluator tests must also pass false-empty and API-error cases. |
 | Recovery | A Wrangler data-only export imports into a separately migrated database and passes invariants. |
 | Teardown | Repeated deterministic fixture setup followed by cleanup leaves zero users, templates, and runs. |
 
@@ -43,7 +49,8 @@ Each successful run writes:
 - `browser-smoke-teardown.json` for observed isolated-state cleanup.
 
 The summary records the environment, binding, exact database identity, commit,
-migration range, check verdicts, invariant deltas, and teardown counts. It
+migration range, declaration digest, affected tables, check verdicts,
+authenticated sanitized-handler evidence, invariant deltas, and teardown counts. It
 contains aggregate or synthetic evidence only.
 
 The command also runs learner-visible Playwright smoke journeys with isolated
@@ -55,8 +62,11 @@ shared D1 instance. This is a deterministic lifecycle matrix, not a load test;
 serial execution prevents cold compilation and concurrent shared-database load
 from consuming the test timeout. Playwright retains a trace and screenshot on
 failure; their paths are listed in the report. When
-#97 wires the promotion job, it must upload those browser artifacts alongside
-the database reports.
+The repository promotion workflow uploads those browser artifacts alongside
+the database reports. This repository enforcement does not prove that GitHub
+branch rules, protected environments, independent reviewers, scoped secrets,
+or Cloudflare credential isolation are configured; unresolved external controls
+continue to block production.
 
 Smoke cleanup runs on success, test failure, process error, and migration setup
 failure. `browser-smoke-teardown.json` records whether isolated state existed,

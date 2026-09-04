@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import yaml from "js-yaml";
 import { afterEach, describe, expect, it } from "vitest";
+import { sanitizedGitEnvironment } from "../data/git-subprocess-env.mjs";
 
 const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
 const temporaryDirectories = [];
@@ -18,7 +19,7 @@ function run(command, args, { cwd, env = {} } = {}) {
   return spawnSync(command, args, {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, ...env },
+    env: { ...sanitizedGitEnvironment(), ...env },
   });
 }
 

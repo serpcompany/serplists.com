@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
+import path from "node:path";
+import { captureRepositoryGitState } from "./git-subprocess-env.mjs";
+import { resolveRehearsalPlan } from "./rehearsal-plan-lib.mjs";
 
 import {
   compareMigrationSnapshots,
   runProductionShapedMigrationMatrix,
 } from "./production-shaped-migration-matrix";
+const repoRoot = path.resolve(new URL("../..", import.meta.url).pathname);
+const plan = resolveRehearsalPlan({ repoRoot, commit: captureRepositoryGitState({ repoRoot }).commit });
 
 describe("production-shaped 0023 to 0024 migration matrix", () => {
   it("preserves row counts ownership active/deleted state foreign keys JSON and versions", () => {
-    const report = runProductionShapedMigrationMatrix();
+    const report = runProductionShapedMigrationMatrix({ plan });
 
     expect(report.verdict).toBe("pass");
     expect(report.pre.rows).toEqual(report.post.rows);
@@ -24,7 +29,7 @@ describe("production-shaped 0023 to 0024 migration matrix", () => {
   });
 
   it("fails exact comparison on an owner swap or frozen run data loss", () => {
-    const report = runProductionShapedMigrationMatrix();
+    const report = runProductionShapedMigrationMatrix({ plan });
     const ownerSwap = structuredClone(report.post);
     ownerSwap.preservedRows.templates[0].userId = "matrix-owner-b";
     expect(compareMigrationSnapshots(report.pre, ownerSwap)).toMatchObject({ verdict: "fail" });
@@ -38,7 +43,7 @@ describe("production-shaped 0023 to 0024 migration matrix", () => {
   });
 
   it("preserves every existing section item and sub-item identity across 0024", () => {
-    const report = runProductionShapedMigrationMatrix();
+    const report = runProductionShapedMigrationMatrix({ plan });
 
     expect(report.pre.identityHash).toBe(report.post.identityHash);
     expect(report.pre.identityRows).toEqual(report.post.identityRows);
@@ -54,7 +59,7 @@ describe("production-shaped 0023 to 0024 migration matrix", () => {
   });
 
   it("preserves multiple active runs at different completion progress and notes", () => {
-    const report = runProductionShapedMigrationMatrix();
+    const report = runProductionShapedMigrationMatrix({ plan });
 
     expect(report.post.activeRuns).toEqual([
       expect.objectContaining({ id: "matrix-run-active-25", progress: 25, note: "note-25" }),
@@ -63,7 +68,7 @@ describe("production-shaped 0023 to 0024 migration matrix", () => {
   });
 
   it("keeps completed shared archived and stale lifecycle rows frozen and visible to recovery", () => {
-    const report = runProductionShapedMigrationMatrix();
+    const report = runProductionShapedMigrationMatrix({ plan });
 
     expect(report.post.lifecycle).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "matrix-run-completed", status: "completed", isPublic: 0, deletedAt: null }),
@@ -71,5 +76,10 @@ describe("production-shaped 0023 to 0024 migration matrix", () => {
       expect.objectContaining({ id: "matrix-run-archived", status: "in_progress", isPublic: 0, deletedAt: "2026-09-01T00:00:00Z" }),
     ]));
     expect(report.post.lifecycle.every((run) => run.templateVersion === 0)).toBe(true);
+  });
+
+  it("rejects an unconfigured synthetic 0025 other-table migration instead of reusing fixed 0024 evidence", () => {
+    expect(() => resolveRehearsalPlan({ repoRoot, commit: captureRepositoryGitState({ repoRoot }).commit, migrationFrom: "0025_other_table.sql", migrationTo: "0025_other_table.sql" })).toThrow(/no rehearsal plan/i);
+    expect(() => runProductionShapedMigrationMatrix({ plan: { ...plan, id: "future-other-table", fixtureProfile: "unconfigured-other-table-v1", migrationRange: { from: "0025_other_table.sql", to: "0025_other_table.sql" } } })).toThrow(/not implemented/i);
   });
 });

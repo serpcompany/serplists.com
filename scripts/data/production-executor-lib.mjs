@@ -172,6 +172,11 @@ export function validatePromotionEvidence(evidence) {
   if (evidence.ci?.verdict !== "pass" || evidence.ci.commit !== evidence.commit || evidence.ci.workingTreeDirty) {
     throw new Error("Exact-commit CI data-regression evidence is missing or failed.");
   }
+  const ciCoverage = evidence.ci?.coverage;
+  const rehearsalCoverage = evidence.rehearsal?.coverage;
+  if (ciCoverage?.verdict !== "pass" || !ciCoverage.planId || !/^[0-9a-f]{64}$/.test(ciCoverage.declarationSha256 ?? "") || !Array.isArray(ciCoverage.affectedTables) || !ciCoverage.affectedTables.length || !Array.isArray(ciCoverage.invariants) || !ciCoverage.invariants.length || JSON.stringify(ciCoverage) !== JSON.stringify(rehearsalCoverage)) {
+    throw new Error("CI and rehearsal affected-domain coverage is missing or inconsistent.");
+  }
   if (evidence.ciContractCorrection?.verdict !== "pass" || evidence.ciContractCorrection.commit !== evidence.commit ||
       evidence.ciContractCorrection.eventName !== "push" || evidence.ciContractCorrection.comparisonBase !== evidence.mergeContext?.baseCommit) {
     throw new Error("Exact-commit CI contract-correction comparison evidence is missing or untrusted.");
@@ -190,12 +195,15 @@ export function validatePromotionEvidence(evidence) {
   if (rehearsal.migrationRange?.from !== evidence.migrationRange.from || rehearsal.migrationRange?.to !== evidence.migrationRange.to) {
     throw new Error("Rehearsal migration range does not match the reviewed production range.");
   }
+  if (evidence.ci.migrationRange?.from !== evidence.migrationRange.from || evidence.ci.migrationRange?.to !== evidence.migrationRange.to) throw new Error("CI migration range does not match the reviewed production range.");
   if (rehearsal.recovery?.verdict !== "pass" || rehearsal.teardown?.verdict !== "pass") {
     throw new Error("Rehearsal recovery and teardown evidence must pass.");
   }
   if (rehearsal.sanitizedSource?.verdict !== "pass" || rehearsal.sanitizedSource?.attestation?.verdict !== "pass") {
     throw new Error("Rehearsal must prove attested repository-sanitized production-shaped source import.");
   }
+  const authenticated = rehearsal.authenticatedRehearsal;
+  if (authenticated?.verdict !== "pass" || authenticated.commit !== evidence.commit || authenticated.sanitizerArtifactSha256 !== rehearsal.sanitizedSource.artifactSha256 || authenticated.migrationRange?.from !== evidence.migrationRange.from || authenticated.migrationRange?.to !== evidence.migrationRange.to || !authenticated.checks?.templateRead || !authenticated.checks?.runRead || !authenticated.checks?.templateWrite || !authenticated.checks?.runWrite || authenticated.checks?.falseEmptyDetection !== "pass" || authenticated.checks?.apiErrorDetection !== "pass") throw new Error("Authenticated sanitized candidate-handler evidence is missing or mismatched.");
   const staging = evidence.staging;
   const provenance = evidence.changeProvenance;
   if (evidence.mergeContext?.commit !== evidence.commit || !/^[0-9a-f]{40}$/.test(evidence.mergeContext?.tree ?? "") ||

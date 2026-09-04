@@ -157,6 +157,26 @@ immediately before the reviewed range, verifies the attestation, imports the
 `0023`-compatible sanitized profile, captures pre-change invariants, and only
 then applies the reviewed migration range. The legacy baseline helper refuses
 every remote target.
+
+The exact range and affected-domain obligations come from
+[`scripts/data/rehearsal-plans.json`](../../scripts/data/rehearsal-plans.json).
+The CI gate derives changed migration and maintenance artifacts from its trusted
+base commit; the rehearsal dispatch supplies the exact reviewed range. A future
+`0025` or maintenance artifact cannot reuse the fixed `0024` proof: it must add
+an independently reviewed declaration, fixture profile, affected tables, and
+domain invariants first. After sanitized import and migration, the workflow
+restores the same artifact bytes into isolated local D1, verifies their digest,
+attaches a local-only credential to the sanitized owner, and exercises the
+candidate authenticated template/run read and write handlers. The resulting
+proof is bound to commit, range, local database identity, and sanitizer digest
+inside `rehearsal-promotion.json`.
+
+These repository workflows prohibit manual staging or production mutation and
+enforce their internal order. Production remains blocked until live GitHub
+branch protection, protected environments, an eligible independent reviewer,
+scoped secret placement, and Cloudflare credential isolation are separately
+configured and verified. Repository documentation or green CI is not evidence
+that those external controls exist.
 The commands below document the guarded primitives, not an alternate manual
 remote runbook; their displayed order does not authorize execution.
 

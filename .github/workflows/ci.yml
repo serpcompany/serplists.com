@@ -110,6 +110,8 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
       - name: Data regression gate
+        env:
+          DATA_REGRESSION_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'push' && github.event.before || format('{0}^', github.sha) }}
         run: pnpm run test:data-regressions -- --report-dir tmp/data-reports/ci
       - name: Upload data regression evidence
         if: always()

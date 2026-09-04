@@ -27,6 +27,7 @@ None rationale or database-change details:
 - Compatible application versions and expand/migrate/contract phase:
 - Expected row-count, ownership, deletion, JSON, version, and lifecycle impact:
 - Fixture and production-shaped rehearsal plan:
+- Rehearsal declaration ID, exact base/candidate range, affected tables, and required invariants:
 - Recovery bookmark/export plan and restore target:
 - Preflight, invariant, authenticated smoke, and teardown checks:
 - Roll-forward and rollback triggers:
@@ -39,7 +40,8 @@ Database checklist (required when impact is **Yes**):
 - [ ] I used the next numbered Wrangler SQL migration and did not use `drizzle-kit push` or `drizzle-kit migrate` to apply D1 changes.
 - [ ] Fresh-chain, upgrade, invariant, authenticated API, and teardown checks pass with generated evidence.
 - [ ] Production-shaped rehearsal and recovery-drill evidence is attached when required by classification.
-- [ ] The staging migration-and-deploy order is enforced; while issue #97 is open, I did not merge or remotely deploy schema-dependent code to staging.
+- [ ] Repository workflows enforce staging migration/invariant/deploy order; I used no manual remote mutation path.
+- [ ] I verified the external branch rules, protected environments, independent reviewer, scoped secrets, and Cloudflare credential isolation; unresolved external controls remain explicit production blockers.
 - [ ] I made no production mutation or deployment as part of pull-request validation.
 - [ ] Required independent owners reviewed the exact diff and evidence.
 - [ ] I understand pull-request approval is not production approval; production requires a separate protected-environment approval event.

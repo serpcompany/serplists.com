@@ -50,7 +50,7 @@ function validPromotionEvidence() {
     database: production,
     pendingMigrations: ["0024_safe_template_evolution.sql"],
     migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
-    ci: { verdict: "pass", commit, workingTreeDirty: false },
+    ci: { verdict: "pass", commit, workingTreeDirty: false, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, coverage: { verdict: "pass", planId: "safe-template-evolution-0024", fixtureProfile: "template-evolution-v1", affectedTables: ["templates", "checklist_runs"], invariants: ["row-counts"], declarationSha256: "a".repeat(64) } },
     ciContractCorrection: { verdict: "pass", commit, eventName: "push", comparisonBase: baseCommit },
     ciSchemaContract: { verdict: "pass", commit, runtimeDiff: { verdict: "pass" }, authorityDiff: { verdict: "pass" }, snapshotDiff: { verdict: "pass" }, migrationRange: { from: "0001_initial_schema.sql", to: "0024_safe_template_evolution.sql" } },
     rehearsal: {
@@ -60,7 +60,9 @@ function validPromotionEvidence() {
       migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
       recovery: { verdict: "pass" },
       teardown: { verdict: "pass" },
-      sanitizedSource: { verdict: "pass", attestation: { verdict: "pass" } },
+      sanitizedSource: { verdict: "pass", attestation: { verdict: "pass" }, artifactSha256: "b".repeat(64) },
+      authenticatedRehearsal: { verdict: "pass", commit, sanitizerArtifactSha256: "b".repeat(64), migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, checks: { templateRead: true, runRead: true, templateWrite: true, runWrite: true, falseEmptyDetection: "pass", apiErrorDetection: "pass" } },
+      coverage: { verdict: "pass", planId: "safe-template-evolution-0024", fixtureProfile: "template-evolution-v1", affectedTables: ["templates", "checklist_runs"], invariants: ["row-counts"], declarationSha256: "a".repeat(64) },
     },
     ciRun: { id: 101, head_sha: commit, conclusion: "success", name: "CI", event: "push", head_branch: "main", path: ".github/workflows/ci.yml", repository: { full_name: "serpcompany/serplists.com" } },
     stagingRun: { id: 102, head_sha: stagingCommit, conclusion: "success", name: "Protected data promotion and Pages deploy", event: "push", head_branch: "staging", path: ".github/workflows/cloudflare-pages-deploy.yml", repository: { full_name: "serpcompany/serplists.com" } },
@@ -120,6 +122,7 @@ describe("protected production executor", () => {
     for (const invalid of [
       { ...evidence, classification: "unclassified" },
       { ...evidence, ci: { ...evidence.ci, verdict: "fail" } },
+      { ...evidence, ci: { ...evidence.ci, coverage: { ...evidence.ci.coverage, affectedTables: ["usage_analytics"] } } },
       { ...evidence, ciContractCorrection: { ...evidence.ciContractCorrection, eventName: "local-working-tree" } },
       { ...evidence, ciContractCorrection: { ...evidence.ciContractCorrection, comparisonBase: null } },
       { ...evidence, ciRun: { ...evidence.ciRun, event: "workflow_dispatch" } },
@@ -137,7 +140,11 @@ describe("protected production executor", () => {
     evidence.classification = "additive";
     evidence.migrationRange = { from: null, to: null };
     evidence.pendingMigrations = [];
+    evidence.ci.migrationRange = { from: null, to: null };
+    evidence.ci.coverage = { ...evidence.ci.coverage, planId: "application-only-at-0024" };
     evidence.rehearsal.migrationRange = { from: null, to: null };
+    evidence.rehearsal.coverage = evidence.ci.coverage;
+    evidence.rehearsal.authenticatedRehearsal.migrationRange = { from: null, to: null };
     evidence.staging.migrationRange = { from: null, to: null };
     expect(validatePromotionEvidence(evidence).pendingMigrations).toEqual([]);
   });

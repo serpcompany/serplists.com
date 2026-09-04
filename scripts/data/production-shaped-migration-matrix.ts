@@ -260,27 +260,30 @@ export function compareMigrationSnapshots(
   return { differences, verdict: differences.length === 0 ? "pass" : "fail" } as const;
 }
 
-export function runProductionShapedMigrationMatrix() {
-  const database = replayMigrations({ through: "0023_add_sitemap_revision_state.sql" });
+export function runProductionShapedMigrationMatrix({ plan }: { plan: { id: string; fixtureProfile: string; preMigration: string; migrationRange: { from: string | null; to: string | null }; affectedTables: string[]; invariants: string[]; declarationSha256: string } }) {
+  if (plan.fixtureProfile !== "template-evolution-v1") throw new Error(`Rehearsal fixture profile ${plan.fixtureProfile} is not implemented.`);
+  const database = replayMigrations({ through: plan.preMigration });
   database.exec("PRAGMA foreign_keys = ON");
   seed(database);
-  const pre = capture(database, false);
-  const migration = listMigrationFiles().find(
-    (entry) => entry.name === "0024_safe_template_evolution.sql",
-  );
-  if (!migration) throw new Error("Migration 0024 is missing.");
-  database.exec(migration.sql);
-  const post = capture(database, true);
+  const preHas0024 = plan.preMigration >= "0024_safe_template_evolution.sql";
+  const pre = capture(database, preHas0024);
+  if (plan.migrationRange.from) {
+    const migrations = listMigrationFiles();
+    const fromIndex = migrations.findIndex((entry) => entry.name === plan.migrationRange.from);
+    const toIndex = migrations.findIndex((entry) => entry.name === plan.migrationRange.to);
+    if (fromIndex < 0 || toIndex < fromIndex) throw new Error("Reviewed migration range is unavailable to the matrix.");
+    for (const migration of migrations.slice(fromIndex, toIndex + 1)) database.exec(migration.sql);
+  }
+  const postHas0024 = preHas0024 || plan.migrationRange.to === "0024_safe_template_evolution.sql";
+  const post = capture(database, postHas0024);
   database.close();
 
   const comparison = compareMigrationSnapshots(pre, post);
 
   return {
-    check: "production-shaped-0023-to-0024",
-    migrationRange: {
-      from: "0023_add_sitemap_revision_state.sql",
-      to: "0024_safe_template_evolution.sql",
-    },
+    check: `production-shaped-${plan.id}`,
+    migrationRange: plan.migrationRange,
+    coverage: { verdict: "pass", planId: plan.id, fixtureProfile: plan.fixtureProfile, affectedTables: plan.affectedTables, invariants: plan.invariants, declarationSha256: plan.declarationSha256 },
     pre,
     post,
     comparison,

@@ -1,8 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmdirSync, rmSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { captureRepositoryGitState, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
+import { resolveRehearsalPlan } from "./rehearsal-plan-lib.mjs";
+import { loadSanitizerPolicy, validateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
 
 import { buildDataRegressionReport, renderDataRegressionMarkdown } from "./data-regression-report-lib.mjs";
 import { loadEnvironmentInventory } from "./environment-identity-lib.mjs";
@@ -23,6 +25,12 @@ const nonGating = process.argv.includes("--non-gating");
 const startGitState = captureRepositoryGitState({ repoRoot });
 const startCommit = startGitState.commit;
 const startDirtyPaths = startGitState.paths;
+const valueAfter = (name: string) => process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : undefined;
+let rehearsalPlan: ReturnType<typeof resolveRehearsalPlan> | null = null;
+let rehearsalPlanFailure: string | null = null;
+try {
+  rehearsalPlan = resolveRehearsalPlan({ repoRoot, commit: startCommit, migrationFrom: valueAfter("--migration-from"), migrationTo: valueAfter("--migration-to"), baseRef: valueAfter("--base-ref") ?? process.env.DATA_REGRESSION_BASE_SHA });
+} catch (error) { rehearsalPlanFailure = error instanceof Error ? error.message : String(error); }
 const reportDirectory = path.resolve(
   repoRoot,
   process.argv.includes("--report-dir")
@@ -32,6 +40,7 @@ const reportDirectory = path.resolve(
 const rawVitestReport = path.join(reportDirectory, "data-regression-vitest.json");
 const browserTeardownReportPath = path.join(reportDirectory, "browser-smoke-teardown.json");
 const browserJsonReportPath = path.join(reportDirectory, "browser-smoke-playwright.json");
+const authenticatedRehearsalProofPath = path.join(reportDirectory, "authenticated-rehearsal-handler.json");
 const reportRoot = path.join(repoRoot, "tmp", "data-reports");
 if (
   reportDirectory !== reportRoot &&
@@ -44,6 +53,7 @@ const releaseRegressionLock = await acquireSmokeRunLock({
   lockPath: path.join(repoRoot, ".wrangler", "smoke-state.lock"),
 });
 process.once("exit", releaseRegressionLock);
+const rehearsalRootExistedAtStart = existsSync(path.join(repoRoot, ".wrangler/rehearsals"));
 const filesystemBefore = captureWorkspaceMetadata({ repoRoot });
 
 function cleanupLocalRehearsalTestState() {
@@ -54,6 +64,7 @@ function cleanupLocalRehearsalTestState() {
       rmSync(path.join(root, entry.name), { recursive: true, force: true });
     }
   }
+  if (!rehearsalRootExistedAtStart && readdirSync(root).length === 0) rmdirSync(root);
 }
 
 interface VitestAssertionResult {
@@ -167,6 +178,7 @@ const checks: RegressionCheck[] = requiredChecks.map(([name, title]) => {
       : "fail",
   };
 });
+checks.push({ name: "reviewed rehearsal coverage", test: "exact changed migration and maintenance artifacts have affected-table fixtures and invariants", verdict: rehearsalPlan ? "pass" : "fail" });
 if (commandFailure) checks.push({
   name: "test command",
   test: "focused Vitest command completed",
@@ -175,6 +187,22 @@ if (commandFailure) checks.push({
 
 let browserFailure: string | null = null;
 let actualApplicationVisibilityPassed = false;
+let authenticatedRehearsal = { applicable: false, verdict: "not-applicable" } as Record<string, unknown>;
+const sanitizedPathArg = valueAfter("--sanitized");
+const sanitizerManifestArg = valueAfter("--sanitizer-manifest");
+let sanitizedArtifactSha256: string | null = null;
+if ((sanitizedPathArg == null) !== (sanitizerManifestArg == null)) {
+  browserFailure = "Sanitized rehearsal requires both --sanitized and --sanitizer-manifest.";
+} else if (sanitizedPathArg && sanitizerManifestArg) {
+  try {
+    const sanitizedSql = readFileSync(path.resolve(repoRoot, sanitizedPathArg), "utf8");
+    const manifest = JSON.parse(readFileSync(path.resolve(repoRoot, sanitizerManifestArg), "utf8"));
+    validateSanitizedRehearsalArtifact({ sql: sanitizedSql, manifest, policy: loadSanitizerPolicy({ repoRoot }), now: new Date() });
+    if (manifest.provenance.gitCommit !== startCommit) throw new Error("Sanitizer manifest commit does not match this candidate.");
+    sanitizedArtifactSha256 = manifest.artifact.sha256;
+    authenticatedRehearsal = { applicable: true, verdict: "fail", sanitizerArtifactSha256: sanitizedArtifactSha256 };
+  } catch (error) { browserFailure = error instanceof Error ? error.message : String(error); }
+}
 let browserTeardown = {
   leakedStatePaths: 1,
   verdict: "fail",
@@ -193,6 +221,13 @@ try {
         PLAYWRIGHT_JSON_REPORT: browserJsonReportPath,
         PLAYWRIGHT_SMOKE_LOCK_HELD: "1",
         DATA_REGRESSION_START_COMMIT: startCommit,
+        ...(sanitizedArtifactSha256 && rehearsalPlan ? {
+          PLAYWRIGHT_SANITIZED_REHEARSAL_SQL: path.resolve(repoRoot, sanitizedPathArg),
+          PLAYWRIGHT_SANITIZER_SHA256: sanitizedArtifactSha256,
+          PLAYWRIGHT_REHEARSAL_PROOF: authenticatedRehearsalProofPath,
+          DATA_REGRESSION_MIGRATION_FROM: rehearsalPlan.migrationRange.from ?? "none",
+          DATA_REGRESSION_MIGRATION_TO: rehearsalPlan.migrationRange.to ?? "none",
+        } : {}),
       },
       stdio: ["ignore", "inherit", "inherit"],
     },
@@ -215,6 +250,15 @@ try {
   if (!visibilityPassed) {
     browserFailure = "Actual Better Auth cookie/API/dashboard visibility journey was missing or failed.";
   }
+  if (sanitizedArtifactSha256 && rehearsalPlan) {
+    const proof = JSON.parse(readFileSync(authenticatedRehearsalProofPath, "utf8"));
+    const falseEmptyDetection = checks.find((check) => check.name === "authenticated false-empty detection")?.verdict;
+    const apiErrorDetection = checks.find((check) => check.name === "authenticated API error detection")?.verdict;
+    const combinedChecks = { ...proof.checks, falseEmptyDetection, apiErrorDetection };
+    const bound = proof.verdict === "pass" && proof.commit === startCommit && proof.sanitizerArtifactSha256 === sanitizedArtifactSha256 && proof.migrationRange?.from === rehearsalPlan.migrationRange.from && proof.migrationRange?.to === rehearsalPlan.migrationRange.to && combinedChecks.templateRead && combinedChecks.runRead && combinedChecks.templateWrite && combinedChecks.runWrite && falseEmptyDetection === "pass" && apiErrorDetection === "pass";
+    authenticatedRehearsal = { ...proof, checks: combinedChecks, applicable: true, verdict: bound ? "pass" : "fail" };
+    if (!bound) browserFailure = "Authenticated sanitized candidate-handler evidence is incomplete or mismatched.";
+  }
 } catch (error) {
   browserFailure = error instanceof Error ? error.message : String(error);
   try {
@@ -228,6 +272,7 @@ checks.push({
   test: "Playwright smoke journeys completed with isolated local data and no developer secrets",
   verdict: browserFailure ? "fail" : "pass",
 });
+checks.push({ name: "authenticated sanitized candidate handlers", test: "exact sanitized representative rows pass authenticated candidate template and run reads and writes", verdict: authenticatedRehearsal.applicable === true ? (authenticatedRehearsal.verdict === "pass" ? "pass" : "fail") : "pass" });
 checks.push({
   name: "actual Better Auth cookie and application visibility",
   test: "account-owned D1 template is visible through the actual /api/templates handler and dashboard",
@@ -250,7 +295,8 @@ function collectBrowserFailureArtifacts(directory: string): string[] {
 let migration: ReturnType<typeof runProductionShapedMigrationMatrix> | null = null;
 let migrationFailure: string | null = null;
 try {
-  migration = runProductionShapedMigrationMatrix();
+  if (!rehearsalPlan) throw new Error(rehearsalPlanFailure ?? "Reviewed rehearsal plan is unavailable.");
+  migration = runProductionShapedMigrationMatrix({ plan: rehearsalPlan });
 } catch (error) {
   migrationFailure = error instanceof Error ? error.message : String(error);
   checks.push({
@@ -317,8 +363,8 @@ const report = {
     binding: inventory.binding,
   },
   migrationRange: migration?.migrationRange ?? {
-    from: "0023_add_sitemap_revision_state.sql",
-    to: "0024_safe_template_evolution.sql",
+    from: rehearsalPlan?.migrationRange.from ?? null,
+    to: rehearsalPlan?.migrationRange.to ?? null,
   },
   checks,
   invariants: {
@@ -374,6 +420,8 @@ const report = {
       : [],
   },
   }),
+  coverage: migration?.coverage ?? { verdict: "fail", error: rehearsalPlanFailure, planId: null, affectedTables: [], invariants: [], declarationSha256: null },
+  authenticatedRehearsal,
   runContext: { mode: nonGating ? "non-gating" : "gating", repositoryRoot: startGitState.repositoryRoot, ...immutableRun },
 };
 const markdown = renderDataRegressionMarkdown(report);

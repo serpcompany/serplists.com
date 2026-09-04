@@ -13,7 +13,7 @@ function poisonedEnvironment(root) {
   execFileSync("git", ["init", "-q", poison], { env: sanitizedGitEnvironment() });
   writeFileSync(path.join(poison, "poison.txt"), "poison");
   runRepositoryGit({ repoRoot: poison, args: ["add", "poison.txt"] });
-  runRepositoryGit({ repoRoot: poison, args: ["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "poison"] });
+  runRepositoryGit({ repoRoot: poison, args: ["-c", "core.hooksPath=/dev/null", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "poison"] });
   return { ...process.env, GIT_DIR: path.join(poison, ".git"), GIT_WORK_TREE: poison, GIT_INDEX_FILE: path.join(poison, ".git/index") };
 }
 

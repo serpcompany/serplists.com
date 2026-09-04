@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "plans": [
+    {
+      "id": "safe-template-evolution-0024",
+      "migrationFrom": "0024_safe_template_evolution.sql",
+      "migrationTo": "0024_safe_template_evolution.sql",
+      "preMigration": "0023_add_sitemap_revision_state.sql",
+      "artifacts": ["db/migrations/0024_safe_template_evolution.sql"],
+      "fixtureProfile": "template-evolution-v1",
+      "affectedTables": ["templates", "checklist_runs"],
+      "invariants": [
+        "row-counts", "ownership", "active-deleted", "foreign-keys", "json-validity",
+        "template-version-transition", "run-version-transition", "stable-structure-identities",
+        "authenticated-owned-template-read-write", "authenticated-owned-run-read-write",
+        "authenticated-false-empty", "authenticated-api-error"
+      ]
+    },
+    {
+      "id": "application-only-at-0024",
+      "migrationFrom": null,
+      "migrationTo": null,
+      "preMigration": "0024_safe_template_evolution.sql",
+      "artifacts": [],
+      "fixtureProfile": "template-evolution-v1",
+      "affectedTables": ["templates", "checklist_runs"],
+      "invariants": [
+        "row-counts", "ownership", "active-deleted", "foreign-keys", "json-validity",
+        "authenticated-owned-template-read-write", "authenticated-owned-run-read-write",
+        "authenticated-false-empty", "authenticated-api-error"
+      ]
+    }
+  ]
+}

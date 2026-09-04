@@ -227,7 +227,7 @@ jobs:
       - name: Install Chromium for regression suite
         run: pnpm exec playwright install --with-deps chromium
       - name: Run production-shaped regression suite
-        run: pnpm run test:data-regressions -- --report-dir tmp/data-reports/rehearsal/local-suite
+        run: pnpm run test:data-regressions -- --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --sanitized tmp/data-evidence/production-shaped.sql --sanitizer-manifest tmp/data-evidence/production-shaped.manifest.json --report-dir tmp/data-reports/rehearsal/local-suite
       - name: Always teardown source rehearsal and confirm absence
         if: always()
         env: { CLOUDFLARE_API_TOKEN: "${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}" }

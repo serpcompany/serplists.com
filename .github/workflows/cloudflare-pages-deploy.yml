@@ -59,6 +59,8 @@ jobs:
         run: |
           node scripts/data/remote-invariant-gate.mjs capture --database serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --environment staging --binding DB --commit "$GITHUB_SHA" --state tmp/staging-pre-invariants.json --report-dir tmp/data-reports/staging
       - name: Run data regression prerequisite
+        env:
+          DATA_REGRESSION_BASE_SHA: ${{ github.event.before }}
         run: pnpm run test:data-regressions -- --report-dir tmp/data-reports/staging
       - name: Apply reviewed staging migrations
         env:

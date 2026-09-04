@@ -47,7 +47,7 @@ describe("contract-correction command", () => {
       execFileSync("git", ["init", "-q", poison], { env: sanitizedGitEnvironment() });
       writeFileSync(path.join(poison, "poison.txt"), "poison");
       runRepositoryGit({ repoRoot: poison, args: ["add", "poison.txt"] });
-      runRepositoryGit({ repoRoot: poison, args: ["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "poison"] });
+      runRepositoryGit({ repoRoot: poison, args: ["-c", "core.hooksPath=/dev/null", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "poison"] });
       const changed = path.join(temp, "changed.txt");
       writeFileSync(changed, "db/schema/auth.ts\n");
       const result = spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "tsx", "scripts/data/check-contract-correction.ts", "--changed-files-file", changed, "--base-ref", "HEAD", "--report-dir", temp], { cwd: process.cwd(), encoding: "utf8", env: { ...process.env, GIT_DIR: path.join(poison, ".git"), GIT_WORK_TREE: poison, GIT_INDEX_FILE: path.join(poison, ".git/index") } });
