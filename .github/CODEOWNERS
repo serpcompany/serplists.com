@@ -1,0 +1,29 @@
+# Accountable routing only: @devinschumacher receives requests and designates
+# an independent owner. This mapping is not proof of independent approval.
+# Add a qualified human or @serpcompany/<team> before enabling production.
+
+/db/schema/ @devinschumacher
+/db/migrations/ @devinschumacher
+/db/schema.sql @devinschumacher
+/db/seeds/ @devinschumacher
+/db/maintenance/ @devinschumacher
+/scripts/check-preview-d1-binding.mjs @devinschumacher
+/scripts/check-production-d1-schema-lib.mjs @devinschumacher
+/scripts/check-production-d1-schema.mjs @devinschumacher
+/scripts/d1-baseline-migrations.mjs @devinschumacher
+/scripts/d1-reset-local.mjs @devinschumacher
+/scripts/cleanup-prod-test-users.sh @devinschumacher
+/scripts/reset-official-serp-password.mjs @devinschumacher
+/scripts/reset-official-serp-password-lib.mjs @devinschumacher
+/scripts/set-official-serp-plan.mjs @devinschumacher
+/scripts/set-official-serp-plan-lib.mjs @devinschumacher
+/scripts/data/ @devinschumacher
+/package.json @devinschumacher
+/wrangler.toml @devinschumacher
+/.github/workflows/ @devinschumacher
+/.github/CODEOWNERS @devinschumacher
+/.github/PULL_REQUEST_TEMPLATE.md @devinschumacher
+/docs/agents/database-change-and-data-promotion.md @devinschumacher
+
+# CODEOWNERS approval covers source review only. Production still requires a
+# separate protected-environment approval immediately before the exact action.
