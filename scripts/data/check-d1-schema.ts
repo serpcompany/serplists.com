@@ -92,7 +92,7 @@ try {
     stage = 'schema-query';
     return output;
   };
-  const inventoryOutput = executeRemote("schema-table-inventory", [...targetArgs, "--json", "--command", "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name!='d1_migrations' ORDER BY name"]);
+  const inventoryOutput = executeRemote("schema-table-inventory", [...targetArgs, "--json", "--command", "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name!='d1_migrations' AND name!='_cf_METADATA' ORDER BY name"]);
   const tableNames = [...new Set([...expectedTableNames, ...parseRemoteTableInventory(inventoryOutput)])].sort();
   const sql = [
     ...tableNames.map((name) => `${tableInfoSql(name)};`),
