@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -33,7 +33,7 @@ describe("rehearsal report finalization", () => {
       writeFileSync(files.recovery, JSON.stringify({ verdict: "pass", commit, environment: "rehearsal", sourceDatabase: { name: "source-rehearsal", id: sourceId }, recoveryDatabase: { name: "recovery-rehearsal", id: recoveryId }, migration: { from: migration, to: migration, appliedThrough: migration, ledgerSha256: "b".repeat(64) }, sanitizer: { version: artifact.manifest.sanitizerVersion, artifactSha256: artifact.manifest.artifact.sha256 }, creation: { verdict: "pass", runId: "123", sourceEvidenceSha256: "e".repeat(64), recoveryEvidenceSha256: "f".repeat(64) }, import: { verdict: "pass" }, invariants: { verdict: "pass", evidenceSha256: "c".repeat(64), domainDigest: "d".repeat(64) }, absence: { verdict: "pass" }, rawPlaintextRetained: false }));
       writeFileSync(files.teardown, "PASS rehearsal source-rehearsal is absent.\nPASS rehearsal recovery-rehearsal is absent.\n");
       writeFileSync(files.sanitized, artifact.sql); writeFileSync(files.manifest, JSON.stringify(artifact.manifest));
-      const { rows: _rows, ...state } = sanitizedState({ templates: [], runs: [], ledger: [migration], sourceSha256: artifact.manifest.artifact.sha256 });
+      const { rows: _rows, ...state } = sanitizedState({ templates: [], runs: [], ledger: readdirSync(path.join(repoRoot, "db/migrations")).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort(), sourceSha256: artifact.manifest.artifact.sha256 });
       const source = JSON.parse(readFileSync(files.source, "utf8"));
       Object.assign(source.authenticatedRehearsal, { postMigrationState: state, transformation: { verdict: "pass" }, handlerStateReadback: true });
       writeFileSync(files.source, JSON.stringify(source));

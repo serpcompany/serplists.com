@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
@@ -487,6 +487,14 @@ export const useRunExecutionModel = (
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  // Each visit gets its own identity, including navigating away and back to
+  // the same run/token while a previous visit's mutation is still pending.
+  const routeGeneration = useMemo(() => ({}), [options.runId, options.shareToken]);
+  const activeRouteGeneration = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    activeRouteGeneration.current = routeGeneration;
+    return () => { activeRouteGeneration.current = null; };
+  }, [routeGeneration]);
   const apiClient = options.dependencies?.apiClient;
   // The provider recreates getCachedRun on render. Subscribe to the cached
   // value, and never consult the private cache for a shared-token route.
@@ -553,6 +561,10 @@ export const useRunExecutionModel = (
   });
 
   const applyResult = (result: RunExecutionActionResult): RunExecutionActionResult => {
+    if (activeRouteGeneration.current !== routeGeneration ||
+        (result.kind === 'ok' && result.run && result.run.id !== run?.id)) {
+      return result;
+    }
     if (result.kind === 'ok' && result.run) {
       setRun(result.run);
       setSelectedItemId((currentSelectedItemId) => {

@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { rmSync } from "node:fs";
+import { rmSync, readdirSync, readFileSync } from "node:fs";
+import { routeFragmentDirectory, finalizeRouteCoverage } from "./data/route-coverage-evidence.mjs";
 import { prepareSanitizedSmoke } from "./data/prepare-sanitized-smoke.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +30,10 @@ const teardownReportPath = path.resolve(
   process.env.PLAYWRIGHT_TEARDOWN_REPORT ?? "tmp/data-reports/browser-smoke-teardown.json",
 );
 const env = buildSmokeChildEnvironment(process.env);
+env.DATA_REGRESSION_START_COMMIT ??= execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).trim();
+const migrationFiles = readdirSync(path.join(repoRoot, 'db/migrations')).filter(name => /^\d+.*\.sql$/.test(name)).sort();
+env.DATA_REGRESSION_MIGRATION_FROM ??= migrationFiles[0];
+env.DATA_REGRESSION_MIGRATION_TO ??= migrationFiles.at(-1);
 
 function parsePort(value, fallback) {
   const port = Number(value);
@@ -131,7 +137,16 @@ const releaseSmokeLock = env.PLAYWRIGHT_SMOKE_LOCK_HELD === "1"
   ? () => {}
   : await acquireSmokeRunLock({ lockPath: smokeLockAbsolutePath });
 try {
+  run(process.execPath, ['--test', 'scripts/data/route-coverage.node-test.mjs']);
+  const fragments = path.resolve(repoRoot, routeFragmentDirectory(env));
+  if (!fragments.startsWith(path.join(repoRoot, 'tmp') + path.sep)) throw new Error('Route coverage artifacts must stay under repository tmp/');
+  rmSync(fragments, { recursive: true, force: true });
   prepareSmokeD1();
+  const ledgerOutput = execFileSync(NPX_COMMAND, [...NPX_ARGS_PREFIX, 'wrangler', 'd1', 'execute', DATABASE_NAME, '--local', '--persist-to', smokePersistPath, '--command', 'SELECT name FROM d1_migrations ORDER BY id', '--json'], { cwd: repoRoot, env: { ...env, CI: '1' }, encoding: 'utf8' });
+  const ledger = JSON.parse(ledgerOutput)[0].results.map(row => row.name);
+  if (JSON.stringify(ledger) !== JSON.stringify(migrationFiles)) throw new Error('Real route database migration ledger does not match the full repository chain');
+  env.PLAYWRIGHT_ROUTE_LEDGER_JSON = JSON.stringify(ledger.map(name => ({ name, sha256: createHash('sha256').update(readFileSync(path.join(repoRoot, 'db/migrations', name))).digest('hex') })));
+  run(NPX_COMMAND, [...NPX_ARGS_PREFIX, "wrangler", "d1", "execute", DATABASE_NAME, "--local", "--persist-to", smokePersistPath, "--file", "scripts/data/sql/route-coverage-fixtures.sql", "--yes"]);
   const setupCommands = buildPlaywrightServerCommands({
     isolated: true,
     hasDevVars: false,
@@ -162,7 +177,7 @@ try {
 const pnpmBin = "pnpm";
 const child = spawn(
   pnpmBin,
-  ["exec", "playwright", "test", "--grep", "@smoke", ...process.argv.slice(2)],
+  ["exec", "playwright", "test", "--grep", "@smoke|@real-d1", ...process.argv.slice(2)],
   {
     env,
     shell: process.platform === "win32",
@@ -170,7 +185,38 @@ const child = spawn(
   },
 );
 
-child.on("exit", (code, signal) => {
+child.on("exit", async (code, signal) => {
+  let finalCode = code ?? 1;
+  const includesRouteSuite = !process.argv.slice(2).some(arg => arg.includes('.spec.')) || process.argv.slice(2).some(arg => arg.includes('real-d1'));
+  if (includesRouteSuite) {
+    try {
+      // Additional real Worker families contribute independently validated fragments.
+      if (finalCode === 0 && !signal) {
+        const { runAdminBillingSitemapCoverage } = await import('./data/run-admin-billing-sitemap-coverage.mjs');
+        await runAdminBillingSitemapCoverage({ repoRoot, persistPath: smokePersistAbsolutePath, env });
+      }
+      finalizeRouteCoverage(env, repoRoot, { browserPassed: finalCode === 0 && !signal });
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      finalCode = 1;
+    }
+  }
+  if (finalCode === 0 && !signal && includesRouteSuite) {
+    try {
+      run(NPX_COMMAND, [...NPX_ARGS_PREFIX, "wrangler", "d1", "execute", DATABASE_NAME, "--local", "--persist-to", smokePersistPath, "--file", "scripts/data/sql/route-coverage-missing-column.sql", "--yes"]);
+      finalCode = await new Promise(resolve => {
+        const negative = spawn(pnpmBin, ["exec", "playwright", "test", "tests/e2e/real-d1-routes.spec.ts", "--grep", "@real-d1-negative"], {
+          env: { ...env, PLAYWRIGHT_ROUTE_NEGATIVE: "1", ...(env.PLAYWRIGHT_JSON_REPORT ? { PLAYWRIGHT_JSON_REPORT: env.PLAYWRIGHT_JSON_REPORT.replace(/\.json$/, "-route-negative.json") } : {}) },
+          shell: process.platform === "win32", stdio: "inherit",
+        });
+        negative.on('exit', code => resolve(code ?? 1));
+        negative.on('error', () => resolve(1));
+      });
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      finalCode = 1;
+    }
+  }
   const teardown = cleanupSmokeState({
     repoRoot,
     statePath: smokePersistAbsolutePath,
@@ -183,7 +229,7 @@ child.on("exit", (code, signal) => {
     process.exitCode = 1;
     return;
   }
-  process.exitCode = teardown.verdict === "pass" ? (code ?? 1) : 1;
+  process.exitCode = teardown.verdict === "pass" ? finalCode : 1;
 });
 
 child.on("error", (error) => {

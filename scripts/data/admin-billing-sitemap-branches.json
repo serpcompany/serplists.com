@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "harness": "scripts/data/run-admin-billing-sitemap-coverage.mjs",
+  "runtime": "Unchanged application modules bundled into workerd with the complete Wrangler-migrated local D1 used by the browser suite. Actual Better Auth login. Only external Stripe HTTP transport is a local protocol double; unexpected external origins and operations fail.",
+  "covered": {
+    "admin-mutations": [
+      "Unauthorized admin request rejected before mutation",
+      "Email lookup resolves real user; unknown email returns 404",
+      "New entitlement insert grants pro and persists note",
+      "Duplicate insert falls back to update; free and expired overrides read back as free",
+      "Malformed JSON, missing identity and invalid plan return 400",
+      "Delete override removes actual D1 row"
+    ],
+    "stripe-mutations": [
+      "Unauthenticated billing denied; nonmember team context returns 404",
+      "Configured portal without customer returns 400",
+      "First checkout reads email and inserts customer; second checkout reuses the D1 mapping",
+      "Checkout form carries configured price; portal uses existing customer",
+      "Missing checkout URL and failed external transport produce 500",
+      "Unsigned webhook returns 400",
+      "Signed checkout completed upserts existing customer mapping",
+      "Signed subscription create inserts customer/subscription; active status grants pro",
+      "Duplicate processed event returns duplicate and preserves one subscription",
+      "Subscription update persists cancel flag; trialing grants pro; deleted/canceled returns free",
+      "Subscription metadata fallback resolves user without prior customer mapping",
+      "Incomplete subscription and unknown event do not create subscriptions",
+      "Actual D1 update trigger failure records event error and returns 500; retry after removal clears error"
+    ],
+    "sitemap-queries": [
+      "Index reads profile, public-template, category, family-revision and durable-shard tables",
+      "Valid fixture profile and public template appear in actual XML; unique category appears",
+      "Unchanged index preserves shard revision; publication change changes hash and excludes private template",
+      "Durable shard insertion/upsert and obsolete shard deletion read back from D1",
+      "All four paged families return XML for page 1; zero/out-of-range return 404; HEAD returns empty body; POST returns 405",
+      "Legacy pages/categories sitemap redirects retain valid page or default invalid page"
+    ]
+  },
+  "notExercised": [
+    "Concurrent checkout customer insertion conflict fallback (ordinary insert and existing read covered)",
+    "Optional missing billing-table legacy compatibility paths (suite requires full current schema)",
+    "More than 25000 entries and a bundled prefix filling an entire sitemap shard",
+    "Every malformed Stripe signature spelling, event JSON shape, and admin unsupported subpath",
+    "Live Stripe service behavior, credentials, checkout payment completion, and billing UI redirects"
+  ]
+}

@@ -1,0 +1,980 @@
+{
+  "version": 1,
+  "branchCoverage": "Required named scenarios exercise actual public and authenticated pages, user/team roles, template/run lifecycle mutations, admin/billing/webhook and sitemap query families. Fingerprints detect changed surfaces but do not prove branch execution. scenarioEvidence contains explicit executed assertions and any unexercised edge conditions; admin-billing-sitemap-branches.json records provider/concurrency and legacy compatibility limits.",
+  "scenarios": [
+    "public-content",
+    "public-static-pages",
+    "owned-pages",
+    "template-run-read-branches",
+    "user-override-entitlement",
+    "team-role-reads",
+    "free-entitlement",
+    "team-entitlement",
+    "admin-mutations",
+    "stripe-mutations",
+    "sitemap-queries",
+    "template-run-mutations",
+    "team-mutations",
+    "legacy-route-aliases"
+  ],
+  "surfaces": [
+    {
+      "path": "functions/api/better-auth.ts",
+      "kind": "query-family",
+      "sha256": "004a6e9d440496ed3a166ff98e4e16ece76fd0c419bd54524c57e9268b20e9eb",
+      "scenarios": [
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/db.ts",
+      "kind": "query-family",
+      "sha256": "4be44a101d999f8394b0cb4fe7d998c6b4eec6f71a0a7077038ec1afc06ff63d",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/handlers/admin.ts",
+      "kind": "query-family",
+      "sha256": "7562cafae9b2293ad6a55777227e574552dbd71ab0b41da508aef355d1c4dee0",
+      "scenarios": [
+        "admin-mutations"
+      ]
+    },
+    {
+      "path": "functions/api/handlers/auth.ts",
+      "kind": "query-family",
+      "sha256": "400e5c96aabb2fbd0664ebac3638571db8699519c950b29878ed730ee8b62b9b",
+      "scenarios": [
+        "public-content"
+      ]
+    },
+    {
+      "path": "functions/api/handlers/billing.ts",
+      "kind": "query-family",
+      "sha256": "bbbc638bebb439324c54880c6d2cf03a9d2c764777d33dc13380682dd294710f",
+      "scenarios": [
+        "free-entitlement",
+        "user-override-entitlement",
+        "team-entitlement"
+      ]
+    },
+    {
+      "path": "functions/api/handlers/checklists.ts",
+      "kind": "query-family",
+      "sha256": "2f47544ee08e0b22d7681b4d013421eadfbd0fbd552ae7b67e98a13c8b037072",
+      "scenarios": [
+        "public-content",
+        "template-run-read-branches",
+        "template-run-mutations"
+      ]
+    },
+    {
+      "path": "functions/api/handlers/stripe.ts",
+      "kind": "query-family",
+      "sha256": "46610e28e2ce9330fb7ea27ce3131a571dcbc73f36a3b6340fd731a07eb933ea",
+      "scenarios": [
+        "stripe-mutations"
+      ]
+    },
+    {
+      "path": "functions/api/handlers/teams.ts",
+      "kind": "query-family",
+      "sha256": "bd06b2734c0c7ba14f0f3669b2bc586437e9ba08ceb448f5f7a00b3781028e56",
+      "scenarios": [
+        "team-role-reads",
+        "team-mutations"
+      ]
+    },
+    {
+      "path": "functions/api/handlers/templates.ts",
+      "kind": "query-family",
+      "sha256": "759cf9d51fc9ee9afd488a7b86f756441a4e25e35a8cbb3034421bbffdf26563",
+      "scenarios": [
+        "public-content",
+        "template-run-read-branches",
+        "template-run-mutations"
+      ]
+    },
+    {
+      "path": "functions/api/utils/entitlements.ts",
+      "kind": "query-family",
+      "sha256": "befa09c39bb42eb4aace8d57fae181d8510bdb3eabdf3ebd956cbf49000214a3",
+      "scenarios": [
+        "free-entitlement",
+        "user-override-entitlement",
+        "team-entitlement"
+      ]
+    },
+    {
+      "path": "functions/api/utils/team-access.ts",
+      "kind": "query-family",
+      "sha256": "7d5f77741a7fc846eba2a6e1aa1abd13ed2375f2256a11c8df116741d1ecfc18",
+      "scenarios": [
+        "team-role-reads"
+      ]
+    },
+    {
+      "path": "functions/sitemap.xml.ts",
+      "kind": "query-family",
+      "sha256": "0345b2a2e9d9bf93ae1f50caa7d81e12d9af435eec01839a464d172f770abf7c",
+      "scenarios": [
+        "sitemap-queries"
+      ]
+    },
+    {
+      "path": "functions/sitemap/shared.ts",
+      "kind": "query-family",
+      "sha256": "e1dc745057c04123aac49e84ac5742df47dafaceb6ea872fefbc681f4de8319e",
+      "scenarios": [
+        "sitemap-queries"
+      ]
+    },
+    {
+      "path": "functions/sitemaps/templates/[page].xml.ts",
+      "kind": "query-family",
+      "sha256": "f3c5b30f1b7d3a9df2044b19ff758f9fe1a5d4f1592995e98aa1447c64b4fbc0",
+      "scenarios": [
+        "sitemap-queries"
+      ]
+    },
+    {
+      "path": "src/App.tsx",
+      "kind": "page",
+      "sha256": "fd0622c7ebc3d579b5d4dceea7bbda56154fdcd3fd34347cb8d36b73ecc22343",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/lib/routes.ts",
+      "kind": "page",
+      "sha256": "853656332d66bd2b2e0009551baca51bd816a63d64e0006e99f4e7fea592f3cc",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/pages/About.tsx",
+      "kind": "page",
+      "sha256": "75af6cffc4bd90360c1f36b3bfb1b46d9beae203dcda2afa9926474b35e68f86",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/pages/Account.tsx",
+      "kind": "page",
+      "sha256": "56b44da761e8aa88aaa68b5083057614b387838566c0226c40ab87c61b403cdb",
+      "scenarios": [
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "src/pages/accountProfileUpdates.ts",
+      "kind": "page",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "scenarios": [
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "src/pages/Categories.tsx",
+      "kind": "page",
+      "sha256": "132863c1e071a3aff10a7af62f49311384bcf9d3bb50289b9c5ddad0e46b8e55",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/pages/CategoryDetail.tsx",
+      "kind": "page",
+      "sha256": "c9d08b0f83163a1498c7fe4febba224b4bae09751e978570740ba37116e886cd",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/pages/ChecklistLibrary.tsx",
+      "kind": "page",
+      "sha256": "bd969c4d1107b621541cbca79913be2302f230dac3a8db22f47862cdbd842dc9",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/pages/ChecklistRun.tsx",
+      "kind": "page",
+      "sha256": "26111e6068808e240c4ad49d398925a3d0aa696adf1bd3116b1995f413c4ee2b",
+      "scenarios": [
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "src/pages/Contact.tsx",
+      "kind": "page",
+      "sha256": "5191cafb91bbb0417bac6b39bca3011f85ebf9fbaad2fb505931c7deb7c2a74a",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/pages/Dashboard.tsx",
+      "kind": "page",
+      "sha256": "5800ab72be574a3172fe483061de93989ee52c297ffb5e50cd24d10572c201e5",
+      "scenarios": [
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "src/pages/DashboardSettings.tsx",
+      "kind": "page",
+      "sha256": "a9796523eef74308e150b14bf36fff31eb593b258c4eb6cb249bc2272400856e",
+      "scenarios": [
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "src/pages/Features.tsx",
+      "kind": "page",
+      "sha256": "57bac9631e8368be04214968090687ac5716d21784dea9e885b8aec17f8681f4",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/pages/ForgotPassword.tsx",
+      "kind": "page",
+      "sha256": "acb38845d24cf24b191d06d56da1ab1c0fb49b2bd48c12ddf92323ac09d807a2",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/pages/Index.tsx",
+      "kind": "page",
+      "sha256": "16d5ac5849d8ece25cb5890655b540d4a897b983b79889bd6e96b4f33e337ae9",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/pages/Login.tsx",
+      "kind": "page",
+      "sha256": "23cc3598b7009c66dce3cc8acb196fa2a1ea3df3f1d25d4683c096b58a6efc51",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/pages/NotFound.tsx",
+      "kind": "page",
+      "sha256": "4f77011cf9dc515f29024841fb6eb30960621d394050a490f54eb3a7219bab47",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/pages/Pricing.tsx",
+      "kind": "page",
+      "sha256": "be3d660af65a3e5a0a8c326afbb5b562b4b0afa2f30b27a4bef67c40714fba1b",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/pages/PublicTemplate.tsx",
+      "kind": "page",
+      "sha256": "5937363eb28d807859b11741cbf366b5c317367268b8d5c7ea11417988715253",
+      "scenarios": [
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/pages/Recipes.tsx",
+      "kind": "page",
+      "sha256": "e728544d65cefd533d6753a6659d42967afd014ceb12240fb1aa418bc1fc6697",
+      "scenarios": [],
+      "notApplicable": "Unrouted legacy component: src/App.tsx imports no Recipes page."
+    },
+    {
+      "path": "src/pages/Register.tsx",
+      "kind": "page",
+      "sha256": "697c8b531edd0278dfe46379cdb2583f0054c21b05ee547dc2ddc03e2b26337f",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/pages/ResetPassword.tsx",
+      "kind": "page",
+      "sha256": "360cff99939be85bed09c3f45bff2b5de0daa2b24b59cedc0f5e75c757354c11",
+      "scenarios": [
+        "public-static-pages"
+      ]
+    },
+    {
+      "path": "src/pages/TeamInviteAccept.tsx",
+      "kind": "page",
+      "sha256": "d7ab280aacb4762ba218277425a2b72694de3b4661b98f518f15b1c1df499826",
+      "scenarios": [
+        "public-static-pages",
+        "team-mutations"
+      ]
+    },
+    {
+      "path": "src/pages/TemplateDetail.tsx",
+      "kind": "page",
+      "sha256": "df5951444c85a289ae0c5ba701e4c66a8bc62b4043d94c03953ee25b4b2b2e15",
+      "scenarios": [
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "src/pages/TemplateEditor.tsx",
+      "kind": "page",
+      "sha256": "2c5481b903fba1d83b0f17f3825df2c8db8682bb6fdf9532e000218a61aa3c3b",
+      "scenarios": [
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "src/pages/TemplateImportExport.tsx",
+      "kind": "page",
+      "sha256": "7ecabfc691fbc25f8aeebd52c0ba482f25026d9c9fa3f3f15ae7798f7db4e192",
+      "scenarios": [
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "src/pages/Templates.tsx",
+      "kind": "page",
+      "sha256": "6b1905b187dfcf4b6676841abb820939409353fa09a4ffd71ff4fd1d2dfd0d5d",
+      "scenarios": [
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "src/pages/UserProfile.tsx",
+      "kind": "page",
+      "sha256": "46960eb770de0181fefb3e7acd733822d3936bf29f7d9c1dc3fbc870860bcd1c",
+      "scenarios": [
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/components/account/BillingSection.tsx",
+      "kind": "query-consumer",
+      "sha256": "31530219560026af2da87f93e5c48c45aa30a190a7a98f2a07d3e6a6cdc58420",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/components/account/SecuritySection.tsx",
+      "kind": "query-consumer",
+      "sha256": "ac759da8c4f52ad4528ab8a52effb63f661555388cb253ef29cb28ed78819365",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/components/account/TeamSettingsSection.tsx",
+      "kind": "query-consumer",
+      "sha256": "46a2768b1ab318d3a757e6864780f34079a5a3d262e21ee52adee6844703ab4d",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/components/dashboard/ArchiveRecoverySection.tsx",
+      "kind": "query-consumer",
+      "sha256": "646ef148ef999576419eb1a75e3bdb7f8a4d7323801d9680a5caf3a97a58e260",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/components/shared/AvatarUpload.tsx",
+      "kind": "query-consumer",
+      "sha256": "fb8df446eeabfa0ea32fa25cb1456632c6a8ed7f4b2b8beec2c915f962bcfbc6",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/components/shared/UserInfo.tsx",
+      "kind": "query-consumer",
+      "sha256": "e82810f230f8019669403ff8ed74ad7105ebe0e5285b599281154bcd9434e81a",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/components/template-editor/GenerateFromClipy.tsx",
+      "kind": "query-consumer",
+      "sha256": "04265da9846df8915b32b38f23f76207fa25f2b2701ef68eb4007df70814021c",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/components/TemplateBackup.tsx",
+      "kind": "query-consumer",
+      "sha256": "f80befacbb9a9d7d7e2c64ac342f1ad690998d595d8c4a026317fa0c9d640d7c",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/components/ui/carousel.tsx",
+      "kind": "query-consumer",
+      "sha256": "5a4ff73c804e86c873382da80c453f1399006326ef042fb984c24162ec86666e",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/contexts/CloudflareAuthContext.tsx",
+      "kind": "query-consumer",
+      "sha256": "ced5da076acb9efe83abb72968dfeec9f8847f2461f28b0d3efbc25fd73a479a",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/contexts/TemplatesContext.tsx",
+      "kind": "query-consumer",
+      "sha256": "e54d477344952aedfdfdf2995962e4e588d77cf97f5cbf9b57eed1f435888c37",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/contexts/WorkspaceContext.tsx",
+      "kind": "query-consumer",
+      "sha256": "1a6e2097712f7b13c0f908995ac75f3614b21b8f007c719d3460d2ec44c08126",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/features/run-execution/useRunExecutionModel.ts",
+      "kind": "query-consumer",
+      "sha256": "04f45149b9b9b1f4d70f5faa1d7aca39da37b823669afb5e1a691552b2ce8bb6",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/features/teams/acceptTeamInvite.ts",
+      "kind": "query-consumer",
+      "sha256": "c20c4159e65729f7b42202dc33924d37477f2dfcc830ba2773739412f2967f82",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/features/template-detail/useTemplateDetailModel.ts",
+      "kind": "query-consumer",
+      "sha256": "ed900c79cbd29d6a1d4f2e12aec9c03f276cd24a42565fa4ee3ffefaac3bc7a5",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/lib/access-flow.ts",
+      "kind": "query-consumer",
+      "sha256": "4320ce0144b92f4edbafd9efd54d24d2771b0688500b4c545828b96ad30226d9",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/lib/api.ts",
+      "kind": "query-consumer",
+      "sha256": "1da29a65cf0f0558a8728d79495ab85e09ef984940c5f56fd67cfe0fcf2401d0",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/lib/api/client.ts",
+      "kind": "query-consumer",
+      "sha256": "0b7471a33f36b2e3020e83a9c63ec5e60ac2c1040e30052432fe26094477bf33",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/lib/auth-client.ts",
+      "kind": "query-consumer",
+      "sha256": "777585d6153b6ba5f05742a57e9d6fcc41fcef5825db295661a87d83f0885897",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "src/lib/utils/fileUpload.ts",
+      "kind": "query-consumer",
+      "sha256": "b8657df4d4cbd043cfcdc99e1ee080c8957bdbf1c5551dcde634ce6570bc3521",
+      "scenarios": [
+        "owned-pages",
+        "public-content"
+      ]
+    },
+    {
+      "path": "functions/api/[[route]].ts",
+      "kind": "server-module",
+      "sha256": "54f4ce7538a4f5d09208d895606a2ea78dcc483415289078fb7bad97be953b45",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/env.ts",
+      "kind": "server-module",
+      "sha256": "a84af423d65ab7cbdf3e8b74fd81fd7a55e967d3b7271a408af0ecaa1d51fc56",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/handlers/clipy.ts",
+      "kind": "server-module",
+      "sha256": "a9271445a2223fd4a757a260b725dd7ce4160c805b5c3cf39bf4e905d0dcddfb",
+      "scenarios": [],
+      "notApplicable": "No domain D1 query: this handler uses R2 or outbound Clipy. Its shared Better Auth session lookup is exercised by owned-pages; external object/media behavior is outside the database compatibility gate."
+    },
+    {
+      "path": "functions/api/handlers/uploads.ts",
+      "kind": "server-module",
+      "sha256": "ab99b64604996d2517ea20564339cc85a8ce1308c9a124b0f0ef9c73cfb52365",
+      "scenarios": [],
+      "notApplicable": "No domain D1 query: this handler uses R2 or outbound Clipy. Its shared Better Auth session lookup is exercised by owned-pages; external object/media behavior is outside the database compatibility gate."
+    },
+    {
+      "path": "functions/api/types.ts",
+      "kind": "server-module",
+      "sha256": "0e5a94e16709513b05d248de107b6d3cd6664eb3d2ef4b1bc0070a3b21413a28",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/audit.ts",
+      "kind": "server-module",
+      "sha256": "4faf59b01ae11ad5a727371781a270f6a9109da7454b80c24cf20fafd12c6626",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/auth-secret.ts",
+      "kind": "server-module",
+      "sha256": "d373a034d874f4af9923be5ca0e6d29c537e1580f22f3f6630e8fef1d74d6646",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/body.ts",
+      "kind": "server-module",
+      "sha256": "f0ed53059eb53d01bb5493ee3a2e1de2bb9cabee12b4487ac9ab8847416b2339",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/cors.ts",
+      "kind": "server-module",
+      "sha256": "1fbd39b4630082bf4c52c338946609c009bf9be3af5b9449a16dea050f00c2f8",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/crypto.ts",
+      "kind": "server-module",
+      "sha256": "052c9e0adab281db9cea6addd5526d1c9bc235b900990e2a8262aaf4374ff6cd",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/jwt.ts",
+      "kind": "server-module",
+      "sha256": "852ddb5d13d6e65fea29ffd9dd6706723c85117d19a53e016ec294593bd7c9d6",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/logger.ts",
+      "kind": "server-module",
+      "sha256": "39934cb9968afdbfdff69202d2534a0e0c0326f2ee3305e6b0687a80959762ac",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/payloads.ts",
+      "kind": "server-module",
+      "sha256": "faab934da60b22b0df6912aed0c0b8c7cbce5daf4c02193bdd60ae368275e24a",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/rate-limit.ts",
+      "kind": "server-module",
+      "sha256": "1214f71f0cee7d63b1f77e3caac9533f1e702932cf57f3186897c802464f0e24",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/response.ts",
+      "kind": "server-module",
+      "sha256": "1a72862f2fcc29baec5c0ffb76300e2d44f795cf738f3cadf1367554b58ba96f",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/session.ts",
+      "kind": "server-module",
+      "sha256": "45d05123728c387e958b5fec15b416a263ff74dffffe3817d95f286e8d831dac",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/slug.ts",
+      "kind": "server-module",
+      "sha256": "44e9ad934f5a5576f2af7b19ee3313cfb6126c933365adea169bb4bc60ffa336",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/stripe.ts",
+      "kind": "server-module",
+      "sha256": "6dc23b3711c1564921b02877265648ef1590b9e4e6b424feeceb31ff1420b08c",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/team-invite-delivery.ts",
+      "kind": "server-module",
+      "sha256": "4371604e5e422737e3f04c3cc8b3a12d3b7348b1431b0eb0bbe9491bb962be1f",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/api/utils/template-reconciliation.ts",
+      "kind": "server-module",
+      "sha256": "d52bc543fe239ff987571f22d3ecfcdbfab3f79e531ffbb0a5f9eccdd99834a6",
+      "scenarios": [
+        "public-content",
+        "owned-pages"
+      ]
+    },
+    {
+      "path": "functions/categories/sitemap.xml.ts",
+      "kind": "server-module",
+      "sha256": "2b3ea65b075f90998efeab11d8b7dbe61d2380295e925e2673e1c4b987ce77cd",
+      "scenarios": [
+        "sitemap-queries"
+      ]
+    },
+    {
+      "path": "functions/sitemaps/categories/[page].xml.ts",
+      "kind": "server-module",
+      "sha256": "03a0a6df428242f8c1ffc2f719132119c03ff1eb8616d9a32c9d3fc0f5059ad8",
+      "scenarios": [
+        "sitemap-queries"
+      ]
+    },
+    {
+      "path": "functions/sitemaps/pages/[page].xml.ts",
+      "kind": "server-module",
+      "sha256": "8a2ca90819a024e2b0add6f147ba49e3cfaf5c63410728e14bdc88c0616eab63",
+      "scenarios": [
+        "sitemap-queries"
+      ]
+    },
+    {
+      "path": "functions/sitemaps/profiles/[page].xml.ts",
+      "kind": "server-module",
+      "sha256": "aba0f21cc5e8955cd2cf50dd6ba3f23c57698d9b3ba96d4f01801a8328fcf69b",
+      "scenarios": [
+        "sitemap-queries"
+      ]
+    },
+    {
+      "path": "functions/sitemaps/static.xml.ts",
+      "kind": "server-module",
+      "sha256": "5f2c131b20719dc656a41e85c03d015fb0eff3239be9eeb3e916e49268b6a87a",
+      "scenarios": [
+        "sitemap-queries"
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "/",
+      "example": "/",
+      "persona": "anonymous",
+      "scenario": "public-static-pages"
+    },
+    {
+      "pattern": "/templates",
+      "example": "/templates",
+      "persona": "anonymous",
+      "scenario": "public-static-pages"
+    },
+    {
+      "pattern": "/categories",
+      "example": "/categories",
+      "persona": "anonymous",
+      "scenario": "public-static-pages"
+    },
+    {
+      "pattern": "/categories/:categorySlug",
+      "example": "/categories/business",
+      "persona": "anonymous",
+      "scenario": "public-static-pages"
+    },
+    {
+      "pattern": "/features",
+      "example": "/features",
+      "persona": "anonymous",
+      "scenario": "public-static-pages"
+    },
+    {
+      "pattern": "/features/:featureSlug",
+      "example": "/features/template-builder",
+      "persona": "anonymous",
+      "scenario": "public-static-pages"
+    },
+    {
+      "pattern": "/pricing",
+      "example": "/pricing",
+      "persona": "anonymous",
+      "scenario": "public-static-pages"
+    },
+    {
+      "pattern": "/about",
+      "example": "/about",
+      "persona": "anonymous",
+      "scenario": "public-static-pages"
+    },
+    {
+      "pattern": "/contact",
+      "example": "/contact",
+      "persona": "anonymous",
+      "scenario": "public-static-pages"
+    },
+    {
+      "pattern": "/login",
+      "example": "/login",
+      "persona": "anonymous",
+      "scenario": "public-static-pages"
+    },
+    {
+      "pattern": "/register",
+      "example": "/register",
+      "persona": "anonymous",
+      "scenario": "public-static-pages"
+    },
+    {
+      "pattern": "/forgot-password",
+      "example": "/forgot-password",
+      "persona": "anonymous",
+      "scenario": "public-static-pages"
+    },
+    {
+      "pattern": "/reset-password",
+      "example": "/reset-password",
+      "persona": "anonymous",
+      "scenario": "public-static-pages"
+    },
+    {
+      "pattern": "/team-invites/:token",
+      "example": "/team-invites/coverage-pending",
+      "persona": "anonymous",
+      "scenario": "public-static-pages"
+    },
+    {
+      "pattern": "/profile/:username",
+      "example": "/profile/coverage-owner",
+      "persona": "anonymous",
+      "scenario": "public-content"
+    },
+    {
+      "pattern": "/profile/:username/:templateSlug",
+      "example": "/profile/coverage-owner/coverage-public",
+      "persona": "anonymous",
+      "scenario": "public-content"
+    },
+    {
+      "pattern": "/share/:shareToken",
+      "example": "/share/coverage-share",
+      "persona": "anonymous",
+      "scenario": "public-content"
+    },
+    {
+      "pattern": "/dashboard/templates",
+      "example": "/dashboard/templates",
+      "persona": "owner",
+      "scenario": "owned-pages"
+    },
+    {
+      "pattern": "/dashboard/templates/:id",
+      "example": "/dashboard/templates/coverage-private",
+      "persona": "owner",
+      "scenario": "owned-pages"
+    },
+    {
+      "pattern": "/dashboard/templates/:id/edit",
+      "example": "/dashboard/templates/coverage-private/edit",
+      "persona": "owner",
+      "scenario": "owned-pages"
+    },
+    {
+      "pattern": "/dashboard/templates/new",
+      "example": "/dashboard/templates/new",
+      "persona": "owner",
+      "scenario": "owned-pages"
+    },
+    {
+      "pattern": "/dashboard/import-templates",
+      "example": "/dashboard/import-templates",
+      "persona": "owner",
+      "scenario": "owned-pages"
+    },
+    {
+      "pattern": "/dashboard/runs",
+      "example": "/dashboard/runs",
+      "persona": "owner",
+      "scenario": "owned-pages"
+    },
+    {
+      "pattern": "/dashboard/runs/:id",
+      "example": "/dashboard/runs/coverage-run",
+      "persona": "owner",
+      "scenario": "owned-pages"
+    },
+    {
+      "pattern": "/run/:id",
+      "example": "/run/coverage-run",
+      "persona": "owner",
+      "scenario": "owned-pages"
+    },
+    {
+      "pattern": "/dashboard/settings",
+      "example": "/dashboard/settings",
+      "persona": "owner",
+      "scenario": "owned-pages"
+    },
+    {
+      "pattern": "/checklists",
+      "example": "/checklists",
+      "persona": "anonymous",
+      "scenario": "legacy-route-aliases"
+    },
+    {
+      "pattern": "/console",
+      "example": "/console",
+      "persona": "owner",
+      "scenario": "legacy-route-aliases"
+    },
+    {
+      "pattern": "/dashboard",
+      "example": "/dashboard",
+      "persona": "owner",
+      "scenario": "legacy-route-aliases"
+    },
+    {
+      "pattern": "/account",
+      "example": "/account",
+      "persona": "owner",
+      "scenario": "legacy-route-aliases"
+    },
+    {
+      "pattern": "/dashboard/profile",
+      "example": "/dashboard/profile",
+      "persona": "owner",
+      "scenario": "legacy-route-aliases"
+    },
+    {
+      "pattern": "/console/templates/:id",
+      "example": "/console/templates/coverage-private",
+      "persona": "owner",
+      "scenario": "legacy-route-aliases"
+    },
+    {
+      "pattern": "/console/templates/:id/edit",
+      "example": "/console/templates/coverage-private/edit",
+      "persona": "owner",
+      "scenario": "legacy-route-aliases"
+    },
+    {
+      "pattern": "/console/runs/:id",
+      "example": "/console/runs/coverage-run",
+      "persona": "owner",
+      "scenario": "legacy-route-aliases"
+    },
+    {
+      "pattern": "*",
+      "notApplicable": "404 fallback has no D1 content and deliberately logs a console error; it is not a successful application data route."
+    },
+    {
+      "pattern": "/team-invites/:token",
+      "example": "/team-invites/:createdToken",
+      "persona": "editor",
+      "scenario": "team-mutations"
+    }
+  ]
+}

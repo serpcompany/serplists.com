@@ -37,6 +37,7 @@
     "test:coverage": "vitest run --coverage",
     "test:hooks": "vitest run scripts/hooks/hook-enforcement.test.mjs",
     "test:smoke": "node scripts/run-playwright-smoke.mjs",
+    "test:data:routes": "node scripts/run-playwright-smoke.mjs --grep @real-d1",
     "test:data-regressions": "tsx scripts/data/run-data-regression-suite.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",

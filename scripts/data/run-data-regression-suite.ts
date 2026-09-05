@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmdirSync, rmSync, unlinkSync } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { captureRepositoryGitState, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
 import { resolveRehearsalPlan } from "./rehearsal-plan-lib.mjs";
@@ -42,6 +43,9 @@ const reportDirectory = path.resolve(
 const rawVitestReport = path.join(reportDirectory, "data-regression-vitest.json");
 const browserTeardownReportPath = path.join(reportDirectory, "browser-smoke-teardown.json");
 const browserJsonReportPath = path.join(reportDirectory, "browser-smoke-playwright.json");
+const routeCoverageReportPath = path.join(reportDirectory, "route-coverage.json");
+const routeNegativeReportPath = browserJsonReportPath.replace(/\.json$/, "-route-negative.json");
+const routeNegativeEvidencePath = path.join(reportDirectory, "route-coverage-negative.json");
 const authenticatedRehearsalProofPath = path.join(reportDirectory, "authenticated-rehearsal-handler.json");
 const candidateAuthenticatedProofPath = path.join(reportDirectory, "candidate-authenticated-handler.json");
 const reportRoot = path.join(repoRoot, "tmp", "data-reports");
@@ -193,6 +197,8 @@ if (commandFailure) checks.push({
 let browserFailure: string | null = null;
 let actualApplicationVisibilityPassed = false;
 let candidateAuthenticated = { verdict: "fail", checks: {} } as Record<string, unknown>;
+let routeCoverage = { verdict: "fail" } as Record<string, unknown>;
+let routeNegativePassed = false;
 let authenticatedRehearsal = { applicable: false, verdict: "not-applicable" } as Record<string, unknown>;
 const sanitizedPathArg = valueAfter("--sanitized");
 const sanitizerManifestArg = valueAfter("--sanitizer-manifest");
@@ -215,6 +221,7 @@ let browserTeardown = {
 };
 if (existsSync(browserTeardownReportPath)) unlinkSync(browserTeardownReportPath);
 if (existsSync(browserJsonReportPath)) unlinkSync(browserJsonReportPath);
+for (const file of [routeCoverageReportPath, routeNegativeReportPath, routeNegativeEvidencePath]) if (existsSync(file)) unlinkSync(file);
 try {
   execFileSync(
     process.platform === "win32" ? "pnpm.cmd" : "pnpm",
@@ -225,6 +232,7 @@ try {
         ...sanitizedGitEnvironment(),
         PLAYWRIGHT_TEARDOWN_REPORT: browserTeardownReportPath,
         PLAYWRIGHT_JSON_REPORT: browserJsonReportPath,
+        PLAYWRIGHT_ROUTE_COVERAGE_PROOF: routeCoverageReportPath,
         PLAYWRIGHT_SMOKE_LOCK_HELD: "1",
         DATA_REGRESSION_START_COMMIT: startCommit,
         PLAYWRIGHT_CANDIDATE_AUTH_PROOF: candidateAuthenticatedProofPath,
@@ -246,6 +254,28 @@ try {
   const browserReport = JSON.parse(
     readFileSync(browserJsonReportPath, "utf8"),
   ) as PlaywrightJsonReport;
+  const routeReport = JSON.parse(readFileSync(routeCoverageReportPath, "utf8"));
+  const expectedRouteLedger = readdirSync(path.join(repoRoot, "db/migrations"))
+    .filter((name) => /^\d+.*\.sql$/.test(name)).sort()
+    .map((name) => ({ name, sha256: createHash("sha256").update(readFileSync(path.join(repoRoot, "db/migrations", name))).digest("hex") }));
+  const routeBound = routeReport.verdict === "pass" && routeReport.commit === startCommit
+    && routeReport.target?.environment === "local" && routeReport.target?.binding === "DB"
+    && routeReport.target?.databaseId === "local:miniflare:DB@isolated-data-regression"
+    && JSON.stringify(routeReport.migrationLedger) === JSON.stringify(expectedRouteLedger)
+    && Array.isArray(routeReport.checks) && routeReport.checks.length > 0
+    && routeReport.checks.every((check: { verdict?: string }) => check.verdict === "pass");
+  routeCoverage = { ...routeReport, verdict: routeBound ? "pass" : "fail" };
+  if (!routeBound) throw new Error("Real D1 route coverage is missing, failed, or bound to a different commit or migration ledger.");
+  const routeNegative = JSON.parse(readFileSync(routeNegativeReportPath, "utf8")) as PlaywrightJsonReport;
+  const negativeSpec = collectPlaywrightSpecs(routeNegative.suites ?? []).find((spec) =>
+    String(spec.title).includes("missing column breaks the real consuming profile page"));
+  const negativeEvidence = JSON.parse(readFileSync(routeNegativeEvidencePath, "utf8"));
+  routeNegativePassed = negativeSpec?.tests?.some((test) => test.results?.some((result) => result.status === "passed")) === true
+    && negativeEvidence.verdict === "pass" && negativeEvidence.commit === startCommit
+    && JSON.stringify(negativeEvidence.target) === JSON.stringify(routeReport.target)
+    && JSON.stringify(negativeEvidence.migrationRange) === JSON.stringify(routeReport.migrationRange)
+    && JSON.stringify(negativeEvidence.migrationLedger) === JSON.stringify(expectedRouteLedger);
+  if (!routeNegativePassed) throw new Error("Real D1 missing-column page regression detector was missing or failed.");
   const visibilitySpec = collectPlaywrightSpecs(browserReport.suites ?? [])
     .find((spec) => String(spec.title).includes(
       "authenticated account-owned D1 template is visible through API and dashboard",
@@ -288,6 +318,8 @@ checks.push({
   verdict: browserFailure ? "fail" : "pass",
 });
 checks.push({ name: "authenticated candidate template and run read-write", test: "authenticated candidate API proves template read template write readback run read and run write readback", verdict: candidateAuthenticated.verdict === "pass" ? "pass" : "fail" });
+checks.push({ name: "real D1 page and query coverage", test: "all required real Worker and local D1 route scenarios pass for the exact commit and applied migration ledger", verdict: routeCoverage.verdict === "pass" ? "pass" : "fail" });
+checks.push({ name: "broken query page detector", test: "a missing D1 column fails the normal consuming-page error detector", verdict: routeNegativePassed ? "pass" : "fail" });
 if (authenticatedRehearsal.applicable === true) {
   checks.push({
     name: "authenticated sanitized candidate handlers",
@@ -453,6 +485,8 @@ const report = {
   coverage,
   authenticatedRehearsal,
   candidateAuthenticated,
+  routeCoverage,
+  routeNegativePassed,
   runContext: { mode: nonGating ? "non-gating" : "gating", repositoryRoot: startGitState.repositoryRoot, ...immutableRun },
 };
 const markdown = renderDataRegressionMarkdown(report);

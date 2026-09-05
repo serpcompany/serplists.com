@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { writeDataCheckReports } from "./reporting.mjs";
 import { validateRehearsalRecoveryEvidence } from "./rehearsal-recovery-lib.mjs";
@@ -21,6 +21,8 @@ try {
   const authenticated = source.authenticatedRehearsal;
   validateAuthenticatedCandidateEvidence(authenticated, { requireDetectors: true });
   validateSanitizedStateBinding(authenticated.postMigrationState, invariants.sanitizedState);
+  const expectedLedger = readdirSync(path.join(repoRoot, "db/migrations")).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
+  if (JSON.stringify(authenticated.postMigrationState.ledger) !== JSON.stringify(expectedLedger)) throw new Error("Authenticated state must use the full exact candidate migration ledger.");
   if (authenticated.postMigrationState.sourceSha256 !== sanitizedManifest.artifact?.sha256 || authenticated.postMigrationState.ledgerSha256 !== invariants.ledger?.afterSha256 || JSON.stringify(authenticated.postMigrationState.ledger) !== JSON.stringify(invariants.ledger?.after) || authenticated.transformation?.verdict !== "pass" || authenticated.handlerStateReadback !== true) throw new Error("Authenticated handlers are not bound to the exact transformed remote ledger and domain.");
   if (authenticated.commit !== arg("--commit") || authenticated.target?.environment !== "local" || authenticated.sanitizerArtifactSha256 !== sanitizedManifest.artifact?.sha256 || authenticated.migrationRange?.from !== (arg("--migration-from") === "none" ? null : arg("--migration-from")) || authenticated.migrationRange?.to !== (arg("--migration-to") === "none" ? null : arg("--migration-to"))) throw new Error("Authenticated candidate-handler rehearsal evidence is incomplete or not bound to the sanitized artifact.");
   const recovery = validateRehearsalRecoveryEvidence({
