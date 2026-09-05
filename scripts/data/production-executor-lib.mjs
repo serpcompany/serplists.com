@@ -97,7 +97,11 @@ function statementRisk(statement) {
     const safeDefault = /\bdefault\s+(?!null\b)(?:[-+]?\d+(?:\.\d+)?|'(?:''|[^'])*'|"(?:""|[^"])*")\s*$/i.test(normalized);
     return required && !safeDefault ? "destructive" : "additive";
   }
-  if (/^(insert|update|replace)\b/i.test(normalized)) return "backfill";
+  // SQLite implements REPLACE, including INSERT OR REPLACE, by deleting the
+  // conflicting row before inserting. That can fire delete actions and cascade
+  // through foreign keys, so it must never inherit the ordinary INSERT risk.
+  if (/^replace\b/i.test(normalized) || /^insert\s+or\s+replace\b/i.test(normalized)) return "destructive";
+  if (/^(insert|update)\b/i.test(normalized)) return "backfill";
   if (/^(delete|drop)\b/i.test(normalized) || /^alter\s+table\b/i.test(normalized) || /^create\s+unique\s+index\b/i.test(normalized)) {
     return "destructive";
   }

@@ -219,6 +219,19 @@ describe("protected production executor", () => {
     expect(() => assertMigrationClassification({ requested: "additive", sqlTexts: ["DELETE FROM x;"] })).toThrow(/destructive/i);
   });
 
+  it("classifies SQLite conflict-replacement forms as destructive", () => {
+    for (const sql of [
+      "REPLACE INTO templates(id, title) VALUES ('t', 'replacement');",
+      'REPLACE INTO main."templates"(id) VALUES (\'t\');',
+      "INSERT OR REPLACE INTO [templates](id) VALUES ('t');",
+      "INSERT /* conflict policy */ OR /* delete then insert */ REPLACE INTO `main`.`templates`(id) VALUES ('t');",
+    ]) {
+      expect(() => assertMigrationClassification({ requested: "backfill", sqlTexts: [sql] })).toThrow(/destructive/i);
+      expect(assertMigrationClassification({ requested: "destructive", sqlTexts: [sql] })).toBe("destructive");
+    }
+    expect(assertMigrationClassification({ requested: "backfill", sqlTexts: ["INSERT OR IGNORE INTO templates(id) VALUES ('t');"] })).toBe("backfill");
+  });
+
   it("classifies only positively allowlisted compatible schema additions as additive", () => {
     for (const sql of [
       "CREATE TABLE IF NOT EXISTS audit_events (id TEXT PRIMARY KEY, value TEXT NOT NULL);",
@@ -290,6 +303,10 @@ describe("protected production executor", () => {
     expect(() => assertApprovalMatchesRequest({ approval: { ...validApproval(), classification: "additive" }, request })).toThrow(/classification/i);
     expect(() => assertApprovalMatchesRequest({ approval: { ...validApproval(), changeAuthors: ["other"] }, request })).toThrow(/authors/i);
     expect(() => assertApprovalMatchesRequest({ approval: { ...validApproval(), decision: "short" }, request })).toThrow(/decision/i);
+    const destructiveRequest = { ...request, classification: "destructive" };
+    const destructiveApproval = { ...validApproval(), classification: "destructive", decision: "Reviewed destructive replacement cascades and exact recovery evidence." };
+    expect(assertApprovalMatchesRequest({ approval: destructiveApproval, request: destructiveRequest })).toEqual(destructiveApproval);
+    expect(() => assertApprovalMatchesRequest({ approval: { ...destructiveApproval, decision: "replace rows" }, request: destructiveRequest })).toThrow(/decision/i);
   });
 
   it("requires distinct verified repository-admin production approval for irreversible changes", () => {
