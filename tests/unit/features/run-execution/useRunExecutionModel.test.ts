@@ -69,7 +69,7 @@ describe('run execution model loading', () => {
         getCachedRun: () => cachedRun,
         runId: 'run-1',
       },
-      { apiClient, updateRun: vi.fn() },
+      { apiClient },
     );
 
     expect(result).toEqual({
@@ -106,7 +106,7 @@ describe('run execution model loading', () => {
       {
         shareToken: 'share-token',
       },
-      { apiClient, updateRun: vi.fn() },
+      { apiClient },
     );
 
     expect(result.kind).toBe('ok');
@@ -153,7 +153,7 @@ describe('run execution model loading', () => {
       {
         runId: 'run-1',
       },
-      { apiClient, updateRun: vi.fn() },
+      { apiClient },
     );
 
     expect(result).toEqual({
@@ -178,7 +178,7 @@ describe('run execution model loading', () => {
       {
         runId: 'run-1',
       },
-      { apiClient, updateRun: vi.fn() },
+      { apiClient },
     );
 
     expect(result).toEqual({

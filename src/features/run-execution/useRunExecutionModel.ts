@@ -116,7 +116,7 @@ export type UseRunExecutionModelOptions = RunExecutionLoadOptions & {
 };
 
 const getApiClient = (
-  dependencies: RunExecutionDependencies,
+  dependencies: Pick<RunExecutionDependencies, 'apiClient'>,
 ): RunExecutionApiClient => dependencies.apiClient ?? api;
 
 const resolveMode = ({
@@ -173,7 +173,7 @@ const withClonedRun = (run: ChecklistRun): ChecklistRun => ({
 
 export const loadRunExecutionData = async (
   options: RunExecutionLoadOptions,
-  dependencies: RunExecutionDependencies,
+  dependencies: Pick<RunExecutionDependencies, 'apiClient'>,
 ): Promise<RunExecutionLoadResult> => {
   const mode = resolveMode(options);
   const apiClient = getApiClient(dependencies);
@@ -487,6 +487,12 @@ export const useRunExecutionModel = (
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const apiClient = options.dependencies?.apiClient;
+  // The provider recreates getCachedRun on render. Subscribe to the cached
+  // value, and never consult the private cache for a shared-token route.
+  const cachedRun = !options.shareToken && options.runId
+    ? options.getCachedRun?.(options.runId)
+    : undefined;
 
   useEffect(() => {
     let cancelled = false;
@@ -498,11 +504,11 @@ export const useRunExecutionModel = (
 
       const result = await loadRunExecutionData(
         {
-          getCachedRun: options.getCachedRun,
+          getCachedRun: () => cachedRun,
           runId: options.runId,
           shareToken: options.shareToken,
         },
-        dependencies,
+        { apiClient },
       );
 
       if (cancelled) {
@@ -534,7 +540,7 @@ export const useRunExecutionModel = (
     return () => {
       cancelled = true;
     };
-  }, [dependencies, options.getCachedRun, options.runId, options.shareToken]);
+  }, [apiClient, cachedRun, options.runId, options.shareToken]);
 
   const counts = countRunExecutionItems(run);
   const selectedData = getSelectedRunItem(run, selectedItemId);
