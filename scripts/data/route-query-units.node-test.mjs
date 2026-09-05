@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import './route-query-computed-binding.node-test.mjs';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import {

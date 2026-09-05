@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import ts from 'typescript';
 export { createRouteQueryRuntime } from './route-query-runtime.mjs';
 
@@ -196,20 +196,23 @@ function queryLineage(sourceFile, adapterNames = new Set()) {
   const databaseBindings = new Set();
   const builderDefinitions = new Map();
   const executedBindings = new Set();
+  const environmentBindings = new Set();
   function scopeOf(declaration) {
     if (ts.isParameter(declaration)) return declaration.parent;
     for (let current = declaration.parent; current; current = current.parent) {
-      if (ts.isBlock(current) || ts.isFunctionLike(current) || ts.isSourceFile(current)) return current;
+      if (ts.isBlock(current) || ts.isFunctionLike(current) || ts.isSourceFile(current) ||
+        ts.isForStatement(current) || ts.isForInStatement(current) || ts.isForOfStatement(current) ||
+        ts.isCaseBlock(current) || ts.isCatchClause(current)) return current;
     }
     return sourceFile;
   }
-  function resolveBinding(identifier) {
+  function resolveBinding(identifier, includeLater = false) {
     const candidates = declarationsByName.get(identifier.text) ?? [];
     return candidates
       .filter((declaration) => {
         const scope = scopeOf(declaration);
         return scope.pos <= identifier.pos && identifier.end <= scope.end &&
-          (ts.isParameter(declaration) || declaration.getStart(sourceFile) <= identifier.getStart(sourceFile));
+          (includeLater || ts.isParameter(declaration) || declaration.getStart(sourceFile) <= identifier.getStart(sourceFile));
       })
       .sort((left, right) => {
         const leftScope = scopeOf(left);
@@ -258,10 +261,192 @@ function queryLineage(sourceFile, adapterNames = new Set()) {
   function isDatabaseExpression(node) {
     if (ts.isIdentifier(node)) return isDatabaseIdentifier(node);
     if (isErasedExpressionWrapper(node) || ts.isAwaitExpression(node)) return isDatabaseExpression(node.expression);
-    if (isAccess(node)) return accessName(node) === 'DB' || isDatabaseExpression(node.expression);
+    if (isAccess(node)) return bindingAccessName(node) === 'DB' || isDatabaseExpression(node.expression);
     return ts.isCallExpression(node) && ts.isIdentifier(node.expression) &&
       (node.expression.text === 'createDb' ||
         (!resolveBinding(node.expression) && packageAdapters.get(node.expression.text) === 'factory'));
+  }
+  function staticBindingName(node, seen = new Set()) {
+    if (ts.isStringLiteralLike(node)) return node.text;
+    if (isErasedExpressionWrapper(node)) return staticBindingName(node.expression, seen);
+    if (ts.isIdentifier(node)) {
+      const binding = resolveBinding(node, true);
+      if (!binding || seen.has(binding) || !ts.isVariableDeclaration(binding) ||
+        binding.getStart(sourceFile) > node.getStart(sourceFile) ||
+        !ts.isVariableDeclarationList(binding.parent) || !(binding.parent.flags & ts.NodeFlags.Const) || !binding.initializer) return null;
+      return staticBindingName(binding.initializer, new Set([...seen, binding]));
+    }
+    if (ts.isTemplateExpression(node)) {
+      let value = node.head.text;
+      for (const span of node.templateSpans) {
+        const part = staticBindingName(span.expression, seen);
+        if (part === null) return null;
+        value += part + span.literal.text;
+      }
+      return value;
+    }
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+      const left = staticBindingName(node.left, seen);
+      const right = staticBindingName(node.right, seen);
+      return left !== null && right !== null ? left + right : null;
+    }
+    return null;
+  }
+  function bindingAccessName(node) {
+    return ts.isElementAccessExpression(node) ? staticBindingName(node.argumentExpression) : accessName(node);
+  }
+  // Resolve only literal, immutable lexical inputs. Parameter defaults are not
+  // their supplied values; unresolved extractions must remain potentially D1.
+  function literalBindingValue(binding, seen) {
+    if (!binding || seen.has(binding)) return null;
+    const next = new Set([...seen, binding]);
+    if (ts.isVariableDeclaration(binding)) {
+      return ts.isVariableDeclarationList(binding.parent) && (binding.parent.flags & ts.NodeFlags.Const) && binding.initializer
+        ? literalValue(binding.initializer, next) : null;
+    }
+    if (!ts.isBindingElement(binding) || binding.dotDotDotToken) return null;
+    const input = literalBindingValue(binding.parent.parent, next);
+    if (!input) return null;
+    let value;
+    if (ts.isObjectBindingPattern(binding.parent) && ts.isObjectLiteralExpression(input)) {
+      const key = binding.propertyName ?? binding.name;
+      const name = ts.isComputedPropertyName(key) ? staticBindingName(key.expression)
+        : ts.isIdentifier(key) || ts.isStringLiteralLike(key) ? key.text : null;
+      if (name === null) return null;
+      for (const property of input.properties) {
+        if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name) ||
+          !(ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) || property.name.text === '__proto__') return null;
+        if (property.name.text === name) value = property.initializer;
+      }
+    } else if (ts.isArrayBindingPattern(binding.parent) && ts.isArrayLiteralExpression(input) &&
+      !input.elements.some(ts.isSpreadElement)) {
+      value = input.elements[binding.parent.elements.indexOf(binding)];
+      if (value && ts.isOmittedExpression(value)) value = undefined;
+    } else return null;
+    // Only a proven absent literal property/slot selects the default.
+    return value ? literalValue(value, next) : binding.initializer ? literalValue(binding.initializer, next) : null;
+  }
+  function literalValue(node, seen) {
+    if (isErasedExpressionWrapper(node)) return literalValue(node.expression, seen);
+    if (ts.isIdentifier(node)) {
+      const binding = resolveBinding(node, true);
+      if (!binding || !hasOnlyLocalReads(binding)) return null;
+      return literalBindingValue(binding, seen);
+    }
+    return node;
+  }
+  function hasOnlyLocalReads(binding, seen = new Set()) {
+    if (seen.has(binding)) return false;
+    const next = new Set([...seen, binding]);
+    let safe = true;
+    const visit = node => {
+      if (!safe) return;
+      if (ts.isIdentifier(node) && node !== binding.name && resolveBinding(node, true) === binding &&
+        !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node) &&
+        !(ts.isPropertyAssignment(node.parent) && node.parent.name === node) &&
+        !(ts.isBindingElement(node.parent) && node.parent.propertyName === node)) {
+        let value = node;
+        while ((isAccess(value.parent) || isErasedExpressionWrapper(value.parent)) && value.parent.expression === value) value = value.parent;
+        const parent = value.parent;
+        const alias = ts.isVariableDeclaration(parent) && parent.initializer === value &&
+          ts.isVariableDeclarationList(parent.parent) && (parent.parent.flags & ts.NodeFlags.Const);
+        const read = value !== node && (ts.isReturnStatement(parent) || ts.isExpressionStatement(parent));
+        if (!alias && !read) safe = false;
+        if (alias) {
+          const inspectAlias = declaration => {
+            if (ts.isIdentifier(declaration.name)) {
+              if (!hasOnlyLocalReads(declaration, next)) safe = false;
+            } else for (const element of declaration.name.elements) {
+              if (ts.isBindingElement(element)) inspectAlias(element);
+            }
+          };
+          inspectAlias(parent);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+    return safe;
+  }
+  function isBenignLiteral(node, seen = new Set()) {
+    if (!node) return false;
+    const value = literalValue(node, seen);
+    if (!value) return false;
+    if (ts.isStringLiteralLike(value) || ts.isNumericLiteral(value) ||
+      [ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.NullKeyword].includes(value.kind)) return true;
+    if (ts.isArrayLiteralExpression(value)) return value.elements.every(element => isBenignLiteral(element, seen));
+    if (ts.isObjectLiteralExpression(value)) return value.properties.every(property =>
+      ts.isPropertyAssignment(property) && !ts.isComputedPropertyName(property.name) &&
+      (ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) &&
+      !['DB', 'env', '__proto__'].includes(property.name.text) && isBenignLiteral(property.initializer, seen));
+    return false;
+  }
+  function isEnvironmentExpression(node, seen = new Set()) {
+    if (isErasedExpressionWrapper(node)) return isEnvironmentExpression(node.expression, seen);
+    if (isAccess(node)) return bindingAccessName(node) === 'env';
+    if (!ts.isIdentifier(node)) return false;
+    if (node.text === 'env') return true;
+    const binding = resolveBinding(node, true);
+    if (environmentBindings.has(binding)) return true;
+    if (!binding || seen.has(binding)) return false;
+    // Destructured values come from the enclosing pattern's input, not their
+    // own initializer (which is only a default). Until that extraction is
+    // proven, an unknown key may select D1: reject before it escapes in a bag,
+    // including parameter, nested, default and rest binding patterns.
+    if (ts.isBindingElement(binding)) return !hasOnlyLocalReads(binding) || !isBenignLiteral(literalBindingValue(binding, seen));
+    if (!binding.initializer) return false;
+    return isEnvironmentExpression(binding.initializer, new Set([...seen, binding]));
+  }
+  function hasEnvironmentOrigin(node, seen = new Set()) {
+    if (isErasedExpressionWrapper(node)) return hasEnvironmentOrigin(node.expression, seen);
+    if (isAccess(node)) return bindingAccessName(node) === 'env';
+    if (!ts.isIdentifier(node)) return false;
+    const binding = resolveBinding(node, true);
+    if (!binding) return node.text === 'env';
+    if (environmentBindings.has(binding)) return true;
+    if (seen.has(binding)) return false;
+    const next = new Set([...seen, binding]);
+    if (ts.isParameter(binding) && node.text === 'env') return true;
+    if (ts.isParameter(binding) && ts.isFunctionLike(binding.parent)) {
+      const owner = binding.parent;
+      const ownerBinding = ts.isFunctionDeclaration(owner) ? owner
+        : ts.isVariableDeclaration(owner.parent) && owner.parent.initializer === owner ? owner.parent : null;
+      const index = owner.parameters.indexOf(binding);
+      let forwarded = false;
+      const resolvesToOwner = (callee, aliases = new Set()) => {
+        if (isErasedExpressionWrapper(callee)) return resolvesToOwner(callee.expression, aliases);
+        if (callee === owner) return true;
+        if (!ts.isIdentifier(callee)) return false;
+        const target = resolveBinding(callee, true);
+        if (ownerBinding && target === ownerBinding) return true;
+        if (!target || aliases.has(target) || !target.initializer) return false;
+        return resolvesToOwner(target.initializer, new Set([...aliases, target]));
+      };
+      const inspect = child => {
+        if (ts.isCallExpression(child) && resolvesToOwner(child.expression) && child.arguments[index] &&
+          hasEnvironmentOrigin(child.arguments[index], next)) forwarded = true;
+        if (!forwarded) ts.forEachChild(child, inspect);
+      };
+      inspect(sourceFile);
+      if (forwarded) return true;
+    }
+    if (ts.isBindingElement(binding)) {
+      for (let ancestor = binding.parent.parent; ts.isBindingElement(ancestor); ancestor = ancestor.parent.parent) {
+        const key = ancestor.propertyName ?? ancestor.name;
+        const name = ts.isComputedPropertyName(key) ? staticBindingName(key.expression)
+          : ts.isIdentifier(key) || ts.isStringLiteralLike(key) ? key.text : null;
+        if (name === 'env') return true;
+      }
+      const key = binding.propertyName ?? binding.name;
+      const name = ts.isComputedPropertyName(key) ? staticBindingName(key.expression)
+        : ts.isIdentifier(key) || ts.isStringLiteralLike(key) ? key.text : null;
+      if (name === 'env') return true;
+      const input = binding.parent.parent;
+      if (input.initializer && hasEnvironmentOrigin(input.initializer, next)) return true;
+      const extracted = literalBindingValue(binding, seen);
+      if (extracted && hasEnvironmentOrigin(extracted, next)) return true;
+    }
+    return Boolean(binding.initializer && hasEnvironmentOrigin(binding.initializer, next));
   }
   function builderSemantic(identifier, seen = new Set()) {
     const binding = resolveBinding(identifier);
@@ -282,6 +467,8 @@ function queryLineage(sourceFile, adapterNames = new Set()) {
     return [...dependencies, semanticTokens(definition, sourceFile)].join('=>');
   }
   const lineageApi = { isDatabaseIdentifier, isDatabaseExpression, builderDefinition, builderSemantic, resolveBinding,
+    bindingAccessName, staticBindingName, isEnvironmentExpression, hasEnvironmentOrigin,
+    markEnvironmentBinding: binding => environmentBindings.add(binding),
     isExecutedResult: (identifier) => executedBindings.has(resolveBinding(identifier)) };
 
   let changed = true;
@@ -326,13 +513,183 @@ function queryLineage(sourceFile, adapterNames = new Set()) {
 // branches the current fixtures never enter. This is a syntax boundary, not a
 // coverage exclusion. In particular .then can recover query failures or execute
 // synchronously; treating its returned value as query success would be unsound.
-function assertSupportedDatabaseCalls(sourceFile, lineage, adapterNames) {
+function assertSupportedDatabaseCalls(sourceFile, lineage, adapterNames, audit = { modules: new Map(), active: new Set(), verified: new Set() }, boundary = sourceFile) {
   const failHandle = node => {
     throw new Error(`Unsupported database handle transfer at ${sourceFile.fileName}:${sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1}; keep a direct database alias and directly consume queries.`);
   };
   // The same resolved import mapping owns both accepted input handles and
   // factory output lineage, including `import { drizzle as makeDb }`.
   const packageAdapters = importedDatabaseAdapters(sourceFile);
+  const localImports = new Map();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      !statement.moduleSpecifier.text.startsWith('.') || statement.importClause?.isTypeOnly) continue;
+    const imports = statement.importClause?.namedBindings;
+    if (imports && ts.isNamedImports(imports)) for (const element of imports.elements) {
+      if (!element.isTypeOnly) localImports.set(element.name.text, { module: statement.moduleSpecifier.text, name: (element.propertyName ?? element.name).text });
+    }
+  }
+  const failEnvCall = () => {
+    throw new Error(`Unsupported database environment call at ${sourceFile.fileName}; Env requires a proven consumer and parameter.`);
+  };
+  const stableCallable = (file, scope, binding) => {
+    let stable = true;
+    const inspect = node => {
+      if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+        node.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
+        const left = child => {
+          if (ts.isIdentifier(child) && scope.resolveBinding(child, true) === binding) stable = false;
+          ts.forEachChild(child, left);
+        };
+        left(node.left);
+      }
+      ts.forEachChild(node, inspect);
+    };
+    inspect(file);
+    return stable;
+  };
+  // A dependency override is not a consumer proof. The sole reducible case is
+  // an empty default whose argument is omitted at every audited Functions call
+  // site. Public Worker entrypoints and unknown/escaping references fail closed.
+  const provesEmptyDefault = parameter => {
+    const owner = parameter.parent;
+    if (!ts.isFunctionDeclaration(owner) || !owner.name || owner.name.text === 'onRequest' ||
+      owner.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.DefaultKeyword) ||
+      !parameter.initializer || !ts.isObjectLiteralExpression(parameter.initializer) || parameter.initializer.properties.length) return false;
+    const filename = resolve(sourceFile.fileName);
+    const functionsRoot = resolve('functions');
+    if (!filename.startsWith(`${functionsRoot}/`)) return false;
+    try { if (readFileSync(filename, 'utf8') !== sourceFile.text) return false; } catch { return false; }
+    let untouched = true;
+    const inspectDefaultUses = node => {
+      if (ts.isIdentifier(node) && lineage.resolveBinding(node, true) === parameter) {
+        const member = node.parent;
+        const fallback = member.parent;
+        if (!ts.isPropertyAccessExpression(member) || member.expression !== node ||
+          !ts.isBinaryExpression(fallback) || fallback.left !== member || fallback.operatorToken.kind !== ts.SyntaxKind.QuestionQuestionToken) untouched = false;
+      }
+      ts.forEachChild(node, inspectDefaultUses);
+    };
+    inspectDefaultUses(owner.body);
+    if (!untouched) return false;
+    const index = owner.parameters.indexOf(parameter);
+    let calls = 0;
+    let safe = true;
+    const matchesModule = (specifier, from) => {
+      if (!specifier.startsWith('.')) return false;
+      const base = resolve(dirname(from), specifier);
+      return [base, `${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.mjs`, join(base, 'index.ts')].includes(filename);
+    };
+    for (const path of sourceFiles(functionsRoot).filter(path => /\.[cm]?[jt]sx?$/.test(path) && !/\.(?:test|spec)\./.test(path))) {
+      const file = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
+      const scope = queryLineage(file);
+      const names = new Set(path === filename ? [owner.name.text] : []);
+      for (const statement of file.statements) {
+        if (ts.isExportDeclaration(statement) && statement.moduleSpecifier && ts.isStringLiteralLike(statement.moduleSpecifier) &&
+          matchesModule(statement.moduleSpecifier.text, path)) return false;
+        if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+          !matchesModule(statement.moduleSpecifier.text, path) || statement.importClause?.isTypeOnly) continue;
+        const imports = statement.importClause?.namedBindings;
+        if (statement.importClause?.name || !imports || !ts.isNamedImports(imports)) return false;
+        for (const item of imports.elements) if (!item.isTypeOnly && (item.propertyName ?? item.name).text === owner.name.text) names.add(item.name.text);
+      }
+      const inspect = node => {
+        if (ts.isImportDeclaration(node)) return;
+        if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) safe = false;
+        if (ts.isIdentifier(node) && names.has(node.text)) {
+          const parent = node.parent;
+          const binding = scope.resolveBinding(node, true);
+          const ownDeclaration = path === filename && binding && ts.isFunctionDeclaration(binding) && binding.name?.text === owner.name.text;
+          if ((!binding || ownDeclaration) && !(ts.isFunctionDeclaration(parent) && parent.name === node) &&
+            !(ts.isPropertyAccessExpression(parent) && parent.name === node)) {
+            if (!ts.isCallExpression(parent) || parent.expression !== node || parent.arguments.length > index || parent.arguments.some(ts.isSpreadElement)) safe = false;
+            else calls++;
+          }
+        }
+        ts.forEachChild(node, inspect);
+      };
+      inspect(file);
+    }
+    return safe && calls > 0;
+  };
+  const loadModule = specifier => {
+    const base = resolve(dirname(sourceFile.fileName), specifier);
+    for (const path of [base, `${base}.ts`, `${base}.tsx`, `${base}.mjs`, `${base}.js`, join(base, 'index.ts')]) {
+      if (audit.modules.has(path)) return audit.modules.get(path);
+      let source;
+      try { source = readFileSync(path, 'utf8'); } catch { continue; }
+      const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, path.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+      const module = { file, lineage: queryLineage(file) };
+      audit.modules.set(path, module);
+      return module;
+    }
+    return failEnvCall();
+  };
+  const callable = (node, seen = new Set()) => {
+    if (isErasedExpressionWrapper(node)) return callable(node.expression, seen);
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
+      ts.isPropertyAccessExpression(node.left) && ts.isIdentifier(node.left.expression)) {
+      const parameter = lineage.resolveBinding(node.left.expression, true);
+      if (parameter && ts.isParameter(parameter) && provesEmptyDefault(parameter)) return callable(node.right, seen);
+      return failEnvCall();
+    }
+    if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return { file: sourceFile, lineage, fn: node };
+    if (!ts.isIdentifier(node)) return failEnvCall();
+    const binding = lineage.resolveBinding(node, true);
+    if (binding) {
+      if (seen.has(binding)) return failEnvCall();
+      if (ts.isFunctionDeclaration(binding) && binding.body) return { file: sourceFile, lineage, fn: binding };
+      if (!ts.isVariableDeclaration(binding) || !binding.initializer || !ts.isVariableDeclarationList(binding.parent) ||
+        !(binding.parent.flags & ts.NodeFlags.Const)) return failEnvCall();
+      return callable(binding.initializer, new Set([...seen, binding]));
+    }
+    const imported = localImports.get(node.text);
+    if (!imported) return failEnvCall();
+    const module = loadModule(imported.module);
+    for (const statement of module.file.statements) {
+      if (!statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)) continue;
+      if (ts.isFunctionDeclaration(statement) && statement.name?.text === imported.name && statement.body) return { ...module, fn: statement };
+      if (ts.isVariableStatement(statement) && (statement.declarationList.flags & ts.NodeFlags.Const)) for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.name.text === imported.name && declaration.initializer &&
+          (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer))) return { ...module, fn: declaration.initializer };
+      }
+    }
+    return failEnvCall();
+  };
+  const proveEnvCall = (call, argument, property = null) => {
+    if (call.arguments.some(ts.isSpreadElement)) return failEnvCall();
+    const target = callable(call.expression);
+    const targetBinding = ts.isFunctionDeclaration(target.fn) ? target.fn : target.fn.parent;
+    if (!stableCallable(target.file, target.lineage, targetBinding)) return failEnvCall();
+    const parameter = target.fn.parameters[call.arguments.indexOf(argument)];
+    if (!parameter || parameter.dotDotDotToken || parameter.initializer) return failEnvCall();
+    let binding = parameter;
+    if (property !== null && ts.isObjectBindingPattern(parameter.name)) {
+      binding = parameter.name.elements.find(element => {
+        const key = element.propertyName ?? element.name;
+        return !element.dotDotDotToken && !element.initializer && ts.isIdentifier(element.name) &&
+          (ts.isIdentifier(key) || ts.isStringLiteralLike(key)) && key.text === property;
+      });
+    }
+    if (!binding || !ts.isIdentifier(binding.name)) return failEnvCall();
+    target.lineage.markEnvironmentBinding(binding);
+    if (!resolve(target.file.fileName).startsWith(`${resolve('functions')}/`)) {
+      const requireInstrumentedDatabase = node => {
+        if (ts.isTypeNode(node)) return;
+        if (target.lineage.isDatabaseExpression(node) || isQueryRoot(node, target.lineage)) return failEnvCall();
+        ts.forEachChild(node, requireInstrumentedDatabase);
+      };
+      requireInstrumentedDatabase(target.fn.body);
+    }
+    const key = `${target.file.fileName}:${target.fn.pos}:${binding.pos}`;
+    if (audit.active.has(key) || audit.verified.has(key)) return true;
+    audit.active.add(key);
+    try {
+      assertSupportedDatabaseCalls(target.file, target.lineage, new Map(), audit, target.fn.body);
+      audit.verified.add(key);
+    } finally { audit.active.delete(key); }
+    return true;
+  };
   const trackedCallArgument = (call, argument) => {
     if (!ts.isCallExpression(call) || !ts.isIdentifier(call.expression)) return false;
     const target = lineage.resolveBinding(call.expression);
@@ -392,6 +749,46 @@ function assertSupportedDatabaseCalls(sourceFile, lineage, adapterNames) {
     failHandle(node);
   };
   const visit = (node) => {
+    // Reject an Env value at transfer, before an arbitrary container property
+    // or array index can erase its binding lineage. Direct lexical aliases and
+    // binding reads stay intact and are audited at their eventual use.
+    if (lineage.hasEnvironmentOrigin(node)) {
+      const parent = node.parent;
+      const storedProperty = (ts.isPropertyAssignment(parent) && parent.initializer === node) || ts.isShorthandPropertyAssignment(parent);
+      const inlineEnvArgument = storedProperty && (parent.name?.text === 'env') &&
+        ts.isObjectLiteralExpression(parent.parent) && ts.isCallExpression(parent.parent.parent) &&
+        proveEnvCall(parent.parent.parent, parent.parent, 'env');
+      const directArrayBinding = ts.isArrayLiteralExpression(parent) && ts.isVariableDeclaration(parent.parent) &&
+        parent.parent.initializer === parent && ts.isArrayBindingPattern(parent.parent.name) &&
+        !parent.parent.name.elements.some(element => ts.isBindingElement(element) && element.dotDotDotToken);
+      const syntaxName = ((ts.isVariableDeclaration(parent) || ts.isParameter(parent) || ts.isBindingElement(parent) ||
+        ts.isFunctionDeclaration(parent)) && (parent.name === node || parent.propertyName === node)) ||
+        ((ts.isPropertyAccessExpression(parent) || ts.isPropertyAssignment(parent)) && parent.name === node);
+      const directAlias = (ts.isVariableDeclaration(parent) || ts.isBindingElement(parent)) && parent.initializer === node;
+      const receiver = isAccess(parent) && parent.expression === node;
+      const wrapper = isErasedExpressionWrapper(parent) && parent.expression === node;
+      const trackedArgument = ts.isCallExpression(parent) && parent.arguments.includes(node) && proveEnvCall(parent, node);
+      if (!syntaxName && !directAlias && !receiver && !wrapper && !inlineEnvArgument && !directArrayBinding && !trackedArgument) {
+        throw new Error(`Unsupported database environment transfer at ${sourceFile.fileName}; keep a direct Env alias and access its binding directly.`);
+      }
+    }
+    if ((node.flags & ts.NodeFlags.OptionalChain) &&
+      (lineage.isDatabaseExpression(node) || (ts.isCallExpression(node) && isAccess(node.expression) &&
+        (lineage.isDatabaseExpression(node.expression.expression) || isBuilder(node.expression.expression))))) {
+      throw new Error(`Unsupported database optional access at ${sourceFile.fileName}; use an explicit branch and direct query.`);
+    }
+    if (ts.isElementAccessExpression(node) && lineage.bindingAccessName(node) === null &&
+      (lineage.isEnvironmentExpression(node.expression) ||
+        (isAccess(node.parent) && node.parent.expression === node &&
+          ['prepare', 'exec', 'execute', 'batch', 'select', 'insert', 'update'].includes(accessName(node.parent))))) {
+      throw new Error(`Unsupported database computed binding at ${sourceFile.fileName}; use a provable static binding name.`);
+    }
+    if (ts.isBindingElement(node) && node.propertyName && ts.isComputedPropertyName(node.propertyName) &&
+      (lineage.staticBindingName(node.propertyName.expression) === 'DB' ||
+        (lineage.staticBindingName(node.propertyName.expression) === null &&
+          lineage.isEnvironmentExpression(node.parent.parent.initializer ?? node.name)))) {
+      throw new Error(`Unsupported database computed binding destructuring at ${sourceFile.fileName}; alias the binding directly.`);
+    }
     // Instantiation expressions are classified as TypeNodes by TypeScript but
     // still evaluate their expression (e.g. handle<T>); audit that operand.
     if ((ts.isTypeNode(node) && !ts.isExpressionWithTypeArguments(node)) || ts.isImportDeclaration(node)) return;
@@ -437,7 +834,7 @@ function assertSupportedDatabaseCalls(sourceFile, lineage, adapterNames) {
     }
     ts.forEachChild(node, visit);
   };
-  visit(sourceFile);
+  visit(boundary);
 }
 
 function lazyQueryAdapterNames(sourceFile, lineage, adapterNames = new Map()) {

@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { z } from "zod";
 import { normalizeMigrationRange } from "./migration-range-lib.mjs";
+import { DuplicateJsonKeyError, parseStrictJson } from "./strict-json-lib.mjs";
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const GIT_SHA = /^[0-9a-f]{40}$/;
@@ -206,7 +207,7 @@ function assertRawDataOnlyExport(parsed) {
   }
   if (!inserts.length) throw new Error("Sanitizer source did not contain data-export INSERT statements.");
   const unexpected = inserts.find(({ table }) => !SOURCE_TABLES.has(table));
-  if (unexpected) throw new Error(`Rehearsal data-only export contains an unexpected table: ${unexpected.table}.`);
+  if (unexpected) throw new Error("Sanitizer source structure rejected: unsupported table (SOURCE_TABLE).");
   return inserts;
 }
 
@@ -241,7 +242,14 @@ function emptyData(database) {
   for (const { name } of database.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()) database.exec(`DELETE FROM "${String(name).replaceAll('"', '""')}";`);
 }
 
-function parseJson(value) { if (typeof value !== "string") return null; try { return JSON.parse(value); } catch { return null; } }
+function parseJson(value) {
+  if (typeof value !== "string") return null;
+  try { return parseStrictJson(value); }
+  catch (error) {
+    if (error instanceof DuplicateJsonKeyError) throw error;
+    return null;
+  }
+}
 function collectShapes(itemsValue) {
   const items = parseJson(itemsValue);
   const shapes = new Set();
@@ -336,9 +344,9 @@ function decimalValue(token) {
 function assertSemanticJsonNumbers(value) {
   if (parseJson(value) === null) return;
   JSON.parse(value, (key, entry, context) => {
-    if (typeof entry === "number" && SAFE_JSON_KEYS.has(key) && (SEMANTIC_NUMERIC_KEYS.has(key) || key === "fileSize")) {
+    if (typeof entry === "number" && SAFE_JSON_KEYS.has(key) && (IDENTITY_KEYS.has(key) || SEMANTIC_NUMERIC_KEYS.has(key) || key === "fileSize")) {
       const underflow = entry === 0 && /[1-9]/.test(context.source.split(/[eE]/)[0]);
-      if (!Number.isFinite(entry) || (Number.isInteger(entry) && !Number.isSafeInteger(entry)) || underflow || decimalValue(context.source) !== decimalValue(JSON.stringify(entry))) throw new Error("Production-shaped source contains an unsupported semantic JSON number representation.");
+      if (!Number.isFinite(entry) || (Number.isInteger(entry) && !Number.isSafeInteger(entry)) || underflow || decimalValue(context.source) !== decimalValue(JSON.stringify(entry))) throw new Error(IDENTITY_KEYS.has(key) ? "Production-shaped source contains an unsupported identity JSON number representation." : "Production-shaped source contains an unsupported semantic JSON number representation.");
     }
     return entry;
   });
@@ -487,6 +495,7 @@ function assertSanitizedArtifactRows({ repoRoot, sql, sourceProfile }) {
     if (normalized.sql !== sql) throw new Error("Sanitized artifact is not canonical content-free source data.");
     return normalized;
   } catch (error) {
+    if (error instanceof DuplicateJsonKeyError) throw new Error("Sanitized artifact contains duplicate JSON object keys.");
     if (error instanceof Error && error.message.startsWith("Sanitized artifact")) throw error;
     throw new Error("Sanitized artifact could not be verified against the repository schema.");
   } finally { database.close(); }
@@ -518,6 +527,7 @@ export function normalizeRehearsalDataExport({ repoRoot, rawExport, migrationRan
     const result = buildSanitizedSql(database, sourceProfile);
     return { ...result, sourceProfile, sourceSha256: sha256(rawExport), artifactSha256: sha256(result.sql) };
   } catch (error) {
+    if (error instanceof DuplicateJsonKeyError) throw new Error("Production-shaped source contains duplicate JSON object keys.");
     const message = error instanceof Error ? error.message : String(error);
     if (message.startsWith("Production-shaped")) throw error;
     throw new Error("Sanitizer could not import the protected data-only export into the repository schema; source content was not retained.");
@@ -526,7 +536,7 @@ export function normalizeRehearsalDataExport({ repoRoot, rawExport, migrationRan
 
 export function generateSanitizedRehearsalArtifact({ repoRoot, rawExport, sourceDatabaseId, sourceDate, gitCommit, issueNumber, requestedApproverIdentity, generatedAt, retentionDeadline, migrationRange, sourceSchema }) {
   const policy = loadSanitizerPolicy({ repoRoot });
-  if (!policy.allowedAccessOwners.includes(requestedApproverIdentity)) throw new Error(`Sanitization requires an allowlisted access owner; received ${requestedApproverIdentity}.`);
+  if (!policy.allowedAccessOwners.includes(requestedApproverIdentity)) throw new Error("Sanitization requires an allowlisted access owner (SOURCE_OWNER).");
   if (!D1_UUID.test(sourceDatabaseId)) throw new Error("Sanitizer provenance requires an exact source D1 database UUID.");
   const productionDatabaseId = JSON.parse(readFileSync(path.join(repoRoot, "scripts/data/environment-inventory.json"), "utf8")).environments.production.databaseId;
   if (sourceDatabaseId !== productionDatabaseId) throw new Error("Production-shaped sanitizer source must match the checked-in production database ID.");
@@ -547,13 +557,13 @@ export function generateSanitizedRehearsalArtifact({ repoRoot, rawExport, source
 
 export function validateSanitizedRehearsalArtifact({ sql, manifest, policy, now, migrationRange, sourceSchema }) {
   const parsed = manifestSchema.safeParse(manifest);
-  if (!parsed.success) throw new Error(`Strict sanitizer manifest rejected unrecognized or invalid fields: ${parsed.error.message}`);
+  if (!parsed.success) throw new Error("Strict sanitizer manifest rejected unrecognized or invalid fields (MANIFEST_STRUCTURE).");
   const value = parsed.data;
   const expected = resolveSanitizerProfile({ repoRoot: policy.__repoRoot, migrationRange, sourceSchema });
   if (JSON.stringify(value.sourceProfile) !== JSON.stringify(expected)) throw new Error("Sanitizer profile/range/source schema mismatch.");
-  if (value.sanitizerVersion !== policy.sanitizerVersion) throw new Error(`Sanitizer version is not allowlisted: ${value.sanitizerVersion}.`);
+  if (value.sanitizerVersion !== policy.sanitizerVersion) throw new Error("Sanitizer version is not allowlisted (MANIFEST_VERSION).");
   if (value.provenance.generator !== policy.generator || value.provenance.sourceKind !== policy.sourceKind) throw new Error("Sanitizer provenance does not match the repository generator policy.");
-  if (!policy.allowedAccessOwners.includes(value.handling.accessOwner)) throw new Error(`Manifest does not name an allowlisted access owner: ${value.handling.accessOwner}.`);
+  if (!policy.allowedAccessOwners.includes(value.handling.accessOwner)) throw new Error("Manifest does not name an allowlisted access owner (MANIFEST_OWNER).");
   const productionDatabaseId = JSON.parse(readFileSync(path.join(policy.__repoRoot, "scripts/data/environment-inventory.json"), "utf8")).environments.production.databaseId;
   if (value.provenance.sourceDatabaseIdSha256 !== sha256(productionDatabaseId)) throw new Error("Manifest source identity does not match the checked-in production database.");
   const generatedAt = new Date(value.provenance.generatedAt); const deadline = new Date(value.handling.retentionDeadline);

@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { createHash, createHmac } from "node:crypto";
+import { DuplicateJsonKeyError, parseStrictJson } from "./strict-json-lib.mjs";
 
 const MIGRATION_PATTERN = /^\d{4}_[a-z0-9_]+\.sql$/;
 const BASELINE_FILE = fileURLToPath(new URL("./sql/capture-invariants.sql", import.meta.url));
@@ -96,12 +97,7 @@ function canonicalJson(value) {
 }
 
 function normalizedItems(raw) {
-  let value;
-  try {
-    value = JSON.parse(String(raw));
-  } catch {
-    return { invalidJson: true };
-  }
+  let value = preservedItems(raw, "Active");
   if (Array.isArray(value) && value.length && !Object.hasOwn(value[0] ?? {}, "items")) {
     value = [{ title: "Checklist", items: value }];
   }
@@ -117,6 +113,28 @@ function normalizedItems(raw) {
   return canonicalJson(stripStableIds(value));
 }
 
+function preservedItems(raw, label) {
+  let value;
+  let unsupportedNumber = false;
+  try {
+    // Preserve identities, references, JSON types, and array positions in full.
+    value = parseStrictJson(raw, (_name, entry, context) => {
+      // Node 22 supplies the original primitive token. Accept numeric tokens
+      // only when serialization reproduces them exactly; rounded, overflowing,
+      // underflowing, and noncanonical numeric spellings fail closed.
+      if (typeof entry === "number" && (!Number.isFinite(entry) || context?.source !== JSON.stringify(entry))) {
+        unsupportedNumber = true;
+      }
+      return entry;
+    });
+  } catch (error) {
+    if (error instanceof DuplicateJsonKeyError) throw error;
+    return { invalidJson: true };
+  }
+  if (unsupportedNumber) throw new Error(`${label} invariant capture contains an unsupported numeric value.`);
+  return canonicalJson(value);
+}
+
 function stableIdentityDigests(raw, key) {
   let value;
   try {
@@ -125,15 +143,15 @@ function stableIdentityDigests(raw, key) {
     return [];
   }
   const identities = [];
-  const visit = (entry, path = "$") => {
+  const visit = (entry, path = []) => {
     if (Array.isArray(entry)) {
-      entry.forEach((child, index) => visit(child, `${path}[${index}]`));
+      entry.forEach((child, index) => visit(child, [...path, ["index", index]]));
       return;
     }
     if (!entry || typeof entry !== "object") return;
-    if (entry.id !== undefined && entry.id !== null && entry.id !== "") identities.push(hmac(`${path}\u001f${String(entry.id)}`, key));
+    if (Object.hasOwn(entry, "id")) identities.push(hmac(JSON.stringify([path, canonicalJson(entry.id)]), key));
     for (const [name, child] of Object.entries(entry)) {
-      if (name !== "id") visit(child, `${path}.${name}`);
+      if (name !== "id") visit(child, [...path, ["key", name]]);
     }
   };
   visit(value);
@@ -225,7 +243,7 @@ export function privacySafeDomainSnapshot({ templateRows, runRows, key, hasEvolu
         hasTemplate: row.template_id != null,
         templateVersion: hasEvolution ? Number(row.template_version) : null,
         revision: hasEvolution ? Number(row.revision) : null,
-        retiredItemsDigest: hasEvolution ? hmac(JSON.stringify(normalizedItems(row.retired_items)), key) : null,
+        retiredItemsDigest: hasEvolution ? hmac(JSON.stringify(preservedItems(row.retired_items, "Retired")), key) : null,
       }),
     };
   }).sort((left, right) => left.key.localeCompare(right.key, "en"));

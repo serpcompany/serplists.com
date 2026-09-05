@@ -25,15 +25,19 @@ export interface DrizzleContract {
       columns: string[];
       matchByColumns?: boolean;
       predicate?: string | null;
+      sql?: string | null;
+      keys?: IndexKey[];
     }>;
   }>;
 }
+
+interface IndexKey { column: string | null; collation: string; descending: boolean }
 
 export interface DatabaseCatalog {
   tables: Record<string, {
     sql?: string;
     columns: Array<{ name: string; type: string; notNull: boolean; defaultValue: string | null; primaryKey: number }>;
-    indexes: Array<{ name: string; unique: boolean; partial: boolean; columns: string[]; predicate: string | null }>;
+    indexes: Array<{ name: string; unique: boolean; partial: boolean; columns: string[]; predicate: string | null; sql?: string | null; keys?: IndexKey[] }>;
     foreignKeys: Array<{ columns: string[]; referencedTable: string; referencedColumns: string[]; onUpdate: string; onDelete: string }>;
   }>;
   triggers: Array<{ name: string; table: string; sql: string | null }>;
@@ -240,6 +244,8 @@ export function buildCatalogContract(catalog: DatabaseCatalog): DrizzleContract 
         partial: index.partial,
         columns: index.columns,
         predicate: index.predicate,
+        sql: index.sql,
+        keys: index.keys,
       })),
       foreignKeys: table.foreignKeys.map((foreignKey) => ({
         ...foreignKey,
@@ -277,13 +283,18 @@ function withoutSqlComments(sql: string): string {
   return result;
 }
 
+function sqliteCaseFold(value: string): string {
+  // SQLite identifier case folding is ASCII-only; Ä and ä are distinct names.
+  return value.replace(/[A-Z]/g, character => character.toLowerCase());
+}
+
 export function normalizeSql(sql: unknown, preserveQuotes = false): string | null {
   if (sql == null) return null;
   let normalized = withoutSqlComments(String(sql))
     .split(/('(?:''|[^'])*'|"(?:""|[^"])*"|`(?:``|[^`])*`|\[[^\]]*\])/)
     .map((part, index) => index % 2
-      ? (preserveQuotes || part.startsWith("'") ? part : part.slice(1, -1).toLowerCase())
-      : part.toLowerCase().replace(/\s+/g, " "))
+      ? (preserveQuotes || part.startsWith("'") ? part : sqliteCaseFold(part.slice(1, -1)))
+      : sqliteCaseFold(part).replace(/\s+/g, " "))
     .join("")
     .trim()
     .replace(/;$/, "");
@@ -303,7 +314,7 @@ export function normalizeSql(sql: unknown, preserveQuotes = false): string | nul
   return normalized;
 }
 
-export function normalizeTableDefinition(sql: unknown): string | null {
+export function normalizeTableDefinition(sql: unknown, normalizeDefaults = true): string | null {
   if (sql == null) return null;
   const source = withoutSqlComments(String(sql));
   const tokens: Array<{ value: string; wordLike: boolean }> = [];
@@ -338,9 +349,9 @@ export function normalizeTableDefinition(sql: unknown): string | null {
       tokens.push({ value, wordLike: true });
       continue;
     }
-    const word = source.slice(index).match(/^[a-z0-9_$]+/i)?.[0];
+    const word = source.slice(index).match(/^[a-zA-Z0-9_$\u0080-\uffff]+/)?.[0];
     if (word) {
-      tokens.push({ value: word.toLowerCase(), wordLike: true });
+      tokens.push({ value: sqliteCaseFold(word), wordLike: true });
       index += word.length;
       continue;
     }
@@ -351,14 +362,14 @@ export function normalizeTableDefinition(sql: unknown): string | null {
       index += operator.length;
       continue;
     }
-    tokens.push({ value: character.toLowerCase(), wordLike: false });
+    tokens.push({ value: character, wordLike: false });
     index++;
   }
 
   const canonicalTokens: typeof tokens = [];
   for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
     const token = tokens[tokenIndex];
-    if (token.value === 'default') {
+    if (normalizeDefaults && token.value === 'default') {
       let cursor = tokenIndex + 1;
       let openingParentheses = 0;
       while (tokens[cursor]?.value === '(') {
@@ -442,11 +453,38 @@ function predicateFromIndexSql(sql: unknown, partial: boolean) {
   const normalized = normalizeSql(sql);
   const match = normalized?.match(/\bwhere\s+(.+)$/);
   if (!match?.[1]) throw new Error("Partial index predicate is unavailable; refusing a partial=true-only comparison.");
-  return match[1].trim();
+  return normalizeTableDefinition(match[1], false);
 }
 
 function pragmaBoolean(value: unknown) {
   return value === true || value === 1 || value === "1";
+}
+
+function indexDefinition(index: Record<string, unknown>, sql: unknown, rows: Array<Record<string, unknown>>) {
+  const flag = (value: unknown) => [0, 1, '0', '1', false, true].some(candidate => candidate === value);
+  if (!['c', 'u', 'pk'].includes(String(index.origin)) || !flag(index.unique) || !flag(index.partial)) {
+    throw new Error('Index inventory metadata unavailable or malformed.');
+  }
+  const autoindex = ['u', 'pk'].includes(String(index.origin)) && String(index.name).startsWith('sqlite_autoindex_');
+  // UNIQUE/PRIMARY KEY autoindexes have no CREATE INDEX statement (a WITHOUT
+  // ROWID primary key has no sqlite_schema index row either). Their keys remain
+  // mandatory; an explicit index must always supply its full definition.
+  if (autoindex ? sql !== null : typeof sql !== 'string' || !sql.trim()) {
+    throw new Error('Index definition metadata unavailable.');
+  }
+  const keys = rows.filter(row => pragmaBoolean(row.key))
+    .sort((a, b) => Number(a.seqno) - Number(b.seqno));
+  if (!keys.length || rows.some(row => !flag(row.key)) || keys.some((row, position) =>
+    row.seqno == null || Number(row.seqno) !== position || !Number.isInteger(Number(row.cid)) || row.cid == null || Number(row.cid) < -2 ||
+    !flag(row.desc) ||
+    typeof row.coll !== 'string' || !row.coll ||
+    (Number(row.cid) >= 0 ? typeof row.name !== 'string' : row.name !== null))) {
+    throw new Error('Index key metadata unavailable or malformed.');
+  }
+  return {
+    sql: normalizeTableDefinition(sql, false),
+    keys: keys.map(row => ({ column: row.name as string | null, collation: sqliteCaseFold(String(row.coll)), descending: pragmaBoolean(row.desc) })),
+  };
 }
 
 export function inspectDatabase(database: Database): DatabaseCatalog {
@@ -473,6 +511,9 @@ export function inspectDatabase(database: Database): DatabaseCatalog {
         const escapedIndexName = name.replaceAll("'", "''");
         return {
           name,
+          ...indexDefinition(index,
+            database.prepare("SELECT sql FROM sqlite_schema WHERE type = 'index' AND name = ?").get(name)?.sql ?? null,
+            database.prepare(`PRAGMA index_xinfo('${escapedIndexName}')`).all() as Array<Record<string, unknown>>),
           unique: Boolean(index.unique),
           partial: Boolean(index.partial),
           columns: (database.prepare(`PRAGMA index_info('${escapedIndexName}')`).all() as Array<Record<string, unknown>>)
@@ -528,6 +569,18 @@ function pragmaDefault(column: Record<string, unknown>): string | null {
   return column.dflt_value == null ? null : String(column.dflt_value);
 }
 
+function remoteIndexText(row: Record<string, unknown>, field: 'index_sql' | 'column_name'): string | null {
+  const flag = row[`${field}_is_null`];
+  const value = row[field];
+  if (![0, 1, '0', '1'].some(candidate => candidate === flag) ||
+      (Number(flag) === 1 ? value !== null && value !== 'null' : typeof value !== 'string')) {
+    throw new Error('Index null metadata unavailable or inconsistent.');
+  }
+  // Wrangler may serialize SQL NULL as the string "null". Only an explicit
+  // SQL-derived flag distinguishes that from a real identifier named "null".
+  return Number(flag) === 1 ? null : value as string;
+}
+
 export function catalogFromPragmaResults(tableNames: string[], results: PragmaResult[]): DatabaseCatalog {
   if (results.length !== tableNames.length * 4 + 1 || results.some((result) => !Array.isArray(result?.results))) {
     throw new Error(`Malformed or truncated Wrangler schema output: expected ${tableNames.length * 4 + 1} result sets, received ${results.length}.`);
@@ -537,7 +590,9 @@ export function catalogFromPragmaResults(tableNames: string[], results: PragmaRe
   tableNames.forEach((name, index) => {
     const columns = results[index]?.results ?? [];
     const indexes = results[index + tableNames.length]?.results ?? [];
-    const indexColumns = results[index + (tableNames.length * 2)]?.results ?? [];
+    const indexColumns = (results[index + (tableNames.length * 2)]?.results ?? []).map(row => ({
+      ...row, index_sql: remoteIndexText(row, 'index_sql'), column_name: remoteIndexText(row, 'column_name'),
+    })) as Array<Record<string, unknown>>;
     const foreignKeyRows = results[index + (tableNames.length * 3)]?.results ?? [];
     tables[name] = {
       columns: columns.map((column) => ({
@@ -551,10 +606,13 @@ export function catalogFromPragmaResults(tableNames: string[], results: PragmaRe
         .filter((entry) => typeof entry.name === "string")
         .map((entry) => ({
           name: String(entry.name),
+          ...indexDefinition(entry,
+            indexColumns.find(column => column.index_name === entry.name)?.index_sql,
+            indexColumns.filter(column => column.index_name === entry.name).map(column => ({ ...column, name: column.column_name }))),
           unique: pragmaBoolean(entry.unique),
           partial: pragmaBoolean(entry.partial),
           columns: indexColumns
-            .filter((column) => column.index_name === entry.name)
+            .filter((column) => column.index_name === entry.name && pragmaBoolean(column.key))
             .sort((left, right) => Number(left.seqno) - Number(right.seqno))
             .map((column) => String(column.column_name)),
           predicate: predicateFromIndexSql(
@@ -637,10 +695,16 @@ export function diffDrizzleContract(contract: DrizzleContract, catalog: Database
       if (JSON.stringify(expectedIndex.columns) !== JSON.stringify(actualIndex.columns)) {
         issues.push(`expected columns ${expectedIndex.columns.join(", ")}; received ${actualIndex.columns.join(", ")}`);
       }
+      if ('sql' in expectedIndex && (expectedIndex.sql === undefined || expectedIndex.sql !== actualIndex.sql)) {
+        issues.push('index definition differs or is unavailable');
+      }
+      if ('keys' in expectedIndex && (!expectedIndex.keys?.length || JSON.stringify(expectedIndex.keys) !== JSON.stringify(actualIndex.keys))) {
+        issues.push('index key semantics differ or are unavailable');
+      }
       if (expectedIndex.partial) {
         if (!expectedIndex.predicate || !actualIndex.predicate) {
           issues.push("partial index predicate unavailable");
-        } else if (normalizeSql(expectedIndex.predicate) !== normalizeSql(actualIndex.predicate)) {
+        } else if (normalizeTableDefinition(expectedIndex.predicate, false) !== normalizeTableDefinition(actualIndex.predicate, false)) {
           issues.push(`expected predicate ${normalizeSql(expectedIndex.predicate)}; received ${normalizeSql(actualIndex.predicate)}`);
         }
       }

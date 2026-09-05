@@ -59,6 +59,130 @@ it("accepts an actual post0024 export for application-only rehearsal without inv
 });
 
 describe("source-derived rehearsal sanitizer", () => {
+  it.each([false, true])("accepts equal decoded keys in distinct objects before source attestation (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    const source = syntheticSourceDatabase(repoRoot, current);
+    try {
+      const raw = String.raw`[{"\u0069d":"private-section","items":[{"id":"private-one","notes":"Private {\"id\":1,\"id\":2}"},{"\u0069d":"private-two","notes":"Private \\ string"}]}]`;
+      for (const table of ["templates", "checklist_runs"]) source.prepare(`UPDATE ${table} SET items=?`).run(raw);
+      if (current) source.prepare("UPDATE checklist_runs SET retired_items=?").run(String.raw`[{"kind":"item","sectionId":"private-section","item":{"id":"private-one"}},{"kind":"item","sectionId":"private-section","item":{"\u0069d":"private-two"}}]`);
+      const baseline = generate({ ...context, rawExport: exportSyntheticRows(source) });
+      for (const table of ["templates", "checklist_runs"]) source.prepare(`UPDATE ${table} SET items=?`).run(JSON.stringify(JSON.parse(raw), null, 2));
+      const formatted = generate({ ...context, rawExport: exportSyntheticRows(source) });
+      expect(formatted.sql).toBe(baseline.sql);
+      for (const artifact of [baseline, formatted]) {
+        expect(() => validateSanitizedRehearsalArtifact({ ...artifact, policy: loadSanitizerPolicy({ repoRoot }), now: generatedAt, ...context })).not.toThrow();
+        expect(JSON.stringify(artifact)).not.toMatch(/private-|Private /);
+      }
+    } finally { source.close(); }
+  });
+
+  it.each([[false, "templates", "items"], [false, "checklist_runs", "items"], [true, "templates", "items"], [true, "checklist_runs", "items"], [true, "checklist_runs", "retired_items"]])(
+    "rejects duplicate decoded keys before source attestation (current=%s %s %s)", (current, table, column) => {
+      const context = current ? currentContext : legacyContext;
+      const source = syntheticSourceDatabase(repoRoot, current);
+      try {
+        const baseline = generate({ ...context, rawExport: exportSyntheticRows(source) });
+        for (const fields of [
+          '"id":"private-first","id":"private-last"',
+          String.raw`"id":"private-first","\u0069d":"private-last"`,
+          '"id":9007199254740993,"id":"private-last"',
+          String.raw`"notes":{"private-key":1,"private-\u006bey":2},"id":"private-last"`,
+        ]) {
+          const value = column === "retired_items" ? `[{"kind":"item","sectionId":"private-section","item":{${fields}}}]`
+            : `[{"id":"private-section","items":[{${fields}}]}]`;
+          source.prepare(`UPDATE ${table} SET ${column}=?`).run(value);
+          for (const call of [
+            () => normalizeRehearsalDataExport({ repoRoot, ...context, rawExport: exportSyntheticRows(source) }),
+            () => generate({ ...context, rawExport: exportSyntheticRows(source) }),
+          ]) {
+            let result, error;
+            try { result = call(); } catch (caught) { error = caught; }
+            expect(result).toBeUndefined();
+            expect(error?.message).toBe("Production-shaped source contains duplicate JSON object keys.");
+            expect(JSON.stringify({ result, error, message: error?.message, stack: error?.stack })).not.toMatch(/private-|9007199254740993/);
+          }
+        }
+        const changed = structuredClone(baseline);
+        changed.sql = changed.sql.replace('"id":', '"id":"sanitized-shadow","id":');
+        expect(changed.sql === baseline.sql).toBe(false);
+        const hash = value => createHash("sha256").update(value).digest("hex");
+        changed.manifest.artifact = { sha256: hash(changed.sql), byteLength: Buffer.byteLength(changed.sql) };
+        const { manifestIntegritySha256: ignored, ...unsigned } = changed.manifest;
+        changed.manifest.manifestIntegritySha256 = hash(JSON.stringify(unsigned));
+        expect(() => validateSanitizedRehearsalArtifact({ ...changed, policy: loadSanitizerPolicy({ repoRoot }), now: generatedAt, ...context }))
+          .toThrow("Sanitized artifact contains duplicate JSON object keys.");
+      } finally { source.close(); }
+    },
+  );
+
+  it.each([false, true])("preserves supported decimal identity equality, distinctness and type across the cohort (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    const source = syntheticSourceDatabase(repoRoot, current), target = replayMigrations({ through: context.sourceSchema });
+    try {
+      source.prepare("UPDATE templates SET items=?").run('[{"id":1.0,"items":[{"id":0.10},{"id":"0.1"},{"id":2},{"id":9007199254740991}]}]');
+      source.prepare("UPDATE checklist_runs SET items=?").run('[{"id":1e0,"items":[{"id":2.00},{"id":0.1},{"id":"0.1"},{"id":9.007199254740991e15}]}]');
+      if (current) source.prepare("UPDATE checklist_runs SET retired_items=?").run('[{"sectionId":1,"itemId":0.100,"item":{"id":0.1}}]');
+      const artifact = generate({ ...context, rawExport: exportSyntheticRows(source) });
+      target.exec(artifact.sql);
+      const templates = target.prepare("SELECT items FROM templates").all().map(row => JSON.parse(row.items)[0]);
+      const runs = target.prepare("SELECT * FROM checklist_runs").all();
+      for (const row of runs) {
+        const run = JSON.parse(row.items)[0];
+        for (const template of templates) {
+          expect(run.id).toBe(template.id);
+          expect(run.items.map(item => item.id)).toEqual([template.items[2].id, template.items[0].id, template.items[1].id, template.items[3].id]);
+          expect(new Set([template.id, ...template.items.map(item => item.id)]).size).toBe(5);
+          expect(template.items.map(item => typeof item.id)).toEqual(["number", "string", "number", "number"]);
+          if (current) expect(JSON.parse(row.retired_items)[0]).toEqual({ sectionId: template.id, itemId: template.items[0].id, item: { id: template.items[0].id } });
+        }
+      }
+      expect(() => validateSanitizedRehearsalArtifact({ ...artifact, policy: loadSanitizerPolicy({ repoRoot }), now: generatedAt, ...context })).not.toThrow();
+    } finally { source.close(); target.close(); }
+  });
+  it("keeps public source and manifest rejection diagnostics content-free", () => {
+    const sentinel = "private.customer@example.test";
+    const artifact = generate();
+    const policy = loadSanitizerPolicy({ repoRoot });
+    const calls = [
+      () => normalizeRehearsalDataExport({ repoRoot, ...legacyContext, rawExport: `INSERT INTO "${sentinel}" VALUES ('x');` }),
+      () => generate({ requestedApproverIdentity: sentinel }),
+      ...[
+        a => { a.manifest[sentinel] = sentinel; },
+        a => { a.manifest.sanitizerVersion = sentinel; },
+        a => { a.manifest.handling.accessOwner = sentinel; },
+        a => { a.manifest.provenance.sourceDate = sentinel; },
+      ].map(mutate => () => { const changed = structuredClone(artifact); mutate(changed); validateSanitizedRehearsalArtifact({ ...changed, policy, now: generatedAt, ...legacyContext }); }),
+    ];
+    for (const call of calls) {
+      let error;
+      try { call(); } catch (caught) { error = caught; }
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message.includes(sentinel)).toBe(false);
+    }
+  });
+  it.each([false, true])("rejects lossy identity tokens before sampling or mapping (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    for (const token of ["9007199254740992", "9007199254740993", "1.00000000000000001", "1e-999", "1e999"]) {
+      const source = oversizedPersonalSource(current, false);
+      try {
+        const baseline = generate({ ...context, rawExport: exportSyntheticRows(source) });
+        // An otherwise unselected run must still undergo token validation.
+        const rows = source.prepare("SELECT id FROM checklist_runs").all().sort((a,b) => createHash("sha256").update(a.id).digest("hex").localeCompare(createHash("sha256").update(b.id).digest("hex")));
+        source.prepare("UPDATE checklist_runs SET items=? WHERE id=?").run(`[{"id":${token},"items":[]}]`, rows.at(-1).id);
+        const input = { repoRoot, rawExport: exportSyntheticRows(source), ...context };
+        expect(() => normalizeRehearsalDataExport(input)).toThrow(/unsupported.*identity.*number/i);
+        expect(() => generate(input)).toThrow(/unsupported.*identity.*number/i);
+        const changed = structuredClone(baseline);
+        changed.sql = changed.sql.replace("'[]'", `'[{"id":${token},"items":[]}]'`);
+        const hash = value => createHash("sha256").update(value).digest("hex");
+        changed.manifest.artifact = { sha256: hash(changed.sql), byteLength: Buffer.byteLength(changed.sql) };
+        const { manifestIntegritySha256, ...unsigned } = changed.manifest;
+        changed.manifest.manifestIntegritySha256 = hash(JSON.stringify(unsigned));
+        expect(() => validateSanitizedRehearsalArtifact({ ...changed, policy: loadSanitizerPolicy({ repoRoot }), now: generatedAt, ...context })).toThrow();
+      } finally { source.close(); }
+    }
+  });
   it.each([false, true])("preserves zero and negative source versions (current=%s)", current => {
     const context = current ? currentContext : legacyContext;
     const source = syntheticSourceDatabase(repoRoot, current), target = replayMigrations({ through: context.sourceSchema });

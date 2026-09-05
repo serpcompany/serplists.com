@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -59,7 +59,6 @@ if (
   throw new Error(`Report directory must stay under ${reportRoot}.`);
 }
 const reportDirectoryRelative = path.relative(repoRoot, reportDirectory);
-const rehearsalRootExistedAtStart = existsSync(path.join(repoRoot, ".wrangler/rehearsals"));
 const filesystemBefore = captureWorkspaceMetadata({ repoRoot });
 // These source controls invoke the normal browser harness, so they must complete
 // before this aggregate owns the same lock. It is not a nested Vitest test.
@@ -85,17 +84,6 @@ const releaseRegressionLock = await acquireSmokeRunLock({
   lockPath: path.join(repoRoot, ".wrangler", "smoke-state.lock"),
 });
 process.once("exit", releaseRegressionLock);
-
-function cleanupLocalRehearsalTestState() {
-  const root = path.join(repoRoot, ".wrangler", "rehearsals");
-  if (!existsSync(root)) return;
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    if (entry.isDirectory() && /^(?:vitest|roundtrip)-/.test(entry.name)) {
-      rmSync(path.join(root, entry.name), { recursive: true, force: true });
-    }
-  }
-  if (!rehearsalRootExistedAtStart && readdirSync(root).length === 0) rmdirSync(root);
-}
 
 interface VitestAssertionResult {
   fullName?: string;
@@ -183,7 +171,6 @@ try {
     vitestResult = { success: false, testResults: [] };
   }
 }
-cleanupLocalRehearsalTestState();
 
 const assertions = (vitestResult.testResults ?? []).flatMap(
   (result) => result.assertionResults ?? [],
@@ -408,6 +395,10 @@ const endDirtyPaths = endGitState.paths;
 const workingTreeDirtyPaths = [...new Set([...startDirtyPaths, ...endDirtyPaths])].sort();
 const immutableRun = evaluateImmutableRunContext({ startCommit, endCommit, startPaths: startDirtyPaths, endPaths: endDirtyPaths, nonGating });
 restorePreexistingEmptyWranglerTemp({ repoRoot, before: filesystemBefore });
+// All shared-state work and teardown is complete. Audit the released resource,
+// rather than exempting an active lock from filesystem damage detection.
+releaseRegressionLock();
+process.removeListener("exit", releaseRegressionLock);
 const filesystemChanges = compareWorkspaceMetadata({
   before: filesystemBefore,
   after: captureWorkspaceMetadata({ repoRoot }),
@@ -526,5 +517,4 @@ const paths = writeDataCheckReports({
 });
 console.log(markdown);
 console.log(`Reports: ${paths.markdown}, ${paths.json}, ${paths.junit}; raw test report: ${rawVitestReport}`);
-releaseRegressionLock();
 if (report.verdict !== "pass") process.exitCode = 1;

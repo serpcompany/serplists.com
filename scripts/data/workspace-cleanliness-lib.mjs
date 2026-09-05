@@ -1,7 +1,49 @@
-import { lstatSync, readdirSync, mkdirSync } from "node:fs";
+import { lstatSync, readdirSync, mkdirSync, mkdtempSync, rmSync, rmdirSync } from "node:fs";
 import path from "node:path";
 
 const DEFAULT_EXCLUDED_ROOTS = [".git", "node_modules"];
+
+/** Allocate a unique fixture directory; names of other entries never imply ownership. */
+export function createOwnedWorkspaceDirectory({ parent, prefix }) {
+  const parents = [];
+  function ensureDirectory(name) {
+    try {
+      if (!lstatSync(name).isDirectory()) throw new Error('Workspace directory ownership requires a real directory.');
+      return;
+    } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    ensureDirectory(path.dirname(name));
+    try {
+      mkdirSync(name);
+      parents.push([name, lstatSync(name)]);
+    } catch (error) {
+      if (error.code !== 'EEXIST' || !lstatSync(name).isDirectory()) throw error;
+    }
+  }
+  ensureDirectory(parent);
+  const parentIdentity = lstatSync(parent);
+  const directory = mkdtempSync(path.join(parent, prefix));
+  const identity = lstatSync(directory);
+  function assertOwned(name, expected) {
+    const actual = lstatSync(name);
+    if (!actual.isDirectory() || actual.dev !== expected.dev || actual.ino !== expected.ino || actual.birthtimeMs !== expected.birthtimeMs) {
+      throw new Error('Workspace directory ownership changed before cleanup.');
+    }
+  }
+  let cleaned = false;
+  return { directory, cleanup() {
+    if (cleaned) return;
+    cleaned = true;
+    for (const [name, expected] of parents) assertOwned(name, expected);
+    assertOwned(parent, parentIdentity);
+    assertOwned(directory, identity);
+    rmSync(directory, { recursive: true });
+    for (const [name, expected] of parents.reverse()) {
+      assertOwned(name, expected);
+      try { rmdirSync(name); }
+      catch (error) { if (error.code !== 'ENOTEMPTY' && error.code !== 'EEXIST') throw error; }
+    }
+  } };
+}
 
 /** Restore only an empty directory that the provider removed during teardown.
  * @param {{ repoRoot: string, before: WorkspaceMetadata }} options

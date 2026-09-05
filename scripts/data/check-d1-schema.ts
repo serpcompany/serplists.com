@@ -30,7 +30,9 @@ function readArg(name: string) {
   const inline = process.argv.find((argument) => argument.startsWith(`${name}=`));
   if (inline) return inline.slice(name.length + 1);
   const index = process.argv.indexOf(name);
-  return index === -1 ? null : process.argv[index + 1];
+  if (index === -1) return null;
+  const value = process.argv[index + 1];
+  return value === undefined || value.startsWith('--') ? '' : value;
 }
 
 function differenceCount(value: unknown): number {
@@ -43,7 +45,7 @@ const database = readArg("--database") ?? "unknown";
 const environment = readArg("--label") ?? "unknown";
 const binding = readArg("--binding") ?? "DB";
 const preview = process.argv.includes("--preview");
-const reportDirectory = readArg("--report-dir") ?? process.env.DATA_REPORT_DIR ?? "tmp/data-reports";
+const reportDirectory = readArg("--report-dir") || process.env.DATA_REPORT_DIR || "tmp/data-reports";
 const migrations = (() => {
   try { return listMigrationFiles().map((migration) => migration.name); } catch { return []; }
 })();
@@ -55,7 +57,13 @@ const identityChecks: unknown[] = [];
 let stage = 'schema-configuration';
 
 try {
-  if (database === "unknown" || environment === "unknown") {
+  const valueOptions = ['--database', '--label', '--binding', '--database-id', '--report-dir'];
+  const missingValue = process.argv.some((argument, index) => valueOptions.some(option =>
+    argument === `${option}=` || (argument === option && (!process.argv[index + 1] || process.argv[index + 1].startsWith('--')))));
+  const assertedDatabaseId = readArg("--database-id") ?? process.env.D1_DATABASE_ID;
+  if (missingValue || database === "unknown" || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}$/.test(database)
+    || !['local', 'staging', 'rehearsal', 'production'].includes(environment) || binding !== 'DB'
+    || (assertedDatabaseId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(assertedDatabaseId))) {
     throw new Error("Usage: check-d1-schema --database NAME --label ENV [--binding BINDING] [--preview] [--database-id ID]");
   }
   const runtimeContract = buildDrizzleContract(drizzleSchema);
@@ -64,7 +72,6 @@ try {
   const migrationContract = buildCatalogContract(expectedMigrationCatalog);
   migrated.close();
   const expectedTableNames = [...new Set([...Object.keys(runtimeContract.tables), ...Object.keys(migrationContract.tables)])];
-  const assertedDatabaseId = readArg("--database-id") ?? process.env.D1_DATABASE_ID;
   if (environment === "production" && !assertedDatabaseId) throw new Error("Production schema verification requires the exact asserted database UUID.");
   stage = 'schema-identity';
   resolvedIdentity = resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
@@ -99,7 +106,7 @@ try {
   const sql = [
     ...tableNames.map((name) => `${tableInfoSql(name)};`),
     ...tableNames.map((name) => `PRAGMA index_list('${name.replaceAll("'", "''")}');`),
-    ...tableNames.map((name) => `SELECT il.name AS index_name, ii.seqno, ii.name AS column_name, sm.sql AS index_sql FROM pragma_index_list('${name.replaceAll("'", "''")}') AS il JOIN pragma_index_info(il.name) AS ii LEFT JOIN sqlite_schema AS sm ON sm.type = 'index' AND sm.name = il.name ORDER BY il.name, ii.seqno;`),
+    ...tableNames.map((name) => `SELECT il.name AS index_name, ii.seqno, ii.cid, ii.name AS column_name, ii.name IS NULL AS column_name_is_null, ii.coll, ii.desc, ii.key, sm.sql AS index_sql, sm.sql IS NULL AS index_sql_is_null FROM pragma_index_list('${name.replaceAll("'", "''")}') AS il JOIN pragma_index_xinfo(il.name) AS ii LEFT JOIN sqlite_schema AS sm ON sm.type = 'index' AND sm.name = il.name ORDER BY il.name, ii.seqno;`),
     ...tableNames.map((name) => `PRAGMA foreign_key_list('${name.replaceAll("'", "''")}');`),
     "SELECT type AS object_type, name, tbl_name AS table_name, sql FROM sqlite_schema WHERE type IN ('table','trigger','view') AND name NOT LIKE 'sqlite_%' ORDER BY type,name;",
   ].join(" ");
@@ -154,17 +161,41 @@ try {
   if (verdict === "fail") process.exitCode = 1;
 } catch (error) {
   const failure = safeCanaryFailure(stage, error);
+  const { reportIdentitySummary } = await import('./report-identity-lib.mjs');
+  const safeEnvironment = ['local', 'staging', 'rehearsal', 'production'].includes(environment) ? environment : 'unknown';
+  const safeBinding = binding === 'DB' ? binding : 'unknown';
+  const assertedId = readArg('--database-id') ?? process.env.D1_DATABASE_ID;
+  const safeIdentity = safeEnvironment !== 'unknown' && safeBinding !== 'unknown' && resolvedIdentity?.databaseName === database
+    && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}$/.test(resolvedIdentity.databaseName)
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resolvedIdentity.databaseId)
+    && (!assertedId || assertedId === resolvedIdentity.databaseId) ? resolvedIdentity : null;
+  let safeDatabaseName = safeIdentity?.databaseName ?? 'unknown';
+  let safeDatabaseId = safeIdentity?.databaseId ?? 'unknown';
+  if (!resolvedIdentity && safeEnvironment !== 'unknown' && safeBinding !== 'unknown') {
+    try {
+      const { loadEnvironmentInventory, validateEnvironmentInventory } = await import('./environment-identity-lib.mjs');
+      const { readFileSync } = await import('node:fs');
+      const inventory = loadEnvironmentInventory({ repoRoot });
+      validateEnvironmentInventory({ inventory, wranglerToml: readFileSync(path.join(repoRoot, 'wrangler.toml'), 'utf8') });
+      const known = inventory.environments[safeEnvironment];
+      if (known?.databaseName === database && (!assertedId || assertedId === known.databaseId)) {
+        safeDatabaseName = known.databaseName;
+        if (assertedId) safeDatabaseId = assertedId;
+      }
+    } catch { /* Unknown or mismatched requested metadata is not report evidence. */ }
+  }
   const report = buildFailureReport({
     check: "d1-schema-contract",
-    commit,
+    commit: /^[a-f0-9]{40}$/.test(commit) ? commit : 'unknown',
     error: new Error(failure.message),
     migrationFiles: migrations,
-    requestedTarget: { environment, binding, databaseName: database, mode: preview ? "preview" : "remote" },
-    resolvedIdentity,
+    requestedTarget: { environment: safeEnvironment, binding: safeBinding, databaseName: safeDatabaseName, mode: preview ? "preview" : "remote" },
+    resolvedIdentity: safeIdentity,
   });
+  report.target.databaseId = safeDatabaseId;
   Object.assign(report, { failedStage: failure.stage, errorCode: failure.code, checks: [{ name: failure.check, verdict: 'fail' }], ...(failure.exitStatus === undefined ? {} : { exitStatus: failure.exitStatus }) });
-  const summary = `BLOCKED environment=${environment} binding=${binding} databaseName=${resolvedIdentity?.databaseName ?? database} databaseId=${resolvedIdentity?.databaseId ?? 'unresolved-id'} commit=${commit} migration=${report.migrationRange.from}->${report.migrationRange.to} stage=${failure.stage}: ${failure.code}. ${report.error}`;
-  try { writeDataCheckReports({ name: `d1-schema-${environment}`, report, summary, reportDirectory }); }
+  const summary = `BLOCKED ${reportIdentitySummary(report)}; mode=${report.target.mode}; stage=${failure.stage}: ${failure.code}. ${report.error}`;
+  try { writeDataCheckReports({ name: `d1-schema-${safeEnvironment}`, report, summary, reportDirectory }); }
   catch { console.error('Remote schema failure report could not be persisted.'); }
   console.error(summary);
   process.exitCode = 1;

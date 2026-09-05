@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { writeDataCheckReports } from "./reporting.mjs";
+import { reportIdentitySummary } from "./report-identity-lib.mjs";
 import {
   allPassingChecks,
   loadProvenanceState,
@@ -70,21 +71,22 @@ const report = {
   baseRef,
   target: {
     environment: "local",
-    database: "repository-migration-history",
+    binding: "not-applicable:repository-history",
+    databaseName: "repository-migration-history",
     databaseId: "git:db/migrations",
   },
   migrationRange: {
-    from: migrationFiles[0] ?? null,
-    to: migrationFiles.at(-1) ?? null,
+    from: state ? migrationFiles[0] ?? null : "unknown",
+    to: state ? migrationFiles.at(-1) ?? null : "unknown",
   },
   checks,
   failures,
   verdict: failures.length === 0 ? "pass" : "fail",
 };
 const summary = report.verdict === "pass"
-  ? `PASS migration provenance at ${commit}; ${migrationFiles.length} locked Wrangler migrations; Drizzle is baselined through ${report.migrationRange.to}; environment=local.`
+  ? `PASS repository migration provenance; ${reportIdentitySummary(report)}; ${migrationFiles.length} locked Wrangler migrations.`
   : [
-      `BLOCKED migration provenance at ${commit}; environment=local; base=${baseRef ?? "none"}.`,
+      `BLOCKED repository migration provenance; ${reportIdentitySummary(report)}; base=${baseRef ?? "none"}.`,
       ...failures.map((item) => `- ${item.name}: ${item.detail}`),
       "Use pnpm db:generate -- --name <snake_case_name>; do not add or edit numbered SQL by hand.",
     ].join("\n");

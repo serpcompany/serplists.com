@@ -22,8 +22,8 @@ describe("Drizzle to D1 schema contract", () => {
     expect(parseRemoteTableInventory(JSON.stringify([{ results: [{ name: "templates" }, { name: "rogue_live" }, { name: "sqlite_sequence" }] }]))).toEqual(["rogue_live", "templates"]);
     const catalog = catalogFromPragmaResults(["rogue_live"], [
       { results: [{ name: "id", type: "TEXT", notnull: 0, dflt_value: "null", pk: 1 }, { name: "template_id", type: "TEXT", notnull: 0, dflt_value: "null", pk: 0 }] },
-      { results: [{ name: "rogue_template_idx", unique: 0, partial: 0 }] },
-      { results: [{ index_name: "rogue_template_idx", seqno: 0, column_name: "template_id", index_sql: "CREATE INDEX rogue_template_idx ON rogue_live(template_id)" }] },
+      { results: [{ name: "rogue_template_idx", origin: "c", unique: 0, partial: 0 }] },
+      { results: [{ index_name: "rogue_template_idx", seqno: 0, cid: 1, column_name: "template_id", column_name_is_null: 0, coll: "BINARY", desc: 0, key: 1, index_sql: "CREATE INDEX rogue_template_idx ON rogue_live(template_id)", index_sql_is_null: 0 }] },
       { results: [{ id: 0, seq: 0, table: "templates", from: "template_id", to: "id", on_update: "NO ACTION", on_delete: "CASCADE" }] },
       { results: [] },
     ]);
@@ -36,10 +36,11 @@ describe("Drizzle to D1 schema contract", () => {
       ["templates"],
       [
         { results: [{ name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 }] },
-        { results: [{ name: "idx_templates_owner", unique: 0, partial: 0 }] },
+        { results: [{ name: "idx_templates_owner", origin: "c", unique: 0, partial: 0 }] },
         { results: [
-          { index_name: "idx_templates_owner", seqno: 0, column_name: "owner_type", index_sql: "CREATE INDEX idx_templates_owner ON templates(owner_type, user_id)" },
-          { index_name: "idx_templates_owner", seqno: 1, column_name: "user_id", index_sql: "CREATE INDEX idx_templates_owner ON templates(owner_type, user_id)" },
+          { index_name: "idx_templates_owner", seqno: 0, cid: 1, column_name: "owner_type", column_name_is_null: 0, coll: "BINARY", desc: 0, key: 1, index_sql: "CREATE INDEX idx_templates_owner ON templates(owner_type, user_id)", index_sql_is_null: 0 },
+          { index_name: "idx_templates_owner", seqno: 1, cid: 2, column_name: "user_id", column_name_is_null: 0, coll: "BINARY", desc: 0, key: 1, index_sql: "CREATE INDEX idx_templates_owner ON templates(owner_type, user_id)", index_sql_is_null: 0 },
+          { index_name: "idx_templates_owner", seqno: 2, cid: -1, column_name: "null", column_name_is_null: 1, coll: "BINARY", desc: 0, key: 0, index_sql: "CREATE INDEX idx_templates_owner ON templates(owner_type, user_id)", index_sql_is_null: 0 },
         ] },
         { results: [] },
         { results: [] },
@@ -48,7 +49,15 @@ describe("Drizzle to D1 schema contract", () => {
 
     expect(catalog.tables.templates).toEqual({
       columns: [{ name: "id", type: "TEXT", notNull: true, defaultValue: null, primaryKey: 1 }],
-      indexes: [{ name: "idx_templates_owner", unique: false, partial: false, columns: ["owner_type", "user_id"], predicate: null }],
+      indexes: [{
+        name: "idx_templates_owner", unique: false, partial: false,
+        columns: ["owner_type", "user_id"], predicate: null,
+        sql: "create index idx_templates_owner on templates(owner_type,user_id)",
+        keys: [
+          { column: "owner_type", collation: "binary", descending: false },
+          { column: "user_id", collation: "binary", descending: false },
+        ],
+      }],
       foreignKeys: [],
     });
   });
@@ -163,7 +172,7 @@ describe("Drizzle to D1 schema contract", () => {
 
     expect(diff.invalidIndexes.memberships).toEqual([{
       name: "idx_active_owner",
-      issues: ["expected predicate role = 'owner' and status = 'active'; received role = 'owner' and status = 'disabled'"],
+      issues: ["expected predicate role = 'owner' and status = 'active'; received role='owner' and status='disabled'"],
     }]);
     expect(diff.verdict).toBe("fail");
     database.close();
@@ -180,7 +189,7 @@ describe("Drizzle to D1 schema contract", () => {
 
     expect(diffDrizzleContract(expected, liveCatalog).invalidIndexes.team_members).toEqual([{
       name: "idx_team_members_active_owner_unique",
-      issues: ["expected predicate role = 'owner' and status = 'active'; received role = 'owner' and status = 'disabled'"],
+      issues: ["expected predicate role='owner' and status='active'; received role = 'owner' and status = 'disabled'"],
     }]);
     database.close();
   });

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, rmdirSync, existsSync, symlinkSync, readdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, rmdirSync, existsSync, symlinkSync, readdirSync, renameSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -11,9 +11,59 @@ import {
   evaluateImmutableRunContext,
   parsePorcelainStatus,
   restorePreexistingEmptyWranglerTemp,
+  createOwnedWorkspaceDirectory,
 } from "./workspace-cleanliness-lib.mjs";
 
 describe("data regression workspace cleanliness", () => {
+  it('removes only newly created empty parents and refuses a replaced fixture directory', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'workspace-owned-parent-'));
+    const parent = path.join(root, '.wrangler/rehearsals');
+    try {
+      const owned = createOwnedWorkspaceDirectory({ parent, prefix: 'vitest-' });
+      owned.cleanup();
+      expect(readdirSync(root)).toEqual([]);
+      const replaced = createOwnedWorkspaceDirectory({ parent, prefix: 'vitest-' });
+      renameSync(replaced.directory, `${replaced.directory}-retained`);
+      symlinkSync(`${replaced.directory}-retained`, replaced.directory);
+      expect(() => replaced.cleanup()).toThrow(/ownership/);
+      expect(readdirSync(parent)).toHaveLength(2);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+  it('retains new sibling resources and refuses a replaced parent without touching its target', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'workspace-owned-sibling-'));
+    const parent = path.join(root, 'rehearsals');
+    try {
+      const owned = createOwnedWorkspaceDirectory({ parent, prefix: 'vitest-' });
+      writeFileSync(path.join(parent, 'roundtrip-other-invocation'), 'retain');
+      owned.cleanup();
+      expect(readdirSync(parent)).toEqual(['roundtrip-other-invocation']);
+      const replaced = createOwnedWorkspaceDirectory({ parent, prefix: 'vitest-' });
+      renameSync(parent, `${parent}-retained`);
+      symlinkSync(`${parent}-retained`, parent);
+      expect(() => replaced.cleanup()).toThrow(/ownership/);
+      expect(existsSync(replaced.directory)).toBe(true);
+      expect(() => createOwnedWorkspaceDirectory({ parent, prefix: 'vitest-' })).toThrow(/ownership/);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+  it('cleans only its invocation directory and preserves retained matching directories files and symlinks', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'workspace-owned-'));
+    const parent = path.join(root, '.wrangler/rehearsals');
+    try {
+      mkdirSync(parent, { recursive: true });
+      mkdirSync(path.join(parent, 'roundtrip-user-retained'));
+      writeFileSync(path.join(parent, 'roundtrip-user-retained/evidence'), 'retain');
+      mkdirSync(path.join(parent, 'vitest-previous-evidence'));
+      writeFileSync(path.join(parent, 'vitest-file'), 'retain');
+      symlinkSync('roundtrip-user-retained', path.join(parent, 'roundtrip-link'));
+      symlinkSync('missing', path.join(parent, 'vitest-dangling'));
+      const before = captureWorkspaceMetadata({ repoRoot: root });
+      const owned = createOwnedWorkspaceDirectory({ parent, prefix: 'vitest-' });
+      writeFileSync(path.join(owned.directory, 'fixture'), 'disposable');
+      owned.cleanup();
+      owned.cleanup();
+      expect(compareWorkspaceMetadata({ before, after: captureWorkspaceMetadata({ repoRoot: root }) })).toEqual([]);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
   it('restores only preexisting empty Wrangler scaffolding', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'wrangler-scaffold-'));
     const directory = path.join(root, '.wrangler/tmp');

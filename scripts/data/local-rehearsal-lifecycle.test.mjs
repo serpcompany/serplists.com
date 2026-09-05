@@ -1,11 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 import { runDataCommand } from "./data-command-lib.mjs";
+import { createOwnedWorkspaceDirectory } from "./workspace-cleanliness-lib.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
@@ -22,8 +22,8 @@ function run(command) {
 describe("isolated local rehearsal lifecycle", () => {
   it("replays migrations, applies deterministic fixtures twice, and proves teardown leaves no rows", () => {
     const rehearsalRoot = path.join(repoRoot, ".wrangler/rehearsals");
-    mkdirSync(rehearsalRoot, { recursive: true });
-    const persistencePath = mkdtempSync(path.join(rehearsalRoot, "vitest-"));
+    const owned = createOwnedWorkspaceDirectory({ parent: rehearsalRoot, prefix: "vitest-" });
+    const persistencePath = owned.directory;
     const relativePersistencePath = path.relative(repoRoot, persistencePath);
 
     try {
@@ -71,7 +71,7 @@ describe("isolated local rehearsal lifecycle", () => {
         }).executed,
       ).toBe(true);
     } finally {
-      rmSync(persistencePath, { recursive: true, force: true });
+      owned.cleanup();
     }
   }, 20_000);
 

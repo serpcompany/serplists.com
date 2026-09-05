@@ -12,6 +12,7 @@ import {
   replayMigrations,
 } from "./schema-contract";
 import { buildFailureReport, writeDataCheckReports } from "./reporting.mjs";
+import { reportIdentitySummary } from "./report-identity-lib.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runRepositoryGit, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
@@ -52,7 +53,8 @@ try {
       commit,
       target: {
         environment: "local",
-        database: "fresh-migration-replay",
+        binding: "not-applicable:in-memory",
+        databaseName: "fresh-migration-replay",
         databaseId: "local:ephemeral",
       },
       migrationRange: {
@@ -65,9 +67,9 @@ try {
       verdict,
     };
     const summary = verdict === "pass"
-      ? `PASS Drizzle/D1 schema contract at ${report.commit}; ${report.migrationRange.from} → ${report.migrationRange.to}; db/schema.sql matches.`
+      ? `PASS in-memory SQLite schema contract; ${reportIdentitySummary(report)}; db/schema.sql matches.`
       : [
-          `BLOCKED Drizzle/D1 schema contract at ${report.commit}.`,
+          `BLOCKED in-memory SQLite schema contract; ${reportIdentitySummary(report)}.`,
           `Runtime differences: ${JSON.stringify(runtimeDiff)}.`,
           `db/schema.sql differences: ${snapshotDiff.differences.join(", ") || "none"}.`,
           "Add the matching Wrangler migration and regenerate db/schema.sql before merging.",
@@ -86,10 +88,11 @@ try {
     commit,
     error,
     migrationFiles: migrationNames,
-    requestedTarget: { environment: "local", database: "fresh-migration-replay", mode: "local" },
+    requestedTarget: { environment: "local", binding: "not-applicable:in-memory", databaseName: "fresh-migration-replay", mode: "local" },
     resolvedIdentity: { databaseName: "fresh-migration-replay", databaseId: "local:ephemeral" },
   });
-  const summary = `BLOCKED local schema contract: ${report.error}`;
+  if (!migrationNames.length) report.migrationRange = { from: "unknown", to: "unknown" };
+  const summary = `BLOCKED in-memory SQLite schema contract; ${reportIdentitySummary(report)}: ${report.error}`;
   const paths = writeDataCheckReports({ name: "schema-contract", report, summary, reportDirectory });
   console.error(summary);
   console.error(`Reports: ${paths.text}, ${paths.json}, ${paths.junit}`);

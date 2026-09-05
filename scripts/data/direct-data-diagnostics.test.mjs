@@ -8,6 +8,7 @@ import { listMigrationFiles, replayMigrations } from './schema-contract.ts';
 const root = resolve('.');
 const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const databaseId = '11111111-1111-4111-8111-111111111111';
+const invariantDatabase = 'serp-checklists-rehearsal-diagnostics';
 const secretTable = 'PRIVATE_TABLE_SENTINEL_118';
 const markers = [secretTable, 'PRIVATE_VALUE_SENTINEL_118', 'PRIVATE_OWNER_SENTINEL_118', 'STDERR_SECRET_SENTINEL_118', 'STDOUT_SECRET_SENTINEL_118', 'STATE_PATH_SENTINEL_118', 'INVARIANT_KEY_SENTINEL_118_', 'unknown_ledger_sentinel_128.sql', 'data-safety-fixture-user-v1', 'data-safety-fixture-template-v1', 'data-safety-fixture-run-v1'];
 const expectPrivateFree = text => { for (const marker of markers) expect(text.toLowerCase()).not.toContain(marker.toLowerCase()); };
@@ -30,7 +31,7 @@ const fs=require('node:fs'); const {DatabaseSync}=require('node:sqlite');
 const args=process.argv.slice(2); const sql=args.includes('--command') ? args[args.indexOf('--command')+1] : args.includes('--file') ? fs.readFileSync(args[args.indexOf('--file')+1],'utf8') : '';
 const identity=args.includes('info'); const inventory=sql.startsWith('SELECT name FROM sqlite_schema');
 fs.appendFileSync(${JSON.stringify(calls)},JSON.stringify({identity,inventory,privateArgument:sql.includes(${JSON.stringify(secretTable)}),domainQuery:sql.startsWith('SELECT * FROM')})+'\\n');
-if(identity){console.log(JSON.stringify({name:'fixture-db',uuid:${JSON.stringify(databaseId)}}));process.exit(0);}
+if(identity){console.log(JSON.stringify({name:args[args.indexOf('info')+1]===${JSON.stringify(invariantDatabase)}?${JSON.stringify(invariantDatabase)}:'fixture-db',uuid:${JSON.stringify(databaseId)}}));process.exit(0);}
 if(${JSON.stringify(failure)}==='unknown-ledger' && sql.includes('SELECT id, name FROM d1_migrations')){console.log(JSON.stringify([{results:[{id:1,name:'0001_initial_schema.sql'},{id:2,name:'9999_unknown_ledger_sentinel_128.sql'}]}]));process.exit(0);}
 if(${JSON.stringify(failure)}==='schema' && inventory){console.log(JSON.stringify([{results:[{name:${JSON.stringify(secretTable)}}]}]));process.exit(0);}
 if((${JSON.stringify(failure)}==='schema' && sql.includes(${JSON.stringify(secretTable)})) || (${JSON.stringify(failure)}==='invariant' && sql.includes("SELECT 'template' kind"))) {
@@ -47,7 +48,7 @@ console.log(JSON.stringify(results));}finally{db.close();}
 function run(f, kind, mode = 'capture') {
   const args = kind === 'schema'
     ? ['--import', 'tsx', 'scripts/data/check-d1-schema.ts', '--database', 'fixture-db', '--database-id', databaseId, '--label', 'staging', '--report-dir', f.reports]
-    : ['scripts/data/remote-invariant-gate.mjs', mode, '--database', 'fixture-db', '--database-id', databaseId, '--environment', 'rehearsal', '--binding', 'DB', '--commit', commit, '--migration-from', 'none', '--migration-to', 'none', '--state', f.state, '--report-dir', f.reports];
+    : ['scripts/data/remote-invariant-gate.mjs', mode, '--database', invariantDatabase, '--database-id', databaseId, '--environment', 'rehearsal', '--binding', 'DB', '--commit', commit, '--migration-from', 'none', '--migration-to', 'none', '--state', f.state, '--report-dir', f.reports];
   return spawnSync(process.execPath, args, { cwd: root, env: { PATH: `${f.directory}:${process.env.PATH}`, HOME: process.env.HOME, CI: '1', INVARIANT_HMAC_KEY: 'INVARIANT_KEY_SENTINEL_118_'.repeat(3) }, encoding: 'utf8', timeout: 20_000 });
 }
 
@@ -66,7 +67,7 @@ describe.skipIf(process.platform === 'win32')('direct schema and invariant CLI p
       expect(report).toMatchObject({ verdict: 'fail', commit, failedStage: `${kind}-query`, exitStatus: 31 });
       expect(report.target.databaseId).toBe(databaseId);
       expect(report.migrationRange).toBeDefined();
-      for (const text of reportFiles(f)) for (const context of [commit, databaseId, 'fixture-db']) expect(text).toContain(context);
+      for (const text of reportFiles(f)) for (const context of [commit, databaseId, kind === 'schema' ? 'fixture-db' : invariantDatabase]) expect(text).toContain(context);
       expect(readFileSync(join(f.reports, file.replace('.json', '.junit.xml')), 'utf8')).toMatch(/failures="[1-9][0-9]*"/);
       const calls = readFileSync(f.calls, 'utf8').trim().split('\n').map(line => JSON.parse(line));
       expect(calls[0].identity).toBe(true);

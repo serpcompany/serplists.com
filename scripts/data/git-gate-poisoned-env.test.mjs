@@ -27,16 +27,21 @@ describe("poisoned Git environment isolation across data gates", () => {
       const schemaDir = path.join(root, "schema");
       const schema = runScript(["scripts/data/check-schema-contract.ts", "--report-dir", schemaDir], env);
       expect(schema.status, schema.stderr).toBe(0);
-      expect(JSON.parse(readFileSync(path.join(schemaDir, "schema-contract.json"), "utf8"))).toMatchObject({ commit: intendedCommit, target: { environment: "local", database: "fresh-migration-replay" } });
+      expect(JSON.parse(readFileSync(path.join(schemaDir, "schema-contract.json"), "utf8"))).toMatchObject({ commit: intendedCommit, target: { environment: "local", binding: "not-applicable:in-memory", databaseName: "fresh-migration-replay", databaseId: "local:ephemeral" } });
       expect(JSON.parse(readFileSync(path.join(schemaDir, "contract-correction.json"), "utf8"))).toMatchObject({ commit: intendedCommit, repositoryRoot: repoRoot });
 
-      for (const [script, reportName] of [["scripts/data/check-d1-schema.ts", "d1-schema-unknown.json"], ["scripts/data/check-pending-migrations.mjs", "pending-migrations-unknown.json"]]) {
+      for (const [script, reportName, expectedDatabase] of [["scripts/data/check-d1-schema.ts", "d1-schema-unknown.json", "unknown"], ["scripts/data/check-pending-migrations.mjs", "pending-migrations-unknown.json", "intended-db"]]) {
         const reportDir = path.join(root, reportName);
         const result = runScript([script, "--database", "intended-db", "--report-dir", reportDir], env);
         expect(result.status).toBe(1);
         const report = JSON.parse(readFileSync(path.join(reportDir, reportName), "utf8"));
         expect(report).toMatchObject({ commit: intendedCommit, target: { environment: "unknown" } });
-        expect(report.target.databaseName ?? report.target.database).toBe('intended-db');
+        expect(report.target.databaseName ?? report.target.database).toBe(expectedDatabase);
+        if (script.endsWith('check-d1-schema.ts')) {
+          // Invalid, unobserved configuration is not trusted target evidence.
+          expect(report.failedStage).toBe('schema-configuration');
+          expect(JSON.stringify(report)).not.toContain('intended-db');
+        }
       }
     } finally { rmSync(root, { recursive: true, force: true }); }
   }, 20_000);

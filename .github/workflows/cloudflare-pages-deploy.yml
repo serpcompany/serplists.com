@@ -258,6 +258,9 @@ jobs:
           printf 'BLOCKED %s production-request-input-validation; commit=%s; database=%s (%s); migration=%s -> %s.\n' "$REPORT_ENVIRONMENT" "$REPORT_COMMIT" "$REPORT_DATABASE_NAME" "$REPORT_DATABASE_ID" "$REPORT_MIGRATION_FROM" "$REPORT_MIGRATION_TO" > tmp/data-reports/production-request/early-failure.txt
           COMMIT_XML=$(jq -rn --arg v "$REPORT_COMMIT" '$v|@html'); ENV_XML=$(jq -rn --arg v "$REPORT_ENVIRONMENT" '$v|@html'); NAME_XML=$(jq -rn --arg v "$REPORT_DATABASE_NAME" '$v|@html'); ID_XML=$(jq -rn --arg v "$REPORT_DATABASE_ID" '$v|@html'); FROM_XML=$(jq -rn --arg v "$REPORT_MIGRATION_FROM" '$v|@html'); TO_XML=$(jq -rn --arg v "$REPORT_MIGRATION_TO" '$v|@html')
           printf '<testsuite name="workflow-early-failure" tests="1" failures="1"><properties><property name="commit" value="%s"/><property name="environment" value="%s"/><property name="databaseName" value="%s"/><property name="databaseId" value="%s"/><property name="migrationFrom" value="%s"/><property name="migrationTo" value="%s"/></properties><testcase name="production-request-input-validation"><failure message="workflow stopped before evidence download"/></testcase></testsuite>\n' "$COMMIT_XML" "$ENV_XML" "$NAME_XML" "$ID_XML" "$FROM_XML" "$TO_XML" > tmp/data-reports/production-request/early-failure.junit.xml
+      - name: Install production-request dependencies after trusted input validation
+        if: success() && steps.production_input_gate.outcome == 'success'
+        run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Download exact-commit CI and rehearsal artifacts
         env:
           GH_TOKEN: ${{ github.token }}

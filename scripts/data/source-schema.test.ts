@@ -41,6 +41,20 @@ function fixture(current = false) {
 }
 
 describe('exact source catalog before writes', () => {
+  it.each([
+    'CREATE UNIQUE INDEX idx_users_username ON users(username COLLATE NOCASE)',
+    'CREATE UNIQUE INDEX idx_users_username ON users(username DESC)',
+    'CREATE UNIQUE INDEX idx_users_username ON users(lower(username))',
+    "CREATE UNIQUE INDEX idx_users_username ON users(username) WHERE username <> ''",
+    'CREATE INDEX idx_users_username ON users(username)',
+  ])('rejects complete-replay username index definition drift: %s', replacement => {
+    const f = fixture(true);
+    try {
+      expect(f.inspect().verdict).toBe('pass');
+      f.db.exec(`DROP INDEX idx_users_username; ${replacement}`);
+      expect(f.inspect).toThrow('Production source catalog verification failed before migration writes.');
+    } finally { f.db.close(); }
+  });
   it('ignores transport-stripped SQL comments while preserving quoted tokens and literal comment markers', () => {
     expect(normalizeSql("CREATE/**/TABLE t(x TEXT /* 'comment' */ DEFAULT '-- literal /* retained */');", true)).toBe(normalizeSql("CREATE TABLE t(x TEXT DEFAULT '-- literal /* retained */');", true));
     expect(normalizeSql("SELECT 'it''s -- retained', \"/* retained */\" -- don't treat the quote as SQL\n FROM [table--name]", true)).toBe(normalizeSql("SELECT 'it''s -- retained', \"/* retained */\" FROM [table--name]", true));

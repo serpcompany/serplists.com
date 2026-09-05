@@ -34,6 +34,21 @@ process.stdout.write(execFileSync(process.execPath,[${JSON.stringify(cli)},...ar
     const healthy = check();
     expect(healthy.status, healthy.stdout + healthy.stderr).toBe(0);
     expect(JSON.parse(readFileSync(path.join(reportDir, 'd1-schema-staging.json'), 'utf8')).verdict).toBe('pass');
+    for (const definition of [
+      'CREATE UNIQUE INDEX idx_users_username ON users(username COLLATE NOCASE)',
+      'CREATE UNIQUE INDEX idx_users_username ON users(username DESC)',
+      'CREATE UNIQUE INDEX idx_users_username ON users(lower(username))',
+      "CREATE UNIQUE INDEX idx_users_username ON users(username) WHERE username <> ''",
+      'CREATE INDEX idx_users_username ON users(username)',
+    ]) {
+      execute(`DROP INDEX idx_users_username; ${definition}`);
+      const drift = check();
+      expect(drift.status, drift.stdout + drift.stderr).toBe(1);
+      const report = JSON.parse(readFileSync(path.join(reportDir, 'd1-schema-staging.json'), 'utf8'));
+      expect(report.schemaDifferences.migrationObjects.verdict).toBe('fail');
+      execute('DROP INDEX idx_users_username; CREATE UNIQUE INDEX idx_users_username ON users(username)');
+    }
+    expect(check().status).toBe(0);
     for (const table of ['unreviewed_app_table']) {
       execute(`CREATE TABLE ${table}(id TEXT)`);
       const drift = check();
