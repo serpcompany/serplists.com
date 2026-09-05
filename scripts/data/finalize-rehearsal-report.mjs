@@ -6,6 +6,7 @@ import { validateRehearsalRecoveryEvidence } from "./rehearsal-recovery-lib.mjs"
 import { loadSanitizerPolicy, validateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
 import { resolveRehearsalPlan, validateCoverageMatch } from "./rehearsal-plan-lib.mjs";
 import { validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
+import { validateSanitizedStateBinding } from "./sanitized-state-lib.mjs";
 function arg(name) { const i = process.argv.indexOf(name); return i < 0 ? null : process.argv[i + 1]; }
 try {
   const source = JSON.parse(readFileSync(arg("--source"), "utf8"));
@@ -19,6 +20,8 @@ try {
   const sanitizedManifest = JSON.parse(readFileSync(arg("--sanitizer-manifest"), "utf8"));
   const authenticated = source.authenticatedRehearsal;
   validateAuthenticatedCandidateEvidence(authenticated, { requireDetectors: true });
+  validateSanitizedStateBinding(authenticated.postMigrationState, invariants.sanitizedState);
+  if (authenticated.postMigrationState.sourceSha256 !== sanitizedManifest.artifact?.sha256 || authenticated.postMigrationState.ledgerSha256 !== invariants.ledger?.afterSha256 || JSON.stringify(authenticated.postMigrationState.ledger) !== JSON.stringify(invariants.ledger?.after) || authenticated.transformation?.verdict !== "pass" || authenticated.handlerStateReadback !== true) throw new Error("Authenticated handlers are not bound to the exact transformed remote ledger and domain.");
   if (authenticated.commit !== arg("--commit") || authenticated.target?.environment !== "local" || authenticated.sanitizerArtifactSha256 !== sanitizedManifest.artifact?.sha256 || authenticated.migrationRange?.from !== (arg("--migration-from") === "none" ? null : arg("--migration-from")) || authenticated.migrationRange?.to !== (arg("--migration-to") === "none" ? null : arg("--migration-to"))) throw new Error("Authenticated candidate-handler rehearsal evidence is incomplete or not bound to the sanitized artifact.");
   const recovery = validateRehearsalRecoveryEvidence({
     evidence: JSON.parse(readFileSync(arg("--recovery"), "utf8")),
@@ -73,7 +76,11 @@ try {
   writeFileSync(output, JSON.stringify(report, null, 2) + "\n");
   writeFileSync(output.replace(/\.json$/, ".md"), `# Production-shaped rehearsal: PASS\n\nCommit: ${report.commit}\nEnvironment: rehearsal\nDatabase: ${report.target.databaseName} (${report.target.databaseId})\nRecovery database: ${recovery.recoveryDatabase.name} (${recovery.recoveryDatabase.id})\nMigration: ${report.migrationRange.from} -> ${report.migrationRange.to}\nCoverage plan: ${report.coverage.planId} (${report.coverage.declarationSha256})\nSanitizer: ${sanitizedManifest.sanitizerVersion}\nSanitizer artifact: ${sanitizedManifest.artifact.sha256}\nSource date: ${sanitizedManifest.provenance.sourceDate}\nAccess owner: ${sanitizedManifest.handling.accessOwner}\nRetention deadline: ${sanitizedManifest.handling.retentionDeadline}\nAuthenticated candidate template/run reads and writes: PASS\nFalse-empty and API-error detection: PASS\nRequired affected-domain coverage: PASS\nRecovery, raw-source cleanup, database teardown: PASS\n`);
   const xml = (value) => String(value).replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  const stateSummary = `\nAuthenticated post-migration state: ${authenticated.postMigrationState.domainSha256}\nExact post-migration ledger: ${authenticated.postMigrationState.ledgerSha256}\nLocal and remote transformed dataset equality: PASS\n`;
+  writeFileSync(output.replace(/\.json$/, ".md"), readFileSync(output.replace(/\.json$/, ".md"), "utf8") + stateSummary);
   writeFileSync(output.replace(/\.json$/, ".junit.xml"), `<testsuite name="production-shaped-rehearsal" tests="1" failures="0"><properties><property name="commit" value="${xml(report.commit)}"/><property name="environment" value="rehearsal"/><property name="database" value="${xml(report.target.databaseName)}"/><property name="databaseId" value="${xml(report.target.databaseId)}"/><property name="recoveryDatabaseId" value="${xml(recovery.recoveryDatabase.id)}"/><property name="migration" value="${xml(`${report.migrationRange.from}->${report.migrationRange.to}`)}"/><property name="sanitizer" value="${xml(sanitizedManifest.sanitizerVersion)}"/></properties><testcase name="rehearsal-and-separate-database-restore"/></testsuite>\n`);
+  const junitPath = output.replace(/\.json$/, ".junit.xml");
+  writeFileSync(junitPath, readFileSync(junitPath, "utf8").replace("</properties>", `<property name="sanitizedSourceSha256" value="${authenticated.postMigrationState.sourceSha256}"/><property name="postMigrationDomainSha256" value="${authenticated.postMigrationState.domainSha256}"/><property name="postMigrationLedgerSha256" value="${authenticated.postMigrationState.ledgerSha256}"/></properties>`));
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   const output = arg("--output") ?? "tmp/data-reports/rehearsal/rehearsal-promotion.json";

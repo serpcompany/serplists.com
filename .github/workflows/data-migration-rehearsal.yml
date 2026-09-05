@@ -209,7 +209,7 @@ jobs:
           node scripts/data/data-command.mjs migration-apply --environment rehearsal --database-name "$DATABASE_NAME" --database-id "$DATABASE_ID" --confirm-database-id "$DATABASE_ID" --execute
           node scripts/data/check-reviewed-migration-range.mjs after
           pnpm exec tsx scripts/data/check-d1-schema.ts --database "$DATABASE_NAME" --database-id "$DATABASE_ID" --label rehearsal --report-dir tmp/data-reports/rehearsal
-          node scripts/data/remote-invariant-gate.mjs compare --database "$DATABASE_NAME" --database-id "$DATABASE_ID" --environment rehearsal --binding DB --commit "$GITHUB_SHA" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --state tmp/rehearsal-pre-invariants.json --report-dir tmp/data-reports/rehearsal/remote-migration
+          node scripts/data/remote-invariant-gate.mjs compare --database "$DATABASE_NAME" --database-id "$DATABASE_ID" --environment rehearsal --binding DB --commit "$GITHUB_SHA" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --state tmp/rehearsal-pre-invariants.json --report-dir tmp/data-reports/rehearsal/remote-migration --sanitized tmp/data-evidence/production-shaped.sql
       - name: Restore data-bearing export into separate recovery database and verify invariants
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}

@@ -6,6 +6,7 @@ import { captureRepositoryGitState, sanitizedGitEnvironment } from "./git-subpro
 import { resolveRehearsalPlan } from "./rehearsal-plan-lib.mjs";
 import { loadSanitizerPolicy, validateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
 import { authenticatedCoverageAssertions, validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
+import { validateSanitizedStateBinding } from "./sanitized-state-lib.mjs";
 
 import { buildDataRegressionReport, renderDataRegressionMarkdown } from "./data-regression-report-lib.mjs";
 import { loadEnvironmentInventory } from "./environment-identity-lib.mjs";
@@ -266,7 +267,8 @@ try {
     const combinedChecks = { ...proof.checks, falseEmptyDetection, apiErrorDetection };
     let strictChecks = false;
     try { validateAuthenticatedCandidateEvidence({ ...proof, checks: combinedChecks }, { requireDetectors: true }); strictChecks = true; } catch { strictChecks = false; }
-    const bound = strictChecks && proof.commit === startCommit && proof.sanitizerArtifactSha256 === sanitizedArtifactSha256 && proof.migrationRange?.from === rehearsalPlan.migrationRange.from && proof.migrationRange?.to === rehearsalPlan.migrationRange.to;
+    validateSanitizedStateBinding(proof.postMigrationState, proof.postMigrationState);
+    const bound = strictChecks && proof.handlerStateReadback === true && proof.transformation?.verdict === "pass" && proof.postMigrationState.sourceSha256 === sanitizedArtifactSha256 && proof.commit === startCommit && proof.sanitizerArtifactSha256 === sanitizedArtifactSha256 && proof.migrationRange?.from === rehearsalPlan.migrationRange.from && proof.migrationRange?.to === rehearsalPlan.migrationRange.to;
     authenticatedRehearsal = { ...proof, checks: combinedChecks, applicable: true, verdict: bound ? "pass" : "fail" };
     if (!bound) browserFailure = "Authenticated sanitized candidate-handler evidence is incomplete or mismatched.";
   }

@@ -1,8 +1,7 @@
 import { spawn } from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { rmSync } from "node:fs";
-import { readFileSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { prepareSanitizedSmoke } from "./data/prepare-sanitized-smoke.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findOpenPortPair } from "./dev-auto-lib.mjs";
@@ -59,6 +58,10 @@ function prepareSmokeD1() {
 
   rmSync(smokePersistAbsolutePath, { recursive: true, force: true });
   rmSync(smokeTransientAbsolutePath, { recursive: true, force: true });
+  if (env.PLAYWRIGHT_SANITIZED_REHEARSAL_SQL) {
+    prepareSanitizedSmoke({ repoRoot, persistPath: smokePersistAbsolutePath, env, wrangler: (args) => execFileSync(NPX_COMMAND, [...NPX_ARGS_PREFIX, "wrangler", ...args], { cwd: repoRoot, env: { ...env, CI: "1" }, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }) });
+    return;
+  }
   run(
     NPX_COMMAND,
     [
@@ -78,14 +81,6 @@ function prepareSmokeD1() {
       },
     },
   );
-  if (env.PLAYWRIGHT_SANITIZED_REHEARSAL_SQL) {
-    const sanitizedPath = path.resolve(repoRoot, env.PLAYWRIGHT_SANITIZED_REHEARSAL_SQL);
-    const allowedRoot = path.resolve(repoRoot, "tmp/data-evidence");
-    if (!sanitizedPath.startsWith(`${allowedRoot}${path.sep}`)) throw new Error("Sanitized rehearsal import must stay under tmp/data-evidence/.");
-    const digest = createHash("sha256").update(readFileSync(sanitizedPath)).digest("hex");
-    if (digest !== env.PLAYWRIGHT_SANITIZER_SHA256) throw new Error("Sanitized rehearsal bytes do not match the bound artifact digest.");
-    for (const file of [sanitizedPath, path.join(repoRoot, "scripts/data/sql/rehearsal-auth-fixture.sql")]) run(NPX_COMMAND, [...NPX_ARGS_PREFIX, "wrangler", "d1", "execute", DATABASE_NAME, "--local", "--persist-to", smokePersistPath, "--file", file, "--yes"]);
-  }
 }
 
 env.PLAYWRIGHT_REUSE_EXISTING_SERVER = "0";

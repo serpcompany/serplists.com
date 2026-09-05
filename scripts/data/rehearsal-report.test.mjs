@@ -5,6 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { generateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
 import { resolveRehearsalPlan } from "./rehearsal-plan-lib.mjs";
+import { sanitizedState } from "./sanitized-state-lib.mjs";
 
 const repoRoot = new URL("../..", import.meta.url).pathname;
 const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
@@ -32,10 +33,24 @@ describe("rehearsal report finalization", () => {
       writeFileSync(files.recovery, JSON.stringify({ verdict: "pass", commit, environment: "rehearsal", sourceDatabase: { name: "source-rehearsal", id: sourceId }, recoveryDatabase: { name: "recovery-rehearsal", id: recoveryId }, migration: { from: migration, to: migration, appliedThrough: migration, ledgerSha256: "b".repeat(64) }, sanitizer: { version: artifact.manifest.sanitizerVersion, artifactSha256: artifact.manifest.artifact.sha256 }, creation: { verdict: "pass", runId: "123", sourceEvidenceSha256: "e".repeat(64), recoveryEvidenceSha256: "f".repeat(64) }, import: { verdict: "pass" }, invariants: { verdict: "pass", evidenceSha256: "c".repeat(64), domainDigest: "d".repeat(64) }, absence: { verdict: "pass" }, rawPlaintextRetained: false }));
       writeFileSync(files.teardown, "PASS rehearsal source-rehearsal is absent.\nPASS rehearsal recovery-rehearsal is absent.\n");
       writeFileSync(files.sanitized, artifact.sql); writeFileSync(files.manifest, JSON.stringify(artifact.manifest));
+      const { rows: _rows, ...state } = sanitizedState({ templates: [], runs: [], ledger: [migration], sourceSha256: artifact.manifest.artifact.sha256 });
+      const source = JSON.parse(readFileSync(files.source, "utf8"));
+      Object.assign(source.authenticatedRehearsal, { postMigrationState: state, transformation: { verdict: "pass" }, handlerStateReadback: true });
+      writeFileSync(files.source, JSON.stringify(source));
+      const comparison = JSON.parse(readFileSync(files.comparison, "utf8"));
+      Object.assign(comparison, { sanitizedState: state, ledger: { verdict: "pass", after: state.ledger, afterSha256: state.ledgerSha256 } });
+      writeFileSync(files.comparison, JSON.stringify(comparison));
       const args = ["scripts/data/finalize-rehearsal-report.mjs", "--source", files.source, "--comparison", files.comparison, "--recovery", files.recovery, "--teardown", files.teardown, "--sanitized", files.sanitized, "--sanitizer-manifest", files.manifest, "--commit", commit, "--database-name", "source-rehearsal", "--database-id", sourceId, "--recovery-database-id", recoveryId, "--migration-from", migration, "--migration-to", migration, "--output", files.output];
       execFileSync(process.execPath, args, { cwd: repoRoot });
       expect(JSON.parse(readFileSync(files.output, "utf8"))).toMatchObject({ commit, target: { environment: "rehearsal", databaseId: sourceId }, migrationRange: { from: migration, to: migration }, coverage: { planId: "safe-template-evolution-0024", declarationSha256: plan.declarationSha256 }, authenticatedRehearsal: { verdict: "pass", sanitizerArtifactSha256: artifact.manifest.artifact.sha256, checks: { templateRead: true, runWriteReadback: true, falseEmptyDetection: "pass", apiErrorDetection: "pass" } }, sanitizedSource: { sanitizerVersion: "source-derived-shape-v2", accessOwner: "@devinschumacher" }, recovery: { recoveryDatabase: { id: recoveryId } } });
       for (const text of [readFileSync(files.output.replace(".json", ".md"), "utf8"), readFileSync(files.output.replace(".json", ".junit.xml"), "utf8")]) for (const value of [commit, sourceId, recoveryId, migration, "source-derived-shape-v2"]) expect(text).toContain(value);
+
+      for (const field of ["sourceSha256", "domainSha256", "ledgerSha256"]) {
+        const mismatched = structuredClone(comparison); mismatched.sanitizedState[field] = "f".repeat(64);
+        writeFileSync(files.comparison, JSON.stringify(mismatched));
+        expect(spawnSync(process.execPath, args, { cwd: repoRoot, encoding: "utf8" }).status).toBe(1);
+      }
+      writeFileSync(files.comparison, JSON.stringify(comparison));
 
       const failed = spawnSync(process.execPath, args.map((value) => value === commit ? "f".repeat(40) : value), { cwd: repoRoot, encoding: "utf8" });
       expect(failed.status).toBe(1);

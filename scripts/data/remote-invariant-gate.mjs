@@ -6,6 +6,8 @@ import { captureRemoteInvariantSnapshot, compareProductionInvariants } from "./i
 import { writeDataCheckReports } from "./reporting.mjs";
 import { extractD1Identity } from "./wrangler-identity-lib.mjs";
 import { evaluateInvariantLedgerTransition, validatePreInvariantEvidence, validateRemoteInvariantContext } from "./remote-invariant-evidence-lib.mjs";
+import { captureSanitizedState } from "./sanitized-state-lib.mjs";
+import { createHash } from "node:crypto";
 
 function arg(name) { const i = process.argv.indexOf(name); return i < 0 ? null : process.argv[i + 1]; }
 const mode = process.argv[2];
@@ -56,6 +58,15 @@ try {
     const { added, removed, observedRange } = transition;
     const ledgerMatches = transition.verdict === "pass";
     const report = { ...comparison, check: "remote-invariant-comparison", commit: context.commit, target: context.target, sourceTarget: pre.target, comparisonKind: context.comparisonKind, migrationRange: observedRange, ledger: { before: pre.snapshot.appliedMigrations, after: post.appliedMigrations, beforeSha256: pre.snapshot.ledgerSha256, afterSha256: post.ledgerSha256, added, removed, appliedThrough: post.appliedThrough, verdict: ledgerMatches ? "pass" : "fail" } };
+    if (arg("--sanitized")) {
+      if (context.target.environment !== "rehearsal") throw new Error("Public sanitized state digest is restricted to rehearsal.");
+      const sourceSha256 = createHash("sha256").update(readFileSync(arg("--sanitized"))).digest("hex");
+      verifyLiveIdentity(context.target);
+      const { rows: _rows, ...binding } = captureSanitizedState({ sourceSha256, query: (sql) => wrangler(["d1", "execute", database, "--remote", "--json", "--command", sql]) });
+      verifyLiveIdentity(context.target);
+      if (binding.ledgerSha256 !== post.ledgerSha256) throw new Error("Remote ledger changed while binding sanitized handlers.");
+      report.sanitizedState = binding;
+    }
     if (!ledgerMatches) { report.verdict = "fail"; report.failures = [...report.failures, "migration ledger or reviewed range mismatch"]; }
     const summary = `${report.verdict.toUpperCase()} remote invariant comparison commit=${context.commit} environment=${context.target.environment} binding=${context.target.binding} database=${context.target.databaseName} databaseId=${context.target.databaseId} migration=${observedRange.from}->${observedRange.to} ledger=${post.appliedThrough}.`;
     writeDataCheckReports({ name: "remote-invariant-comparison", report, summary, reportDirectory });
