@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { replayMigrations, listMigrationFiles } from "./schema-contract.ts";
 import { generateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
-import { sanitizedState, verifySanitizedTransformation, validateSanitizedStateBinding } from "./sanitized-state-lib.mjs";
+import { captureSanitizedState, sanitizedState, verifySanitizedTransformation, validateSanitizedStateBinding } from "./sanitized-state-lib.mjs";
 
 const repoRoot = new URL("../..", import.meta.url).pathname;
 const migration = "0024_safe_template_evolution.sql";
@@ -12,6 +12,19 @@ const artifact = generateSanitizedRehearsalArtifact({ repoRoot, rawExport: readF
 const snapshot = (db, applied) => sanitizedState({ templates: db.prepare("SELECT * FROM templates").all(), runs: db.prepare("SELECT * FROM checklist_runs").all(), ledger: applied, sourceSha256: artifact.manifest.artifact.sha256 });
 
 describe("sanitized candidate state", () => {
+  it("preserves SQL null separately from literal null text across Wrangler display serialization", () => {
+    const db = replayMigrations();
+    try {
+      db.exec(artifact.sql);
+      db.exec("CREATE TABLE d1_migrations(id INTEGER, name TEXT)");
+      ledger.forEach((name, index) => db.prepare("INSERT INTO d1_migrations VALUES (?,?)").run(index + 1, name));
+      db.exec("UPDATE templates SET description='null'");
+      const capture = captureSanitizedState({ sourceSha256: artifact.manifest.artifact.sha256, query: (sql) => JSON.stringify([{ results: db.prepare(sql).all().map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value === null ? "null" : value]))) }]) });
+      expect(capture.rows.templates[0].deleted_at).toBeNull();
+      expect(capture.rows.templates[0].description).toBe("null");
+      expect(capture.domainSha256).toBe(snapshot(db, ledger).domainSha256);
+    } finally { db.close(); }
+  });
   it("rejects a corrupted transformation with a valid final schema before authenticated rehearsal can pass", () => {
     const db = replayMigrations({ through: "0023_add_sitemap_revision_state.sql" });
     try {

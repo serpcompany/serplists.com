@@ -269,3 +269,19 @@ jobs:
             playwright-report/
           if-no-files-found: error
           retention-days: 90
+      - name: Prepare privacy-safe publication identity
+        if: always()
+        env:
+          PUBLICATION_ENVIRONMENT: rehearsal
+          PUBLICATION_DATABASE_ID: ${{ env.DATABASE_ID }}
+          PUBLICATION_MIGRATION_FROM: ${{ inputs.migration_from }}
+          PUBLICATION_MIGRATION_TO: ${{ inputs.migration_to }}
+        run: node scripts/data/prepare-publication-evidence.mjs
+      - name: Retain publication identity
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: publication-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp/publication-evidence/publication.json
+          if-no-files-found: error
+          retention-days: 90

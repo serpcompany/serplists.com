@@ -1,0 +1,39 @@
+name: Publish durable database evidence
+on:
+  workflow_run:
+    workflows: [Data migration rehearsal, Protected data promotion and Pages deploy]
+    types: [completed]
+permissions: {}
+concurrency:
+  group: evidence-publication-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'serpcompany/serplists.com' && github.event.workflow_run.head_repository.full_name == github.repository && ((github.event.workflow_run.event == 'workflow_dispatch' && github.event.workflow_run.head_branch == 'main') || (github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'staging'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+      pull-requests: read
+    steps:
+      # github.sha is the default-branch publisher revision for workflow_run,
+      # never the source workflow's head_sha or a PR/artifact-supplied ref.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with: { node-version: 22.23.1 }
+      - name: Publish allowlisted evidence from trusted publisher code
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/data/publish-workflow-evidence.mjs
+      - name: Retain privacy-safe publication report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: evidence-publication-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          path: tmp/publication-report/
+          if-no-files-found: warn
+          retention-days: 90

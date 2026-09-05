@@ -106,6 +106,7 @@ function collectPlaywrightSpecs(suites: PlaywrightSuite[]): PlaywrightSpec[] {
 
 const testFiles = [
   "scripts/data/authenticated-visibility.test.mjs",
+  "scripts/data/sanitized-state.test.mjs",
   "scripts/data/production-shaped-migration-matrix.test.ts",
   "scripts/data/local-rehearsal-lifecycle.test.mjs",
   "scripts/data/teardown-probe.test.ts",
@@ -134,6 +135,7 @@ const requiredChecks = [
   ["authenticated visibility evaluator", "passes when all account-owned database rows are present in the API payload"],
   ["authenticated false-empty detection", "fails when database rows exist but the API is incorrectly empty"],
   ["authenticated API error detection", "fails when account-owned rows exist but the API errors"],
+  ["sanitized transformation corruption detection", "rejects a corrupted transformation with a valid final schema before authenticated rehearsal can pass"],
   ["rollback recovery rehearsal", "round-trips a Wrangler data-only export through a fresh migrated database and invariants"],
   ["fixture teardown leak detection", "replays migrations, applies deterministic fixtures twice, and proves teardown leaves no rows"],
   ["observed fixture teardown counts", "reports actual remaining fixture rows after exact cleanup"],

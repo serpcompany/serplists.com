@@ -23,7 +23,15 @@ export function captureSanitizedState({ query, sourceSha256 }) {
     if (!Array.isArray(parsed) || parsed.length !== 1 || !Array.isArray(parsed[0]?.results)) throw new Error("Incomplete sanitized state query.");
     return parsed[0].results;
   };
-  return sanitizedState({ templates: rows("SELECT * FROM templates ORDER BY id"), runs: rows("SELECT * FROM checklist_runs ORDER BY id"), ledger: parseAppliedMigrationLedger(query("SELECT id,name FROM d1_migrations ORDER BY id")), sourceSha256 });
+  const domainRows = (table) => {
+    const columns = rows(`PRAGMA table_info(${table})`).map((row) => row.name);
+    if (!columns.length || columns.some((name) => !/^[a-z_][a-z0-9_]*$/.test(name))) throw new Error("Sanitized domain columns are missing or unsupported.");
+    // Wrangler's display serializer changes SQL NULL into the text "null".
+    // Serialize inside SQLite so null, text, numbers and every column survive
+    // identically across local and remote execution without lossy coercion.
+    return rows(`SELECT json_object(${columns.map((name) => `'${name}',"${name}"`).join(",")}) AS row_json FROM ${table} ORDER BY id`).map((row) => JSON.parse(row.row_json));
+  };
+  return sanitizedState({ templates: domainRows("templates"), runs: domainRows("checklist_runs"), ledger: parseAppliedMigrationLedger(query("SELECT id,name FROM d1_migrations ORDER BY id")), sourceSha256 });
 }
 
 export function verifySanitizedTransformation({ before, after, expectedLedger }) {

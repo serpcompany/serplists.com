@@ -91,6 +91,21 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Prepare privacy-safe publication identity
+        if: always()
+        env:
+          PUBLICATION_ENVIRONMENT: staging
+          PUBLICATION_DATABASE_ID: fcaf4325-5be7-4ead-ab60-45932a04177b
+        run: node scripts/data/prepare-publication-evidence.mjs
+      - name: Retain publication identity
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: publication-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp/publication-evidence/publication.json
+          if-no-files-found: error
+          retention-days: 90
+
   staging_deploy:
     needs: staging_data
     runs-on: ubuntu-latest
@@ -274,6 +289,23 @@ jobs:
             tmp/production-request.json
             tmp/change-provenance.json
             tmp/data-reports/production-request/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Prepare privacy-safe publication identity
+        if: always()
+        env:
+          PUBLICATION_ENVIRONMENT: production
+          PUBLICATION_DATABASE_ID: b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1
+          PUBLICATION_MIGRATION_FROM: ${{ inputs.migration_from }}
+          PUBLICATION_MIGRATION_TO: ${{ inputs.migration_to }}
+        run: node scripts/data/prepare-publication-evidence.mjs
+      - name: Retain publication identity
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: publication-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp/publication-evidence/publication.json
           if-no-files-found: error
           retention-days: 90
 
