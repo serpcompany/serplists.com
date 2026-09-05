@@ -79,11 +79,18 @@ export function affectedTablesFromSql(sql) {
     new RegExp(String.raw`^DELETE\s+FROM\s+(${identifier})(?=\s|$)`, "i"),
     new RegExp(String.raw`^CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?${identifier}\s+ON\s+(${identifier})(?=\s|\()`, "i"),
   ];
+  const alterRename = new RegExp(String.raw`^ALTER\s+TABLE\s+(${identifier})\s+RENAME\s+TO\s+(${identifier})(?=\s|$)`, "i");
   const tables = [];
   for (const statement of sqlStatementsWithoutComments(sql)) {
     if (/^(?:BEGIN(?:\s+TRANSACTION)?|COMMIT|END(?:\s+TRANSACTION)?|ROLLBACK)\b/i.test(statement) || /^PRAGMA\b/i.test(statement) || /^SELECT\b/i.test(statement)) continue;
     if (/^WITH\b/i.test(statement) || /^CREATE\s+VIRTUAL\s+TABLE\b/i.test(statement) || /^(?:DROP\s+INDEX|CREATE\s+TRIGGER|DROP\s+TRIGGER|CREATE\s+VIEW|DROP\s+VIEW)\b/i.test(statement)) {
       throw new Error(`Unsupported SQL statement prevents complete affected-table detection: ${statement.split(/\s+/).slice(0, 4).join(" ")}.`);
+    }
+    if (/^ALTER\s+TABLE\b/i.test(statement) && /\bRENAME\s+TO\b/i.test(statement)) {
+      const rename = statement.match(alterRename);
+      if (!rename) throw new Error(`Unsupported SQL statement prevents complete affected-table detection: ${statement.split(/\s+/).slice(0, 4).join(" ")}.`);
+      tables.push(normalize(rename[1]), normalize(rename[2]));
+      continue;
     }
     const match = recognizers.map((pattern) => statement.match(pattern)).find(Boolean);
     if (!match) throw new Error(`Unsupported SQL statement prevents complete affected-table detection: ${statement.split(/\s+/).slice(0, 4).join(" ")}.`);

@@ -38,6 +38,12 @@ describe("reviewed rehearsal plan", () => {
     `;
     expect(affectedTablesFromSql(sql)).toEqual(["archive.templates", "audit_events", "checklist_runs", "templates", "users"]);
   });
+  it("accounts for both source and destination tables in ALTER TABLE RENAME TO", () => {
+    expect(affectedTablesFromSql("ALTER TABLE templates RENAME TO templates_archive;")).toEqual(["templates", "templates_archive"]);
+    expect(affectedTablesFromSql('ALTER TABLE main."old.templates" RENAME TO [new.templates];')).toEqual(["new.templates", "old.templates"]);
+    expect(affectedTablesFromSql("ALTER TABLE `main`.`old_templates` RENAME TO `new_templates`;")).toEqual(["new_templates", "old_templates"]);
+    expect(() => affectedTablesFromSql("ALTER TABLE templates RENAME TO 'invalid';")).toThrow(/unsupported SQL/i);
+  });
   it.each([
     ["virtual table", "CREATE VIRTUAL TABLE search USING fts5(content);"],
     ["schema view", "CREATE VIEW active_templates AS SELECT * FROM templates;"],

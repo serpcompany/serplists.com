@@ -28,6 +28,8 @@ const ciWorkflowPath = path.join(repositoryRoot, ".github/workflows/ci.yml");
 const ciSource = fs.readFileSync(ciWorkflowPath, "utf8");
 const ciWorkflow = yaml.load(ciSource);
 const codeownersSource = fs.readFileSync(path.join(repositoryRoot, ".github/CODEOWNERS"), "utf8");
+const productionFinalizerSource = fs.readFileSync(path.join(repositoryRoot, "scripts/data/finalize-production-release.mjs"), "utf8");
+const incidentRunbookSource = fs.readFileSync(path.join(repositoryRoot, "docs/knowledge/incident-response-runbook.md"), "utf8");
 
 const requiredJobs = [
   "staging_data",
@@ -39,7 +41,7 @@ const requiredJobs = [
   "production_data",
   "production_deploy",
   "production_postdeploy",
-  "rollback_route",
+  "production_failure_report",
 ];
 
 function asArray(value) {
@@ -217,7 +219,7 @@ describe("protected staging and production data-promotion workflow", () => {
       "production_deploy",
       "production_postdeploy",
     ]) {
-      expectDependency("rollback_route", prerequisite);
+      expectDependency("production_failure_report", prerequisite);
     }
 
     for (const jobId of requiredJobs) expectFailClosed(jobId);
@@ -522,7 +524,7 @@ describe("protected staging and production data-promotion workflow", () => {
       "staging_postdeploy",
       "production_data",
       "production_postdeploy",
-      "rollback_route",
+      "production_failure_report",
     ]) {
       expectAlwaysUploadedEvidence(jobId);
     }
@@ -530,7 +532,7 @@ describe("protected staging and production data-promotion workflow", () => {
     const evidence = [
       jobs.production_data,
       jobs.production_postdeploy,
-      jobs.rollback_route,
+      jobs.production_failure_report,
     ]
       .map(jobText)
       .join(" ");
@@ -567,10 +569,10 @@ describe("protected staging and production data-promotion workflow", () => {
     expect(jobText(jobs.production_postdeploy)).toMatch(/custom-domain/);
   });
 
-  it("routes any failed production stage to the rollback procedure", () => {
-    const rollback = jobs.rollback_route;
-    const condition = String(rollback?.if ?? "");
-    const text = jobText(rollback);
+  it("stops failed production stages without exposing a restore route", () => {
+    const failureReport = jobs.production_failure_report;
+    const condition = String(failureReport?.if ?? "");
+    const text = jobText(failureReport);
 
     expect(condition).toMatch(/always\(\)/);
     expect(condition).toMatch(/github\.event_name == 'workflow_dispatch'/);
@@ -579,11 +581,25 @@ describe("protected staging and production data-promotion workflow", () => {
     expect(condition).not.toMatch(/needs\.production_request\.result != 'success'/);
     expect(condition).not.toMatch(/\.result != 'success'/);
     expect(condition).toMatch(/needs\.production_data\.result == '(failure|cancelled)'/);
-    expect(text).toMatch(/(rollback|roll-forward|recovery)/);
-    expect(text).toMatch(/(procedure|workflow|incident|route)/);
+    expect(text).toMatch(/automatic.*recovery.*forbidden/);
+    expect(text).toMatch(/fresh exact-target approval/);
+    expect(text).toMatch(/protected recovery executor or break-glass/);
     expect(text).toMatch(/request_expected_commit/);
     expect(text).toMatch(/request_database_id/);
     expect(text).toMatch(/environment.*production|production.*environment/);
+    expect(text).not.toMatch(/time-travel.*restore|d1.*restore|incident-response-runbook/);
+    expect(jobs.rollback_route).toBeUndefined();
+  });
+
+  it("documents production recovery only through fresh exact-target protected authorization", () => {
+    expect(productionFinalizerSource).not.toMatch(/rollbackRoute|incident-response-runbook/);
+    expect(incidentRunbookSource).not.toMatch(/wrangler\s+d1\s+time-travel\s+restore/i);
+    expect(incidentRunbookSource).toMatch(/fresh independent human approval/i);
+    expect(incidentRunbookSource).toMatch(/exact production name[\s\S]*uuid[\s\S]*commit[\s\S]*recovery point/i);
+    expect(incidentRunbookSource).toMatch(/newly created isolated non-production database/i);
+    expect(incidentRunbookSource).toMatch(/identity immediately before and[\s\S]*after the restore/i);
+    expect(incidentRunbookSource).toMatch(/ledger\/schema\/invariant\/authenticated checks/i);
+    expect(incidentRunbookSource).toMatch(/protected recovery executor[\s\S]*break-glass/i);
   });
 
   it("reports every failed, cancelled, or skipped staging path with exact commit and environment", () => {

@@ -447,7 +447,7 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-  rollback_route:
+  production_failure_report:
     needs: [production_request, production_data, production_deploy, production_postdeploy]
     if: always() && github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && needs.production_request.result == 'success' && (needs.production_data.result == 'failure' || needs.production_data.result == 'cancelled' || needs.production_data.result == 'skipped' || needs.production_deploy.result == 'failure' || needs.production_deploy.result == 'cancelled' || needs.production_deploy.result == 'skipped' || needs.production_postdeploy.result == 'failure' || needs.production_postdeploy.result == 'cancelled' || needs.production_postdeploy.result == 'skipped')
     runs-on: ubuntu-latest
@@ -455,17 +455,17 @@ jobs:
       REQUEST_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
       REQUEST_DATABASE_ID: ${{ inputs.confirm_production_database_id }}
     steps:
-      - name: Route to reviewed rollback or roll-forward incident procedure
+      - name: Record fail-closed production stop
         run: |
-          mkdir -p tmp/data-reports/rollback
-          printf '{"verdict":"fail","commit":"%s","environment":"production","databaseId":"%s","route":"docs/knowledge/incident-response-runbook.md","decision":"human rollback-or-roll-forward required"}\n' "$REQUEST_EXPECTED_COMMIT" "$REQUEST_DATABASE_ID" > tmp/data-reports/rollback/rollback-route.json
-          printf 'BLOCKED production promotion for commit %s in environment production and database %s. Follow the incident recovery procedure; no automatic data restore is authorized.\n' "$REQUEST_EXPECTED_COMMIT" "$REQUEST_DATABASE_ID" > tmp/data-reports/rollback/rollback-route.txt
-          printf '<testsuite name="rollback-route" tests="1" failures="1"><properties><property name="commit" value="%s"/><property name="environment" value="production"/></properties><testcase name="promotion"><failure message="manual recovery decision required"/></testcase></testsuite>\n' "$REQUEST_EXPECTED_COMMIT" > tmp/data-reports/rollback/rollback-route.junit.xml
-      - name: Upload rollback route reports
+          mkdir -p tmp/data-reports/production-failure
+          printf '{"verdict":"fail","commit":"%s","environment":"production","databaseId":"%s","automaticRecovery":"forbidden","nextAction":"open incident and obtain fresh exact-target approval for a protected recovery executor or break-glass action"}\n' "$REQUEST_EXPECTED_COMMIT" "$REQUEST_DATABASE_ID" > tmp/data-reports/production-failure/production-failure.json
+          printf 'STOPPED production promotion for commit %s in environment production and database %s. Automatic and direct operator restore are forbidden. Open an incident and obtain fresh exact-target approval before any protected recovery executor or break-glass action.\n' "$REQUEST_EXPECTED_COMMIT" "$REQUEST_DATABASE_ID" > tmp/data-reports/production-failure/production-failure.txt
+          printf '<testsuite name="production-failure" tests="1" failures="1"><properties><property name="commit" value="%s"/><property name="environment" value="production"/></properties><testcase name="promotion"><failure message="fresh exact-target protected recovery approval required"/></testcase></testsuite>\n' "$REQUEST_EXPECTED_COMMIT" > tmp/data-reports/production-failure/production-failure.junit.xml
+      - name: Upload production failure reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: rollback-route-${{ github.run_id }}
-          path: tmp/data-reports/rollback/
+          name: production-failure-${{ github.run_id }}
+          path: tmp/data-reports/production-failure/
           if-no-files-found: error
           retention-days: 90

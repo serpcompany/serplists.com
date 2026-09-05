@@ -21,7 +21,6 @@ try {
     approval: data.approval,
     deploymentUrl,
     authenticatedAndCustomDomainSmoke: { verdict: smoke.verdict, checks: smoke.checks, failures: smoke.failures, controlledCanaryMutationApproved: smoke.controlledCanaryMutationApproved, canaryEvidenceDigest: smoke.canaryEvidenceDigest, deploymentUrl: smoke.deploymentUrl, customDomain: smoke.customDomain },
-    rollbackRoute: "docs/knowledge/incident-response-runbook.md",
   };
   const summary = `PASS production release ${request.commit} to ${deploymentUrl}; recovery, migration, invariants, authenticated visibility, and custom-domain checks passed.`;
   writeDataCheckReports({ name: "production-release", report, summary, reportDirectory: arg("--report-dir") ?? "tmp/data-reports/production-postdeploy" });
