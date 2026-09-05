@@ -30,7 +30,16 @@ export function resolveSanitizerProfile({ repoRoot, migrationRange, sourceSchema
 const SAFE_JSON_KEYS = new Set([
   "id", "title", "description", "notes", "items", "subItems", "contents", "isCompleted",
   "completed", "type", "url", "label", "value", "required", "order", "version", "rules",
+  "uploadType", "fileName", "fileSize",
+  "kind", "section", "item", "subItem", "sectionId", "itemId", "sectionTitle", "itemTitle",
 ]);
+const SEMANTIC_ENUMS = { type: new Set(["text", "image", "video", "file", "embed", "subItems"]), uploadType: new Set(["url", "upload"]), kind: new Set(["section", "item", "subItem"]) };
+const TEMPLATE_TYPES = new Set(['checklist', 'recipe', 'workflow']);
+const RUN_STATUSES = new Set(['not_started', 'in_progress', 'completed']);
+function sanitizeScalarEnum(value, allowed) {
+  return typeof value === 'string' && value.trim() !== '' && !allowed.has(value) ? 'sanitized-enum' : value;
+}
+const IDENTITY_KEYS = new Set(["id", "sectionId", "itemId"]);
 const SEMANTIC_NUMERIC_KEYS = new Set(["order", "version", "progress", "position", "sortOrder", "duration", "quantity"]);
 const SOURCE_TABLES = new Set([
   "account", "audit_events", "checklist_runs", "d1_migrations", "entitlement_overrides",
@@ -247,22 +256,30 @@ function selectRepresentativeRows(rows, signaturesFor, limit) {
   return selected.slice(0, limit);
 }
 
-function sanitizeJson(value, pathParts = []) {
-  if (Array.isArray(value)) return value.map((entry, index) => sanitizeJson(entry, [...pathParts, index]));
+function sanitizeJson(value, pathParts = [], identities = new Map()) {
+  if (Array.isArray(value)) return value.map((entry, index) => sanitizeJson(entry, [...pathParts, index], identities));
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, entry], index) => {
     const safeKey = SAFE_JSON_KEYS.has(key) ? key : `field_${index + 1}`;
-    if (safeKey === "id" && typeof entry === "string") return [safeKey, entry === "" ? "" : `shape-id-${pathParts.join("-") || "root"}`];
-    return [safeKey, sanitizeJson(entry, [...pathParts, safeKey])];
+    if (IDENTITY_KEYS.has(safeKey) && (typeof entry === "string" || typeof entry === "number")) {
+      if (typeof entry === "string" && entry.trim() === "") return [safeKey, entry];
+      // A single typed identity map spans the selected templates, runs and
+      // retired items. Encounter-order aliases reveal no source identifier and
+      // canonical re-normalization assigns the same aliases again.
+      if (!identities.has(entry)) identities.set(entry, typeof entry === "number" ? -(identities.size + 1) : `shape-id-${identities.size + 1}`);
+      return [safeKey, identities.get(entry)];
+    }
+    return [safeKey, sanitizeJson(entry, [...pathParts, safeKey], identities)];
   }));
-  if (typeof value === "string") return value === "" ? "" : `sanitized-${pathParts.at(-1) ?? "value"}`;
+  if (typeof value === "string") return value === "" || SEMANTIC_ENUMS[pathParts.at(-1)]?.has(value) ? value : `sanitized-${pathParts.at(-1) ?? "value"}`;
   if (typeof value === "number") {
     const key = pathParts.at(-1);
+    // Preserve asset validation thresholds, including negative invalid sizes.
+    if (key === "fileSize") return value;
     if (SEMANTIC_NUMERIC_KEYS.has(key)) return Math.max(-1000000, Math.min(value, 1000000));
     return Number.parseInt(sha256(pathParts.join("/")).slice(0, 8), 16) % 1000000 + 1;
   }
   return value;
 }
-function sanitizedJsonText(value, fallback) { const parsed = parseJson(value); return JSON.stringify(parsed === null ? fallback : sanitizeJson(parsed)); }
 function sqlLiteral(value) {
   if (value === null || value === undefined) return "NULL";
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
@@ -273,6 +290,8 @@ function insertStatement(table, row, columns) { return `INSERT INTO ${table} (${
 function fixedTimestamp(value, index) { return value == null ? null : `2020-01-${String((index % 28) + 1).padStart(2, "0")} 00:00:00`; }
 
 function buildSanitizedSql(database, sourceProfile, preserveSample = false) {
+  const identities = new Map();
+  const sanitizedJsonText = (value, fallback) => { const parsed = parseJson(value); return JSON.stringify(parsed === null ? fallback : sanitizeJson(parsed, [], identities)); };
   const users = database.prepare("SELECT * FROM users").all();
   const templates = database.prepare("SELECT * FROM templates").all();
   const runs = database.prepare("SELECT * FROM checklist_runs").all();
@@ -317,7 +336,7 @@ function buildSanitizedSql(database, sourceProfile, preserveSample = false) {
     created_at: fixedTimestamp(row.created_at, index), updated_at: fixedTimestamp(row.updated_at, index),
     slug: `sanitized-template-${index + 1}`, version: Math.max(1, Number(row.version ?? 1)),
     content_version: row.content_version,
-    type: row.type === "workflow" ? "workflow" : "checklist", seo_title: null, seo_description: null,
+    type: sanitizeScalarEnum(row.type, TEMPLATE_TYPES), seo_title: null, seo_description: null,
     rules: sanitizedJsonText(row.rules, []), owner_type: "user", team_id: null,
     created_by_user_id: mapUser(row.created_by_user_id) ?? mapUser(row.user_id), updated_by_user_id: mapUser(row.updated_by_user_id),
     deleted_at: fixedTimestamp(row.deleted_at, index),
@@ -326,7 +345,7 @@ function buildSanitizedSql(database, sourceProfile, preserveSample = false) {
     id: runMap.get(row.id), user_id: mapUser(row.user_id), template_id: row.template_id == null ? null : templateMap.get(row.template_id),
     title: `Sanitized Run ${index + 1}`, items: sanitizedJsonText(row.items, []),
     template_version: row.template_version, revision: row.revision, retired_items: current ? sanitizedJsonText(row.retired_items, []) : undefined,
-    status: ["not_started", "in_progress", "completed"].includes(row.status) ? row.status : "not_started",
+    status: sanitizeScalarEnum(row.status, RUN_STATUSES),
     started_at: fixedTimestamp(row.started_at, index), completed_at: fixedTimestamp(row.completed_at, index),
     created_at: fixedTimestamp(row.created_at, index), updated_at: fixedTimestamp(row.updated_at, index),
     progress: Math.max(0, Math.min(Number(row.progress ?? 0), 100)), is_public: row.is_public ? 1 : 0,
@@ -355,10 +374,10 @@ function assertPrivacySafeSql(sql) {
 function assertSanitizedJson(value) {
   const parsed = parseJson(value);
   if (parsed === null) throw new Error("Sanitized artifact contains invalid JSON.");
-  const visit = (entry) => {
-    if (typeof entry === "string" && entry !== "" && !/^(?:sanitized-|shape-id-)/.test(entry)) throw new Error("Sanitized artifact contains an unapproved customer-content value.");
-    if (Array.isArray(entry)) entry.forEach(visit);
-    else if (entry && typeof entry === "object") Object.values(entry).forEach(visit);
+  const visit = (entry, key) => {
+    if (typeof entry === "string" && entry !== "" && !(IDENTITY_KEYS.has(key) && entry.trim() === "") && !SEMANTIC_ENUMS[key]?.has(entry) && !/^(?:sanitized-|shape-id-)/.test(entry)) throw new Error("Sanitized artifact contains an unapproved customer-content value.");
+    if (Array.isArray(entry)) entry.forEach(value => visit(value));
+    else if (entry && typeof entry === "object") Object.entries(entry).forEach(([key, value]) => visit(value, key));
   };
   visit(parsed);
 }

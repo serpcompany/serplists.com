@@ -1,12 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmdirSync, rmSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { captureRepositoryGitState, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
 import { resolveRehearsalPlan } from "./rehearsal-plan-lib.mjs";
 import { migrationRangesEqual } from "./migration-range-lib.mjs";
-import { assertRuntimeRangeBinding, validateFullExportRecoveryProof } from './runtime-gate-contract.mjs';
+import { assertRuntimeRangeBinding, validateFullExportRecoveryProof, assertSourceHandlerProofTap } from './runtime-gate-contract.mjs';
 import { loadSanitizerPolicy, validateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
 import { authenticatedCoverageAssertions, validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
 import { validateSanitizedStateBinding } from "./sanitized-state-lib.mjs";
@@ -22,6 +22,7 @@ import {
   compareWorkspaceMetadata,
   evaluateImmutableRunContext,
   evaluateWorkspaceCleanliness,
+  restorePreexistingEmptyWranglerTemp,
 } from "./workspace-cleanliness-lib.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -58,12 +59,32 @@ if (
   throw new Error(`Report directory must stay under ${reportRoot}.`);
 }
 const reportDirectoryRelative = path.relative(repoRoot, reportDirectory);
+const rehearsalRootExistedAtStart = existsSync(path.join(repoRoot, ".wrangler/rehearsals"));
+const filesystemBefore = captureWorkspaceMetadata({ repoRoot });
+// This proof invokes the normal browser harness twice, so it must complete
+// before this aggregate owns the same lock. It is not a nested Vitest test.
+mkdirSync(reportDirectory, { recursive: true });
+try {
+  const tap = execFileSync(process.execPath, ['--test', '--test-reporter=tap', 'scripts/data/sanitized-handler-proof.node-test.mjs'], {
+    cwd: repoRoot, env: { ...sanitizedGitEnvironment(), DATA_REPORT_DIR: reportDirectory },
+    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 540_000, maxBuffer: 4 * 1024 * 1024,
+  });
+  writeFileSync(path.join(reportDirectory, 'source-handler-regressions.tap'), tap);
+  assertSourceHandlerProofTap(tap);
+} catch {
+  writeDataCheckReports({ name: 'data-regression-suite', reportDirectory,
+    report: { verdict: 'fail', commit: startCommit,
+      target: { environment: 'local', binding: 'DB', databaseName: 'serp-checklists-db', databaseId: 'local:miniflare:DB@isolated-data-regression' },
+      migrationRange: rehearsalPlan?.migrationRange ?? { from: 'invalid', to: 'invalid' },
+      checks: [{ name: 'source-derived handler positive and negative controls', verdict: 'fail' }], incomplete: true },
+    summary: 'FAIL source-derived handler controls; subsequent aggregate phases were not started. Synthetic local proof only.',
+  });
+  process.exit(1);
+}
 const releaseRegressionLock = await acquireSmokeRunLock({
   lockPath: path.join(repoRoot, ".wrangler", "smoke-state.lock"),
 });
 process.once("exit", releaseRegressionLock);
-const rehearsalRootExistedAtStart = existsSync(path.join(repoRoot, ".wrangler/rehearsals"));
-const filesystemBefore = captureWorkspaceMetadata({ repoRoot });
 
 function cleanupLocalRehearsalTestState() {
   const root = path.join(repoRoot, ".wrangler", "rehearsals");
@@ -179,6 +200,7 @@ const checks: RegressionCheck[] = requiredChecks.map(([name, title]) => {
       : "fail",
   };
 });
+checks.push({ name: 'source-derived handler positive and negative controls', test: 'both current-schema synthetic browser controls execute without skips or failures before the aggregate lock', verdict: 'pass' });
 try {
   const recovery = JSON.parse(readFileSync(fullExportRecoveryPath,'utf8'));
   const valid = validateFullExportRecoveryProof(recovery,startCommit);
@@ -384,6 +406,7 @@ try {
 const endDirtyPaths = endGitState.paths;
 const workingTreeDirtyPaths = [...new Set([...startDirtyPaths, ...endDirtyPaths])].sort();
 const immutableRun = evaluateImmutableRunContext({ startCommit, endCommit, startPaths: startDirtyPaths, endPaths: endDirtyPaths, nonGating });
+restorePreexistingEmptyWranglerTemp({ repoRoot, before: filesystemBefore });
 const filesystemChanges = compareWorkspaceMetadata({
   before: filesystemBefore,
   after: captureWorkspaceMetadata({ repoRoot }),

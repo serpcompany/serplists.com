@@ -5,6 +5,11 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // Data integration files launch synchronous Git/Wrangler/compiler children.
+    // Bound file-level parallelism on large-core developer hosts; concurrency
+    // exercised inside each test remains unchanged.
+    minWorkers: 1,
+    maxWorkers: 2,
     setupFiles: './tests/setup.ts',
     exclude: [
       '**/node_modules/**',

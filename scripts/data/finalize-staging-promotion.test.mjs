@@ -11,7 +11,7 @@ const databaseName = "serp-checklists-staging-db";
 const databaseId = "fcaf4325-5be7-4ead-ab60-45932a04177b";
 const schemaMigrations = readdirSync(new URL('../../db/migrations/', import.meta.url)).filter(name => /^\d{4}_.+\.sql$/.test(name)).sort();
 
-function runFinalizer({ mutate = () => {}, rawFiles = {} } = {}) {
+function runFinalizer({ mutate = () => {}, rawFiles = {}, missingData = false } = {}) {
   const directory = mkdtempSync(path.join(tmpdir(), "staging-finalizer-"));
   const reports = {
     data: { verdict: "pass", commit, teardown: { verdict: "pass", leakedUsers: 0, leakedTemplates: 0, leakedRuns: 0 } },
@@ -24,27 +24,81 @@ function runFinalizer({ mutate = () => {}, rawFiles = {} } = {}) {
   reports.range.coverage = { planId: "safe-template-evolution-0024", artifactSha256: { "db/migrations/0024_safe_template_evolution.sql": "a".repeat(64) } };
   reports.data.coverage = { ...reports.range.coverage, verdict: "pass" };
   reports.data.migrationRange = structuredClone(reports.range.migrationRange);
+  for (const name of ['range','deploy','smoke']) {
+    reports[name].target.binding = 'DB';
+    reports[name].migrationRange = structuredClone(reports.range.migrationRange);
+  }
   mutate(reports);
   const args = [];
   for (const [name, value] of Object.entries(reports)) {
-    const file = path.join(directory, `${name}.json`);
-    writeFileSync(file, Object.hasOwn(rawFiles, name) ? rawFiles[name] : JSON.stringify(value));
+    const file = path.join(directory, name === 'data' && missingData ? 'PRIVATE_CUSTOMER_EMAIL@example.com.json' : `${name}.json`);
+    if (!(name === 'data' && missingData)) writeFileSync(file, Object.hasOwn(rawFiles, name) ? rawFiles[name] : JSON.stringify(value));
     args.push(`--${name}`, file);
   }
   const output = path.join(directory, "output", "staging-promotion.json");
   const result = spawnSync(process.execPath, [
     fileURLToPath(new URL("./finalize-staging-promotion.mjs", import.meta.url)),
     ...args, "--commit", commit, "--tree", tree, "--database-name", databaseName,
-    "--database-id", databaseId, "--output", output,
+    "--database-id", databaseId, "--binding", "DB", "--output", output,
   ]);
   return { directory, output, result };
 }
 
 describe("staging promotion finalizer", () => {
+  it('redacts missing input paths while retaining validated failure identity', () => {
+    const run = runFinalizer({ missingData: true });
+    try {
+      expect(run.result.status).toBe(1);
+      expect(JSON.parse(readFileSync(run.output, 'utf8'))).toMatchObject({
+        verdict: 'fail', commit,
+        target: { environment: 'staging', binding: 'DB', databaseName, databaseId },
+        migrationRange: { from: '0024_safe_template_evolution.sql', to: '0024_safe_template_evolution.sql' },
+      });
+      for (const suffix of ['json', 'junit.xml', 'txt', 'md']) {
+        const text = readFileSync(run.output.replace(/\.json$/, `.${suffix}`), 'utf8');
+        expect(text).not.toContain('PRIVATE_CUSTOMER_EMAIL@example.com');
+        expect(text).toContain('0024_safe_template_evolution.sql');
+      }
+      expect(String(run.result.stdout) + String(run.result.stderr)).not.toContain('PRIVATE_CUSTOMER_EMAIL@example.com');
+    } finally { rmSync(run.directory, { recursive: true, force: true }); }
+  });
+  it.each(['malformed','missing','digest'])('reports truthful identity for %s range or canary evidence', failure => {
+    const run = runFinalizer({ ...(failure === 'malformed' ? {rawFiles:{range:'PRIVATE_RANGE'}} : {mutate: reports => {
+      if (failure === 'missing') delete reports.range.migrationRange;
+      else delete reports.smoke.canaryEvidenceDigest;
+    }}) });
+    try {
+      expect(run.result.status).toBe(1);
+      const report = JSON.parse(readFileSync(run.output));
+      expect(report.migrationRange).toEqual(failure === 'digest' ? {from:'0024_safe_template_evolution.sql',to:'0024_safe_template_evolution.sql'} : {from:'invalid',to:'invalid'});
+      for (const suffix of ['json','junit.xml','txt','md']) {
+        const text = readFileSync(run.output.replace(/\.json$/, `.${suffix}`),'utf8');
+        expect(text).toContain(failure === 'digest' ? '0024_safe_template_evolution.sql' : 'invalid');
+        expect(text).not.toContain('PRIVATE_RANGE');
+        if (failure === 'digest') for (const value of [commit,'DB',databaseName,databaseId]) expect(text).toContain(value);
+      }
+    } finally {rmSync(run.directory,{recursive:true,force:true});}
+  });
+  it.each(['smoke', 'data'])('retains validated named identity when later %s evidence fails', file => {
+    const run = runFinalizer({ rawFiles: { [file]: 'PRIVATE_MALFORMED' } });
+    try {
+      expect(run.result.status).toBe(1);
+      expect(JSON.parse(readFileSync(run.output))).toMatchObject({verdict:'fail', commit, target:{environment:'staging',binding:'DB',databaseName,databaseId},migrationRange:{from:'0024_safe_template_evolution.sql',to:'0024_safe_template_evolution.sql'}});
+      for (const suffix of ['json','junit.xml','txt','md']) {
+        const text = readFileSync(run.output.replace(/\.json$/, `.${suffix}`),'utf8');
+        for (const value of [commit,'DB',databaseName,databaseId,'0024_safe_template_evolution.sql']) expect(text).toContain(value);
+        expect(text).not.toContain('PRIVATE_MALFORMED');
+      }
+    } finally { rmSync(run.directory,{recursive:true,force:true}); }
+  });
   it("binds passing data, ledger, invariant, deploy, smoke, and teardown evidence to one commit and tree", () => {
     const run = runFinalizer();
     try {
       expect(run.result.status).toBe(0);
+      for (const suffix of ['json','junit.xml','txt','md']) {
+        const text = readFileSync(run.output.replace(/\.json$/, `.${suffix}`), 'utf8');
+        for (const value of ['DB', databaseName, databaseId, commit, '0024_safe_template_evolution.sql']) expect(text).toContain(value);
+      }
       expect(JSON.parse(readFileSync(run.output, "utf8"))).toMatchObject({
         verdict: "pass", commit, tree, target: { environment: "staging", databaseName, databaseId },
         teardown: { verdict: "pass" }, smoke: { verdict: "pass" }, deploy: { verdict: "pass" },
@@ -75,6 +129,12 @@ describe("staging promotion finalizer", () => {
     } finally { rmSync(run.directory, { recursive: true, force: true }); }
   });
   it.each([
+    ...['range','deploy','smoke'].flatMap(name => [
+      [`missing ${name} binding`, reports => { delete reports[name].target.binding; }],
+      [`wrong ${name} binding`, reports => { reports[name].target.binding = 'WRONG'; }],
+      [`missing ${name} range`, reports => { delete reports[name].migrationRange; }],
+      [`wrong ${name} range`, reports => { reports[name].migrationRange = {from:null,to:null}; }],
+    ]),
     ...['environment','binding','databaseName','databaseId'].flatMap(field => [
       [`missing schema ${field}`, reports => { delete reports.schema.target[field]; }],
       [`wrong schema ${field}`, reports => { reports.schema.target[field] = 'wrong'; }],

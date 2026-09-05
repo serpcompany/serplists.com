@@ -349,7 +349,83 @@ fs.writeFileSync('state.json', JSON.stringify(state));
   return {cwd, configuration, request, invoke, approve};
 }
 
-describe('local executor subprocess boundaries', () => {
+// Full prepare/approval/data scenarios launch many real Node child processes
+// against the local provider transport. Measured cases take 5.2–7.3 seconds;
+// bound only this integration suite at 20 seconds per test.
+describe('local executor subprocess boundaries', { timeout: 20000 }, () => {
+  it.each(['finalizer','executor'].flatMap(producer => ['missing','json','range','none'].map(input => [producer,input])))('%s reports truthful range for %s request failure without provider calls', (producer,input) => {
+    const {cwd,request} = executorSandbox();
+    const sentinel = 'PRIVATE_REQUEST_SENTINEL';
+    try {
+      if (input === 'missing') rmSync(path.join(cwd,'request.json'));
+      else if (input === 'json') writeFileSync(path.join(cwd,'request.json'),sentinel);
+      else {
+        request.migrationRange = input === 'none' ? {from:null,to:null} : {from:sentinel};
+        writeFileSync(path.join(cwd,'request.json'),JSON.stringify(request));
+      }
+      const script = producer === 'finalizer' ? 'finalize-production-release.mjs' : 'production-executor.mjs';
+      const result = spawnSync(process.execPath,[fileURLToPath(new URL(`./${script}`,import.meta.url)), ...(producer === 'executor' ? ['prepare'] : []), '--request','request.json','--report-dir','failure'],{cwd,encoding:'utf8',env:{PATH:path.join(cwd,'bin')}});
+      expect(result.status).toBe(1);
+      const stem = producer === 'finalizer' ? 'production-release' : 'production-data-promotion';
+      expect(JSON.parse(readFileSync(path.join(cwd,`failure/${stem}.json`)))).toMatchObject({verdict:'fail',migrationRange:input === 'none' ? {from:null,to:null} : {from:'invalid',to:'invalid'}});
+      for (const suffix of ['json','junit.xml','txt','md']) {
+        const text = readFileSync(path.join(cwd,`failure/${stem}.${suffix}`),'utf8');
+        if (suffix !== 'json') expect(text).toContain(input === 'none' ? 'none' : 'invalid');
+        expect(text).not.toContain(sentinel);
+      }
+      expect(result.stdout + result.stderr).not.toContain(sentinel);
+      expect(existsSync(path.join(cwd,'calls.txt'))).toBe(false);
+    } finally { rmSync(cwd,{recursive:true,force:true}); }
+  });
+  it.each(['finalizer','executor'])('preserves validated identity in %s failure reports before downstream evidence exists', producer => {
+    const {cwd} = executorSandbox();
+    try {
+      const script = producer === 'finalizer' ? 'finalize-production-release.mjs' : 'production-executor.mjs';
+      const result = spawnSync(process.execPath,[fileURLToPath(new URL(`./${script}`,import.meta.url)), ...(producer === 'executor' ? ['prepare'] : []), '--request','request.json','--report-dir','failure'],{cwd,encoding:'utf8',env:{PATH:path.join(cwd,'bin'),GITHUB_SHA:'f'.repeat(40)}});
+      expect(result.status).toBe(1);
+      const stem = producer === 'finalizer' ? 'production-release' : 'production-data-promotion';
+      expect(JSON.parse(readFileSync(path.join(cwd,`failure/${stem}.json`)))).toMatchObject({verdict:'fail',commit,target:{environment:'production',binding:'DB',...production},migrationRange:{from:'0024_safe_template_evolution.sql',to:'0024_safe_template_evolution.sql'}});
+      for (const suffix of ['json','junit.xml','txt','md']) {
+        const text = readFileSync(path.join(cwd,`failure/${stem}.${suffix}`),'utf8');
+        for (const value of [commit,'DB',production.databaseName,production.databaseId,'0024_safe_template_evolution.sql']) expect(text).toContain(value);
+      }
+      expect(existsSync(path.join(cwd,'calls.txt'))).toBe(false);
+    } finally { rmSync(cwd,{recursive:true,force:true}); }
+  });
+  it('prints complete validated identity through prepare, data, and final release CLI reports', () => {
+    const {cwd, invoke, approve, request} = executorSandbox();
+    try {
+      for (const mode of ['prepare','data']) {
+        if (mode === 'data') approve();
+        const result = invoke(mode);
+        expect(result.status, result.stderr).toBe(0);
+        for (const suffix of ['json','junit.xml','txt','md']) {
+          const text = readFileSync(path.join(cwd, `reports/production-data-promotion.${suffix}`), 'utf8');
+          for (const value of [commit, 'production', 'DB', production.databaseName, production.databaseId, request.migrationRange.from]) expect(text).toContain(value);
+        }
+      }
+      const smoke = {...validProductionSmoke(), target:{environment:'production',binding:'DB',...production}, migrationRange:request.migrationRange};
+      writeFileSync(path.join(cwd,'smoke.json'),JSON.stringify(smoke));
+      writeFileSync(path.join(cwd,'url.txt'),smoke.deploymentUrl);
+      const deployment = {verdict:'pass',commit,tree:request.mergeContext.tree,target:smoke.target,migrationRange:request.migrationRange};
+      writeFileSync(path.join(cwd,'deploy.json'),JSON.stringify(deployment));
+      const finalize = () => spawnSync(process.execPath,[fileURLToPath(new URL('./finalize-production-release.mjs',import.meta.url)), '--request','request.json','--evidence','evidence.json','--deploy','deploy.json','--smoke','smoke.json','--deployment-url-file','url.txt','--report-dir','final'],{cwd,encoding:'utf8',env:{...context}});
+      const result = finalize();
+      expect(result.status,result.stderr).toBe(0);
+      for (const suffix of ['json','junit.xml','txt','md']) {
+        const text=readFileSync(path.join(cwd,`final/production-release.${suffix}`),'utf8');
+        for (const value of [commit,'production','DB',production.databaseName,production.databaseId,request.migrationRange.from]) expect(text).toContain(value);
+      }
+      for (const field of ['binding','databaseName','databaseId']) {
+        const bad = structuredClone(deployment); delete bad.target[field];
+        writeFileSync(path.join(cwd,'deploy.json'),JSON.stringify(bad));
+        expect(finalize().status).toBe(1);
+        expect(JSON.parse(readFileSync(path.join(cwd,'final/production-release.json'))).verdict).toBe('fail');
+      }
+      writeFileSync(path.join(cwd,'deploy.json'),JSON.stringify({...deployment,migrationRange:{from:null,to:null}}));
+      expect(finalize().status).toBe(1);
+    } finally { rmSync(cwd,{recursive:true,force:true}); }
+  }, 20000);
   // These synchronous child transports can collectively occupy the worker for
   // over a minute. Let Vitest deliver report updates between scenarios.
   afterEach(() => new Promise(resolve => setImmediate(resolve)));

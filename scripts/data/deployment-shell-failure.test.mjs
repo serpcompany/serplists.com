@@ -32,11 +32,15 @@ function fixture(exitCode, brokenGrep = false) {
   mkdirSync(bin);
   mkdirSync(path.join(cwd, "tmp"));
   // No inherited PATH, secrets, shell startup files, or network-capable CLI.
-  for (const command of ["mkdir", "tee", "grep", "tail", "sed", "wc", "tr"]) {
-    const source = [`/usr/bin/${command}`, `/bin/${command}`].find(existsSync);
+  for (const command of ["mkdir", "tee", "grep", "tail", "sed", "wc", "tr", "find", "jq", "cat"]) {
+    const source = [`/usr/bin/${command}`, `/bin/${command}`, `/opt/homebrew/bin/${command}`].find(existsSync);
     expect(source).toBeDefined();
     symlinkSync(source, path.join(bin, command));
   }
+  mkdirSync(path.join(cwd, 'tmp/staging-evidence/data'), {recursive:true});
+  const migrationRange = {from:null,to:null};
+  writeFileSync(path.join(cwd,'tmp/staging-evidence/data/staging-reviewed-range.json'),JSON.stringify({verdict:'pass',commit,migrationRange,target:{environment:'staging',binding:'DB',databaseName:'serp-checklists-staging-db',databaseId:'fcaf4325-5be7-4ead-ab60-45932a04177b'}}));
+  writeFileSync(path.join(cwd,'tmp/production-request.json'),JSON.stringify({commit,migrationRange,database:{databaseName:'serp-checklists-db',databaseId:'b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1'}}));
   const executable = (name, source) => writeFileSync(path.join(bin, name), source, { mode: 0o755 });
   executable("pnpm", `#!/bin/bash\n[[ "$1 $2 $3 $4" == "exec wrangler pages deploy" ]] || exit 99\nprintf '%s\\n' '${url}'\nexit ${exitCode}\n`);
   executable("git", `#!/bin/bash\n[[ "$1 $2" == "rev-parse HEAD^{tree}" ]] || exit 99\nprintf '%s\\n' '${tree}'\n`);
@@ -145,6 +149,7 @@ describe("privileged deployment shell failure propagation", () => {
     const step = job.steps.find(step => step.name === "Validate approved commit migration range and rehearsal artifact");
     const { cwd, env } = fixture(0);
     try {
+      rmSync(path.join(cwd, 'bin/find'));
       writeFileSync(path.join(cwd, "bin/find"), '#!/bin/bash\nprintf "%s/report.json\\n" "$1"\n', { mode: 0o755 });
       rmSync(path.join(cwd, "bin/sed"));
       // Emit exactly one plausible line before failure: the count still equals 1.

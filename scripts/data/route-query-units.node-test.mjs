@@ -11,6 +11,39 @@ import {
   routeQuerySourceDigest,
 } from './route-query-units-lib.mjs';
 
+test('batch receiver chains cannot collapse distinct conditional prepared origins into one credited leaf', () => {
+  const source = `export async function handle(env, flag) {
+    const statement = flag ? env.DB.prepare('SELECT missing FROM users') : env.DB.prepare('SELECT 1');
+    return await env.DB.batch([statement.bind()]);
+  }`;
+  assert.throws(() => instrumentRouteQuerySource(source, 'functions/batch-conditional-chain.ts'), /Unsupported database origin/);
+});
+
+test('batch instrumentation preserves receiver, method lookup, argument order and lazy construction', async () => {
+  const source = `export async function handle(env) {
+    return await env.DB['batch']([env.DB.prepare('SELECT 1')]);
+  }`;
+  const transformed = instrumentRouteQuerySource(source, 'functions/batch-order.ts');
+  const execute = async code => {
+    const events = [];
+    const db = {
+      get batch() { events.push('method'); return function(statements) { assert.equal(this, db); events.push('execute'); return Promise.resolve(statements.length); }; },
+      prepare() { events.push('construct'); return {then() {throw new Error('eager query');}}; },
+    };
+    const env = {get DB() {events.push('receiver'); return db;}};
+    const module = await import(`data:text/javascript,${encodeURIComponent(code)}`);
+    return {result: await module.handle(env), events};
+  };
+  const runtime = createRouteQueryRuntime();
+  globalThis.__SERPLISTS_D1_COVERAGE__ = runtime;
+  try {
+    const expected = {result:1, events:['receiver','method','receiver','construct','execute']};
+    assert.deepEqual(await execute(source), expected);
+    assert.deepEqual(await execute(transformed.code), expected);
+    assert.equal(evaluateRouteQueryUnitCoverage(transformed.units, runtime.snapshot().outcomes).verdict, 'pass');
+  } finally {delete globalThis.__SERPLISTS_D1_COVERAGE__;}
+});
+
 for (const body of [
   `if(flag) return await makeDb(env.DB).select().from(users);`,
   `const connection=makeDb(env.DB); if(flag) return await connection.select().from(users);`,
@@ -128,7 +161,7 @@ test('transitive lazy helper and batch-array origins bind consumer IDs', () => {
     `export async function f(db) { const statements = [db.insert('original').values('row')]; return await db.batch(statements); }`,
   ]) {
     const discover = (text) => discoverRouteQueryUnitsFromSource(text, 'functions/transitive.ts');
-    assert.equal(discover(source).length, 1);
+    assert.equal(discover(source).length, source.includes('batch(') ? 2 : 1);
     assert.notEqual(routeQuerySourceDigest(discover(source)), routeQuerySourceDigest(discover(source.replace('original', 'changed'))));
   }
 });
@@ -171,7 +204,7 @@ test('transitive named helpers and conditional mapped batch inputs preserve lazy
       return await rows(db);
     }`;
   const transformed = instrumentRouteQuerySource(source, 'functions/batch-lineage.ts');
-  assert.equal(transformed.units.length, 2);
+  assert.equal(transformed.units.length, 5);
   const run = async (code) => {
     const events = [];
     const module = await import(`data:text/javascript,${encodeURIComponent(code)}`);
@@ -511,12 +544,12 @@ test('lazy adapter source literals remain bound to direct and split consumers', 
   }
 });
 
-test('batch builders stay lazy and only the batch is an execution unit', async () => {
+test('batch builders stay lazy and earn statement coverage only after batch success', async () => {
   const source = `export async function handle(db) {
     return await db.batch([db.insert('table').values('row')]);
   }`;
   const transformed = instrumentRouteQuerySource(source, 'functions/batch.ts');
-  assert.equal(transformed.units.length, 1);
+  assert.equal(transformed.units.length, 2);
   const runtime = createRouteQueryRuntime();
   globalThis.__SERPLISTS_D1_COVERAGE__ = runtime;
   const events = [];

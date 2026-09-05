@@ -1,3 +1,4 @@
+const successful = status => Number.isInteger(status) && status >= 200 && status < 300;
 function visibleIds(rows, ownerId) {
   if (!Array.isArray(rows)) return null;
   return new Set(rows.filter((row) => row?.user_id === ownerId).map((row) => String(row.id)));
@@ -19,51 +20,50 @@ export async function exerciseControlledCanaryMutation({ template, run, request 
     template: { id: String(template.id), originalTitle: String(template.title), originalVersion: Number(template.version), probeTitle, writeAttempted: false, writeStatus: null, readbackTitle: null, readbackVersion: null, restoreStatus: null, restoredTitle: null },
     run: { id: String(run.id), originalProgress, originalRevision: Number(run.revision), probeProgress, writeAttempted: false, writeStatus: null, readbackProgress: null, readbackRevision: null, restoreStatus: null, restoredProgress: null },
   };
+  const probes = [
+    { key: "template", path: `/api/templates/${evidence.template.id}`, field: "title", version: "version", expected: "expected_version", original: "originalTitle", probe: "probeTitle", before: "originalVersion", read: "readbackTitle", revision: "readbackVersion", restored: "restoredTitle" },
+    { key: "run", path: `/api/checklists/${evidence.run.id}`, field: "progress", version: "revision", expected: "expected_revision", original: "originalProgress", probe: "probeProgress", before: "originalRevision", read: "readbackProgress", revision: "readbackRevision", restored: "restoredProgress" },
+  ];
   try {
-    evidence.template.writeAttempted = true;
-    const templateWrite = await request(`/api/templates/${evidence.template.id}`, { method: "PUT", body: JSON.stringify({ title: probeTitle, expected_version: evidence.template.originalVersion }) });
-    evidence.template.writeStatus = templateWrite.status;
-    const templateReadback = await request(`/api/templates/${evidence.template.id}`);
-    evidence.template.readbackTitle = templateReadback.rows?.title ?? null;
-    evidence.template.readbackVersion = Number(templateReadback.rows?.version);
-    evidence.run.writeAttempted = true;
-    const runWrite = await request(`/api/checklists/${evidence.run.id}`, { method: "PUT", body: JSON.stringify({ progress: probeProgress, expected_revision: evidence.run.originalRevision }) });
-    evidence.run.writeStatus = runWrite.status;
-    const runReadback = await request(`/api/checklists/${evidence.run.id}`);
-    evidence.run.readbackProgress = Number(runReadback.rows?.progress);
-    evidence.run.readbackRevision = Number(runReadback.rows?.revision);
-  } catch (error) {
-    evidence.error = error instanceof Error ? error.message : String(error);
-  } finally {
-    if (evidence.template.writeAttempted) {
-      try {
-        const current = await request(`/api/templates/${evidence.template.id}`);
-        const currentVersion = Number(current.rows?.version);
-        evidence.template.readbackTitle ??= current.rows?.title ?? null;
-        evidence.template.readbackVersion = Number.isFinite(evidence.template.readbackVersion) ? evidence.template.readbackVersion : currentVersion;
-        if (current.rows?.title === evidence.template.originalTitle) {
-          evidence.template.restoreStatus = 200;
-        } else if (current.rows?.title === evidence.template.probeTitle && currentVersion === evidence.template.originalVersion + 1) {
-          const restore = await request(`/api/templates/${evidence.template.id}`, { method: "PUT", body: JSON.stringify({ title: evidence.template.originalTitle, expected_version: currentVersion }) });
-          evidence.template.restoreStatus = restore.status;
-        } else throw new Error("Template canary state changed concurrently; automatic restoration refused.");
-        evidence.template.restoredTitle = (await request(`/api/templates/${evidence.template.id}`)).rows?.title ?? null;
-      } catch (error) { evidence.template.restoreError = error instanceof Error ? error.message : String(error); }
+    if (typeof template.title !== "string" || !template.id || !run.id || !Number.isSafeInteger(template.version) || template.version < 0 || !Number.isSafeInteger(run.revision) || run.revision < 0 || typeof run.progress !== "number" || !Number.isFinite(run.progress)) throw new Error();
+    for (const p of probes) {
+      const e = evidence[p.key];
+      e.writeAttempted = true;
+      const write = await request(p.path, { method: "PUT", body: JSON.stringify({ [p.field]: e[p.probe], [p.expected]: e[p.before] }) });
+      e.writeStatus = write.status;
+      if (!successful(write.status)) throw new Error();
+      const readback = await request(p.path);
+      e.readbackStatus = readback.status;
+      e[p.read] = readback.rows?.[p.field] ?? null;
+      e[p.revision] = readback.rows?.[p.version] ?? null;
+      if (readback.status !== 200 || e[p.read] !== e[p.probe] || e[p.revision] !== e[p.before] + 1) throw new Error();
     }
-    if (evidence.run.writeAttempted) {
+  } catch {
+    evidence.error = "Canary probe failed.";
+  } finally {
+    for (const p of probes) {
+      const e = evidence[p.key];
+      if (!e.writeAttempted) continue;
       try {
-        const current = await request(`/api/checklists/${evidence.run.id}`);
-        const currentRevision = Number(current.rows?.revision);
-        evidence.run.readbackProgress = Number.isFinite(evidence.run.readbackProgress) ? evidence.run.readbackProgress : Number(current.rows?.progress);
-        evidence.run.readbackRevision = Number.isFinite(evidence.run.readbackRevision) ? evidence.run.readbackRevision : currentRevision;
-        if (Number(current.rows?.progress) === evidence.run.originalProgress) {
-          evidence.run.restoreStatus = 200;
-        } else if (Number(current.rows?.progress) === evidence.run.probeProgress && currentRevision === evidence.run.originalRevision + 1) {
-          const restore = await request(`/api/checklists/${evidence.run.id}`, { method: "PUT", body: JSON.stringify({ progress: evidence.run.originalProgress, expected_revision: currentRevision }) });
-          evidence.run.restoreStatus = restore.status;
-        } else throw new Error("Run canary state changed concurrently; automatic restoration refused.");
-        evidence.run.restoredProgress = Number((await request(`/api/checklists/${evidence.run.id}`)).rows?.progress);
-      } catch (error) { evidence.run.restoreError = error instanceof Error ? error.message : String(error); }
+        const current = await request(p.path);
+        if (current.status !== 200) throw new Error();
+        const version = current.rows?.[p.version];
+        let restoredVersion = e[p.before];
+        if (current.rows?.[p.field] === e[p.original] && version === e[p.before]) {
+          e.restoreStatus = 200;
+        } else if (current.rows?.[p.field] === e[p.probe] && version === e[p.before] + 1) {
+          const restore = await request(p.path, { method: "PUT", body: JSON.stringify({ [p.field]: e[p.original], [p.expected]: version }) });
+          e.restoreStatus = restore.status;
+          if (!successful(restore.status)) throw new Error();
+          restoredVersion = version + 1;
+        } else throw new Error();
+        const restored = await request(p.path);
+        e.restoredStatus = restored.status;
+        e[p.restored] = restored.rows?.[p.field] ?? null;
+        e.restoredVersion = restored.rows?.[p.version] ?? null;
+        e.expectedRestoredVersion = restoredVersion;
+        if (restored.status !== 200 || e[p.restored] !== e[p.original] || e.restoredVersion !== restoredVersion) throw new Error();
+      } catch { e.restoreError = "Canary restoration failed or state changed concurrently; restoration refused."; }
     }
   }
   return evidence;
@@ -85,12 +85,12 @@ export function evaluateDeploymentSmoke(input) {
   const mutationChecks = [
     ["template_canary_designated", input.canaryMutation?.template?.id === input.designatedTemplateId],
     ["template_write", input.canaryMutation?.template?.writeStatus >= 200 && input.canaryMutation?.template?.writeStatus < 300],
-    ["template_write_readback", input.canaryMutation?.template?.readbackTitle === input.canaryMutation?.template?.probeTitle && input.canaryMutation?.template?.readbackVersion > input.canaryMutation?.template?.originalVersion],
-    ["template_restore", input.canaryMutation?.template?.restoreStatus >= 200 && input.canaryMutation?.template?.restoreStatus < 300 && input.canaryMutation?.template?.restoredTitle === input.canaryMutation?.template?.originalTitle],
+    ["template_write_readback", input.canaryMutation?.template?.readbackTitle === input.canaryMutation?.template?.probeTitle && input.canaryMutation?.template?.readbackStatus === 200 && input.canaryMutation?.template?.readbackVersion === input.canaryMutation?.template?.originalVersion + 1],
+    ["template_restore", !input.canaryMutation?.template?.restoreError && input.canaryMutation?.template?.restoredStatus === 200 && input.canaryMutation?.template?.restoredVersion === input.canaryMutation?.template?.expectedRestoredVersion && input.canaryMutation?.template?.restoreStatus >= 200 && input.canaryMutation?.template?.restoreStatus < 300 && input.canaryMutation?.template?.restoredTitle === input.canaryMutation?.template?.originalTitle],
     ["run_canary_designated", input.canaryMutation?.run?.id === input.designatedRunId],
     ["run_write", input.canaryMutation?.run?.writeStatus >= 200 && input.canaryMutation?.run?.writeStatus < 300],
-    ["run_write_readback", input.canaryMutation?.run?.readbackProgress === input.canaryMutation?.run?.probeProgress && input.canaryMutation?.run?.readbackRevision > input.canaryMutation?.run?.originalRevision],
-    ["run_restore", input.canaryMutation?.run?.restoreStatus >= 200 && input.canaryMutation?.run?.restoreStatus < 300 && input.canaryMutation?.run?.restoredProgress === input.canaryMutation?.run?.originalProgress],
+    ["run_write_readback", input.canaryMutation?.run?.readbackProgress === input.canaryMutation?.run?.probeProgress && input.canaryMutation?.run?.readbackStatus === 200 && input.canaryMutation?.run?.readbackRevision === input.canaryMutation?.run?.originalRevision + 1],
+    ["run_restore", !input.canaryMutation?.run?.restoreError && input.canaryMutation?.run?.restoredStatus === 200 && input.canaryMutation?.run?.restoredVersion === input.canaryMutation?.run?.expectedRestoredVersion && input.canaryMutation?.run?.restoreStatus >= 200 && input.canaryMutation?.run?.restoreStatus < 300 && input.canaryMutation?.run?.restoredProgress === input.canaryMutation?.run?.originalProgress],
   ].map(([name, passed]) => ({ name, verdict: passed ? "pass" : "fail" }));
   const evidenceChecks = [
     ['database_canary_templates_present', input.databaseTemplateIds.length > 0],
@@ -103,6 +103,7 @@ export function evaluateDeploymentSmoke(input) {
     ['custom_domain_health', input.customDomainHealthStatus >= 200 && input.customDomainHealthStatus < 300],
     ['controlled_canary_mutation_approval', input.controlledCanaryMutationApproved === true],
   ].map(([name, passed]) => ({ name, verdict: passed ? 'pass' : 'fail' }));
+  if (input.canaryMutation?.error) failures.push("canary_probe_failed");
   failures.push(...mutationChecks.filter((check) => check.verdict === "fail").map((check) => check.name));
   return {
     check: "authenticated-account-owned-postdeploy-smoke",

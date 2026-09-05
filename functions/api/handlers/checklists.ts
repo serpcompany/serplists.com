@@ -299,7 +299,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       if (!existingSharedRun) {
         return jsonError('Shared run not found', 404);
       }
-      if (!parseLegacySections(existingSharedRun.items).success) {
+      if (!parseLegacySections(existingSharedRun.items).success || !validRetiredChecklistContent(existingSharedRun.retired_items)) {
         return jsonError('Checklist content is invalid; stored data has not been changed.', 409);
       }
 
@@ -1089,7 +1089,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       return jsonError('Forbidden', 403);
     }
 
-    if (!parseLegacySections(existingRun.items).success) {
+    if (!parseLegacySections(existingRun.items).success || !validRetiredChecklistContent(existingRun.retired_items)) {
       return jsonError('Checklist content is invalid; stored data has not been changed.', 409);
     }
 

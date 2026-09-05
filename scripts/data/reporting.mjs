@@ -40,9 +40,9 @@ export function writeDataCheckReports({ name, report, summary, reportDirectory =
   summary = `Verdict: ${report.verdict.toUpperCase()}\n\n${summaryLines.join('\n')}`;
   const failureCount = junitChecks.filter((check) => check.verdict !== "pass").length;
   const reportProperties = [
-    ["commit", report.commit], ["environment", report.target?.environment],
+    ["commit", report.commit], ["environment", report.target?.environment], ["binding", report.target?.binding],
     ["database", report.target?.databaseName], ["databaseId", report.target?.databaseId],
-    ["migrationFrom", report.migrationRange?.from], ["migrationTo", report.migrationRange?.to],
+    ["migrationFrom", report.migrationRange?.from === null ? 'none' : report.migrationRange?.from], ["migrationTo", report.migrationRange?.to === null ? 'none' : report.migrationRange?.to],
     ["sanitizer", report.sanitizerVersion ?? report.sanitizedSource?.sanitizerVersion],
   ].filter(([, value]) => value != null);
   const junit = [

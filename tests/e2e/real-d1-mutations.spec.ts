@@ -1,6 +1,8 @@
 import type { BrowserContext } from '@playwright/test';
 import { test, expect, endpoint, login, visit } from './fixtures/real-d1';
 import { recordRouteScenarios } from '../../scripts/data/route-coverage-evidence.mjs';
+import { readFileSync } from 'node:fs';
+import { parseLegacySections } from '../../src/lib/schemas/legacyChecklistSchema';
 
 const sections = [{ id: 'mutation-section', title: 'Mutation section', items: [{ id: 'mutation-item', title: 'Mutation item' }] }];
 async function request(context: BrowserContext, method: string, path: string, data?: unknown, status = 200) {
@@ -59,7 +61,16 @@ test.describe('real D1 writable query branches', () => {
       const imported = await request(context, 'POST', `/templates/backup${scope}`, { templates: [{ title: 'Mutation import', sections }], options: { visibility: 'private' } });
       expect(imported.imported).toBe(1);
       expect(imported.failed).toEqual([]);
-      expect((await request(context, 'GET', `/templates/backup${scope}${scope ? '&' : '?'}includePublic=1&format=backup`)).templates.length).toBeGreaterThan(0);
+      // Positive export is scoped to the valid records owned by this test.
+      expect((await request(context, 'GET', `/templates/backup${scope}${scope ? '&' : '?'}format=backup`)).templates.some(row => row.id === imported.successes[0].id)).toBe(true);
+      const sourceState = process.env.PLAYWRIGHT_REHEARSAL_STATE ? JSON.parse(readFileSync(process.env.PLAYWRIGHT_REHEARSAL_STATE, 'utf8')) : null;
+      const invalidPublic = sourceState?.rows.templates.filter(row => row.is_public && row.deleted_at == null && !parseLegacySections(row.items).success) ?? [];
+      const before = await Promise.all(invalidPublic.map(row => request(context, 'GET', `/templates/${row.id}`)));
+      const publicExport = await request(context, 'GET', `/templates/backup${scope}${scope ? '&' : '?'}includePublic=1&format=backup`, undefined, invalidPublic.length ? 409 : 200);
+      if (invalidPublic.length) {
+        expect(publicExport.error).toContain('invalid content');
+        expect(await Promise.all(invalidPublic.map(row => request(context, 'GET', `/templates/${row.id}`)))).toEqual(before);
+      } else expect(publicExport.templates.length).toBeGreaterThan(0);
       for (const id of [template.id, clone.id, imported.successes[0].id]) await request(context, 'DELETE', `/templates/${id}`);
       await request(context, 'DELETE', `/checklists/${run.id}`);
     }

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { normalizeMigrationRange, migrationRangeForReport } from "./migration-range-lib.mjs";
 import { createHmac } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { evaluateDeploymentSmoke, exerciseControlledCanaryMutation } from "./deployment-smoke-lib.mjs";
@@ -31,8 +32,11 @@ const runId = process.env.DATA_CANARY_RUN_ID;
 const mutationApproved = process.env.DATA_CANARY_MUTATION_APPROVED === "true";
 const canaryEvidenceKey = process.env.DATA_CANARY_EVIDENCE_HMAC_KEY;
 const reportDirectory = arg("--report-dir") ?? `tmp/data-reports/${environment}`;
+const requestedRange = { from: arg('--migration-from') ?? undefined, to: arg('--migration-to') ?? undefined };
+let migrationRange = migrationRangeForReport(requestedRange);
 let stage = 'configuration';
 try {
+  migrationRange = normalizeMigrationRange(requestedRange);
   if (!ownerId || !cookie || !templateId || !runId || !mutationApproved || !deploymentUrl || !customDomain || (canaryEvidenceKey ?? "").length < 32) throw new Error("Protected canary identity, designated records, mutation approval, evidence key, cookie, deployment URL, and custom domain are required.");
   const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
   const childEnv = Object.fromEntries(["PATH", "HOME", "CI", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"].filter((key) => process.env[key]).map((key) => [key, process.env[key]]));
@@ -77,35 +81,32 @@ try {
   const originalTemplate = Array.isArray(templates.rows) ? templates.rows.find((row) => String(row.id) === templateId && row.user_id === ownerId) : null;
   const originalRun = Array.isArray(runs.rows) ? runs.rows.find((row) => String(row.id) === runId && row.user_id === ownerId) : null;
   if (!originalTemplate || !originalRun) throw new Error("Designated canary rows are not visible to the authenticated canary owner.");
-  stage = 'canary-mutation';
-  const mutation = await exerciseControlledCanaryMutation({ template: originalTemplate, run: originalRun, request: (apiPath, init) => fetchJson(new URL(apiPath, deploymentUrl), cookie, init) });
-  const canaryEvidenceDigest = createHmac("sha256", canaryEvidenceKey).update(JSON.stringify(mutation)).digest("hex");
-  stage = 'reporting';
-  const result = evaluateDeploymentSmoke({
+  const prerequisites = {
     databaseTemplateIds: dbRows.filter((row) => row.kind === "template").map((row) => row.id),
     databaseRunIds: dbRows.filter((row) => row.kind === "run").map((row) => row.id),
-    templateStatus: templates.status,
-    templateRows: templates.rows,
-    runStatus: runs.status,
-    runRows: runs.rows,
-    ownerId,
-    deploymentHealthStatus: deploymentHealth.status,
-    customDomainHealthStatus: customHealth.status,
-    designatedTemplateId: templateId,
-    designatedRunId: runId,
+    templateStatus: templates.status, templateRows: templates.rows,
+    runStatus: runs.status, runRows: runs.rows, ownerId,
+    deploymentHealthStatus: deploymentHealth.status, customDomainHealthStatus: customHealth.status,
+    designatedTemplateId: templateId, designatedRunId: runId,
     controlledCanaryMutationApproved: mutationApproved,
-    canaryMutation: mutation,
-    canaryEvidenceDigest,
-  });
-  const report = { ...result, commit: process.env.GITHUB_SHA ?? "unknown", target: { environment, databaseName, databaseId }, deploymentUrl, customDomain, identityChecks };
-  const summary = [`${report.verdict.toUpperCase()} ${environment} authenticated account-owned template/run visibility, controlled canary writability/restoration, and custom-domain smoke.`, ...[...report.checks, ...(report.evidenceChecks ?? [])].map((check) => `${check.verdict.toUpperCase()} ${check.name}`)].join("\n");
+  };
+  const preflight = evaluateDeploymentSmoke(prerequisites);
+  stage = 'canary-mutation';
+  const mutation = preflight.evidenceChecks.every(check => check.verdict === 'pass')
+    ? await exerciseControlledCanaryMutation({ template: originalTemplate, run: originalRun, request: (apiPath, init) => fetchJson(new URL(apiPath, deploymentUrl), cookie, init) })
+    : null;
+  const canaryEvidenceDigest = createHmac("sha256", canaryEvidenceKey).update(JSON.stringify(mutation)).digest("hex");
+  stage = 'reporting';
+  const result = evaluateDeploymentSmoke({ ...prerequisites, canaryMutation: mutation, canaryEvidenceDigest });
+  const report = { ...result, commit: process.env.GITHUB_SHA ?? "unknown", target: { environment, binding: "DB", databaseName, databaseId }, migrationRange, deploymentUrl, customDomain, identityChecks };
+  const summary = [`${report.verdict.toUpperCase()} ${environment} authenticated account-owned template/run visibility, controlled canary writability/restoration, and custom-domain smoke.`, ...[...report.checks, ...(report.evidenceChecks ?? [])].map((check) => `${check.verdict.toUpperCase()} ${check.name}`), `Commit: ${report.commit}`, `Database: ${environment} DB ${databaseName} (${databaseId})`, `Migration range: ${migrationRange.from ?? "none"} → ${migrationRange.to ?? "none"}`].join("\n");
   writeDataCheckReports({ name: `${environment}-postdeploy-smoke`, report, summary, reportDirectory });
   console.log(summary);
   if (report.verdict !== "pass") process.exitCode = 1;
 } catch (error) {
   const failure = safeCanaryFailure(stage, error);
-  const report = { check: "authenticated-account-owned-postdeploy-smoke", verdict: "fail", commit: process.env.GITHUB_SHA ?? "unknown", target: { environment, databaseName, databaseId }, failedStage: failure.stage, errorCode: failure.code, error: failure.message, checks: [{ name: failure.check, verdict: 'fail' }], ...(failure.exitStatus !== undefined ? { exitStatus: failure.exitStatus } : {}) };
-  const summary = `BLOCKED ${environment} postdeploy smoke at ${report.failedStage}: ${report.errorCode}. ${report.error}\nCommit: ${report.commit}\nDatabase: ${databaseName} (${databaseId})`;
+  const report = { check: "authenticated-account-owned-postdeploy-smoke", verdict: "fail", commit: process.env.GITHUB_SHA ?? "unknown", target: { environment, binding: "DB", databaseName, databaseId }, migrationRange, failedStage: failure.stage, errorCode: failure.code, error: failure.message, checks: [{ name: failure.check, verdict: 'fail' }], ...(failure.exitStatus !== undefined ? { exitStatus: failure.exitStatus } : {}) };
+  const summary = `BLOCKED ${environment} postdeploy smoke at ${report.failedStage}: ${report.errorCode}. ${report.error}\nCommit: ${report.commit}\nDatabase: DB ${databaseName} (${databaseId})\nMigration range: ${migrationRange.from ?? "none"} → ${migrationRange.to ?? "none"}`;
   try { writeDataCheckReports({ name: `${environment}-postdeploy-smoke`, report, summary, reportDirectory }); }
   catch { console.error('Canary failure report could not be persisted.'); }
   console.error(summary);

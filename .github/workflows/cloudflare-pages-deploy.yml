@@ -120,6 +120,10 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version-file: .node-version, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: staging-data-${{ github.run_id }}
+          path: tmp/staging-evidence/data
       - run: BETTER_AUTH_SECRET=ci-build-placeholder-secret-32-chars-minimum pnpm run build
       - name: Deploy staging after data gates
         id: staging_pages_deploy
@@ -130,7 +134,7 @@ jobs:
           pnpm exec wrangler pages deploy ./dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch staging --commit-hash "$GITHUB_SHA" | tee tmp/data-reports/staging-deploy/deploy-output.txt
       - name: Record exact staging deployment result
         if: always()
-        run: node scripts/data/record-deployment.mjs --environment staging --commit "$GITHUB_SHA" --tree "$(git rev-parse 'HEAD^{tree}')" --database-name serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --outcome "${{ steps.staging_pages_deploy.outcome }}" --raw-output tmp/data-reports/staging-deploy/deploy-output.txt --report-dir tmp/data-reports/staging-deploy
+        run: node scripts/data/record-deployment.mjs --environment staging --binding DB --reviewed-evidence "$(find tmp/staging-evidence/data -name staging-reviewed-range.json -print -quit)" --commit "$GITHUB_SHA" --tree "$(git rev-parse 'HEAD^{tree}')" --database-name serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --outcome "${{ steps.staging_pages_deploy.outcome }}" --raw-output tmp/data-reports/staging-deploy/deploy-output.txt --report-dir tmp/data-reports/staging-deploy
       - name: Upload staging deployment evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -167,7 +171,10 @@ jobs:
           DATA_CANARY_RUN_ID: ${{ vars.STAGING_DATA_CANARY_RUN_ID }}
           DATA_CANARY_EVIDENCE_HMAC_KEY: ${{ secrets.STAGING_CANARY_EVIDENCE_HMAC_KEY }}
           DATA_CANARY_MUTATION_APPROVED: "true"
-        run: node scripts/data/deployment-smoke.mjs --environment staging --database-name serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --deployment-url https://staging.serplists-com.pages.dev --custom-domain https://staging.serplists.com --report-dir tmp/data-reports/staging-postdeploy
+        run: |
+          RANGE_REPORT=$(find tmp/staging-evidence/data -name staging-reviewed-range.json -print -quit)
+          jq -e '.migrationRange | has("from") and has("to")' "$RANGE_REPORT" > /dev/null
+          node scripts/data/deployment-smoke.mjs --environment staging --binding DB --migration-from "$(jq -r '.migrationRange.from // "none"' "$RANGE_REPORT")" --migration-to "$(jq -r '.migrationRange.to // "none"' "$RANGE_REPORT")" --database-name serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --deployment-url https://staging.serplists-com.pages.dev --custom-domain https://staging.serplists.com --report-dir tmp/data-reports/staging-postdeploy
       - name: Finalize exact staging promotion evidence
         if: always()
         run: |
@@ -176,7 +183,7 @@ jobs:
           SCHEMA_REPORT=$(find tmp/staging-evidence/data -name d1-schema-staging.json -print -quit)
           INVARIANT_REPORT=$(find tmp/staging-evidence/data -name remote-invariant-comparison.json -print -quit)
           DEPLOY_REPORT=$(find tmp/staging-evidence/deploy -name staging-deploy.json -print -quit)
-          node scripts/data/finalize-staging-promotion.mjs --data "$DATA_REPORT" --range "$RANGE_REPORT" --schema "$SCHEMA_REPORT" --invariants "$INVARIANT_REPORT" --deploy "$DEPLOY_REPORT" --smoke tmp/data-reports/staging-postdeploy/staging-postdeploy-smoke.json --commit "$GITHUB_SHA" --tree "$(git rev-parse 'HEAD^{tree}')" --database-name serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --output tmp/data-reports/staging-postdeploy/staging-promotion.json
+          node scripts/data/finalize-staging-promotion.mjs --binding DB --data "$DATA_REPORT" --range "$RANGE_REPORT" --schema "$SCHEMA_REPORT" --invariants "$INVARIANT_REPORT" --deploy "$DEPLOY_REPORT" --smoke tmp/data-reports/staging-postdeploy/staging-postdeploy-smoke.json --commit "$GITHUB_SHA" --tree "$(git rev-parse 'HEAD^{tree}')" --database-name serp-checklists-staging-db --database-id fcaf4325-5be7-4ead-ab60-45932a04177b --output tmp/data-reports/staging-postdeploy/staging-promotion.json
       - name: Upload staging postdeploy reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -497,7 +504,7 @@ jobs:
         run: pnpm exec wrangler pages deploy ./dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch main --commit-hash "$GITHUB_SHA" | tee tmp/production-deploy.txt
       - name: Record exact production deployment result
         if: always()
-        run: node scripts/data/record-deployment.mjs --environment production --commit "$GITHUB_SHA" --tree "$(git rev-parse 'HEAD^{tree}')" --database-name serp-checklists-db --database-id b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1 --outcome "${{ steps.production_pages_deploy.outcome }}" --raw-output tmp/production-deploy.txt --report-dir tmp/data-reports/production-deploy
+        run: node scripts/data/record-deployment.mjs --environment production --binding DB --reviewed-evidence tmp/production-request.json --commit "$GITHUB_SHA" --tree "$(git rev-parse 'HEAD^{tree}')" --database-name serp-checklists-db --database-id b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1 --outcome "${{ steps.production_pages_deploy.outcome }}" --raw-output tmp/production-deploy.txt --report-dir tmp/data-reports/production-deploy
       - name: Record exact deployment URL
         run: |
           grep -Eo 'https://[a-zA-Z0-9.-]+\.pages\.dev' tmp/production-deploy.txt | tail -1 > tmp/production-deployment-url.txt
@@ -554,9 +561,11 @@ jobs:
           DATA_CANARY_RUN_ID: ${{ vars.PRODUCTION_DATA_CANARY_RUN_ID }}
           DATA_CANARY_EVIDENCE_HMAC_KEY: ${{ secrets.PRODUCTION_CANARY_EVIDENCE_HMAC_KEY }}
           DATA_CANARY_MUTATION_APPROVED: "true"
-        run: node scripts/data/deployment-smoke.mjs --environment production --database-name serp-checklists-db --database-id "$CONFIRM_PRODUCTION_DATABASE_ID" --deployment-url "$(cat tmp/production-deployment-url.txt)" --custom-domain https://serplists.com --report-dir tmp/data-reports/production-postdeploy
+        run: |
+          jq -e '.migrationRange | has("from") and has("to")' tmp/production-request.json > /dev/null
+          node scripts/data/deployment-smoke.mjs --environment production --binding DB --migration-from "$(jq -r '.migrationRange.from // "none"' tmp/production-request.json)" --migration-to "$(jq -r '.migrationRange.to // "none"' tmp/production-request.json)" --database-name serp-checklists-db --database-id "$CONFIRM_PRODUCTION_DATABASE_ID" --deployment-url "$(cat tmp/production-deployment-url.txt)" --custom-domain https://serplists.com --report-dir tmp/data-reports/production-postdeploy
       - name: Publish complete production release report
-        run: node scripts/data/finalize-production-release.mjs --request tmp/production-request.json --evidence tmp/production-data-evidence.json --smoke tmp/data-reports/production-postdeploy/production-postdeploy-smoke.json --deployment-url-file tmp/production-deployment-url.txt --report-dir tmp/data-reports/production-postdeploy
+        run: node scripts/data/finalize-production-release.mjs --request tmp/production-request.json --evidence tmp/production-data-evidence.json --deploy tmp/data-reports/production-deploy/production-deploy.json --smoke tmp/data-reports/production-postdeploy/production-postdeploy-smoke.json --deployment-url-file tmp/production-deployment-url.txt --report-dir tmp/data-reports/production-postdeploy
       - name: Upload production postdeploy reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

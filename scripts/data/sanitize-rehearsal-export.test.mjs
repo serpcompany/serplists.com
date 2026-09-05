@@ -1,9 +1,14 @@
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  lstatSync,
   readFileSync,
+  readdirSync,
+  readlinkSync,
+  rmdirSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -12,19 +17,58 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
 const script = path.join(repoRoot, "scripts/data/sanitize-rehearsal-export.mjs");
-const evidenceRoot = path.join(repoRoot, "tmp/data-evidence");
-const rawRoot = path.join(repoRoot, "tmp/production-sensitive");
+const allowedEvidenceRoot = path.join(repoRoot, "tmp/data-evidence");
+const allowedRawRoot = path.join(repoRoot, "tmp/production-sensitive");
+const allowedReportRoot = path.join(repoRoot, "tmp/data-reports");
+let evidenceRoot;
+let rawRoot;
+let sanitizerReportRoot;
+let ownedDirectories = [];
+let createdParents = [];
 const productionDatabaseId = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1";
 const gitCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
 const sourceDate = new Date().toISOString().slice(0, 10);
 const retentionDeadline = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
 const validRawExport = readFileSync(path.join(repoRoot, "scripts/data/fixtures/production-export-edge-cases.sql"), "utf8");
-const sanitizerReportRoot = path.join(repoRoot, "tmp/data-reports/sanitizer");
+
+// Observe operator-owned defaults without emitting their contents or following links.
+function snapshotDefaultArtifacts() {
+  function snapshot(target) {
+    let stat;
+    try {
+      stat = lstatSync(target);
+    } catch (error) {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    }
+    return {
+      mode: stat.mode, inode: stat.ino, size: stat.size,
+      modified: stat.mtimeMs, changed: stat.ctimeMs,
+      digest: stat.isFile() ? createHash("sha256").update(readFileSync(target)).digest("hex")
+        : stat.isSymbolicLink() ? createHash("sha256").update(readlinkSync(target)).digest("hex") : null,
+      children: stat.isDirectory() ? Object.fromEntries(readdirSync(target).sort().map((name) => [name, snapshot(path.join(target, name))])) : null,
+    };
+  }
+  return [
+    snapshot(path.join(allowedEvidenceRoot, "production-source.identity.json")),
+    snapshot(path.join(allowedReportRoot, "sanitizer")),
+  ];
+}
+
+function allocateOwnedDirectory(parent) {
+  const missing = [];
+  for (let current = parent; !existsSync(current); current = path.dirname(current)) missing.push(current);
+  mkdirSync(parent, { recursive: true });
+  createdParents.push(...missing.reverse());
+  const directory = mkdtempSync(path.join(parent, "sanitizer-cli-test-"));
+  ownedDirectories.push(directory);
+  return directory;
+}
 
 function commandArgs(inputPath, outputPath, manifestPath) {
   mkdirSync(evidenceRoot, { recursive: true });
@@ -35,6 +79,7 @@ function commandArgs(inputPath, outputPath, manifestPath) {
     "--input", inputPath,
     "--output", path.relative(repoRoot, outputPath),
     "--manifest", path.relative(repoRoot, manifestPath),
+    "--report-dir", path.relative(repoRoot, sanitizerReportRoot),
     "--source-identity-evidence", sourceIdentityPath,
     "--source-date", sourceDate,
     "--source-schema", "0023_add_sitemap_revision_state.sql",
@@ -64,6 +109,26 @@ function workflowRequestEnvironment() {
 }
 
 describe("sanitizer command", () => {
+  let defaultArtifactsBefore;
+  beforeAll(() => { defaultArtifactsBefore = snapshotDefaultArtifacts(); });
+  beforeEach(() => {
+    evidenceRoot = allocateOwnedDirectory(allowedEvidenceRoot);
+    rawRoot = allocateOwnedDirectory(allowedRawRoot);
+    sanitizerReportRoot = allocateOwnedDirectory(allowedReportRoot);
+  });
+  afterEach(() => {
+    for (const directory of ownedDirectories.reverse()) rmSync(directory, { recursive: true, force: true });
+    ownedDirectories = [];
+    for (const parent of createdParents.reverse()) {
+      try { rmdirSync(parent); } catch (error) {
+        if (!["ENOTEMPTY", "EEXIST", "ENOENT"].includes(error.code)) throw error;
+      }
+    }
+    createdParents = [];
+    expect(snapshotDefaultArtifacts()).toEqual(defaultArtifactsBefore);
+  });
+  afterAll(() => { expect(snapshotDefaultArtifacts()).toEqual(defaultArtifactsBefore); });
+
   it("is dry-run by default and constrains raw input to non-artifact sensitive storage", () => {
     mkdirSync(evidenceRoot, { recursive: true });
     mkdirSync(rawRoot, { recursive: true });
@@ -73,7 +138,7 @@ describe("sanitizer command", () => {
       path.join(evidenceRoot, "synthetic.manifest.json"),
     ), { cwd: repoRoot, env: process.env, encoding: "utf8" });
     expect(JSON.parse(output)).toMatchObject({
-      sanitizer: "source-derived-shape-v3",
+      sanitizer: "source-derived-shape-v4",
       issueNumber: 95,
       requestedApproverIdentity: "@devinschumacher",
     });
@@ -101,7 +166,7 @@ describe("sanitizer command", () => {
       expect(result.stderr).toMatch(/workflow.*context/i);
       expect(existsSync(inputPath)).toBe(false);
       const report = JSON.parse(readFileSync(path.join(sanitizerReportRoot, "sanitize-production-export.json"), "utf8"));
-      expect(report).toMatchObject({ verdict: "fail", commit: gitCommit, target: { environment: "production", binding: "DB", databaseId: productionDatabaseId }, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, sanitizerVersion: "source-derived-shape-v3" });
+      expect(report).toMatchObject({ verdict: "fail", commit: gitCommit, target: { environment: "production", binding: "DB", databaseId: productionDatabaseId }, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, sanitizerVersion: "source-derived-shape-v4" });
       for (const name of ["sanitize-production-export.md", "sanitize-production-export.junit.xml"]) expect(readFileSync(path.join(sanitizerReportRoot, name), "utf8")).toContain(gitCommit);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });

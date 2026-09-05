@@ -1,5 +1,23 @@
 import { normalizeMigrationRange, migrationRangesEqual } from './migration-range-lib.mjs';
 
+export function assertSourceHandlerProofTap(output) {
+  const lines = String(output).replaceAll('\r', '').split('\n');
+  const count = name => {
+    const matches = lines.filter(line => line.startsWith(`# ${name} `));
+    return matches.length === 1 ? Number(matches[0].slice(name.length + 3)) : NaN;
+  };
+  const names = [
+    'synthetic source with malformed retired content produces refusal and unchanged proof alongside healthy writes',
+    'explicit no-eligible synthetic source fails without a pass artifact',
+  ];
+  if (!names.every(name => lines.some(line => /^ok \d+ - /.test(line) && line.replace(/^ok \d+ - /, '') === name)) ||
+      count('tests') < 2 || !Number.isSafeInteger(count('tests')) || count('pass') !== count('tests') ||
+      ['fail', 'cancelled', 'skipped', 'todo'].some(name => count(name) !== 0)) {
+    throw new Error('Mandatory source-handler regression controls are missing, skipped, or failed.');
+  }
+  return true;
+}
+
 // Mandatory runs accept no Playwright selectors or configuration overrides.
 // Developers may explicitly request an isolated, non-gating diagnostic run.
 export function browserGateArguments(args) {

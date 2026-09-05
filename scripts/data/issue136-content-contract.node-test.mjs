@@ -94,6 +94,20 @@ test('issue136: real migrated D1 rejects malformed content without template/run/
     }
     const saved = await db.prepare('SELECT items FROM templates WHERE id = ?').bind(created.id).first();
     assert.deepEqual(JSON.parse(saved.items),sections);
+    // Valid visible items cannot make malformed retired content safe to write.
+    // Exercise both authenticated and anonymous shared PUT against real D1.
+    const invalidRetired = JSON.stringify([{kind:'item',sectionId:'content-section',item:{id:false}}]);
+    await db.prepare('UPDATE checklist_runs SET retired_items = ? WHERE id IN (?, ?)').bind(invalidRetired,run.id,sharedFresh.id).run();
+    const retiredBefore = await snapshot();
+    const sharedToken = (await db.prepare('SELECT share_token FROM checklist_runs WHERE id = ?').bind(sharedFresh.id).first()).share_token;
+    const retiredStatuses = [];
+    for (const [route, requestCookie] of [[`/api/checklists/${run.id}`,cookie],[`/api/checklists/shared/${sharedToken}`,'']]) {
+      const response = await mf.dispatchFetch(`http://localhost${route}`,{method:'PUT',headers:{Origin:'http://localhost','Content-Type':'application/json',Cookie:requestCookie},body:JSON.stringify({progress:42,expected_revision:1})});
+      retiredStatuses.push(response.status);
+      await response.text();
+    }
+    assert.deepEqual(retiredStatuses,[409,409],'authenticated and anonymous shared writes must both refuse invalid retired content');
+    assert.deepEqual(await snapshot(),retiredBefore,'refused retired-content writes preserve every run/template/history/audit row');
     const malformed = JSON.stringify([{id:'bad-section',items:[{id:'bad-item',contents:[{type:'text',value:{bad:true}}]}]}]);
     await db.prepare('UPDATE templates SET items = ? WHERE id = ?').bind(malformed,created.id).run();
     const before = await snapshot();

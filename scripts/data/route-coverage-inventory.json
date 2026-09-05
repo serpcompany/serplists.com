@@ -66,7 +66,7 @@
     {
       "path": "functions/api/handlers/checklists.ts",
       "kind": "query-family",
-      "sha256": "0c5c3366ed5d7e1934c7aa2f8144d93e967c9ee79bc14bbec8331a684d1abd61",
+      "sha256": "aa40df273bc89c85cace6216d34f9686a78a69de066bba681d02aff280788068",
       "scenarios": [
         "public-content",
         "template-run-read-branches",

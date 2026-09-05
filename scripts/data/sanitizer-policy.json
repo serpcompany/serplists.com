@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "sanitizerVersion": "source-derived-shape-v3",
+  "sanitizerVersion": "source-derived-shape-v4",
   "allowedAccessOwners": ["@devinschumacher"],
   "maximumRetentionHours": 24,
   "sourceKind": "protected-d1-data-only-export",

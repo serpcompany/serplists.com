@@ -6,6 +6,7 @@ import { replayMigrations } from "./schema-contract.ts";
 import { syntheticSourceDatabase, exportSyntheticRows } from "./sanitizer-test-source.mjs";
 import { sanitizedState, verifySanitizedTransformation, validateSanitizedStateBinding } from "./sanitized-state-lib.mjs";
 import { listMigrationFiles } from "./schema-contract.ts";
+import { parseLegacySections } from "../../src/lib/schemas/legacyChecklistSchema.ts";
 import { generateSanitizedRehearsalArtifact, loadSanitizerPolicy, normalizeRehearsalDataExport, validateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
 
 const repoRoot = new URL("../..", import.meta.url).pathname;
@@ -44,9 +45,114 @@ it("accepts an actual post0024 export for application-only rehearsal without inv
 });
 
 describe("source-derived rehearsal sanitizer", () => {
+  it.each([
+    ['templates', 'type', 'recipe', 'recipe'],
+    ['templates', 'type', 'checklist', 'checklist'],
+    ['templates', 'type', 'workflow', 'workflow'],
+    ['templates', 'type', 'PRIVATE_TEMPLATE_KIND', 'sanitized-enum'],
+    ['templates', 'type', '', ''],
+    ['checklist_runs', 'status', 'in_progress', 'in_progress'],
+    ['checklist_runs', 'status', 'completed', 'completed'],
+    ['checklist_runs', 'status', 'not_started', 'not_started'],
+    ['checklist_runs', 'status', 'PRIVATE_RUN_STATE', 'sanitized-enum'],
+  ])('preserves scalar enum semantics without repairing invalid %s.%s=%s', (table, column, value, expected) => {
+    const source = syntheticSourceDatabase(repoRoot, false);
+    const target = replayMigrations({ through: legacyContext.sourceSchema });
+    try {
+      source.prepare(`UPDATE ${table} SET ${column}=?`).run(value);
+      const artifact = generate({ rawExport: exportSyntheticRows(source) });
+      target.exec(artifact.sql);
+      expect(target.prepare(`SELECT ${column} AS value FROM ${table}`).all()).toEqual([{ value: expected }, { value: expected }]);
+      expect(artifact.sql).not.toContain('PRIVATE_TEMPLATE_KIND');
+      expect(artifact.sql).not.toContain('PRIVATE_RUN_STATE');
+    } finally { source.close(); target.close(); }
+  });
+  it("retains duplicate identities and malformed nested shapes without making them writable", () => {
+    const source = syntheticSourceDatabase(repoRoot, false), target = replayMigrations({ through: legacyContext.sourceSchema });
+    try {
+      const malformed = [{ id: "private-section", items: [
+        { id: "private-duplicate", contents: [{ type: "private-invalid", value: "private-value" }] },
+        { id: "private-duplicate", contents: { type: "text", value: "private-value" } },
+        { id: null, contents: [null, { type: false, subItems: "private-invalid-array" }] },
+      ] }];
+      expect(parseLegacySections(malformed).success).toBe(false);
+      source.prepare("UPDATE templates SET items=?").run(JSON.stringify(malformed));
+      const artifact = generate({ ...legacyContext, rawExport: exportSyntheticRows(source) });
+      target.exec(artifact.sql);
+      const result = JSON.parse(target.prepare("SELECT items FROM templates LIMIT 1").get().items);
+      expect(parseLegacySections(result).success).toBe(false);
+      expect(result[0].items).toHaveLength(3);
+      expect(result[0].items[0].id).toBe(result[0].items[1].id);
+      expect(Array.isArray(result[0].items[1].contents)).toBe(false);
+      expect(result[0].items[2]).toEqual({ id: null, contents: [null, { type: false, subItems: "sanitized-subItems" }] });
+      expect(artifact.sql).not.toContain("private-");
+    } finally { source.close(); target.close(); }
+  });
+  it("preserves typed repeated and distinct identifiers across reordered templates, runs and retired items", () => {
+    const source = syntheticSourceDatabase(repoRoot, true);
+    const target = replayMigrations();
+    try {
+      const sections = [{ id: "private-section-identity", title: "private-title", items: [
+        { id: "private-first-identity", title: "private-title", contents: [{ id: "private-content-identity", type: "subItems", value: "", subItems: [{ id: 987654321012345, title: "private-child" }] }] },
+        { id: "private-second-identity", title: "private-title", contents: [{ id: "private-other-content", type: "text", value: "private-value" }] },
+      ] }];
+      source.prepare("UPDATE templates SET items=?").run(JSON.stringify(sections));
+      const reordered = structuredClone(sections); reordered[0].items.reverse();
+      source.prepare("UPDATE checklist_runs SET items=?, retired_items=?").run(JSON.stringify(reordered), JSON.stringify([sections[0].items[0], { id: "987654321012345" }, { id: 123456789012345 }, { id: "" }, { id: null }, { id: false }]));
+      const artifact = generate({ ...currentContext, rawExport: exportSyntheticRows(source) });
+      target.exec(artifact.sql);
+      const templates = target.prepare("SELECT items FROM templates").all().map(row => JSON.parse(row.items));
+      const run = target.prepare("SELECT items, retired_items FROM checklist_runs LIMIT 1").get();
+      const items = JSON.parse(run.items)[0].items, retired = JSON.parse(run.retired_items);
+      expect(templates[0]).toEqual(templates[1]);
+      expect(items[1]).toEqual(templates[0][0].items[0]);
+      expect(items[0].id).not.toBe(items[1].id);
+      expect(items[0].contents[0].id).not.toBe(items[1].contents[0].id);
+      expect(retired[0]).toEqual(items[1]);
+      const numeric = items[1].contents[0].subItems[0].id;
+      expect(typeof numeric).toBe("number");
+      expect(typeof retired[1].id).toBe("string");
+      expect(retired[2].id).not.toBe(numeric);
+      expect(retired.slice(3)).toEqual([{ id: "" }, { id: null }, { id: false }]);
+      expect(artifact.sql).not.toMatch(/private-|987654321012345|123456789012345/);
+    } finally { source.close(); target.close(); }
+  });
+  it("preserves allowed content and upload enums while removing private text and leaving invalid enums invalid", () => {
+    const source = syntheticSourceDatabase(repoRoot, true);
+    const target = replayMigrations();
+    try {
+      const contents = ["text", "image", "video", "file", "embed", "subItems", "private-invalid-enum"].map((type, i) => ({ id: `private-content-${i}`, type, value: "private-value", uploadType: i % 2 ? "upload" : "url", fileName: "private-file-name" }));
+      contents.push({ id: "private-invalid-upload", type: "file", value: "private-value", uploadType: "private-upload-enum" });
+      source.prepare("UPDATE templates SET items=?").run(JSON.stringify([{ id: "private-section", title: "private-title", items: [{ id: "private-item", title: "private-title", contents }] }]));
+      const artifact = generate({ ...currentContext, rawExport: exportSyntheticRows(source) });
+      target.exec(artifact.sql);
+      const result = JSON.parse(target.prepare("SELECT items FROM templates LIMIT 1").get().items)[0].items[0].contents;
+      expect(result.slice(0, 6).map(entry => entry.type)).toEqual(["text", "image", "video", "file", "embed", "subItems"]);
+      expect(result.slice(0, 6).map(entry => entry.uploadType)).toEqual(["url", "upload", "url", "upload", "url", "upload"]);
+      expect(result[6].type).toBe("sanitized-type");
+      expect(result[7].uploadType).toBe("sanitized-uploadType");
+      expect(artifact.sql).not.toContain("private-");
+    } finally { source.close(); target.close(); }
+  });
+  it("keeps retired identity references and malformed whitespace identities and file sizes meaningful", () => {
+    const source = syntheticSourceDatabase(repoRoot, true), target = replayMigrations();
+    try {
+      const section = { id: "private-section", items: [{ id: "private-item", contents: [{ id: " ", type: "file", fileSize: -8 }, { id: "private-large-file", type: "file", fileSize: 20000000 }] }] };
+      source.prepare("UPDATE templates SET items=?").run(JSON.stringify([section]));
+      source.prepare("UPDATE checklist_runs SET retired_items=?").run(JSON.stringify([{ kind: "item", sectionId: section.id, sectionTitle: "private-title", item: section.items[0] }]));
+      const artifact = generate({ ...currentContext, rawExport: exportSyntheticRows(source) });
+      target.exec(artifact.sql);
+      const item = JSON.parse(target.prepare("SELECT items FROM templates LIMIT 1").get().items)[0];
+      const retired = JSON.parse(target.prepare("SELECT retired_items FROM checklist_runs LIMIT 1").get().retired_items)[0];
+      expect(retired).toEqual({ kind: "item", sectionId: item.id, sectionTitle: "sanitized-sectionTitle", item: item.items[0] });
+      expect(item.items[0].contents[0]).toMatchObject({ id: " ", type: "file", fileSize: -8 });
+      expect(item.items[0].contents[1].fileSize).toBe(20000000);
+      expect(artifact.sql).not.toContain("private-");
+    } finally { source.close(); target.close(); }
+  });
   it("preserves source relationships and migration-edge shapes without source values", () => {
     const artifact = generate();
-    expect(artifact.manifest).toMatchObject({ schemaVersion: 3, artifactType: "sanitized-production-shaped", sanitizerVersion: "source-derived-shape-v3", selection: { sourceCounts: { users: 1, templates: 2, checklistRuns: 2 }, selectedCounts: { users: 1, templates: 2, checklistRuns: 2 } }, privacy: { directIdentifiers: "removed", customerContent: "removed", credentialsAndSessions: "excluded", passwordMaterial: "excluded" }, handling: { accessOwner: "@devinschumacher", retentionDeadline } });
+    expect(artifact.manifest).toMatchObject({ schemaVersion: 3, artifactType: "sanitized-production-shaped", sanitizerVersion: "source-derived-shape-v4", selection: { sourceCounts: { users: 1, templates: 2, checklistRuns: 2 }, selectedCounts: { users: 1, templates: 2, checklistRuns: 2 } }, privacy: { directIdentifiers: "removed", customerContent: "removed", credentialsAndSessions: "excluded", passwordMaterial: "excluded" }, handling: { accessOwner: "@devinschumacher", retentionDeadline } });
     expect(artifact.manifest.selection.coveredShapes).toEqual(expect.arrayContaining(artifact.manifest.selection.requiredShapes));
     for (const secret of ["private.person@example.com", "Private Person", "Customer", "Confidential", "secret note", "private-access-token", "private-session-token", "private-share-token", "8ab2b7e9", "987654321012345"]) expect(artifact.sql).not.toContain(secret);
     expect(artifact.sql).toContain('"order":17');

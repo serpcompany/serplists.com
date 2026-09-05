@@ -22,6 +22,7 @@ import { runProductionIdentityBoundCommand } from "./production-identity-bound-c
 import { prepareProduction, verifyRecoveryBundle, digest, assertRepositoryAppliedPrefix, assertRecoveryFreshness, repositoryMigrationHistory } from "./production-preparation-lib.mjs";
 import { safeCanaryFailure, wrapCanarySubprocessFailure } from './canary-diagnostics.mjs';
 import { loadEnvironmentInventory, validateEnvironmentInventory } from "./environment-identity-lib.mjs";
+import { validateReportIdentity, reportIdentitySummary } from './report-identity-lib.mjs';
 
 function arg(name) {
   const index = process.argv.indexOf(name);
@@ -64,9 +65,9 @@ process.once("SIGINT", () => { cleanupPlaintext(); process.exit(130); });
 process.once("SIGTERM", () => { cleanupPlaintext(); process.exit(143); });
 let report;
 let requestSnapshot = {
-  commit: /^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA ?? '') ? process.env.GITHUB_SHA : 'unknown',
-  target: { environment: "production", databaseName: "unread-request", databaseId: null },
-  migrationRange: { from: null, to: null },
+  commit: 'unknown',
+  target: { environment: "production", binding: 'unknown', databaseName: "unread-request", databaseId: 'unknown' },
+  migrationRange: { from: 'invalid', to: 'invalid' },
 };
 const operationState = {
   activeStep: null,
@@ -77,15 +78,9 @@ const operationState = {
 try {
   if (!requestPath) throw new Error("Protected executor requires --request.");
   const requestInput = JSON.parse(readFileSync(requestPath, "utf8"));
-  const repoRoot = path.resolve(new URL("../..", import.meta.url).pathname);
-  const trustedDatabase = loadEnvironmentInventory({ repoRoot }).environments.production;
-  requestSnapshot = {
-    commit: /^[a-f0-9]{40}$/.test(requestInput?.commit ?? '') ? requestInput.commit : 'unknown',
-    target: { environment: "production", binding: 'DB', databaseName: trustedDatabase.databaseName, databaseId: trustedDatabase.databaseId },
-    migrationRange: { from: null, to: null },
-  };
+  const reportIdentity = validateReportIdentity({ commit: requestInput?.commit, target: { environment: 'production', binding: 'DB', databaseName: requestInput?.database?.databaseName, databaseId: requestInput?.database?.databaseId }, migrationRange: requestInput?.migrationRange });
+  requestSnapshot = reportIdentity;
   const knownMigrations = repositoryMigrationHistory();
-  for (const end of ['from', 'to']) if (knownMigrations.includes(requestInput?.migrationRange?.[end])) requestSnapshot.migrationRange[end] = requestInput.migrationRange[end];
   const request = validatePromotionEvidence(requestInput);
   if (mode === "prepare" && process.env.DATA_PROTECTED_ENVIRONMENT !== "production-preparation") throw new Error("Recovery preparation requires the protected read-only environment.");
   const context = ["data", "prepare"].includes(mode)
@@ -273,7 +268,7 @@ try {
     check: "protected-production-data-promotion",
     verdict: "pass",
     commit: request.commit,
-    target: { environment: "production", ...database },
+    target: reportIdentity.target,
     migrationRange: request.migrationRange,
     recovery: { bookmark: "captured", export: "captured" },
     pendingMigrations: pendingObserved,
@@ -283,7 +278,7 @@ try {
     checks: [{ name: `request-sha256:${digest(request)}; preparation-sha256:${mode === "prepare" ? digest(evidence) : receipt.preparationSha256}`, verdict: "pass" }],
     operations: operationState,
   };
-  const summary = `PASS protected production ${mode} for ${request.commit}; DB ${database.databaseName} (${database.databaseId}); ${request.migrationRange.from} -> ${request.migrationRange.to}; request SHA256 ${digest(request)}; preparation SHA256 ${report.preparationSha256}.`;
+  const summary = `PASS protected production ${mode}; ${reportIdentitySummary(report)}; request SHA256 ${digest(request)}; preparation SHA256 ${report.preparationSha256}.`;
   writeDataCheckReports({ name: "production-data-promotion", report, summary, reportDirectory });
   console.log(summary);
 } catch (error) {
@@ -303,7 +298,7 @@ try {
     error: message,
     failure,
   };
-  const summary = `BLOCKED protected production executor: ${report.error} Commit ${report.commit}; production DB ${report.target.databaseName} (${report.target.databaseId}); ${report.migrationRange.from} -> ${report.migrationRange.to}.`;
+  const summary = `BLOCKED protected production executor; ${reportIdentitySummary(report)}: ${report.error}`;
   try { writeDataCheckReports({ name: "production-data-promotion", report, summary, reportDirectory }); }
   catch { console.error('Protected production failure report could not be written.'); }
   console.error(summary);

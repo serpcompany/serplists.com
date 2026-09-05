@@ -179,8 +179,8 @@ function queryExpressions(boundary, { skipNestedAwait = false, adapterNames = ne
             ? `${semanticTokens(adapterNames.get(node.expression.text), sourceFile)}=>${semanticTokens(expression, sourceFile)}`
             : semanticTokens(expression, sourceFile),
       });
-      // A D1 batch is the execution unit. Its lazy statement builders must not
-      // be wrapped or counted before the batch actually succeeds.
+      // Discover batch execution here; its selected lazy statement origins are
+      // analyzed separately and earn coverage only after the batch succeeds.
       if (propertyCallName(node) === 'batch') return;
     }
     ts.forEachChild(node, visit);
@@ -521,7 +521,7 @@ export function discoverRouteQueryUnitsFromSource(source, path) {
 
   // Every construction must be attributable to a real consumer. Expand only
   // lexical initializer and named-adapter edges; do not infer mutable data flow.
-  // Batch owns its complete statement input (including conditional arrays/maps).
+  // Batch statement selection is handled separately from dependency accounting.
   const accounted = new Set();
   const dependencies = (start) => {
     const seen = new Set();
@@ -551,6 +551,40 @@ export function discoverRouteQueryUnitsFromSource(source, path) {
   const failOrigin = (node, reason) => {
     throw new Error(`Unsupported database origin at ${path}:${sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1}; ${reason}`);
   };
+  // Follow values delivered to batch, rather than crediting every construction
+  // mentioned in its transitive syntax. Tag only final lazy statement values.
+  const batchStatements = (input, seen = new Set()) => {
+    if (seen.has(input)) failOrigin(input, 'cyclic batch input.');
+    const next = new Set([...seen, input]);
+    if (isErasedExpressionWrapper(input)) return batchStatements(input.expression, next);
+    if (ts.isIdentifier(input)) {
+      const definition = lineage.builderDefinition(input);
+      if (!definition) failOrigin(input, 'batch input requires a statically tracked statement initializer.');
+      return batchStatements(definition, next);
+    }
+    if (ts.isArrayLiteralExpression(input)) return input.elements.flatMap(element => batchStatements(ts.isSpreadElement(element) ? element.expression : element, next));
+    if (ts.isConditionalExpression(input)) return [...batchStatements(input.whenTrue, next), ...batchStatements(input.whenFalse, next)];
+    if (propertyCallName(input) === 'map') {
+      const callback = input.arguments[0];
+      if (!callback || !ts.isArrowFunction(callback) || ts.isBlock(callback.body)) failOrigin(input, 'batch maps require an expression arrow returning tracked statements.');
+      return batchStatements(callback.body, next);
+    }
+    if (ts.isCallExpression(input)) {
+      const { origins } = dependencies(input);
+      if ([...origins].filter(origin => isQueryRoot(origin, lineage)).length === 1 && [...origins].every(origin => propertyCallName(origin) !== 'batch') &&
+        (!EAGER_METHODS.has(propertyCallName(input)) || propertyCallName(input) === 'values')) return [input];
+    }
+    failOrigin(input, 'unsupported batch statement value; use direct lazy statements, immutable aliases, conditional arrays or maps.');
+  };
+  for (const candidate of [...candidates]) {
+    if (candidate.kind !== 'query' || propertyCallName(candidate.node) !== 'batch') continue;
+    if (candidate.node.arguments.length !== 1) failOrigin(candidate.node, 'batch requires one tracked statement array.');
+    candidate.mode = 'batch';
+    for (const statement of batchStatements(candidate.node.arguments[0])) {
+      candidates.push({ kind: 'query', mode: 'statement', node: statement, instrumentNode: statement,
+        semantic: `batch-statement:${semanticTokens(statement, sourceFile)}`, owner: functionName(statement) });
+    }
+  }
   for (const adapter of adapterNames.values()) {
     const returns = [];
     const inspect = (node) => {
@@ -591,6 +625,7 @@ export function discoverRouteQueryUnitsFromSource(source, path) {
         kind: candidate.kind,
         _nodeStart: candidate.instrumentNode.getStart(sourceFile),
         _nodeEnd: candidate.instrumentNode.end,
+        _mode: candidate.mode,
       };
     });
 }
@@ -611,8 +646,13 @@ export function instrumentRouteQuerySource(source, path) {
       const query = queryByRange.get(`${node.getStart(sourceFile)}:${node.end}`);
       if (query) {
         const original = ts.visitEachChild(node, visitor, context);
+        if (query._mode === 'batch') {
+          return factory.updateCallExpression(original,
+            factory.createCallExpression(factory.createPropertyAccessExpression(runtimeAccess(factory), 'batchTarget'), undefined,
+              [factory.createStringLiteral(query.id), original.expression.expression]), original.typeArguments, original.arguments);
+        }
         return factory.createCallExpression(
-          factory.createPropertyAccessExpression(runtimeAccess(factory), 'observe'),
+          factory.createPropertyAccessExpression(runtimeAccess(factory), query._mode === 'statement' ? 'statement' : 'observe'),
           undefined,
           // Evaluate in the original lexical context. Moving an expression into
           // a thunk breaks nested await/yield and can change argument evaluation.
@@ -640,7 +680,7 @@ export function instrumentRouteQuerySource(source, path) {
   const result = ts.transform(sourceFile, [transformer]);
   try {
     const code = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed }).printFile(result.transformed[0]);
-    return { code, units: units.map(({ _nodeStart, _nodeEnd, ...unit }) => unit) };
+    return { code, units: units.map(({ _nodeStart, _nodeEnd, _mode, ...unit }) => unit) };
   } finally {
     result.dispose();
   }
@@ -660,7 +700,7 @@ export function discoverRouteQueryUnits(root) {
       return discoverRouteQueryUnitsFromSource(readFileSync(file, 'utf8'), path);
     })
     .sort((a, b) => a.id.localeCompare(b.id))
-    .map(({ _nodeStart, _nodeEnd, ...unit }) => unit);
+    .map(({ _nodeStart, _nodeEnd, _mode, ...unit }) => unit);
 }
 
 export function routeQuerySourceDigest(units) {

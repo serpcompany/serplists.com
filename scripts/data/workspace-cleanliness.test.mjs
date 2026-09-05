@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, rmdirSync, existsSync, symlinkSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -10,9 +10,38 @@ import {
   evaluateWorkspaceCleanliness,
   evaluateImmutableRunContext,
   parsePorcelainStatus,
+  restorePreexistingEmptyWranglerTemp,
 } from "./workspace-cleanliness-lib.mjs";
 
 describe("data regression workspace cleanliness", () => {
+  it('restores only preexisting empty Wrangler scaffolding', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'wrangler-scaffold-'));
+    const directory = path.join(root, '.wrangler/tmp');
+    try {
+      mkdirSync(directory, { recursive: true });
+      const before = captureWorkspaceMetadata({ repoRoot: root });
+      rmdirSync(directory);
+      expect(restorePreexistingEmptyWranglerTemp({ repoRoot: root, before })).toBe(true);
+      expect(compareWorkspaceMetadata({ before, after: captureWorkspaceMetadata({ repoRoot: root }) })).toEqual([]);
+      writeFileSync(path.join(directory, 'owned.txt'), 'must not hide loss');
+      const nonempty = captureWorkspaceMetadata({ repoRoot: root });
+      rmSync(directory, { recursive: true });
+      expect(restorePreexistingEmptyWranglerTemp({ repoRoot: root, before: nonempty })).toBe(false);
+      expect(existsSync(directory)).toBe(false);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+  it('does not follow a replaced Wrangler parent symlink', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'wrangler-scaffold-link-'));
+    const outside = mkdtempSync(path.join(tmpdir(), 'wrangler-scaffold-outside-'));
+    try {
+      mkdirSync(path.join(root, '.wrangler/tmp'), { recursive: true });
+      const before = captureWorkspaceMetadata({ repoRoot: root });
+      rmSync(path.join(root, '.wrangler'), { recursive: true });
+      symlinkSync(outside, path.join(root, '.wrangler'));
+      expect(restorePreexistingEmptyWranglerTemp({ repoRoot: root, before })).toBe(false);
+      expect(readdirSync(outside)).toEqual([]);
+    } finally { rmSync(root, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); }
+  });
   it("records exact dirty paths and fails closed in CI", () => {
     const paths = parsePorcelainStatus([
       " M src/generated.ts",

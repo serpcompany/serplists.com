@@ -1,7 +1,27 @@
-import { lstatSync, readdirSync } from "node:fs";
+import { lstatSync, readdirSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
 const DEFAULT_EXCLUDED_ROOTS = [".git", "node_modules"];
+
+/** Restore only an empty directory that the provider removed during teardown.
+ * @param {{ repoRoot: string, before: WorkspaceMetadata }} options
+ */
+export function restorePreexistingEmptyWranglerTemp({ repoRoot, before }) {
+  const relative = '.wrangler/tmp';
+  if (before[relative]?.type !== 'directory' || Object.keys(before).some(name => name.startsWith(`${relative}/`))) return false;
+  const stat = name => {
+    try { return lstatSync(name); }
+    catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+  };
+  const parent = path.join(repoRoot, '.wrangler');
+  const parentState = stat(parent);
+  if (parentState && !parentState.isDirectory()) return false;
+  const directory = path.join(repoRoot, relative);
+  if (stat(directory)) return false;
+  if (!parentState) mkdirSync(parent);
+  mkdirSync(directory);
+  return true;
+}
 
 /**
  * @typedef {{ type: 'directory' } | { type: 'file' | 'symlink', size: number, mtimeMs: number }} WorkspaceEntry

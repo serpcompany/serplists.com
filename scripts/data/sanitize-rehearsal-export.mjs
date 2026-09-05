@@ -70,7 +70,7 @@ function resolveRawInput(value) {
 let rawInputPathForCleanup;
 let shouldCleanupRawInput = false;
 let reportDirectory = path.join(repoRoot, "tmp/data-reports/sanitizer");
-let reportContext = { commit: "unknown", target: { environment: "production", binding: "DB", databaseName: "unknown", databaseId: "unknown" }, migrationRange: { from: "unknown", to: "unknown" }, sanitizerVersion: "source-derived-shape-v3" };
+let reportContext = { commit: "unknown", target: { environment: "production", binding: "DB", databaseName: "unknown", databaseId: "unknown" }, migrationRange: { from: "unknown", to: "unknown" }, sanitizerVersion: "source-derived-shape-v4" };
 
 try {
   const { values, flags } = parseArgs(process.argv.slice(2));
@@ -81,7 +81,7 @@ try {
   if (requestedSourceIdentityPath && existsSync(requestedSourceIdentityPath)) {
     sourceIdentity = JSON.parse(readFileSync(requestedSourceIdentityPath, "utf8"));
   }
-  reportContext = { commit: gitCommit, target: { environment: "production", binding: "DB", databaseName: productionIdentity.databaseName, databaseId: sourceIdentity?.databaseId ?? "unknown" }, migrationRange: { from: values["--migration-from"] ?? "unknown", to: values["--migration-to"] ?? "unknown" }, sanitizerVersion: "source-derived-shape-v3" };
+  reportContext = { commit: gitCommit, target: { environment: "production", binding: "DB", databaseName: productionIdentity.databaseName, databaseId: sourceIdentity?.databaseId ?? "unknown" }, migrationRange: { from: values["--migration-from"] ?? "unknown", to: values["--migration-to"] ?? "unknown" }, sanitizerVersion: "source-derived-shape-v4" };
   const requestedReportDirectory = path.resolve(repoRoot, values["--report-dir"] ?? "tmp/data-reports/sanitizer");
   const allowedReportRoot = path.join(repoRoot, "tmp/data-reports");
   if (requestedReportDirectory !== allowedReportRoot && !requestedReportDirectory.startsWith(`${allowedReportRoot}${path.sep}`)) throw new Error("Sanitizer report directory must stay under ignored tmp/data-reports/.");
@@ -105,7 +105,7 @@ try {
   }
 
   const plan = {
-    sanitizer: "source-derived-shape-v3",
+    sanitizer: "source-derived-shape-v4",
     inputPath,
     outputPath,
     manifestPath,
