@@ -7,6 +7,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { withPreparedRecoveryImport } from "./recovery-restore-lib.mjs";
+import { writeDataCheckReports } from "./reporting.mjs";
 
 import {
   loadEnvironmentInventory,
@@ -155,6 +157,8 @@ export function runDataCommand({
       confirmationDatabaseId: values["--confirm-database-id"],
       persistTo: values["--persist-to"],
       beforeMigration: values["--before"],
+      migrationRange: { from: values["--migration-from"], to: values["--migration-to"] },
+      sourceSchema: values["--source-schema"],
       now,
     });
   }
@@ -260,6 +264,22 @@ export function runDataCommand({
     });
     if (ledger.verdict !== "pass") throw new Error(`Rehearsal baseline ledger verification failed: ${JSON.stringify(ledger)}.`);
     output = JSON.stringify({ baseline: plan.report.baseline, ledger }, null, 2);
+  } else if (operation === "recovery-restore") {
+    const restored = withPreparedRecoveryImport({
+      inputPath: path.resolve(repoRoot, values["--input"]),
+      expectedSourceSha256: plan.report.recoveryRestore.transformation.sourceSha256,
+      execute: (file) => {
+        const command = [...plan.command];
+        command[command.indexOf("--file") + 1] = file;
+        try { return runIdentityBound(command); }
+        catch { throw new Error("Recovery import failed; plaintext diagnostics suppressed."); }
+      },
+    });
+    output = JSON.stringify({ recoveryRestore: { ...plan.report.recoveryRestore, transformation: restored.metadata, preparedPlaintextCleanup: "pass" } });
+    writeDataCheckReports({ name: "recovery-import", reportDirectory: resolveEvidencePath(repoRoot, values["--report-dir"] ?? "tmp/data-reports/rehearsal/recovery"),
+      report: { verdict: "pass", commit: gitCommit, target: plan.report, transformation: restored.metadata, preparedPlaintextCleanup: "pass" },
+      summary: "PASS actual full-export import completed; prepared plaintext removed. Post-restore equality remains a separate blocking gate.",
+    });
   } else {
     output = plan.command ? runIdentityBound(plan.command, { after: operation !== "rehearsal-teardown" && operation !== "rehearsal-create" }) : "";
   }
@@ -269,6 +289,8 @@ export function runDataCommand({
       normalized = normalizeRehearsalDataExport({
         repoRoot,
         rawExport: readFileSync(plan.rawOutputPath, "utf8"),
+        migrationRange: { from: values["--migration-from"], to: values["--migration-to"] },
+        sourceSchema: values["--source-schema"],
       });
       writeFileSync(plan.outputPath, normalized.sql, { encoding: "utf8", mode: 0o600 });
       chmodSync(plan.outputPath, 0o600);

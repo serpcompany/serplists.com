@@ -9,6 +9,8 @@ import { evaluateInvariantLedgerTransition, validatePreInvariantEvidence, valida
 import { captureSanitizedState } from "./sanitized-state-lib.mjs";
 import { createHash } from "node:crypto";
 import { migrationsInRange, migrationRangeForReport } from "./migration-range-lib.mjs";
+import { safeCanaryFailure, wrapCanarySubprocessFailure } from './canary-diagnostics.mjs';
+import { captureFullRecoveryState, fullRecoveryStatesEqual } from './recovery-restore-lib.mjs';
 
 function arg(name) { const i = process.argv.indexOf(name); return i < 0 ? null : process.argv[i + 1]; }
 const mode = process.argv[2];
@@ -22,18 +24,28 @@ const context = {
   comparisonKind: arg("--comparison-kind") ?? "migration",
 };
 const childEnv = Object.fromEntries(["PATH", "HOME", "CI", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"].filter((key) => process.env[key]).map((key) => [key, process.env[key]]));
+let stage = 'invariant-configuration';
 function expectedMigrations() {
   const files = readdirSync(new URL("../../db/migrations/", import.meta.url)).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
   return migrationsInRange(files, context.expectedMigrationRange);
 }
-function wrangler(args) { return execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "wrangler", ...args], { encoding: "utf8", env: childEnv }); }
+function wrangler(args) {
+  try { return execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "wrangler", ...args], { encoding: "utf8", env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] }); }
+  catch (error) { throw wrapCanarySubprocessFailure(stage, error); }
+}
 function verifyLiveIdentity(target) {
+  stage = 'invariant-identity';
   const live = extractD1Identity(wrangler(["d1", "info", target.databaseName, "--json"]));
   if (live.databaseId !== target.databaseId || live.databaseName !== target.databaseName) throw new Error(`Live invariant target mismatch for ${target.environment}.`);
 }
 function capture(target) {
   verifyLiveIdentity(target);
+  stage = 'invariant-query';
   const snapshot = captureRemoteInvariantSnapshot({ database: target.databaseName, key: process.env.INVARIANT_HMAC_KEY, runWrangler: wrangler });
+  if (context.comparisonKind === "recovery") snapshot.fullRecovery = captureFullRecoveryState({
+    key: process.env.INVARIANT_HMAC_KEY,
+    query: sql => wrangler(["d1", "execute", target.databaseName, "--remote", "--json", "--command", sql]),
+  });
   verifyLiveIdentity(target);
   return snapshot;
 }
@@ -42,25 +54,35 @@ try {
   if (!state || !["capture", "compare"].includes(mode)) throw new Error("Remote invariant gate arguments are incomplete.");
   if (mode === "capture") {
     const snapshot = capture(context.target);
+    stage = 'invariant-comparison';
     const evidence = { schemaVersion: 1, check: "remote-invariant-capture", verdict: "pass", ...context, snapshot };
     mkdirSync(path.dirname(state), { recursive: true });
     writeFileSync(state, JSON.stringify(evidence, null, 2) + "\n", { mode: 0o600 });
     writeDataCheckReports({ name: "remote-invariant-capture", report: { ...evidence, migrationRange: context.expectedMigrationRange, ledger: { applied: snapshot.appliedMigrations, appliedThrough: snapshot.appliedThrough, sha256: snapshot.ledgerSha256 } }, summary: `PASS remote invariant capture commit=${context.commit} environment=${context.target.environment} binding=${context.target.binding} database=${context.target.databaseName} databaseId=${context.target.databaseId} ledger=${snapshot.appliedThrough}.`, reportDirectory });
   } else {
+    stage = 'invariant-state';
     const pre = JSON.parse(readFileSync(state, "utf8"));
     validatePreInvariantEvidence({ pre, context });
     const post = capture(context.target);
+    stage = 'invariant-comparison';
     const comparison = compareProductionInvariants({ pre: pre.snapshot.invariants, post: post.invariants, preHasEvolution: pre.snapshot.hasEvolution, postHasEvolution: post.hasEvolution, preDomain: pre.snapshot.domain, postDomain: post.domain });
     const transition = evaluateInvariantLedgerTransition({ before: pre.snapshot.appliedMigrations, after: post.appliedMigrations, comparisonKind: context.comparisonKind, expectedRange: context.expectedMigrationRange, expectedMigrations: expectedMigrations() });
     const { added, removed, observedRange } = transition;
     const ledgerMatches = transition.verdict === "pass";
     const report = { ...comparison, check: "remote-invariant-comparison", commit: context.commit, target: context.target, sourceTarget: pre.target, comparisonKind: context.comparisonKind, migrationRange: observedRange, ledger: { before: pre.snapshot.appliedMigrations, after: post.appliedMigrations, beforeSha256: pre.snapshot.ledgerSha256, afterSha256: post.ledgerSha256, added, removed, appliedThrough: post.appliedThrough, verdict: ledgerMatches ? "pass" : "fail" } };
+    if (context.comparisonKind === "recovery") {
+      const matches = fullRecoveryStatesEqual(pre.snapshot.fullRecovery, post.fullRecovery);
+      report.fullRecovery = { before: pre.snapshot.fullRecovery, after: post.fullRecovery, verdict: matches ? "pass" : "fail" };
+      if (!matches) { report.verdict = "fail"; report.failures = [...report.failures, "full recovery catalog or data mismatch"]; }
+    }
     if (arg("--sanitized")) {
       if (context.target.environment !== "rehearsal") throw new Error("Public sanitized state digest is restricted to rehearsal.");
       const sourceSha256 = createHash("sha256").update(readFileSync(arg("--sanitized"))).digest("hex");
       verifyLiveIdentity(context.target);
+      stage = 'invariant-query';
       const { rows: _rows, ...binding } = captureSanitizedState({ sourceSha256, query: (sql) => wrangler(["d1", "execute", database, "--remote", "--json", "--command", sql]) });
       verifyLiveIdentity(context.target);
+      stage = 'invariant-comparison';
       if (binding.ledgerSha256 !== post.ledgerSha256) throw new Error("Remote ledger changed while binding sanitized handlers.");
       report.sanitizedState = binding;
     }
@@ -70,8 +92,10 @@ try {
     if (report.verdict !== "pass") process.exitCode = 1;
   }
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  const report = { check: mode === "capture" ? "remote-invariant-capture" : "remote-invariant-comparison", verdict: "fail", commit: context.commit ?? "unknown", target: context.target, migrationRange: migrationRangeForReport(context.expectedMigrationRange), comparisonKind: context.comparisonKind, error: message };
-  writeDataCheckReports({ name: report.check, report, summary: `BLOCKED remote invariants commit=${report.commit} environment=${context.target.environment ?? "unknown"} binding=${context.target.binding ?? "unknown"} database=${database ?? "unknown"} databaseId=${context.target.databaseId ?? "unknown"} migration=${context.expectedMigrationRange.from ?? "unknown"}->${context.expectedMigrationRange.to ?? "unknown"}: ${message}`, reportDirectory });
-  console.error(message); process.exitCode = 1;
+  const failure = safeCanaryFailure(stage, error);
+  const report = { check: mode === "capture" ? "remote-invariant-capture" : "remote-invariant-comparison", verdict: "fail", commit: context.commit ?? "unknown", target: context.target, migrationRange: migrationRangeForReport(context.expectedMigrationRange), comparisonKind: context.comparisonKind, error: failure.message, failedStage: failure.stage, errorCode: failure.code, checks: [{ name: failure.check, verdict: 'fail' }], ...(failure.exitStatus === undefined ? {} : { exitStatus: failure.exitStatus }) };
+  const summary = `BLOCKED remote invariants commit=${report.commit} environment=${context.target.environment ?? "unknown"} binding=${context.target.binding ?? "unknown"} database=${database ?? "unknown"} databaseId=${context.target.databaseId ?? "unknown"} migration=${report.migrationRange.from}->${report.migrationRange.to} stage=${failure.stage}: ${failure.code}. ${failure.message}`;
+  try { writeDataCheckReports({ name: report.check, report, summary, reportDirectory }); }
+  catch { console.error('Remote invariant failure report could not be persisted.'); }
+  console.error(summary); process.exitCode = 1;
 }

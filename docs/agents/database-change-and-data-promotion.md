@@ -145,6 +145,8 @@ An ephemeral migration rehearsal must start with a newly created empty database,
 
 ### Production
 
+Before preparation can be approved, and again immediately before migration writes, validate the ordered applied ledger prefix and compare the complete live source catalog against repository migrations replayed through that prefix. Tables, all columns/defaults/constraints, indexes, triggers, and views must match; unknown, missing, or changed objects block every write. Bind privacy-safe typed source-schema digest/count/status evidence to the exact commit, database, source ledger, and reviewed range. Pending migrations must not require the candidate schema early. Source proof never satisfies deployment readiness: the separate strict post-migration schema, ledger, and invariant gates remain mandatory.
+
 The protected production workflow is the only normal production path, in this order:
 
 1. identify and allowlist the production database;

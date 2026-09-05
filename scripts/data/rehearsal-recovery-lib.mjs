@@ -1,10 +1,13 @@
 import { normalizeMigrationRange, migrationRangesEqual } from "./migration-range-lib.mjs";
+import { resolveSanitizerProfile } from "./sanitizer-lib.mjs";
 const GIT_SHA = /^[0-9a-f]{40}$/;
 
 export function validateRehearsalRecoveryEvidence({ evidence, sourceDatabaseId, recoveryDatabaseId, expectedCommit, expectedEnvironment = "rehearsal", expectedMigrationFrom, expectedMigrationTo, expectedSanitizerVersion }) {
   const range = normalizeMigrationRange(evidence?.migration);
   const expectedRange = expectedMigrationFrom !== undefined || expectedMigrationTo !== undefined
     ? normalizeMigrationRange({ from: expectedMigrationFrom, to: expectedMigrationTo }) : range;
+  const sourceProfile = resolveSanitizerProfile({ repoRoot: new URL("../..", import.meta.url).pathname, migrationRange: expectedRange, sourceSchema: evidence?.sanitizer?.sourceProfile?.sourceSchema });
+  if (JSON.stringify(evidence?.sanitizer?.sourceProfile) !== JSON.stringify(sourceProfile) || !/^[a-f0-9]{64}$/.test(evidence?.sanitizer?.manifestIntegritySha256 ?? "")) throw new Error("Recovery sanitizer profile/range/source schema or manifest binding mismatch.");
   if (!sourceDatabaseId || !recoveryDatabaseId || sourceDatabaseId === recoveryDatabaseId) {
     throw new Error("Recovery rehearsal requires separate source and restore database identities.");
   }

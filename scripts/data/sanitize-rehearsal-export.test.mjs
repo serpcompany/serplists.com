@@ -37,6 +37,7 @@ function commandArgs(inputPath, outputPath, manifestPath) {
     "--manifest", path.relative(repoRoot, manifestPath),
     "--source-identity-evidence", sourceIdentityPath,
     "--source-date", sourceDate,
+    "--source-schema", "0023_add_sitemap_revision_state.sql",
     "--issue", "95",
     "--approver-identity", "@devinschumacher",
     "--retention-deadline", retentionDeadline,
@@ -72,7 +73,7 @@ describe("sanitizer command", () => {
       path.join(evidenceRoot, "synthetic.manifest.json"),
     ), { cwd: repoRoot, env: process.env, encoding: "utf8" });
     expect(JSON.parse(output)).toMatchObject({
-      sanitizer: "source-derived-shape-v2",
+      sanitizer: "source-derived-shape-v3",
       issueNumber: 95,
       requestedApproverIdentity: "@devinschumacher",
     });
@@ -100,7 +101,7 @@ describe("sanitizer command", () => {
       expect(result.stderr).toMatch(/workflow.*context/i);
       expect(existsSync(inputPath)).toBe(false);
       const report = JSON.parse(readFileSync(path.join(sanitizerReportRoot, "sanitize-production-export.json"), "utf8"));
-      expect(report).toMatchObject({ verdict: "fail", commit: gitCommit, target: { environment: "production", binding: "DB", databaseId: productionDatabaseId }, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, sanitizerVersion: "source-derived-shape-v2" });
+      expect(report).toMatchObject({ verdict: "fail", commit: gitCommit, target: { environment: "production", binding: "DB", databaseId: productionDatabaseId }, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, sanitizerVersion: "source-derived-shape-v3" });
       for (const name of ["sanitize-production-export.md", "sanitize-production-export.junit.xml"]) expect(readFileSync(path.join(sanitizerReportRoot, name), "utf8")).toContain(gitCommit);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });

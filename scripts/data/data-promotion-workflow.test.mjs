@@ -141,6 +141,8 @@ describe("protected staging and production data-promotion workflow", () => {
       "/scripts/run-playwright-smoke.mjs",
       "/lefthook.yml",
       "/playwright.config.ts",
+      "/tests/e2e/",
+      "/tests/unit/scripts/data/",
       "/tests/e2e/data-visibility-regression.spec.ts",
       "/tests/e2e/sanitized-rehearsal-handler.spec.ts",
     ]) {

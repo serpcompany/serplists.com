@@ -210,7 +210,7 @@ if ((sanitizedPathArg == null) !== (sanitizerManifestArg == null)) {
   try {
     const sanitizedSql = readFileSync(path.resolve(repoRoot, sanitizedPathArg), "utf8");
     const manifest = JSON.parse(readFileSync(path.resolve(repoRoot, sanitizerManifestArg), "utf8"));
-    validateSanitizedRehearsalArtifact({ sql: sanitizedSql, manifest, policy: loadSanitizerPolicy({ repoRoot }), now: new Date() });
+    validateSanitizedRehearsalArtifact({ sql: sanitizedSql, manifest, policy: loadSanitizerPolicy({ repoRoot }), now: new Date(), migrationRange: rehearsalPlan?.migrationRange, sourceSchema: rehearsalPlan?.preMigration });
     if (manifest.provenance.gitCommit !== startCommit) throw new Error("Sanitizer manifest commit does not match this candidate.");
     sanitizedArtifactSha256 = manifest.artifact.sha256;
     authenticatedRehearsal = { applicable: true, verdict: "fail", sanitizerArtifactSha256: sanitizedArtifactSha256 };
@@ -240,6 +240,7 @@ try {
         ...(sanitizedArtifactSha256 && rehearsalPlan ? {
           PLAYWRIGHT_SANITIZED_REHEARSAL_SQL: path.resolve(repoRoot, sanitizedPathArg),
           PLAYWRIGHT_SANITIZER_SHA256: sanitizedArtifactSha256,
+          PLAYWRIGHT_SANITIZER_MANIFEST: path.resolve(repoRoot, sanitizerManifestArg),
           PLAYWRIGHT_REHEARSAL_PROOF: authenticatedRehearsalProofPath,
           DATA_REGRESSION_MIGRATION_FROM: rehearsalPlan.migrationRange.from ?? "none",
           DATA_REGRESSION_MIGRATION_TO: rehearsalPlan.migrationRange.to ?? "none",

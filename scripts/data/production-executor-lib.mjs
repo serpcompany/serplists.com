@@ -4,7 +4,9 @@ import { validateControlledCanaryChecks } from "./deployment-smoke-lib.mjs";
 import { assertProductionKeySeparation } from "./production-key-separation-lib.mjs";
 import { normalizeMigrationRange, migrationRangesEqual } from "./migration-range-lib.mjs";
 import { evaluateInvariantLedgerTransition } from "./remote-invariant-evidence-lib.mjs";
-import { assertRecoveryApproval, digest } from "./production-preparation-lib.mjs";
+import { assertRecoveryApproval, assertRecoveryFreshness, assertRepositoryAppliedPrefix, digest } from "./production-preparation-lib.mjs";
+import { wrapCanarySubprocessFailure } from './canary-diagnostics.mjs';
+import { assertSourceSchemaProof } from './source-schema-proof.mjs';
 export {
   compareProductionInvariants,
   parseInvariantOutput,
@@ -20,7 +22,7 @@ const REQUIRED_CONTEXT = {
   DATA_PROTECTED_ENVIRONMENT: "production",
 };
 const RISK = ["additive", "backfill", "destructive", "irreversible"];
-const REQUIRED_PRODUCTION_STEPS = ["identity", "recovery-bookmark", "recovery-export", "reviewed-pending-range", "pre-invariants", "migration-apply", "ledger-clean", "schema-contract", "post-invariants"];
+const REQUIRED_PRODUCTION_STEPS = ["identity", "recovery-bookmark", "recovery-export", "reviewed-pending-range", "pre-invariants", "source-schema", "migration-apply", "ledger-clean", "schema-contract", "post-invariants"];
 const IDENTITY_BOUND_STEPS = new Set(REQUIRED_PRODUCTION_STEPS.filter((step) => step !== "identity"));
 
 function sqlStatements(sqlTexts) {
@@ -420,18 +422,29 @@ export function verifySignedEvidence({ signedEvidence }) {
   return signedEvidence.payload;
 }
 
-export function runProductionDataPhase({ commit, database, pendingMigrations, classification, approval = null, preparation, receipt, run }) {
+export function runProductionDataPhase({ commit, database, pendingMigrations, classification, approval = null, preparation, receipt, run, clock = Date.now }) {
   assertRecoveryApproval({ approval, receipt });
+  if (digest(preparation) !== receipt.preparationSha256) throw new Error('Production preparation does not match the approved receipt.');
+  assertRecoveryFreshness(preparation, clock);
+  assertRepositoryAppliedPrefix({ ...preparation.results['pre-invariants'].summary, pendingMigrations });
+  assertSourceSchemaProof(preparation.results['source-schema']?.summary, { ...preparation.results['pre-invariants'].summary, commit, database, pendingMigrations });
   const steps = [
     "identity", "reviewed-pending-range",
-    "pre-invariants", "migration-apply", "ledger-clean", "schema-contract", "post-invariants",
+    "pre-invariants", "source-schema", "migration-apply", "ledger-clean", "schema-contract", "post-invariants",
   ];
   const results = { ...preparation.results };
   for (const step of steps) {
-    const result = run(step);
+    if (step === 'migration-apply') assertRecoveryFreshness(preparation, clock);
+    let result;
+    try { result = run(step); } catch (error) { throw wrapCanarySubprocessFailure(`production-${step}`, error); }
     if (result?.verdict !== "pass") throw new Error(`Production ${step} gate failed.`);
     if (["identity", "reviewed-pending-range"].includes(step) && JSON.stringify(result.summary) !== JSON.stringify(preparation.results[step].summary)) throw new Error(`Production ${step} changed after recovery preparation.`);
     if (step === "pre-invariants" && result.summary?.ledgerSha256 !== preparation.results[step].summary?.ledgerSha256) throw new Error("Production ledger changed after recovery preparation; fresh preparation and approval required.");
+    if (step === 'pre-invariants') assertRepositoryAppliedPrefix({ ...result.summary, pendingMigrations });
+    if (step === 'source-schema') {
+      assertSourceSchemaProof(result.summary, { ...results['pre-invariants'].summary, commit, database, pendingMigrations });
+      if (result.summary.proofSha256 !== preparation.results[step].summary.proofSha256) throw new Error('Source catalog changed after preparation.');
+    }
     results[step] = result;
   }
   const payload = {
@@ -455,6 +468,9 @@ function hasSha256(value) { return /^[0-9a-f]{64}$/.test(value ?? ""); }
 function assertProductionStepSummary({ step, summary, payload }) {
   if (summary?.type !== step) throw new Error(`Signed production ${step} evidence lacks a typed summary.`);
   switch (step) {
+    case "source-schema":
+      assertSourceSchemaProof(summary, { ...payload.results['pre-invariants'].summary, commit: payload.commit, database: payload.database, pendingMigrations: payload.pendingMigrations });
+      break;
     case "identity":
       if (summary.databaseName !== payload.database.databaseName || summary.databaseId !== payload.database.databaseId) throw new Error("Signed production identity summary does not match the target database.");
       break;

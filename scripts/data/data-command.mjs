@@ -14,7 +14,7 @@ function runCommand(command) {
     cwd: repoRoot,
     env: sanitizedGitEnvironment(),
     encoding: "utf8",
-    stdio: ["inherit", "pipe", "inherit"],
+    stdio: ["inherit", "pipe", process.argv[2] === "recovery-restore" ? "pipe" : "inherit"],
   });
 }
 

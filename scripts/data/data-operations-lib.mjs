@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { prepareRecoveryExport } from "./recovery-restore-lib.mjs";
 
 import { getRepositoryMigrationRange } from "./environment-identity-lib.mjs";
 import { selectInvariantSqlFiles } from "./invariant-capture-lib.mjs";
@@ -100,6 +101,8 @@ export function buildDataOperationPlan({
   confirmationDatabaseId,
   persistTo,
   beforeMigration,
+  migrationRange,
+  sourceSchema,
   now = new Date(),
 }) {
   if (identity.environment === "production" && MUTATING_OPERATIONS.has(operation)) {
@@ -252,9 +255,12 @@ export function buildDataOperationPlan({
         manifest: importManifest,
         policy: loadSanitizerPolicy({ repoRoot }),
         now,
+        migrationRange,
+        sourceSchema,
       });
       command = commandForSql(identity, path.resolve(importPath), resolvedPersistTo);
       report.sanitizedImport = {
+        sourceProfile: importManifest.sourceProfile,
         sourceDate: importManifest.provenance.sourceDate,
         sanitizerVersion: importManifest.sanitizerVersion,
         sourceExportSha256: importManifest.provenance.sourceExportSha256,
@@ -278,7 +284,10 @@ export function buildDataOperationPlan({
         throw new Error("Recovery plaintext must stay under non-artifact tmp/rehearsal-sensitive/.");
       }
       command = commandForSql(identity, resolvedInput, resolvedPersistTo);
-      report.recoveryRestore = { plaintextRetention: "delete-after-restore", artifactUpload: "forbidden" };
+      report.recoveryRestore = {
+        plaintextRetention: "delete-after-restore", artifactUpload: "forbidden",
+        transformation: prepareRecoveryExport(importSql ?? readFileSync(resolvedInput)).metadata,
+      };
       break;
     }
     case "rehearsal-teardown":

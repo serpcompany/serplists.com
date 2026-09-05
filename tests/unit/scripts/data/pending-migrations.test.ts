@@ -8,9 +8,11 @@ import {
   buildCatalogContract,
   buildDrizzleContract,
   catalogFromPragmaResults,
+  compareDatabaseSchemas,
   diffDrizzleContract,
   inspectDatabase,
   replayMigrations,
+  tableInfoSql,
 } from "../../../../scripts/data/schema-contract";
 import {
   buildPendingMigrationReport,
@@ -178,14 +180,15 @@ describe("pending migration gate", () => {
       );
       const contract = buildDrizzleContract(drizzleSchema);
       const replayed = replayMigrations();
-      const migrationContract = buildCatalogContract(inspectDatabase(replayed));
+      const expectedCatalog = inspectDatabase(replayed);
+      const migrationContract = buildCatalogContract(expectedCatalog);
       replayed.close();
       const tableNames = [...new Set([
         ...Object.keys(contract.tables),
         ...Object.keys(migrationContract.tables),
       ])].sort();
       const pragmaSql = [
-        ...tableNames.map((name) => `PRAGMA table_info('${name}');`),
+        ...tableNames.map((name) => `${tableInfoSql(name)};`),
         ...tableNames.map((name) => `PRAGMA index_list('${name}');`),
         ...tableNames.map((name) => `SELECT il.name AS index_name, ii.seqno, ii.name AS column_name, sm.sql AS index_sql FROM pragma_index_list('${name}') AS il JOIN pragma_index_info(il.name) AS ii LEFT JOIN sqlite_schema AS sm ON sm.type = 'index' AND sm.name = il.name ORDER BY il.name, ii.seqno;`),
         ...tableNames.map((name) => `PRAGMA foreign_key_list('${name}');`),
@@ -218,6 +221,19 @@ describe("pending migration gate", () => {
       const liveCatalog = catalogFromPragmaResults(tableNames, JSON.parse(schemaOutput));
       expect(diffDrizzleContract(contract, liveCatalog).verdict).toBe("pass");
       expect(diffDrizzleContract(migrationContract, liveCatalog).verdict).toBe("pass");
+      expect(compareDatabaseSchemas(expectedCatalog, liveCatalog).verdict).toBe('pass');
+      // Actual Wrangler JSON turns absent SQL NULL into the string "null".
+      // The explicit flag must preserve no default, DEFAULT NULL and 'null'.
+      const defaultOutput = JSON.parse(execFileSync(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', [
+        'exec', 'wrangler', 'd1', 'execute', 'serp-checklists-db', '--local', '--persist-to', persistence, '--json', '--command',
+        `CREATE TABLE default_probe(none TEXT, sql_null TEXT DEFAULT NULL, literal_null TEXT DEFAULT 'null'); CREATE TABLE changed_default_probe(none TEXT DEFAULT NULL, sql_null TEXT, literal_null TEXT DEFAULT NULL); ${tableInfoSql('default_probe')}; ${tableInfoSql('changed_default_probe')};`,
+      ], { cwd: process.cwd(), encoding: 'utf8' }));
+      const catalog = (columns: { results: Array<Record<string, unknown>> }) => catalogFromPragmaResults(['default_probe'], [columns, { results: [] }, { results: [] }, { results: [] }, { results: [] }]);
+      const originalDefaults = catalog(defaultOutput.at(-2));
+      const changedDefaults = catalog(defaultOutput.at(-1));
+      expect(originalDefaults.tables.default_probe.columns.map(column => column.defaultValue)).toEqual([null, 'null', "'null'"]);
+      expect(changedDefaults.tables.default_probe.columns.map(column => column.defaultValue)).toEqual(['null', null, 'null']);
+      expect(diffDrizzleContract(buildCatalogContract(originalDefaults), changedDefaults).verdict).toBe('fail');
     } finally {
       rmSync(persistence, { recursive: true, force: true });
     }

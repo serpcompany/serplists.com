@@ -3,8 +3,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
-import { prepareProduction, verifyRecoveryBundle, digest, approvalToken } from "./production-preparation-lib.mjs";
+import { afterEach, describe, expect, it } from "vitest";
+import { prepareProduction, verifyRecoveryBundle, digest, approvalToken, repositoryMigrationHistory, RECOVERY_MAX_AGE_MS } from "./production-preparation-lib.mjs";
 
 import {
   assertApprovalMatchesRequest,
@@ -111,18 +111,20 @@ function validIdentityCheck() {
 }
 
 function validProductionResults() {
-  const steps = ["identity", "recovery-bookmark", "recovery-export", "reviewed-pending-range", "pre-invariants", "migration-apply", "ledger-clean", "schema-contract", "post-invariants"];
+  const steps = ["identity", "recovery-bookmark", "recovery-export", "reviewed-pending-range", "pre-invariants", "source-schema", "migration-apply", "ledger-clean", "schema-contract", "post-invariants"];
   return Object.fromEntries(steps.map((step) => [step, validStepResult(step)]));
 }
 
 function validStepResult(step) {
   const pendingMigrations = ["0024_safe_template_evolution.sql"];
+  const source = { commit, database: production, ledgerSha256: digest(repositoryMigrationHistory().slice(0, -1)), appliedThrough: '0023_add_sitemap_revision_state.sql', migrationRange: { from: pendingMigrations[0], to: pendingMigrations[0] }, catalogSha256: 'a'.repeat(64), objectCount: 100 };
   const summaries = {
+    'source-schema': { type: step, verdict: 'pass', ...source, proofSha256: digest(source) },
     identity: { type: step, databaseName: production.databaseName, databaseId: production.databaseId },
     "recovery-bookmark": { type: step, captured: true, bookmark: "bookmark-verified" },
     "recovery-export": { type: step, encryptedBackupSha256: "b".repeat(64), encryptedBackupByteLength: 128 },
     "reviewed-pending-range": { type: step, pendingMigrations, from: pendingMigrations[0], to: pendingMigrations[0] },
-    "pre-invariants": { type: step, invariantCount: 20, appliedThrough: "0023_add_sitemap_revision_state.sql", ledgerSha256: "c".repeat(64), domainDigest: "d".repeat(64) },
+    "pre-invariants": { type: step, invariantCount: 20, appliedThrough: "0023_add_sitemap_revision_state.sql", appliedMigrations: repositoryMigrationHistory().slice(0, -1), ledgerSha256: digest(repositoryMigrationHistory().slice(0, -1)), domainDigest: "d".repeat(64) },
     "migration-apply": { type: step, appliedMigrations: pendingMigrations },
     "ledger-clean": { type: step, pendingMigrations: [], appliedThrough: pendingMigrations[0] },
     "schema-contract": { type: step, verdict: "pass", appliedThrough: pendingMigrations[0], schemaDigest: "e".repeat(64) },
@@ -150,7 +152,294 @@ function preparedHandshake(run = validStepResult, request = validPromotionEviden
   return { preparation, receipt, approval, bundle };
 }
 
+const driftCases = {
+  unknown: names => [...names.slice(0, -1), '0023_unknown.sql'],
+  duplicate: names => [...names.slice(0, -1), names.at(-2)],
+  reordered: names => [names[1], names[0], ...names.slice(2)],
+  missing: names => names.slice(1),
+  skipped: names => names.filter((_, index) => index !== 5),
+  malformed: names => [...names.slice(0, -1), 'private-sentinel@example.test'],
+};
+
+describe('repository prefix and fixed recovery expiry', () => {
+  it.each(Object.entries(driftCases))('blocks %s in preparation and execution even with unchanged digest', (_name, drift) => {
+    const calls = [];
+    const badResult = step => {
+      calls.push(step);
+      const result = validStepResult(step);
+      if (step === 'pre-invariants') {
+        result.summary.appliedMigrations = drift(result.summary.appliedMigrations);
+        result.summary.ledgerSha256 = digest(result.summary.appliedMigrations);
+      }
+      return result;
+    };
+    expect(() => preparedHandshake(badResult)).toThrow();
+    expect(calls).not.toContain('migration-apply');
+    const handshake = preparedHandshake();
+    handshake.preparation.results['pre-invariants'] = badResult('pre-invariants');
+    handshake.receipt.preparationSha256 = digest(handshake.preparation);
+    handshake.approval.decision = `Approved ${approvalToken(handshake.receipt)}`;
+    calls.length = 0;
+    expect(() => runProductionDataPhase({ ...handshake, pendingMigrations: validPromotionEvidence().pendingMigrations, run: badResult })).toThrow();
+    expect(calls).toEqual([]);
+  });
+
+  const instant = Date.parse('2026-09-05T00:00:00.000Z');
+  const times = [
+    ['fresh', instant, true], ['one millisecond before expiry', instant - RECOVERY_MAX_AGE_MS + 1, true],
+    ['boundary', instant - RECOVERY_MAX_AGE_MS, false], ['expired', instant - RECOVERY_MAX_AGE_MS - 1, false],
+    ['ancient', 0, false], ['future', instant + 1, false], ['malformed', 'yesterday', false],
+    ['invalid calendar', '2026-02-30T00:00:00.000Z', false], ['missing', undefined, false],
+  ];
+  it.each(times)('verifies %s recovery with an explicit clock', (_name, timestamp, pass) => {
+    const { bundle } = preparedHandshake();
+    bundle.preparation.preparedAt = typeof timestamp === 'number' ? new Date(timestamp).toISOString() : timestamp;
+    bundle.expectedDigest = digest(bundle.preparation);
+    bundle.clock = () => instant;
+    if (pass) expect(verifyRecoveryBundle(bundle).preparationSha256).toBe(bundle.expectedDigest);
+    else expect(() => verifyRecoveryBundle(bundle)).toThrow(/freshness/);
+  });
+
+  it.each(times)('runs the durable verification CLI with %s recovery and reports a safe reason', (_name, timestamp, pass) => {
+    const cwd = mkdtempSync(path.join(tmpdir(), 'recovery-expiry-cli-'));
+    try {
+      const { bundle } = preparedHandshake();
+      bundle.preparation.preparedAt = typeof timestamp === 'number' ? new Date(timestamp).toISOString() : timestamp;
+      for (const [name, value] of Object.entries({request: bundle.request, preparation: bundle.preparation})) writeFileSync(path.join(cwd, `${name}.json`), JSON.stringify(value));
+      writeFileSync(path.join(cwd, 'export.enc'), bundle.encrypted);
+      writeFileSync(path.join(cwd, 'clock.mjs'), `Date.now = () => ${instant};`);
+      const result = spawnSync(process.execPath, ['--import', path.join(cwd, 'clock.mjs'), fileURLToPath(new URL('./verify-production-preparation.mjs', import.meta.url)), '--request', 'request.json', '--preparation', 'preparation.json', '--encrypted-export', 'export.enc', '--preparation-digest', digest(bundle.preparation), '--artifact-id', '123', '--output', 'receipt.json'], {cwd, encoding: 'utf8', env: {...context}});
+      expect(result.status, result.stderr).toBe(pass ? 0 : 1);
+      expect(existsSync(path.join(cwd, 'receipt.json'))).toBe(pass);
+      for (const suffix of ['json', 'junit.xml', 'txt', 'md']) {
+        const output = readFileSync(path.join(cwd, `tmp/recovery-verification/durable-recovery-verification.${suffix}`), 'utf8');
+        if (!pass) expect(output).toContain('freshness');
+      }
+      const report = JSON.parse(readFileSync(path.join(cwd, 'tmp/recovery-verification/durable-recovery-verification.json')));
+      expect(report.commit).toBe(commit);
+      expect(report.target.databaseId).toBe(production.databaseId);
+    } finally { rmSync(cwd, {recursive: true, force: true}); }
+  });
+
+  it('rejects a capture that itself consumes the entire recovery window', () => {
+    let now = instant;
+    expect(() => prepareProduction({ request: validPromotionEvidence(), context: {}, clock: () => now, run: step => {
+      if (step === 'recovery-export') now += RECOVERY_MAX_AGE_MS;
+      return validStepResult(step);
+    } })).toThrow(/freshness/);
+  });
+
+  it.each(['approval wait', 'invariant delay'])('blocks same-run %s then requires new capture and new receipt approval', delay => {
+    let now = instant;
+    const calls = [];
+    const request = validPromotionEvidence();
+    const encrypted = Buffer.from('isolated encrypted fixture');
+    const context = { repository: 'serpcompany/serplists.com', runId: '12', runAttempt: '1', commit };
+    const capture = () => prepareProduction({ request, context, clock: () => now, run: step => {
+      calls.push(`capture:${step}`);
+      const result = validStepResult(step);
+      if (step === 'recovery-export') result.summary = { encryptedBackupSha256: digest(encrypted), encryptedBackupByteLength: encrypted.length };
+      return result;
+    } });
+    const preparation = capture();
+    const verify = (preparation, artifactId) => verifyRecoveryBundle({ request, preparation, encrypted, expectedDigest: digest(preparation), artifactId, context, clock: () => now });
+    const receipt = verify(preparation, '1');
+    const approve = receipt => ({ ...validApproval(), recovery: receipt, decision: `Approve ${approvalToken(receipt)}` });
+    const approval = approve(receipt);
+    if (delay !== 'invariant delay') now += RECOVERY_MAX_AGE_MS;
+    const execute = (preparation, receipt, approval, delayed = false) => runProductionDataPhase({ commit, database: production, preparation, receipt, approval, pendingMigrations: request.pendingMigrations, clock: () => now, run: step => {
+      calls.push(`execute:${step}`);
+      if (delayed && step === 'pre-invariants') now += RECOVERY_MAX_AGE_MS;
+      return validStepResult(step);
+    } });
+    expect(() => execute(preparation, receipt, approval, delay === 'invariant delay')).toThrow(/freshness/);
+    expect(calls).not.toContain('execute:migration-apply');
+    const fresh = capture();
+    const freshReceipt = verify(fresh, '2');
+    expect(() => execute(fresh, freshReceipt, approval)).toThrow(/approval/);
+    expect(execute(fresh, freshReceipt, approve(freshReceipt)).payload.verdict).toBe('pass');
+    expect(calls.filter(step => step === 'execute:migration-apply')).toHaveLength(1);
+  });
+});
+
+// Real local subprocesses emulate the transport only. The unmodified executor
+// CLI parses their responses, performs identity checks, and writes its reports.
+function executorSandbox() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'executor-boundary-'));
+  const bin = path.join(cwd, 'bin');
+  mkdirSync(bin);
+  const request = validPromotionEvidence();
+  writeFileSync(path.join(cwd, 'request.json'), JSON.stringify(request));
+  const configuration = { database: production, history: repositoryMigrationHistory(), sql: repositoryMigrationHistory().map(name => readFileSync(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8')), pending: request.pendingMigrations, failure: null, drift: null };
+  const fake = `#!${process.execPath}
+const fs = require('node:fs');
+const path = require('node:path');
+const args = process.argv.slice(2), config = JSON.parse(fs.readFileSync('transport.json'));
+const state = fs.existsSync('state.json') ? JSON.parse(fs.readFileSync('state.json')) : { applied: false, ledgers: 0, pendingQueries: 0 };
+const command = args.join(' ');
+const stage = command.includes('d1 info') ? 'identity' : command.includes('time-travel') ? 'bookmark' : command.includes('d1 export') ? 'export' : command.includes('migrations apply') ? 'migration' : command.includes('migrations list') ? 'pending' : command.includes('check:prod:d1-schema') ? 'schema' : command.includes('FROM d1_migrations') ? 'ledger' : command.includes('FROM sqlite_schema') ? 'source-schema' : 'invariant';
+fs.appendFileSync('calls.txt', stage + '\\n');
+if (stage === 'pending') state.pendingQueries++;
+if (stage === 'identity' && config.delayFinalIdentity && state.pendingQueries >= 3) fs.writeFileSync('clock.txt', String(config.clock + 900000));
+if (stage === 'schema') {
+  const dir = args[args.indexOf('--report-dir') + 1];
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'raw-child.txt'), 'SQL_PRIVATE_SENTINEL user@example.test token-private');
+  fs.writeFileSync('schema-directory.txt', dir);
+}
+if (stage === config.failure || (config.failure === 'post-invariant' && stage === 'invariant' && state.applied)) {
+  console.log('SQL_PRIVATE_SENTINEL user@example.test token-private');
+  console.error('SQL_PRIVATE_SENTINEL user@example.test token-private');
+  process.exit(23);
+}
+const output = value => console.log(JSON.stringify(value));
+if (stage === 'identity') output([{uuid: config.database.databaseId, name: config.database.databaseName}]);
+else if (stage === 'bookmark') output({bookmark: 'local-bookmark'});
+else if (stage === 'export') fs.writeFileSync(args[args.indexOf('--output') + 1], 'local fixture export');
+else if (stage === 'pending') console.log(state.applied || !config.pending.length ? 'No migrations to apply!' : 'Migrations to be applied:\\n┌──────────────────────────────────┐\\n' + config.pending.map(name => '│ ' + name + ' │').join('\\n') + '\\n└──────────────────────────────────┘');
+else if (stage === 'migration') { state.applied = true; console.log('applied'); }
+else if (stage === 'ledger') {
+  state.ledgers++;
+  let names = state.applied ? config.history : config.history.slice(0, config.history.length - config.pending.length);
+  if (config.drift && (!config.driftAfter || state.ledgers >= config.driftAfter)) names = config.drift;
+  output([{ results: names.map((name, index) => ({id: index + 1, name})) }]);
+} else if (stage === 'source-schema') {
+  state.catalogQueries = (state.catalogQueries || 0) + 1;
+  const db = new (require('node:sqlite').DatabaseSync)(':memory:');
+  for (const sql of config.sql.slice(0, config.history.length - (state.applied ? 0 : config.pending.length))) db.exec(sql);
+  if (config.sourceDrift && state.catalogQueries >= (config.sourceDriftAfter || 1)) db.exec(config.sourceDrift);
+  output([{results: db.prepare(args[args.indexOf('--command') + 1]).all()}]);
+  db.close();
+} else if (stage === 'schema') {
+  const dir = args[args.indexOf('--report-dir') + 1];
+  const db = config.database;
+  fs.writeFileSync(path.join(dir, 'd1-schema-production.json'), JSON.stringify({verdict: 'pass', identityChecks: [{...db, before: db, after: db}]}));
+} else if (args.includes('--file')) {
+  const sql = fs.readFileSync(args[args.indexOf('--file') + 1], 'utf8');
+  output([{results: [...sql.matchAll(/SELECT '([^']+)' AS invariant/g)].map(match => ({invariant: match[1], total_rows: 0}))}]);
+} else output([{results: []}]);
+fs.writeFileSync('state.json', JSON.stringify(state));
+`;
+  writeFileSync(path.join(bin, 'pnpm'), fake); chmodSync(path.join(bin, 'pnpm'), 0o755);
+  // Encryption is a local transport fixture too; never consume real keys.
+  writeFileSync(path.join(bin, 'openssl'), `#!${process.execPath}\nconst fs=require('node:fs'); const a=process.argv; fs.writeFileSync(a[a.indexOf('-out')+1], 'encrypted local fixture');\n`);
+  chmodSync(path.join(bin, 'openssl'), 0o755);
+  const invoke = mode => {
+    writeFileSync(path.join(cwd, 'transport.json'), JSON.stringify(configuration));
+    const extra = mode === 'data' ? ['--approval', 'approval.json', '--preparation', 'preparation.json', '--encrypted-export', `reports/production-recovery-${commit}.sql.enc`, '--preparation-digest', digest(JSON.parse(readFileSync(path.join(cwd, 'preparation.json')))), '--artifact-id', '123'] : [];
+    const clockArgs = configuration.clock ? ['--import', path.join(cwd, 'clock.mjs')] : [];
+    return spawnSync(process.execPath, [...clockArgs, fileURLToPath(new URL('./production-executor.mjs', import.meta.url)), mode, '--request', 'request.json', '--output', mode === 'prepare' ? 'preparation.json' : 'evidence.json', '--report-dir', 'reports', ...extra], {cwd, encoding: 'utf8', env: {...context, PATH: bin, DATA_PROTECTED_ENVIRONMENT: mode === 'prepare' ? 'production-preparation' : 'production'}});
+  };
+  const approve = () => {
+    const preparation = JSON.parse(readFileSync(path.join(cwd, 'preparation.json')));
+    const receipt = verifyRecoveryBundle({request, preparation, encrypted: readFileSync(path.join(cwd, `reports/production-recovery-${commit}.sql.enc`)), expectedDigest: digest(preparation), artifactId: '123', context: preparation.context, ...(configuration.clock ? {clock: () => configuration.clock} : {})});
+    writeFileSync(path.join(cwd, 'approval.json'), JSON.stringify({...validApproval(), recovery: receipt, decision: `Approve fixture ${approvalToken(receipt)}`}));
+  };
+  return {cwd, configuration, request, invoke, approve};
+}
+
+describe('local executor subprocess boundaries', () => {
+  // These synchronous child transports can collectively occupy the worker for
+  // over a minute. Let Vitest deliver report updates between scenarios.
+  afterEach(() => new Promise(resolve => setImmediate(resolve)));
+  it.each(['identity', 'bookmark', 'export', 'pending', 'ledger', 'invariant', 'source-schema', 'migration', 'schema', 'post-invariant', 'data:identity', 'data:pending', 'data:ledger', 'data:invariant', 'data:source-schema'])('contains real %s child failures in every report and console', failure => {
+    const sandbox = executorSandbox();
+    const {cwd, configuration, invoke, approve} = sandbox;
+    try {
+      const dataPhase = ['migration', 'schema', 'post-invariant'].includes(failure) || failure.startsWith('data:');
+      if (dataPhase) {
+        expect(invoke('prepare').status).toBe(0); approve();
+      }
+      configuration.failure = failure.replace('data:', '');
+      const result = invoke(dataPhase ? 'data' : 'prepare');
+      expect(result.status, result.stderr).toBe(1);
+      const report = JSON.parse(readFileSync(path.join(cwd, 'reports/production-data-promotion.json')));
+      expect(report.failure.exitStatus).toBe(23);
+      for (const output of [result.stdout, result.stderr, ...['json', 'junit.xml', 'txt', 'md'].map(suffix => readFileSync(path.join(cwd, `reports/production-data-promotion.${suffix}`), 'utf8'))]) {
+        for (const sentinel of ['SQL_PRIVATE_SENTINEL', 'user@example.test', 'token-private']) expect(output).not.toContain(sentinel);
+      }
+      expect(existsSync(path.join(cwd, 'evidence.json'))).toBe(false);
+      const calls = readFileSync(path.join(cwd, 'calls.txt'), 'utf8').trim().split('\n');
+      expect(calls.filter(call => call === 'migration')).toHaveLength(['migration', 'schema', 'post-invariant'].includes(failure) ? 1 : 0);
+      if (failure === 'schema') expect(existsSync(readFileSync(path.join(cwd, 'schema-directory.txt'), 'utf8'))).toBe(false);
+    } finally { rmSync(cwd, {recursive: true, force: true}); }
+  });
+
+  it('checks the injected clock after the final identity subprocess and blocks expiry with zero writes', () => {
+    const {cwd, configuration, invoke, approve} = executorSandbox();
+    try {
+      configuration.clock = Date.parse('2026-09-05T00:00:00.000Z');
+      writeFileSync(path.join(cwd, 'clock.txt'), String(configuration.clock));
+      writeFileSync(path.join(cwd, 'clock.mjs'), `import { readFileSync } from 'node:fs'; Date.now = () => Number(readFileSync('clock.txt', 'utf8'));`);
+      expect(invoke('prepare').status).toBe(0); approve();
+      configuration.delayFinalIdentity = true;
+      const result = invoke('data');
+      expect(result.status).toBe(1);
+      for (const suffix of ['json', 'junit.xml', 'txt', 'md']) expect(readFileSync(path.join(cwd, `reports/production-data-promotion.${suffix}`), 'utf8')).toContain('freshness');
+      expect(readFileSync(path.join(cwd, 'calls.txt'), 'utf8').split('\n')).not.toContain('migration');
+    } finally { rmSync(cwd, {recursive: true, force: true}); }
+  });
+
+  it.each(Object.entries(driftCases))('rejects %s ledger during prepare and the last read before mutation', (_name, drift) => {
+    for (const phase of ['prepare', 'data']) {
+      const {cwd, configuration, invoke, approve} = executorSandbox();
+      try {
+        if (phase === 'data') { expect(invoke('prepare').status).toBe(0); approve(); }
+        configuration.drift = drift(configuration.history.slice(0, -1));
+        // Preparation has invariant + source-before/after ledger reads;
+        // execution repeats those before the final pre-write ledger read.
+        configuration.driftAfter = phase === 'data' ? 7 : 1;
+        const result = invoke(phase);
+        expect(result.status, result.stderr).toBe(1);
+        expect(readFileSync(path.join(cwd, 'calls.txt'), 'utf8').split('\n')).not.toContain('migration');
+      } finally { rmSync(cwd, {recursive: true, force: true}); }
+    }
+  });
+
+  it.each([1, 2, 3])('rejects live trigger drift at catalog read %s before any apply subprocess', sourceDriftAfter => {
+    const {cwd, configuration, invoke, approve} = executorSandbox();
+    try {
+      configuration.sourceDrift = 'CREATE TRIGGER private_sentinel AFTER UPDATE ON templates BEGIN DELETE FROM checklist_runs WHERE user_id=NEW.user_id; END';
+      configuration.sourceDriftAfter = sourceDriftAfter;
+      if (sourceDriftAfter > 1) { expect(invoke('prepare').status).toBe(0); approve(); }
+      const result = invoke(sourceDriftAfter === 1 ? 'prepare' : 'data');
+      expect(result.status, result.stderr).toBe(1);
+      expect(readFileSync(path.join(cwd, 'calls.txt'), 'utf8').split('\n')).not.toContain('migration');
+      for (const suffix of ['json', 'junit.xml', 'txt', 'md']) {
+        const report = readFileSync(path.join(cwd, `reports/production-data-promotion.${suffix}`), 'utf8');
+        expect(report).toContain('source catalog');
+        expect(report).not.toContain('private_sentinel');
+      }
+    } finally { rmSync(cwd, {recursive: true, force: true}); }
+  });
+
+  it.each([false, true])('completes full prepare/approval/execute with no migrations=%s', noMigrations => {
+    const {cwd, configuration, request, invoke, approve} = executorSandbox();
+    try {
+      if (noMigrations) {
+        configuration.pending = []; request.pendingMigrations = [];
+        for (const value of [request, request.ci, request.rehearsal, request.rehearsal.authenticatedRehearsal, request.staging]) value.migrationRange = {from: null, to: null};
+        writeFileSync(path.join(cwd, 'request.json'), JSON.stringify(request));
+      }
+      const prepared = invoke('prepare'); expect(prepared.status, prepared.stderr).toBe(0);
+      approve();
+      const executed = invoke('data'); expect(executed.status, executed.stderr).toBe(0);
+      expect(JSON.parse(readFileSync(path.join(cwd, 'evidence.json'))).payload.verdict).toBe('pass');
+    } finally { rmSync(cwd, {recursive: true, force: true}); }
+  });
+});
+
 describe("protected production executor", () => {
+  it('rejects source proof replay for another request even when invariant metadata supplies the old identity', () => {
+    const request = validPromotionEvidence();
+    request.database = { ...production, databaseId: '11111111-1111-4111-8111-111111111111' };
+    expect(() => preparedHandshake(step => {
+      const result = validStepResult(step);
+      if (step === 'pre-invariants') result.summary.database = production;
+      return result;
+    }, request)).toThrow(/Source schema proof/);
+  });
+
   it("rejects local, push, unprotected, mismatched-commit, and legacy credential contexts", () => {
     for (const env of [
       {},
@@ -203,11 +492,10 @@ describe("protected production executor", () => {
       expect(existsSync(path.join(cwd, "evidence.json"))).toBe(false);
       const report = JSON.parse(readFileSync(path.join(reportDirectory, "production-data-promotion.json"), "utf8"));
       expect(report.operations).toEqual({ activeStep: null, attemptedSteps: [], completedSteps: [], results: {} });
-      expect(report.error).toContain("keys must be separate");
+      expect(report.failure.stage).toBe('production-configuration');
       const outputs = [result.stdout, result.stderr];
       for (const suffix of ["json", "junit.xml", "txt", "md"]) {
         const output = readFileSync(path.join(reportDirectory, `production-data-promotion.${suffix}`), "utf8");
-        for (const role of roles) expect(output).toContain(role);
         outputs.push(output);
       }
       for (const output of outputs) {
@@ -564,7 +852,7 @@ esac
 
     expect(calls).toEqual([
       "identity", "reviewed-pending-range",
-      "pre-invariants", "migration-apply", "ledger-clean", "schema-contract", "post-invariants",
+      "pre-invariants", "source-schema", "migration-apply", "ledger-clean", "schema-contract", "post-invariants",
     ]);
     expect(assertDeployEvidence({ signedEvidence: result, commit, database: production })).toMatchObject({
       verdict: "pass",
@@ -617,7 +905,7 @@ esac
     if (scenario === "success") {
       const evidence = orchestrate();
       expect(assertDeployEvidence({ signedEvidence: evidence, commit, database: production }).verdict).toBe("pass");
-      expect(calls).toEqual(["prepare:identity", "prepare:recovery-bookmark", "prepare:recovery-export", "prepare:reviewed-pending-range", "prepare:pre-invariants", "upload", "durable-verified", "approval", "execute:identity", "execute:reviewed-pending-range", "execute:pre-invariants", "execute:migration-apply", "execute:ledger-clean", "execute:schema-contract", "execute:post-invariants"]);
+      expect(calls).toEqual(["prepare:identity", "prepare:recovery-bookmark", "prepare:recovery-export", "prepare:reviewed-pending-range", "prepare:pre-invariants", "prepare:source-schema", "upload", "durable-verified", "approval", "execute:identity", "execute:reviewed-pending-range", "execute:pre-invariants", "execute:source-schema", "execute:migration-apply", "execute:ledger-clean", "execute:schema-contract", "execute:post-invariants"]);
     } else {
       expect(orchestrate).toThrow();
       expect(calls).not.toContain("execute:migration-apply");
@@ -691,6 +979,7 @@ esac
     ["empty invariant summary", (fixture) => { fixture.signedEvidence.payload.results["pre-invariants"].summary.invariantCount = 0; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["unclean ledger summary", (fixture) => { fixture.signedEvidence.payload.results["ledger-clean"].summary.pendingMigrations = ["hidden.sql"]; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["empty schema summary", (fixture) => { fixture.signedEvidence.payload.results["schema-contract"].summary.schemaDigest = ""; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["source-only schema proof", (fixture) => { fixture.signedEvidence.payload.results["schema-contract"] = fixture.signedEvidence.payload.results['source-schema']; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["missing step identity", (fixture) => { fixture.signedEvidence.payload.results["migration-apply"].identityChecks = []; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["missing independent approval", (fixture) => { fixture.signedEvidence.payload.approval = {}; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["self approval in signed evidence", (fixture) => { fixture.signedEvidence.payload.approval.approver = "AUTHOR"; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],

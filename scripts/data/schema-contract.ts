@@ -221,7 +221,7 @@ export function buildCatalogContract(catalog: DatabaseCatalog): DrizzleContract 
         name: column.name,
         affinity: sqliteAffinity(column.type),
         notNull: column.notNull,
-        defaultValue: normalizeSql(column.defaultValue),
+        defaultValue: normalizeDefault(column.defaultValue),
         primaryKey: column.primaryKey,
       })),
       indexes: table.indexes.map((index) => ({
@@ -240,26 +240,76 @@ export function buildCatalogContract(catalog: DatabaseCatalog): DrizzleContract 
   };
 }
 
-function normalizeSql(sql: unknown): string | null {
+function withoutSqlComments(sql: string): string {
+  let result = '';
+  let index = 0;
+  while (index < sql.length) {
+    const character = sql[index];
+    if (["'", '"', '`', '['].includes(character)) {
+      const end = character === '[' ? ']' : character;
+      result += character; index++;
+      while (index < sql.length) {
+        const value = sql[index]; result += value; index++;
+        if (value === end) {
+          if (end !== ']' && sql[index] === end) { result += sql[index]; index++; }
+          else break;
+        }
+      }
+    } else if (sql.startsWith('--', index)) {
+      while (index < sql.length && !['\n', '\r'].includes(sql[index])) index++;
+      result += ' ';
+    } else if (sql.startsWith('/*', index)) {
+      const end = sql.indexOf('*/', index + 2);
+      if (end === -1) throw new Error('Unterminated SQL comment.');
+      index = end + 2; result += ' ';
+    } else { result += character; index++; }
+  }
+  return result;
+}
+
+export function normalizeSql(sql: unknown, preserveQuotes = false): string | null {
   if (sql == null) return null;
-  let normalized = String(sql ?? "")
-    .split(/('(?:''|[^'])*')/)
+  let normalized = withoutSqlComments(String(sql))
+    .split(/('(?:''|[^'])*'|"(?:""|[^"])*"|`(?:``|[^`])*`|\[[^\]]*\])/)
     .map((part, index) => index % 2
-      ? part
-      : part
-          .replaceAll("`", "")
-          .replaceAll('"', "")
-          .replaceAll("[", "")
-          .replaceAll("]", "")
-          .toLowerCase())
+      ? (preserveQuotes || part.startsWith("'") ? part : part.slice(1, -1).toLowerCase())
+      : part.toLowerCase().replace(/\s+/g, " "))
     .join("")
-    .replace(/\s+/g, " ")
     .trim()
     .replace(/;$/, "");
-  if (normalized.startsWith("(") && normalized.endsWith(")")) {
+  // Strip only parentheses enclosing the entire expression, never (a)+(b).
+  while (normalized.startsWith("(") && normalized.endsWith(")")) {
+    const unquoted = normalized.replace(/('(?:''|[^'])*'|"(?:""|[^"])*"|`(?:``|[^`])*`|\[[^\]]*\])/g, token => " ".repeat(token.length));
+    let depth = 0;
+    let encloses = true;
+    for (let index = 0; index < unquoted.length; index++) {
+      if (unquoted[index] === "(") depth++;
+      if (unquoted[index] === ")") depth--;
+      if (depth === 0 && index < unquoted.length - 1) { encloses = false; break; }
+    }
+    if (!encloses || depth !== 0) break;
     normalized = normalized.slice(1, -1).trim();
   }
   return normalized;
+}
+
+function normalizeDefault(sql: unknown) {
+  // Double-quoted SQLite defaults can be string literals; retain their content.
+  return normalizeSql(sql, true);
+}
+
+function canonicalizeCatalog(catalog: DatabaseCatalog): DatabaseCatalog {
+  const byName = (left: { name: string }, right: { name: string }) => left.name.localeCompare(right.name, "en");
+  return {
+    tables: Object.fromEntries(Object.entries(catalog.tables).sort(([a], [b]) => a.localeCompare(b, "en")).map(([name, table]) => [name, {
+      ...table,
+      columns: table.columns.map(column => ({ ...column, defaultValue: normalizeDefault(column.defaultValue) })),
+      indexes: [...table.indexes].sort(byName),
+      foreignKeys: [...table.foreignKeys].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b), "en")),
+    }])),
+    triggers: [...catalog.triggers].sort(byName),
+    views: [...catalog.views].sort(byName),
+  };
 }
 
 function sqliteAffinity(type: unknown) {
@@ -282,7 +332,9 @@ function normalizeDrizzleDefault(value: unknown, dialect: SQLiteSyncDialect) {
   if (typeof value === "boolean") return value ? "1" : "0";
   if (typeof value === "number" || typeof value === "bigint") return String(value);
   if (typeof value === "string") return `'${value.replaceAll("'", "''")}'`;
-  return normalizeDrizzleSql(value, dialect);
+  const query = dialect.sqlToQuery(value as Parameters<SQLiteSyncDialect["sqlToQuery"]>[0]);
+  if (query.params.length) throw new Error("Drizzle schema contract SQL must not contain unresolved parameters.");
+  return normalizeDefault(query.sql);
 }
 
 function predicateFromIndexSql(sql: unknown, partial: boolean) {
@@ -309,7 +361,7 @@ export function inspectDatabase(database: Database): DatabaseCatalog {
         name: String(column.name),
         type: String(column.type ?? "").toUpperCase(),
         notNull: pragmaBoolean(column.notnull) || Number(column.pk ?? 0) > 0,
-        defaultValue: column.dflt_value == null ? null : normalizeSql(column.dflt_value),
+        defaultValue: column.dflt_value == null ? null : String(column.dflt_value),
         primaryKey: Number(column.pk ?? 0),
       }));
     const indexes = (database.prepare(`PRAGMA index_list('${escapedTableName}')`).all() as Array<Record<string, unknown>>)
@@ -354,7 +406,24 @@ export function inspectDatabase(database: Database): DatabaseCatalog {
   }));
 
   const views = (database.prepare("SELECT name, sql FROM sqlite_schema WHERE type = 'view' ORDER BY name").all() as Array<{ name: string; sql: string }>).map((view) => ({ name: view.name, sql: normalizeSql(view.sql) ?? "" }));
-  return { tables, triggers, views };
+  return canonicalizeCatalog({ tables, triggers, views });
+}
+
+export function tableInfoSql(tableName: string): string {
+  return `SELECT cid, name, type, "notnull", dflt_value, pk, dflt_value IS NULL AS default_is_null FROM pragma_table_info('${tableName.replaceAll("'", "''")}')`;
+}
+
+function pragmaDefault(column: Record<string, unknown>): string | null {
+  if ('default_is_null' in column) {
+    if (![0, 1, '0', '1'].some(value => value === column.default_is_null)) throw new Error('Malformed explicit default-null flag in remote schema output.');
+    const flag = Number(column.default_is_null);
+    if (flag === 1) {
+      if (column.dflt_value != null && column.dflt_value !== 'null') throw new Error('Inconsistent absent-default metadata in remote schema output.');
+      return null;
+    }
+    if (column.dflt_value == null) throw new Error('Missing declared default in remote schema output.');
+  }
+  return column.dflt_value == null ? null : String(column.dflt_value);
 }
 
 export function catalogFromPragmaResults(tableNames: string[], results: PragmaResult[]): DatabaseCatalog {
@@ -373,9 +442,7 @@ export function catalogFromPragmaResults(tableNames: string[], results: PragmaRe
         name: String(column.name),
         type: String(column.type ?? "").toUpperCase(),
         notNull: pragmaBoolean(column.notnull) || Number(column.pk ?? 0) > 0,
-        defaultValue: column.dflt_value == null || String(column.dflt_value).toLowerCase() === "null"
-          ? null
-          : String(column.dflt_value),
+        defaultValue: pragmaDefault(column),
         primaryKey: Number(column.pk ?? 0),
       })),
       indexes: indexes
@@ -402,7 +469,7 @@ export function catalogFromPragmaResults(tableNames: string[], results: PragmaRe
   const objects = results.at(-1)?.results ?? [];
   const triggers = objects.filter((row) => row.object_type === "trigger").map((row) => ({ name: String(row.name), table: String(row.table_name), sql: normalizeSql(row.sql) ?? "" }));
   const views = objects.filter((row) => row.object_type === "view").map((row) => ({ name: String(row.name), sql: normalizeSql(row.sql) ?? "" }));
-  return { tables, triggers, views };
+  return canonicalizeCatalog({ tables, triggers, views });
 }
 
 export function diffDrizzleContract(contract: DrizzleContract, catalog: DatabaseCatalog) {
@@ -432,7 +499,7 @@ export function diffDrizzleContract(contract: DrizzleContract, catalog: Database
       const actualAffinity = sqliteAffinity(actualColumn.type);
       if (expectedColumn.affinity !== actualAffinity) issues.push(`expected affinity ${expectedColumn.affinity}; received ${actualAffinity}`);
       if (expectedColumn.notNull !== actualColumn.notNull) issues.push(expectedColumn.notNull ? "expected NOT NULL" : "expected nullable");
-      const actualDefault = normalizeSql(actualColumn.defaultValue);
+      const actualDefault = normalizeDefault(actualColumn.defaultValue);
       if (expectedColumn.defaultValue !== actualDefault) {
         issues.push(`expected default ${expectedColumn.defaultValue ?? "no default"}; received ${actualDefault ?? "no default"}`);
       }
@@ -513,6 +580,8 @@ export function contractFingerprint(contract: DrizzleContract) {
 }
 
 export function compareDatabaseSchemas(expected: DatabaseCatalog, actual: DatabaseCatalog) {
+  expected = canonicalizeCatalog(expected);
+  actual = canonicalizeCatalog(actual);
   const differences: string[] = [];
   const tableNames = [...new Set([...Object.keys(expected.tables), ...Object.keys(actual.tables)])].sort();
 

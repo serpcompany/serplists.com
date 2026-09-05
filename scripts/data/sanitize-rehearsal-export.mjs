@@ -13,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { assertSanitizerSourceWorkflowContext } from "./workflow-request-context-lib.mjs";
-import { generateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
+import { generateSanitizedRehearsalArtifact, resolveSanitizerProfile } from "./sanitizer-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
 import { runRepositoryGit } from "./git-subprocess-env.mjs";
 
@@ -70,7 +70,7 @@ function resolveRawInput(value) {
 let rawInputPathForCleanup;
 let shouldCleanupRawInput = false;
 let reportDirectory = path.join(repoRoot, "tmp/data-reports/sanitizer");
-let reportContext = { commit: "unknown", target: { environment: "production", binding: "DB", databaseName: "unknown", databaseId: "unknown" }, migrationRange: { from: "unknown", to: "unknown" }, sanitizerVersion: "source-derived-shape-v2" };
+let reportContext = { commit: "unknown", target: { environment: "production", binding: "DB", databaseName: "unknown", databaseId: "unknown" }, migrationRange: { from: "unknown", to: "unknown" }, sanitizerVersion: "source-derived-shape-v3" };
 
 try {
   const { values, flags } = parseArgs(process.argv.slice(2));
@@ -81,7 +81,7 @@ try {
   if (requestedSourceIdentityPath && existsSync(requestedSourceIdentityPath)) {
     sourceIdentity = JSON.parse(readFileSync(requestedSourceIdentityPath, "utf8"));
   }
-  reportContext = { commit: gitCommit, target: { environment: "production", binding: "DB", databaseName: productionIdentity.databaseName, databaseId: sourceIdentity?.databaseId ?? "unknown" }, migrationRange: { from: values["--migration-from"] ?? "unknown", to: values["--migration-to"] ?? "unknown" }, sanitizerVersion: "source-derived-shape-v2" };
+  reportContext = { commit: gitCommit, target: { environment: "production", binding: "DB", databaseName: productionIdentity.databaseName, databaseId: sourceIdentity?.databaseId ?? "unknown" }, migrationRange: { from: values["--migration-from"] ?? "unknown", to: values["--migration-to"] ?? "unknown" }, sanitizerVersion: "source-derived-shape-v3" };
   const requestedReportDirectory = path.resolve(repoRoot, values["--report-dir"] ?? "tmp/data-reports/sanitizer");
   const allowedReportRoot = path.join(repoRoot, "tmp/data-reports");
   if (requestedReportDirectory !== allowedReportRoot && !requestedReportDirectory.startsWith(`${allowedReportRoot}${path.sep}`)) throw new Error("Sanitizer report directory must stay under ignored tmp/data-reports/.");
@@ -98,12 +98,14 @@ try {
   const migrationFrom = requireValue(values, "--migration-from");
   const migrationTo = requireValue(values, "--migration-to");
   reportContext.migrationRange = normalizeMigrationRange({ from: migrationFrom, to: migrationTo });
+  const sourceSchema = requireValue(values, "--source-schema");
+  reportContext.sourceProfile = resolveSanitizerProfile({ repoRoot, migrationRange: reportContext.migrationRange, sourceSchema });
   if (new Set([inputPath, outputPath, manifestPath]).size !== 3) {
     throw new Error("Sanitizer input, output, and manifest paths must be distinct.");
   }
 
   const plan = {
-    sanitizer: "source-derived-shape-v2",
+    sanitizer: "source-derived-shape-v3",
     inputPath,
     outputPath,
     manifestPath,
@@ -112,6 +114,7 @@ try {
     requestedApproverIdentity: approverIdentity,
     gitCommit,
     target: reportContext.target,
+    sourceProfile: reportContext.sourceProfile,
   };
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
   if (!flags.has("--execute")) process.exit(0);
@@ -130,6 +133,8 @@ try {
   const artifact = generateSanitizedRehearsalArtifact({
     repoRoot,
     rawExport: readFileSync(inputPath, "utf8"),
+    migrationRange: reportContext.migrationRange,
+    sourceSchema,
     sourceDatabaseId,
     sourceDate,
     gitCommit,

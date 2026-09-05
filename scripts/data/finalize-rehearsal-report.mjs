@@ -21,6 +21,7 @@ try {
   const invariants = JSON.parse(readFileSync(arg("--comparison"), "utf8"));
   const sanitizedManifest = JSON.parse(readFileSync(arg("--sanitizer-manifest"), "utf8"));
   const authenticated = source.authenticatedRehearsal;
+  if (JSON.stringify(authenticated?.sourceProfile) !== JSON.stringify(sanitizedManifest.sourceProfile) || authenticated?.manifestIntegritySha256 !== sanitizedManifest.manifestIntegritySha256) throw new Error("Authenticated source profile/manifest binding mismatch.");
   validateAuthenticatedCandidateEvidence(authenticated, { requireDetectors: true });
   validateSanitizedStateBinding(authenticated.postMigrationState, invariants.sanitizedState);
   const expectedLedger = readdirSync(path.join(repoRoot, "db/migrations")).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
@@ -41,11 +42,14 @@ try {
     expectedSanitizerVersion: sanitizedManifest?.sanitizerVersion,
   });
   const recoveryPass = recovery.verdict === "pass";
+  if (JSON.stringify(recovery.sanitizer.sourceProfile) !== JSON.stringify(sanitizedManifest.sourceProfile) || recovery.sanitizer.manifestIntegritySha256 !== sanitizedManifest.manifestIntegritySha256 || recovery.sanitizer.artifactSha256 !== sanitizedManifest.artifact.sha256) throw new Error("Recovery source profile/manifest binding mismatch.");
   validateSanitizedRehearsalArtifact({
     sql: readFileSync(arg("--sanitized"), "utf8"),
     manifest: sanitizedManifest,
     policy: loadSanitizerPolicy({ repoRoot }),
     now: new Date(),
+    migrationRange,
+    sourceSchema: expectedPlan.preMigration,
   });
   const teardownPass = /PASS rehearsal .* is absent/.test(readFileSync(arg("--teardown"), "utf8"));
   const remoteTarget = { environment: "rehearsal", binding: "DB", databaseName: arg("--database-name"), databaseId: arg("--database-id") };
@@ -66,6 +70,10 @@ try {
       verdict: "pass",
       attestation: { verdict: "pass", verifier: "github-cli-before-import" },
       sanitizerVersion: sanitizedManifest.sanitizerVersion,
+      sourceProfile: sanitizedManifest.sourceProfile,
+      observedSourceShapes: sanitizedManifest.selection.observedSourceShapes,
+      absentSourceShapes: sanitizedManifest.selection.absentSourceShapes,
+      syntheticEdgeCaseRequirements: sanitizedManifest.selection.syntheticEdgeCaseRequirements,
       artifactSha256: sanitizedManifest.artifact.sha256,
       manifestIntegritySha256: sanitizedManifest.manifestIntegritySha256,
       sourceDate: sanitizedManifest.provenance.sourceDate,
@@ -81,7 +89,7 @@ try {
   writeFileSync(output, JSON.stringify(report, null, 2) + "\n");
   writeFileSync(output.replace(/\.json$/, ".md"), `# Production-shaped rehearsal: PASS\n\nCommit: ${report.commit}\nEnvironment: rehearsal\nDatabase: ${report.target.databaseName} (${report.target.databaseId})\nRecovery database: ${recovery.recoveryDatabase.name} (${recovery.recoveryDatabase.id})\nMigration: ${report.migrationRange.from} -> ${report.migrationRange.to}\nCoverage plan: ${report.coverage.planId} (${report.coverage.declarationSha256})\nSanitizer: ${sanitizedManifest.sanitizerVersion}\nSanitizer artifact: ${sanitizedManifest.artifact.sha256}\nSource date: ${sanitizedManifest.provenance.sourceDate}\nAccess owner: ${sanitizedManifest.handling.accessOwner}\nRetention deadline: ${sanitizedManifest.handling.retentionDeadline}\nAuthenticated candidate template/run reads and writes: PASS\nFalse-empty and API-error detection: PASS\nRequired affected-domain coverage: PASS\nRecovery, raw-source cleanup, database teardown: PASS\n`);
   const xml = (value) => String(value).replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-  const stateSummary = `\nAuthenticated post-migration state: ${authenticated.postMigrationState.domainSha256}\nExact post-migration ledger: ${authenticated.postMigrationState.ledgerSha256}\nLocal and remote transformed dataset equality: PASS\n`;
+  const stateSummary = `\nSource profile: ${sanitizedManifest.sourceProfile.profile}\nSource schema: ${sanitizedManifest.sourceProfile.sourceSchema}\nObserved source shapes: ${sanitizedManifest.selection.observedSourceShapes.join(", ") || "none"}\nAbsent source shapes: ${sanitizedManifest.selection.absentSourceShapes.join(", ") || "none"}\nSeparate synthetic edge-case requirements: ${sanitizedManifest.selection.syntheticEdgeCaseRequirements.join(", ") || "none"}\nAuthenticated post-migration state: ${authenticated.postMigrationState.domainSha256}\nExact post-migration ledger: ${authenticated.postMigrationState.ledgerSha256}\nLocal and remote transformed dataset equality: PASS\n`;
   writeFileSync(output.replace(/\.json$/, ".md"), readFileSync(output.replace(/\.json$/, ".md"), "utf8") + stateSummary);
   writeFileSync(output.replace(/\.json$/, ".junit.xml"), `<testsuite name="production-shaped-rehearsal" tests="1" failures="0"><properties><property name="commit" value="${xml(report.commit)}"/><property name="environment" value="rehearsal"/><property name="database" value="${xml(report.target.databaseName)}"/><property name="databaseId" value="${xml(report.target.databaseId)}"/><property name="recoveryDatabaseId" value="${xml(recovery.recoveryDatabase.id)}"/><property name="migration" value="${xml(`${report.migrationRange.from}->${report.migrationRange.to}`)}"/><property name="sanitizer" value="${xml(sanitizedManifest.sanitizerVersion)}"/></properties><testcase name="rehearsal-and-separate-database-restore"/></testsuite>\n`);
   const junitPath = output.replace(/\.json$/, ".junit.xml");

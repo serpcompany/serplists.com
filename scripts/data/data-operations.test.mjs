@@ -115,6 +115,7 @@ describe("data operation plans", () => {
       repoRoot,
       gitCommit: "0123456789abcdef",
       importPath: "tmp/rehearsal-sensitive/recovery.sql",
+      importSql: 'PRAGMA defer_foreign_keys=TRUE; CREATE TABLE users(id TEXT);',
     });
     expect(plan.command).toEqual(expect.arrayContaining([
       "--file", path.join(repoRoot, "tmp/rehearsal-sensitive/recovery.sql"),

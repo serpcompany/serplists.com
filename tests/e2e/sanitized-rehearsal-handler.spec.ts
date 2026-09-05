@@ -10,6 +10,9 @@ test("@smoke exact sanitized rows pass authenticated candidate template and run 
   expect(state.transformation.verdict).toBe("pass");
   expect(state.commit).toBe(process.env.DATA_REGRESSION_START_COMMIT);
   expect(state.sourceSha256).toBe(process.env.PLAYWRIGHT_SANITIZER_SHA256);
+  const manifest = JSON.parse(readFileSync(process.env.PLAYWRIGHT_SANITIZER_MANIFEST!, "utf8"));
+  expect(state.sourceProfile).toEqual(manifest.sourceProfile);
+  expect(state.manifestIntegritySha256).toBe(manifest.manifestIntegritySha256);
   await page.goto("/login");
   await page.locator("#email").fill("rehearsal-owner@e2e.local");
   await page.locator("#password").fill("password123");
@@ -50,6 +53,6 @@ test("@smoke exact sanitized rows pass authenticated candidate template and run 
   expect(proof).toMatchObject({ templatesStatus: 200, runsStatus: 200, templateRead: true, runRead: true, templateWriteReadback: true, runWriteReadback: true });
   const output = process.env.PLAYWRIGHT_REHEARSAL_PROOF;
   if (!output) throw new Error("Rehearsal proof output is required.");
-  const { rows: _rows, commit, migrationRange, transformation, ...postMigrationState } = state;
-  writeFileSync(output, JSON.stringify({ verdict: "pass", commit, target: { environment: "local", binding: "DB", databaseName: "serp-checklists-db", databaseId: "local:miniflare:DB@isolated-data-regression" }, migrationRange, sanitizerArtifactSha256: process.env.PLAYWRIGHT_SANITIZER_SHA256, postMigrationState, transformation, handlerStateReadback: true, checks: { templateRead: proof.templateRead, runRead: proof.runRead, templateWriteReadback: proof.templateWriteReadback, runWriteReadback: proof.runWriteReadback } }, null, 2));
+  const { rows: _rows, commit, migrationRange, transformation, sourceProfile, manifestIntegritySha256, ...postMigrationState } = state;
+  writeFileSync(output, JSON.stringify({ verdict: "pass", commit, target: { environment: "local", binding: "DB", databaseName: "serp-checklists-db", databaseId: "local:miniflare:DB@isolated-data-regression" }, migrationRange, sourceProfile, manifestIntegritySha256, sanitizerArtifactSha256: process.env.PLAYWRIGHT_SANITIZER_SHA256, postMigrationState, transformation, handlerStateReadback: true, checks: { templateRead: proof.templateRead, runRead: proof.runRead, templateWriteReadback: proof.templateWriteReadback, runWriteReadback: proof.runWriteReadback } }, null, 2));
 });

@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from 'node:os';
 import path from "node:path";
+import { tsImport } from 'tsx/esm/api';
 import {
   assertDeployEvidence,
   assertApprovalMatchesRequest,
@@ -12,12 +14,13 @@ import {
   validatePromotionEvidence,
   verifySignedEvidence,
 } from "./production-executor-lib.mjs";
-import { captureRemoteInvariantSnapshot, compareProductionInvariants } from "./invariant-capture-lib.mjs";
+import { captureRemoteInvariantSnapshot, compareProductionInvariants, parseAppliedMigrationLedger } from "./invariant-capture-lib.mjs";
 import { extractD1Identity } from "./wrangler-identity-lib.mjs";
 import { parsePendingMigrationNames } from "./pending-migrations-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
 import { runProductionIdentityBoundCommand } from "./production-identity-bound-command-lib.mjs";
-import { prepareProduction, verifyRecoveryBundle, digest } from "./production-preparation-lib.mjs";
+import { prepareProduction, verifyRecoveryBundle, digest, assertRepositoryAppliedPrefix, assertRecoveryFreshness, repositoryMigrationHistory } from "./production-preparation-lib.mjs";
+import { safeCanaryFailure, wrapCanarySubprocessFailure } from './canary-diagnostics.mjs';
 import { loadEnvironmentInventory, validateEnvironmentInventory } from "./environment-identity-lib.mjs";
 
 function arg(name) {
@@ -27,7 +30,11 @@ function arg(name) {
 const baseChildEnv = Object.fromEntries(["PATH", "HOME", "CI", "FORCE_COLOR", "NO_COLOR"].filter((key) => process.env[key]).map((key) => [key, process.env[key]]));
 const cloudflareChildEnv = { ...baseChildEnv, CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID };
 function run(command, args, env = baseChildEnv) {
-  return execFileSync(command, args, { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"], maxBuffer: 20 * 1024 * 1024 });
+  try {
+    return execFileSync(command, args, { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"], maxBuffer: 20 * 1024 * 1024 });
+  } catch (error) {
+    throw wrapCanarySubprocessFailure(`production-${operationState.activeStep ?? 'configuration'}`, error);
+  }
 }
 function pnpm(args) { return run(process.platform === "win32" ? "pnpm.cmd" : "pnpm", args, cloudflareChildEnv); }
 function extractBookmark(output) {
@@ -57,7 +64,7 @@ process.once("SIGINT", () => { cleanupPlaintext(); process.exit(130); });
 process.once("SIGTERM", () => { cleanupPlaintext(); process.exit(143); });
 let report;
 let requestSnapshot = {
-  commit: process.env.GITHUB_SHA ?? "unknown",
+  commit: /^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA ?? '') ? process.env.GITHUB_SHA : 'unknown',
   target: { environment: "production", databaseName: "unread-request", databaseId: null },
   migrationRange: { from: null, to: null },
 };
@@ -70,11 +77,15 @@ const operationState = {
 try {
   if (!requestPath) throw new Error("Protected executor requires --request.");
   const requestInput = JSON.parse(readFileSync(requestPath, "utf8"));
+  const repoRoot = path.resolve(new URL("../..", import.meta.url).pathname);
+  const trustedDatabase = loadEnvironmentInventory({ repoRoot }).environments.production;
   requestSnapshot = {
-    commit: requestInput?.commit ?? process.env.GITHUB_SHA ?? "unknown",
-    target: { environment: "production", ...(requestInput?.database ?? {}) },
-    migrationRange: requestInput?.migrationRange ?? { from: null, to: null },
+    commit: /^[a-f0-9]{40}$/.test(requestInput?.commit ?? '') ? requestInput.commit : 'unknown',
+    target: { environment: "production", binding: 'DB', databaseName: trustedDatabase.databaseName, databaseId: trustedDatabase.databaseId },
+    migrationRange: { from: null, to: null },
   };
+  const knownMigrations = repositoryMigrationHistory();
+  for (const end of ['from', 'to']) if (knownMigrations.includes(requestInput?.migrationRange?.[end])) requestSnapshot.migrationRange[end] = requestInput.migrationRange[end];
   const request = validatePromotionEvidence(requestInput);
   if (mode === "prepare" && process.env.DATA_PROTECTED_ENVIRONMENT !== "production-preparation") throw new Error("Recovery preparation requires the protected read-only environment.");
   const context = ["data", "prepare"].includes(mode)
@@ -102,9 +113,11 @@ try {
     receipt = verifyRecoveryBundle({ request, preparation, encrypted: readFileSync(arg("--encrypted-export")), expectedDigest: arg("--preparation-digest"), artifactId: arg("--artifact-id"), context });
   }
 
-  const database = request.database;
+  const database = { databaseName: request.database.databaseName, databaseId: request.database.databaseId };
   let pendingObserved = [];
   let preInvariantSnapshot = null;
+  const { inspectSourceSchema } = await tsImport('./source-schema.ts', import.meta.url);
+  let sourceSchemaProof = null;
   const orchestrate = mode === "prepare" ? prepareProduction : runProductionDataPhase;
   const evidence = orchestrate({
     request, context, preparation, receipt,
@@ -125,7 +138,10 @@ try {
           database,
           operation,
           commandArgs: args,
-          runWrangler: (wranglerArgs) => pnpm(["exec", "wrangler", ...wranglerArgs]),
+          runWrangler: (wranglerArgs) => {
+            if (wranglerArgs.slice(0, 3).join(' ') === 'd1 migrations apply') assertRecoveryFreshness(preparation);
+            return pnpm(["exec", "wrangler", ...wranglerArgs]);
+          },
         });
         identityChecks.push(result.observedIdentity);
         return result.output;
@@ -174,7 +190,13 @@ try {
         case "pre-invariants":
           preInvariantSnapshot = captureInvariants("pre");
           output = JSON.stringify(preInvariantSnapshot);
-          summary = { type: step, invariantCount: Object.keys(preInvariantSnapshot.invariants).length, appliedThrough: preInvariantSnapshot.appliedThrough, ledgerSha256: preInvariantSnapshot.ledgerSha256, domainDigest: preInvariantSnapshot.domain.digest };
+          assertRepositoryAppliedPrefix({ ...preInvariantSnapshot, pendingMigrations: request.pendingMigrations });
+          summary = { type: step, invariantCount: Object.keys(preInvariantSnapshot.invariants).length, appliedThrough: preInvariantSnapshot.appliedThrough, appliedMigrations: preInvariantSnapshot.appliedMigrations, ledgerSha256: preInvariantSnapshot.ledgerSha256, domainDigest: preInvariantSnapshot.domain.digest };
+          break;
+        case "source-schema":
+          sourceSchemaProof = inspectSourceSchema({ commit: request.commit, database, pendingMigrations: request.pendingMigrations, wrapFailure: wrapCanarySubprocessFailure,
+            execute: sql => identityBound('source-schema', ['d1', 'execute', database.databaseName, '--remote', '--json', '--command', sql]) });
+          summary = sourceSchemaProof;
           break;
         case "post-invariants": {
           const post = captureInvariants("post");
@@ -192,6 +214,17 @@ try {
           break;
         }
         case "migration-apply":
+          // Re-read after potentially slow invariant queries, then check age after
+          // the final identity read and immediately before the mutation command.
+          {
+            const appliedMigrations = parseAppliedMigrationLedger(identityBound('pre-write-ledger', ['d1', 'execute', database.databaseName, '--remote', '--json', '--command', 'SELECT id, name FROM d1_migrations ORDER BY id']));
+            const pendingMigrations = parsePendingMigrationNames(identityBound('pre-write-pending', ['d1', 'migrations', 'list', database.databaseName, '--remote']), knownMigrations);
+            if (JSON.stringify(pendingMigrations) !== JSON.stringify(request.pendingMigrations)) throw new Error('Reviewed pending range changed.');
+            assertRepositoryAppliedPrefix({ appliedMigrations, pendingMigrations, ledgerSha256: digest(appliedMigrations) });
+            const adjacentProof = inspectSourceSchema({ commit: request.commit, database, pendingMigrations, wrapFailure: wrapCanarySubprocessFailure,
+              execute: sql => identityBound('source-schema', ['d1', 'execute', database.databaseName, '--remote', '--json', '--command', sql]) });
+            if (adjacentProof.proofSha256 !== sourceSchemaProof?.proofSha256) throw new Error('Source catalog changed before apply.');
+          }
           output = identityBound("migration-apply", ["d1", "migrations", "apply", database.databaseName, "--remote"]);
           summary = { type: step, appliedMigrations: [...request.pendingMigrations] };
           break;
@@ -201,11 +234,20 @@ try {
           summary = { type: step, pendingMigrations: [], appliedThrough: request.migrationRange.to ?? request.ciSchemaContract.migrationRange.to };
           break;
         case "schema-contract": {
-          output = pnpm(["run", "check:prod:d1-schema", "--", "--database-id", database.databaseId, "--report-dir", reportDirectory]);
-          const schemaEvidence = JSON.parse(readFileSync(path.join(reportDirectory, "d1-schema-production.json"), "utf8"));
+          // The child writes detailed schema diagnostics. Keep them out of the
+          // publishable artifact directory on both success and failure.
+          const privateReports = mkdtempSync(path.join(tmpdir(), 'production-schema-'));
+          let schemaEvidence;
+          try {
+            output = pnpm(["run", "check:prod:d1-schema", "--", "--database-id", database.databaseId, "--report-dir", privateReports]);
+            schemaEvidence = JSON.parse(readFileSync(path.join(privateReports, "d1-schema-production.json"), "utf8"));
+          } finally { rmSync(privateReports, { recursive: true, force: true }); }
           if (schemaEvidence.verdict !== "pass" || !Array.isArray(schemaEvidence.identityChecks) || schemaEvidence.identityChecks.length === 0) throw new Error("Production schema contract evidence lacks identity-bound D1 checks.");
-          identityChecks.push(...schemaEvidence.identityChecks);
-          summary = { type: step, verdict: schemaEvidence.verdict, appliedThrough: schemaEvidence.migrationRange?.to ?? request.ciSchemaContract.migrationRange.to, schemaDigest: createHash("sha256").update(JSON.stringify(schemaEvidence)).digest("hex") };
+          for (const check of schemaEvidence.identityChecks) {
+            if ([check, check.before, check.after].some(value => value?.databaseName !== database.databaseName || value?.databaseId !== database.databaseId)) throw new Error('Schema identity evidence mismatch.');
+            identityChecks.push({ environment: 'production', binding: 'DB', ...database, before: { ...database }, after: { ...database } });
+          }
+          summary = { type: step, verdict: 'pass', appliedThrough: knownMigrations.at(-1), schemaDigest: createHash("sha256").update(JSON.stringify(schemaEvidence)).digest("hex") };
           break;
         }
         default:
@@ -241,14 +283,15 @@ try {
     checks: [{ name: `request-sha256:${digest(request)}; preparation-sha256:${mode === "prepare" ? digest(evidence) : receipt.preparationSha256}`, verdict: "pass" }],
     operations: operationState,
   };
-  const summary = `PASS protected production ${mode} for ${request.commit}; ${request.migrationRange.from} -> ${request.migrationRange.to}; request SHA256 ${digest(request)}; preparation SHA256 ${report.preparationSha256}.`;
+  const summary = `PASS protected production ${mode} for ${request.commit}; DB ${database.databaseName} (${database.databaseId}); ${request.migrationRange.from} -> ${request.migrationRange.to}; request SHA256 ${digest(request)}; preparation SHA256 ${report.preparationSha256}.`;
   writeDataCheckReports({ name: "production-data-promotion", report, summary, reportDirectory });
   console.log(summary);
 } catch (error) {
-  cleanupPlaintext();
-  const message = error instanceof Error ? error.message : String(error);
+  try { cleanupPlaintext(); } catch (cleanupError) { error = cleanupError; }
+  const failure = safeCanaryFailure(`production-${operationState.activeStep ?? 'configuration'}`, error);
+  const message = failure.message;
   if (operationState.activeStep) {
-    operationState.results[operationState.activeStep] = { verdict: "fail", error: message };
+    operationState.results[operationState.activeStep] = { verdict: "fail", ...failure };
   }
   report = {
     check: "protected-production-data-promotion",
@@ -258,9 +301,11 @@ try {
     migrationRange: requestSnapshot.migrationRange,
     operations: operationState,
     error: message,
+    failure,
   };
-  const summary = `BLOCKED protected production executor: ${report.error}`;
-  writeDataCheckReports({ name: "production-data-promotion", report, summary, reportDirectory });
+  const summary = `BLOCKED protected production executor: ${report.error} Commit ${report.commit}; production DB ${report.target.databaseName} (${report.target.databaseId}); ${report.migrationRange.from} -> ${report.migrationRange.to}.`;
+  try { writeDataCheckReports({ name: "production-data-promotion", report, summary, reportDirectory }); }
+  catch { console.error('Protected production failure report could not be written.'); }
   console.error(summary);
   process.exitCode = 1;
 }

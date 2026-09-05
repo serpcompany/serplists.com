@@ -12,6 +12,7 @@ describe("isolated smoke child environment", () => {
       PATH: "/safe/bin",
       HOME: "/safe/home",
       CI: "1",
+      PLAYWRIGHT_SANITIZER_MANIFEST: "tmp/data-evidence/source.manifest.json",
       USESEND_API_KEY: "sentinel-usesend-secret",
       RESEND_API_KEY: "sentinel-resend-secret",
       CLOUDFLARE_API_TOKEN: "sentinel-cloudflare-secret",
@@ -20,6 +21,7 @@ describe("isolated smoke child environment", () => {
     });
 
     expect(child).toMatchObject({ PATH: "/safe/bin", HOME: "/safe/home", CI: "1" });
+    expect(child.PLAYWRIGHT_SANITIZER_MANIFEST).toBe("tmp/data-evidence/source.manifest.json");
     expect(JSON.stringify(child)).not.toContain("sentinel");
     expect(child).not.toHaveProperty("USESEND_API_KEY");
     expect(child).not.toHaveProperty("CLOUDFLARE_API_TOKEN");

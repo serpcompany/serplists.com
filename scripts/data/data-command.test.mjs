@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { DatabaseSync } from "node:sqlite";
 
 import { afterAll, describe, expect, it } from "vitest";
 
@@ -11,6 +12,7 @@ import {
   validateRehearsalCreationEvidence,
 } from "./data-command-lib.mjs";
 import { generateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
+import { syntheticSourceDatabase, exportSyntheticRows } from "./sanitizer-test-source.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
@@ -28,7 +30,7 @@ function writeGeneratedArtifact() {
   const tempDir = mkdtempSync(path.join(tmpdir(), "serp-generated-import-"));
   const inputPath = path.join(tempDir, "sanitized.sql");
   const manifestPath = path.join(tempDir, "manifest.json");
-  const artifact = generateSanitizedRehearsalArtifact({
+  const artifact = generateSanitizedRehearsalArtifact({ migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, sourceSchema: "0023_add_sitemap_revision_state.sql",
     repoRoot,
     rawExport: productionExportFixture,
     sourceDatabaseId: productionId,
@@ -59,6 +61,35 @@ function protectedEnvironment(target = "staging") {
 }
 
 describe("data command", () => {
+  it("executes the shared prepared full export and persists only transformation evidence", () => {
+    const privateRoot = path.join(repoRoot, "tmp/rehearsal-sensitive"); mkdirSync(privateRoot, { recursive: true });
+    const directory = mkdtempSync(path.join(privateRoot, "restore-command-test-"));
+    const reports = mkdtempSync(path.join(repoRoot, "tmp/data-reports/restore-command-test-"));
+    const input = path.join(directory, "recovery.sql");
+    writeFileSync(input, `PRAGMA defer_foreign_keys=TRUE; CREATE TABLE account(id TEXT, user_id TEXT REFERENCES users(id)); INSERT INTO account VALUES('a','u'); CREATE TABLE users(id TEXT PRIMARY KEY); INSERT INTO users VALUES('u');`);
+    const db = new DatabaseSync(":memory:");
+    let importedPath;
+    try {
+      const result = runDataCommand({
+        argv: ["recovery-restore", "--environment", "rehearsal", "--database-name", "serp-checklists-rehearsal-issue-95", "--database-id", rehearsalId, "--confirm-database-id", rehearsalId, "--approver-identity", "@devinschumacher", "--creation-evidence", creationEvidencePath, "--input", input, "--report-dir", reports, "--execute"],
+        repoRoot, gitCommit: fullGitCommit, now: new Date("2026-09-05T00:30:00.000Z"), env: protectedEnvironment(), write: () => {},
+        runCommand: command => {
+          if (command.includes("info")) return JSON.stringify({ uuid: rehearsalId, name: "serp-checklists-rehearsal-issue-95" });
+          if (command.some(part => String(part).includes("total_objects"))) return JSON.stringify([{ results: [{ total_objects: 0 }] }]);
+          importedPath = command[command.indexOf("--file") + 1];
+          expect(importedPath).not.toBe(input);
+          db.exec("PRAGMA foreign_keys=ON; BEGIN;");
+          db.exec(readFileSync(importedPath, "utf8"));
+          db.exec("COMMIT;");
+          return "private command output must not be reported";
+        },
+      });
+      expect(db.prepare("SELECT user_id FROM account").get().user_id).toBe("u");
+      expect(existsSync(importedPath)).toBe(false);
+      expect(result.output).not.toContain("private command output");
+      expect(JSON.parse(readFileSync(path.join(reports, "recovery-import.json"), "utf8"))).toMatchObject({ verdict: "pass", preparedPlaintextCleanup: "pass", transformation: { format: "d1-full-export-tables-first-v1" } });
+    } finally { db.close(); rmSync(directory, { recursive: true, force: true }); rmSync(reports, { recursive: true, force: true }); }
+  });
   it("prints exact identity before running and rechecks the live remote UUID", () => {
     const events = [];
     const result = runDataCommand({
@@ -192,7 +223,7 @@ describe("data command", () => {
     try {
       expect(() => runDataCommand({
         argv: [
-          "rehearsal-import", "--environment", "rehearsal",
+          "rehearsal-import", "--migration-from", "0024_safe_template_evolution.sql", "--migration-to", "0024_safe_template_evolution.sql", "--source-schema", "0023_add_sitemap_revision_state.sql", "--environment", "rehearsal",
           "--database-name", "serp-checklists-rehearsal-issue-95",
           "--database-id", rehearsalId,
           "--confirm-database-id", rehearsalId,
@@ -218,7 +249,7 @@ describe("data command", () => {
     try {
       const result = runDataCommand({
         argv: [
-          "rehearsal-import", "--environment", "rehearsal",
+          "rehearsal-import", "--migration-from", "0024_safe_template_evolution.sql", "--migration-to", "0024_safe_template_evolution.sql", "--source-schema", "0023_add_sitemap_revision_state.sql", "--environment", "rehearsal",
           "--database-name", "serp-checklists-rehearsal-issue-95",
           "--database-id", rehearsalId,
           "--confirm-database-id", rehearsalId,
@@ -405,7 +436,7 @@ describe("data command", () => {
     try {
       runDataCommand({
         argv: [
-          "rehearsal-export", "--environment", "rehearsal",
+          "rehearsal-export", "--migration-from", "0024_safe_template_evolution.sql", "--migration-to", "0024_safe_template_evolution.sql", "--source-schema", "0023_add_sitemap_revision_state.sql", "--environment", "rehearsal",
           "--database-name", "serp-checklists-rehearsal-issue-95",
           "--database-id", rehearsalId,
           "--confirm-database-id", rehearsalId,
@@ -422,11 +453,9 @@ describe("data command", () => {
             return JSON.stringify({ uuid: rehearsalId, name: "serp-checklists-rehearsal-issue-95" });
           }
           const rawPath = command[command.indexOf("--output") + 1];
-          writeFileSync(rawPath, [
-            "PRAGMA defer_foreign_keys=TRUE;",
-            "INSERT INTO d1_migrations VALUES(24,'0024_safe_template_evolution.sql','2026-09-05');",
-            generated.artifact.sql,
-          ].join("\n"));
+          const source = syntheticSourceDatabase(repoRoot);
+          try { writeFileSync(rawPath, exportSyntheticRows(source)); }
+          finally { source.close(); }
           return "Done!";
         },
       });

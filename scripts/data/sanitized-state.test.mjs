@@ -8,7 +8,7 @@ import { captureSanitizedState, sanitizedState, verifySanitizedTransformation, v
 const repoRoot = new URL("../..", import.meta.url).pathname;
 const migration = "0024_safe_template_evolution.sql";
 const ledger = listMigrationFiles().map((file) => file.name);
-const artifact = generateSanitizedRehearsalArtifact({ repoRoot, rawExport: readFileSync(path.join(repoRoot, "scripts/data/fixtures/production-export-edge-cases.sql"), "utf8"), sourceDatabaseId: "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1", sourceDate: "2026-09-05", gitCommit: "a".repeat(40), issueNumber: 95, requestedApproverIdentity: "@devinschumacher", generatedAt: new Date("2026-09-05T00:00:00Z"), retentionDeadline: "2026-09-05T12:00:00Z" });
+const artifact = generateSanitizedRehearsalArtifact({ migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, sourceSchema: "0023_add_sitemap_revision_state.sql", repoRoot, rawExport: readFileSync(path.join(repoRoot, "scripts/data/fixtures/production-export-edge-cases.sql"), "utf8"), sourceDatabaseId: "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1", sourceDate: "2026-09-05", gitCommit: "a".repeat(40), issueNumber: 95, requestedApproverIdentity: "@devinschumacher", generatedAt: new Date("2026-09-05T00:00:00Z"), retentionDeadline: "2026-09-05T12:00:00Z" });
 const snapshot = (db, applied) => sanitizedState({ templates: db.prepare("SELECT * FROM templates").all(), runs: db.prepare("SELECT * FROM checklist_runs").all(), ledger: applied, sourceSha256: artifact.manifest.artifact.sha256 });
 
 describe("sanitized candidate state", () => {

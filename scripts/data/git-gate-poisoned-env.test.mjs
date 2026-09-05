@@ -47,7 +47,7 @@ describe("poisoned Git environment isolation across data gates", () => {
       expect(command.status, command.stderr).toBe(0);
       expect(command.stdout).toContain(intendedCommit);
       expect(command.stdout).toContain('"databaseName": "serp-checklists-db"');
-      const sanitizer = spawnSync(process.execPath, ["scripts/data/sanitize-rehearsal-export.mjs", "--input", "tmp/production-sensitive/not-read.sql", "--output", "tmp/data-evidence/not-written.sql", "--manifest", "tmp/data-evidence/not-written.json", "--source-database-id", "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1", "--source-date", "2026-09-05", "--issue", "95", "--approver-identity", "@devinschumacher", "--retention-deadline", "2026-09-06T00:00:00.000Z", "--migration-from", "0024_safe_template_evolution.sql", "--migration-to", "0024_safe_template_evolution.sql"], { cwd: repoRoot, encoding: "utf8", env });
+      const sanitizer = spawnSync(process.execPath, ["scripts/data/sanitize-rehearsal-export.mjs", "--input", "tmp/production-sensitive/not-read.sql", "--output", "tmp/data-evidence/not-written.sql", "--manifest", "tmp/data-evidence/not-written.json", "--source-database-id", "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1", "--source-schema", "0023_add_sitemap_revision_state.sql", "--source-date", "2026-09-05", "--issue", "95", "--approver-identity", "@devinschumacher", "--retention-deadline", "2026-09-06T00:00:00.000Z", "--migration-from", "0024_safe_template_evolution.sql", "--migration-to", "0024_safe_template_evolution.sql"], { cwd: repoRoot, encoding: "utf8", env });
       expect(sanitizer.status, sanitizer.stderr).toBe(0);
       expect(sanitizer.stdout).toContain(intendedCommit);
       expect(sanitizer.stdout).toContain('"databaseName": "serp-checklists-db"');
