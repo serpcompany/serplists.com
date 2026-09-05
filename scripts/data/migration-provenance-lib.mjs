@@ -22,6 +22,14 @@ const TRUSTED_LEGACY_HEADER_SHA256 = "28bf4e0dd485e16d9ec2ae5d74ede9ff2f804e3448
 const TRUSTED_LEGACY_ENTRIES_SHA256 = "1481cb93b761a1c4252ac7866d39dcfd72ada0515dedc92ed46555a9b6676ff5";
 const TRUSTED_LEGACY_THROUGH = "0024_safe_template_evolution.sql";
 const TRUSTED_LEGACY_COUNT = 24;
+// Pinned independently of the candidate manifest and comparison branch. The
+// snapshot hash is included in TRUSTED_LEGACY_ENTRIES_SHA256 above.
+const TRUSTED_BOOTSTRAP_JOURNAL = {
+  version: "7", dialect: "sqlite", entries: [{
+    idx: 24, version: "6", when: 1788548742000,
+    tag: "0024_safe_template_evolution", breakpoints: true,
+  }],
+};
 
 const REQUIRED_GIT_LOCAL_ENV_VARS = [
   "GIT_ALTERNATE_OBJECT_DIRECTORIES",
@@ -251,11 +259,44 @@ function gitShow(repoRoot, ref, relativePath) {
   }
 }
 
+function comparisonRoot(state, baseRef) {
+  if (baseRef) {
+    // A missing object is not the same as an existing pre-provenance commit.
+    execFileSync("git", ["rev-parse", "--verify", `${baseRef}^{commit}`], {
+      cwd: state.repoRoot, env: sanitizedGitEnvironment(), stdio: "pipe",
+    });
+    const baseText = gitShow(state.repoRoot, baseRef, PROVENANCE_FILE);
+    if (baseText !== null) return {
+      provenance: JSON.parse(baseText),
+      read: (file) => gitShow(state.repoRoot, baseRef, file),
+    };
+  }
+  const migrations = state.provenance.migrations.slice(0, TRUSTED_LEGACY_COUNT);
+  if (sha256(JSON.stringify(state.provenance.baseline)) !== TRUSTED_LEGACY_HEADER_SHA256 ||
+      sha256(JSON.stringify(migrations)) !== TRUSTED_LEGACY_ENTRIES_SHA256) {
+    throw new Error("The independently pinned bootstrap migration root is invalid.");
+  }
+  const snapshots = new Map();
+  for (const entry of migrations.filter((item) => item.snapshot)) {
+    const file = `${META_DIRECTORY}/${entry.snapshot}`;
+    const content = readFileSync(path.join(state.repoRoot, file), "utf8");
+    if (sha256(content) !== entry.snapshotSha256) {
+      throw new Error(`Pinned bootstrap snapshot ${entry.snapshot} has changed.`);
+    }
+    snapshots.set(file, content);
+  }
+  return {
+    provenance: { baseline: state.provenance.baseline, migrations },
+    read: (file) => file === JOURNAL_FILE
+      ? JSON.stringify(TRUSTED_BOOTSTRAP_JOURNAL) : snapshots.get(file) ?? null,
+  };
+}
+
 export function validateAgainstBase(state, baseRef) {
-  if (!baseRef) return [];
-  const baseText = gitShow(state.repoRoot, baseRef, PROVENANCE_FILE);
-  if (baseText === null) return [];
-  const base = JSON.parse(baseText);
+  let root;
+  try { root = comparisonRoot(state, baseRef); }
+  catch (error) { return [failure("comparison-root", error.message)]; }
+  const base = root.provenance;
   const failures = [];
   const currentByFile = new Map(state.provenance.migrations.map((entry) => [entry.file, entry]));
   for (const [index, baseEntry] of base.migrations.entries()) {
@@ -273,7 +314,7 @@ export function validateAgainstBase(state, baseRef) {
   if (JSON.stringify(state.provenance.baseline) !== JSON.stringify(base.baseline)) {
     failures.push(failure("base-history-modified", `Legacy baseline metadata differs from immutable base ${baseRef}.`));
   }
-  const baseJournalText = gitShow(state.repoRoot, baseRef, JOURNAL_FILE);
+  const baseJournalText = root.read(JOURNAL_FILE);
   if (baseJournalText !== null) {
     const baseJournal = JSON.parse(baseJournalText);
     const currentPrefix = state.journal.entries.slice(0, baseJournal.entries.length);
@@ -285,24 +326,25 @@ export function validateAgainstBase(state, baseRef) {
 }
 
 export function verifyNewMigrationGeneratedFromBase(state, baseRef) {
-  if (!baseRef) return [];
-  const baseText = gitShow(state.repoRoot, baseRef, PROVENANCE_FILE);
-  if (baseText === null) return [];
-  const base = JSON.parse(baseText);
+  let root;
+  try { root = comparisonRoot(state, baseRef); }
+  catch (error) { return [failure("generated-reproduction", error.message)]; }
+  const base = root.provenance;
   const added = state.provenance.migrations.slice(base.migrations.length);
-  if (added.length === 0 || added.length > 1) return [];
+  if (added.length === 0) return [];
+  if (added.length > 1) return [failure("generated-reproduction", "Only one post-base migration can be reproduced against the current Drizzle schema.")];
   const candidate = added[0];
-  if (!candidate.snapshot) return [];
+  if (!candidate.snapshot) return [failure("generated-reproduction", "New migration lacks a snapshot.")];
   const scratch = mkdtempSync(path.join(tmpdir(), "serplists-drizzle-reproduce-"));
   try {
     const out = path.join(scratch, "migrations");
     const meta = path.join(out, "meta");
     mkdirSync(meta, { recursive: true });
-    const journal = gitShow(state.repoRoot, baseRef, JOURNAL_FILE);
+    const journal = root.read(JOURNAL_FILE);
     if (journal === null) return [failure("generated-reproduction", `Base ${baseRef} has no Drizzle journal.`)];
     writeFileSync(path.join(meta, "_journal.json"), journal);
     for (const entry of base.migrations.filter((item) => item.snapshot)) {
-      const contents = gitShow(state.repoRoot, baseRef, `${META_DIRECTORY}/${entry.snapshot}`);
+      const contents = root.read(`${META_DIRECTORY}/${entry.snapshot}`);
       if (contents === null) return [failure("generated-reproduction", `Base snapshot ${entry.snapshot} is unavailable.`)];
       writeFileSync(path.join(meta, entry.snapshot), contents);
     }
@@ -368,8 +410,8 @@ export function allPassingChecks(failures) {
     { name: "snapshot-lineage", failureNames: ["snapshot-lineage"] },
     { name: "journal-pairing", failureNames: ["journal-pairing"] },
     { name: "schema-snapshot-drift", failureNames: ["schema-snapshot-drift"] },
-    { name: "base-history-immutable", failureNames: ["base-history-immutable", "base-history-modified"] },
-    { name: "generated-reproduction", failureNames: ["generated-reproduction"] },
+    { name: "base-history-immutable", failureNames: ["base-history-immutable", "base-history-modified", "base-history-deleted", "comparison-root"] },
+    { name: "generated-reproduction", failureNames: ["generated-reproduction", "generated-sql-modified", "generated-snapshot-modified"] },
   ];
   return checks.map(({ name, failureNames }) => ({
     name,

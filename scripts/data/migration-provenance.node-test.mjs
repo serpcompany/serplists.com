@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
+import "./migration-provenance-bootstrap.node-test.mjs";
 
 import {
   allPassingChecks,
@@ -87,7 +88,7 @@ test("a no-op cannot extend the legacy baseline when the comparison base has no 
     });
 
     const state = loadProvenanceState(root);
-    assert.deepEqual(validateAgainstBase(state, base), []);
+    assert.ok(validateAgainstBase(state, base).some((item) => item.name === "comparison-root"));
     const names = validateProvenanceState(state).map((item) => item.name);
     assert.ok(names.includes("trusted-baseline-header"));
     assert.ok(names.includes("trusted-legacy-baseline"));
