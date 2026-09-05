@@ -7,6 +7,7 @@ import { digest, prepareProduction, approvalToken } from './production-preparati
 import { runProductionDataPhase } from './production-executor-lib.mjs';
 import type { ProductionStepResult } from './production-executor-lib.mjs';
 import { captureRemoteInvariantSnapshot } from './invariant-capture-lib.mjs';
+import { completePromotionEvidence } from './fixtures/complete-promotion-evidence.mjs';
 
 const commit = 'a'.repeat(40);
 const database = { databaseName: 'local-only', databaseId: 'local-only-id' };
@@ -91,7 +92,8 @@ describe('exact source catalog before writes', () => {
     const f = fixture();
     try {
       f.db.exec(readFileSync(new URL('./fixtures/production-export-edge-cases.sql', import.meta.url), 'utf8'));
-      const request = { ...f.binding };
+      const request = completePromotionEvidence({ commit, database });
+      request.classification = 'destructive';
       let writes = 0;
       const run = (step: string) => {
         if (step === 'source-schema') return { verdict: 'pass', summary: f.inspect() };
@@ -119,10 +121,15 @@ describe('exact source catalog before writes', () => {
         const results: unknown = prepared.results;
         assertPreparationResults(results);
         const preparation = { ...prepared, results };
-        const receipt = { preparationSha256: digest(preparation), runId: '1', runAttempt: '1', artifactId: '1' };
-        const approval = { recovery: receipt, recoveryTokenSha256: digest(approvalToken(receipt)) };
+        const receipt = { requestSha256: digest(request), preparationSha256: digest(preparation), runId: '1', runAttempt: '1', artifactId: '1' };
+        const approval = { recovery: receipt, recoveryTokenSha256: digest(approvalToken(receipt)),
+          environment: 'production', source: 'github-environment-review', approver: 'independent-reviewer', changeAuthors: ['author'], classification: request.classification,
+          reviewReference: { repository: 'serpcompany/serplists.com', runId: '1', runAttempt: '1', commit, environment: 'production' },
+          decisionSha256: digest('Reviewed isolated recovery fixture'),
+          riskDecision: { policy: 'meaningful-written-risk-reason-v1', sha256: digest('Reviewed isolated recovery fixture'), characterCount: 33, wordCount: 4 },
+        };
         drift();
-        expect(() => runProductionDataPhase({ ...f.binding, classification: 'destructive', preparation, receipt, approval, run })).toThrow(/source catalog/);
+        expect(() => runProductionDataPhase({ request, ...f.binding, classification: 'destructive', preparation, receipt, approval, run })).toThrow(/source catalog/);
       }
       expect(writes).toBe(0);
       expect(f.db.prepare('SELECT total_changes() AS n').get()).toEqual(changes);

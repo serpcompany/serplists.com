@@ -30,6 +30,20 @@ function exportRows(database) {
   )).join("\n");
 }
 
+function oversizedPersonalSource(current, secondOwner = true) {
+  const source = syntheticSourceDatabase(repoRoot, current);
+  source.exec("DELETE FROM checklist_runs; DELETE FROM templates");
+  const ownerA = source.prepare("SELECT id FROM users LIMIT 1").get().id;
+  const ownerB = secondOwner ? "PRIVATE_OWNER_B" : ownerA;
+  if (secondOwner) source.exec("INSERT INTO users(id,email,created_at) VALUES('PRIVATE_OWNER_B','private-b@example.test','2020-01-01')");
+  // Reproduce the review's adversarial input: B sorts beyond both fill limits.
+  const orderedIds = (family, count) => Array.from({ length: count }, (_, i) => `PRIVATE_${family}_${i}`).sort((a, b) => createHash("sha256").update(a).digest("hex").localeCompare(createHash("sha256").update(b).digest("hex")));
+  const templates = orderedIds("TEMPLATE", 17), runs = orderedIds("RUN", 25);
+  templates.forEach((id, i) => source.prepare("INSERT INTO templates(id,user_id,title,items,slug,version,created_at) VALUES(?,?,'Private','[]',?,?, '2020-01-01')").run(id, i === 16 ? ownerB : ownerA, id, i === 16 ? 702 : 701));
+  runs.forEach((id, i) => source.prepare("INSERT INTO checklist_runs(id,user_id,template_id,title,items,progress,created_at,started_at) VALUES(?,?,?,'Private','[]',?,'2020-01-01','2020-01-01')").run(id, i === 24 ? ownerB : ownerA, i === 24 ? templates[16] : templates[0], i === 24 ? 72 : 71));
+  return source;
+}
+
 it("accepts an actual post0024 export for application-only rehearsal without inventing legacy shapes", () => {
   const database = replayMigrations({ through: "0023_add_sitemap_revision_state.sql" });
   try {
@@ -45,6 +59,348 @@ it("accepts an actual post0024 export for application-only rehearsal without inv
 });
 
 describe("source-derived rehearsal sanitizer", () => {
+  it.each([false, true])("preserves zero and negative source versions (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    const source = syntheticSourceDatabase(repoRoot, current), target = replayMigrations({ through: context.sourceSchema });
+    try {
+      source.exec("UPDATE templates SET version=0");
+      if (current) source.exec("UPDATE templates SET content_version=-7; UPDATE checklist_runs SET template_version=0, revision=-3");
+      const exported = exportSyntheticRows(source);
+      const artifact = normalizeRehearsalDataExport({ repoRoot, rawExport: exported, ...context });
+      target.exec(artifact.sql);
+      expect(target.prepare("SELECT version FROM templates").all()).toEqual([{ version: 0 }, { version: 0 }]);
+      if (current) {
+        expect(target.prepare("SELECT content_version FROM templates").all()).toEqual([{ content_version: -7 }, { content_version: -7 }]);
+        expect(target.prepare("SELECT template_version,revision FROM checklist_runs").all()).toEqual([{ template_version: 0, revision: -3 }, { template_version: 0, revision: -3 }]);
+      }
+      expect(exportSyntheticRows(source)).toBe(exported);
+    } finally { source.close(); target.close(); }
+  });
+  it.each([false, true])("preserves finite fractional, out-of-range and null progress (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    for (const value of [-1, 0, 12.375, 100, 101, null]) {
+      const source = syntheticSourceDatabase(repoRoot, current), target = replayMigrations({ through: context.sourceSchema });
+      try {
+        source.prepare("UPDATE checklist_runs SET progress=?").run(value);
+        const exported = exportSyntheticRows(source);
+        const artifact = generate({ ...context, rawExport: exported });
+        target.exec(artifact.sql);
+        expect(target.prepare("SELECT progress FROM checklist_runs").all()).toEqual([{ progress: value }, { progress: value }]);
+        expect(exportSyntheticRows(source)).toBe(exported);
+      } finally { source.close(); target.close(); }
+    }
+  });
+  it.each([false, true])("rejects unsupported lifecycle scalar storage without disclosing values (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    const columns = [["templates", "version"], ["checklist_runs", "progress"], ["templates", "is_public"], ["checklist_runs", "is_public"],
+      ...(current ? [["templates", "content_version"], ["checklist_runs", "template_version"], ["checklist_runs", "revision"]] : [])];
+    for (const [table, column] of columns) for (const literal of ["'PRIVATE_SCALAR_VALUE'", "X'50524956415445'", "1e999", "9007199254740993",
+      ...(column === "progress" ? [] : ["1.25"]), ...(column === "is_public" ? ["-1", "2"] : [])]) {
+      const source = syntheticSourceDatabase(repoRoot, current);
+      try {
+        // Insert the literal into exported SQL so SQLite, not a JS fixture serializer, reads its storage representation.
+        const row = source.prepare(`SELECT * FROM ${table} LIMIT 1`).get();
+        const exported = exportSyntheticRows(source);
+        const original = exported.split("\n").find(line => line.startsWith(`INSERT INTO ${table} (`));
+        const values = Object.entries(row).map(([key, value]) => key === column ? literal : value == null ? "NULL" : typeof value === "number" ? String(value) : "'" + String(value).replaceAll("'", "''") + "'");
+        const changed = exported.replace(original, `INSERT INTO ${table} (${Object.keys(row).join(",")}) VALUES (${values.join(",")});`);
+        let error;
+        try { normalizeRehearsalDataExport({ repoRoot, rawExport: changed, ...context }); } catch (caught) { error = caught; }
+        expect(error, `${table}.${column}: ${literal}`).toBeInstanceOf(Error);
+        expect(error.message).not.toMatch(/PRIVATE|505249|9007199254740993/);
+        expect(error.message).not.toContain(row.id);
+      } finally { source.close(); }
+    }
+  });
+  it.each([false, true])("preserves nullable visibility flags exactly (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    for (const value of [null, 0, 1]) {
+      const source = syntheticSourceDatabase(repoRoot, current), target = replayMigrations({ through: context.sourceSchema });
+      try {
+        source.prepare("UPDATE templates SET is_public=?").run(value);
+        source.prepare("UPDATE checklist_runs SET is_public=?").run(value);
+        target.exec(generate({ ...context, rawExport: exportSyntheticRows(source) }).sql);
+        for (const table of ["templates", "checklist_runs"]) expect(target.prepare(`SELECT is_public FROM ${table}`).all()).toEqual([{ is_public: value }, { is_public: value }]);
+      } finally { source.close(); target.close(); }
+    }
+  });
+  it("preserves recognized JSON semantic numbers without clamping or exposing unrelated numbers", () => {
+    const source = syntheticSourceDatabase(repoRoot, true), target = replayMigrations();
+    try {
+      source.prepare("UPDATE templates SET items=?").run(JSON.stringify([{ id: "private-section", order: -2000000.25, version: 9007199254740991, value: 8765432101234, items: [] }]));
+      const artifact = generate({ ...currentContext, rawExport: exportSyntheticRows(source) });
+      target.exec(artifact.sql);
+      const item = JSON.parse(target.prepare("SELECT items FROM templates LIMIT 1").get().items)[0];
+      expect(item).toMatchObject({ order: -2000000.25, version: 9007199254740991 });
+      expect(item.value).not.toBe(8765432101234);
+      expect(() => validateSanitizedRehearsalArtifact({ ...artifact, policy: loadSanitizerPolicy({ repoRoot }), now: generatedAt, ...currentContext })).not.toThrow();
+    } finally { source.close(); target.close(); }
+  });
+  it.each([false, true])("rejects unsupported semantic JSON numbers before returning an artifact (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    for (const literal of ["1e999", "9007199254740993", "1e-999", "9007199254740991.1", "1.00000000000000001", "-9007199254740991.1", "0.10000000000000001", "100000000000000001e-17", "4.9e-324", "9007199254740992.0"]) {
+      const source = syntheticSourceDatabase(repoRoot, current);
+      try {
+        source.prepare("UPDATE templates SET items=?").run(`[{"id":"PRIVATE_SECTION","items":[],"order":${literal}}]`);
+        const exported = exportSyntheticRows(source);
+        expect(() => generate({ ...context, rawExport: exported })).toThrow("Production-shaped source contains an unsupported semantic JSON number representation.");
+        expect(exportSyntheticRows(source)).toBe(exported);
+      } finally { source.close(); }
+    }
+  });
+  it.each([false, true])("preserves equivalent decimal tokens through generator and validator (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    const cases = [
+      ["1.0", "1"], ["0.10", "0.1"], ["1e3", "1000"], ["1.2300E+2", "123"],
+      ["-2000000.2500", "-2000000.25"], ["12.3750", "12.375"],
+      ["9007199254740991.0", "9007199254740991"], ["-9007199254740991.00", "-9007199254740991"],
+      ["9.007199254740991e15", "9007199254740991"], ["1.00000000000000000", "1"],
+      ["1e-7", "1e-7"], ["0.0000010", "0.000001"], ["5.00e-324", "5e-324"],
+      ["-0.0", "0"], ["0e999999999999999999999", "0"],
+    ];
+    const source = syntheticSourceDatabase(repoRoot, current);
+    try {
+      for (const [token, serialized] of cases) {
+        source.prepare("UPDATE templates SET items=?").run(`[{"id":"PRIVATE_SECTION","items":[],"order":${token},"version":${token},"fileSize":${token}}]`);
+        const artifact = generate({ ...context, rawExport: exportSyntheticRows(source) });
+        for (const key of ["order", "version", "fileSize"]) expect(artifact.sql).toContain(`"${key}":${serialized}`);
+        expect(() => validateSanitizedRehearsalArtifact({ ...artifact, policy: loadSanitizerPolicy({ repoRoot }), now: generatedAt, ...context })).not.toThrow();
+      }
+    } finally { source.close(); }
+  });
+  it.each([false, true])("rejects decimal loss on an unsampled source row (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    const source = oversizedPersonalSource(current, false);
+    try {
+      source.exec("UPDATE checklist_runs SET progress=73 WHERE progress=72");
+      const baseline = generate({ ...context, rawExport: exportSyntheticRows(source) });
+      expect(baseline.manifest.selection.sourceCounts.checklistRuns).toBe(25);
+      expect(baseline.manifest.selection.selectedCounts.checklistRuns).toBe(24);
+      expect(baseline.sql).not.toContain(", 73,");
+      for (const token of ["9007199254740991.1", "1.00000000000000001"]) {
+        source.prepare("UPDATE checklist_runs SET items=? WHERE progress=73").run(`[{"id":"PRIVATE_UNSAMPLED","items":[],"order":${token}}]`);
+        const exported = exportSyntheticRows(source);
+        expect(() => generate({ ...context, rawExport: exported })).toThrow("Production-shaped source contains an unsupported semantic JSON number representation.");
+        expect(exportSyntheticRows(source)).toBe(exported);
+      }
+    } finally { source.close(); }
+  });
+  it.each([false, true])("rejects rehashed artifacts containing decimal loss (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    const source = syntheticSourceDatabase(repoRoot, current);
+    try {
+      source.prepare("UPDATE templates SET items=?").run('[{"id":"PRIVATE_SECTION","items":[],"order":1,"version":1,"fileSize":1}]');
+      const artifact = generate({ ...context, rawExport: exportSyntheticRows(source) });
+      for (const key of ["order", "version", "fileSize"]) for (const token of ["9007199254740991.1", "1.00000000000000001", "0.10000000000000001", "4.9e-324"]) {
+        const changed = structuredClone(artifact);
+        changed.sql = changed.sql.replace(`"${key}":1`, `"${key}":${token}`);
+        expect(changed.sql).not.toBe(artifact.sql);
+        const hash = text => createHash("sha256").update(text).digest("hex");
+        changed.manifest.artifact = { sha256: hash(changed.sql), byteLength: Buffer.byteLength(changed.sql) };
+        const { manifestIntegritySha256: ignored, ...unsigned } = changed.manifest;
+        changed.manifest.manifestIntegritySha256 = hash(JSON.stringify(unsigned));
+        expect(() => validateSanitizedRehearsalArtifact({ ...changed, policy: loadSanitizerPolicy({ repoRoot }), now: generatedAt, ...context })).toThrow("Sanitized artifact could not be verified against the repository schema.");
+      }
+    } finally { source.close(); }
+  });
+  it.each([false, true])("rejects explicit exports omitting lifecycle scalars while retaining positional exports (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    const source = syntheticSourceDatabase(repoRoot, current);
+    try {
+      const exported = exportSyntheticRows(source);
+      const expected = normalizeRehearsalDataExport({ repoRoot, rawExport: exported, ...context });
+      const positional = exported.replace(/^(INSERT INTO [a-z_]+) \([^\n]+?\) VALUES/gm, '$1 VALUES');
+      expect(normalizeRehearsalDataExport({ repoRoot, rawExport: positional, ...context }).sql).toBe(expected.sql);
+      for (const [table, columns] of [["templates", ["version", "is_public", "type", ...(current ? ["content_version"] : [])]], ["checklist_runs", ["progress", "is_public", "status", ...(current ? ["template_version", "revision"] : [])]]]) {
+        const row = source.prepare(`SELECT * FROM ${table} LIMIT 1`).get();
+        const original = exported.split("\n").find(line => line.startsWith(`INSERT INTO ${table} (`));
+        for (const omitted of columns) {
+          const entries = Object.entries(row).filter(([key]) => key !== omitted);
+          const values = entries.map(([, value]) => value == null ? "NULL" : typeof value === "number" ? String(value) : "'" + String(value).replaceAll("'", "''") + "'");
+          const changed = exported.replace(original, `INSERT INTO ${table} (${entries.map(([key]) => key).join(",")}) VALUES (${values.join(",")});`);
+          expect(() => normalizeRehearsalDataExport({ repoRoot, rawExport: changed, ...context }), `${table}.${omitted}`).toThrow(/omits.*columns/);
+        }
+      }
+    } finally { source.close(); }
+  });
+  it.each([false, true])("reserves distinct personal owners beyond both shape-sample thresholds (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    const source = oversizedPersonalSource(current), target = replayMigrations({ through: context.sourceSchema });
+    try {
+      const exported = exportSyntheticRows(source);
+      const artifact = generate({ ...context, rawExport: exported });
+      expect(artifact.manifest.selection.sourceCounts).toMatchObject({ users: 2, templates: 17, checklistRuns: 25 });
+      expect(artifact.manifest.selection.selectedCounts).toMatchObject({ users: 2, checklistRuns: 24 });
+      target.exec(artifact.sql);
+      expect(target.prepare("SELECT COUNT(DISTINCT user_id) n FROM templates WHERE owner_type='user'").get().n).toBe(2);
+      expect(target.prepare("SELECT COUNT(DISTINCT user_id) n FROM checklist_runs WHERE team_id IS NULL").get().n).toBe(2);
+      const b = target.prepare("SELECT user_id FROM templates WHERE version=702").get();
+      expect(b).toBeDefined();
+      expect(target.prepare("SELECT r.user_id, t.user_id template_owner, t.version FROM checklist_runs r JOIN templates t ON t.id=r.template_id WHERE r.progress=72").get()).toEqual({ user_id: b.user_id, template_owner: b.user_id, version: 702 });
+      expect(target.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      expect(generate({ ...context, rawExport: exported }).sql).toBe(artifact.sql);
+      expect(generate({ ...context, rawExport: exported.split("\n").reverse().join("\n") }).sql).toBe(artifact.sql);
+      expect(artifact.sql).not.toMatch(/PRIVATE_|private-b/);
+      expect(() => validateSanitizedRehearsalArtifact({ ...artifact, policy: loadSanitizerPolicy({ repoRoot }), now: generatedAt, ...context })).not.toThrow();
+    } finally { source.close(); target.close(); }
+  });
+  it.each([false, true])("retains bounded single-owner samples without inventing another principal (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    const source = oversizedPersonalSource(current, false), target = replayMigrations({ through: context.sourceSchema });
+    try {
+      const artifact = generate({ ...context, rawExport: exportSyntheticRows(source) });
+      target.exec(artifact.sql);
+      expect(artifact.manifest.selection.selectedCounts).toMatchObject({ users: 1, templates: 16, checklistRuns: 24 });
+      expect(target.prepare("SELECT COUNT(*) n FROM users").get().n).toBe(1);
+      expect(target.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    } finally { source.close(); target.close(); }
+  });
+  it.each(["templates", "checklist_runs"])("reserves a personal-owner pair independently in the %s family", family => {
+    const source = oversizedPersonalSource(true), target = replayMigrations();
+    try {
+      if (family === "templates") source.exec("UPDATE checklist_runs SET user_id=(SELECT user_id FROM templates WHERE version=701 LIMIT 1), template_id=(SELECT id FROM templates WHERE version=701 LIMIT 1)");
+      else source.exec("UPDATE templates SET user_id=(SELECT user_id FROM checklist_runs WHERE progress=71 LIMIT 1)");
+      const artifact = generate({ ...currentContext, rawExport: exportSyntheticRows(source) });
+      target.exec(artifact.sql);
+      expect(target.prepare(`SELECT COUNT(DISTINCT user_id) n FROM ${family}`).get().n).toBe(2);
+      const other = family === "templates" ? "checklist_runs" : "templates";
+      expect(target.prepare(`SELECT COUNT(DISTINCT user_id) n FROM ${other}`).get().n).toBe(1);
+      expect(target.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    } finally { source.close(); target.close(); }
+  });
+  it("fails explicitly when the personal-owner pair and lifecycle signatures exceed the run cap", () => {
+    const source = oversizedPersonalSource(true);
+    try {
+      const rows = source.prepare("SELECT id FROM checklist_runs WHERE progress=71").all().sort((a, b) => createHash("sha256").update(a.id).digest("hex").localeCompare(createHash("sha256").update(b.id).digest("hex")));
+      rows.forEach((row, i) => source.prepare("UPDATE checklist_runs SET status=? WHERE id=?").run(`PRIVATE_STATUS_${i}`, row.id));
+      source.exec("UPDATE checklist_runs SET status='PRIVATE_STATUS_0' WHERE progress=72");
+      expect(() => generate({ ...currentContext, rawExport: exportSyntheticRows(source) })).toThrow("Production-shaped sample cannot fit personal-owner representatives and observed shapes within its bounds.");
+    } finally { source.close(); }
+  });
+  it("rejects an unsupported scalar even on a row beyond the general fill limit", () => {
+    const source = oversizedPersonalSource(true, false);
+    try {
+      source.exec("UPDATE checklist_runs SET progress='PRIVATE_UNSAMPLED_VALUE' WHERE progress=72");
+      expect(() => generate({ ...currentContext, rawExport: exportSyntheticRows(source) })).toThrow("Production-shaped source contains an unsupported lifecycle scalar type or representation.");
+    } finally { source.close(); }
+  });
+  it("fails explicitly when reserved owner relations cannot fit the finite cohort", () => {
+    const source = oversizedPersonalSource(true);
+    try {
+      source.exec("INSERT INTO teams(id,name,created_by_user_id,created_at) SELECT 'PRIVATE_TEAM','Private',id,'2020-01-01' FROM users LIMIT 1");
+      source.exec("UPDATE checklist_runs SET team_id='PRIVATE_TEAM' WHERE progress=71");
+      // Selected team membership is relational closure, including every member.
+      for (let i = 0; i < 97; i++) {
+        source.prepare("INSERT INTO users(id,email,created_at) VALUES(?,?,'2020-01-01')").run(`PRIVATE_EXTRA_${i}`, `private-extra-${i}@example.test`);
+        source.prepare("INSERT INTO team_members(id,team_id,user_id,role,status,created_at) VALUES(?,'PRIVATE_TEAM',?,'viewer','active','2020-01-01')").run(`PRIVATE_LINK_${i}`, `PRIVATE_EXTRA_${i}`);
+      }
+      expect(() => generate({ ...currentContext, rawExport: exportSyntheticRows(source) })).toThrow(/bounds/);
+    } finally { source.close(); }
+  });
+  it("samples many personal owners within caps rather than reserving every owner", () => {
+    const source = oversizedPersonalSource(true), target = replayMigrations();
+    try {
+      source.exec("UPDATE checklist_runs SET template_id=(SELECT id FROM templates WHERE version=701 LIMIT 1)");
+      for (let i = 0; i < 30; i++) {
+        source.prepare("INSERT INTO users(id,email,created_at) VALUES(?,?,'2020-01-01')").run(`PRIVATE_MANY_${i}`, `private-many-${i}@example.test`);
+        source.prepare("INSERT INTO checklist_runs(id,user_id,title,items,created_at,started_at) VALUES(?,?,'Private','[]','2020-01-01','2020-01-01')").run(`PRIVATE_MANY_RUN_${i}`, `PRIVATE_MANY_${i}`);
+      }
+      const artifact = generate({ ...currentContext, rawExport: exportSyntheticRows(source) });
+      target.exec(artifact.sql);
+      expect(artifact.manifest.selection.selectedCounts.checklistRuns).toBe(24);
+      expect(target.prepare("SELECT COUNT(DISTINCT user_id) n FROM checklist_runs").get().n).toBeGreaterThanOrEqual(2);
+      expect(artifact.manifest.selection.selectedCounts.users).toBeLessThan(32);
+      expect(target.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    } finally { source.close(); target.close(); }
+  });
+  it.each([false, true])("round-trips safe version boundaries and rejects rehashed scalar tampering (current=%s)", current => {
+    const context = current ? currentContext : legacyContext;
+    for (const value of [-9007199254740991, -1, 0, 1, 9007199254740991]) {
+      const source = syntheticSourceDatabase(repoRoot, current), target = replayMigrations({ through: context.sourceSchema });
+      try {
+        source.prepare("UPDATE templates SET version=?").run(value);
+        if (current) {
+          source.prepare("UPDATE templates SET content_version=?").run(value);
+          source.prepare("UPDATE checklist_runs SET template_version=?,revision=?").run(value, value);
+        }
+        const artifact = generate({ ...context, rawExport: exportSyntheticRows(source) });
+        target.exec(artifact.sql);
+        expect(target.prepare("SELECT version FROM templates").all()).toEqual([{ version: value }, { version: value }]);
+        if (current) {
+          expect(target.prepare("SELECT content_version FROM templates").all()).toEqual([{ content_version: value }, { content_version: value }]);
+          expect(target.prepare("SELECT template_version,revision FROM checklist_runs").all()).toEqual([{ template_version: value, revision: value }, { template_version: value, revision: value }]);
+        }
+        const validate = artifact => validateSanitizedRehearsalArtifact({ ...artifact, policy: loadSanitizerPolicy({ repoRoot }), now: generatedAt, ...context });
+        expect(() => validate(artifact)).not.toThrow();
+        if (value === 9007199254740991) for (const replacement of ["1.25", "'PRIVATE_SCALAR'", "9007199254740993"]) {
+          const changed = structuredClone(artifact);
+          changed.sql = changed.sql.replace(", 9007199254740991,", `, ${replacement},`);
+          expect(changed.sql).not.toBe(artifact.sql);
+          const hash = value => createHash("sha256").update(value).digest("hex");
+          changed.manifest.artifact = { sha256: hash(changed.sql), byteLength: Buffer.byteLength(changed.sql) };
+          const { manifestIntegritySha256: ignored, ...unsigned } = changed.manifest;
+          changed.manifest.manifestIntegritySha256 = hash(JSON.stringify(unsigned));
+          expect(() => validate(changed)).toThrow();
+        }
+      } finally { source.close(); target.close(); }
+    }
+  });
+  it("preserves two personal principals and selected team roles without source identifiers", () => {
+    const source = syntheticSourceDatabase(repoRoot, false), target = replayMigrations({ through: legacyContext.sourceSchema });
+    try {
+      source.exec(`INSERT INTO users(id,email,created_at) VALUES('private-second-owner','private-second@example.test','2020-01-01');
+        INSERT INTO teams(id,name,created_by_user_id,created_at) SELECT 'private-team','Private Team',id,'2020-01-01' FROM users WHERE id!='private-second-owner' LIMIT 1;
+        INSERT INTO team_members(id,team_id,user_id,role,status,created_at) SELECT 'private-member-owner','private-team',created_by_user_id,'owner','active','2020-01-01' FROM teams;
+        INSERT INTO team_members(id,team_id,user_id,role,status,created_at) VALUES('private-member-viewer','private-team','private-second-owner','viewer','active','2020-01-01');
+        UPDATE templates SET owner_type='team',team_id='private-team' WHERE id=(SELECT id FROM templates ORDER BY id LIMIT 1);
+        UPDATE checklist_runs SET user_id='private-second-owner' WHERE id=(SELECT id FROM checklist_runs ORDER BY id LIMIT 1);`);
+      const artifact = generate({ rawExport: exportSyntheticRows(source) });
+      target.exec(artifact.sql);
+      expect(target.prepare("SELECT COUNT(*) n FROM users").get().n).toBe(2);
+      expect(target.prepare("SELECT role,status FROM team_members ORDER BY role").all()).toEqual([{ role: 'owner', status: 'active' }, { role: 'viewer', status: 'active' }]);
+      expect(target.prepare("SELECT owner_type,team_id FROM templates WHERE owner_type='team'").get()).toEqual({ owner_type: 'team', team_id: 'rehearsal-team-1' });
+      expect(artifact.manifest.selection.selectedCounts.teams).toBe(1);
+      expect(artifact.sql).not.toMatch(/private-|Private Team/);
+      expect(() => validateSanitizedRehearsalArtifact({ sql: artifact.sql, manifest: artifact.manifest, policy: loadSanitizerPolicy({ repoRoot }), now: generatedAt, ...legacyContext })).not.toThrow();
+    } finally { source.close(); target.close(); }
+  });
+  it.each([
+    "UPDATE templates SET created_by_user_id='PRIVATE_MISSING_PRINCIPAL'",
+    "UPDATE templates SET owner_type='team',team_id='PRIVATE_ORPHAN_TEAM'",
+    "UPDATE checklist_runs SET template_id='PRIVATE_ORPHAN_TEMPLATE'",
+    "UPDATE templates SET owner_type='PRIVATE_INVALID_OWNER'",
+  ])('refuses unresolved or malformed source ownership without repairing source rows: %s', sql => {
+    const source = syntheticSourceDatabase(repoRoot, false);
+    try {
+      source.exec('PRAGMA foreign_keys=OFF'); source.exec(sql);
+      const exported = exportSyntheticRows(source);
+      expect(() => normalizeRehearsalDataExport({ repoRoot, rawExport: exported, ...legacyContext })).toThrow();
+      expect(exportSyntheticRows(source)).toBe(exported);
+    } finally { source.close(); }
+  });
+  it('refuses a relational cohort beyond its membership cap instead of deleting memberships', () => {
+    const source = syntheticSourceDatabase(repoRoot, false);
+    try {
+      const owner = source.prepare('SELECT id FROM users LIMIT 1').get().id;
+      source.prepare("INSERT INTO teams(id,name,created_by_user_id,created_at) VALUES('PRIVATE_LARGE_TEAM','Private',?,'2020-01-01')").run(owner);
+      source.exec("UPDATE templates SET owner_type='team',team_id='PRIVATE_LARGE_TEAM'");
+      for (let i = 0; i < 97; i++) {
+        source.prepare("INSERT INTO users(id,email,created_at) VALUES(?,?,'2020-01-01')").run(`PRIVATE_MEMBER_${i}`, `member${i}@private.example`);
+        source.prepare("INSERT INTO team_members(id,team_id,user_id,role,status,created_at) VALUES(?,'PRIVATE_LARGE_TEAM',?,'viewer','active','2020-01-01')").run(`PRIVATE_LINK_${i}`, `PRIVATE_MEMBER_${i}`);
+      }
+      expect(() => normalizeRehearsalDataExport({ repoRoot, rawExport: exportSyntheticRows(source), ...legacyContext })).toThrow(/bounds/);
+      expect(source.prepare('SELECT COUNT(*) n FROM team_members').get().n).toBe(97);
+    } finally { source.close(); }
+  });
+  it('preserves absent creators rather than fabricating an owner authorization relation', () => {
+    const source = syntheticSourceDatabase(repoRoot, false), target = replayMigrations({ through: legacyContext.sourceSchema });
+    try {
+      source.exec('UPDATE templates SET created_by_user_id=NULL; UPDATE checklist_runs SET created_by_user_id=NULL');
+      target.exec(generate({ rawExport: exportSyntheticRows(source) }).sql);
+      expect(target.prepare('SELECT COUNT(*) n FROM templates WHERE created_by_user_id IS NOT NULL').get().n).toBe(0);
+      expect(target.prepare('SELECT COUNT(*) n FROM checklist_runs WHERE created_by_user_id IS NOT NULL').get().n).toBe(0);
+    } finally { source.close(); target.close(); }
+  });
   it.each([
     ['templates', 'type', 'recipe', 'recipe'],
     ['templates', 'type', 'checklist', 'checklist'],
@@ -152,7 +508,7 @@ describe("source-derived rehearsal sanitizer", () => {
   });
   it("preserves source relationships and migration-edge shapes without source values", () => {
     const artifact = generate();
-    expect(artifact.manifest).toMatchObject({ schemaVersion: 3, artifactType: "sanitized-production-shaped", sanitizerVersion: "source-derived-shape-v4", selection: { sourceCounts: { users: 1, templates: 2, checklistRuns: 2 }, selectedCounts: { users: 1, templates: 2, checklistRuns: 2 } }, privacy: { directIdentifiers: "removed", customerContent: "removed", credentialsAndSessions: "excluded", passwordMaterial: "excluded" }, handling: { accessOwner: "@devinschumacher", retentionDeadline } });
+    expect(artifact.manifest).toMatchObject({ schemaVersion: 3, artifactType: "sanitized-production-shaped", sanitizerVersion: "source-derived-shape-v5", selection: { sourceCounts: { users: 1, templates: 2, checklistRuns: 2 }, selectedCounts: { users: 1, templates: 2, checklistRuns: 2 } }, privacy: { directIdentifiers: "removed", customerContent: "removed", credentialsAndSessions: "excluded", passwordMaterial: "excluded" }, handling: { accessOwner: "@devinschumacher", retentionDeadline } });
     expect(artifact.manifest.selection.coveredShapes).toEqual(expect.arrayContaining(artifact.manifest.selection.requiredShapes));
     for (const secret of ["private.person@example.com", "Private Person", "Customer", "Confidential", "secret note", "private-access-token", "private-session-token", "private-share-token", "8ab2b7e9", "987654321012345"]) expect(artifact.sql).not.toContain(secret);
     expect(artifact.sql).toContain('"order":17');
@@ -207,8 +563,8 @@ describe("source-derived rehearsal sanitizer", () => {
         "INSERT INTO `sqlite_sequence` VALUES('d1_migrations', 999);",
       ].join("\n");
       const artifact = normalizeRehearsalDataExport({ repoRoot, rawExport: exported, ...context });
-      expect(artifact.sourceCounts).toEqual({ users: 1, templates: 2, checklistRuns: 2 });
-      expect(artifact.selectedCounts).toEqual({ users: 1, templates: 2, checklistRuns: 2 });
+      expect(artifact.sourceCounts).toEqual({ users: 1, templates: 2, checklistRuns: 2, teams: 0, teamMembers: 0 });
+      expect(artifact.selectedCounts).toEqual({ users: 1, templates: 2, checklistRuns: 2, teams: 0, teamMembers: 0 });
       expect(artifact.sql).not.toContain(phrase);
     } finally { source.close(); }
   });
@@ -236,7 +592,7 @@ describe("source-derived rehearsal sanitizer", () => {
         .replace("INSERT INTO users (", "INSERT OR REPLACE INTO [users] (")
         .replace("'encoded-marker'", "replace('customer\\nINSERT INTO sqlite_sequence, -- comment; /* text */', '\\n', char(10))");
       const artifact = normalizeRehearsalDataExport({ repoRoot, rawExport: encoded, ...legacyContext });
-      expect(artifact.sourceCounts).toEqual({ users: 1, templates: 2, checklistRuns: 2 });
+      expect(artifact.sourceCounts).toEqual({ users: 1, templates: 2, checklistRuns: 2, teams: 0, teamMembers: 0 });
     } finally { source.close(); }
   });
 

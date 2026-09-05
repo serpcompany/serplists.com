@@ -6,7 +6,7 @@ import { validateRehearsalRecoveryEvidence } from "./rehearsal-recovery-lib.mjs"
 import { loadSanitizerPolicy, validateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
 import { resolveRehearsalPlan, validateCoverageMatch } from "./rehearsal-plan-lib.mjs";
 import { validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
-import { validateSanitizedStateBinding } from "./sanitized-state-lib.mjs";
+import { validateSanitizedStateBinding, validateSanitizedCohortProof } from "./sanitized-state-lib.mjs";
 import { normalizeMigrationRange, migrationRangesEqual, migrationsInRange, migrationRangeForReport } from "./migration-range-lib.mjs";
 function arg(name) { const i = process.argv.indexOf(name); return i < 0 ? null : process.argv[i + 1]; }
 try {
@@ -24,6 +24,7 @@ try {
   if (JSON.stringify(authenticated?.sourceProfile) !== JSON.stringify(sanitizedManifest.sourceProfile) || authenticated?.manifestIntegritySha256 !== sanitizedManifest.manifestIntegritySha256) throw new Error("Authenticated source profile/manifest binding mismatch.");
   validateAuthenticatedCandidateEvidence(authenticated, { requireDetectors: true });
   validateSanitizedStateBinding(authenticated.postMigrationState, invariants.sanitizedState);
+  validateSanitizedCohortProof(authenticated.cohortProof, { state: invariants.sanitizedState, selection: sanitizedManifest.selection });
   const expectedLedger = readdirSync(path.join(repoRoot, "db/migrations")).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
   const pending = migrationsInRange(expectedLedger, migrationRange);
   const expectedBefore = expectedLedger.slice(0, expectedLedger.length - pending.length);
@@ -70,6 +71,7 @@ try {
       verdict: "pass",
       attestation: { verdict: "pass", verifier: "github-cli-before-import" },
       sanitizerVersion: sanitizedManifest.sanitizerVersion,
+      selection: sanitizedManifest.selection,
       sourceProfile: sanitizedManifest.sourceProfile,
       observedSourceShapes: sanitizedManifest.selection.observedSourceShapes,
       absentSourceShapes: sanitizedManifest.selection.absentSourceShapes,
@@ -90,7 +92,8 @@ try {
   writeFileSync(output.replace(/\.json$/, ".md"), `# Production-shaped rehearsal: PASS\n\nCommit: ${report.commit}\nEnvironment: rehearsal\nDatabase: ${report.target.databaseName} (${report.target.databaseId})\nRecovery database: ${recovery.recoveryDatabase.name} (${recovery.recoveryDatabase.id})\nMigration: ${report.migrationRange.from} -> ${report.migrationRange.to}\nCoverage plan: ${report.coverage.planId} (${report.coverage.declarationSha256})\nSanitizer: ${sanitizedManifest.sanitizerVersion}\nSanitizer artifact: ${sanitizedManifest.artifact.sha256}\nSource date: ${sanitizedManifest.provenance.sourceDate}\nAccess owner: ${sanitizedManifest.handling.accessOwner}\nRetention deadline: ${sanitizedManifest.handling.retentionDeadline}\nAuthenticated candidate template/run reads and writes: PASS\nFalse-empty and API-error detection: PASS\nRequired affected-domain coverage: PASS\nRecovery, raw-source cleanup, database teardown: PASS\n`);
   const xml = (value) => String(value).replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   const stateSummary = `\nSource profile: ${sanitizedManifest.sourceProfile.profile}\nSource schema: ${sanitizedManifest.sourceProfile.sourceSchema}\nObserved source shapes: ${sanitizedManifest.selection.observedSourceShapes.join(", ") || "none"}\nAbsent source shapes: ${sanitizedManifest.selection.absentSourceShapes.join(", ") || "none"}\nSeparate synthetic edge-case requirements: ${sanitizedManifest.selection.syntheticEdgeCaseRequirements.join(", ") || "none"}\nAuthenticated post-migration state: ${authenticated.postMigrationState.domainSha256}\nExact post-migration ledger: ${authenticated.postMigrationState.ledgerSha256}\nLocal and remote transformed dataset equality: PASS\n`;
-  writeFileSync(output.replace(/\.json$/, ".md"), readFileSync(output.replace(/\.json$/, ".md"), "utf8") + stateSummary);
+  const cohortSummary = `Selected cohort: ${JSON.stringify(sanitizedManifest.selection.selectedCounts)}\nSource counts: ${JSON.stringify(sanitizedManifest.selection.sourceCounts)}\nCohort bounds: ${JSON.stringify(sanitizedManifest.selection.cohortLimits)}\nObserved ownership and roles: ${sanitizedManifest.selection.ownershipCoverage.source.join(', ')}\nProfile exclusions (not covered): ${sanitizedManifest.selection.profileExclusions.join(', ')}\nSelected authorization cohort digest: ${authenticated.postMigrationState.cohortSha256}\nAuthenticated cohort measurements: ${JSON.stringify(authenticated.cohortProof.measurements)}\nPost-handler source preservation: ${JSON.stringify(authenticated.cohortProof.postHandlerPreservation)}\n`;
+  writeFileSync(output.replace(/\.json$/, ".md"), readFileSync(output.replace(/\.json$/, ".md"), "utf8") + stateSummary + cohortSummary);
   writeFileSync(output.replace(/\.json$/, ".junit.xml"), `<testsuite name="production-shaped-rehearsal" tests="1" failures="0"><properties><property name="commit" value="${xml(report.commit)}"/><property name="environment" value="rehearsal"/><property name="database" value="${xml(report.target.databaseName)}"/><property name="databaseId" value="${xml(report.target.databaseId)}"/><property name="recoveryDatabaseId" value="${xml(recovery.recoveryDatabase.id)}"/><property name="migration" value="${xml(`${report.migrationRange.from}->${report.migrationRange.to}`)}"/><property name="sanitizer" value="${xml(sanitizedManifest.sanitizerVersion)}"/></properties><testcase name="rehearsal-and-separate-database-restore"/></testsuite>\n`);
   const junitPath = output.replace(/\.json$/, ".junit.xml");
   writeFileSync(junitPath, readFileSync(junitPath, "utf8").replace("</properties>", `<property name="sanitizedSourceSha256" value="${authenticated.postMigrationState.sourceSha256}"/><property name="postMigrationDomainSha256" value="${authenticated.postMigrationState.domainSha256}"/><property name="postMigrationLedgerSha256" value="${authenticated.postMigrationState.ledgerSha256}"/></properties>`));

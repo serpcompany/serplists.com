@@ -43,5 +43,7 @@ export function prepareSanitizedSmoke({ repoRoot, persistPath, env, wrangler }) 
     writeFileSync(statePath, JSON.stringify({ ...after, commit: plan.commit, migrationRange: plan.migrationRange, sourceProfile: manifest.sourceProfile, manifestIntegritySha256: manifest.manifestIntegritySha256, transformation: { verdict: "pass" } }));
     env.PLAYWRIGHT_REHEARSAL_STATE = statePath;
     local(["d1", "execute", "serp-checklists-db", "--file", path.join(repoRoot, "scripts/data/sql/rehearsal-auth-fixture.sql"), "--yes"]);
+    const authenticated = captureSanitizedState({ query, sourceSha256 });
+    if (authenticated.domainSha256 !== after.domainSha256 || authenticated.cohortSha256 !== after.cohortSha256) throw new Error('Local synthetic authentication changed source domain or authorization relations.');
   } finally { rmSync(directory, { recursive: true, force: true }); }
 }

@@ -10,6 +10,7 @@ import { replayMigrations } from "./schema-contract.ts";
 import { sanitizedState } from "./sanitized-state-lib.mjs";
 import { DatabaseSync } from 'node:sqlite';
 import { captureFullRecoveryState, prepareRecoveryExport } from './recovery-restore-lib.mjs';
+import { validatePromotionEvidence } from './production-executor-lib.mjs';
 
 const repoRoot = new URL("../..", import.meta.url).pathname;
 const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
@@ -43,6 +44,11 @@ describe("rehearsal report finalization", () => {
     try {
       const now = new Date();
       const sourceDatabase = syntheticSourceDatabase(repoRoot, input === "none");
+      // Explicit envelope-only source additions provide eligible canaries while
+      // retaining the original malformed rows for refusal coverage.
+      const owner = sourceDatabase.prepare('SELECT id FROM users LIMIT 1').get().id;
+      sourceDatabase.prepare("INSERT INTO templates(id,user_id,title,items,is_public,slug,version,created_at) VALUES ('envelope-template',?,'Envelope template','[]',0,'envelope-template',1,'2026-09-05')").run(owner);
+      sourceDatabase.prepare("INSERT INTO checklist_runs(id,user_id,title,items,is_public,status,progress,template_id,created_at,started_at) VALUES ('envelope-run',?,'Envelope run','[]',0,'in_progress',0,'envelope-template','2026-09-05','2026-09-05')").run(owner);
       const rawExport = exportSyntheticRows(sourceDatabase); sourceDatabase.close();
       const artifact = generateSanitizedRehearsalArtifact({ migrationRange: plan.migrationRange, sourceSchema: plan.preMigration,
         repoRoot,
@@ -61,7 +67,7 @@ describe("rehearsal report finalization", () => {
       const database = replayMigrations({ through: plan.preMigration });
       database.exec(artifact.sql);
       if (migration) database.exec(readFileSync(path.join(repoRoot, "db/migrations", migration), "utf8"));
-      const { rows: _rows, ...state } = sanitizedState({ templates: database.prepare("SELECT * FROM templates").all(), runs: database.prepare("SELECT * FROM checklist_runs").all(), ledger: readdirSync(path.join(repoRoot, "db/migrations")).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort(), sourceSha256: artifact.manifest.artifact.sha256 });
+      const { rows: _rows, ...state } = sanitizedState({ templates: database.prepare("SELECT * FROM templates").all(), runs: database.prepare("SELECT * FROM checklist_runs").all(), principals: database.prepare('SELECT id FROM users').all(), teams: database.prepare('SELECT * FROM teams').all(), members: database.prepare('SELECT * FROM team_members').all(), ledger: readdirSync(path.join(repoRoot, "db/migrations")).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort(), sourceSha256: artifact.manifest.artifact.sha256 });
       database.exec('CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY,name TEXT NOT NULL)');
       state.ledger.forEach((name, index) => database.prepare('INSERT INTO d1_migrations VALUES(?,?)').run(index + 1, name));
       const completeState = db => captureFullRecoveryState({ key: 'fixture-full-recovery-equality-key-0000', query: sql => JSON.stringify([{ results: db.prepare(sql).all() }]) });
@@ -75,6 +81,18 @@ describe("rehearsal report finalization", () => {
       database.close();
       const source = JSON.parse(readFileSync(files.source, "utf8"));
       Object.assign(source.authenticatedRehearsal, { postMigrationState: state, transformation: { verdict: "pass" }, sourceProfile: artifact.manifest.sourceProfile, manifestIntegritySha256: artifact.manifest.manifestIntegritySha256, handlerStateReadback: true });
+      source.authenticatedRehearsal.cohortProof = { cohortSha256: state.cohortSha256, selectedCounts: artifact.manifest.selection.selectedCounts, profileExclusions: artifact.manifest.selection.profileExclusions, authenticatedPrincipals: [], withheldRows: [], contexts: [{ kind: 'templates', write: 'pass' }, { kind: 'runs', write: 'pass' }], measurements: { rowReads: 4, privateDenials: 0, roleWriteDenials: 0, templateWrites: 1, runWrites: 1 } };
+      // Fixture metadata models the real selected principal, independent of the
+      // mocked successful browser outcomes used to test this report boundary.
+      source.authenticatedRehearsal.cohortProof.authenticatedPrincipals = ['rehearsal-owner-1'];
+      source.authenticatedRehearsal.cohortProof.postHandlerPreservation = { verdict: 'pass', cohortSha256: state.cohortSha256, withheldRows: 0, malformedRows: 0, untouchedRows: 2, writtenRows: 2 };
+      const cohortProof = source.authenticatedRehearsal.cohortProof;
+      cohortProof.requirementsSha256 = state.requirementsSha256;
+      cohortProof.cases = state.requirements.cases.map(row => ({ ...row, verdict: 'pass' }));
+      cohortProof.contexts = state.requirements.contexts.map(row => ({ kind: row.kind, contextId: row.contextId, principal: row.principals[0], id: row.candidateIds[0], write: 'pass', browserWriteReadback: 'pass' }));
+      for (const [key, action] of [['rowReads','read'], ['privateDenials','private-denial'], ['roleWriteDenials','role-write-denial']]) cohortProof.measurements[key] = state.requirements.cases.filter(row => row.action === action).length;
+      cohortProof.postHandlerPreservation.untouchedRows = artifact.manifest.selection.selectedCounts.templates + artifact.manifest.selection.selectedCounts.checklistRuns - 2;
+      cohortProof.postHandlerPreservation.malformedRows = state.requirements.cases.filter(row => row.action === 'malformed-refusal').length;
       writeFileSync(files.source, JSON.stringify(source));
       const comparison = JSON.parse(readFileSync(files.comparison, "utf8"));
       Object.assign(comparison, { sanitizedState: state, ledger: { verdict: "pass", before: migration ? state.ledger.slice(0, -1) : state.ledger, after: state.ledger, afterSha256: state.ledgerSha256 } });
@@ -104,15 +122,44 @@ describe("rehearsal report finalization", () => {
       writeFileSync(files.recovery, validRecovery);
       for (let index = 0; index < args.length; index++) if (args[index] == null) args[index] = "none";
       execFileSync(process.execPath, args, { cwd: repoRoot });
-      expect(JSON.parse(readFileSync(files.output, "utf8"))).toMatchObject({ commit, target: { environment: "rehearsal", databaseId: sourceId }, migrationRange: { from: migration, to: migration }, coverage: { planId: plan.id, declarationSha256: plan.declarationSha256, artifactSha256: plan.artifactSha256 }, authenticatedRehearsal: { verdict: "pass", sanitizerArtifactSha256: artifact.manifest.artifact.sha256, checks: { templateRead: true, runWriteReadback: true, falseEmptyDetection: "pass", apiErrorDetection: "pass" } }, sanitizedSource: { sanitizerVersion: "source-derived-shape-v4", accessOwner: "@devinschumacher" }, recovery: { recoveryDatabase: { id: recoveryId } } });
-      for (const text of [readFileSync(files.output.replace(".json", ".md"), "utf8"), readFileSync(files.output.replace(".json", ".junit.xml"), "utf8")]) for (const value of [commit, sourceId, recoveryId, migration ?? "null", "source-derived-shape-v4"]) expect(text).toContain(value);
+      expect(JSON.parse(readFileSync(files.output, 'utf8')).sanitizedSource.selection).toEqual(artifact.manifest.selection);
+      // Consume the actual finalizer output, including its row-free independent
+      // state, rather than constructing a guessed rehearsal envelope.
+      const rehearsal = JSON.parse(readFileSync(files.output, 'utf8'));
+      const tree = 'd'.repeat(40), stagingCommit = 'c'.repeat(40);
+      const runEvidence = (head_sha, name, head_branch, workflow) => ({ id: 101, head_sha, conclusion: 'success', name, event: 'push', head_branch, path: `.github/workflows/${workflow}`, repository: { full_name: 'serpcompany/serplists.com' } });
+      expect(validatePromotionEvidence({
+        commit, classification: migration ? 'backfill' : 'additive', database: { databaseName: 'serp-checklists-db', databaseId: 'b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1' },
+        pendingMigrations: migration ? [migration] : [], migrationRange: plan.migrationRange, rehearsal,
+        ci: { ...source, workingTreeDirty: false },
+        ciContractCorrection: { verdict: 'pass', commit, eventName: 'push', comparisonBase: commit },
+        ciSchemaContract: { verdict: 'pass', commit, runtimeDiff: { verdict: 'pass' }, authorityDiff: { verdict: 'pass' }, snapshotDiff: { verdict: 'pass' }, migrationRange: { from: state.ledger[0], to: state.ledger.at(-1) } },
+        ciRun: runEvidence(commit, 'CI', 'main', 'ci.yml'),
+        stagingRun: runEvidence(stagingCommit, 'Protected data promotion and Pages deploy', 'staging', 'cloudflare-pages-deploy.yml'),
+        mergeContext: { commit, tree, baseCommit: commit },
+        changeProvenance: { mergeCommit: commit, pullRequestHeadCommit: stagingCommit, changeAuthors: ['author'] },
+        staging: { verdict: 'pass', commit: stagingCommit, tree, migrationRange: plan.migrationRange,
+          target: { environment: 'staging', databaseId: 'fcaf4325-5be7-4ead-ab60-45932a04177b' },
+          data: { verdict: 'pass' }, schema: { verdict: 'pass', ledger: { verdict: 'pass' } }, invariants: { verdict: 'pass' }, deploy: { verdict: 'pass' }, teardown: { verdict: 'pass' },
+          smoke: { verdict: 'pass', failures: [], controlledCanaryMutationApproved: true, canaryEvidenceDigest: 'a'.repeat(64), checks: ['template_canary_designated', 'template_write', 'template_write_readback', 'template_restore', 'run_canary_designated', 'run_write', 'run_write_readback', 'run_restore'].map(name => ({ name, verdict: 'pass' })) },
+        },
+      }).rehearsal).toEqual(rehearsal);
+      expect(JSON.parse(readFileSync(files.output, "utf8"))).toMatchObject({ commit, target: { environment: "rehearsal", databaseId: sourceId }, migrationRange: { from: migration, to: migration }, coverage: { planId: plan.id, declarationSha256: plan.declarationSha256, artifactSha256: plan.artifactSha256 }, authenticatedRehearsal: { verdict: "pass", sanitizerArtifactSha256: artifact.manifest.artifact.sha256, checks: { templateRead: true, runWriteReadback: true, falseEmptyDetection: "pass", apiErrorDetection: "pass" } }, sanitizedSource: { sanitizerVersion: "source-derived-shape-v5", accessOwner: "@devinschumacher" }, recovery: { recoveryDatabase: { id: recoveryId } } });
+      for (const text of [readFileSync(files.output.replace(".json", ".md"), "utf8"), readFileSync(files.output.replace(".json", ".junit.xml"), "utf8")]) for (const value of [commit, sourceId, recoveryId, migration ?? "null", "source-derived-shape-v5"]) expect(text).toContain(value);
 
-      for (const field of ["sourceSha256", "domainSha256", "ledgerSha256"]) {
+      for (const field of ["sourceSha256", "domainSha256", "cohortSha256", "ledgerSha256"]) {
         const mismatched = structuredClone(comparison); mismatched.sanitizedState[field] = "f".repeat(64);
         writeFileSync(files.comparison, JSON.stringify(mismatched));
         expect(spawnSync(process.execPath, args, { cwd: repoRoot, encoding: "utf8" }).status).toBe(1);
       }
       writeFileSync(files.comparison, JSON.stringify(comparison));
+
+      for (const mutate of [proof => { delete proof.cohortProof; }, proof => { proof.cohortProof.authenticatedPrincipals = []; }, proof => { proof.cohortProof.measurements.rowReads = 0; }]) {
+        const changed = structuredClone(source); mutate(changed.authenticatedRehearsal);
+        writeFileSync(files.source, JSON.stringify(changed));
+        expect(spawnSync(process.execPath, args, { cwd: repoRoot }).status).toBe(1);
+      }
+      writeFileSync(files.source, JSON.stringify(source));
 
       for (const badRange of [{ from: null, to: "0024_safe_template_evolution.sql" }, { from: "0023_add_sitemap_revision_state.sql", to: "0023_add_sitemap_revision_state.sql" }]) {
         writeFileSync(files.comparison, JSON.stringify({ ...comparison, migrationRange: badRange }));

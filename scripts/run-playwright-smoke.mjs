@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { rmSync, readdirSync, readFileSync, existsSync, mkdirSync, cpSync } from "node:fs";
+import { rmSync, readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync, cpSync } from "node:fs";
 import { routeFragmentDirectory, finalizeRouteCoverage } from "./data/route-coverage-evidence.mjs";
 import { prepareSanitizedSmoke } from "./data/prepare-sanitized-smoke.mjs";
+import { captureSanitizedState, verifySanitizedRefusalPreservation, validateSanitizedCohortProof, validateSanitizedStateBinding } from './data/sanitized-state-lib.mjs';
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findOpenPortPair } from "./dev-auto-lib.mjs";
@@ -221,6 +222,17 @@ const child = spawn(
 
 child.on("exit", async (code, signal) => {
   let finalCode = code ?? 1;
+  if (finalCode === 0 && !signal && env.PLAYWRIGHT_SANITIZED_REHEARSAL_SQL) {
+    try {
+      const before = JSON.parse(readFileSync(env.PLAYWRIGHT_REHEARSAL_STATE, 'utf8'));
+      const proof = JSON.parse(readFileSync(env.PLAYWRIGHT_REHEARSAL_PROOF, 'utf8'));
+      const after = captureSanitizedState({ sourceSha256: before.sourceSha256, query: sql => execFileSync(NPX_COMMAND, [...NPX_ARGS_PREFIX, 'wrangler', 'd1', 'execute', DATABASE_NAME, '--local', '--persist-to', smokePersistPath, '--command', sql, '--json'], { cwd: repoRoot, env: { ...env, CI: '1' }, encoding: 'utf8' }) });
+      proof.cohortProof.postHandlerPreservation = verifySanitizedRefusalPreservation({ before, after, proof });
+      validateSanitizedStateBinding(proof.postMigrationState, before);
+      validateSanitizedCohortProof(proof.cohortProof, { state: before, selection: JSON.parse(readFileSync(env.PLAYWRIGHT_SANITIZER_MANIFEST, 'utf8')).selection });
+      writeFileSync(env.PLAYWRIGHT_REHEARSAL_PROOF, JSON.stringify(proof, null, 2));
+    } catch (error) { console.error(error instanceof Error ? error.message : String(error)); finalCode = 1; }
+  }
   const includesRouteSuite = invocation.gating;
   if (includesRouteSuite) {
     try {

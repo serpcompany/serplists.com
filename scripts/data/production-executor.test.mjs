@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { completePromotionEvidence } from './fixtures/complete-promotion-evidence.mjs';
+import { completeRehearsalEvidence } from './fixtures/complete-rehearsal-evidence.mjs';
 import { prepareProduction, verifyRecoveryBundle, digest, approvalToken, repositoryMigrationHistory, RECOVERY_MAX_AGE_MS } from "./production-preparation-lib.mjs";
 
 import {
@@ -45,47 +47,7 @@ const context = {
 };
 
 function validPromotionEvidence() {
-  const baseCommit = "b".repeat(40);
-  const stagingCommit = "c".repeat(40);
-  const tree = "d".repeat(40);
-  return {
-    commit,
-    classification: "backfill",
-    database: production,
-    pendingMigrations: ["0024_safe_template_evolution.sql"],
-    migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
-    ci: { verdict: "pass", commit, workingTreeDirty: false, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, coverage: { verdict: "pass", planId: "safe-template-evolution-0024", fixtureProfile: "template-evolution-v1", affectedTables: ["templates", "checklist_runs"], invariants: ["row-counts"], declarationSha256: "a".repeat(64) } },
-    ciContractCorrection: { verdict: "pass", commit, eventName: "push", comparisonBase: baseCommit },
-    ciSchemaContract: { verdict: "pass", commit, runtimeDiff: { verdict: "pass" }, authorityDiff: { verdict: "pass" }, snapshotDiff: { verdict: "pass" }, migrationRange: { from: "0001_initial_schema.sql", to: "0024_safe_template_evolution.sql" } },
-    rehearsal: {
-      verdict: "pass",
-      commit,
-      target: { environment: "rehearsal", databaseId: "11111111-1111-4111-8111-111111111111" },
-      migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
-      recovery: { verdict: "pass" },
-      teardown: { verdict: "pass" },
-      sanitizedSource: { verdict: "pass", attestation: { verdict: "pass" }, artifactSha256: "b".repeat(64) },
-      authenticatedRehearsal: { verdict: "pass", commit, sanitizerArtifactSha256: "b".repeat(64), migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, checks: { templateRead: true, runRead: true, templateWriteReadback: true, runWriteReadback: true, falseEmptyDetection: "pass", apiErrorDetection: "pass" } },
-      coverage: { verdict: "pass", planId: "safe-template-evolution-0024", fixtureProfile: "template-evolution-v1", affectedTables: ["templates", "checklist_runs"], invariants: ["row-counts"], declarationSha256: "a".repeat(64) },
-    },
-    ciRun: { id: 101, head_sha: commit, conclusion: "success", name: "CI", event: "push", head_branch: "main", path: ".github/workflows/ci.yml", repository: { full_name: "serpcompany/serplists.com" } },
-    stagingRun: { id: 102, head_sha: stagingCommit, conclusion: "success", name: "Protected data promotion and Pages deploy", event: "push", head_branch: "staging", path: ".github/workflows/cloudflare-pages-deploy.yml", repository: { full_name: "serpcompany/serplists.com" } },
-    mergeContext: { commit, tree, baseCommit },
-    changeProvenance: { mergeCommit: commit, pullRequestNumber: 100, pullRequestHeadCommit: stagingCommit, changeAuthors: ["author"] },
-    staging: {
-      verdict: "pass",
-      commit: stagingCommit,
-      tree,
-      target: { environment: "staging", databaseName: "serp-checklists-staging-db", databaseId: "fcaf4325-5be7-4ead-ab60-45932a04177b" },
-      migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" },
-      data: { verdict: "pass" },
-      schema: { verdict: "pass", ledger: { verdict: "pass" } },
-      invariants: { verdict: "pass" },
-      deploy: { verdict: "pass" },
-      smoke: { verdict: "pass", failures: [], controlledCanaryMutationApproved: true, canaryEvidenceDigest: "a".repeat(64), checks: ["template_canary_designated", "template_write", "template_write_readback", "template_restore", "run_canary_designated", "run_write", "run_write_readback", "run_restore"].map((name) => ({ name, verdict: "pass" })) },
-      teardown: { verdict: "pass" },
-    },
-  };
+  return completePromotionEvidence({ commit, database: production });
 }
 
 function validProductionSmoke() {
@@ -160,7 +122,7 @@ function preparedHandshake(run = validStepResult, request = validPromotionEviden
   const receipt = verifyRecoveryBundle(bundle);
   const decision = `Reviewed recovery and approve ${approvalToken(receipt)}`;
   const approval = { ...validApproval(), recovery: receipt, decisionSha256: digest(decision), recoveryTokenSha256: digest(approvalToken(receipt)) };
-  return { preparation, receipt, approval, bundle };
+  return { request, commit: request.commit, database: request.database, classification: request.classification, pendingMigrations: request.pendingMigrations, preparation, receipt, approval, bundle };
 }
 
 const driftCases = {
@@ -171,6 +133,157 @@ const driftCases = {
   skipped: names => names.filter((_, index) => index !== 5),
   malformed: names => [...names.slice(0, -1), 'private-sentinel@example.test'],
 };
+
+it.each(['commit', 'database', 'classification', 'pendingMigrations'])('rejects mismatched %s before any data-phase operation', field => {
+  const request = validPromotionEvidence();
+  const handshake = preparedHandshake(validStepResult, request);
+  const args = { request, commit, database: production, classification: request.classification, pendingMigrations: request.pendingMigrations };
+  args[field] = { commit: 'f'.repeat(40), database: { ...production, databaseId: 'other' }, classification: 'destructive', pendingMigrations: [] }[field];
+  const calls = [];
+  expect(() => runProductionDataPhase({ ...handshake, ...args,
+    run: step => { calls.push(step); return validStepResult(step); },
+  })).toThrow(/request/);
+  expect(calls).toEqual([]);
+});
+
+it.each(['preparation request', 'receipt request', 'approval authors'])('rejects mismatched %s binding before any data-phase operation', field => {
+  const request = validPromotionEvidence();
+  const handshake = preparedHandshake(validStepResult, request);
+  if (field === 'preparation request') handshake.preparation.requestSha256 = 'f'.repeat(64);
+  if (field === 'receipt request') handshake.receipt.requestSha256 = 'f'.repeat(64);
+  if (field === 'approval authors') handshake.approval.changeAuthors = ['other-author'];
+  handshake.receipt.preparationSha256 = digest(handshake.preparation);
+  handshake.approval.recoveryTokenSha256 = digest(approvalToken(handshake.receipt));
+  const calls = [];
+  expect(() => runProductionDataPhase({ ...handshake, request, commit, database: production,
+    classification: request.classification, pendingMigrations: request.pendingMigrations,
+    run: step => { calls.push(step); return validStepResult(step); },
+  })).toThrow(/request/);
+  expect(calls).toEqual([]);
+});
+
+it.each([undefined, null])('deploy requires a complete request (%s)', request => {
+  const signedEvidence = validSignedProductionEvidence();
+  expect(() => assertDeployEvidence({ signedEvidence, commit, database: production, request })).toThrow();
+  expect(() => assertDeployEvidence({ signedEvidence, commit, database: production })).toThrow();
+  expect(assertDeployEvidence({ signedEvidence, commit, database: production, request: validPromotionEvidence() }).verdict).toBe('pass');
+});
+
+it('rejects a request whose pending migrations differ from its reviewed range', () => {
+  const request = validPromotionEvidence();
+  request.pendingMigrations = [];
+  expect(() => validatePromotionEvidence(request)).toThrow(/pending.*range/);
+});
+
+it.each(['commit', 'database'])('deploy rejects a complete request for another %s', field => {
+  const request = validPromotionEvidence();
+  const signedEvidence = validSignedProductionEvidence(request);
+  // Rebuild a fully valid request for the other target; receipt rebinding must
+  // not let that request authorize the original deployment arguments.
+  const other = completePromotionEvidence({ commit: field === 'commit' ? 'e'.repeat(40) : commit,
+    database: field === 'database' ? { ...production, databaseId: 'other-id' } : production });
+  validatePromotionEvidence(other);
+  signedEvidence.payload.recovery.requestSha256 = digest(other);
+  const rebound = createSignedEvidence({ payload: signedEvidence.payload });
+  expect(() => assertDeployEvidence({ signedEvidence: rebound, commit, database: production, request: other })).toThrow(/exact request/);
+});
+
+it.each([undefined, null, {}, { commit }])('data phase rejects incomplete request %j before any operation', request => {
+  const handshake = preparedHandshake();
+  const calls = [];
+  expect(() => runProductionDataPhase({ ...handshake, request,
+    run: step => { calls.push(step); return validStepResult(step); },
+  })).toThrow();
+  expect(calls).toEqual([]);
+  if (request === undefined) {
+    delete handshake.request;
+    expect(() => runProductionDataPhase({ ...handshake, run: step => { calls.push(step); return validStepResult(step); } })).toThrow(/request/);
+    expect(calls).toEqual([]);
+  }
+});
+
+it('rejects a rebound invented cohort before any data-phase operation', () => {
+  const request = validPromotionEvidence();
+  request.rehearsal.authenticatedRehearsal.cohortProof.cases[0].id = 'invented';
+  const handshake = preparedHandshake(validStepResult, request);
+  const calls = [];
+  expect(() => runProductionDataPhase({ ...handshake, request, commit, database: production,
+    classification: request.classification, pendingMigrations: request.pendingMigrations,
+    run: step => { calls.push(step); return validStepResult(step); },
+  })).toThrow();
+  expect(calls).toEqual([]);
+});
+
+it('rejects legacy boolean-only rehearsal evidence at promotion validation', () => {
+  const request = validPromotionEvidence();
+  delete request.rehearsal.authenticatedRehearsal.cohortProof;
+  delete request.rehearsal.authenticatedRehearsal.postMigrationState;
+  expect(() => validatePromotionEvidence(request)).toThrow();
+});
+
+it('rejects missing cohort proof at final release even with a matching recovery receipt', () => {
+  const request = validPromotionEvidence();
+  delete request.rehearsal.authenticatedRehearsal.cohortProof;
+  const signedEvidence = validSignedProductionEvidence(request);
+  const smoke = validProductionSmoke();
+  expect(() => validateFinalProductionRelease({ request, signedEvidence, smoke, deploymentUrl: smoke.deploymentUrl })).toThrow();
+});
+
+const cohortEvidenceMutations = [
+  ['missing selection', r => { delete r.sanitizedSource.selection; }],
+  ['missing local state', r => { delete r.authenticatedRehearsal.postMigrationState; }],
+  ['missing independent state', r => { delete r.remoteRehearsal.invariants.sanitizedState; }],
+  ['missing cohort', r => { delete r.authenticatedRehearsal.cohortProof; }],
+  ['missing state cohorts', r => { delete r.authenticatedRehearsal.postMigrationState.cohort; delete r.remoteRehearsal.invariants.sanitizedState.cohort; }],
+  ['missing state requirements', r => { delete r.remoteRehearsal.invariants.sanitizedState.requirements; }],
+  ['missing case', r => { r.authenticatedRehearsal.cohortProof.cases.pop(); }],
+  ['duplicate case', r => { r.authenticatedRehearsal.cohortProof.cases[1] = r.authenticatedRehearsal.cohortProof.cases[0]; }],
+  ['invented row', r => { r.authenticatedRehearsal.cohortProof.cases[0].id = 'invented'; }],
+  ['wrong principal', r => { r.authenticatedRehearsal.cohortProof.cases[0].principal = 'rehearsal-owner-99'; }],
+  ['wrong authenticated principal', r => { r.authenticatedRehearsal.cohortProof.authenticatedPrincipals[0] = 'rehearsal-owner-99'; }],
+  ['wrong requirements', r => { r.remoteRehearsal.invariants.sanitizedState.requirements.cases.pop(); }],
+  ['wrong selected counts', r => { r.sanitizedSource.selection.selectedCounts.templates++; }],
+  ['wrong exclusions', r => { r.sanitizedSource.selection.profileExclusions.push('invented'); }],
+  ['wrong independent state', r => { r.remoteRehearsal.invariants.sanitizedState.domainSha256 = 'f'.repeat(64); }],
+  ['wrong source artifact', r => { r.sanitizedSource.artifactSha256 = r.authenticatedRehearsal.sanitizerArtifactSha256 = 'f'.repeat(64); }],
+  ['wrong manifest', r => { r.authenticatedRehearsal.manifestIntegritySha256 = 'f'.repeat(64); }],
+  ['wrong source profile', r => { r.authenticatedRehearsal.sourceProfile = { profile: 'invented' }; }],
+  ['failed transformation', r => { r.authenticatedRehearsal.transformation.verdict = 'fail'; }],
+  ['missing handler readback', r => { delete r.authenticatedRehearsal.handlerStateReadback; }],
+  ['wrong handler environment', r => { r.authenticatedRehearsal.target.environment = 'production'; }],
+  ['wrong remote commit', r => { r.remoteRehearsal.invariants.commit = 'f'.repeat(40); }],
+  ['wrong remote target', r => { r.remoteRehearsal.invariants.target = { ...r.target, databaseId: production.databaseId }; }],
+  ['wrong remote range', r => { r.remoteRehearsal.invariants.migrationRange = { from: null, to: null }; }],
+  ['failed remote comparison', r => { r.remoteRehearsal.invariants.verdict = 'fail'; }],
+  ['wrong comparison kind', r => { r.remoteRehearsal.invariants.comparisonKind = 'recovery'; }],
+  ['wrong ledger digest', r => { r.remoteRehearsal.invariants.ledger.afterSha256 = 'f'.repeat(64); }],
+  ['wrong ledger transition', r => { r.remoteRehearsal.invariants.ledger.before = []; }],
+  ['coherently shortened ledger', r => {
+    for (const state of [r.authenticatedRehearsal.postMigrationState, r.remoteRehearsal.invariants.sanitizedState]) {
+      state.ledger = state.ledger.slice(1); state.ledgerSha256 = digest(state.ledger);
+    }
+    const ledger = r.remoteRehearsal.invariants.ledger;
+    ledger.before = ledger.before.slice(1); ledger.after = ledger.after.slice(1); ledger.afterSha256 = digest(ledger.after);
+  }],
+];
+
+it.each(cohortEvidenceMutations)('rejects %s at every downstream evidence handoff', (_name, mutate) => {
+  const request = validPromotionEvidence();
+  mutate(request.rehearsal);
+  // Bind the malformed request before validation, so recovery digest rejection
+  // cannot substitute for checking the actual cohort evidence.
+  const signedEvidence = validSignedProductionEvidence(request);
+  const smoke = validProductionSmoke();
+  expect(() => validatePromotionEvidence(structuredClone(request))).toThrow();
+  const calls = [];
+  expect(() => runProductionDataPhase({ ...preparedHandshake(validStepResult, structuredClone(request)),
+    run: step => { calls.push(step); return validStepResult(step); },
+  })).toThrow();
+  expect(calls).toEqual([]);
+  expect(() => assertDeployEvidence({ signedEvidence, commit, database: production })).toThrow(/request/);
+  expect(() => assertDeployEvidence({ signedEvidence, commit, database: production, request: structuredClone(request) })).toThrow();
+  expect(() => validateFinalProductionRelease({ request: structuredClone(request), signedEvidence, smoke, deploymentUrl: smoke.deploymentUrl })).toThrow();
+});
 
 describe('repository prefix and fixed recovery expiry', () => {
   it.each(Object.entries(driftCases))('blocks %s in preparation and execution even with unchanged digest', (_name, drift) => {
@@ -191,7 +304,8 @@ describe('repository prefix and fixed recovery expiry', () => {
     handshake.receipt.preparationSha256 = digest(handshake.preparation);
     handshake.approval.decision = `Approved ${approvalToken(handshake.receipt)}`;
     calls.length = 0;
-    expect(() => runProductionDataPhase({ ...handshake, pendingMigrations: validPromotionEvidence().pendingMigrations, run: badResult })).toThrow();
+    handshake.approval.recoveryTokenSha256 = digest(approvalToken(handshake.receipt));
+    expect(() => runProductionDataPhase({ ...handshake, run: badResult })).toThrow(/complete repository history/);
     expect(calls).toEqual([]);
   });
 
@@ -258,7 +372,7 @@ describe('repository prefix and fixed recovery expiry', () => {
     const approve = receipt => ({ ...validApproval(), recovery: receipt, recoveryTokenSha256: digest(approvalToken(receipt)) });
     const approval = approve(receipt);
     if (delay !== 'invariant delay') now += RECOVERY_MAX_AGE_MS;
-    const execute = (preparation, receipt, approval, delayed = false) => runProductionDataPhase({ commit, database: production, preparation, receipt, approval, pendingMigrations: request.pendingMigrations, clock: () => now, run: step => {
+    const execute = (preparation, receipt, approval, delayed = false) => runProductionDataPhase({ request, classification: request.classification, commit, database: production, preparation, receipt, approval, pendingMigrations: request.pendingMigrations, clock: () => now, run: step => {
       calls.push(`execute:${step}`);
       if (delayed && step === 'pre-invariants') now += RECOVERY_MAX_AGE_MS;
       return validStepResult(step);
@@ -353,6 +467,16 @@ fs.writeFileSync('state.json', JSON.stringify(state));
 // against the local provider transport. Measured cases take 5.2–7.3 seconds;
 // bound only this integration suite at 20 seconds per test.
 describe('local executor subprocess boundaries', { timeout: 20000 }, () => {
+  it.each(cohortEvidenceMutations)('executor rejects %s before any provider transport', (_name, mutate) => {
+    const { cwd, request, invoke } = executorSandbox();
+    try {
+      mutate(request.rehearsal);
+      writeFileSync(path.join(cwd, 'request.json'), JSON.stringify(request));
+      const result = invoke('prepare');
+      expect(result.status, result.stderr).toBe(1);
+      expect(existsSync(path.join(cwd, 'calls.txt'))).toBe(false);
+    } finally { rmSync(cwd, { recursive: true, force: true }); }
+  });
   it.each(['finalizer','executor'].flatMap(producer => ['missing','json','range','none'].map(input => [producer,input])))('%s reports truthful range for %s request failure without provider calls', (producer,input) => {
     const {cwd,request} = executorSandbox();
     const sentinel = 'PRIVATE_REQUEST_SENTINEL';
@@ -506,6 +630,7 @@ describe('local executor subprocess boundaries', { timeout: 20000 }, () => {
       if (noMigrations) {
         configuration.pending = []; request.pendingMigrations = [];
         for (const value of [request, request.ci, request.rehearsal, request.rehearsal.authenticatedRehearsal, request.staging]) value.migrationRange = {from: null, to: null};
+        request.rehearsal = completeRehearsalEvidence({ commit, migrationRange: request.migrationRange, ledger: repositoryMigrationHistory(), coverage: request.ci.coverage });
         writeFileSync(path.join(cwd, 'request.json'), JSON.stringify(request));
       }
       const prepared = invoke('prepare'); expect(prepared.status, prepared.stderr).toBe(0);
@@ -629,9 +754,7 @@ describe("protected production executor", () => {
     evidence.pendingMigrations = [];
     evidence.ci.migrationRange = { from: null, to: null };
     evidence.ci.coverage = { ...evidence.ci.coverage, planId: "application-only-at-0024" };
-    evidence.rehearsal.migrationRange = { from: null, to: null };
-    evidence.rehearsal.coverage = evidence.ci.coverage;
-    evidence.rehearsal.authenticatedRehearsal.migrationRange = { from: null, to: null };
+    evidence.rehearsal = completeRehearsalEvidence({ commit, migrationRange: evidence.migrationRange, ledger: repositoryMigrationHistory(), coverage: evidence.ci.coverage });
     evidence.staging.migrationRange = { from: null, to: null };
     expect(validatePromotionEvidence(evidence).pendingMigrations).toEqual([]);
   });
@@ -950,7 +1073,7 @@ esac
       "identity", "reviewed-pending-range",
       "pre-invariants", "source-schema", "migration-apply", "ledger-clean", "schema-contract", "post-invariants",
     ]);
-    expect(assertDeployEvidence({ signedEvidence: result, commit, database: production })).toMatchObject({
+    expect(assertDeployEvidence({ signedEvidence: result, commit, database: production, request: validPromotionEvidence() })).toMatchObject({
       verdict: "pass",
       commit,
       database: production,
@@ -1000,7 +1123,7 @@ esac
     };
     if (scenario === "success") {
       const evidence = orchestrate();
-      expect(assertDeployEvidence({ signedEvidence: evidence, commit, database: production }).verdict).toBe("pass");
+      expect(assertDeployEvidence({ signedEvidence: evidence, commit, database: production, request: validPromotionEvidence() }).verdict).toBe("pass");
       expect(calls).toEqual(["prepare:identity", "prepare:recovery-bookmark", "prepare:recovery-export", "prepare:reviewed-pending-range", "prepare:pre-invariants", "prepare:source-schema", "upload", "durable-verified", "approval", "execute:identity", "execute:reviewed-pending-range", "execute:pre-invariants", "execute:source-schema", "execute:migration-apply", "execute:ledger-clean", "execute:schema-contract", "execute:post-invariants"]);
     } else {
       expect(orchestrate).toThrow();
@@ -1032,9 +1155,9 @@ esac
         expect(approval).toMatchObject({ riskDecision: { policy: "meaningful-written-risk-reason-v1", characterCount: expect.any(Number), wordCount: expect.any(Number) }, reviewReference: { repository: "serpcompany/serplists.com", runId: context.GITHUB_RUN_ID, runAttempt: context.GITHUB_RUN_ATTEMPT, commit, environment: "production" } });
         for (const field of ["decisionSha256", "recoveryTokenSha256"]) expect(approval[field]).toMatch(/^[0-9a-f]{64}$/);
         expect(approval.riskDecision.sha256).toMatch(/^[0-9a-f]{64}$/);
-        const evidence = runProductionDataPhase({ commit, database: production, pendingMigrations: bundle.request.pendingMigrations, classification: "backfill", approval, preparation, receipt, run: validStepResult });
+        const evidence = runProductionDataPhase({ request: bundle.request, commit, database: production, pendingMigrations: bundle.request.pendingMigrations, classification: "backfill", approval, preparation, receipt, run: validStepResult });
         expect(JSON.stringify(evidence)).not.toContain(privateDecision);
-        expect(assertDeployEvidence({ signedEvidence: evidence, commit, database: production }).verdict).toBe("pass");
+        expect(assertDeployEvidence({ signedEvidence: evidence, commit, database: production, request: bundle.request }).verdict).toBe("pass");
       } else {
         expect(existsSync(path.join(cwd, "approval.json"))).toBe(false);
         for (const suffix of ["json", "junit.xml", "txt", "md"]) expect(readFileSync(path.join(cwd, `tmp/data-reports/production/production-approval.${suffix}`), "utf8")).not.toContain(privateDecision);
@@ -1071,7 +1194,7 @@ esac
       payload: { verdict: "pass", commit, database: production, migrationRange: { from: "0024", to: "0024" } },
     });
     signed.payload.commit = "f".repeat(40);
-    expect(() => assertDeployEvidence({ signedEvidence: signed, commit, database: production })).toThrow(/digest/i);
+    expect(() => assertDeployEvidence({ signedEvidence: signed, commit, database: production, request: validPromotionEvidence() })).toThrow(/digest/i);
   });
 
   it.each([

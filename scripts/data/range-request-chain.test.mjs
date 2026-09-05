@@ -8,6 +8,7 @@ import { normalizeMigrationRange, rangeFromPending } from "./migration-range-lib
 import { selectRangeEvidence } from "./select-range-evidence.mjs";
 import { parsePendingMigrationNames } from "./pending-migrations-lib.mjs";
 import { parseAppliedMigrationLedger } from './invariant-capture-lib.mjs';
+import { completeRehearsalEvidence } from './fixtures/complete-rehearsal-evidence.mjs';
 
 const repoRoot = path.resolve(new URL("../..", import.meta.url).pathname);
 const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
@@ -100,7 +101,7 @@ else process.exit(97);
       const reports = {
         correction: { verdict: "pass", commit, eventName: "push", comparisonBase: commit },
         schema: { verdict: "pass", commit, runtimeDiff: { verdict: "pass" }, authorityDiff: { verdict: "pass" }, snapshotDiff: { verdict: "pass" }, migrationRange: { from: files[0], to: migration } },
-        rehearsal: { ...ciReport(plan), target: { environment: "rehearsal", databaseId: "11111111-1111-4111-8111-111111111111" }, recovery: { verdict: "pass" }, sanitizedSource: { verdict: "pass", attestation: { verdict: "pass" }, artifactSha256: "a".repeat(64) }, authenticatedRehearsal: { verdict: "pass", commit, sanitizerArtifactSha256: "a".repeat(64), migrationRange: plan.migrationRange, checks: { templateRead: true, runRead: true, templateWriteReadback: true, runWriteReadback: true, falseEmptyDetection: "pass", apiErrorDetection: "pass" } } },
+        rehearsal: completeRehearsalEvidence({ commit, migrationRange: plan.migrationRange, ledger: files, coverage: coverage(plan) }),
         staging: { verdict: "pass", commit: stagingCommit, tree, target: { environment: "staging", databaseId: stagingId }, migrationRange: stagingPlan.migrationRange, pendingMigrations: stagingInput === "none" ? [] : [migration], data: ciReport(stagingPlan), schema: { verdict: "pass", ledger: { verdict: "pass" } }, invariants: { verdict: "pass", migrationRange: stagingPlan.migrationRange, ledger: { verdict: "pass", before: stagingInput === "none" ? files : files.slice(0, -1), after: files } }, deploy: { verdict: "pass" }, smoke: { verdict: "pass", failures: [], controlledCanaryMutationApproved: true, canaryEvidenceDigest: "a".repeat(64), checks: ["template_canary_designated", "template_write", "template_write_readback", "template_restore", "run_canary_designated", "run_write", "run_write_readback", "run_restore"].map((name) => ({ name, verdict: "pass" })) }, teardown: { verdict: "pass" } },
         "ci-run-metadata": { id: 101, head_sha: commit, conclusion: "success", name: "CI", event: "push", head_branch: "main", path: ".github/workflows/ci.yml", repository: { full_name: "serpcompany/serplists.com" } },
         "staging-run-metadata": { id: 102, head_sha: stagingCommit, conclusion: "success", name: "Protected data promotion and Pages deploy", event: "push", head_branch: "staging", path: ".github/workflows/cloudflare-pages-deploy.yml", repository: { full_name: "serpcompany/serplists.com" } },
@@ -116,6 +117,21 @@ else process.exit(97);
       const result = run(); expect(result.status, result.stderr).toBe(0);
       expect(JSON.parse(readFileSync(path.join(directory, "request.json"), "utf8"))).toMatchObject({ pendingMigrations: [migration], migrationRange: plan.migrationRange, ci: { coverage: { artifactSha256: plan.artifactSha256 } } });
       for (const extension of ["md", "junit.xml", "json"]) expect(readFileSync(path.join(directory, `reports/production-request.${extension}`), "utf8")).toContain(commit);
+      expect(JSON.parse(readFileSync(path.join(directory, 'request.json'), 'utf8')).rehearsal).toEqual(reports.rehearsal);
+      for (const mutate of [
+        r => { delete r.sanitizedSource.selection; },
+        r => { delete r.remoteRehearsal.invariants.sanitizedState; },
+        r => { delete r.authenticatedRehearsal.cohortProof; },
+        r => { r.authenticatedRehearsal.cohortProof.cases[0].id = 'invented'; },
+        r => { r.authenticatedRehearsal.cohortProof.cases[0].principal = 'rehearsal-owner-99'; },
+      ]) {
+        const bad = structuredClone(reports.rehearsal); mutate(bad);
+        writeFileSync(path.join(directory, 'rehearsal.json'), JSON.stringify(bad));
+        rmSync(path.join(directory, 'request.json'), { force: true });
+        const rejected = run();
+        expect(rejected.status, rejected.stderr).toBe(1);
+      }
+      writeFileSync(path.join(directory, 'rehearsal.json'), JSON.stringify(reports.rehearsal));
       const ciPath = selectRangeEvidence(ciDirectory, plan.migrationRange).file;
       for (const mutate of [
         (report) => { report.migrationRange = { from: null, to: null }; },

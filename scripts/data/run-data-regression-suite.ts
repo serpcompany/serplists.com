@@ -9,7 +9,7 @@ import { migrationRangesEqual } from "./migration-range-lib.mjs";
 import { assertRuntimeRangeBinding, validateFullExportRecoveryProof, assertSourceHandlerProofTap } from './runtime-gate-contract.mjs';
 import { loadSanitizerPolicy, validateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
 import { authenticatedCoverageAssertions, validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
-import { validateSanitizedStateBinding } from "./sanitized-state-lib.mjs";
+import { validateSanitizedStateBinding, validateSanitizedCohortProof } from "./sanitized-state-lib.mjs";
 
 import { buildDataRegressionReport, renderDataRegressionMarkdown } from "./data-regression-report-lib.mjs";
 import { loadEnvironmentInventory } from "./environment-identity-lib.mjs";
@@ -61,7 +61,7 @@ if (
 const reportDirectoryRelative = path.relative(repoRoot, reportDirectory);
 const rehearsalRootExistedAtStart = existsSync(path.join(repoRoot, ".wrangler/rehearsals"));
 const filesystemBefore = captureWorkspaceMetadata({ repoRoot });
-// This proof invokes the normal browser harness twice, so it must complete
+// These source controls invoke the normal browser harness, so they must complete
 // before this aggregate owns the same lock. It is not a nested Vitest test.
 mkdirSync(reportDirectory, { recursive: true });
 try {
@@ -200,7 +200,7 @@ const checks: RegressionCheck[] = requiredChecks.map(([name, title]) => {
       : "fail",
   };
 });
-checks.push({ name: 'source-derived handler positive and negative controls', test: 'both current-schema synthetic browser controls execute without skips or failures before the aggregate lock', verdict: 'pass' });
+checks.push({ name: 'source-derived handler positive and negative controls', test: 'all current-schema synthetic browser controls execute without skips or failures before the aggregate lock', verdict: 'pass' });
 try {
   const recovery = JSON.parse(readFileSync(fullExportRecoveryPath,'utf8'));
   const valid = validateFullExportRecoveryProof(recovery,startCommit);
@@ -325,6 +325,7 @@ try {
     let strictChecks = false;
     try { validateAuthenticatedCandidateEvidence({ ...proof, checks: combinedChecks }, { requireDetectors: true }); strictChecks = true; } catch { strictChecks = false; }
     validateSanitizedStateBinding(proof.postMigrationState, proof.postMigrationState);
+    validateSanitizedCohortProof(proof.cohortProof, { state: proof.postMigrationState, selection: JSON.parse(readFileSync(sanitizedArtifact.manifestPath, 'utf8')).selection });
     const bound = strictChecks && proof.handlerStateReadback === true && proof.transformation?.verdict === "pass" && proof.postMigrationState.sourceSha256 === sanitizedArtifact.sha256 && proof.commit === startCommit && proof.sanitizerArtifactSha256 === sanitizedArtifact.sha256 && migrationRangesEqual(proof.migrationRange, rehearsalPlan.migrationRange);
     authenticatedRehearsal = { ...proof, checks: combinedChecks, applicable: true, verdict: bound ? "pass" : "fail" };
     if (!bound) browserFailure = "Authenticated sanitized candidate-handler evidence is incomplete or mismatched.";

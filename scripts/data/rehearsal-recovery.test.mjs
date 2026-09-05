@@ -10,7 +10,7 @@ const evidence = {
   sourceDatabase: { name: "rehearsal-source", id: sourceDatabaseId },
   recoveryDatabase: { name: "rehearsal-restore", id: recoveryDatabaseId },
   migration: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql", appliedThrough: "0024_safe_template_evolution.sql", ledgerSha256: "b".repeat(64) },
-  sanitizer: { version: "source-derived-shape-v4", artifactSha256: "a".repeat(64), manifestIntegritySha256: "c".repeat(64), sourceProfile: { profile: "legacy-template-evolution-v1", migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, sourceSchema: "0023_add_sitemap_revision_state.sql" } },
+  sanitizer: { version: "source-derived-shape-v5", artifactSha256: "a".repeat(64), manifestIntegritySha256: "c".repeat(64), sourceProfile: { profile: "legacy-template-evolution-v1", migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, sourceSchema: "0023_add_sitemap_revision_state.sql" } },
   creation: { verdict: "pass", runId: "123", sourceEvidenceSha256: "e".repeat(64), recoveryEvidenceSha256: "f".repeat(64) },
   import: { verdict: "pass" },
   invariants: { verdict: "pass", evidenceSha256: "c".repeat(64), domainDigest: "d".repeat(64) },

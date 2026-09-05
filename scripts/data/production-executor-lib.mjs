@@ -1,10 +1,11 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
+import { validateSanitizedStateBinding, validateSanitizedCohortProof } from './sanitized-state-lib.mjs';
 import { validateControlledCanaryChecks } from "./deployment-smoke-lib.mjs";
 import { assertProductionKeySeparation } from "./production-key-separation-lib.mjs";
-import { normalizeMigrationRange, migrationRangesEqual } from "./migration-range-lib.mjs";
+import { normalizeMigrationRange, migrationRangesEqual, migrationsInRange } from "./migration-range-lib.mjs";
 import { evaluateInvariantLedgerTransition } from "./remote-invariant-evidence-lib.mjs";
-import { assertRecoveryApproval, assertRecoveryFreshness, assertRepositoryAppliedPrefix, digest } from "./production-preparation-lib.mjs";
+import { assertRecoveryApproval, assertRecoveryFreshness, assertRepositoryAppliedPrefix, digest, repositoryMigrationHistory } from "./production-preparation-lib.mjs";
 import { wrapCanarySubprocessFailure } from './canary-diagnostics.mjs';
 import { assertSourceSchemaProof } from './source-schema-proof.mjs';
 export {
@@ -168,6 +169,7 @@ export function assertProductionArtifactContext({ env, expectedCommit }) {
 }
 
 export function validatePromotionEvidence(evidence) {
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) throw new Error('A complete production request is required.');
   evidence.migrationRange = normalizeMigrationRange(evidence?.migrationRange);
   assertSha(evidence?.commit, "Promotion commit");
   if (!["additive", "backfill", "destructive", "irreversible"].includes(evidence.classification)) {
@@ -213,6 +215,38 @@ export function validatePromotionEvidence(evidence) {
   }
   const authenticated = rehearsal.authenticatedRehearsal;
   validateAuthenticatedCandidateEvidence(authenticated, { requireDetectors: true });
+  const invariants = rehearsal.remoteRehearsal?.invariants;
+  if (!authenticated.postMigrationState?.cohort || !invariants?.sanitizedState?.cohort ||
+      !rehearsal.sanitizedSource.selection?.selectedCounts || !Array.isArray(rehearsal.sanitizedSource.selection.profileExclusions)) {
+    throw new Error('Authenticated source cohort and manifest selection are required.');
+  }
+  validateSanitizedStateBinding(authenticated.postMigrationState, invariants?.sanitizedState);
+  validateSanitizedCohortProof(authenticated.cohortProof, { state: invariants.sanitizedState, selection: rehearsal.sanitizedSource.selection });
+  const source = rehearsal.sanitizedSource;
+  if (authenticated.target?.environment !== 'local' || authenticated.transformation?.verdict !== 'pass' || authenticated.handlerStateReadback !== true ||
+      authenticated.postMigrationState.sourceSha256 !== source.artifactSha256 || !source.sourceProfile ||
+      JSON.stringify(authenticated.sourceProfile) !== JSON.stringify(source.sourceProfile) || !hasSha256(source.manifestIntegritySha256) ||
+      authenticated.manifestIntegritySha256 !== source.manifestIntegritySha256) {
+    throw new Error('Authenticated cohort source, manifest, transformation, or handler state binding is missing or mismatched.');
+  }
+  const remote = rehearsal.remoteRehearsal;
+  if (invariants.verdict !== 'pass' || invariants.commit !== evidence.commit || invariants.comparisonKind !== 'migration' ||
+      JSON.stringify(remote.target) !== JSON.stringify(rehearsal.target) || JSON.stringify(invariants.target) !== JSON.stringify(rehearsal.target) ||
+      !migrationRangesEqual(remote.migrationRange, evidence.migrationRange) || !migrationRangesEqual(invariants.migrationRange, evidence.migrationRange)) {
+    throw new Error('Independent rehearsal state is not bound to the exact commit, target, and reviewed range.');
+  }
+  const expectedLedger = repositoryMigrationHistory();
+  const pending = migrationsInRange(expectedLedger, evidence.migrationRange);
+  if (!Array.isArray(evidence.pendingMigrations) || JSON.stringify(evidence.pendingMigrations) !== JSON.stringify(pending)) {
+    throw new Error('Production request pending migrations do not match the reviewed range.');
+  }
+  const expectedBefore = expectedLedger.slice(0, expectedLedger.length - pending.length);
+  if (invariants.ledger?.verdict !== 'pass' || JSON.stringify(invariants.ledger.before) !== JSON.stringify(expectedBefore) ||
+      JSON.stringify(invariants.ledger.after) !== JSON.stringify(expectedLedger) ||
+      JSON.stringify(authenticated.postMigrationState.ledger) !== JSON.stringify(expectedLedger) ||
+      authenticated.postMigrationState.ledgerSha256 !== invariants.ledger.afterSha256) {
+    throw new Error('Authenticated cohort state must bind the complete exact candidate ledger and reviewed transition.');
+  }
   authenticated.migrationRange = normalizeMigrationRange(authenticated.migrationRange);
   if (authenticated.commit !== evidence.commit || authenticated.sanitizerArtifactSha256 !== rehearsal.sanitizedSource.artifactSha256 || !migrationRangesEqual(authenticated.migrationRange, evidence.migrationRange)) throw new Error("Authenticated sanitized candidate-handler evidence is missing or mismatched.");
   const staging = evidence.staging;
@@ -469,9 +503,10 @@ export function verifySignedEvidence({ signedEvidence }) {
  * Approval may be omitted at the call boundary but is rejected by
  * assertRecoveryApproval. This phase requires the receipt binding, preparation
  * digest/freshness, ledger prefix, and source proof before invoking write steps;
- * full independent-approval evidence is checked by the surrounding executor.
+ * the complete request and independent approval are checked at this boundary.
  * Step summaries have different shapes and remain subject to their runtime gates.
  * @param {{
+ *   request: object,
  *   commit: string,
  *   database: { databaseName: string, databaseId: string },
  *   pendingMigrations: string[],
@@ -493,8 +528,18 @@ export function verifySignedEvidence({ signedEvidence }) {
  *   }, digest: string, provenance: 'requires-github-artifact-attestation'
  * }}
  */
-export function runProductionDataPhase({ commit, database, pendingMigrations, classification, approval = null, preparation, receipt, run, clock = Date.now }) {
+export function runProductionDataPhase({ request, commit, database, pendingMigrations, classification, approval = null, preparation, receipt, run, clock = Date.now }) {
+  validatePromotionEvidence(request);
+  assertRequestTarget({ request, commit, database });
+  if (classification !== request.classification || JSON.stringify(pendingMigrations) !== JSON.stringify(request.pendingMigrations)) {
+    throw new Error('Production classification or pending migrations do not match the exact request.');
+  }
   assertRecoveryApproval({ approval, receipt });
+  const requestSha256 = digest(request);
+  if (preparation?.requestSha256 !== requestSha256 || receipt.requestSha256 !== requestSha256) {
+    throw new Error('Production preparation and recovery receipt must bind the exact request.');
+  }
+  assertApprovalMatchesRequest({ approval, request });
   if (digest(preparation) !== receipt.preparationSha256) throw new Error('Production preparation does not match the approved receipt.');
   assertRecoveryFreshness(preparation, clock);
   assertRepositoryAppliedPrefix({ ...preparation.results['pre-invariants'].summary, pendingMigrations });
@@ -533,6 +578,12 @@ export function runProductionDataPhase({ commit, database, pendingMigrations, cl
     results,
   };
   return createSignedEvidence({ payload });
+}
+
+function assertRequestTarget({ request, commit, database }) {
+  if (commit !== request.commit || database?.databaseName !== request.database.databaseName || database?.databaseId !== request.database.databaseId) {
+    throw new Error('Production commit or database does not match the exact request.');
+  }
 }
 
 function hasSha256(value) { return /^[0-9a-f]{64}$/.test(value ?? ""); }
@@ -575,7 +626,9 @@ function assertProductionStepSummary({ step, summary, payload }) {
   }
 }
 
-export function assertDeployEvidence({ signedEvidence, commit, database, request = null }) {
+export function assertDeployEvidence({ signedEvidence, commit, database, request }) {
+  validatePromotionEvidence(request);
+  assertRequestTarget({ request, commit, database });
   const payload = verifySignedEvidence({ signedEvidence });
   if (payload.verdict !== "pass" || payload.commit !== commit ||
       payload.database?.databaseName !== database.databaseName || payload.database?.databaseId !== database.databaseId) {
@@ -597,11 +650,9 @@ export function assertDeployEvidence({ signedEvidence, commit, database, request
   }
   if (payload.approval?.environment !== "production" || payload.approval?.source !== "github-environment-review" || typeof payload.approval?.approver !== "string" || !payload.approval.approver || !Array.isArray(payload.approval.changeAuthors) || !payload.approval.changeAuthors.length) throw new Error("Signed production evidence lacks validated independent approval.");
   assertRecoveryApproval({ approval: payload.approval, receipt: payload.recovery });
-  if (request) {
-    if (payload.recovery.requestSha256 !== digest(request)) throw new Error("Signed production recovery does not bind this exact request.");
-    if (payload.classification !== request.classification || JSON.stringify(payload.pendingMigrations) !== JSON.stringify(request.pendingMigrations)) throw new Error("Signed production classification or pending migrations do not match the reviewed request.");
-    assertApprovalMatchesRequest({ approval: payload.approval, request });
-  }
+  if (payload.recovery.requestSha256 !== digest(request)) throw new Error("Signed production recovery does not bind this exact request.");
+  if (payload.classification !== request.classification || JSON.stringify(payload.pendingMigrations) !== JSON.stringify(request.pendingMigrations) || !migrationRangesEqual(payload.migrationRange, request.migrationRange)) throw new Error("Signed production classification or pending migrations do not match the reviewed request.");
+  assertApprovalMatchesRequest({ approval: payload.approval, request });
   return payload;
 }
 

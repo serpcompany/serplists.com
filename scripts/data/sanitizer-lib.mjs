@@ -36,6 +36,12 @@ const SAFE_JSON_KEYS = new Set([
 const SEMANTIC_ENUMS = { type: new Set(["text", "image", "video", "file", "embed", "subItems"]), uploadType: new Set(["url", "upload"]), kind: new Set(["section", "item", "subItem"]) };
 const TEMPLATE_TYPES = new Set(['checklist', 'recipe', 'workflow']);
 const RUN_STATUSES = new Set(['not_started', 'in_progress', 'completed']);
+const TEAM_ROLES = new Set(['owner', 'admin', 'editor', 'runner', 'viewer']);
+// Small enough for exhaustive authenticated pairwise isolation checks. Overflow
+// is an explicit unsupported cohort, never silent truncation of its relations.
+const COHORT_LIMITS = { users: 128, templates: 24, checklistRuns: 24, teams: 16, teamMembers: 96 };
+const PROFILE_EXCLUSIONS = ['billing-and-entitlements', 'invites', 'audit-and-version-history', 'source-authentication-and-sessions', 'share-tokens', 'user-profile-and-referrals'];
+const countSchema = z.object({ users: z.number().int().nonnegative(), templates: z.number().int().nonnegative(), checklistRuns: z.number().int().nonnegative(), teams: z.number().int().nonnegative(), teamMembers: z.number().int().nonnegative() }).strict();
 function sanitizeScalarEnum(value, allowed) {
   return typeof value === 'string' && value.trim() !== '' && !allowed.has(value) ? 'sanitized-enum' : value;
 }
@@ -67,8 +73,11 @@ const manifestSchema = z.object({
     artifactTeardown: z.literal("delete-rehearsal-databases-and-expire-artifact"),
   }).strict(),
   selection: z.object({
-    sourceCounts: z.object({ users: z.number().int().nonnegative(), templates: z.number().int().nonnegative(), checklistRuns: z.number().int().nonnegative() }).strict(),
-    selectedCounts: z.object({ users: z.number().int().positive(), templates: z.number().int().positive(), checklistRuns: z.number().int().positive() }).strict(),
+    sourceCounts: countSchema,
+    selectedCounts: countSchema,
+    cohortLimits: countSchema,
+    profileExclusions: z.array(z.string()),
+    ownershipCoverage: z.object({ source: z.array(z.string()), selected: z.array(z.string()) }).strict(),
     requiredShapes: z.array(z.string()), coveredShapes: z.array(z.string()), observedSourceShapes: z.array(z.string()), absentSourceShapes: z.array(z.string()), syntheticEdgeCaseRequirements: z.array(z.string()), sourceShapeDigest: z.string().regex(SHA256),
   }).strict(),
   artifact: z.object({ sha256: z.string().regex(SHA256), byteLength: z.number().int().positive() }).strict(),
@@ -202,13 +211,16 @@ function assertRawDataOnlyExport(parsed) {
 }
 
 function assertSourceColumns(inserts, sourceProfile) {
-  if (sourceProfile.profile !== "current-template-run-v1") return;
+  const current = sourceProfile.profile === "current-template-run-v1";
   for (const { table, columns } of inserts) {
-    const required = { templates: ["content_version"], checklist_runs: ["template_version", "revision", "retired_items"] }[table];
+    const required = {
+      templates: ["version", "is_public", "type", ...(current ? ["content_version"] : [])],
+      checklist_runs: ["progress", "is_public", "status", ...(current ? ["template_version", "revision", "retired_items"] : [])],
+    }[table];
     // A positional VALUES insert must supply every writable table column;
     // SQLite enforces that arity during import. Explicit column lists can omit
-    // defaulted evolution fields, so those lists need this additional check.
-    if (columns.length && required?.some((column) => !columns.includes(column))) throw new Error("Production-shaped current source omits evolution columns; defaults cannot substitute for source values.");
+    // defaulted lifecycle fields, so those lists need this additional check.
+    if (columns.length && required?.some((column) => !columns.includes(column))) throw new Error("Production-shaped source omits required lifecycle columns; defaults cannot substitute for source values.");
   }
 }
 
@@ -248,12 +260,21 @@ function stableOrder(row) { return sha256(String(row.id ?? "")); }
 function selectRepresentativeRows(rows, signaturesFor, limit) {
   const selected = []; const seen = new Set();
   const sorted = [...rows].sort((a, b) => stableOrder(a).localeCompare(stableOrder(b)));
+  // Reserve at most two personal principals per family before shape coverage
+  // and general fill. Owner cardinality must never make the sample unbounded.
+  const firstPersonal = sorted.find(row => row.team_id == null && row.user_id != null);
+  const secondPersonal = firstPersonal && sorted.find(row => row.team_id == null && row.user_id != null && row.user_id !== firstPersonal.user_id);
+  if (secondPersonal) {
+    selected.push(firstPersonal, secondPersonal);
+    for (const row of selected) for (const signature of signaturesFor(row)) seen.add(signature);
+  }
   for (const row of sorted) {
     const signatures = [...signaturesFor(row)].sort();
     if (signatures.some((signature) => !seen.has(signature))) { selected.push(row); signatures.forEach((signature) => seen.add(signature)); }
   }
+  if (selected.length > limit) throw new Error('Production-shaped sample cannot fit personal-owner representatives and observed shapes within its bounds.');
   for (const row of sorted) { if (selected.length >= limit) break; if (!selected.includes(row)) selected.push(row); }
-  return selected.slice(0, limit);
+  return selected;
 }
 
 function sanitizeJson(value, pathParts = [], identities = new Map()) {
@@ -275,7 +296,7 @@ function sanitizeJson(value, pathParts = [], identities = new Map()) {
     const key = pathParts.at(-1);
     // Preserve asset validation thresholds, including negative invalid sizes.
     if (key === "fileSize") return value;
-    if (SEMANTIC_NUMERIC_KEYS.has(key)) return Math.max(-1000000, Math.min(value, 1000000));
+    if (SEMANTIC_NUMERIC_KEYS.has(key)) return value;
     return Number.parseInt(sha256(pathParts.join("/")).slice(0, 8), 16) % 1000000 + 1;
   }
   return value;
@@ -289,32 +310,87 @@ function sqlLiteral(value) {
 function insertStatement(table, row, columns) { return `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${columns.map((column) => sqlLiteral(row[column])).join(", ")});`; }
 function fixedTimestamp(value, index) { return value == null ? null : `2020-01-${String((index % 28) + 1).padStart(2, "0")} 00:00:00`; }
 
+function assertLifecycleScalars(templates, runs, current) {
+  const fail = () => { throw new Error("Production-shaped source contains an unsupported lifecycle scalar type or representation."); };
+  for (const row of templates) for (const key of current ? ["version", "content_version"] : ["version"]) if (!Number.isSafeInteger(row[key])) fail();
+  for (const row of runs) {
+    if (current) for (const key of ["template_version", "revision"]) if (!Number.isSafeInteger(row[key])) fail();
+    if (row.progress !== null && (typeof row.progress !== "number" || !Number.isFinite(row.progress) || (Number.isInteger(row.progress) && !Number.isSafeInteger(row.progress)))) fail();
+  }
+  for (const row of [...templates, ...runs]) if (![null, 0, 1].includes(row.is_public)) fail();
+}
+
+// Compare decimal values, not token spelling or the already-rounded Number.
+// Keep the exponent exact without expanding potentially enormous powers of ten.
+function decimalValue(token) {
+  const [mantissa, exponent = "0"] = token.toLowerCase().split("e");
+  const negative = mantissa.startsWith("-");
+  const [whole, fraction = ""] = (negative ? mantissa.slice(1) : mantissa).split(".");
+  const digits = (whole + fraction).replace(/^0+/, "");
+  if (!digits) return "0";
+  const coefficient = digits.replace(/0+$/, "");
+  const scale = BigInt(exponent) - BigInt(fraction.length) + BigInt(digits.length - coefficient.length);
+  return `${negative ? "-" : ""}${coefficient}e${scale}`;
+}
+
+function assertSemanticJsonNumbers(value) {
+  if (parseJson(value) === null) return;
+  JSON.parse(value, (key, entry, context) => {
+    if (typeof entry === "number" && SAFE_JSON_KEYS.has(key) && (SEMANTIC_NUMERIC_KEYS.has(key) || key === "fileSize")) {
+      const underflow = entry === 0 && /[1-9]/.test(context.source.split(/[eE]/)[0]);
+      if (!Number.isFinite(entry) || (Number.isInteger(entry) && !Number.isSafeInteger(entry)) || underflow || decimalValue(context.source) !== decimalValue(JSON.stringify(entry))) throw new Error("Production-shaped source contains an unsupported semantic JSON number representation.");
+    }
+    return entry;
+  });
+}
+
 function buildSanitizedSql(database, sourceProfile, preserveSample = false) {
   const identities = new Map();
   const sanitizedJsonText = (value, fallback) => { const parsed = parseJson(value); return JSON.stringify(parsed === null ? fallback : sanitizeJson(parsed, [], identities)); };
   const users = database.prepare("SELECT * FROM users").all();
   const templates = database.prepare("SELECT * FROM templates").all();
   const runs = database.prepare("SELECT * FROM checklist_runs").all();
+  assertLifecycleScalars(templates, runs, sourceProfile.profile === "current-template-run-v1");
+  for (const row of templates) for (const key of ["items", "category", "tags", "rules"]) assertSemanticJsonNumbers(row[key]);
+  for (const row of runs) for (const key of ["items", "retired_items"]) assertSemanticJsonNumbers(row[key]);
+  const teams = database.prepare("SELECT * FROM teams").all();
+  const members = database.prepare("SELECT * FROM team_members").all();
+  const teamsById = new Map(teams.map(row => [row.id, row]));
+  const usersById = new Map(users.map(row => [row.id, row]));
+  const templatesById = new Map(templates.map(row => [row.id, row]));
+  const userFields = ['user_id', 'created_by_user_id', 'updated_by_user_id', 'assigned_to_user_id', 'started_by_user_id', 'completed_by_user_id', 'billing_owner_user_id', 'invited_by_user_id'];
+  for (const row of [...templates, ...runs, ...teams, ...members]) {
+    for (const field of userFields) if (row[field] != null && !usersById.has(row[field])) throw new Error('Production-shaped source contains an unresolved principal relation.');
+    if (row.team_id != null && !teamsById.has(row.team_id)) throw new Error('Production-shaped source contains an orphan team relation.');
+  }
+  for (const row of templates) if (!['user', 'team'].includes(row.owner_type) || (row.owner_type === 'team') !== (row.team_id != null) || (row.owner_type === 'user' && row.user_id == null)) throw new Error('Production-shaped source contains malformed ownership.');
+  for (const row of runs) if ((row.template_id != null && !templatesById.has(row.template_id)) || (row.team_id == null && row.user_id == null)) throw new Error('Production-shaped source contains an orphan template or missing run owner.');
+  for (const row of members) if (!TEAM_ROLES.has(row.role) || !['active', 'disabled'].includes(row.status)) throw new Error('Production-shaped source contains an unsupported membership role or status.');
   if (!users.length || !templates.length || !runs.length) throw new Error("Production-shaped source must contain users, templates, and checklist runs.");
   for (const row of [...templates, ...runs]) if (!Array.isArray(parseJson(row.items))) throw new Error("Production-shaped source has invalid item JSON; a replacement shape is prohibited.");
   if (sourceProfile.profile === "current-template-run-v1") for (const row of runs) if (!Array.isArray(parseJson(row.retired_items))) throw new Error("Production-shaped current source has invalid retired-item JSON; a replacement shape is prohibited.");
   const bySampleId = (a, b) => Number(a.id.split("-").at(-1)) - Number(b.id.split("-").at(-1));
-  const selectedTemplates = preserveSample ? templates.sort(bySampleId) : selectRepresentativeRows(templates, (row) => collectShapes(row.items), 16);
-  let selectedRuns = preserveSample ? runs.sort(bySampleId) : selectRepresentativeRows(runs, (row) => new Set([...collectShapes(row.items), `status:${row.status ?? "null"}`, row.deleted_at ? "deleted-run" : "active-run"]), 24);
-  const templatesById = new Map(templates.map((row) => [row.id, row]));
-  for (const run of selectedRuns) { const template = templatesById.get(run.template_id); if (template && !selectedTemplates.includes(template) && selectedTemplates.length < 24) selectedTemplates.push(template); }
-  const selectedTemplateIds = new Set(selectedTemplates.map((row) => row.id));
-  selectedRuns = selectedRuns.filter((row) => row.template_id == null || selectedTemplateIds.has(row.template_id));
+  const ownershipShapes = row => [row.team_id == null ? 'personal-owner' : 'team-owner', ...(row.team_id == null ? [] : members.filter(member => member.team_id === row.team_id).map(member => `role:${member.role}:${member.status}`))];
+  const selectedTemplates = preserveSample ? templates.sort(bySampleId) : selectRepresentativeRows(templates, (row) => new Set([...collectShapes(row.items), ...ownershipShapes(row)]), 16);
+  const selectedRuns = preserveSample ? runs.sort(bySampleId) : selectRepresentativeRows(runs, (row) => new Set([...collectShapes(row.items), ...ownershipShapes(row), `status:${row.status ?? "null"}`, row.deleted_at ? "deleted-run" : "active-run"]), 24);
+  for (const run of selectedRuns) { const template = templatesById.get(run.template_id); if (template && !selectedTemplates.includes(template)) selectedTemplates.push(template); }
   if (!selectedRuns.length) throw new Error("Production-shaped source did not yield a relationally valid checklist-run sample.");
 
+  const teamIds = new Set([...selectedTemplates, ...selectedRuns].map(row => row.team_id).filter(id => id != null));
+  const selectedTeams = teams.filter(row => teamIds.has(row.id)).sort(preserveSample ? bySampleId : (a,b) => stableOrder(a).localeCompare(stableOrder(b)));
+  const selectedMembers = members.filter(row => teamIds.has(row.team_id)).sort(preserveSample ? bySampleId : (a,b) => stableOrder(a).localeCompare(stableOrder(b)));
   const userIds = new Set();
-  for (const row of [...selectedTemplates, ...selectedRuns]) for (const field of ["user_id", "created_by_user_id", "updated_by_user_id", "assigned_to_user_id", "started_by_user_id", "completed_by_user_id"]) if (row[field] != null) userIds.add(row[field]);
-  const usersById = new Map(users.map((row) => [row.id, row]));
-  const selectedUsers = [...userIds].map((id) => usersById.get(id)).filter(Boolean);
+  for (const row of [...selectedTemplates, ...selectedRuns, ...selectedTeams, ...selectedMembers]) for (const field of userFields) if (row[field] != null) userIds.add(row[field]);
+  const selectedUsers = [...userIds].map(id => usersById.get(id)).sort(preserveSample ? bySampleId : (a,b) => stableOrder(a).localeCompare(stableOrder(b)));
+  const selectedCounts = { users: selectedUsers.length, templates: selectedTemplates.length, checklistRuns: selectedRuns.length, teams: selectedTeams.length, teamMembers: selectedMembers.length };
+  for (const key of Object.keys(COHORT_LIMITS)) if (selectedCounts[key] > COHORT_LIMITS[key]) throw new Error('Production-shaped relational cohort exceeds its explicit supported bounds.');
+  const coveredOwners = new Set([...selectedTemplates, ...selectedRuns].flatMap(ownershipShapes));
+  if ([...templates, ...runs].flatMap(ownershipShapes).some(shape => !coveredOwners.has(shape))) throw new Error('Production-shaped sample cannot cover observed ownership or membership dimensions within its bounds.');
   if (!selectedUsers.length) throw new Error("Production-shaped source rows do not resolve to an owning user.");
   const userMap = new Map(selectedUsers.map((row, index) => [row.id, `rehearsal-owner-${index + 1}`]));
   const templateMap = new Map(selectedTemplates.map((row, index) => [row.id, `rehearsal-template-${index + 1}`]));
   const runMap = new Map(selectedRuns.map((row, index) => [row.id, `rehearsal-run-${index + 1}`]));
+  const teamMap = new Map(selectedTeams.map((row, index) => [row.id, `rehearsal-team-${index + 1}`]));
   const mapUser = (value) => value == null ? null : (userMap.get(value) ?? null);
   const userColumns = ["id", "email", "password_hash", "name", "avatar_url", "username", "display_username", "email_verified", "auth_created_at", "auth_updated_at", "affiliate_code", "referral_count", "total_earnings", "created_at", "updated_at"];
   const templateColumns = ["id", "user_id", "title", "description", "items", "is_public", "category", "tags", "created_at", "updated_at", "slug", "version", "type", "seo_title", "seo_description", "rules", "owner_type", "team_id", "created_by_user_id", "updated_by_user_id", "deleted_at"];
@@ -329,16 +405,25 @@ function buildSanitizedSql(database, sourceProfile, preserveSample = false) {
     referral_count: Math.max(0, Math.min(Number(row.referral_count ?? 0), 3)), total_earnings: 0,
     created_at: fixedTimestamp(row.created_at, index), updated_at: fixedTimestamp(row.updated_at, index),
   }, userColumns)));
+  selectedTeams.forEach((row, index) => statements.push(insertStatement('teams', {
+    id: teamMap.get(row.id), name: `Sanitized Team ${index + 1}`, slug: row.slug == null ? null : `sanitized-team-${index + 1}`,
+    billing_owner_user_id: mapUser(row.billing_owner_user_id), created_by_user_id: mapUser(row.created_by_user_id),
+    created_at: fixedTimestamp(row.created_at,index), updated_at: fixedTimestamp(row.updated_at,index), archived_at: fixedTimestamp(row.archived_at,index),
+  }, ['id','name','slug','billing_owner_user_id','created_by_user_id','created_at','updated_at','archived_at'])));
+  selectedMembers.forEach((row,index) => statements.push(insertStatement('team_members', {
+    id: `rehearsal-member-${index + 1}`, team_id: teamMap.get(row.team_id), user_id: mapUser(row.user_id), role: row.role, status: row.status,
+    invited_by_user_id: mapUser(row.invited_by_user_id), joined_at: fixedTimestamp(row.joined_at,index), created_at: fixedTimestamp(row.created_at,index), updated_at: fixedTimestamp(row.updated_at,index),
+  }, ['id','team_id','user_id','role','status','invited_by_user_id','joined_at','created_at','updated_at'])));
   selectedTemplates.forEach((row, index) => statements.push(insertStatement("templates", {
     id: templateMap.get(row.id), user_id: mapUser(row.user_id), title: `Sanitized Template ${index + 1}`,
     description: row.description == null ? null : `Sanitized description ${index + 1}`, items: sanitizedJsonText(row.items, []),
-    is_public: row.is_public ? 1 : 0, category: sanitizedJsonText(row.category, []), tags: sanitizedJsonText(row.tags, []),
+    is_public: row.is_public, category: sanitizedJsonText(row.category, []), tags: sanitizedJsonText(row.tags, []),
     created_at: fixedTimestamp(row.created_at, index), updated_at: fixedTimestamp(row.updated_at, index),
-    slug: `sanitized-template-${index + 1}`, version: Math.max(1, Number(row.version ?? 1)),
+    slug: `sanitized-template-${index + 1}`, version: row.version,
     content_version: row.content_version,
     type: sanitizeScalarEnum(row.type, TEMPLATE_TYPES), seo_title: null, seo_description: null,
-    rules: sanitizedJsonText(row.rules, []), owner_type: "user", team_id: null,
-    created_by_user_id: mapUser(row.created_by_user_id) ?? mapUser(row.user_id), updated_by_user_id: mapUser(row.updated_by_user_id),
+    rules: sanitizedJsonText(row.rules, []), owner_type: row.owner_type, team_id: row.team_id == null ? null : teamMap.get(row.team_id),
+    created_by_user_id: mapUser(row.created_by_user_id), updated_by_user_id: mapUser(row.updated_by_user_id),
     deleted_at: fixedTimestamp(row.deleted_at, index),
   }, templateColumns)));
   selectedRuns.forEach((row, index) => statements.push(insertStatement("checklist_runs", {
@@ -348,9 +433,9 @@ function buildSanitizedSql(database, sourceProfile, preserveSample = false) {
     status: sanitizeScalarEnum(row.status, RUN_STATUSES),
     started_at: fixedTimestamp(row.started_at, index), completed_at: fixedTimestamp(row.completed_at, index),
     created_at: fixedTimestamp(row.created_at, index), updated_at: fixedTimestamp(row.updated_at, index),
-    progress: Math.max(0, Math.min(Number(row.progress ?? 0), 100)), is_public: row.is_public ? 1 : 0,
-    share_token: null, share_expires_at: null, share_used_at: null, team_id: null,
-    created_by_user_id: mapUser(row.created_by_user_id) ?? mapUser(row.user_id), assigned_to_user_id: mapUser(row.assigned_to_user_id),
+    progress: row.progress, is_public: row.is_public,
+    share_token: null, share_expires_at: null, share_used_at: null, team_id: row.team_id == null ? null : teamMap.get(row.team_id),
+    created_by_user_id: mapUser(row.created_by_user_id), assigned_to_user_id: mapUser(row.assigned_to_user_id),
     started_by_user_id: mapUser(row.started_by_user_id), completed_by_user_id: mapUser(row.completed_by_user_id), deleted_at: fixedTimestamp(row.deleted_at, index),
   }, runColumns)));
   const coveredShapes = [...new Set([...selectedTemplates, ...selectedRuns].flatMap((row) => [...collectShapes(sanitizedJsonText(row.items, []))]))].sort();
@@ -359,7 +444,7 @@ function buildSanitizedSql(database, sourceProfile, preserveSample = false) {
   if (observedSourceShapes.some((shape) => !coveredShapes.includes(shape))) throw new Error("Production-shaped sample lost an observed source shape.");
   const sql = `${statements.join("\n")}\n`;
   assertPrivacySafeSql(sql);
-  return { sql, sourceCounts: { users: users.length, templates: templates.length, checklistRuns: runs.length }, selectedCounts: { users: selectedUsers.length, templates: selectedTemplates.length, checklistRuns: selectedRuns.length }, coveredShapes, observedSourceShapes };
+  return { sql, sourceCounts: { users: users.length, templates: templates.length, checklistRuns: runs.length, teams: teams.length, teamMembers: members.length }, selectedCounts, ownershipCoverage: { source: [...new Set([...templates, ...runs].flatMap(ownershipShapes))].sort(), selected: [...coveredOwners].sort() }, coveredShapes, observedSourceShapes };
 }
 
 function assertPrivacySafeSql(sql) {
@@ -390,8 +475,8 @@ function assertSanitizedArtifactRows({ repoRoot, sql, sourceProfile }) {
     emptyData(database);
     database.exec(sql);
     if (database.prepare("SELECT COUNT(*) total FROM users WHERE password_hash IS NOT NULL OR name IS NOT NULL OR avatar_url IS NOT NULL OR email LIKE '%@%' OR id NOT LIKE 'rehearsal-owner-%' OR email NOT LIKE 'sanitized-owner-%'").get().total) throw new Error("Sanitized artifact contains direct identifiers or password material.");
-    if (database.prepare("SELECT COUNT(*) total FROM templates WHERE id NOT LIKE 'rehearsal-template-%' OR title NOT LIKE 'Sanitized Template %' OR slug NOT LIKE 'sanitized-template-%' OR seo_title IS NOT NULL OR seo_description IS NOT NULL OR team_id IS NOT NULL").get().total) throw new Error("Sanitized artifact contains unapproved template identifiers or customer content.");
-    if (database.prepare("SELECT COUNT(*) total FROM checklist_runs WHERE id NOT LIKE 'rehearsal-run-%' OR title NOT LIKE 'Sanitized Run %' OR share_token IS NOT NULL OR share_expires_at IS NOT NULL OR share_used_at IS NOT NULL OR team_id IS NOT NULL").get().total) throw new Error("Sanitized artifact contains unapproved run identifiers, content, or credentials.");
+    if (database.prepare("SELECT COUNT(*) total FROM templates WHERE id NOT LIKE 'rehearsal-template-%' OR title NOT LIKE 'Sanitized Template %' OR slug NOT LIKE 'sanitized-template-%' OR seo_title IS NOT NULL OR seo_description IS NOT NULL").get().total) throw new Error("Sanitized artifact contains unapproved template identifiers or customer content.");
+    if (database.prepare("SELECT COUNT(*) total FROM checklist_runs WHERE id NOT LIKE 'rehearsal-run-%' OR title NOT LIKE 'Sanitized Run %' OR share_token IS NOT NULL OR share_expires_at IS NOT NULL OR share_used_at IS NOT NULL").get().total) throw new Error("Sanitized artifact contains unapproved run identifiers, content, or credentials.");
     for (const row of database.prepare("SELECT items, category, tags, rules FROM templates").all()) for (const value of Object.values(row)) assertSanitizedJson(value);
     for (const row of database.prepare("SELECT items FROM checklist_runs").all()) assertSanitizedJson(row.items);
     if (sourceProfile.profile === "current-template-run-v1") for (const row of database.prepare("SELECT retired_items FROM checklist_runs").all()) assertSanitizedJson(row.retired_items);
@@ -450,7 +535,7 @@ export function generateSanitizedRehearsalArtifact({ repoRoot, rawExport, source
     schemaVersion: 3, artifactType: "sanitized-production-shaped", sanitizerVersion: policy.sanitizerVersion, sourceProfile: normalized.sourceProfile,
     provenance: { generator: policy.generator, gitCommit, sourceKind: policy.sourceKind, sourceDate, sourceExportSha256: normalized.sourceSha256, sourceDatabaseIdSha256: sha256(sourceDatabaseId), generatedAt: generatedAt.toISOString(), issueNumber },
     handling: { accessOwner: requestedApproverIdentity, purpose: "staging-rehearsal-only", retentionDeadline, rawSourceCleanup: "delete-after-sanitizer-exit", artifactTeardown: "delete-rehearsal-databases-and-expire-artifact" },
-    selection: { sourceCounts: normalized.sourceCounts, selectedCounts: normalized.selectedCounts, requiredShapes: normalized.observedSourceShapes, coveredShapes: normalized.coveredShapes, observedSourceShapes: normalized.observedSourceShapes, absentSourceShapes: REQUIRED_SHAPES.filter((shape) => !normalized.observedSourceShapes.includes(shape)), syntheticEdgeCaseRequirements: normalized.sourceProfile.profile === "legacy-template-evolution-v1" ? REQUIRED_SHAPES : [], sourceShapeDigest: sha256(JSON.stringify({ counts: normalized.sourceCounts, shapes: normalized.observedSourceShapes })) },
+    selection: { sourceCounts: normalized.sourceCounts, selectedCounts: normalized.selectedCounts, cohortLimits: COHORT_LIMITS, profileExclusions: PROFILE_EXCLUSIONS, ownershipCoverage: normalized.ownershipCoverage, requiredShapes: normalized.observedSourceShapes, coveredShapes: normalized.coveredShapes, observedSourceShapes: normalized.observedSourceShapes, absentSourceShapes: REQUIRED_SHAPES.filter((shape) => !normalized.observedSourceShapes.includes(shape)), syntheticEdgeCaseRequirements: normalized.sourceProfile.profile === "legacy-template-evolution-v1" ? REQUIRED_SHAPES : [], sourceShapeDigest: sha256(JSON.stringify({ counts: normalized.sourceCounts, shapes: normalized.observedSourceShapes })) },
     artifact: { sha256: normalized.artifactSha256, byteLength: Buffer.byteLength(normalized.sql) },
     privacy: { profile: "source-derived-structure-content-free", directIdentifiers: "removed", customerContent: "removed", credentialsAndSessions: "excluded", passwordMaterial: "excluded" },
     manifestIntegritySha256: "",
@@ -480,6 +565,8 @@ export function validateSanitizedRehearsalArtifact({ sql, manifest, policy, now,
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   if (!same(value.selection.coveredShapes, observed.coveredShapes) || !same(value.selection.requiredShapes, value.selection.observedSourceShapes) || !same(value.selection.observedSourceShapes, observed.coveredShapes) || !same(value.selection.selectedCounts, observed.selectedCounts) || !same(value.selection.absentSourceShapes, REQUIRED_SHAPES.filter((shape) => !observed.coveredShapes.includes(shape))) || !same(value.selection.syntheticEdgeCaseRequirements, expected.profile === "legacy-template-evolution-v1" ? REQUIRED_SHAPES : []) || value.selection.sourceShapeDigest !== sha256(JSON.stringify({ counts: value.selection.sourceCounts, shapes: value.selection.observedSourceShapes }))) throw new Error("Sanitizer observed coverage metadata does not match the artifact.");
   for (const key of Object.keys(value.selection.sourceCounts)) if (value.selection.sourceCounts[key] < value.selection.selectedCounts[key]) throw new Error("Sanitizer source counts are smaller than the sample.");
+  if (!same(value.selection.cohortLimits, COHORT_LIMITS) || !same(value.selection.profileExclusions, PROFILE_EXCLUSIONS)) throw new Error('Sanitizer cohort bounds or profile exclusions mismatch.');
+  if (!same(value.selection.ownershipCoverage, observed.ownershipCoverage)) throw new Error('Sanitizer ownership coverage mismatch.');
   if (value.artifact.sha256 !== sha256(sql) || value.artifact.byteLength !== Buffer.byteLength(sql)) throw new Error("Sanitized artifact bytes do not match the strict manifest integrity fields.");
   if (value.manifestIntegritySha256 !== integrityDigestFor(value)) throw new Error("Sanitizer manifest integrity digest is invalid.");
   return value;
