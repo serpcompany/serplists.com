@@ -489,7 +489,10 @@ export const useRunExecutionModel = (
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   // Each visit gets its own identity, including navigating away and back to
   // the same run/token while a previous visit's mutation is still pending.
-  const routeGeneration = useMemo(() => ({}), [options.runId, options.shareToken]);
+  const routeGeneration = useMemo(
+    () => ({ runId: options.runId, shareToken: options.shareToken }),
+    [options.runId, options.shareToken],
+  );
   const activeRouteGeneration = useRef<object | null>(null);
   useLayoutEffect(() => {
     activeRouteGeneration.current = routeGeneration;
