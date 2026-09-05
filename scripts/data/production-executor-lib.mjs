@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
 import { validateControlledCanaryChecks } from "./deployment-smoke-lib.mjs";
+import { assertProductionKeySeparation } from "./production-key-separation-lib.mjs";
 export {
   compareProductionInvariants,
   parseInvariantOutput,
@@ -55,7 +56,7 @@ function sqlStatements(sqlTexts) {
     if (quote) {
       current += character;
       if (character === quote) {
-        if (next === quote) {
+        if (quote !== "]" && next === quote) {
           current += next;
           index += 1;
         } else {
@@ -64,8 +65,8 @@ function sqlStatements(sqlTexts) {
       }
       continue;
     }
-    if (["'", '"', "`"].includes(character)) {
-      quote = character;
+    if (["'", '"', "`", "["].includes(character)) {
+      quote = character === "[" ? "]" : character;
       current += character;
       continue;
     }
@@ -97,10 +98,10 @@ function statementRisk(statement) {
     const safeDefault = /\bdefault\s+(?!null\b)(?:[-+]?\d+(?:\.\d+)?|'(?:''|[^'])*'|"(?:""|[^"])*")\s*$/i.test(normalized);
     return required && !safeDefault ? "destructive" : "additive";
   }
-  // SQLite implements REPLACE, including INSERT OR REPLACE, by deleting the
-  // conflicting row before inserting. That can fire delete actions and cascade
-  // through foreign keys, so it must never inherit the ordinary INSERT risk.
-  if (/^replace\b/i.test(normalized) || /^insert\s+or\s+replace\b/i.test(normalized)) return "destructive";
+  // SQLite REPLACE conflict resolution can delete a conflicting row for either
+  // INSERT or UPDATE and cascade foreign-key deletes. Classify the operation
+  // prefix before ordinary writes, regardless of the target identifier syntax.
+  if (/^replace\b/i.test(normalized) || /^(?:insert|update)\s+or\s+replace\b/i.test(normalized)) return "destructive";
   if (/^(insert|update)\b/i.test(normalized)) return "backfill";
   if (/^(delete|drop)\b/i.test(normalized) || /^alter\s+table\b/i.test(normalized) || /^create\s+unique\s+index\b/i.test(normalized)) {
     return "destructive";
@@ -140,15 +141,7 @@ export function assertProductionWorkflowContext({ env, expectedCommit }) {
   if (!env.CLOUDFLARE_API_TOKEN || env.CLOUDFLARE_API_KEY || env.CLOUDFLARE_EMAIL) {
     throw new Error("Production requires one protected, scoped CLOUDFLARE_API_TOKEN and rejects legacy global-key credentials.");
   }
-  if ((env.PRODUCTION_BACKUP_ENCRYPTION_KEY ?? "").length < 32) {
-    throw new Error("Protected production backup encryption key is missing.");
-  }
-  if ((env.PRODUCTION_INVARIANT_HMAC_KEY ?? "").length < 32) {
-    throw new Error("Protected production invariant HMAC key is missing.");
-  }
-  if (env.PRODUCTION_BACKUP_ENCRYPTION_KEY === env.PRODUCTION_INVARIANT_HMAC_KEY) {
-    throw new Error("Production backup encryption and invariant HMAC keys must be separate.");
-  }
+  assertProductionKeySeparation(env);
   return {
     repository: env.GITHUB_REPOSITORY,
     runId: env.GITHUB_RUN_ID,

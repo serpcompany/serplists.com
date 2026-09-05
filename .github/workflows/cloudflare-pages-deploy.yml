@@ -326,6 +326,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
           PRODUCTION_BACKUP_ENCRYPTION_KEY: ${{ secrets.PRODUCTION_BACKUP_ENCRYPTION_KEY }}
           PRODUCTION_INVARIANT_HMAC_KEY: ${{ secrets.PRODUCTION_INVARIANT_HMAC_KEY }}
+          PRODUCTION_CANARY_EVIDENCE_HMAC_KEY: ${{ secrets.PRODUCTION_CANARY_EVIDENCE_HMAC_KEY }}
           DATA_PROTECTED_ENVIRONMENT: production
         run: node scripts/data/production-executor.mjs data --request tmp/production-request.json --approval tmp/production-approval.json --output tmp/production-data-evidence.json --report-dir tmp/data-reports/production
       - name: Attest GitHub-produced production data evidence

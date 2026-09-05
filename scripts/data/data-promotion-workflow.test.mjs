@@ -321,6 +321,14 @@ describe("protected staging and production data-promotion workflow", () => {
     expect(executor.env?.PRODUCTION_BACKUP_ENCRYPTION_KEY).toBe(
       "${{ secrets.PRODUCTION_BACKUP_ENCRYPTION_KEY }}",
     );
+    expect(executor.env?.PRODUCTION_CANARY_EVIDENCE_HMAC_KEY).toBe(
+      "${{ secrets.PRODUCTION_CANARY_EVIDENCE_HMAC_KEY }}",
+    );
+    const productionSmoke = jobs.production_postdeploy.steps.find((step) => step.env?.DATA_CANARY_EVIDENCE_HMAC_KEY);
+    expect(productionSmoke.env.DATA_CANARY_EVIDENCE_HMAC_KEY).toBe(executor.env.PRODUCTION_CANARY_EVIDENCE_HMAC_KEY);
+    for (const [jobId, job] of Object.entries(jobs).filter(([id]) => id.startsWith("staging_"))) {
+      expect(JSON.stringify(job), jobId).not.toContain("secrets.PRODUCTION_");
+    }
 
     for (const [jobId, job] of Object.entries(jobs)) {
       for (const step of job.steps ?? []) {

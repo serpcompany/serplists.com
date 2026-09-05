@@ -40,6 +40,7 @@ const context = {
   CLOUDFLARE_API_TOKEN: "environment-scoped-token",
   PRODUCTION_BACKUP_ENCRYPTION_KEY: "protected-backup-encryption-key-123456",
   PRODUCTION_INVARIANT_HMAC_KEY: "protected-invariant-hmac-key-123456789",
+  PRODUCTION_CANARY_EVIDENCE_HMAC_KEY: "protected-canary-evidence-key-123456789",
 };
 
 function validPromotionEvidence() {
@@ -146,7 +147,7 @@ describe("protected production executor", () => {
     }
   });
 
-  it("requires distinct production invariant and backup keys", () => {
+  it("requires distinct production invariant, backup, and canary keys", () => {
     expect(assertProductionWorkflowContext({ env: context, expectedCommit: commit })).toMatchObject({
       commit,
       protectedEnvironment: "production",
@@ -162,6 +163,52 @@ describe("protected production executor", () => {
       },
       expectedCommit: commit,
     })).toThrow(/must be separate/i);
+  });
+
+  it.each([
+    ["backup and invariant", ["PRODUCTION_BACKUP_ENCRYPTION_KEY", "PRODUCTION_INVARIANT_HMAC_KEY"], ["backup encryption", "invariant HMAC"]],
+    ["backup and canary", ["PRODUCTION_BACKUP_ENCRYPTION_KEY", "PRODUCTION_CANARY_EVIDENCE_HMAC_KEY"], ["backup encryption", "canary evidence HMAC"]],
+    ["invariant and canary", ["PRODUCTION_INVARIANT_HMAC_KEY", "PRODUCTION_CANARY_EVIDENCE_HMAC_KEY"], ["invariant HMAC", "canary evidence HMAC"]],
+    ["all three", ["PRODUCTION_BACKUP_ENCRYPTION_KEY", "PRODUCTION_INVARIANT_HMAC_KEY", "PRODUCTION_CANARY_EVIDENCE_HMAC_KEY"], ["backup encryption", "invariant HMAC", "canary evidence HMAC"]],
+  ])("blocks %s key reuse before privileged operations and reports only roles", (_name, names, roles) => {
+    const cwd = mkdtempSync(path.join(tmpdir(), "production-key-separation-"));
+    try {
+      const reportDirectory = path.join(cwd, "reports");
+      const requestPath = path.join(cwd, "request.json");
+      writeFileSync(requestPath, JSON.stringify(validPromotionEvidence()));
+      const env = { ...context, PATH: cwd };
+      for (const name of names) env[name] = context[names[0]];
+      const result = spawnSync(process.execPath, [
+        fileURLToPath(new URL("./production-executor.mjs", import.meta.url)),
+        "data", "--request", requestPath,
+        "--output", path.join(cwd, "evidence.json"), "--report-dir", reportDirectory,
+      ], { cwd, env, encoding: "utf8" });
+      expect(result.status).toBe(1);
+      expect(existsSync(path.join(cwd, "evidence.json"))).toBe(false);
+      const report = JSON.parse(readFileSync(path.join(reportDirectory, "production-data-promotion.json"), "utf8"));
+      expect(report.operations).toEqual({ activeStep: null, attemptedSteps: [], completedSteps: [], results: {} });
+      expect(report.error).toContain("keys must be separate");
+      const outputs = [result.stdout, result.stderr];
+      for (const suffix of ["json", "junit.xml", "txt", "md"]) {
+        const output = readFileSync(path.join(reportDirectory, `production-data-promotion.${suffix}`), "utf8");
+        for (const role of roles) expect(output).toContain(role);
+        outputs.push(output);
+      }
+      for (const output of outputs) {
+        for (const name of Object.keys(context).filter((key) => key.endsWith("_KEY"))) {
+          expect(output).not.toContain(env[name]);
+        }
+      }
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it.each([undefined, "", "too-short"])("rejects missing or short canary key %s without falling back to staging", (key) => {
+    expect(() => assertProductionWorkflowContext({
+      env: { ...context, PRODUCTION_CANARY_EVIDENCE_HMAC_KEY: key, STAGING_CANARY_EVIDENCE_HMAC_KEY: context.PRODUCTION_CANARY_EVIDENCE_HMAC_KEY },
+      expectedCommit: commit,
+    })).toThrow(/canary evidence HMAC key is missing/);
   });
 
   it("requires exact passing CI and rehearsal evidence for the requested commit and migration range", () => {
