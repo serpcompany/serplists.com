@@ -66,7 +66,7 @@ jobs:
       - name: Run data regression prerequisite
         env:
           DATA_REGRESSION_BASE_SHA: ${{ github.event.before }}
-        run: pnpm run test:data-regressions -- --report-dir tmp/data-reports/staging
+        run: pnpm run test:data-regressions -- --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --report-dir tmp/data-reports/staging
       - name: Apply reviewed staging migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
@@ -273,7 +273,7 @@ jobs:
           node scripts/data/capture-change-provenance.mjs --pulls tmp/change-pulls.json --commits tmp/change-commits.json --commit-authors tmp/change-commit-authors.json --merge-commit tmp/change-merge-commit.json --merge-authors tmp/change-merge-authors.json --commit "$EXPECTED_COMMIT" --output tmp/change-provenance.json
       - name: Validate approved commit migration range and rehearsal artifact
         run: |
-          CI_REPORT=$(find tmp/evidence/ci -name data-regression-suite.json -print -quit)
+          CI_REPORT=$(node scripts/data/select-range-evidence.mjs tmp/evidence/ci "$MIGRATION_FROM" "$MIGRATION_TO")
           CORRECTION_REPORT=$(find tmp/evidence/ci -name contract-correction.json -print -quit)
           SCHEMA_REPORT=$(find tmp/evidence/ci -name schema-contract.json -print -quit)
           STAGING_REPORT=$(find tmp/evidence/staging -name staging-promotion.json -print)
@@ -309,8 +309,73 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-  production_owner_approval:
+  # Read-only token only. This environment never releases the production writer.
+  # The external protection/credential-isolation hold remains binding.
+  production_preparation:
     needs: production_request
+    runs-on: ubuntu-latest
+    environment: production-preparation
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      preparation_digest: ${{ steps.prepare.outputs.preparation_digest }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with: { node-version-file: .node-version, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: production-request-${{ github.run_id }}
+          path: tmp
+      - name: Prepare exact production recovery with read-only credential
+        id: prepare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_READONLY_CLOUDFLARE_API_TOKEN }}
+          PRODUCTION_BACKUP_ENCRYPTION_KEY: ${{ secrets.PRODUCTION_BACKUP_ENCRYPTION_KEY }}
+          PRODUCTION_INVARIANT_HMAC_KEY: ${{ secrets.PRODUCTION_INVARIANT_HMAC_KEY }}
+          PRODUCTION_CANARY_EVIDENCE_HMAC_KEY: ${{ secrets.PRODUCTION_CANARY_EVIDENCE_HMAC_KEY }}
+          DATA_PROTECTED_ENVIRONMENT: production-preparation
+        run: node scripts/data/production-executor.mjs prepare --request tmp/production-request.json --output tmp/recovery/production-preparation.json --report-dir tmp/recovery
+      - name: Persist encrypted recovery and exact request before approval
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            tmp/recovery/
+            tmp/production-request.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Download immutable recovery artifact for verification
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          artifact-ids: ${{ steps.upload.outputs.artifact-id }}
+          path: tmp/verified-recovery
+      - name: Verify durable request and encrypted export before requesting approval
+        env:
+          RECOVERY_ID: ${{ steps.upload.outputs.artifact-id }}
+          RECOVERY_DIGEST: ${{ steps.prepare.outputs.preparation_digest }}
+        run: node scripts/data/verify-production-preparation.mjs --request tmp/verified-recovery/production-request.json --preparation tmp/verified-recovery/recovery/production-preparation.json --encrypted-export "tmp/verified-recovery/recovery/production-recovery-$GITHUB_SHA.sql.enc" --preparation-digest "$RECOVERY_DIGEST" --artifact-id "$RECOVERY_ID" --output tmp/recovery-receipt.json
+      - name: Always remove plaintext recovery material
+        if: always()
+        run: rm -f tmp/production-sensitive/*.sql
+
+      - name: Retain preparation and durable verification outcomes
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-preparation-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            tmp/recovery/*.json
+            tmp/recovery/*.xml
+            tmp/recovery/*.txt
+            tmp/recovery-verification/
+          if-no-files-found: error
+          retention-days: 90
+
+  production_owner_approval:
+    needs: production_preparation
     if: github.event_name == 'workflow_dispatch' && inputs.migration_classification == 'irreversible'
     runs-on: ubuntu-latest
     environment: production-owner-approval
@@ -319,14 +384,16 @@ jobs:
         run: echo "Repository-owner production approval gate passed."
 
   production_data:
-    needs: [production_request, production_owner_approval]
-    if: always() && needs.production_request.result == 'success' && (inputs.migration_classification != 'irreversible' || needs.production_owner_approval.result == 'success')
+    needs: [production_preparation, production_owner_approval]
+    if: always() && needs.production_preparation.result == 'success' && (inputs.migration_classification != 'irreversible' || needs.production_owner_approval.result == 'success')
     runs-on: ubuntu-latest
     environment: production
     env:
       EXPECTED_COMMIT: ${{ inputs.expected_commit }}
       REQUEST_CLASSIFICATION: ${{ inputs.migration_classification }}
       REPOSITORY_OWNER_APPROVER: ${{ vars.PRODUCTION_REPOSITORY_OWNER_APPROVER }}
+      RECOVERY_ID: ${{ needs.production_preparation.outputs.artifact_id }}
+      RECOVERY_DIGEST: ${{ needs.production_preparation.outputs.preparation_digest }}
     permissions:
       contents: read
       actions: read
@@ -344,6 +411,14 @@ jobs:
         with:
           name: production-request-${{ github.run_id }}
           path: tmp
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          artifact-ids: ${{ needs.production_preparation.outputs.artifact_id }}
+          path: tmp/verified-recovery
+      - name: Reverify exact durable artifacts released by preparation
+        run: |
+          cmp tmp/production-request.json tmp/verified-recovery/production-request.json
+          node scripts/data/verify-production-preparation.mjs --request tmp/production-request.json --preparation tmp/verified-recovery/recovery/production-preparation.json --encrypted-export "tmp/verified-recovery/recovery/production-recovery-$GITHUB_SHA.sql.enc" --preparation-digest "$RECOVERY_DIGEST" --artifact-id "$RECOVERY_ID" --output tmp/recovery-receipt.json
       - name: Capture independent protected-environment approval identity and decision
         env:
           GH_TOKEN: ${{ github.token }}
@@ -352,7 +427,7 @@ jobs:
           if [ "$REQUEST_CLASSIFICATION" = irreversible ]; then
             gh api "repos/$GITHUB_REPOSITORY/collaborators/$REPOSITORY_OWNER_APPROVER/permission" > tmp/repository-owner-permission.json
           fi
-          node scripts/data/capture-production-approval.mjs --reviews tmp/production-approvals.json --provenance tmp/change-provenance.json --owner-permission tmp/repository-owner-permission.json --output tmp/production-approval.json
+          node scripts/data/capture-production-approval.mjs --reviews tmp/production-approvals.json --provenance tmp/change-provenance.json --owner-permission tmp/repository-owner-permission.json --recovery-receipt tmp/recovery-receipt.json --output tmp/production-approval.json
       - name: Protected identity recovery export reviewed migration ledger schema invariant executor
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
@@ -360,7 +435,7 @@ jobs:
           PRODUCTION_INVARIANT_HMAC_KEY: ${{ secrets.PRODUCTION_INVARIANT_HMAC_KEY }}
           PRODUCTION_CANARY_EVIDENCE_HMAC_KEY: ${{ secrets.PRODUCTION_CANARY_EVIDENCE_HMAC_KEY }}
           DATA_PROTECTED_ENVIRONMENT: production
-        run: node scripts/data/production-executor.mjs data --request tmp/production-request.json --approval tmp/production-approval.json --output tmp/production-data-evidence.json --report-dir tmp/data-reports/production
+        run: node scripts/data/production-executor.mjs data --request tmp/production-request.json --approval tmp/production-approval.json --preparation tmp/verified-recovery/recovery/production-preparation.json --encrypted-export "tmp/verified-recovery/recovery/production-recovery-$GITHUB_SHA.sql.enc" --preparation-digest "$RECOVERY_DIGEST" --artifact-id "$RECOVERY_ID" --output tmp/production-data-evidence.json --report-dir tmp/data-reports/production
       - name: Attest GitHub-produced production data evidence
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:

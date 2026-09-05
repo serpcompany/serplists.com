@@ -20,6 +20,9 @@ function runFinalizer({ mutate = () => {} } = {}) {
     deploy: { verdict: "pass", commit, tree, target: { environment: "staging", databaseName, databaseId } },
     smoke: { verdict: "pass", commit, target: { environment: "staging", databaseName, databaseId }, failures: [], controlledCanaryMutationApproved: true, canaryEvidenceDigest: "a".repeat(64), checks: ["template_canary_designated", "template_write", "template_write_readback", "template_restore", "run_canary_designated", "run_write", "run_write_readback", "run_restore"].map((name) => ({ name, verdict: "pass" })) },
   };
+  reports.range.coverage = { planId: "safe-template-evolution-0024", artifactSha256: { "db/migrations/0024_safe_template_evolution.sql": "a".repeat(64) } };
+  reports.data.coverage = { ...reports.range.coverage, verdict: "pass" };
+  reports.data.migrationRange = structuredClone(reports.range.migrationRange);
   mutate(reports);
   const args = [];
   for (const [name, value] of Object.entries(reports)) {
@@ -61,6 +64,8 @@ describe("staging promotion finalizer", () => {
     ["wrong invariant commit", (reports) => { reports.invariants.commit = "f".repeat(40); }],
     ["wrong invariant database", (reports) => { reports.invariants.target.databaseId = "11111111-1111-4111-8111-111111111111"; }],
     ["wrong invariant range", (reports) => { reports.invariants.migrationRange.to = "0023_add_sitemap_revision_state.sql"; }],
+    ["CI application-only range for pending0024", (reports) => { reports.data.migrationRange = { from: null, to: null }; }],
+    ["CI artifact mismatch", (reports) => { reports.data.coverage = { ...reports.data.coverage, artifactSha256: {} }; }],
     ["reordered ledger", (reports) => { reports.invariants.ledger.after = ["0024_safe_template_evolution.sql", "0023_add_sitemap_revision_state.sql"]; }],
     ["missing canary restore", (reports) => { reports.smoke.checks = reports.smoke.checks.filter((check) => check.name !== "run_restore"); }],
   ])("rejects %s", (_name, mutate) => {

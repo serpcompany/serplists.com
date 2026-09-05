@@ -2,7 +2,9 @@
 import { execFileSync } from "node:child_process";
 import { parsePendingMigrationNames } from "./pending-migrations-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readdirSync } from "node:fs";
+import { resolvePendingRehearsalPlan } from "./rehearsal-plan-lib.mjs";
+import { parseAppliedMigrationLedger } from "./invariant-capture-lib.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runRepositoryGit, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
@@ -19,11 +21,6 @@ try {
   }
   const gitEnvironment = sanitizedGitEnvironment();
   runRepositoryGit({ repoRoot, args: ["merge-base", "--is-ancestor", base, head], stdio: "ignore" });
-  const changed = runRepositoryGit({ repoRoot, args: ["diff", "--name-only", base, head, "--", "db/migrations"] })
-    .trim().split(/\r?\n/)
-    .filter((name) => /^db\/migrations\/\d{4}_[a-z][a-z0-9_]*\.sql$/.test(name))
-    .map((name) => name.split("/").at(-1))
-    .sort();
   execFileSync(pnpm, [
     "run",
     "check:data:migration-provenance",
@@ -45,10 +42,12 @@ try {
     env: gitEnvironment,
   });
   assertIdentity();
-  const pending = parsePendingMigrationNames(output);
-  if (JSON.stringify(changed) !== JSON.stringify(pending)) {
-    throw new Error(`Staging pending migrations ${pending.join(", ") || "none"} do not exactly match reviewed commit migrations ${changed.join(", ") || "none"}.`);
-  }
+  const files = readdirSync(path.join(repoRoot, "db/migrations")).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
+  const pending = parsePendingMigrationNames(output, files);
+  const plan = resolvePendingRehearsalPlan({ repoRoot, commit: head, baseRef: base, pending });
+  const applied = parseAppliedMigrationLedger(execFileSync(pnpm, ["exec", "wrangler", "d1", "execute", expectedIdentity.databaseName, "--remote", "--json", "--command", "SELECT id, name FROM d1_migrations ORDER BY id;"], { cwd: repoRoot, env: gitEnvironment, encoding: "utf8" }));
+  assertIdentity();
+  if (JSON.stringify([...applied, ...pending]) !== JSON.stringify(files)) throw new Error("Live staging ledger plus reviewed pending range must exactly equal repository history.");
   const report = {
     check: "staging-reviewed-range",
     verdict: "pass",
@@ -57,6 +56,8 @@ try {
     target: { environment: "staging", databaseName: "serp-checklists-staging-db", databaseId: "fcaf4325-5be7-4ead-ab60-45932a04177b" },
     migrationRange: { from: pending[0] ?? null, to: pending.at(-1) ?? null },
     pendingMigrations: pending,
+    ledger: { before: applied },
+    coverage: { planId: plan.id, declarationSha256: plan.declarationSha256, artifactSha256: plan.artifactSha256, affectedTables: plan.affectedTables, invariants: plan.invariants },
   };
   const summary = `PASS exact staging commit/range: ${pending.join(", ") || "no migration"}.`;
   writeDataCheckReports({ name: "staging-reviewed-range", report, summary, reportDirectory });

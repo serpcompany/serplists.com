@@ -37,6 +37,7 @@ const requiredJobs = [
   "staging_postdeploy",
   "staging_failure_report",
   "production_request",
+  "production_preparation",
   "production_owner_approval",
   "production_data",
   "production_deploy",
@@ -210,7 +211,9 @@ describe("protected staging and production data-promotion workflow", () => {
     for (const dependency of ["staging_data", "staging_deploy", "staging_postdeploy"]) {
       expectDependency("staging_failure_report", dependency);
     }
-    expectDependency("production_data", "production_request");
+    expect(asArray(jobs.production_preparation.needs)).toEqual(['production_request']);
+    expect(asArray(jobs.production_owner_approval.needs)).toEqual(['production_preparation']);
+    expect(asArray(jobs.production_data.needs)).toEqual(['production_preparation', 'production_owner_approval']);
     expectDependency("production_deploy", "production_data");
     expectDependency("production_postdeploy", "production_deploy");
 
@@ -281,12 +284,11 @@ describe("protected staging and production data-promotion workflow", () => {
       );
     }
 
+    const credentialEnvironments = { staging_data: 'staging', staging_deploy: 'staging', staging_postdeploy: 'staging', production_preparation: 'production-preparation', production_data: 'production', production_deploy: 'production', production_postdeploy: 'production' };
     for (const [jobId, job] of Object.entries(jobs)) {
       if (!jobText(job).includes("secrets.")) continue;
-      expect(
-        ["staging", "production"],
-        `${jobId} uses credentials without a protected environment`,
-      ).toContain(environmentName(job));
+      expect(Object.hasOwn(credentialEnvironments, jobId), `${jobId} is not an approved credential-bearing job`).toBe(true);
+      expect(environmentName(job), `${jobId} uses credentials outside its exact protected environment`).toBe(credentialEnvironments[jobId]);
     }
 
     const permissions = workflow.permissions ?? {};
@@ -307,13 +309,18 @@ describe("protected staging and production data-promotion workflow", () => {
     }
   });
 
-  it("separates production invariant and backup keys and exposes them only to the protected executor step", () => {
+  it("restricts distinct production keys and read/write tokens to exact protected operation steps", () => {
     const secretNames = [
       "PRODUCTION_INVARIANT_HMAC_KEY",
       "PRODUCTION_BACKUP_ENCRYPTION_KEY",
+      "PRODUCTION_CANARY_EVIDENCE_HMAC_KEY",
     ];
     const dataSteps = jobs.production_data.steps ?? [];
     const executor = dataSteps.find((step) => String(step.run ?? "").includes("production-executor.mjs data"));
+    const preparation = jobs.production_preparation.steps.find(step => String(step.run ?? '').includes('production-executor.mjs prepare'));
+    expect(preparation).toBeDefined();
+    expect(environmentName(jobs.production_preparation)).toBe('production-preparation');
+    expect(preparation.env.DATA_PROTECTED_ENVIRONMENT).toBe('production-preparation');
     expect(executor).toBeDefined();
     expect(executor.env?.PRODUCTION_INVARIANT_HMAC_KEY).toBe(
       "${{ secrets.PRODUCTION_INVARIANT_HMAC_KEY }}",
@@ -326,15 +333,33 @@ describe("protected staging and production data-promotion workflow", () => {
     );
     const productionSmoke = jobs.production_postdeploy.steps.find((step) => step.env?.DATA_CANARY_EVIDENCE_HMAC_KEY);
     expect(productionSmoke.env.DATA_CANARY_EVIDENCE_HMAC_KEY).toBe(executor.env.PRODUCTION_CANARY_EVIDENCE_HMAC_KEY);
+    const productionDeploy = jobs.production_deploy.steps.find(step => step.name === 'Deploy exact compatible production commit');
+    expect(productionDeploy).toBeDefined();
+    expect(productionDeploy.run).toContain('pnpm exec wrangler pages deploy');
+    const readonlyToken = '${{ secrets.PRODUCTION_READONLY_CLOUDFLARE_API_TOKEN }}';
+    const writeToken = '${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}';
+    expect(preparation.env.CLOUDFLARE_API_TOKEN).toBe(readonlyToken);
+    for (const step of [executor, productionDeploy, productionSmoke]) expect(step.env.CLOUDFLARE_API_TOKEN).toBe(writeToken);
+    for (const step of [preparation, executor]) for (const secret of secretNames) expect(step.env[secret]).toBe(`\${{ secrets.${secret} }}`);
     for (const [jobId, job] of Object.entries(jobs).filter(([id]) => id.startsWith("staging_"))) {
       expect(JSON.stringify(job), jobId).not.toContain("secrets.PRODUCTION_");
     }
 
     for (const [jobId, job] of Object.entries(jobs)) {
+      for (const secret of secretNames) expect(JSON.stringify(job.env ?? {}), `${secret} must remain step scoped`).not.toContain(secret);
       for (const step of job.steps ?? []) {
-        if (jobId === "production_data" && step === executor) continue;
+        const text = JSON.stringify(step);
+        if (text.includes(readonlyToken)) expect(jobId === 'production_preparation' && step === preparation).toBe(true);
+        if (text.includes(writeToken)) expect((jobId === 'production_data' && step === executor) || (jobId === 'production_deploy' && step === productionDeploy) || (jobId === 'production_postdeploy' && step === productionSmoke)).toBe(true);
         for (const secret of secretNames) {
-          expect(JSON.stringify(step), `${secret} leaked to ${jobId}/${step.name ?? "unnamed"}`).not.toContain(secret);
+          const protectedKeyStep = (jobId === 'production_preparation' && step === preparation) || (jobId === 'production_data' && step === executor);
+          const protectedCanaryStep = secret === 'PRODUCTION_CANARY_EVIDENCE_HMAC_KEY' && jobId === 'production_postdeploy' && step === productionSmoke;
+          if (!protectedKeyStep && !protectedCanaryStep) expect(text, `${secret} leaked to ${jobId}/${step.name ?? "unnamed"}`).not.toContain(secret);
+          else {
+            const reference = `\${{ secrets.${secret} }}`;
+            expect(text.split(reference).length - 1, `${secret} must be referenced exactly once in its approved step`).toBe(1);
+            expect(Object.entries(step.env ?? {}).filter(([, value]) => value === reference).map(([name]) => name)).toEqual([protectedCanaryStep ? 'DATA_CANARY_EVIDENCE_HMAC_KEY' : secret]);
+          }
         }
       }
     }
@@ -453,6 +478,52 @@ describe("protected staging and production data-promotion workflow", () => {
 
     expectDependency("production_deploy", "production_data");
     expect(jobText(jobs.production_deploy)).not.toMatch(/continue-on-error[^}]*true/);
+  });
+
+  it('persists and verifies exact recovery before approval and re-verifies it before the write executor', () => {
+    const preparation = jobs.production_preparation;
+    const steps = preparation.steps;
+    const prepare = steps.findIndex(step => step.id === 'prepare');
+    const upload = steps.findIndex(step => step.id === 'upload');
+    const download = steps.findIndex(step => String(step.uses ?? '').startsWith('actions/download-artifact@') && step.with?.['artifact-ids']);
+    const verify = steps.findIndex(step => String(step.run ?? '').includes('verify-production-preparation.mjs'));
+    expect(prepare).toBeGreaterThan(-1);
+    expect(upload).toBeGreaterThan(prepare);
+    expect(download).toBeGreaterThan(upload);
+    expect(verify).toBeGreaterThan(download);
+    expect(steps[prepare].run).toContain('production-executor.mjs prepare --request tmp/production-request.json');
+    expect(steps[upload].with.path).toContain('tmp/recovery/');
+    expect(steps[upload].with.path).toContain('tmp/production-request.json');
+    expect(steps[upload].with.path).not.toContain('production-sensitive');
+    expect(steps[upload].with['if-no-files-found']).toBe('error');
+    expect(steps[upload].with['retention-days']).toBeGreaterThanOrEqual(90);
+    expect(steps[download].with['artifact-ids']).toBe('${{ steps.upload.outputs.artifact-id }}');
+    expect(steps[download].with.path).toBe('tmp/verified-recovery');
+    expect(steps[verify].env.RECOVERY_ID).toBe('${{ steps.upload.outputs.artifact-id }}');
+    expect(steps[verify].env.RECOVERY_DIGEST).toBe('${{ steps.prepare.outputs.preparation_digest }}');
+    for (const parameter of ['--request tmp/verified-recovery/production-request.json', '--preparation tmp/verified-recovery/recovery/production-preparation.json', '--encrypted-export', '--preparation-digest "$RECOVERY_DIGEST"', '--artifact-id "$RECOVERY_ID"']) expect(steps[verify].run).toContain(parameter);
+    expect(preparation.outputs.artifact_id).toBe('${{ steps.upload.outputs.artifact-id }}');
+    expect(preparation.outputs.preparation_digest).toBe('${{ steps.prepare.outputs.preparation_digest }}');
+    expect(asArray(jobs.production_owner_approval.needs)).toEqual(['production_preparation']);
+    expect(environmentName(jobs.production_owner_approval)).toBe('production-owner-approval');
+    expect(asArray(jobs.production_data.needs)).toEqual(['production_preparation', 'production_owner_approval']);
+    expect(jobs.production_data.if).toContain("needs.production_preparation.result == 'success'");
+    expect(jobs.production_data.if).toContain("needs.production_owner_approval.result == 'success'");
+    expect(environmentName(jobs.production_data)).toBe('production');
+    const dataSteps = jobs.production_data.steps;
+    const dataDownload = dataSteps.findIndex(step => step.with?.['artifact-ids']);
+    const dataVerify = dataSteps.findIndex(step => String(step.run ?? '').includes('verify-production-preparation.mjs'));
+    const approval = dataSteps.findIndex(step => String(step.run ?? '').includes('capture-production-approval.mjs'));
+    const execute = dataSteps.findIndex(step => String(step.run ?? '').includes('production-executor.mjs data'));
+    expect(dataDownload).toBeGreaterThan(-1);
+    expect(dataVerify).toBeGreaterThan(dataDownload);
+    expect(approval).toBeGreaterThan(dataVerify);
+    expect(execute).toBeGreaterThan(approval);
+    expect(dataSteps[dataDownload].with['artifact-ids']).toBe('${{ needs.production_preparation.outputs.artifact_id }}');
+    expect(jobs.production_data.env.RECOVERY_DIGEST).toBe('${{ needs.production_preparation.outputs.preparation_digest }}');
+    expect(dataSteps[dataVerify].run).toContain('cmp tmp/production-request.json tmp/verified-recovery/production-request.json');
+    expect(dataSteps[approval].run).toContain('--recovery-receipt tmp/recovery-receipt.json');
+    for (const parameter of ['--approval tmp/production-approval.json', '--preparation tmp/verified-recovery/recovery/production-preparation.json', '--encrypted-export', '--artifact-id "$RECOVERY_ID"', '--preparation-digest "$RECOVERY_DIGEST"']) expect(dataSteps[execute].run).toContain(parameter);
   });
 
   it("requires exact staging promotion and protected-main push CI evidence before production request", () => {
@@ -690,7 +761,7 @@ describe("protected staging and production data-promotion workflow", () => {
     expect(runText(jobs.production_request)).toContain("--merge-authors tmp/change-merge-authors.json");
     expect(jobText(jobs.production_request)).toContain("change-provenance");
     expect(environmentName(jobs.production_owner_approval)).toBe("production-owner-approval");
-    expectDependency("production_owner_approval", "production_request");
+    expectDependency("production_owner_approval", "production_preparation");
     expectDependency("production_data", "production_owner_approval");
     const dataText = runText(jobs.production_data);
     expect(dataText).toContain("actions/runs/$GITHUB_RUN_ID/approvals");

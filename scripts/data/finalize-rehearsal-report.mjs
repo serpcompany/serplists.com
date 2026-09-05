@@ -7,14 +7,16 @@ import { loadSanitizerPolicy, validateSanitizedRehearsalArtifact } from "./sanit
 import { resolveRehearsalPlan, validateCoverageMatch } from "./rehearsal-plan-lib.mjs";
 import { validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
 import { validateSanitizedStateBinding } from "./sanitized-state-lib.mjs";
+import { normalizeMigrationRange, migrationRangesEqual, migrationsInRange, migrationRangeForReport } from "./migration-range-lib.mjs";
 function arg(name) { const i = process.argv.indexOf(name); return i < 0 ? null : process.argv[i + 1]; }
 try {
+  const migrationRange = normalizeMigrationRange({ from: arg("--migration-from") ?? undefined, to: arg("--migration-to") ?? undefined });
   const source = JSON.parse(readFileSync(arg("--source"), "utf8"));
   const repoRoot = path.resolve(new URL("../..", import.meta.url).pathname);
   const expectedPlan = resolveRehearsalPlan({ repoRoot, commit: arg("--commit"), migrationFrom: arg("--migration-from"), migrationTo: arg("--migration-to") });
   validateCoverageMatch({ evidence: source, expected: expectedPlan });
   const required = [arg("--comparison"), arg("--recovery"), arg("--teardown")];
-  if (source.verdict !== "pass" || source.commit !== arg("--commit") || source.target?.environment !== "local" || source.migrationRange?.from !== (arg("--migration-from") === "none" ? null : arg("--migration-from")) || source.migrationRange?.to !== (arg("--migration-to") === "none" ? null : arg("--migration-to")) || source.coverage?.verdict !== "pass" || required.some((file) => !file || !existsSync(file))) throw new Error("Exact-commit local prerequisite range and coverage evidence is incomplete, mislabeled, or failed.");
+  if (source.verdict !== "pass" || source.commit !== arg("--commit") || source.target?.environment !== "local" || !migrationRangesEqual(source.migrationRange, migrationRange) || source.coverage?.verdict !== "pass" || required.some((file) => !file || !existsSync(file))) throw new Error("Exact-commit local prerequisite range and coverage evidence is incomplete, mislabeled, or failed.");
   const output = arg("--output");
   const invariants = JSON.parse(readFileSync(arg("--comparison"), "utf8"));
   const sanitizedManifest = JSON.parse(readFileSync(arg("--sanitizer-manifest"), "utf8"));
@@ -22,9 +24,12 @@ try {
   validateAuthenticatedCandidateEvidence(authenticated, { requireDetectors: true });
   validateSanitizedStateBinding(authenticated.postMigrationState, invariants.sanitizedState);
   const expectedLedger = readdirSync(path.join(repoRoot, "db/migrations")).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
+  const pending = migrationsInRange(expectedLedger, migrationRange);
+  const expectedBefore = expectedLedger.slice(0, expectedLedger.length - pending.length);
+  if (JSON.stringify(invariants.ledger?.before) !== JSON.stringify(expectedBefore) || JSON.stringify(invariants.ledger?.after) !== JSON.stringify(expectedLedger)) throw new Error("Rehearsal ledger must prove the complete ordered reviewed transition.");
   if (JSON.stringify(authenticated.postMigrationState.ledger) !== JSON.stringify(expectedLedger)) throw new Error("Authenticated state must use the full exact candidate migration ledger.");
   if (authenticated.postMigrationState.sourceSha256 !== sanitizedManifest.artifact?.sha256 || authenticated.postMigrationState.ledgerSha256 !== invariants.ledger?.afterSha256 || JSON.stringify(authenticated.postMigrationState.ledger) !== JSON.stringify(invariants.ledger?.after) || authenticated.transformation?.verdict !== "pass" || authenticated.handlerStateReadback !== true) throw new Error("Authenticated handlers are not bound to the exact transformed remote ledger and domain.");
-  if (authenticated.commit !== arg("--commit") || authenticated.target?.environment !== "local" || authenticated.sanitizerArtifactSha256 !== sanitizedManifest.artifact?.sha256 || authenticated.migrationRange?.from !== (arg("--migration-from") === "none" ? null : arg("--migration-from")) || authenticated.migrationRange?.to !== (arg("--migration-to") === "none" ? null : arg("--migration-to"))) throw new Error("Authenticated candidate-handler rehearsal evidence is incomplete or not bound to the sanitized artifact.");
+  if (authenticated.commit !== arg("--commit") || authenticated.target?.environment !== "local" || authenticated.sanitizerArtifactSha256 !== sanitizedManifest.artifact?.sha256 || !migrationRangesEqual(authenticated.migrationRange, migrationRange)) throw new Error("Authenticated candidate-handler rehearsal evidence is incomplete or not bound to the sanitized artifact.");
   const recovery = validateRehearsalRecoveryEvidence({
     evidence: JSON.parse(readFileSync(arg("--recovery"), "utf8")),
     sourceDatabaseId: arg("--database-id"),
@@ -44,16 +49,14 @@ try {
   });
   const teardownPass = /PASS rehearsal .* is absent/.test(readFileSync(arg("--teardown"), "utf8"));
   const remoteTarget = { environment: "rehearsal", binding: "DB", databaseName: arg("--database-name"), databaseId: arg("--database-id") };
-  const remoteBound = invariants.verdict === "pass" && invariants.commit === arg("--commit") && invariants.comparisonKind === "migration" && JSON.stringify(invariants.target) === JSON.stringify(remoteTarget) && invariants.migrationRange?.from === arg("--migration-from") && invariants.migrationRange?.to === arg("--migration-to") && invariants.ledger?.verdict === "pass";
+  const remoteBound = invariants.verdict === "pass" && invariants.commit === arg("--commit") && invariants.comparisonKind === "migration" && JSON.stringify(invariants.target) === JSON.stringify(remoteTarget) && migrationRangesEqual(invariants.migrationRange, migrationRange) && invariants.ledger?.verdict === "pass";
   if (!remoteBound || !recoveryPass || !teardownPass) throw new Error("Remote rehearsal identity, migration ledger, invariants, recovery, or confirmed teardown failed.");
   const report = {
     check: "production-shaped-rehearsal",
     verdict: "pass",
     commit: arg("--commit"),
     target: remoteTarget,
-    migrationRange: arg("--migration-from") === "none"
-      ? { from: null, to: null }
-      : { from: arg("--migration-from"), to: arg("--migration-to") },
+    migrationRange,
     localPrerequisite: source,
     coverage: source.coverage,
     authenticatedRehearsal: authenticated,
@@ -88,7 +91,7 @@ try {
   const output = arg("--output") ?? "tmp/data-reports/rehearsal/rehearsal-promotion.json";
   let sanitizerVersion = "unknown";
   try { sanitizerVersion = JSON.parse(readFileSync(arg("--sanitizer-manifest"), "utf8")).sanitizerVersion ?? "unknown"; } catch {}
-  const failure = { check: "production-shaped-rehearsal", verdict: "fail", commit: arg("--commit") ?? "unknown", target: { environment: "rehearsal", databaseName: arg("--database-name"), databaseId: arg("--database-id") }, migrationRange: { from: arg("--migration-from"), to: arg("--migration-to") }, sanitizerVersion, error: message };
+  const failure = { check: "production-shaped-rehearsal", verdict: "fail", commit: arg("--commit") ?? "unknown", target: { environment: "rehearsal", databaseName: arg("--database-name"), databaseId: arg("--database-id") }, migrationRange: migrationRangeForReport({ from: arg("--migration-from") ?? undefined, to: arg("--migration-to") ?? undefined }), sanitizerVersion, error: message };
   const identity = `commit=${failure.commit} environment=rehearsal database=${failure.target.databaseName} databaseId=${failure.target.databaseId} migration=${failure.migrationRange.from}->${failure.migrationRange.to} sanitizer=${failure.sanitizerVersion}`;
   writeDataCheckReports({ name: "rehearsal-promotion", report: failure, summary: `BLOCKED production-shaped rehearsal: ${identity}: ${message}`, reportDirectory: path.dirname(output) });
   console.error(message);

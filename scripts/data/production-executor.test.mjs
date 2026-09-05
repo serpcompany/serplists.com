@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { prepareProduction, verifyRecoveryBundle, digest, approvalToken } from "./production-preparation-lib.mjs";
 
 import {
   assertApprovalMatchesRequest,
@@ -131,7 +132,22 @@ function validStepResult(step) {
 }
 
 function validSignedProductionEvidence(request = validPromotionEvidence()) {
-  return createSignedEvidence({ payload: { verdict: "pass", commit, classification: request.classification, database: structuredClone(production), pendingMigrations: structuredClone(request.pendingMigrations), migrationRange: structuredClone(request.migrationRange), results: validProductionResults(), approval: validApproval() } });
+  const { approval, receipt } = preparedHandshake(validStepResult, request);
+  return createSignedEvidence({ payload: { verdict: "pass", commit, classification: request.classification, database: structuredClone(production), pendingMigrations: structuredClone(request.pendingMigrations), migrationRange: structuredClone(request.migrationRange), results: validProductionResults(), approval, recovery: receipt } });
+}
+
+function preparedHandshake(run = validStepResult, request = validPromotionEvidence()) {
+  const encrypted = Buffer.from("isolated encrypted export fixture");
+  const preparationContext = { repository: context.GITHUB_REPOSITORY, runId: context.GITHUB_RUN_ID, runAttempt: "1", commit };
+  const preparation = prepareProduction({ request, context: preparationContext, run: step => {
+    const result = run(step);
+    if (step === "recovery-export") result.summary = { type: step, encryptedBackupSha256: digest(encrypted), encryptedBackupByteLength: encrypted.length };
+    return result;
+  } });
+  const bundle = { request, preparation, encrypted, expectedDigest: digest(preparation), artifactId: "123", context: preparationContext };
+  const receipt = verifyRecoveryBundle(bundle);
+  const approval = { ...validApproval(), recovery: receipt, decision: `Reviewed recovery and approve ${approvalToken(receipt)}` };
+  return { preparation, receipt, approval, bundle };
 }
 
 describe("protected production executor", () => {
@@ -505,11 +521,11 @@ esac
       chmodSync(fakePnpm, 0o755);
       const result = spawnSync(process.execPath, [
         fileURLToPath(new URL("./production-executor.mjs", import.meta.url)),
-        "data", "--request", requestPath, "--approval", approvalPath,
+        "prepare", "--request", requestPath,
         "--output", path.join(cwd, "evidence.json"), "--report-dir", reportDirectory,
       ], {
         cwd,
-        env: { ...process.env, ...context, PATH: `${fakeBin}:${process.env.PATH}` },
+        env: { ...process.env, ...context, DATA_PROTECTED_ENVIRONMENT: "production-preparation", PATH: `${fakeBin}:${process.env.PATH}` },
       });
       expect(result.status).toBe(1);
       const report = JSON.parse(readFileSync(path.join(reportDirectory, "production-data-promotion.json"), "utf8"));
@@ -535,10 +551,10 @@ esac
   it("runs recovery, reviewed migration, ledger, schema, and invariant gates in order before signing deploy evidence", () => {
     const calls = [];
     const result = runProductionDataPhase({
+      ...preparedHandshake(),
       commit,
       database: production,
       pendingMigrations: ["0024_safe_template_evolution.sql"],
-      approval: validApproval(),
       classification: "backfill",
       run: (step) => {
         calls.push(step);
@@ -547,7 +563,7 @@ esac
     });
 
     expect(calls).toEqual([
-      "identity", "recovery-bookmark", "recovery-export", "reviewed-pending-range",
+      "identity", "reviewed-pending-range",
       "pre-invariants", "migration-apply", "ledger-clean", "schema-contract", "post-invariants",
     ]);
     expect(assertDeployEvidence({ signedEvidence: result, commit, database: production })).toMatchObject({
@@ -560,15 +576,75 @@ esac
   it("never reaches migration or deploy evidence when a prerequisite fails", () => {
     const calls = [];
     expect(() => runProductionDataPhase({
+      ...preparedHandshake(),
       commit,
       database: production,
       pendingMigrations: ["0024_safe_template_evolution.sql"],
       run: (step) => {
         calls.push(step);
-        return { verdict: step === "pre-invariants" ? "fail" : "pass" };
+        return { ...validStepResult(step), verdict: step === "pre-invariants" ? "fail" : "pass" };
       },
     })).toThrow(/pre-invariants/i);
     expect(calls).not.toContain("migration-apply");
+  });
+
+  it.each(["success", "upload unavailable", "digest mismatch", "export mismatch", "request mismatch", "wrong attempt", "changed ledger", "changed identity", "changed pending", "denied approval", "missing approval"])("orchestrates durable recovery -> approval -> execution: %s", scenario => {
+    const calls = [];
+    const orchestrate = () => {
+      const handshake = preparedHandshake(step => { calls.push(`prepare:${step}`); return validStepResult(step); });
+      calls.push("upload");
+      if (scenario === "upload unavailable") throw new Error("upload unavailable");
+      // A byte-for-byte downloaded copy is the storage boundary, not a local path assertion.
+      const downloaded = structuredClone(handshake.bundle);
+      downloaded.encrypted = Buffer.from(downloaded.encrypted);
+      if (scenario === "digest mismatch") downloaded.expectedDigest = "0".repeat(64);
+      if (scenario === "export mismatch") downloaded.encrypted = Buffer.from("corrupted");
+      if (scenario === "request mismatch") downloaded.request.commit = "0".repeat(40);
+      if (scenario === "wrong attempt") downloaded.context.runAttempt = "2";
+      verifyRecoveryBundle(downloaded);
+      calls.push("durable-verified", "approval");
+      if (scenario === "denied approval") throw new Error("denied");
+      if (scenario === "missing approval") handshake.approval = null;
+      return runProductionDataPhase({ ...handshake, commit, database: production, pendingMigrations: validPromotionEvidence().pendingMigrations, classification: "backfill", run: step => {
+        calls.push(`execute:${step}`);
+        const result = validStepResult(step);
+        if (scenario === "changed ledger" && step === "pre-invariants") result.summary.ledgerSha256 = "0".repeat(64);
+        if (scenario === "changed identity" && step === "identity") result.summary.databaseId = "wrong";
+        if (scenario === "changed pending" && step === "reviewed-pending-range") result.summary.pendingMigrations = [];
+        return result;
+      } });
+    };
+    if (scenario === "success") {
+      const evidence = orchestrate();
+      expect(assertDeployEvidence({ signedEvidence: evidence, commit, database: production }).verdict).toBe("pass");
+      expect(calls).toEqual(["prepare:identity", "prepare:recovery-bookmark", "prepare:recovery-export", "prepare:reviewed-pending-range", "prepare:pre-invariants", "upload", "durable-verified", "approval", "execute:identity", "execute:reviewed-pending-range", "execute:pre-invariants", "execute:migration-apply", "execute:ledger-clean", "execute:schema-contract", "execute:post-invariants"]);
+    } else {
+      expect(orchestrate).toThrow();
+      expect(calls).not.toContain("execute:migration-apply");
+      if (["upload unavailable", "digest mismatch", "export mismatch", "request mismatch", "wrong attempt"].includes(scenario)) expect(calls).not.toContain("approval");
+    }
+  });
+
+  it.each(["approved", "rejected", "stale-token"])("executes the downloaded-artifact verification and approval CLIs locally: %s", state => {
+    const cwd = mkdtempSync(path.join(tmpdir(), "durable-recovery-cli-"));
+    try {
+      const { bundle, preparation } = preparedHandshake();
+      for (const [name, data] of Object.entries({ request: bundle.request, preparation, provenance: { changeAuthors: ["author"] } })) writeFileSync(path.join(cwd, `${name}.json`), JSON.stringify(data));
+      writeFileSync(path.join(cwd, "export.enc"), bundle.encrypted);
+      const invoke = (script, args, env = {}) => spawnSync(process.execPath, [fileURLToPath(new URL(script, import.meta.url)), ...args], { cwd, env: { ...process.env, ...context, ...env }, encoding: "utf8" });
+      const verified = invoke("./verify-production-preparation.mjs", ["--request", "request.json", "--preparation", "preparation.json", "--encrypted-export", "export.enc", "--preparation-digest", bundle.expectedDigest, "--artifact-id", "123", "--output", "receipt.json"]);
+      expect(verified.status, verified.stderr).toBe(0);
+      const receipt = JSON.parse(readFileSync(path.join(cwd, "receipt.json"), "utf8"));
+      for (const suffix of ["json", "junit.xml", "txt"]) expect(readFileSync(path.join(cwd, `tmp/recovery-verification/durable-recovery-verification.${suffix}`), "utf8")).toContain(receipt.preparationSha256);
+      writeFileSync(path.join(cwd, "reviews.json"), JSON.stringify([{ state: state === "stale-token" ? "approved" : state, user: { login: "independent-reviewer", type: "User" }, environments: [{ name: "production" }], comment: `Reviewed durable export and recovery ${state === "stale-token" ? "old request" : approvalToken(receipt)}` }]));
+      const approved = invoke("./capture-production-approval.mjs", ["--reviews", "reviews.json", "--provenance", "provenance.json", "--recovery-receipt", "receipt.json", "--output", "approval.json"], { REQUEST_CLASSIFICATION: "backfill" });
+      expect(approved.status, approved.stderr).toBe(state === "approved" ? 0 : 1);
+      if (state === "approved") {
+        const approval = JSON.parse(readFileSync(path.join(cwd, "approval.json"), "utf8"));
+        const evidence = runProductionDataPhase({ commit, database: production, pendingMigrations: bundle.request.pendingMigrations, classification: "backfill", approval, preparation, receipt, run: validStepResult });
+        expect(assertDeployEvidence({ signedEvidence: evidence, commit, database: production }).verdict).toBe("pass");
+      } else expect(existsSync(path.join(cwd, "approval.json"))).toBe(false);
+    } finally { rmSync(cwd, { recursive: true, force: true }); }
   });
 
   it("blocks row/owner loss and nonzero invalid or orphan invariants", () => {

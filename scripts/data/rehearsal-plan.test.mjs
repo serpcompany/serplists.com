@@ -65,7 +65,7 @@ describe("reviewed rehearsal plan", () => {
   });
   it("rejects fixed 0024 evidence for another range or affected domain", () => {
     const plan = resolveRehearsalPlan({ repoRoot, commit });
-    const evidence = { commit, migrationRange: plan.migrationRange, coverage: { planId: plan.id, declarationSha256: plan.declarationSha256, affectedTables: plan.affectedTables, invariants: plan.invariants } };
+    const evidence = { commit, migrationRange: plan.migrationRange, coverage: { planId: plan.id, declarationSha256: plan.declarationSha256, artifactSha256: plan.artifactSha256, affectedTables: plan.affectedTables, invariants: plan.invariants } };
     expect(validateCoverageMatch({ evidence, expected: plan })).toEqual(evidence);
     expect(() => validateCoverageMatch({ evidence, expected: { ...plan, migrationRange: { from: "0025_other_table.sql", to: "0025_other_table.sql" }, affectedTables: ["usage_analytics"] } })).toThrow(/range.*coverage/i);
   });

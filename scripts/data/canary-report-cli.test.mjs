@@ -1,0 +1,135 @@
+import { describe, expect, it } from 'vitest';
+import { execFile } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { promisify } from 'node:util';
+import { safeCanaryFailure } from './canary-diagnostics.mjs';
+
+const execute = promisify(execFile);
+const commit = 'c'.repeat(40);
+const owner = 'OWNER_SENTINEL_111';
+const templateId = 'TEMPLATE_SENTINEL_111';
+const runId = 'RUN_SENTINEL_111';
+const cookie = 'session=SESSION_SENTINEL_111';
+const key = 'EVIDENCE_KEY_SENTINEL_111_'.repeat(3);
+const sentinels = [owner, templateId, runId, cookie, 'SESSION_SENTINEL_111', key, 'PROVIDER_SECRET_SENTINEL_111', 'STDERR_SENTINEL_111', 'SQL_SENTINEL_111'];
+const repoRoot = resolve('.');
+
+function fixture(failQuery) {
+  const directory = mkdtempSync(join(tmpdir(), 'canary-cli-privacy-'));
+  const callsPath = join(directory, 'calls.jsonl');
+  const stub = join(directory, 'pnpm');
+  writeFileSync(stub, `#!${process.execPath}\nconst fs = require('node:fs');\nconst operation = process.argv.includes('info') ? 'info' : 'execute';\nfs.appendFileSync(${JSON.stringify(callsPath)}, operation+'\\n');\nif(operation === 'info') console.log(JSON.stringify({name:'fixture-db',uuid:'fixture-id'}));\nelse if(${JSON.stringify(failQuery)}) { process.stderr.write(${JSON.stringify(sentinels.join(' ') + '\n')}); process.stdout.write(${JSON.stringify(sentinels.join(' ') + '\n')}); process.exit(27); }\nelse console.log(JSON.stringify([{results:${JSON.stringify([{ kind: 'template', id: templateId, title: 'Private canary title', version: 3 }, { kind: 'run', id: runId, progress: 10, revision: 2 }])}}]));\n`);
+  chmodSync(stub, 0o700);
+  return { directory, callsPath, reports: join(directory, 'reports') };
+}
+
+async function runCli(f, environment, deploymentUrl = 'http://127.0.0.1:1', customDomain = 'http://127.0.0.1:1') {
+  try {
+    const result = await execute(process.execPath, ['scripts/data/deployment-smoke.mjs', '--environment', environment, '--database-name', 'fixture-db', '--database-id', 'fixture-id', '--deployment-url', deploymentUrl, '--custom-domain', customDomain, '--report-dir', f.reports], {
+      cwd: repoRoot,
+      env: { PATH: `${f.directory}:${process.env.PATH}`, HOME: process.env.HOME, CI: '1', GITHUB_SHA: commit, DATA_CANARY_OWNER_ID: owner, DATA_CANARY_TEMPLATE_ID: templateId, DATA_CANARY_RUN_ID: runId, DATA_CANARY_COOKIE: cookie, DATA_CANARY_EVIDENCE_HMAC_KEY: key, DATA_CANARY_MUTATION_APPROVED: 'true', CLOUDFLARE_API_TOKEN: 'PROVIDER_SECRET_SENTINEL_111' },
+      encoding: 'utf8', timeout: 20_000,
+    });
+    return { ...result, code: 0 };
+  } catch (error) { return { stdout: error.stdout ?? '', stderr: error.stderr ?? '', code: error.code }; }
+}
+
+function artifacts(f, environment) {
+  return Object.fromEntries(['json', 'junit.xml', 'md', 'txt'].map(extension => [extension, readFileSync(join(f.reports, `${environment}-postdeploy-smoke.${extension}`), 'utf8')]));
+}
+
+async function listen(handler) {
+  const server = createServer(handler);
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  return { server, origin: `http://127.0.0.1:${server.address().port}` };
+}
+
+describe.skipIf(process.platform === 'win32')('actual canary CLI privacy and report outcomes', () => {
+  it.each(['staging', 'production'])('redacts query argv/stdout/stderr after successful %s identity checks', async environment => {
+    const f = fixture(true);
+    try {
+      const result = await runCli(f, environment);
+      expect(result.code).toBe(1);
+      expect(readFileSync(f.callsPath, 'utf8').trim().split('\n')).toEqual(environment === 'production' ? ['info', 'execute', 'info'] : ['info', 'execute']);
+      const files = artifacts(f, environment);
+      for (const text of [...Object.values(files), result.stdout, result.stderr]) for (const sentinel of sentinels) expect(text).not.toContain(sentinel);
+      const report = JSON.parse(files.json);
+      expect(report).toMatchObject({ verdict: 'fail', commit, target: { environment, databaseName: 'fixture-db', databaseId: 'fixture-id' }, failedStage: 'd1-query', errorCode: 'CANARY_SUBPROCESS_FAILED', exitStatus: 27 });
+      for (const text of [...Object.values(files), result.stderr]) for (const context of [commit, environment, 'fixture-db', 'fixture-id']) expect(text).toContain(context);
+      expect(files['junit.xml']).toMatch(/failures="[1-9][0-9]*"/);
+    } finally { rmSync(f.directory, { recursive: true, force: true }); }
+  });
+
+  it.each([200, 500])('reports actual custom-domain HTTP%s consistently after successful canary restoration', async healthStatus => {
+    const f = fixture(false);
+    const state = { template: { id: templateId, user_id: owner, title: 'Private canary title', version: 3 }, run: { id: runId, user_id: owner, progress: 10, revision: 2 } };
+    const api = await listen(async (req, res) => {
+      let body = ''; for await (const chunk of req) body += chunk;
+      let value;
+      if (req.url === '/api/templates') value = [state.template];
+      else if (req.url === '/api/checklists') value = [state.run];
+      else if (req.url === '/api/health') value = { status: 'ok' };
+      else {
+        const row = req.url.includes('templates') ? state.template : state.run;
+        if (req.method === 'PUT') {
+          const input = JSON.parse(body);
+          if (row === state.template) { row.title = input.title; row.version += 1; }
+          else { row.progress = input.progress; row.revision += 1; }
+        }
+        value = row;
+      }
+      res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(value));
+    });
+    const custom = await listen((_req, res) => { res.statusCode = healthStatus; res.end('health'); });
+    try {
+      const result = await runCli(f, 'staging', api.origin, custom.origin);
+      expect(result.code).toBe(healthStatus === 200 ? 0 : 1);
+      expect(state.template).toMatchObject({ title: 'Private canary title', version: 5 });
+      expect(state.run).toMatchObject({ progress: 10, revision: 4 });
+      const files = artifacts(f, 'staging');
+      const report = JSON.parse(files.json);
+      expect(report.checks.every(check => check.verdict === 'pass')).toBe(true);
+      expect(report.verdict).toBe(healthStatus === 200 ? 'pass' : 'fail');
+      expect(report.evidenceChecks).toContainEqual({ name: 'custom_domain_health', verdict: report.verdict });
+      expect(files['junit.xml']).toMatch(healthStatus === 200 ? /failures="0"/ : /failures="[1-9][0-9]*"/);
+      expect(files['junit.xml']).toContain('name="custom_domain_health"');
+      for (const text of [...Object.values(files), result.stdout, result.stderr]) for (const sentinel of [...sentinels, 'Private canary title']) expect(text).not.toContain(sentinel);
+    } finally {
+      await Promise.all([api.server, custom.server].map(server => new Promise(resolve => server.close(resolve))));
+      rmSync(f.directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each([200, 401])('names authenticated visibility failure for HTTP%s with missing owned rows', async templateStatus => {
+    const f = fixture(false);
+    let writes = 0;
+    const api = await listen((req, res) => {
+      if (req.method === 'PUT') writes += 1;
+      res.setHeader('content-type', 'application/json');
+      if (req.url === '/api/templates') { res.statusCode = templateStatus; res.end(JSON.stringify(templateStatus === 200 ? [] : { error: 'Unauthorized' })); }
+      else if (req.url === '/api/checklists') res.end(JSON.stringify([{ id: runId, user_id: owner, progress: 10, revision: 2 }]));
+      else res.end(JSON.stringify({ status: 'ok' }));
+    });
+    try {
+      const result = await runCli(f, 'staging', api.origin, api.origin);
+      expect(result.code).toBe(1);
+      expect(writes).toBe(0);
+      const files = artifacts(f, 'staging');
+      expect(JSON.parse(files.json).checks).toContainEqual({ name: 'authenticated_canary_visibility', verdict: 'fail' });
+      expect(files['junit.xml']).toContain('name="authenticated_canary_visibility"');
+      expect(files['junit.xml']).toMatch(/failures="[1-9][0-9]*"/);
+      for (const text of [...Object.values(files), result.stdout, result.stderr]) for (const sentinel of sentinels) expect(text).not.toContain(sentinel);
+    } finally {
+      await new Promise(resolve => api.server.close(resolve));
+      rmSync(f.directory, { recursive: true, force: true });
+    }
+  });
+});
+
+it('does not trust error-owned diagnostic fields or arbitrary stage strings', () => {
+  const error = Object.assign(new Error('SECRET'), { canaryFailure: { message: 'SECRET' }, status: 'SECRET' });
+  expect(JSON.stringify(safeCanaryFailure('SECRET', error))).not.toContain('SECRET');
+});

@@ -8,26 +8,23 @@ import { extractD1Identity } from "./wrangler-identity-lib.mjs";
 import { evaluateInvariantLedgerTransition, validatePreInvariantEvidence, validateRemoteInvariantContext } from "./remote-invariant-evidence-lib.mjs";
 import { captureSanitizedState } from "./sanitized-state-lib.mjs";
 import { createHash } from "node:crypto";
+import { migrationsInRange, migrationRangeForReport } from "./migration-range-lib.mjs";
 
 function arg(name) { const i = process.argv.indexOf(name); return i < 0 ? null : process.argv[i + 1]; }
 const mode = process.argv[2];
 const database = arg("--database");
 const state = arg("--state");
 const reportDirectory = arg("--report-dir") ?? "tmp/data-reports/remote-invariants";
-const rangeValue = (name) => { const value = arg(name); return value === "none" ? null : value; };
 const context = {
   commit: arg("--commit"),
   target: { environment: arg("--environment"), binding: arg("--binding"), databaseName: database, databaseId: arg("--database-id") },
-  expectedMigrationRange: { from: rangeValue("--migration-from"), to: rangeValue("--migration-to") },
+  expectedMigrationRange: { from: arg("--migration-from") ?? undefined, to: arg("--migration-to") ?? undefined },
   comparisonKind: arg("--comparison-kind") ?? "migration",
 };
 const childEnv = Object.fromEntries(["PATH", "HOME", "CI", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"].filter((key) => process.env[key]).map((key) => [key, process.env[key]]));
 function expectedMigrations() {
-  if (context.expectedMigrationRange.from == null) return [];
   const files = readdirSync(new URL("../../db/migrations/", import.meta.url)).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
-  const from = files.indexOf(context.expectedMigrationRange.from); const to = files.indexOf(context.expectedMigrationRange.to);
-  if (from < 0 || to < from) throw new Error("Reviewed invariant migration range is not a contiguous repository range.");
-  return files.slice(from, to + 1);
+  return migrationsInRange(files, context.expectedMigrationRange);
 }
 function wrangler(args) { return execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "wrangler", ...args], { encoding: "utf8", env: childEnv }); }
 function verifyLiveIdentity(target) {
@@ -74,7 +71,7 @@ try {
   }
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
-  const report = { check: mode === "capture" ? "remote-invariant-capture" : "remote-invariant-comparison", verdict: "fail", commit: context.commit ?? "unknown", target: context.target, migrationRange: context.expectedMigrationRange, comparisonKind: context.comparisonKind, error: message };
+  const report = { check: mode === "capture" ? "remote-invariant-capture" : "remote-invariant-comparison", verdict: "fail", commit: context.commit ?? "unknown", target: context.target, migrationRange: migrationRangeForReport(context.expectedMigrationRange), comparisonKind: context.comparisonKind, error: message };
   writeDataCheckReports({ name: report.check, report, summary: `BLOCKED remote invariants commit=${report.commit} environment=${context.target.environment ?? "unknown"} binding=${context.target.binding ?? "unknown"} database=${database ?? "unknown"} databaseId=${context.target.databaseId ?? "unknown"} migration=${context.expectedMigrationRange.from ?? "unknown"}->${context.expectedMigrationRange.to ?? "unknown"}: ${message}`, reportDirectory });
   console.error(message); process.exitCode = 1;
 }

@@ -2,6 +2,9 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
 import { validateControlledCanaryChecks } from "./deployment-smoke-lib.mjs";
 import { assertProductionKeySeparation } from "./production-key-separation-lib.mjs";
+import { normalizeMigrationRange, migrationRangesEqual } from "./migration-range-lib.mjs";
+import { evaluateInvariantLedgerTransition } from "./remote-invariant-evidence-lib.mjs";
+import { assertRecoveryApproval, digest } from "./production-preparation-lib.mjs";
 export {
   compareProductionInvariants,
   parseInvariantOutput,
@@ -163,6 +166,7 @@ export function assertProductionArtifactContext({ env, expectedCommit }) {
 }
 
 export function validatePromotionEvidence(evidence) {
+  evidence.migrationRange = normalizeMigrationRange(evidence?.migrationRange);
   assertSha(evidence?.commit, "Promotion commit");
   if (!["additive", "backfill", "destructive", "irreversible"].includes(evidence.classification)) {
     throw new Error("Production migration classification is missing or invalid.");
@@ -173,6 +177,7 @@ export function validatePromotionEvidence(evidence) {
   if (evidence.ci?.verdict !== "pass" || evidence.ci.commit !== evidence.commit || evidence.ci.workingTreeDirty) {
     throw new Error("Exact-commit CI data-regression evidence is missing or failed.");
   }
+  evidence.ci.migrationRange = normalizeMigrationRange(evidence.ci.migrationRange);
   const ciCoverage = evidence.ci?.coverage;
   const rehearsalCoverage = evidence.rehearsal?.coverage;
   if (ciCoverage?.verdict !== "pass" || !ciCoverage.planId || !/^[0-9a-f]{64}$/.test(ciCoverage.declarationSha256 ?? "") || !Array.isArray(ciCoverage.affectedTables) || !ciCoverage.affectedTables.length || !Array.isArray(ciCoverage.invariants) || !ciCoverage.invariants.length || JSON.stringify(ciCoverage) !== JSON.stringify(rehearsalCoverage)) {
@@ -190,13 +195,14 @@ export function validatePromotionEvidence(evidence) {
   }
   const rehearsal = evidence.rehearsal;
   if (rehearsal?.verdict !== "pass" || rehearsal.commit !== evidence.commit) throw new Error("Exact-commit rehearsal evidence is missing or failed.");
+  rehearsal.migrationRange = normalizeMigrationRange(rehearsal.migrationRange);
   if (!['rehearsal', 'staging'].includes(rehearsal.target?.environment) || rehearsal.target.databaseId === evidence.database.databaseId) {
     throw new Error("Rehearsal evidence must come from an isolated non-production database.");
   }
-  if (rehearsal.migrationRange?.from !== evidence.migrationRange.from || rehearsal.migrationRange?.to !== evidence.migrationRange.to) {
+  if (!migrationRangesEqual(rehearsal.migrationRange, evidence.migrationRange)) {
     throw new Error("Rehearsal migration range does not match the reviewed production range.");
   }
-  if (evidence.ci.migrationRange?.from !== evidence.migrationRange.from || evidence.ci.migrationRange?.to !== evidence.migrationRange.to) throw new Error("CI migration range does not match the reviewed production range.");
+  if (!migrationRangesEqual(evidence.ci.migrationRange, evidence.migrationRange)) throw new Error("CI migration range does not match the reviewed production range.");
   if (rehearsal.recovery?.verdict !== "pass" || rehearsal.teardown?.verdict !== "pass") {
     throw new Error("Rehearsal recovery and teardown evidence must pass.");
   }
@@ -205,14 +211,21 @@ export function validatePromotionEvidence(evidence) {
   }
   const authenticated = rehearsal.authenticatedRehearsal;
   validateAuthenticatedCandidateEvidence(authenticated, { requireDetectors: true });
-  if (authenticated.commit !== evidence.commit || authenticated.sanitizerArtifactSha256 !== rehearsal.sanitizedSource.artifactSha256 || authenticated.migrationRange?.from !== evidence.migrationRange.from || authenticated.migrationRange?.to !== evidence.migrationRange.to) throw new Error("Authenticated sanitized candidate-handler evidence is missing or mismatched.");
+  authenticated.migrationRange = normalizeMigrationRange(authenticated.migrationRange);
+  if (authenticated.commit !== evidence.commit || authenticated.sanitizerArtifactSha256 !== rehearsal.sanitizedSource.artifactSha256 || !migrationRangesEqual(authenticated.migrationRange, evidence.migrationRange)) throw new Error("Authenticated sanitized candidate-handler evidence is missing or mismatched.");
   const staging = evidence.staging;
+  if (staging) staging.migrationRange = normalizeMigrationRange(staging.migrationRange);
+  // Staging can already be at the candidate schema while production is behind.
+  // Its own range must still have exact data coverage and an ordered transition.
+  if (!migrationRangesEqual(staging?.migrationRange, evidence.migrationRange)) {
+    const transition = evaluateInvariantLedgerTransition({ before: staging?.invariants?.ledger?.before ?? [], after: staging?.invariants?.ledger?.after ?? [], expectedRange: staging?.migrationRange, expectedMigrations: staging?.pendingMigrations ?? [], comparisonKind: "migration" });
+    if (!migrationRangesEqual(staging?.data?.migrationRange, staging?.migrationRange) || !migrationRangesEqual(staging?.invariants?.migrationRange, staging?.migrationRange) || staging?.data?.coverage?.verdict !== "pass" || staging?.invariants?.ledger?.verdict !== "pass" || transition.verdict !== "pass" || staging?.invariants?.ledger?.after?.at(-1) !== schema.migrationRange.to) throw new Error("Staging range evidence does not prove the candidate schema and its actual ledger transition.");
+  }
   const provenance = evidence.changeProvenance;
   if (evidence.mergeContext?.commit !== evidence.commit || !/^[0-9a-f]{40}$/.test(evidence.mergeContext?.tree ?? "") ||
       provenance?.mergeCommit !== evidence.commit || staging?.commit !== provenance?.pullRequestHeadCommit ||
       staging?.tree !== evidence.mergeContext.tree || staging?.verdict !== "pass" || staging?.target?.environment !== "staging" ||
-      staging?.target?.databaseId === evidence.database.databaseId || staging?.migrationRange?.from !== evidence.migrationRange.from ||
-      staging?.migrationRange?.to !== evidence.migrationRange.to || staging?.data?.verdict !== "pass" ||
+      staging?.target?.databaseId === evidence.database.databaseId || staging?.data?.verdict !== "pass" ||
       staging?.schema?.verdict !== "pass" || staging?.schema?.ledger?.verdict !== "pass" || staging?.invariants?.verdict !== "pass" ||
       staging?.deploy?.verdict !== "pass" || staging?.smoke?.verdict !== "pass" || !Array.isArray(staging?.smoke?.failures) ||
       staging.smoke.failures.length || staging?.teardown?.verdict !== "pass") {
@@ -407,15 +420,18 @@ export function verifySignedEvidence({ signedEvidence }) {
   return signedEvidence.payload;
 }
 
-export function runProductionDataPhase({ commit, database, pendingMigrations, classification, approval = null, run }) {
+export function runProductionDataPhase({ commit, database, pendingMigrations, classification, approval = null, preparation, receipt, run }) {
+  assertRecoveryApproval({ approval, receipt });
   const steps = [
-    "identity", "recovery-bookmark", "recovery-export", "reviewed-pending-range",
+    "identity", "reviewed-pending-range",
     "pre-invariants", "migration-apply", "ledger-clean", "schema-contract", "post-invariants",
   ];
-  const results = {};
+  const results = { ...preparation.results };
   for (const step of steps) {
     const result = run(step);
     if (result?.verdict !== "pass") throw new Error(`Production ${step} gate failed.`);
+    if (["identity", "reviewed-pending-range"].includes(step) && JSON.stringify(result.summary) !== JSON.stringify(preparation.results[step].summary)) throw new Error(`Production ${step} changed after recovery preparation.`);
+    if (step === "pre-invariants" && result.summary?.ledgerSha256 !== preparation.results[step].summary?.ledgerSha256) throw new Error("Production ledger changed after recovery preparation; fresh preparation and approval required.");
     results[step] = result;
   }
   const payload = {
@@ -429,6 +445,7 @@ export function runProductionDataPhase({ commit, database, pendingMigrations, cl
       to: pendingMigrations.at(-1) ?? null,
     },
     approval,
+    recovery: receipt,
     results,
   };
   return createSignedEvidence({ payload });
@@ -492,7 +509,9 @@ export function assertDeployEvidence({ signedEvidence, commit, database, request
     }
   }
   if (payload.approval?.environment !== "production" || payload.approval?.source !== "github-environment-review" || typeof payload.approval?.approver !== "string" || !payload.approval.approver || !Array.isArray(payload.approval.changeAuthors) || !payload.approval.changeAuthors.length) throw new Error("Signed production evidence lacks validated independent approval.");
+  assertRecoveryApproval({ approval: payload.approval, receipt: payload.recovery });
   if (request) {
+    if (payload.recovery.requestSha256 !== digest(request)) throw new Error("Signed production recovery does not bind this exact request.");
     if (payload.classification !== request.classification || JSON.stringify(payload.pendingMigrations) !== JSON.stringify(request.pendingMigrations)) throw new Error("Signed production classification or pending migrations do not match the reviewed request.");
     assertApprovalMatchesRequest({ approval: payload.approval, request });
   }
@@ -508,7 +527,7 @@ export function validateFinalProductionRelease({
 }) {
   const data = assertDeployEvidence({ signedEvidence, commit: request.commit, database: request.database, request });
   validateControlledCanaryChecks(smoke);
-  if (data.migrationRange?.from !== request.migrationRange?.from || data.migrationRange?.to !== request.migrationRange?.to) {
+  if (!migrationRangesEqual(data.migrationRange, request.migrationRange)) {
     throw new Error("Production data evidence migration range does not match the request.");
   }
   if (!/^https:\/\//.test(deploymentUrl) || smoke?.verdict !== "pass" || !Array.isArray(smoke.failures) || smoke.failures.length !== 0 || smoke.commit !== request.commit ||

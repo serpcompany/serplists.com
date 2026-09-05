@@ -5,6 +5,7 @@ import { evaluateDeploymentSmoke, exerciseControlledCanaryMutation } from "./dep
 import { extractD1Identity } from "./wrangler-identity-lib.mjs";
 import { runProductionIdentityBoundCommand } from "./production-identity-bound-command-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
+import { safeCanaryFailure, wrapCanarySubprocessFailure } from "./canary-diagnostics.mjs";
 
 function arg(name) { const index = process.argv.indexOf(name); return index < 0 ? null : process.argv[index + 1]; }
 function rowsFromD1(output) {
@@ -30,11 +31,21 @@ const runId = process.env.DATA_CANARY_RUN_ID;
 const mutationApproved = process.env.DATA_CANARY_MUTATION_APPROVED === "true";
 const canaryEvidenceKey = process.env.DATA_CANARY_EVIDENCE_HMAC_KEY;
 const reportDirectory = arg("--report-dir") ?? `tmp/data-reports/${environment}`;
+let stage = 'configuration';
 try {
   if (!ownerId || !cookie || !templateId || !runId || !mutationApproved || !deploymentUrl || !customDomain || (canaryEvidenceKey ?? "").length < 32) throw new Error("Protected canary identity, designated records, mutation approval, evidence key, cookie, deployment URL, and custom domain are required.");
   const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
   const childEnv = Object.fromEntries(["PATH", "HOME", "CI", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"].filter((key) => process.env[key]).map((key) => [key, process.env[key]]));
-  const runWrangler = (args) => execFileSync(pnpm, ["exec", "wrangler", ...args], { encoding: "utf8", env: childEnv });
+  const runWrangler = (args) => {
+    stage = args[1] === 'info' ? 'identity' : 'd1-query';
+    try {
+      return execFileSync(pnpm, ["exec", "wrangler", ...args], { encoding: "utf8", env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (error) {
+      // Save only the safe stage/code now: production performs an additional
+      // identity read after a failed query, which changes the current stage.
+      throw wrapCanarySubprocessFailure(stage, error);
+    }
+  };
   const quotedOwner = ownerId.replaceAll("'", "''");
   const quotedTemplate = templateId.replaceAll("'", "''");
   const quotedRun = runId.replaceAll("'", "''");
@@ -53,18 +64,23 @@ try {
     if (after.databaseId !== databaseId || after.databaseName !== databaseName) throw new Error("Postdeploy D1 identity changed during canary query.");
     identityChecks = [{ before, after }];
   }
+  stage = 'database-result';
   const dbRows = rowsFromD1(dbOutput);
+  stage = 'api-read';
   const [templates, runs, deploymentHealth, customHealth] = await Promise.all([
     fetchJson(new URL("/api/templates", deploymentUrl), cookie),
     fetchJson(new URL("/api/checklists", deploymentUrl), cookie),
     fetch(new URL("/api/health", deploymentUrl), { redirect: "error" }),
     fetch(new URL("/api/health", customDomain), { redirect: "error" }),
   ]);
+  stage = 'canary-records';
   const originalTemplate = Array.isArray(templates.rows) ? templates.rows.find((row) => String(row.id) === templateId && row.user_id === ownerId) : null;
   const originalRun = Array.isArray(runs.rows) ? runs.rows.find((row) => String(row.id) === runId && row.user_id === ownerId) : null;
   if (!originalTemplate || !originalRun) throw new Error("Designated canary rows are not visible to the authenticated canary owner.");
+  stage = 'canary-mutation';
   const mutation = await exerciseControlledCanaryMutation({ template: originalTemplate, run: originalRun, request: (apiPath, init) => fetchJson(new URL(apiPath, deploymentUrl), cookie, init) });
   const canaryEvidenceDigest = createHmac("sha256", canaryEvidenceKey).update(JSON.stringify(mutation)).digest("hex");
+  stage = 'reporting';
   const result = evaluateDeploymentSmoke({
     databaseTemplateIds: dbRows.filter((row) => row.kind === "template").map((row) => row.id),
     databaseRunIds: dbRows.filter((row) => row.kind === "run").map((row) => row.id),
@@ -82,14 +98,16 @@ try {
     canaryEvidenceDigest,
   });
   const report = { ...result, commit: process.env.GITHUB_SHA ?? "unknown", target: { environment, databaseName, databaseId }, deploymentUrl, customDomain, identityChecks };
-  const summary = [`${report.verdict.toUpperCase()} ${environment} authenticated account-owned template/run visibility, controlled canary writability/restoration, and custom-domain smoke.`, ...report.checks.map((check) => `${check.verdict.toUpperCase()} ${check.name}`)].join("\n");
+  const summary = [`${report.verdict.toUpperCase()} ${environment} authenticated account-owned template/run visibility, controlled canary writability/restoration, and custom-domain smoke.`, ...[...report.checks, ...(report.evidenceChecks ?? [])].map((check) => `${check.verdict.toUpperCase()} ${check.name}`)].join("\n");
   writeDataCheckReports({ name: `${environment}-postdeploy-smoke`, report, summary, reportDirectory });
   console.log(summary);
   if (report.verdict !== "pass") process.exitCode = 1;
 } catch (error) {
-  const report = { check: "authenticated-account-owned-postdeploy-smoke", verdict: "fail", commit: process.env.GITHUB_SHA ?? "unknown", target: { environment, databaseName, databaseId }, deploymentUrl, customDomain, error: error instanceof Error ? error.message : String(error) };
-  const summary = `BLOCKED ${environment} postdeploy smoke: ${report.error}`;
-  writeDataCheckReports({ name: `${environment}-postdeploy-smoke`, report, summary, reportDirectory });
+  const failure = safeCanaryFailure(stage, error);
+  const report = { check: "authenticated-account-owned-postdeploy-smoke", verdict: "fail", commit: process.env.GITHUB_SHA ?? "unknown", target: { environment, databaseName, databaseId }, failedStage: failure.stage, errorCode: failure.code, error: failure.message, checks: [{ name: failure.check, verdict: 'fail' }], ...(failure.exitStatus !== undefined ? { exitStatus: failure.exitStatus } : {}) };
+  const summary = `BLOCKED ${environment} postdeploy smoke at ${report.failedStage}: ${report.errorCode}. ${report.error}\nCommit: ${report.commit}\nDatabase: ${databaseName} (${databaseId})`;
+  try { writeDataCheckReports({ name: `${environment}-postdeploy-smoke`, report, summary, reportDirectory }); }
+  catch { console.error('Canary failure report could not be persisted.'); }
   console.error(summary);
   process.exitCode = 1;
 }

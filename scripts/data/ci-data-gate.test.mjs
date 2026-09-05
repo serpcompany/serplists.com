@@ -45,7 +45,7 @@ describe("CI blocking gates", () => {
     expect(jobs.build.needs).toEqual(["quality", "database", "data-regressions"]);
     const names = jobs["data-regressions"].steps.map((step) => step.name);
     expect(names.indexOf("Install Playwright browsers")).toBeLessThan(names.indexOf("Data regression gate"));
-    expect(jobs["data-regressions"].steps.find((step) => step.name === "Data regression gate").run).toContain("test:data-regressions");
+    expect(jobs["data-regressions"].steps.find((step) => step.name === "Data regression gate").run).toBe("node scripts/data/run-reviewed-range-suites.mjs");
   });
 
   it("always uploads database and regression evidence for at least 90 days", () => {

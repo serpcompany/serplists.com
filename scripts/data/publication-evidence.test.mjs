@@ -16,6 +16,8 @@ test("success and all completed failure conclusions publish exact structural ide
   assert.equal(report.verdict, "pass");
   assert.equal(report.commit, sha);
   assert.equal(report.databaseId, envelope.databaseId);
+  assert.deepEqual(report.migrationRange, { from: null, to: null });
+  assert.deepEqual(evidence({ envelope: { ...envelope, migrationRange: { from: null, to: null } } }).migrationRange, report.migrationRange);
   assert.deepEqual(report.artifactUrls, [`https://github.com/${REPOSITORY}/actions/runs/123/artifacts/44`]);
   for (const conclusion of ["failure", "cancelled", "timed_out", "action_required", "neutral", "skipped", "stale", "startup_failure"]) {
     assert.equal(evidence({ run: { ...run, conclusion } }).verdict, "fail");

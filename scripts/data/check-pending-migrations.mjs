@@ -84,7 +84,7 @@ try {
     environment,
     migrationFiles,
     mode: local ? "local" : preview ? "preview" : "remote",
-    pendingMigrations: parsePendingMigrationNames(output),
+    pendingMigrations: parsePendingMigrationNames(output, migrationFiles),
   });
   report.identityChecks = identityChecks;
   const summary = renderPendingMigrationSummary(report);

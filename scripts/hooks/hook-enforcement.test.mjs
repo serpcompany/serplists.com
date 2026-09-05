@@ -137,7 +137,14 @@ describe("Git hook installation and enforcement", () => {
     expect(workflow.jobs.database.steps.some((step) => step.run?.includes("check:data:migration-provenance"))).toBe(true);
     expect(workflow.jobs.database.steps.some((step) => step.run === "pnpm run test:data:migration-provenance")).toBe(true);
     expect(workflow.jobs.database.steps.some((step) => step.run?.includes("check:data:schema-contract"))).toBe(true);
-    expect(workflow.jobs["data-regressions"].steps.some((step) => step.run?.includes("test:data-regressions"))).toBe(true);
+    expect(workflow.jobs['data-regressions'].steps.some(step => step.run === 'node scripts/data/run-reviewed-range-suites.mjs')).toBe(true);
+    const rangeRunner = readFileSync(join(repositoryRoot, 'scripts/data/run-reviewed-range-suites.mjs'), 'utf8');
+    expect(rangeRunner).toContain('resolveCiRehearsalPlans');
+    expect(rangeRunner).toContain('for (const plan of plans)');
+    expect(rangeRunner).toContain('["run", "test:data-regressions", "--"');
+    expect(rangeRunner).toContain('"--migration-from", plan.migrationRange.from ?? "none"');
+    expect(rangeRunner).toContain('"--migration-to", plan.migrationRange.to ?? "none"');
+    expect(rangeRunner).toContain('execFileSync');
   });
 
   it("ignores poisoned Git-local environment and never mutates the parent repository", () => {

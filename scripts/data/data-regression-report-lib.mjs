@@ -1,3 +1,4 @@
+import { normalizeMigrationRange } from "./migration-range-lib.mjs";
 export function buildDataRegressionReport({
   commit,
   workingTreeDirty = false,
@@ -50,7 +51,7 @@ export function buildDataRegressionReport({
     workspaceCleanlinessVerdict,
     unexpectedFilesystemChanges,
     target,
-    migrationRange,
+    migrationRange: normalizeMigrationRange(migrationRange),
     checks,
     invariants,
     teardown,

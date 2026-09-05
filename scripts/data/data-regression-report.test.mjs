@@ -69,7 +69,7 @@ describe("data regression evidence report", () => {
       const report = buildDataRegressionReport({
         commit: "0123456789abcdef0123456789abcdef01234567",
         target: { environment: "local", databaseName: "db", databaseId: "local:db", binding: "DB" },
-        migrationRange: { from: "0023.sql", to: "0024.sql" },
+        migrationRange: { from: "0023_add_sitemap_revision_state.sql", to: "0024_safe_template_evolution.sql" },
         checks: [{ name: "authenticated visibility", verdict: "pass" }],
         invariants: { changedCounts: 1, foreignKeyViolations: 0, invalidJson: 0 },
         teardown: { leakedUsers: 1, leakedTemplates: 0, leakedRuns: 0, leakedSmokeStatePaths: 1, verdict: "fail" },
@@ -104,7 +104,7 @@ describe("data regression evidence report", () => {
         workspaceCleanlinessVerdict: "fail",
         unexpectedFilesystemChanges: [{ path: ".env", change: "created" }],
         target: { environment: "local", databaseName: "db", databaseId: "local:db", binding: "DB" },
-        migrationRange: { from: "0023.sql", to: "0024.sql" },
+        migrationRange: { from: "0023_add_sitemap_revision_state.sql", to: "0024_safe_template_evolution.sql" },
         checks: [{ name: "named check", verdict: "pass" }],
         invariants: { changedCounts: 0, foreignKeyViolations: 0, invalidJson: 0 },
         teardown: { leakedUsers: 0, leakedTemplates: 0, leakedRuns: 0, leakedSmokeStatePaths: 0, verdict: "pass" },

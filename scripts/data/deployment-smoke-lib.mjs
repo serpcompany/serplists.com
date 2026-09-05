@@ -92,6 +92,17 @@ export function evaluateDeploymentSmoke(input) {
     ["run_write_readback", input.canaryMutation?.run?.readbackProgress === input.canaryMutation?.run?.probeProgress && input.canaryMutation?.run?.readbackRevision > input.canaryMutation?.run?.originalRevision],
     ["run_restore", input.canaryMutation?.run?.restoreStatus >= 200 && input.canaryMutation?.run?.restoreStatus < 300 && input.canaryMutation?.run?.restoredProgress === input.canaryMutation?.run?.originalProgress],
   ].map(([name, passed]) => ({ name, verdict: passed ? "pass" : "fail" }));
+  const evidenceChecks = [
+    ['database_canary_templates_present', input.databaseTemplateIds.length > 0],
+    ['database_canary_runs_present', input.databaseRunIds.length > 0],
+    ['authenticated_template_api', input.templateStatus >= 200 && input.templateStatus < 300 && templateIds !== null],
+    ['authenticated_run_api', input.runStatus >= 200 && input.runStatus < 300 && runIds !== null],
+    ['account_owned_templates_visible', templateIds !== null && input.databaseTemplateIds.every(id => templateIds.has(String(id)))],
+    ['account_owned_runs_visible', runIds !== null && input.databaseRunIds.every(id => runIds.has(String(id)))],
+    ['deployment_health', input.deploymentHealthStatus >= 200 && input.deploymentHealthStatus < 300],
+    ['custom_domain_health', input.customDomainHealthStatus >= 200 && input.customDomainHealthStatus < 300],
+    ['controlled_canary_mutation_approval', input.controlledCanaryMutationApproved === true],
+  ].map(([name, passed]) => ({ name, verdict: passed ? 'pass' : 'fail' }));
   failures.push(...mutationChecks.filter((check) => check.verdict === "fail").map((check) => check.name));
   return {
     check: "authenticated-account-owned-postdeploy-smoke",
@@ -104,6 +115,7 @@ export function evaluateDeploymentSmoke(input) {
     controlledCanaryMutationApproved: input.controlledCanaryMutationApproved === true,
     canaryEvidenceDigest: input.canaryEvidenceDigest,
     checks: mutationChecks,
+    evidenceChecks,
     failures,
     verdict: failures.length ? "fail" : "pass",
   };

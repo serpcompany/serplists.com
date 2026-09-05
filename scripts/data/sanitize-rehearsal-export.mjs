@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { normalizeMigrationRange, migrationRangeForReport } from "./migration-range-lib.mjs";
 import {
   chmodSync,
   existsSync,
@@ -96,6 +97,7 @@ try {
   const issueNumber = Number(requireValue(values, "--issue"));
   const migrationFrom = requireValue(values, "--migration-from");
   const migrationTo = requireValue(values, "--migration-to");
+  reportContext.migrationRange = normalizeMigrationRange({ from: migrationFrom, to: migrationTo });
   if (new Set([inputPath, outputPath, manifestPath]).size !== 3) {
     throw new Error("Sanitizer input, output, and manifest paths must be distinct.");
   }
@@ -154,6 +156,7 @@ try {
   writeDataCheckReports({ name: "sanitize-production-export", report, summary: `PASS sanitizer commit=${report.commit} environment=production binding=DB database=${report.target.databaseName} databaseId=${report.target.databaseId} migration=${migrationFrom}->${migrationTo} sanitizer=${report.sanitizerVersion}.`, reportDirectory });
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
+  reportContext.migrationRange = migrationRangeForReport(reportContext.migrationRange);
   writeDataCheckReports({ name: "sanitize-production-export", report: { check: "sanitize-production-export", verdict: "fail", ...reportContext, error: message }, summary: `BLOCKED sanitizer commit=${reportContext.commit} environment=${reportContext.target.environment} binding=${reportContext.target.binding} database=${reportContext.target.databaseName} databaseId=${reportContext.target.databaseId} migration=${reportContext.migrationRange.from}->${reportContext.migrationRange.to} sanitizer=${reportContext.sanitizerVersion}: ${message}`, reportDirectory });
   console.error(message);
   process.exitCode = 1;

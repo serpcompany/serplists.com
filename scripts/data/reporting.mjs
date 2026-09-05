@@ -12,10 +12,20 @@ function escapeXml(value) {
 
 export function writeDataCheckReports({ name, report, summary, reportDirectory = "tmp/data-reports" }) {
   mkdirSync(reportDirectory, { recursive: true });
-  const failed = report.verdict !== "pass";
-  const junitChecks = Array.isArray(report.checks) && report.checks.length > 0
-    ? [...report.checks, ...(Array.isArray(report.evidenceChecks) ? report.evidenceChecks : [])]
-    : [{ name, verdict: failed ? "fail" : "pass" }];
+  const junitChecks = [...(Array.isArray(report?.checks) ? report.checks : []), ...(Array.isArray(report?.evidenceChecks) ? report.evidenceChecks : [])]
+    .map((check, index) => check && typeof check === 'object' ? check : { name: `invalid-check-${index + 1}`, verdict: 'fail' });
+  const failed = report?.verdict !== "pass" || junitChecks.some(check => check.verdict !== 'pass');
+  report = { ...report, verdict: failed ? 'fail' : 'pass' };
+  if (!junitChecks.length) junitChecks.push({ name, verdict: report.verdict });
+  else if (failed && junitChecks.every(check => check.verdict === 'pass')) {
+    const overall = { name: `${name}-overall-verdict`, verdict: 'fail' };
+    junitChecks.push(overall);
+    report.evidenceChecks = [...(Array.isArray(report.evidenceChecks) ? report.evidenceChecks : []), overall];
+  }
+  const summaryLines = String(summary ?? '').split('\n');
+  // A caller's stale heading must not contradict the authoritative outcome.
+  if (failed) summaryLines[0] = summaryLines[0].replace(/\bPASS(?:ED)?\b/gi, 'FAIL');
+  summary = `Verdict: ${report.verdict.toUpperCase()}\n\n${summaryLines.join('\n')}`;
   const failureCount = junitChecks.filter((check) => check.verdict !== "pass").length;
   const reportProperties = [
     ["commit", report.commit], ["environment", report.target?.environment],

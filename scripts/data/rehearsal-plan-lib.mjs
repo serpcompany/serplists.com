@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { runRepositoryGit } from "./git-subprocess-env.mjs";
+import { normalizeMigrationRange, migrationRangesEqual, rangeFromPending } from "./migration-range-lib.mjs";
 
 const MIGRATION = /^\d{4}_[a-z0-9_]+\.sql$/;
 const DATA_ARTIFACT = /^(?:db\/migrations\/\d{4}_[a-z0-9_]+\.sql|db\/maintenance\/[a-z0-9_.-]+\.sql)$/;
@@ -119,9 +120,10 @@ export function resolveRehearsalPlan({ repoRoot, commit, migrationFrom, migratio
   if (checkedOutCommit !== commit) throw new Error("Rehearsal plan candidate does not match the checked-out commit.");
   const declaration = loadRehearsalPlans({ repoRoot, planPath });
   const migrations = readdirSync(path.join(repoRoot, "db/migrations")).filter((name) => MIGRATION.test(name)).sort();
-  const explicitNone = migrationFrom === "none" && migrationTo === "none";
-  let requestedFrom = explicitNone ? null : migrationFrom;
-  let requestedTo = explicitNone ? null : migrationTo;
+  const explicit = migrationFrom !== undefined || migrationTo !== undefined;
+  const requested = explicit ? normalizeMigrationRange({ from: migrationFrom, to: migrationTo }) : null;
+  let requestedFrom = requested?.from;
+  let requestedTo = requested?.to;
   let changedArtifacts = [];
   if (baseRef) {
     runRepositoryGit({ repoRoot, args: ["rev-parse", "--verify", baseRef], stdio: ["ignore", "pipe", "pipe"] });
@@ -129,16 +131,16 @@ export function resolveRehearsalPlan({ repoRoot, commit, migrationFrom, migratio
     changedArtifacts = runRepositoryGit({ repoRoot, args: ["diff", "--name-only", `${baseRef}..${commit}`, "--", "db/migrations", "db/maintenance"] }).trim().split(/\r?\n/).filter((name) => DATA_ARTIFACT.test(name));
     if (changedArtifacts.some((artifact) => artifact.startsWith("db/maintenance/"))) throw new Error("Maintenance SQL changes are blocked until a classified rehearsal and protected execution path exists.");
     const changedMigrations = changedArtifacts.filter((name) => name.startsWith("db/migrations/")).map((name) => path.basename(name)).sort();
-    if (migrationFrom == null && changedMigrations.length) { requestedFrom = changedMigrations[0]; requestedTo = changedMigrations.at(-1); }
+    if (!explicit && changedMigrations.length) { requestedFrom = changedMigrations[0]; requestedTo = changedMigrations.at(-1); }
     if (migrationFrom == null && changedArtifacts.length && !changedMigrations.length) throw new Error("Maintenance-only data changes require an explicit exact rehearsal plan selection.");
   }
-  if (!baseRef && migrationFrom == null && requestedFrom == null) {
+  if (!baseRef && !explicit) {
     const latest = migrations.at(-1);
     const defaultPlan = declaration.plans.find((plan) => plan.migrationTo === latest && plan.migrationFrom != null);
     if (!defaultPlan) throw new Error(`Latest migration ${latest ?? "missing"} has no reviewed rehearsal plan.`);
     requestedFrom = defaultPlan.migrationFrom; requestedTo = defaultPlan.migrationTo;
   }
-  if (baseRef && migrationFrom == null && changedArtifacts.length === 0) { requestedFrom = null; requestedTo = null; }
+  if (baseRef && !explicit && changedArtifacts.length === 0) { requestedFrom = null; requestedTo = null; }
   const plan = declaration.plans.find((candidate) => candidate.migrationFrom === requestedFrom && candidate.migrationTo === requestedTo);
   if (!plan) throw new Error(`Reviewed migration range ${requestedFrom ?? "none"}->${requestedTo ?? "none"} has no rehearsal plan.`);
   const fromIndex = plan.migrationFrom == null ? -1 : migrations.indexOf(plan.migrationFrom);
@@ -148,10 +150,35 @@ export function resolveRehearsalPlan({ repoRoot, commit, migrationFrom, migratio
   if (uncovered.length) throw new Error(`Changed database artifacts lack affected-table/invariant coverage: ${uncovered.join(", ")}.`);
   const observedAffectedTables = [...new Set(plan.artifacts.flatMap((artifact) => affectedTablesFromSql(readFileSync(path.join(repoRoot, artifact), "utf8"))))].sort();
   if (plan.artifacts.length && !exactArray(observedAffectedTables, [...plan.affectedTables].sort())) throw new Error(`Rehearsal plan ${plan.id} affected tables do not exactly match executable SQL: declared=${plan.affectedTables.join(",")}; observed=${observedAffectedTables.join(",")}.`);
-  return { ...plan, commit, migrationRange: { from: plan.migrationFrom, to: plan.migrationTo }, changedArtifacts, observedAffectedTables, declarationSha256: rehearsalPlanDigest(declaration) };
+  const artifactSha256 = Object.fromEntries(plan.artifacts.map((artifact) => {
+    const sql = readFileSync(path.join(repoRoot, artifact), "utf8");
+    if (runRepositoryGit({ repoRoot, args: ["show", `${commit}:${artifact}`] }) !== sql) throw new Error("Reviewed migration bytes differ from the exact Git commit.");
+    return [artifact, createHash("sha256").update(sql).digest("hex")];
+  }));
+  return { ...plan, commit, migrationRange: { from: plan.migrationFrom, to: plan.migrationTo }, artifactSha256, changedArtifacts, observedAffectedTables, declarationSha256: rehearsalPlanDigest(declaration) };
 }
 
 export function validateCoverageMatch({ evidence, expected }) {
-  if (evidence?.commit !== expected.commit || evidence?.migrationRange?.from !== expected.migrationRange.from || evidence?.migrationRange?.to !== expected.migrationRange.to || evidence?.coverage?.planId !== expected.id || evidence?.coverage?.declarationSha256 !== expected.declarationSha256 || JSON.stringify(evidence?.coverage?.affectedTables) !== JSON.stringify(expected.affectedTables) || JSON.stringify(evidence?.coverage?.invariants) !== JSON.stringify(expected.invariants)) throw new Error("Data-regression range or affected-domain coverage does not match the reviewed request.");
+  if (JSON.stringify(evidence?.coverage?.artifactSha256) !== JSON.stringify(expected.artifactSha256)) throw new Error("Reviewed migration artifact hashes do not match exact-commit evidence.");
+  if (evidence?.commit !== expected.commit || !migrationRangesEqual(evidence?.migrationRange, expected.migrationRange) || evidence?.coverage?.planId !== expected.id || evidence?.coverage?.declarationSha256 !== expected.declarationSha256 || JSON.stringify(evidence?.coverage?.affectedTables) !== JSON.stringify(expected.affectedTables) || JSON.stringify(evidence?.coverage?.invariants) !== JSON.stringify(expected.invariants)) throw new Error("Data-regression range or affected-domain coverage does not match the reviewed request.");
   return evidence;
+}
+
+export function resolvePendingRehearsalPlan({ pending, ...options }) {
+  const files = readdirSync(path.join(options.repoRoot, "db/migrations")).filter((name) => MIGRATION.test(name)).sort();
+  const range = rangeFromPending(files, pending);
+  return resolveRehearsalPlan({ ...options, migrationFrom: range.from, migrationTo: range.to });
+}
+
+// CI must produce the default change coverage plus reviewed outstanding ranges.
+// These are evidence candidates, never permission to apply a migration.
+export function resolveCiRehearsalPlans(options) {
+  const primary = resolveRehearsalPlan(options);
+  const declaration = loadRehearsalPlans(options);
+  const plans = [primary];
+  for (const candidate of declaration.plans) {
+    if (candidate.id === primary.id || primary.changedArtifacts.some((artifact) => !candidate.artifacts.includes(artifact))) continue;
+    plans.push(resolveRehearsalPlan({ ...options, migrationFrom: candidate.migrationFrom, migrationTo: candidate.migrationTo }));
+  }
+  return plans;
 }

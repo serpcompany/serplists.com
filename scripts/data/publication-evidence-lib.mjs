@@ -1,3 +1,4 @@
+import { normalizeMigrationRange } from "./migration-range-lib.mjs";
 export const REPOSITORY = "serpcompany/serplists.com";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const FIXED_DATABASES = { production: "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1", staging: "fcaf4325-5be7-4ead-ab60-45932a04177b" };
@@ -30,11 +31,13 @@ export function publicEvidence({ run, envelope, migrationNames = [], artifactIds
   // A rerun of only failed jobs may reuse the immutable identity from the same
   // run's earlier successful job. It never reuses another run or commit.
   const bound = envelope?.commit === run.head_sha && envelope?.runId === run.id && positive(envelope?.attempt) && envelope.attempt <= run.run_attempt && envelope?.environment === environment;
-  const validMigration = (value) => value === "none" || (typeof value === "string" && /^\d{4}_[a-z0-9_]+\.sql$/.test(value) && migrationNames.includes(value));
-  const from = bound && validMigration(envelope.migrationRange?.from) ? envelope.migrationRange.from : "unavailable";
-  const to = bound && validMigration(envelope.migrationRange?.to) ? envelope.migrationRange.to : "unavailable";
+  let range;
+  try { range = normalizeMigrationRange(envelope?.migrationRange); } catch { /* Missing or invalid identity remains unavailable. */ }
+  const validMigration = (value) => value === null || (typeof value === "string" && /^\d{4}_[a-z0-9_]+\.sql$/.test(value) && migrationNames.includes(value));
+  const from = bound && range && validMigration(range.from) ? range.from : "unavailable";
+  const to = bound && range && validMigration(range.to) ? range.to : "unavailable";
   const databaseId = FIXED_DATABASES[environment] ?? (bound && UUID.test(envelope.databaseId ?? "") && !Object.values(FIXED_DATABASES).includes(envelope.databaseId) ? envelope.databaseId : "unavailable");
-  const complete = bound && databaseId !== "unavailable" && from !== "unavailable" && to !== "unavailable" && ((from === "none") === (to === "none"));
+  const complete = bound && databaseId !== "unavailable" && from !== "unavailable" && to !== "unavailable";
   const base = `https://github.com/${REPOSITORY}/actions/runs/${run.id}`;
   return {
     schemaVersion: 1, runId: run.id, attempt: run.run_attempt, commit: run.head_sha, environment, databaseId,

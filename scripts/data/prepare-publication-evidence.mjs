@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { normalizeMigrationRange } from "./migration-range-lib.mjs";
 
 // This artifact is data only. The privileged publisher independently binds and
 // allowlists every field; arbitrary report text and failure messages are omitted.
@@ -14,5 +15,7 @@ const report = {
   databaseId: env.PUBLICATION_DATABASE_ID,
   migrationRange: { from: env.PUBLICATION_MIGRATION_FROM || env.MIGRATION_FROM || range?.from || null, to: env.PUBLICATION_MIGRATION_TO || env.MIGRATION_TO || range?.to || null },
 };
+try { report.migrationRange = normalizeMigrationRange(report.migrationRange); }
+catch { report.migrationRange = { from: "unavailable", to: "unavailable" }; }
 mkdirSync("tmp/publication-evidence", { recursive: true });
 writeFileSync("tmp/publication-evidence/publication.json", `${JSON.stringify(report)}\n`);

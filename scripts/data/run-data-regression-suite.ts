@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { captureRepositoryGitState, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
 import { resolveRehearsalPlan } from "./rehearsal-plan-lib.mjs";
+import { migrationRangesEqual } from "./migration-range-lib.mjs";
 import { loadSanitizerPolicy, validateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
 import { authenticatedCoverageAssertions, validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
 import { validateSanitizedStateBinding } from "./sanitized-state-lib.mjs";
@@ -300,7 +301,7 @@ try {
     let strictChecks = false;
     try { validateAuthenticatedCandidateEvidence({ ...proof, checks: combinedChecks }, { requireDetectors: true }); strictChecks = true; } catch { strictChecks = false; }
     validateSanitizedStateBinding(proof.postMigrationState, proof.postMigrationState);
-    const bound = strictChecks && proof.handlerStateReadback === true && proof.transformation?.verdict === "pass" && proof.postMigrationState.sourceSha256 === sanitizedArtifactSha256 && proof.commit === startCommit && proof.sanitizerArtifactSha256 === sanitizedArtifactSha256 && proof.migrationRange?.from === rehearsalPlan.migrationRange.from && proof.migrationRange?.to === rehearsalPlan.migrationRange.to;
+    const bound = strictChecks && proof.handlerStateReadback === true && proof.transformation?.verdict === "pass" && proof.postMigrationState.sourceSha256 === sanitizedArtifactSha256 && proof.commit === startCommit && proof.sanitizerArtifactSha256 === sanitizedArtifactSha256 && migrationRangesEqual(proof.migrationRange, rehearsalPlan.migrationRange);
     authenticatedRehearsal = { ...proof, checks: combinedChecks, applicable: true, verdict: bound ? "pass" : "fail" };
     if (!bound) browserFailure = "Authenticated sanitized candidate-handler evidence is incomplete or mismatched.";
   }
@@ -400,6 +401,7 @@ const workspaceCleanliness = evaluateWorkspaceCleanliness({
 const executedAssertions = new Map((migration?.assertions ?? []).map((assertion) => [assertion.name, assertion.verdict]));
 for (const assertion of authenticatedCoverageAssertions({ candidateAuthenticated, falseEmptyVerdict: checks.find((check) => check.name === "authenticated false-empty detection")?.verdict, apiErrorVerdict: checks.find((check) => check.name === "authenticated API error detection")?.verdict })) executedAssertions.set(assertion.name, assertion.verdict);
 const coverage = rehearsalPlan && migration ? {
+  artifactSha256: rehearsalPlan.artifactSha256,
   ...migration.coverage,
   executedAssertions: [...executedAssertions].map(([name, verdict]) => ({ name, verdict })),
   verdict: rehearsalPlan.invariants.every((name) => executedAssertions.get(name) === "pass") ? "pass" : "fail",

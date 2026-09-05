@@ -1,4 +1,4 @@
-export function parsePendingMigrationNames(output) {
+export function parsePendingMigrationNames(output, repositoryMigrations) {
   const normalized = String(output).replace(/\u001b\[[0-9;]*m/g, "");
   if (/truncated output/i.test(normalized)) {
     throw new Error("Truncated Wrangler migration output is not trustworthy.");
@@ -16,7 +16,12 @@ export function parsePendingMigrationNames(output) {
   }
   const rows = [...pendingSection.matchAll(/^│\s*(\d{4}_[a-z0-9_]+\.sql)\s*│\s*$/gm)].map((match) => match[1]);
   if (!rows.length) throw new Error("Malformed Wrangler pending-migration table: no migration rows.");
-  return [...new Set(rows)].sort();
+  if (new Set(rows).size !== rows.length) throw new Error("Duplicate pending migrations are blocking drift.");
+  if (repositoryMigrations && rows.some(name => !repositoryMigrations.includes(name))) throw new Error('Pending migrations contain an unknown repository migration.');
+  // Wrangler lists pending files in filesystem order. This is a set of files
+  // still to apply, not the applied d1_migrations ledger's authoritative order.
+  // Canonicalize only this transport; applied-ledger parsing remains strict.
+  return repositoryMigrations ? repositoryMigrations.filter(name => rows.includes(name)) : rows.sort();
 }
 
 export function buildPendingMigrationReport({

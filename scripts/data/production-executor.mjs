@@ -17,6 +17,8 @@ import { extractD1Identity } from "./wrangler-identity-lib.mjs";
 import { parsePendingMigrationNames } from "./pending-migrations-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
 import { runProductionIdentityBoundCommand } from "./production-identity-bound-command-lib.mjs";
+import { prepareProduction, verifyRecoveryBundle, digest } from "./production-preparation-lib.mjs";
+import { loadEnvironmentInventory, validateEnvironmentInventory } from "./environment-identity-lib.mjs";
 
 function arg(name) {
   const index = process.argv.indexOf(name);
@@ -74,8 +76,9 @@ try {
     migrationRange: requestInput?.migrationRange ?? { from: null, to: null },
   };
   const request = validatePromotionEvidence(requestInput);
-  const context = mode === "data"
-    ? assertProductionWorkflowContext({ env: process.env, expectedCommit: request.commit })
+  if (mode === "prepare" && process.env.DATA_PROTECTED_ENVIRONMENT !== "production-preparation") throw new Error("Recovery preparation requires the protected read-only environment.");
+  const context = ["data", "prepare"].includes(mode)
+    ? assertProductionWorkflowContext({ env: mode === "prepare" ? { ...process.env, DATA_PROTECTED_ENVIRONMENT: "production" } : process.env, expectedCommit: request.commit })
     : assertProductionArtifactContext({ env: process.env, expectedCommit: request.commit });
 
   if (mode === "verify-deploy") {
@@ -89,15 +92,22 @@ try {
     console.log(`Authorized exact deploy ${payload.commit} after protected data gates.`);
     process.exit(0);
   }
-  if (mode !== "data" || !outputPath) throw new Error("Protected executor mode must be data or verify-deploy; data requires --output.");
-  if (!approvalPath) throw new Error("Protected data executor requires recorded GitHub approval evidence.");
-  const approval = JSON.parse(readFileSync(approvalPath, "utf8"));
-  assertApprovalMatchesRequest({ approval, request });
+  if (!["data", "prepare"].includes(mode) || !outputPath) throw new Error("Protected executor requires prepare/data with --output or verify-deploy.");
+  let approval, preparation, receipt;
+  if (mode === "data") {
+    if (!approvalPath || !arg("--preparation") || !arg("--encrypted-export")) throw new Error("Protected execution requires durable preparation and approval.");
+    approval = JSON.parse(readFileSync(approvalPath, "utf8"));
+    assertApprovalMatchesRequest({ approval, request });
+    preparation = JSON.parse(readFileSync(arg("--preparation"), "utf8"));
+    receipt = verifyRecoveryBundle({ request, preparation, encrypted: readFileSync(arg("--encrypted-export")), expectedDigest: arg("--preparation-digest"), artifactId: arg("--artifact-id"), context });
+  }
 
   const database = request.database;
   let pendingObserved = [];
   let preInvariantSnapshot = null;
-  const evidence = runProductionDataPhase({
+  const orchestrate = mode === "prepare" ? prepareProduction : runProductionDataPhase;
+  const evidence = orchestrate({
+    request, context, preparation, receipt,
     commit: request.commit,
     database,
     pendingMigrations: request.pendingMigrations,
@@ -127,6 +137,10 @@ try {
       });
       switch (step) {
         case "identity": {
+          const repoRoot = path.resolve(new URL("../..", import.meta.url).pathname);
+          const inventory = loadEnvironmentInventory({ repoRoot });
+          validateEnvironmentInventory({ inventory, wranglerToml: readFileSync(path.join(repoRoot, "wrangler.toml"), "utf8") });
+          if (inventory.environments.production.databaseId !== database.databaseId || inventory.environments.production.databaseName !== database.databaseName) throw new Error("Production request differs from checked-out identity allowlist.");
           output = pnpm(["exec", "wrangler", "d1", "info", database.databaseName, "--json"]);
           const live = extractD1Identity(output);
           if (live.databaseId !== database.databaseId || live.databaseName !== database.databaseName) throw new Error("Production database allowlist identity mismatch.");
@@ -153,7 +167,7 @@ try {
         }
         case "reviewed-pending-range":
           output = identityBound("reviewed-pending-range", ["d1", "migrations", "list", database.databaseName, "--remote"]);
-          pendingObserved = parsePendingMigrationNames(output);
+          pendingObserved = parsePendingMigrationNames(output, request.pendingMigrations);
           if (JSON.stringify(pendingObserved) !== JSON.stringify(request.pendingMigrations)) throw new Error("Live pending migrations differ from the reviewed migration range.");
           summary = { type: step, pendingMigrations: [...pendingObserved], from: request.migrationRange.from, to: request.migrationRange.to };
           break;
@@ -183,7 +197,7 @@ try {
           break;
         case "ledger-clean":
           output = identityBound("post-apply-ledger", ["d1", "migrations", "list", database.databaseName, "--remote"]);
-          if (parsePendingMigrationNames(output).length) throw new Error("Production ledger remains behind after migration apply.");
+          if (parsePendingMigrationNames(output, request.pendingMigrations).length) throw new Error("Production ledger remains behind after migration apply.");
           summary = { type: step, pendingMigrations: [], appliedThrough: request.migrationRange.to ?? request.ciSchemaContract.migrationRange.to };
           break;
         case "schema-contract": {
@@ -199,6 +213,8 @@ try {
       }
       mkdirSync(reportDirectory, { recursive: true });
       const artifact = path.join(reportDirectory, `${step}.txt`);
+      // Persist only typed privacy-safe summaries, never raw command/customer output.
+      output = JSON.stringify(summary);
       writeFileSync(artifact, output, { mode: 0o600 });
       const artifactByteLength = Buffer.byteLength(output);
       const result = { verdict: "pass", artifact, outputLength: artifactByteLength, artifactByteLength, artifactSha256: createHash("sha256").update(output).digest("hex"), summary, identityChecks };
@@ -210,6 +226,7 @@ try {
   });
   mkdirSync(path.dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, JSON.stringify(evidence, null, 2) + "\n", { mode: 0o600 });
+  if (mode === "prepare" && process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `preparation_digest=${digest(evidence)}\n`, { flag: "a" });
   report = {
     check: "protected-production-data-promotion",
     verdict: "pass",
@@ -219,9 +236,12 @@ try {
     recovery: { bookmark: "captured", export: "captured" },
     pendingMigrations: pendingObserved,
     context,
+    preparationSha256: mode === "prepare" ? digest(evidence) : receipt.preparationSha256,
+    requestSha256: digest(request),
+    checks: [{ name: `request-sha256:${digest(request)}; preparation-sha256:${mode === "prepare" ? digest(evidence) : receipt.preparationSha256}`, verdict: "pass" }],
     operations: operationState,
   };
-  const summary = `PASS protected production data promotion for ${request.commit}; recovery captured and ${request.migrationRange.from} -> ${request.migrationRange.to} verified.`;
+  const summary = `PASS protected production ${mode} for ${request.commit}; ${request.migrationRange.from} -> ${request.migrationRange.to}; request SHA256 ${digest(request)}; preparation SHA256 ${report.preparationSha256}.`;
   writeDataCheckReports({ name: "production-data-promotion", report, summary, reportDirectory });
   console.log(summary);
 } catch (error) {

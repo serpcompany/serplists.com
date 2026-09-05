@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -19,7 +19,8 @@ describe("recovery finalizer evidence binding", () => {
       const manifest = generateSanitizedRehearsalArtifact({ repoRoot, rawExport: readFileSync(path.join(repoRoot, "scripts/data/fixtures/production-export-edge-cases.sql"), "utf8"), sourceDatabaseId: "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1", sourceDate: now.toISOString().slice(0, 10), gitCommit: commit, issueNumber: 95, requestedApproverIdentity: "@devinschumacher", generatedAt: now, retentionDeadline: new Date(now.getTime() + 3600000).toISOString() }).manifest;
       const files = Object.fromEntries(["comparison", "manifest", "sourceCreation", "recoveryCreation", "teardown", "raw", "output"].map((name) => [name, path.join(directory, name)]));
       const domainDigest = "a".repeat(64); const ledgerDigest = "b".repeat(64);
-      writeFileSync(files.comparison, JSON.stringify({ check: "remote-invariant-comparison", verdict: "pass", comparisonKind: "recovery", commit, target: { environment: "rehearsal", binding: "DB", databaseName: "recovery-db", databaseId: recoveryId }, sourceTarget: { environment: "rehearsal", binding: "DB", databaseName: "source-db", databaseId: sourceId }, migrationRange: { from: migration, to: migration }, ledger: { verdict: "pass", appliedThrough: migration, afterSha256: ledgerDigest }, preDomainDigest: domainDigest, postDomainDigest: domainDigest }));
+      const ledger = readdirSync(path.join(repoRoot, "db/migrations")).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
+      writeFileSync(files.comparison, JSON.stringify({ check: "remote-invariant-comparison", verdict: "pass", comparisonKind: "recovery", commit, target: { environment: "rehearsal", binding: "DB", databaseName: "recovery-db", databaseId: recoveryId }, sourceTarget: { environment: "rehearsal", binding: "DB", databaseName: "source-db", databaseId: sourceId }, migrationRange: { from: migration, to: migration }, ledger: { before: ledger, after: ledger, verdict: "pass", appliedThrough: migration, afterSha256: ledgerDigest }, preDomainDigest: domainDigest, postDomainDigest: domainDigest }));
       writeFileSync(files.manifest, JSON.stringify(manifest));
       writeFileSync(files.sourceCreation, JSON.stringify({ verdict: "pass", commit, runId: "123", target: { databaseName: "source-db", databaseId: sourceId } }));
       writeFileSync(files.recoveryCreation, JSON.stringify({ verdict: "pass", commit, runId: "123", target: { databaseName: "recovery-db", databaseId: recoveryId } }));
