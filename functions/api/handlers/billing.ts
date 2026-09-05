@@ -83,19 +83,18 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
 
       stripeCustomerId = customer.id;
 
-      try {
-        await db.insert(stripe_customers).values({
+      await db
+        .insert(stripe_customers)
+        .values({
           user_id: userId,
           stripe_customer_id: stripeCustomerId,
           created_at: nowIso,
           updated_at: nowIso,
+        })
+        .onConflictDoUpdate({
+          target: stripe_customers.user_id,
+          set: { stripe_customer_id: stripeCustomerId, updated_at: nowIso },
         });
-      } catch {
-        await db
-          .update(stripe_customers)
-          .set({ stripe_customer_id: stripeCustomerId, updated_at: nowIso })
-          .where(eq(stripe_customers.user_id, userId));
-      }
     }
 
     const successUrl = `${origin}/account?billing=success`;

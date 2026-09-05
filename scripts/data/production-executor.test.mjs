@@ -103,7 +103,17 @@ function validProductionSmoke() {
 }
 
 function validApproval() {
-  return { environment: "production", source: "github-environment-review", approver: "independent-reviewer", changeAuthors: ["author"], classification: "backfill", decision: "Reviewed recovery and exact production evidence." };
+  const riskReason = "Reviewed recovery and exact production evidence.";
+  return {
+    environment: "production",
+    source: "github-environment-review",
+    approver: "independent-reviewer",
+    changeAuthors: ["author"],
+    classification: "backfill",
+    reviewReference: { repository: "serpcompany/serplists.com", runId: "123456", runAttempt: "1", commit, environment: "production" },
+    decisionSha256: digest(riskReason),
+    riskDecision: { policy: "meaningful-written-risk-reason-v1", sha256: digest(riskReason), characterCount: riskReason.length, wordCount: 6 },
+  };
 }
 
 function validIdentityCheck() {
@@ -148,7 +158,8 @@ function preparedHandshake(run = validStepResult, request = validPromotionEviden
   } });
   const bundle = { request, preparation, encrypted, expectedDigest: digest(preparation), artifactId: "123", context: preparationContext };
   const receipt = verifyRecoveryBundle(bundle);
-  const approval = { ...validApproval(), recovery: receipt, decision: `Reviewed recovery and approve ${approvalToken(receipt)}` };
+  const decision = `Reviewed recovery and approve ${approvalToken(receipt)}`;
+  const approval = { ...validApproval(), recovery: receipt, decisionSha256: digest(decision), recoveryTokenSha256: digest(approvalToken(receipt)) };
   return { preparation, receipt, approval, bundle };
 }
 
@@ -244,7 +255,7 @@ describe('repository prefix and fixed recovery expiry', () => {
     const preparation = capture();
     const verify = (preparation, artifactId) => verifyRecoveryBundle({ request, preparation, encrypted, expectedDigest: digest(preparation), artifactId, context, clock: () => now });
     const receipt = verify(preparation, '1');
-    const approve = receipt => ({ ...validApproval(), recovery: receipt, decision: `Approve ${approvalToken(receipt)}` });
+    const approve = receipt => ({ ...validApproval(), recovery: receipt, recoveryTokenSha256: digest(approvalToken(receipt)) });
     const approval = approve(receipt);
     if (delay !== 'invariant delay') now += RECOVERY_MAX_AGE_MS;
     const execute = (preparation, receipt, approval, delayed = false) => runProductionDataPhase({ commit, database: production, preparation, receipt, approval, pendingMigrations: request.pendingMigrations, clock: () => now, run: step => {
@@ -333,7 +344,7 @@ fs.writeFileSync('state.json', JSON.stringify(state));
   const approve = () => {
     const preparation = JSON.parse(readFileSync(path.join(cwd, 'preparation.json')));
     const receipt = verifyRecoveryBundle({request, preparation, encrypted: readFileSync(path.join(cwd, `reports/production-recovery-${commit}.sql.enc`)), expectedDigest: digest(preparation), artifactId: '123', context: preparation.context, ...(configuration.clock ? {clock: () => configuration.clock} : {})});
-    writeFileSync(path.join(cwd, 'approval.json'), JSON.stringify({...validApproval(), recovery: receipt, decision: `Approve fixture ${approvalToken(receipt)}`}));
+    writeFileSync(path.join(cwd, 'approval.json'), JSON.stringify({...validApproval(), recovery: receipt, recoveryTokenSha256: digest(approvalToken(receipt))}));
   };
   return {cwd, configuration, request, invoke, approve};
 }
@@ -640,11 +651,16 @@ describe("protected production executor", () => {
       state: "approved", comment, user: { login, type: "User" }, environments: [{ name: "production" }],
     });
     const changeAuthors = ["pr-author", "commit-author"];
-    expect(validateApprovalEvidence({ reviews: [productionReview("independent-reviewer")], classification: "backfill", actor: "dispatcher", changeAuthors }).approver).toBe("independent-reviewer");
-    expect(() => validateApprovalEvidence({ reviews: [productionReview("pr-author")], classification: "additive", actor: "different-dispatcher", changeAuthors })).toThrow(/independent/i);
-    expect(() => validateApprovalEvidence({ reviews: [productionReview("COMMIT-AUTHOR")], classification: "additive", actor: "dispatcher", changeAuthors })).toThrow(/independent/i);
-    expect(() => validateApprovalEvidence({ reviews: [{ ...productionReview("independent"), environments: [{ name: "staging" }] }], classification: "additive", actor: "dispatcher", changeAuthors })).toThrow(/production/i);
-    expect(() => validateApprovalEvidence({ reviews: [productionReview("independent", "short")], classification: "destructive", actor: "dispatcher", changeAuthors })).toThrow(/decision/i);
+    const recoveryToken = "recovery:123456:1:123:" + "a".repeat(64);
+    const reviewContext = { repository: "serpcompany/serplists.com", runId: "123456", runAttempt: "1", commit };
+    const withContext = (values) => ({ ...values, recoveryToken, reviewContext });
+    expect(validateApprovalEvidence(withContext({ reviews: [productionReview("independent-reviewer", `Reviewed recovery and invariant evidence. ${recoveryToken}`)], classification: "backfill", actor: "dispatcher", changeAuthors })).approver).toBe("independent-reviewer");
+    expect(validateApprovalEvidence(withContext({ reviews: [productionReview("independent-reviewer", `復旧証跡と書き込みリスクを確認し、本番変更を承認します。 ${recoveryToken}`)], classification: "backfill", actor: "dispatcher", changeAuthors })).riskDecision.wordCount).toBeGreaterThanOrEqual(3);
+    expect(() => validateApprovalEvidence(withContext({ reviews: [productionReview("independent-reviewer", recoveryToken)], classification: "backfill", actor: "dispatcher", changeAuthors }))).toThrow(/written production review decision/i);
+    expect(() => validateApprovalEvidence(withContext({ reviews: [productionReview("pr-author", recoveryToken)], classification: "additive", actor: "different-dispatcher", changeAuthors }))).toThrow(/independent/i);
+    expect(() => validateApprovalEvidence(withContext({ reviews: [productionReview("COMMIT-AUTHOR", recoveryToken)], classification: "additive", actor: "dispatcher", changeAuthors }))).toThrow(/independent/i);
+    expect(() => validateApprovalEvidence(withContext({ reviews: [{ ...productionReview("independent", recoveryToken), environments: [{ name: "staging" }] }], classification: "additive", actor: "dispatcher", changeAuthors }))).toThrow(/production/i);
+    expect(() => validateApprovalEvidence(withContext({ reviews: [productionReview("independent", `short ${recoveryToken}`)], classification: "destructive", actor: "dispatcher", changeAuthors }))).toThrow(/decision/i);
   });
 
   it("rejects mismatched approval before any protected data mutation can start", () => {
@@ -653,16 +669,18 @@ describe("protected production executor", () => {
     expect(() => assertApprovalMatchesRequest({ approval: { ...validApproval(), approver: "author" }, request })).toThrow(/independent/i);
     expect(() => assertApprovalMatchesRequest({ approval: { ...validApproval(), classification: "additive" }, request })).toThrow(/classification/i);
     expect(() => assertApprovalMatchesRequest({ approval: { ...validApproval(), changeAuthors: ["other"] }, request })).toThrow(/authors/i);
-    expect(() => assertApprovalMatchesRequest({ approval: { ...validApproval(), decision: "short" }, request })).toThrow(/decision/i);
+    expect(() => assertApprovalMatchesRequest({ approval: { ...validApproval(), reviewReference: { ...validApproval().reviewReference, commit: "f".repeat(40) } }, request })).toThrow(/reference/i);
+    expect(() => assertApprovalMatchesRequest({ approval: { ...validApproval(), riskDecision: { ...validApproval().riskDecision, wordCount: 0 } }, request })).toThrow(/decision/i);
     const destructiveRequest = { ...request, classification: "destructive" };
-    const destructiveApproval = { ...validApproval(), classification: "destructive", decision: "Reviewed destructive replacement cascades and exact recovery evidence." };
+    const destructiveApproval = { ...validApproval(), classification: "destructive" };
     expect(assertApprovalMatchesRequest({ approval: destructiveApproval, request: destructiveRequest })).toEqual(destructiveApproval);
-    expect(() => assertApprovalMatchesRequest({ approval: { ...destructiveApproval, decision: "replace rows" }, request: destructiveRequest })).toThrow(/decision/i);
+    expect(() => assertApprovalMatchesRequest({ approval: { ...destructiveApproval, riskDecision: { ...destructiveApproval.riskDecision, sha256: null } }, request: destructiveRequest })).toThrow(/decision/i);
   });
 
   it("requires distinct verified repository-admin production approval for irreversible changes", () => {
-    const review = (login, environment = "production") => ({ state: "approved", comment: "Reviewed irreversible recovery evidence.", user: { login, type: "User" }, environments: [{ name: environment }] });
-    const base = { reviews: [review("independent"), review("repo-owner", "production-owner-approval")], classification: "irreversible", actor: "dispatcher", changeAuthors: ["author"], repositoryOwnerApprover: "repo-owner" };
+    const recoveryToken = "recovery:123456:1:123:" + "a".repeat(64);
+    const review = (login, environment = "production") => ({ state: "approved", comment: `Reviewed irreversible recovery evidence. ${recoveryToken}`, user: { login, type: "User" }, environments: [{ name: environment }] });
+    const base = { reviews: [review("independent"), review("repo-owner", "production-owner-approval")], classification: "irreversible", actor: "dispatcher", changeAuthors: ["author"], repositoryOwnerApprover: "repo-owner", recoveryToken, reviewContext: { repository: "serpcompany/serplists.com", runId: "123456", runAttempt: "1", commit } };
     expect(validateApprovalEvidence({ ...base, ownerPermission: { permission: "admin", user: { login: "repo-owner" } } })).toMatchObject({ approver: "independent", repositoryOwnerApprover: "repo-owner" });
     expect(() => validateApprovalEvidence({ ...base, ownerPermission: { permission: "write", user: { login: "repo-owner" } } })).toThrow(/admin/i);
     expect(() => validateApprovalEvidence({ ...base, reviews: [review("repo-owner", "production-owner-approval")], ownerPermission: { permission: "admin", user: { login: "repo-owner" } } })).toThrow(/distinct/i);
@@ -699,7 +717,7 @@ describe("protected production executor", () => {
 
     const productionReview = (login) => ({
       state: "approved",
-      comment: "Reviewed exact merge and recovery evidence.",
+      comment: `Reviewed exact merge and recovery evidence. recovery:123456:1:123:${"a".repeat(64)}`,
       user: { login, type: "User" },
       environments: [{ name: "production" }],
     });
@@ -709,6 +727,8 @@ describe("protected production executor", () => {
         classification: "backfill",
         actor: "dispatcher",
         changeAuthors: provenance.changeAuthors,
+        recoveryToken: `recovery:123456:1:123:${"a".repeat(64)}`,
+        reviewContext: { repository: "serpcompany/serplists.com", runId: "123456", runAttempt: "1", commit },
       })).toThrow(/independent/i);
     }
 
@@ -913,7 +933,7 @@ esac
     }
   });
 
-  it.each(["approved", "rejected", "stale-token"])("executes the downloaded-artifact verification and approval CLIs locally: %s", state => {
+  it.each(["approved", "rejected", "stale-token", "token-only"])("executes the downloaded-artifact verification and approval CLIs locally: %s", state => {
     const cwd = mkdtempSync(path.join(tmpdir(), "durable-recovery-cli-"));
     try {
       const { bundle, preparation } = preparedHandshake();
@@ -924,14 +944,26 @@ esac
       expect(verified.status, verified.stderr).toBe(0);
       const receipt = JSON.parse(readFileSync(path.join(cwd, "receipt.json"), "utf8"));
       for (const suffix of ["json", "junit.xml", "txt"]) expect(readFileSync(path.join(cwd, `tmp/recovery-verification/durable-recovery-verification.${suffix}`), "utf8")).toContain(receipt.preparationSha256);
-      writeFileSync(path.join(cwd, "reviews.json"), JSON.stringify([{ state: state === "stale-token" ? "approved" : state, user: { login: "independent-reviewer", type: "User" }, environments: [{ name: "production" }], comment: `Reviewed durable export and recovery ${state === "stale-token" ? "old request" : approvalToken(receipt)}` }]));
+      const privateDecision = "PRIVATE_APPROVAL_COMMENT_SENTINEL_128";
+      const reviewState = ["stale-token", "token-only"].includes(state) ? "approved" : state;
+      const comment = state === "token-only" ? approvalToken(receipt) : `Reviewed durable export and recovery ${privateDecision} ${state === "stale-token" ? "old request" : approvalToken(receipt)}`;
+      writeFileSync(path.join(cwd, "reviews.json"), JSON.stringify([{ state: reviewState, user: { login: "independent-reviewer", type: "User" }, environments: [{ name: "production" }], comment }]));
       const approved = invoke("./capture-production-approval.mjs", ["--reviews", "reviews.json", "--provenance", "provenance.json", "--recovery-receipt", "receipt.json", "--output", "approval.json"], { REQUEST_CLASSIFICATION: "backfill" });
       expect(approved.status, approved.stderr).toBe(state === "approved" ? 0 : 1);
       if (state === "approved") {
         const approval = JSON.parse(readFileSync(path.join(cwd, "approval.json"), "utf8"));
+        expect(JSON.stringify(approval)).not.toContain(privateDecision);
+        expect(approval).toMatchObject({ riskDecision: { policy: "meaningful-written-risk-reason-v1", characterCount: expect.any(Number), wordCount: expect.any(Number) }, reviewReference: { repository: "serpcompany/serplists.com", runId: context.GITHUB_RUN_ID, runAttempt: context.GITHUB_RUN_ATTEMPT, commit, environment: "production" } });
+        for (const field of ["decisionSha256", "recoveryTokenSha256"]) expect(approval[field]).toMatch(/^[0-9a-f]{64}$/);
+        expect(approval.riskDecision.sha256).toMatch(/^[0-9a-f]{64}$/);
         const evidence = runProductionDataPhase({ commit, database: production, pendingMigrations: bundle.request.pendingMigrations, classification: "backfill", approval, preparation, receipt, run: validStepResult });
+        expect(JSON.stringify(evidence)).not.toContain(privateDecision);
         expect(assertDeployEvidence({ signedEvidence: evidence, commit, database: production }).verdict).toBe("pass");
-      } else expect(existsSync(path.join(cwd, "approval.json"))).toBe(false);
+      } else {
+        expect(existsSync(path.join(cwd, "approval.json"))).toBe(false);
+        for (const suffix of ["json", "junit.xml", "txt", "md"]) expect(readFileSync(path.join(cwd, `tmp/data-reports/production/production-approval.${suffix}`), "utf8")).not.toContain(privateDecision);
+        expect(approved.stdout + approved.stderr).not.toContain(privateDecision);
+      }
     } finally { rmSync(cwd, { recursive: true, force: true }); }
   });
 
@@ -985,7 +1017,7 @@ esac
     ["self approval in signed evidence", (fixture) => { fixture.signedEvidence.payload.approval.approver = "AUTHOR"; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["approval classification", (fixture) => { fixture.signedEvidence.payload.approval.classification = "additive"; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["approval author set", (fixture) => { fixture.signedEvidence.payload.approval.changeAuthors = ["different-author"]; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
-    ["missing risky decision", (fixture) => { fixture.signedEvidence.payload.approval.decision = "short"; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["missing risky decision", (fixture) => { fixture.signedEvidence.payload.approval.riskDecision = { ...fixture.signedEvidence.payload.approval.riskDecision, wordCount: 0, sha256: null }; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["smoke commit", (fixture) => { fixture.smoke.commit = "f".repeat(40); }],
     ["smoke environment", (fixture) => { fixture.smoke.target.environment = "staging"; }],
     ["smoke database name", (fixture) => { fixture.smoke.target.databaseName = "other"; }],

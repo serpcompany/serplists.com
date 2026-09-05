@@ -24,7 +24,8 @@ async function registerAccount(page: Page) {
 
 async function loginAsSeedUser(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill SERP' }).click();
+  await page.locator('#email').fill('checklists@serp.co');
+  await page.locator('#password').fill('password123');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch workspace' })).toBeVisible({
     timeout: 30_000,

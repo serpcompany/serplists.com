@@ -28,6 +28,16 @@ const STAGES = Object.freeze({
   'schema-identity': 'Remote schema database identity verification failed.',
   'schema-query': 'Remote schema query or catalog result validation failed.',
   'schema-comparison': 'Remote schema comparison or evidence reporting failed.',
+  'pending-migrations-configuration': 'Usage: check-pending-migrations --database NAME --label ENV (--local | --remote) [--preview] [--persist-to PATH]. Migration verification configuration is incomplete or invalid.',
+  'pending-migrations-identity': 'Pending-migration database identity verification failed.',
+  'pending-migrations-command': 'Pending-migration provider command failed.',
+  'pending-migrations-result': 'Pending-migration provider result or ledger validation failed.',
+  'pending-migrations-reporting': 'Pending-migration failure evidence could not be evaluated.',
+  'production-identity-bound-configuration': 'Production identity-bound command configuration or workflow context is invalid.',
+  'production-identity-bound-command': 'Production identity-bound provider command failed.',
+  'production-identity-bound-cleanup': 'Production identity-bound command failed and sensitive output cleanup was attempted.',
+  'production-approval-input': 'Protected production approval input is missing, invalid, or does not prove the required review.',
+  'staging-promotion-input': 'Staging promotion evidence is missing, invalid, or mismatched.',
 });
 const wrappedFailures = new WeakMap();
 const CHECKS = Object.freeze({ configuration: 'canary_configuration', identity: 'canary_database_identity', 'd1-query': 'canary_d1_query', 'database-result': 'canary_database_result', 'api-read': 'authenticated_canary_requests', 'canary-records': 'authenticated_canary_visibility', 'canary-mutation': 'controlled_canary_mutation', reporting: 'canary_reporting' });

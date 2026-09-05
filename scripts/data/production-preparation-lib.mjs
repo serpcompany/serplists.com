@@ -61,5 +61,6 @@ export function approvalToken(receipt) {
 }
 
 export function assertRecoveryApproval({ approval, receipt }) {
-  if (!receipt || JSON.stringify(approval?.recovery) !== JSON.stringify(receipt) || !approval?.decision?.includes(approvalToken(receipt))) throw new Error("Fresh approval must name the exact verified durable recovery request.");
+  const token = approvalToken(receipt);
+  if (!receipt || JSON.stringify(approval?.recovery) !== JSON.stringify(receipt) || approval?.recoveryTokenSha256 !== digest(token)) throw new Error("Fresh approval must name the exact verified durable recovery request.");
 }

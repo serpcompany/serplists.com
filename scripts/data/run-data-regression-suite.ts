@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { captureRepositoryGitState, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
 import { resolveRehearsalPlan } from "./rehearsal-plan-lib.mjs";
 import { migrationRangesEqual } from "./migration-range-lib.mjs";
+import { assertRuntimeRangeBinding, validateFullExportRecoveryProof } from './runtime-gate-contract.mjs';
 import { loadSanitizerPolicy, validateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
 import { authenticatedCoverageAssertions, validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
 import { validateSanitizedStateBinding } from "./sanitized-state-lib.mjs";
@@ -109,23 +110,10 @@ function collectPlaywrightSpecs(suites: PlaywrightSuite[]): PlaywrightSpec[] {
   ]);
 }
 
-const testFiles = [
-  "scripts/data/authenticated-visibility.test.mjs",
-  "scripts/data/sanitized-state.test.mjs",
-  "scripts/data/production-shaped-migration-matrix.test.ts",
-  "scripts/data/local-rehearsal-lifecycle.test.mjs",
-  "scripts/data/teardown-probe.test.ts",
-  "scripts/data/smoke-environment.test.mjs",
-  "scripts/data/smoke-teardown.test.mjs",
-  "scripts/data/workspace-cleanliness.test.mjs",
-  "scripts/data/git-subprocess-env.test.mjs",
-  "tests/unit/functions/api/templates-handler.test.ts",
-  "tests/unit/functions/api/checklists-handler.test.ts",
-  "tests/unit/functions/api/template-evolution-migration.test.ts",
-  "tests/unit/scripts/data/schema-contract.test.ts",
-];
-
 const requiredChecks = [
+  ['mandatory rules atomic failure proof','fails missing mandatory rules without partial template history or audit writes on real D1'],
+  ['billing write failure and retry proof','fails billing persistence faults and recovers webhook retries without duplicate state on real D1'],
+  ['query-unit instrumentation adversarial controls', 'executes query-unit discovery negative controls and real Worker D1 instrumentation parity'],
   ["fresh migration chain", "accepts a fresh database built from the complete Wrangler migration chain"],
   ["exact pre-incident schema mismatch", "rejects the pre-incident migration 0023 schema"],
   ["0023 to 0024 invariant preservation", "preserves row counts ownership active/deleted state foreign keys JSON and versions"],
@@ -141,7 +129,7 @@ const requiredChecks = [
   ["authenticated false-empty detection", "fails when database rows exist but the API is incorrectly empty"],
   ["authenticated API error detection", "fails when account-owned rows exist but the API errors"],
   ["sanitized transformation corruption detection", "rejects a corrupted transformation with a valid final schema before authenticated rehearsal can pass"],
-  ["rollback recovery rehearsal", "round-trips a Wrangler data-only export through a fresh migrated database and invariants"],
+  ["rollback recovery rehearsal", "exports pre0024 and migrated current data, prepares each profile, and restores actual exports"],
   ["fixture teardown leak detection", "replays migrations, applies deterministic fixtures twice, and proves teardown leaves no rows"],
   ["observed fixture teardown counts", "reports actual remaining fixture rows after exact cleanup"],
   ["smoke child secret allowlist", "allowlists runtime variables and drops every developer/cloud/email secret sentinel"],
@@ -151,13 +139,15 @@ const requiredChecks = [
 ] as const;
 
 mkdirSync(reportDirectory, { recursive: true });
+const fullExportRecoveryPath = path.join(reportDirectory, 'full-export-recovery.json');
+if (existsSync(fullExportRecoveryPath)) unlinkSync(fullExportRecoveryPath);
 let vitestResult: VitestJsonReport;
 let commandFailure: string | null = null;
 try {
   execFileSync(
     process.platform === "win32" ? "pnpm.cmd" : "pnpm",
     [
-      "exec", "vitest", "run", ...testFiles,
+      "exec", "vitest", "run", "--no-file-parallelism",
       "--reporter=json", `--outputFile=${rawVitestReport}`,
     ],
     { cwd: repoRoot, env: { ...sanitizedGitEnvironment(), DATA_REPORT_DIR: reportDirectory, DATA_REGRESSION_START_COMMIT: startCommit }, stdio: ["ignore", "inherit", "inherit"] },
@@ -188,6 +178,13 @@ const checks: RegressionCheck[] = requiredChecks.map(([name, title]) => {
       : "fail",
   };
 });
+try {
+  const recovery = JSON.parse(readFileSync(fullExportRecoveryPath,'utf8'));
+  const valid = validateFullExportRecoveryProof(recovery,startCommit);
+  checks.push({name:'actual full-export recovery artifact',test:'four fresh local D1 full-export restores and observed teardown bound to candidate',verdict:valid?'pass':'fail'});
+} catch {
+  checks.push({name:'actual full-export recovery artifact',test:'four fresh local D1 full-export restores and observed teardown bound to candidate',verdict:'fail'});
+}
 checks.push({ name: "reviewed rehearsal coverage", test: "exact changed migration and maintenance artifacts have affected-table fixtures and invariants", verdict: rehearsalPlan ? "pass" : "fail" });
 if (commandFailure) checks.push({
   name: "test command",
@@ -236,14 +233,14 @@ try {
         PLAYWRIGHT_ROUTE_COVERAGE_PROOF: routeCoverageReportPath,
         PLAYWRIGHT_SMOKE_LOCK_HELD: "1",
         DATA_REGRESSION_START_COMMIT: startCommit,
+        DATA_REGRESSION_MIGRATION_FROM: rehearsalPlan?.migrationRange.from ?? "none",
+        DATA_REGRESSION_MIGRATION_TO: rehearsalPlan?.migrationRange.to ?? "none",
         PLAYWRIGHT_CANDIDATE_AUTH_PROOF: candidateAuthenticatedProofPath,
         ...(sanitizedArtifactSha256 && rehearsalPlan ? {
           PLAYWRIGHT_SANITIZED_REHEARSAL_SQL: path.resolve(repoRoot, sanitizedPathArg),
           PLAYWRIGHT_SANITIZER_SHA256: sanitizedArtifactSha256,
           PLAYWRIGHT_SANITIZER_MANIFEST: path.resolve(repoRoot, sanitizerManifestArg),
           PLAYWRIGHT_REHEARSAL_PROOF: authenticatedRehearsalProofPath,
-          DATA_REGRESSION_MIGRATION_FROM: rehearsalPlan.migrationRange.from ?? "none",
-          DATA_REGRESSION_MIGRATION_TO: rehearsalPlan.migrationRange.to ?? "none",
         } : {}),
       },
       stdio: ["ignore", "inherit", "inherit"],
@@ -257,6 +254,8 @@ try {
     readFileSync(browserJsonReportPath, "utf8"),
   ) as PlaywrightJsonReport;
   const routeReport = JSON.parse(readFileSync(routeCoverageReportPath, "utf8"));
+  if (!rehearsalPlan) throw new Error('Runtime evidence requires a resolved selected rehearsal range.');
+  assertRuntimeRangeBinding(routeReport, rehearsalPlan.migrationRange);
   const expectedRouteLedger = readdirSync(path.join(repoRoot, "db/migrations"))
     .filter((name) => /^\d+.*\.sql$/.test(name)).sort()
     .map((name) => ({ name, sha256: createHash("sha256").update(readFileSync(path.join(repoRoot, "db/migrations", name))).digest("hex") }));
@@ -272,6 +271,7 @@ try {
   const negativeSpec = collectPlaywrightSpecs(routeNegative.suites ?? []).find((spec) =>
     String(spec.title).includes("missing column breaks the real consuming profile page"));
   const negativeEvidence = JSON.parse(readFileSync(routeNegativeEvidencePath, "utf8"));
+  assertRuntimeRangeBinding(negativeEvidence, rehearsalPlan.migrationRange);
   routeNegativePassed = negativeSpec?.tests?.some((test) => test.results?.some((result) => result.status === "passed")) === true
     && negativeEvidence.verdict === "pass" && negativeEvidence.commit === startCommit
     && JSON.stringify(negativeEvidence.target) === JSON.stringify(routeReport.target)

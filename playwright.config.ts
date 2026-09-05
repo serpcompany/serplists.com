@@ -37,16 +37,20 @@ const serverCommands = buildPlaywrightServerCommands({
   corsAllowedOrigins,
   betterAuthSecret,
   persistPath: wranglerPersistFlag,
+  instrumentedWorkerPath: process.env.PLAYWRIGHT_INSTRUMENTED_WORKER_PATH,
 });
 const executionPolicy = buildSmokeExecutionPolicy({
   isolated: process.env.PLAYWRIGHT_USE_DEV_VARS === "0",
 });
-const reporter = process.env.PLAYWRIGHT_JSON_REPORT
-  ? [
-      ["list"] as const,
-      ["json", { outputFile: process.env.PLAYWRIGHT_JSON_REPORT }] as const,
-    ]
-  : "list";
+const reporter = [
+  ["list"] as const,
+  ...(process.env.PLAYWRIGHT_JSON_REPORT
+    ? [["json", { outputFile: process.env.PLAYWRIGHT_JSON_REPORT }] as const]
+    : []),
+  ...(process.env.PLAYWRIGHT_ROUTE_QUERY_EVIDENCE === "1"
+    ? [["./scripts/data/route-query-playwright-reporter.mjs"] as const]
+    : []),
+];
 
 process.env.VITE_API_URL ??= apiBaseUrl;
 
@@ -56,6 +60,8 @@ export default defineConfig({
   fullyParallel: executionPolicy.fullyParallel,
   workers: executionPolicy.workers,
   reporter,
+  globalTeardown: process.env.PLAYWRIGHT_ROUTE_QUERY_EVIDENCE === '1'
+    ? './scripts/data/route-query-playwright-teardown.mjs' : undefined,
   use: {
     baseURL: frontendBaseUrl,
     trace: "retain-on-failure",

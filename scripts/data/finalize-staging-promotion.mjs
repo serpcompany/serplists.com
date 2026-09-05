@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { writeDataCheckReports } from "./reporting.mjs";
 import { normalizeMigrationRange, migrationRangesEqual } from "./migration-range-lib.mjs";
 import { evaluateInvariantLedgerTransition } from "./remote-invariant-evidence-lib.mjs";
 import { validateControlledCanaryChecks } from "./deployment-smoke-lib.mjs";
+import { safeCanaryFailure } from "./canary-diagnostics.mjs";
 
 function arg(name) { const index = process.argv.indexOf(name); return index < 0 ? null : process.argv[index + 1]; }
 function read(name) { return JSON.parse(readFileSync(arg(name), "utf8")); }
@@ -27,12 +28,14 @@ try {
   validateControlledCanaryChecks(smoke);
   const exactCommit = [data.commit, range.commit, schema.commit, invariants.commit, deploy.commit, smoke.commit].every((value) => value === commit);
   const exactTarget = range.target?.environment === "staging" && range.target?.databaseName === databaseName &&
-    range.target?.databaseId === databaseId && schema.target?.environment === "staging" && schema.target?.database === databaseName &&
+    range.target?.databaseId === databaseId && schema.target?.environment === "staging" && schema.target?.binding === "DB" && schema.target?.databaseName === databaseName &&
     schema.target?.databaseId === databaseId && deploy.target?.environment === "staging" &&
     invariants.target?.environment === "staging" && invariants.target?.binding === "DB" && invariants.target?.databaseName === databaseName && invariants.target?.databaseId === databaseId &&
     deploy.target?.databaseName === databaseName && deploy.target?.databaseId === databaseId &&
     smoke.target?.environment === "staging" && smoke.target?.databaseName === databaseName &&
     smoke.target?.databaseId === databaseId;
+  const schemaMigrations = readdirSync(new URL('../../db/migrations/', import.meta.url)).filter(name => /^\d{4}_.+\.sql$/.test(name)).sort();
+  if (!migrationRangesEqual(schema.migrationRange, {from:schemaMigrations[0],to:schemaMigrations.at(-1)})) throw new Error('Post-migration schema evidence must cover the complete candidate migration chain.');
   const exactInvariantRange = invariants.comparisonKind === "migration" && migrationRangesEqual(invariants.migrationRange, range.migrationRange);
   const ledgerTransition = evaluateInvariantLedgerTransition({ before: invariants.ledger?.before ?? [], after: invariants.ledger?.after ?? [], comparisonKind: "migration", expectedRange: range.migrationRange, expectedMigrations: range.pendingMigrations ?? [] });
   if (!exactCommit || !exactTarget || !exactInvariantRange || ledgerTransition.verdict !== "pass" || invariants.ledger?.verdict !== "pass" || deploy.tree !== tree) throw new Error("Staging evidence identity, invariant range, or ordered ledger transition does not match the exact commit, tree, environment, and database.");
@@ -58,6 +61,7 @@ try {
     teardown: data.teardown,
   };
 } catch (error) {
+  const inputFailure = error instanceof SyntaxError ? safeCanaryFailure("staging-promotion-input", error) : null;
   report = {
     check: "staging-promotion",
     verdict: "fail",
@@ -65,8 +69,9 @@ try {
     tree,
     target: { environment: "staging", databaseName, databaseId },
     migrationRange: { from: null, to: null },
-    failedStage: "finalize-staging-promotion",
-    error: error instanceof Error ? error.message : String(error),
+    failedStage: inputFailure?.stage ?? "finalize-staging-promotion",
+    ...(inputFailure ? { errorCode: inputFailure.code, checks: [{ name: inputFailure.check, verdict: "fail" }] } : {}),
+    error: inputFailure?.message ?? (error instanceof Error ? error.message : String(error)),
   };
 }
 const summary = `${report.verdict.toUpperCase()} staging promotion for commit ${commit}, tree ${tree}, database ${databaseName} (${databaseId})${report.error ? `: ${report.error}` : "."}`;

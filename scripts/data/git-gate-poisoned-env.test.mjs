@@ -34,7 +34,9 @@ describe("poisoned Git environment isolation across data gates", () => {
         const reportDir = path.join(root, reportName);
         const result = runScript([script, "--database", "intended-db", "--report-dir", reportDir], env);
         expect(result.status).toBe(1);
-        expect(JSON.parse(readFileSync(path.join(reportDir, reportName), "utf8"))).toMatchObject({ commit: intendedCommit, target: { environment: "unknown", database: "intended-db" } });
+        const report = JSON.parse(readFileSync(path.join(reportDir, reportName), "utf8"));
+        expect(report).toMatchObject({ commit: intendedCommit, target: { environment: "unknown" } });
+        expect(report.target.databaseName ?? report.target.database).toBe('intended-db');
       }
     } finally { rmSync(root, { recursive: true, force: true }); }
   }, 20_000);

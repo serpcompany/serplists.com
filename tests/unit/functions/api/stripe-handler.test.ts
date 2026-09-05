@@ -8,6 +8,9 @@ const dbMocks = vi.hoisted(() => {
   };
   const insertChain = {
     values: vi.fn(),
+    onConflictDoNothing: vi.fn(),
+    onConflictDoUpdate: vi.fn(),
+    returning: vi.fn(),
   };
   const updateChain = {
     set: vi.fn(),
@@ -62,7 +65,10 @@ describe("Stripe webhook handler", () => {
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
+    dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
+    dbMocks.insertChain.onConflictDoNothing.mockReturnValue(dbMocks.insertChain);
+    dbMocks.insertChain.onConflictDoUpdate.mockResolvedValue(undefined);
+    dbMocks.insertChain.returning.mockResolvedValue([{id:'claimed-event'}]);
     dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
     dbMocks.updateChain.where.mockResolvedValue(undefined);
     stripeMocks.assertStripeWebhookConfigured.mockReturnValue({ webhookSecret: "whsec_test" });
@@ -140,7 +146,7 @@ describe("Stripe webhook handler", () => {
   });
 
   it("returns duplicate when the webhook event was already recorded", async () => {
-    dbMocks.insertChain.values.mockRejectedValueOnce(new Error("duplicate"));
+    dbMocks.insertChain.returning.mockResolvedValueOnce([]);
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ error: null }]);
 
     const request = new Request("http://localhost/api/stripe/webhook", {
@@ -163,7 +169,7 @@ describe("Stripe webhook handler", () => {
   });
 
   it("retries a previously failed webhook event instead of treating it as a duplicate", async () => {
-    dbMocks.insertChain.values.mockRejectedValueOnce(new Error("duplicate"));
+    dbMocks.insertChain.returning.mockResolvedValueOnce([]);
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ error: "previous failure" }]);
 
     const request = new Request("http://localhost/api/stripe/webhook", {

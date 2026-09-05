@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -9,13 +9,14 @@ const commit = "a".repeat(40);
 const tree = "b".repeat(40);
 const databaseName = "serp-checklists-staging-db";
 const databaseId = "fcaf4325-5be7-4ead-ab60-45932a04177b";
+const schemaMigrations = readdirSync(new URL('../../db/migrations/', import.meta.url)).filter(name => /^\d{4}_.+\.sql$/.test(name)).sort();
 
-function runFinalizer({ mutate = () => {} } = {}) {
+function runFinalizer({ mutate = () => {}, rawFiles = {} } = {}) {
   const directory = mkdtempSync(path.join(tmpdir(), "staging-finalizer-"));
   const reports = {
     data: { verdict: "pass", commit, teardown: { verdict: "pass", leakedUsers: 0, leakedTemplates: 0, leakedRuns: 0 } },
     range: { verdict: "pass", commit, baseCommit: "c".repeat(40), target: { environment: "staging", databaseName, databaseId }, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, pendingMigrations: ["0024_safe_template_evolution.sql"] },
-    schema: { verdict: "pass", commit, target: { environment: "staging", database: databaseName, databaseId }, ledger: { verdict: "pass" } },
+    schema: { verdict: "pass", commit, target: { environment: "staging", binding: "DB", databaseName, databaseId }, migrationRange: {from:schemaMigrations[0],to:schemaMigrations.at(-1)}, ledger: { verdict: "pass" } },
     invariants: { verdict: "pass", commit, comparisonKind: "migration", target: { environment: "staging", binding: "DB", databaseName, databaseId }, migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, ledger: { verdict: "pass", before: ["0023_add_sitemap_revision_state.sql"], after: ["0023_add_sitemap_revision_state.sql", "0024_safe_template_evolution.sql"] } },
     deploy: { verdict: "pass", commit, tree, target: { environment: "staging", databaseName, databaseId } },
     smoke: { verdict: "pass", commit, target: { environment: "staging", databaseName, databaseId }, failures: [], controlledCanaryMutationApproved: true, canaryEvidenceDigest: "a".repeat(64), checks: ["template_canary_designated", "template_write", "template_write_readback", "template_restore", "run_canary_designated", "run_write", "run_write_readback", "run_restore"].map((name) => ({ name, verdict: "pass" })) },
@@ -27,7 +28,7 @@ function runFinalizer({ mutate = () => {} } = {}) {
   const args = [];
   for (const [name, value] of Object.entries(reports)) {
     const file = path.join(directory, `${name}.json`);
-    writeFileSync(file, JSON.stringify(value));
+    writeFileSync(file, Object.hasOwn(rawFiles, name) ? rawFiles[name] : JSON.stringify(value));
     args.push(`--${name}`, file);
   }
   const output = path.join(directory, "output", "staging-promotion.json");
@@ -60,7 +61,26 @@ describe("staging promotion finalizer", () => {
       expect(readFileSync(run.output.replace(/\.json$/, ".txt"), "utf8")).toContain(commit);
     } finally { rmSync(run.directory, { recursive: true, force: true }); }
   });
+
+  it("does not retain malformed evidence text in JSON, JUnit, text, markdown, or console", () => {
+    const sentinel = "PRIVATE_MA";
+    const run = runFinalizer({ rawFiles: { data: sentinel } });
+    try {
+      expect(run.result.status).toBe(1);
+      for (const suffix of ["json", "junit.xml", "txt", "md"]) {
+        const output = readFileSync(run.output.replace(/\.json$/, `.${suffix}`), "utf8");
+        expect(output).not.toContain(sentinel);
+      }
+      expect(String(run.result.stdout) + String(run.result.stderr)).not.toContain(sentinel);
+    } finally { rmSync(run.directory, { recursive: true, force: true }); }
+  });
   it.each([
+    ...['environment','binding','databaseName','databaseId'].flatMap(field => [
+      [`missing schema ${field}`, reports => { delete reports.schema.target[field]; }],
+      [`wrong schema ${field}`, reports => { reports.schema.target[field] = 'wrong'; }],
+    ]),
+    ['missing schema range', reports => { delete reports.schema.migrationRange; }],
+    ['wrong schema range', reports => { reports.schema.migrationRange = {from:null,to:null}; }],
     ["wrong invariant commit", (reports) => { reports.invariants.commit = "f".repeat(40); }],
     ["wrong invariant database", (reports) => { reports.invariants.target.databaseId = "11111111-1111-4111-8111-111111111111"; }],
     ["wrong invariant range", (reports) => { reports.invariants.migrationRange.to = "0023_add_sitemap_revision_state.sql"; }],

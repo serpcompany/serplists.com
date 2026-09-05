@@ -38,12 +38,14 @@ describe("isolated smoke child environment", () => {
       corsAllowedOrigins: "http://localhost:4173",
       betterAuthSecret: "synthetic-test-secret-32-characters",
       persistPath: ".wrangler/smoke-state",
+      instrumentedWorkerPath: "tmp/playwright-pages-runtime/_worker.js",
     });
 
     expect(commands.setup).not.toContain("dotenv");
     expect(commands.setup).not.toContain("sitemap:check");
     expect(commands.setup).not.toContain("sitemap:generate");
     expect(commands.setup).toContain("vite build --mode development");
+    expect(commands.setup).toContain("build-instrumented-playwright-worker.mjs");
     expect(commands.frontend).not.toContain("dotenv");
     expect(commands.frontend).toContain("vite preview");
     expect(commands.frontend).not.toContain("vite --host");
@@ -51,6 +53,9 @@ describe("isolated smoke child environment", () => {
     expect(commands.api).not.toContain("build:dev");
     expect(commands.api).not.toContain("vite build");
     expect(commands.api).toContain("tests/fixtures/playwright-safe.env");
+    expect(commands.api).toContain("pages dev tmp/playwright-pages-runtime");
+    expect(commands.api).not.toContain('--script-path');
+    expect(commands.api).not.toContain('--no-bundle');
     expect(commands.api).toContain("-b USESEND_API_KEY=");
     expect(commands.api).toContain("-b RESEND_API_KEY=");
   });

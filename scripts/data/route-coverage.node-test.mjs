@@ -32,12 +32,17 @@ test('actual aggregate fails missing/stale evidence, new indirect server modules
     writeFileSync(join(root, 'src/lib/routes.ts'), 'export {};');
     const manifest = { scenarios: ['fixture'], surfaces: discoverRouteSurfaces(root).map(surface => ({ ...surface, scenarios: ['fixture'] })), routes: [{ pattern: '/fixture', example: '/fixture', persona: 'anonymous', scenario: 'fixture' }] };
     writeFileSync(join(root, 'scripts/data/route-coverage-inventory.json'), JSON.stringify(manifest));
-    const env = { PLAYWRIGHT_ROUTE_COVERAGE_PROOF: join(root, 'tmp/route-coverage.json'), DATA_REGRESSION_START_COMMIT: 'a'.repeat(40), DATA_REGRESSION_MIGRATION_FROM: '0001.sql', DATA_REGRESSION_MIGRATION_TO: '0001.sql', PLAYWRIGHT_ROUTE_LEDGER_JSON: JSON.stringify([{ name: '0001.sql', sha256: 'b'.repeat(64) }]) };
+    const env = { PLAYWRIGHT_ROUTE_COVERAGE_PROOF: join(root, 'tmp/route-coverage.json'), DATA_REGRESSION_START_COMMIT: 'a'.repeat(40), DATA_REGRESSION_MIGRATION_FROM: '0001_fixture.sql', DATA_REGRESSION_MIGRATION_TO: '0001_fixture.sql', PLAYWRIGHT_ROUTE_LEDGER_JSON: JSON.stringify([{ name: '0001_fixture.sql', sha256: 'b'.repeat(64) }]) };
     assert.throws(() => finalizeRouteCoverage(env, root), /coverage failed/);
     recordRouteScenarios(['fixture'], env);
     assert.throws(() => finalizeRouteCoverage(env, root), /coverage failed/);
     recordRouteVisit('/fixture', 'anonymous', env, root);
     assert.equal(finalizeRouteCoverage(env, root).verdict, 'pass');
+    const noSelectedMigrations = { ...env, DATA_REGRESSION_MIGRATION_FROM: 'none', DATA_REGRESSION_MIGRATION_TO: 'none' };
+    recordRouteScenarios(['fixture'], noSelectedMigrations);
+    recordRouteVisit('/fixture', 'anonymous', noSelectedMigrations, root);
+    const noMigrationReport = finalizeRouteCoverage(noSelectedMigrations, root);
+    assert.deepEqual(noMigrationReport.migrationRange, { from: null, to: null });
     assert.throws(() => finalizeRouteCoverage(env, root, { browserPassed: false }), /coverage failed/);
     assert.throws(() => finalizeRouteCoverage({ ...env, DATA_REGRESSION_START_COMMIT: 'c'.repeat(40) }, root), /coverage failed/);
     assert.throws(() => finalizeRouteCoverage({ ...env, PLAYWRIGHT_ROUTE_LEDGER_JSON: '[]' }, root), /coverage failed/);

@@ -390,8 +390,10 @@ test("a fresh clone generates and stages the complete next Drizzle provenance se
       encoding: "utf8",
       env: stagingEnvironment,
     });
-    assert.equal(staging.status, 0, `${staging.stdout}\n${staging.stderr}`);
-    assert.match(staging.stdout, /PASS exact staging commit\/range: 0025_add_provenance_acceptance_probe\.sql/);
+    // Genuine generation proves provenance, not reviewed domain coverage. This
+    // users-table probe has no supported rehearsal profile and must stay blocked.
+    assert.equal(staging.status, 1, `${staging.stdout}\n${staging.stderr}`);
+    assert.match(`${staging.stdout}\n${staging.stderr}`, /no rehearsal plan/);
 
     rmSync(path.join(clone, "db/migrations/meta", snapshotName));
     const missingMetadata = spawnSync(process.execPath, ["scripts/data/check-staging-reviewed-range-under-test.mjs"], {

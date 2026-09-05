@@ -3,9 +3,9 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
-export function exportSyntheticRows(database) {
+export function exportSyntheticRows(database, { includeLedger = true } = {}) {
   const tables = ["users", "templates", "checklist_runs"];
-  if (database.prepare("SELECT name FROM sqlite_schema WHERE name='d1_migrations'").get()) tables.push("d1_migrations");
+  if (includeLedger && database.prepare("SELECT name FROM sqlite_schema WHERE name='d1_migrations'").get()) tables.push("d1_migrations");
   return tables.flatMap((table) => database.prepare(`SELECT * FROM ${table}`).all().map((row) =>
     `INSERT INTO ${table} (${Object.keys(row).join(",")}) VALUES (${Object.values(row).map((value) => value == null ? "NULL" : typeof value === "number" ? value : `'${String(value).replaceAll("'", "''")}'`).join(",")});`
   )).join("\n");

@@ -3,6 +3,24 @@
   "harness": "scripts/data/run-admin-billing-sitemap-coverage.mjs",
   "runtime": "Unchanged application modules bundled into workerd with the complete Wrangler-migrated local D1 used by the browser suite. Actual Better Auth login. Only external Stripe HTTP transport is a local protocol double; unexpected external origins and operations fail.",
   "covered": {
+    "api-router-provider-denials": [
+      "Local Worker OPTIONS reaches the CORS adapter",
+      "In-process production-host simulation rejects a synthetic blocked-domain login before outbound transport",
+      "Clipy generation GET reaches the real method rejection without calling the provider"
+    ],
+    "upload-crud": [
+      "Real local R2 receives multipart upload bytes from an authenticated owner",
+      "Public GET and HEAD return the stored bytes and metadata",
+      "Owner DELETE removes the object; subsequent read is 404 and the bucket is empty"
+    ],
+    "template-and-team-edge-queries": [
+      "Free template create and clone succeed under their cap and are denied over it",
+      "Free template restoration under the cap records an audit without inventing a content version; over-cap restoration leaves the archive unchanged",
+      "Changed slugs are checked for collision before valid rename",
+      "Free active-run restore and effective-team share reactivation enforce caps",
+      "Same-name teams receive distinct persisted slugs",
+      "Existing-owner invite acceptance preserves ownership and records one acceptance audit"
+    ],
     "admin-mutations": [
       "Unauthorized admin request rejected before mutation",
       "Email lookup resolves real user; unknown email returns 404",
@@ -15,6 +33,7 @@
       "Unauthenticated billing denied; nonmember team context returns 404",
       "Configured portal without customer returns 400",
       "First checkout reads email and inserts customer; second checkout reuses the D1 mapping",
+      "A blank existing customer mapping is repaired through the targeted upsert",
       "Checkout form carries configured price; portal uses existing customer",
       "Missing checkout URL and failed external transport produce 500",
       "Unsigned webhook returns 400",
@@ -32,11 +51,11 @@
       "Unchanged index preserves shard revision; publication change changes hash and excludes private template",
       "Durable shard insertion/upsert and obsolete shard deletion read back from D1",
       "All four paged families return XML for page 1; zero/out-of-range return 404; HEAD returns empty body; POST returns 405",
-      "Legacy pages/categories sitemap redirects retain valid page or default invalid page"
+      "Legacy pages/categories sitemap redirects retain valid page or default invalid page; POST returns 405"
     ]
   },
   "notExercised": [
-    "Concurrent checkout customer insertion conflict fallback (ordinary insert and existing read covered)",
+    "Concurrent checkout requests and live Stripe customer-creation idempotency (targeted local upsert is covered)",
     "Optional missing billing-table legacy compatibility paths (suite requires full current schema)",
     "More than 25000 entries and a bundled prefix filling an entire sitemap shard",
     "Every malformed Stripe signature spelling, event JSON shape, and admin unsupported subpath",

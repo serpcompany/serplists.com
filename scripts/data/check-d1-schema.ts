@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { runRepositoryGit, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
 import { runProductionIdentityBoundCommand } from "./production-identity-bound-command-lib.mjs";
 import { safeCanaryFailure, wrapCanarySubprocessFailure } from './canary-diagnostics.mjs';
+import { privacySafeLedgerProjection } from './ledger-reporting-lib.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const childEnv = sanitizedGitEnvironment();
@@ -40,6 +41,7 @@ function differenceCount(value: unknown): number {
 
 const database = readArg("--database") ?? "unknown";
 const environment = readArg("--label") ?? "unknown";
+const binding = readArg("--binding") ?? "DB";
 const preview = process.argv.includes("--preview");
 const reportDirectory = readArg("--report-dir") ?? process.env.DATA_REPORT_DIR ?? "tmp/data-reports";
 const migrations = (() => {
@@ -54,7 +56,7 @@ let stage = 'schema-configuration';
 
 try {
   if (database === "unknown" || environment === "unknown") {
-    throw new Error("Usage: check-d1-schema --database NAME --label ENV [--preview] [--database-id ID]");
+    throw new Error("Usage: check-d1-schema --database NAME --label ENV [--binding BINDING] [--preview] [--database-id ID]");
   }
   const runtimeContract = buildDrizzleContract(drizzleSchema);
   const migrated = replayMigrations();
@@ -99,7 +101,7 @@ try {
     ...tableNames.map((name) => `PRAGMA index_list('${name.replaceAll("'", "''")}');`),
     ...tableNames.map((name) => `SELECT il.name AS index_name, ii.seqno, ii.name AS column_name, sm.sql AS index_sql FROM pragma_index_list('${name.replaceAll("'", "''")}') AS il JOIN pragma_index_info(il.name) AS ii LEFT JOIN sqlite_schema AS sm ON sm.type = 'index' AND sm.name = il.name ORDER BY il.name, ii.seqno;`),
     ...tableNames.map((name) => `PRAGMA foreign_key_list('${name.replaceAll("'", "''")}');`),
-    "SELECT type AS object_type, name, tbl_name AS table_name, sql FROM sqlite_schema WHERE type IN ('trigger','view') ORDER BY type,name;",
+    "SELECT type AS object_type, name, tbl_name AS table_name, sql FROM sqlite_schema WHERE type IN ('table','trigger','view') AND name NOT LIKE 'sqlite_%' ORDER BY type,name;",
   ].join(" ");
   const args = [...targetArgs];
   args.push("--json", "--command", sql);
@@ -110,6 +112,14 @@ try {
   const appliedMigrations = parseAppliedMigrationLedger(ledgerOutput);
   stage = 'schema-comparison';
   const ledger = compareMigrationLedger({ repositoryMigrations: migrations, appliedMigrations });
+  const ledgerProjection = privacySafeLedgerProjection({ repositoryMigrations: migrations, observedMigrations: appliedMigrations });
+  const reportLedger = {
+    expected: ledger.expected,
+    missing: ledger.missing,
+    orderMatches: ledger.orderMatches,
+    verdict: ledger.verdict,
+    ...ledgerProjection,
+  };
   const runtimeDiff = diffRuntimeSchema(drizzleSchema, remoteCatalog);
   const migrationDiff = diffDrizzleContract(migrationContract, remoteCatalog);
   const migrationObjectDiff = compareDatabaseSchemas(expectedMigrationCatalog, remoteCatalog);
@@ -118,23 +128,24 @@ try {
   const report = {
     check: "d1-schema-contract",
     commit,
-    target: { environment, database, databaseId, mode: preview ? "preview" : "remote" },
+    target: { environment, binding, databaseName: resolvedIdentity.databaseName, databaseId, mode: preview ? "preview" : "remote" },
     migrationRange: { from: migrations[0] ?? null, to: migrations.at(-1) ?? null },
     // Remote differences may contain SQL defaults or tenant-named objects.
     // Retain only counts on failure, never those provider-controlled values.
     schemaDifferences: verdict === 'pass'
       ? { runtime: runtimeDiff, migration: migrationDiff, migrationObjects: migrationObjectDiff }
       : Object.fromEntries(Object.entries({ runtime: runtimeDiff, migration: migrationDiff, migrationObjects: migrationObjectDiff }).map(([name, diff]) => [name, { verdict: diff.verdict, differenceCount: differenceCount(diff) }])),
-    ledger,
+    ledger: reportLedger,
     identityChecks,
     verdict,
   };
+  const reportIdentity = `environment=${environment} binding=${binding} databaseName=${resolvedIdentity.databaseName} databaseId=${databaseId} commit=${commit} migration=${report.migrationRange.from}->${report.migrationRange.to}`;
   const summary = verdict === "pass"
-    ? `PASS ${environment}:${database} (${databaseId}) matches the Drizzle runtime and replayed migration contracts at ${commit}.`
+    ? `PASS ${reportIdentity}; schema matches the Drizzle runtime and replayed migration contracts.`
     : [
-        `BLOCKED ${environment}:${database} (${databaseId}) has Drizzle/D1 schema drift at ${commit}.`,
+        `BLOCKED ${reportIdentity}; Drizzle/D1 schema drift detected.`,
         JSON.stringify(report.schemaDifferences),
-        `Ledger differences: ${JSON.stringify(ledger)}.`,
+        `Ledger differences: ${JSON.stringify(reportLedger)}.`,
         "Apply the required reviewed Wrangler migrations before deploying compatible application code.",
       ].join("\n");
   const paths = writeDataCheckReports({ name: `d1-schema-${environment}`, report, summary, reportDirectory });
@@ -148,11 +159,11 @@ try {
     commit,
     error: new Error(failure.message),
     migrationFiles: migrations,
-    requestedTarget: { environment, database, mode: preview ? "preview" : "remote" },
+    requestedTarget: { environment, binding, databaseName: database, mode: preview ? "preview" : "remote" },
     resolvedIdentity,
   });
   Object.assign(report, { failedStage: failure.stage, errorCode: failure.code, checks: [{ name: failure.check, verdict: 'fail' }], ...(failure.exitStatus === undefined ? {} : { exitStatus: failure.exitStatus }) });
-  const summary = `BLOCKED ${environment}:${database} (${resolvedIdentity?.databaseId ?? 'unresolved-id'}) commit=${commit} migration=${report.migrationRange.from}->${report.migrationRange.to} stage=${failure.stage}: ${failure.code}. ${report.error}`;
+  const summary = `BLOCKED environment=${environment} binding=${binding} databaseName=${resolvedIdentity?.databaseName ?? database} databaseId=${resolvedIdentity?.databaseId ?? 'unresolved-id'} commit=${commit} migration=${report.migrationRange.from}->${report.migrationRange.to} stage=${failure.stage}: ${failure.code}. ${report.error}`;
   try { writeDataCheckReports({ name: `d1-schema-${environment}`, report, summary, reportDirectory }); }
   catch { console.error('Remote schema failure report could not be persisted.'); }
   console.error(summary);

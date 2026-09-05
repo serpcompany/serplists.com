@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -9,7 +9,7 @@ const root = resolve('.');
 const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const databaseId = '11111111-1111-4111-8111-111111111111';
 const secretTable = 'PRIVATE_TABLE_SENTINEL_118';
-const markers = [secretTable, 'PRIVATE_VALUE_SENTINEL_118', 'PRIVATE_OWNER_SENTINEL_118', 'STDERR_SECRET_SENTINEL_118', 'STDOUT_SECRET_SENTINEL_118', 'STATE_PATH_SENTINEL_118', 'INVARIANT_KEY_SENTINEL_118_', 'data-safety-fixture-user-v1', 'data-safety-fixture-template-v1', 'data-safety-fixture-run-v1'];
+const markers = [secretTable, 'PRIVATE_VALUE_SENTINEL_118', 'PRIVATE_OWNER_SENTINEL_118', 'STDERR_SECRET_SENTINEL_118', 'STDOUT_SECRET_SENTINEL_118', 'STATE_PATH_SENTINEL_118', 'INVARIANT_KEY_SENTINEL_118_', 'unknown_ledger_sentinel_128.sql', 'data-safety-fixture-user-v1', 'data-safety-fixture-template-v1', 'data-safety-fixture-run-v1'];
 const expectPrivateFree = text => { for (const marker of markers) expect(text.toLowerCase()).not.toContain(marker.toLowerCase()); };
 
 function fixture(failure) {
@@ -31,6 +31,7 @@ const args=process.argv.slice(2); const sql=args.includes('--command') ? args[ar
 const identity=args.includes('info'); const inventory=sql.startsWith('SELECT name FROM sqlite_schema');
 fs.appendFileSync(${JSON.stringify(calls)},JSON.stringify({identity,inventory,privateArgument:sql.includes(${JSON.stringify(secretTable)}),domainQuery:sql.startsWith('SELECT * FROM')})+'\\n');
 if(identity){console.log(JSON.stringify({name:'fixture-db',uuid:${JSON.stringify(databaseId)}}));process.exit(0);}
+if(${JSON.stringify(failure)}==='unknown-ledger' && sql.includes('SELECT id, name FROM d1_migrations')){console.log(JSON.stringify([{results:[{id:1,name:'0001_initial_schema.sql'},{id:2,name:'9999_unknown_ledger_sentinel_128.sql'}]}]));process.exit(0);}
 if(${JSON.stringify(failure)}==='schema' && inventory){console.log(JSON.stringify([{results:[{name:${JSON.stringify(secretTable)}}]}]));process.exit(0);}
 if((${JSON.stringify(failure)}==='schema' && sql.includes(${JSON.stringify(secretTable)})) || (${JSON.stringify(failure)}==='invariant' && sql.includes("SELECT 'template' kind"))) {
 process.stdout.write(${JSON.stringify(markers.join(' '))});process.stderr.write(${JSON.stringify(markers.join(' '))});process.exit(31);}
@@ -96,6 +97,22 @@ describe.skipIf(process.platform === 'win32')('direct schema and invariant CLI p
       expect(report.schemaDifferences.runtime.verdict).toBe('fail');
       expect(report.schemaDifferences.runtime.differenceCount).toBeGreaterThan(0);
       for (const text of [...reportFiles(f), result.stdout, result.stderr]) expectPrivateFree(text);
+    } finally { rmSync(f.directory, { recursive: true, force: true }); }
+  });
+
+  it('fails an unknown invariant ledger without retaining the provider migration text in reports, state, or console', () => {
+    const f = fixture('unknown-ledger');
+    try {
+      const result = run(f, 'invariant');
+      expect(result.status).toBe(1);
+      expect(existsSync(f.state)).toBe(false);
+      for (const text of [...reportFiles(f), result.stdout, result.stderr]) expectPrivateFree(text);
+      const report = JSON.parse(readFileSync(join(f.reports, 'remote-invariant-capture.json'), 'utf8'));
+      expect(report).toMatchObject({ verdict: 'fail', failedStage: 'invariant-query', ledger: { status: 'drift', observedCount: 2, knownCount: 1, unknownCount: 1, applied: ['0001_initial_schema.sql'], appliedThrough: '0001_initial_schema.sql' } });
+      expect(report.ledger.sha256).toMatch(/^[0-9a-f]{64}$/);
+      const calls = readFileSync(f.calls, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+      expect(calls).toHaveLength(2);
+      expect(calls.map(call => call.identity)).toEqual([true, false]);
     } finally { rmSync(f.directory, { recursive: true, force: true }); }
   });
 });

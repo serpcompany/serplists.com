@@ -53,11 +53,8 @@ test.describe('real local database routes', () => {
     recordRouteScenarios(['owned-pages', 'template-run-read-branches', 'user-override-entitlement']);
   });
 
-  test('@real-d1 every team role reads real membership and entitlement records', async ({ page, context }) => {
-    for (const role of ['owner', 'admin', 'editor', 'runner', 'viewer']) {
-      await context.clearCookies();
-      await page.goto('/login');
-      await page.evaluate(() => localStorage.clear());
+  for (const role of ['owner', 'admin', 'editor', 'runner', 'viewer']) {
+    test(`@real-d1 team role ${role} reads real membership and entitlement records`, async ({ page, context }) => {
         await login(page, role);
         expect((await get(page, '/teams')).map((row: { id: string }) => row.id)).toContain('coverage-team');
         expect((await get(page, '/teams/coverage-team')).membership.role).toBe(role);
@@ -67,9 +64,9 @@ test.describe('real local database routes', () => {
         expect((await get(page, '/billing/status')).plan).toBe(role === 'owner' ? 'pro' : 'free');
         const rename = await context.request.put(`${endpoint}/teams/coverage-team`, { data: { name: `Coverage Team ${role}` } });
         expect(rename.status(), `team write permission: ${role}`).toBe(['owner', 'admin'].includes(role) ? 200 : 403);
-    }
-    recordRouteScenarios(['team-role-reads', 'free-entitlement', 'team-entitlement']);
-  });
+      recordRouteScenarios(['team-role-reads', 'free-entitlement', 'team-entitlement'], process.env, {role});
+    });
+  }
 
   test('@real-d1 legacy route aliases reach their real data destinations', async ({ page }) => {
     await visit(page, '/checklists', 'Templates');

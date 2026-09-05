@@ -48,14 +48,17 @@ describe("SQLite conflict replacement risk (#106)", () => {
 
   it.each(replacements)("cannot reuse weaker approval or omit the recovery decision: %s", (sql) => {
     const classification = classify([sql]);
-    const request = { classification, changeProvenance: { changeAuthors: ["author"] } };
-    const review = { state: "approved", user: { type: "User", login: "reviewer" }, environments: [{ name: "production" }], comment: "Reviewed replacement cascades and exact recovery evidence." };
-    const input = { classification, reviews: [review], actor: "operator", changeAuthors: ["author"] };
+    const commit = 'a'.repeat(40);
+    const recoveryToken = `recovery:1:1:1:${'b'.repeat(64)}`;
+    const request = { commit, classification, changeProvenance: { changeAuthors: ["author"] } };
+    const review = { state: "approved", user: { type: "User", login: "reviewer" }, environments: [{ name: "production" }], comment: `Reviewed replacement cascades and exact recovery evidence. ${recoveryToken}` };
+    const input = { classification, reviews: [review], actor: "operator", changeAuthors: ["author"], recoveryToken, reviewContext:{repository:'serpcompany/serplists.com',runId:'1',runAttempt:'1',commit} };
     const approval = validateApprovalEvidence(input);
     expect(assertApprovalMatchesRequest({ request, approval })).toEqual(approval);
     expect(() => assertApprovalMatchesRequest({ request, approval: { ...approval, classification: "backfill" } })).toThrow(/classification/);
     expect(() => validateApprovalEvidence({ ...input, reviews: [] })).toThrow(/approval is missing/);
-    expect(() => validateApprovalEvidence({ ...input, reviews: [{ ...review, comment: "" }] })).toThrow(/recovery evidence/);
+    expect(() => validateApprovalEvidence({ ...input, reviews: [{ ...review, comment: "" }] })).toThrow(/recovery receipt/);
+    expect(() => validateApprovalEvidence({ ...input, reviews: [{ ...review, comment: recoveryToken }] })).toThrow(/written production review decision/);
   });
 
   it.each([

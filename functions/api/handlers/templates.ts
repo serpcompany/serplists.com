@@ -27,18 +27,12 @@ import {
 
 const junkTemplateTitles = new Set(['Test Template', 'Updated Template Title']);
 
-type QueryResult<T> = PromiseLike<T> | T;
 type TemplateInsertValues = typeof schema.templates.$inferInsert;
 type TemplateUpdateValues = Partial<TemplateInsertValues>;
 type AuditEventValues = typeof schema.audit_events.$inferInsert;
 type TemplateVersionValues = typeof schema.template_versions.$inferInsert;
 
-function isMissingRulesColumnError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /templates[".]?\.?"?rules|no such column:.*rules/i.test(message);
-}
-
-function getTemplateSelectColumns(includeRules: boolean) {
+function getTemplateSelectColumns() {
   const { templates } = schema;
 
   return {
@@ -52,7 +46,7 @@ function getTemplateSelectColumns(includeRules: boolean) {
     type: templates.type,
     seo_title: templates.seo_title,
     seo_description: templates.seo_description,
-    ...(includeRules ? { rules: templates.rules } : {}),
+    rules: templates.rules,
     owner_type: templates.owner_type,
     team_id: templates.team_id,
     created_by_user_id: templates.created_by_user_id,
@@ -67,26 +61,7 @@ function getTemplateSelectColumns(includeRules: boolean) {
   };
 }
 
-async function withRulesColumnFallback<T>(
-  operation: (includeRules: boolean) => QueryResult<T>,
-): Promise<T> {
-  try {
-    return await operation(true);
-  } catch (error) {
-    if (!isMissingRulesColumnError(error)) {
-      throw error;
-    }
-
-    return operation(false);
-  }
-}
-
-function omitRulesColumn<T extends Record<string, unknown>>(values: T): Omit<T, 'rules'> {
-  const { rules: _rules, ...rest } = values;
-  return rest;
-}
-
-async function insertTemplateWithHistoryFallback(
+async function insertTemplateWithHistory(
   db: ReturnType<typeof createDb>,
   values: TemplateInsertValues,
   versionValues: TemplateVersionValues,
@@ -94,25 +69,14 @@ async function insertTemplateWithHistoryFallback(
 ): Promise<void> {
   const { audit_events, template_versions, templates } = schema;
 
-  const runBatch = (templateValues: TemplateInsertValues) =>
-    db.batch([
-      db.insert(templates).values(templateValues),
-      db.insert(template_versions).values(versionValues),
-      db.insert(audit_events).values(auditEventValues),
-    ]);
-
-  try {
-    await runBatch(values);
-  } catch (error) {
-    if (!isMissingRulesColumnError(error)) {
-      throw error;
-    }
-
-    await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateInsertValues);
-  }
+  await db.batch([
+    db.insert(templates).values(values),
+    db.insert(template_versions).values(versionValues),
+    db.insert(audit_events).values(auditEventValues),
+  ]);
 }
 
-async function updateTemplateWithHistoryFallback(
+async function updateTemplateWithHistory(
   db: ReturnType<typeof createDb>,
   values: TemplateUpdateValues,
   whereClause: SQL | undefined,
@@ -130,38 +94,26 @@ async function updateTemplateWithHistoryFallback(
 ): Promise<unknown[]> {
   const { audit_events, checklist_runs, template_versions, templates } = schema;
 
-  const runBatch = (templateValues: TemplateUpdateValues) => {
-    const statements = [
-      db.update(templates).set(templateValues).where(whereClause),
-      ...(versionValues ? [db.insert(template_versions).values(versionValues)] : []),
-      db.insert(audit_events).values(auditEventValues),
-      ...reconciledRunUpdates.map((runUpdate) =>
-        db
-          .update(checklist_runs)
-          .set({
-            items: runUpdate.items,
-            retired_items: runUpdate.retiredItems,
-            progress: runUpdate.progress,
-            template_version: runUpdate.templateVersion,
-            revision: runUpdate.revision + 1,
-            updated_at: runUpdate.updatedAt,
-          })
-          .where(runUpdate.whereClause),
-      ),
-    ] as const;
+  const statements = [
+    db.update(templates).set(values).where(whereClause),
+    ...(versionValues ? [db.insert(template_versions).values(versionValues)] : []),
+    db.insert(audit_events).values(auditEventValues),
+    ...reconciledRunUpdates.map((runUpdate) =>
+      db
+        .update(checklist_runs)
+        .set({
+          items: runUpdate.items,
+          retired_items: runUpdate.retiredItems,
+          progress: runUpdate.progress,
+          template_version: runUpdate.templateVersion,
+          revision: runUpdate.revision + 1,
+          updated_at: runUpdate.updatedAt,
+        })
+        .where(runUpdate.whereClause),
+    ),
+  ] as const;
 
-    return db.batch(statements);
-  };
-
-  try {
-    return await runBatch(values);
-  } catch (error) {
-    if (!isMissingRulesColumnError(error)) {
-      throw error;
-    }
-
-    return await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateUpdateValues);
-  }
+  return db.batch(statements);
 }
 
 function batchUpdateMissed(result: unknown): boolean {
@@ -240,13 +192,13 @@ function parseTemplateRow(template: Record<string, unknown>) {
   };
 }
 
-function selectTemplatesWithOwner(env: Env, includeRules = true) {
+function selectTemplatesWithOwner(env: Env) {
   const db = createDb(env);
   const { templates, users } = schema;
 
   return db
     .select({
-      ...getTemplateSelectColumns(includeRules),
+      ...getTemplateSelectColumns(),
       owner_username: users.username,
       owner_full_name: users.name,
     })
@@ -489,13 +441,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         ? or(ownedTemplateClause, and(eq(templates.is_public, true), isNull(templates.deleted_at)))
         : ownedTemplateClause;
 
-      const rows = await withRulesColumnFallback((includeRules) =>
-        db
-          .select(getTemplateSelectColumns(includeRules))
-          .from(templates)
-          .where(whereClause)
-          .orderBy(desc(templates.created_at)),
-      );
+      const rows = await db
+        .select(getTemplateSelectColumns())
+        .from(templates)
+        .where(whereClause)
+        .orderBy(desc(templates.created_at));
 
       const [userRow] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
 
@@ -713,7 +663,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             request,
             createdAt: now,
           });
-          await insertTemplateWithHistoryFallback(db, insertedTemplate, versionValues, auditEvent);
+          await insertTemplateWithHistory(db, insertedTemplate, versionValues, auditEvent);
           summary.imported += 1;
           summary.successes.push({
             index,
@@ -753,19 +703,17 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         return jsonError('userId required', 400);
       }
 
-      const rows = await withRulesColumnFallback((includeRules) =>
-        selectTemplatesWithOwner(env, includeRules)
-          .where(
-            and(
-              eq(templates.owner_type, 'user'),
-              eq(templates.user_id, targetUserId),
-              isNull(templates.team_id),
-              eq(templates.is_public, true),
-              isNull(templates.deleted_at),
-            ),
-          )
-          .orderBy(desc(templates.created_at)),
-      );
+      const rows = await selectTemplatesWithOwner(env)
+        .where(
+          and(
+            eq(templates.owner_type, 'user'),
+            eq(templates.user_id, targetUserId),
+            isNull(templates.team_id),
+            eq(templates.is_public, true),
+            isNull(templates.deleted_at),
+          ),
+        )
+        .orderBy(desc(templates.created_at));
 
       return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
     }
@@ -773,11 +721,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     // GET /api/templates/slug/:slug
     if (templatesSubpath[0] === 'slug' && templatesSubpath[1]) {
       const slug = templatesSubpath.slice(1).join('/');
-      const [template] = await withRulesColumnFallback((includeRules) =>
-        selectTemplatesWithOwner(env, includeRules)
-          .where(and(eq(templates.slug, slug), isNull(templates.deleted_at)))
-          .limit(1),
-      );
+      const [template] = await selectTemplatesWithOwner(env)
+        .where(and(eq(templates.slug, slug), isNull(templates.deleted_at)))
+        .limit(1);
 
       if (!template || !(await canViewTemplate(env, template as unknown as Record<string, unknown>, userId))) {
         return jsonError('Template not found', 404);
@@ -799,20 +745,16 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           return jsonError('Team not found', 404);
         }
 
-        const rows = await withRulesColumnFallback((includeRules) =>
-          selectTemplatesWithOwner(env, includeRules)
-            .where(and(eq(templates.owner_type, 'team'), eq(templates.team_id, teamId), isNotNull(templates.deleted_at)))
-            .orderBy(desc(templates.updated_at)),
-        );
+        const rows = await selectTemplatesWithOwner(env)
+          .where(and(eq(templates.owner_type, 'team'), eq(templates.team_id, teamId), isNotNull(templates.deleted_at)))
+          .orderBy(desc(templates.updated_at));
 
         return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
       }
 
-      const rows = await withRulesColumnFallback((includeRules) =>
-        selectTemplatesWithOwner(env, includeRules)
-          .where(and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNotNull(templates.deleted_at)))
-          .orderBy(desc(templates.updated_at)),
-      );
+      const rows = await selectTemplatesWithOwner(env)
+        .where(and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNotNull(templates.deleted_at)))
+        .orderBy(desc(templates.updated_at));
 
       return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
     }
@@ -828,13 +770,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       const historyLimit = Number.isFinite(requestedLimit)
         ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
         : 50;
-      const [template] = await withRulesColumnFallback((includeRules) =>
-        db
-          .select(getTemplateSelectColumns(includeRules))
-          .from(templates)
-          .where(eq(templates.id, templateId))
-          .limit(1),
-      );
+      const [template] = await db
+        .select(getTemplateSelectColumns())
+        .from(templates)
+        .where(eq(templates.id, templateId))
+        .limit(1);
 
       if (!template || !(await canViewTemplateHistory(env, template as unknown as Record<string, unknown>, userId))) {
         return jsonError('Template not found', 404);
@@ -932,11 +872,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     // GET /api/templates/:id
     if (templatesSubpath[0]) {
       const templateId = templatesSubpath[0];
-      const [template] = await withRulesColumnFallback((includeRules) =>
-        selectTemplatesWithOwner(env, includeRules)
-          .where(and(eq(templates.id, templateId), isNull(templates.deleted_at)))
-          .limit(1),
-      );
+      const [template] = await selectTemplatesWithOwner(env)
+        .where(and(eq(templates.id, templateId), isNull(templates.deleted_at)))
+        .limit(1);
 
       if (!template || !(await canViewTemplate(env, template as unknown as Record<string, unknown>, userId))) {
         return jsonError('Template not found', 404);
@@ -954,11 +892,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         return jsonError('Team not found', 404);
       }
 
-      const rows = await withRulesColumnFallback((includeRules) =>
-        selectTemplatesWithOwner(env, includeRules)
-          .where(and(eq(templates.owner_type, 'team'), eq(templates.team_id, teamId), isNull(templates.deleted_at)))
-          .orderBy(desc(templates.created_at)),
-      );
+      const rows = await selectTemplatesWithOwner(env)
+        .where(and(eq(templates.owner_type, 'team'), eq(templates.team_id, teamId), isNull(templates.deleted_at)))
+        .orderBy(desc(templates.created_at));
 
       return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
     }
@@ -973,11 +909,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         )
       : and(eq(templates.is_public, true), isNull(templates.deleted_at));
 
-    const rows = await withRulesColumnFallback((includeRules) =>
-      selectTemplatesWithOwner(env, includeRules)
-        .where(whereClause)
-        .orderBy(desc(templates.created_at)),
-    );
+    const rows = await selectTemplatesWithOwner(env)
+      .where(whereClause)
+      .orderBy(desc(templates.created_at));
 
     return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
   }
@@ -994,13 +928,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         return jsonError('Template ID required', 400);
       }
 
-      const [existingTemplate] = await withRulesColumnFallback((includeRules) =>
-        db
-          .select(getTemplateSelectColumns(includeRules))
-          .from(templates)
-          .where(eq(templates.id, templateId))
-          .limit(1),
-      );
+      const [existingTemplate] = await db
+        .select(getTemplateSelectColumns())
+        .from(templates)
+        .where(eq(templates.id, templateId))
+        .limit(1);
       const templateRecord = existingTemplate as unknown as Record<string, unknown>;
 
       if (!existingTemplate || !(await canViewTemplateHistory(env, templateRecord, userId))) {
@@ -1121,13 +1053,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         }
       }
 
-      const [source] = await withRulesColumnFallback((includeRules) =>
-        db
-          .select(getTemplateSelectColumns(includeRules))
-          .from(templates)
-          .where(and(eq(templates.id, sourceId), isNull(templates.deleted_at)))
-          .limit(1),
-      );
+      const [source] = await db
+        .select(getTemplateSelectColumns())
+        .from(templates)
+        .where(and(eq(templates.id, sourceId), isNull(templates.deleted_at)))
+        .limit(1);
 
       if (!source || !source.is_public) {
         return jsonError('Template not found', 404);
@@ -1180,7 +1110,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         request,
         createdAt: now,
       });
-      await insertTemplateWithHistoryFallback(db, clonedTemplate, versionValues, auditEvent);
+      await insertTemplateWithHistory(db, clonedTemplate, versionValues, auditEvent);
 
       return json({ id: templateId, slug });
     }
@@ -1292,7 +1222,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       request,
       createdAt: now,
     });
-    await insertTemplateWithHistoryFallback(db, insertedTemplate, versionValues, auditEvent);
+    await insertTemplateWithHistory(db, insertedTemplate, versionValues, auditEvent);
 
     return json({ id: templateId, slug });
   }
@@ -1378,13 +1308,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError('No fields to update', 400);
     }
 
-    const [existingTemplate] = await withRulesColumnFallback((includeRules) =>
-      db
-        .select(getTemplateSelectColumns(includeRules))
-        .from(templates)
-        .where(eq(templates.id, templateId))
-        .limit(1),
-    );
+    const [existingTemplate] = await db
+      .select(getTemplateSelectColumns())
+      .from(templates)
+      .where(eq(templates.id, templateId))
+      .limit(1);
 
     if (!existingTemplate || !(await canViewTemplate(env, existingTemplate as unknown as Record<string, unknown>, userId))) {
       return jsonError('Template not found or unauthorized', 404);
@@ -1531,7 +1459,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     });
 
     try {
-      const batchResults = await updateTemplateWithHistoryFallback(
+      const batchResults = await updateTemplateWithHistory(
         db,
         updates as TemplateUpdateValues,
         templateUpdateWhere,
@@ -1569,13 +1497,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     }
 
     // First check if the template exists and belongs to the user.
-    const [existingTemplate] = await withRulesColumnFallback((includeRules) =>
-      db
-        .select(getTemplateSelectColumns(includeRules))
-        .from(templates)
-        .where(eq(templates.id, templateId))
-        .limit(1),
-    );
+    const [existingTemplate] = await db
+      .select(getTemplateSelectColumns())
+      .from(templates)
+      .where(eq(templates.id, templateId))
+      .limit(1);
 
     if (!existingTemplate || !(await canViewTemplate(env, existingTemplate as unknown as Record<string, unknown>, userId))) {
       return jsonError('Template not found or unauthorized', 404);

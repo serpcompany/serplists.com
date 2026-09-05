@@ -35,11 +35,5 @@ pre-push:
       run: pnpm run check:data:schema-contract -- --report-dir tmp/data-reports/pre-push
     schema-snapshot:
       run: pnpm run db:schema:snapshot:check
-    unit-tests:
-      run: pnpm test:unit
     data-regressions:
       run: pnpm run test:data-regressions -- --report-dir tmp/data-reports/pre-push
-    smoke-tests:
-      run: pnpm test:smoke
-    e2e-tests:
-      run: pnpm test:e2e

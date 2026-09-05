@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 const ALLOWED_PARENT_ENVIRONMENT = [
   "PATH",
   "HOME",
@@ -53,9 +55,10 @@ export function buildPlaywrightServerCommands({
   corsAllowedOrigins,
   betterAuthSecret,
   persistPath,
+  instrumentedWorkerPath,
 }) {
   const setup = isolated
-    ? "pnpm exec vite build --mode development"
+    ? `pnpm exec vite build --mode development${instrumentedWorkerPath ? ` && node scripts/data/build-instrumented-playwright-worker.mjs --output ${instrumentedWorkerPath}` : ''}`
     : null;
   const frontend = !isolated && hasDevVars
     ? `pnpm exec dotenv -e .dev.vars -- vite --host ${frontendHost} --port ${frontendPort} --strictPort`
@@ -67,8 +70,10 @@ export function buildPlaywrightServerCommands({
     ? " --env-file tests/fixtures/playwright-safe.env"
     : hasDevVars ? " --env-file .dev.vars" : "";
   const persist = persistPath ? ` --persist-to ${persistPath}` : "";
+  if (instrumentedWorkerPath && path.basename(instrumentedWorkerPath) !== '_worker.js') throw new Error('Instrumented Pages must use a test-only _worker.js asset entrypoint.');
+  const pagesDirectory = instrumentedWorkerPath ? path.dirname(instrumentedWorkerPath) : './dist';
   const api =
-    `${build}npx wrangler pages dev ./dist --local --port ${apiPort}${envFile}${persist} ` +
+    `${build}npx wrangler pages dev ${pagesDirectory} --local --port ${apiPort}${envFile}${persist} ` +
     `-b FRONTEND_URL=${frontendUrlForApi} ` +
     `-b CORS_ALLOWED_ORIGINS=${corsAllowedOrigins} ` +
     `-b BETTER_AUTH_SECRET=${betterAuthSecret} ` +

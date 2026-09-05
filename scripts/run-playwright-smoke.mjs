@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { rmSync, readdirSync, readFileSync } from "node:fs";
+import { rmSync, readdirSync, readFileSync, existsSync, mkdirSync, cpSync } from "node:fs";
 import { routeFragmentDirectory, finalizeRouteCoverage } from "./data/route-coverage-evidence.mjs";
 import { prepareSanitizedSmoke } from "./data/prepare-sanitized-smoke.mjs";
 import path from "node:path";
@@ -13,6 +13,8 @@ import {
 } from "./data/smoke-environment-lib.mjs";
 import { cleanupSmokeState } from "./data/smoke-teardown-lib.mjs";
 import { acquireSmokeRunLock } from "./data/smoke-run-lock-lib.mjs";
+import { browserGateArguments } from './data/runtime-gate-contract.mjs';
+import { normalizeMigrationRange } from './data/migration-range-lib.mjs';
 
 const DEFAULT_SMOKE_FRONTEND_PORT = 4173;
 const DEFAULT_SMOKE_API_PORT = 8788;
@@ -21,10 +23,15 @@ const NPX_COMMAND = process.platform === "win32" ? "cmd.exe" : "npx";
 const NPX_ARGS_PREFIX = process.platform === "win32" ? ["/d", "/s", "/c", "npx"] : [];
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
+const invocation = browserGateArguments(process.argv.slice(2));
 const smokePersistPath = path.join(".wrangler", "smoke-state");
 const smokePersistAbsolutePath = path.resolve(repoRoot, smokePersistPath);
 const smokeTransientAbsolutePath = path.resolve(repoRoot, ".wrangler", "tmp");
 const smokeLockAbsolutePath = path.resolve(repoRoot, ".wrangler", "smoke-state.lock");
+const instrumentedWorkerPath = path.join('tmp', 'playwright-pages-runtime', '_worker.js');
+const instrumentedWorkerAbsolutePath = path.resolve(repoRoot, instrumentedWorkerPath);
+const instrumentedPagesDirectory = path.dirname(instrumentedWorkerAbsolutePath);
+let ownsInstrumentedPagesDirectory = false;
 const teardownReportPath = path.resolve(
   repoRoot,
   process.env.PLAYWRIGHT_TEARDOWN_REPORT ?? "tmp/data-reports/browser-smoke-teardown.json",
@@ -32,8 +39,12 @@ const teardownReportPath = path.resolve(
 const env = buildSmokeChildEnvironment(process.env);
 env.DATA_REGRESSION_START_COMMIT ??= execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).trim();
 const migrationFiles = readdirSync(path.join(repoRoot, 'db/migrations')).filter(name => /^\d+.*\.sql$/.test(name)).sort();
-env.DATA_REGRESSION_MIGRATION_FROM ??= migrationFiles[0];
-env.DATA_REGRESSION_MIGRATION_TO ??= migrationFiles.at(-1);
+const selectedRange = normalizeMigrationRange({ from: env.DATA_REGRESSION_MIGRATION_FROM ?? null, to: env.DATA_REGRESSION_MIGRATION_TO ?? null });
+env.DATA_REGRESSION_MIGRATION_FROM = selectedRange.from ?? 'none';
+env.DATA_REGRESSION_MIGRATION_TO = selectedRange.to ?? 'none';
+env.PLAYWRIGHT_JSON_REPORT ??= path.join(repoRoot, 'tmp/data-reports/browser-smoke-playwright.json');
+env.PLAYWRIGHT_INSTRUMENTED_WORKER_PATH = instrumentedWorkerPath;
+env.PLAYWRIGHT_ROUTE_QUERY_EVIDENCE = invocation.gating ? '1' : '0';
 
 function parsePort(value, fallback) {
   const port = Number(value);
@@ -53,6 +64,15 @@ function run(command, args, options = {}) {
     },
     stdio: "inherit",
   });
+}
+
+function cleanupInstrumentedWorker() {
+  const tmpRoot = path.join(repoRoot, 'tmp') + path.sep;
+  if (!instrumentedWorkerAbsolutePath.startsWith(tmpRoot)) throw new Error('Refusing to remove instrumented Worker outside repository tmp/');
+  if (ownsInstrumentedPagesDirectory) {
+    rmSync(instrumentedPagesDirectory, { recursive: true, force: true });
+    ownsInstrumentedPagesDirectory = false;
+  }
 }
 
 function prepareSmokeD1() {
@@ -137,6 +157,9 @@ const releaseSmokeLock = env.PLAYWRIGHT_SMOKE_LOCK_HELD === "1"
   ? () => {}
   : await acquireSmokeRunLock({ lockPath: smokeLockAbsolutePath });
 try {
+  if (existsSync(instrumentedPagesDirectory)) throw new Error('Refusing to overwrite an existing test Pages runtime directory.');
+  mkdirSync(instrumentedPagesDirectory, {recursive:true});
+  ownsInstrumentedPagesDirectory = true;
   run(process.execPath, ['--test', 'scripts/data/route-coverage.node-test.mjs']);
   const fragments = path.resolve(repoRoot, routeFragmentDirectory(env));
   if (!fragments.startsWith(path.join(repoRoot, 'tmp') + path.sep)) throw new Error('Route coverage artifacts must stay under repository tmp/');
@@ -146,6 +169,11 @@ try {
   const ledger = JSON.parse(ledgerOutput)[0].results.map(row => row.name);
   if (JSON.stringify(ledger) !== JSON.stringify(migrationFiles)) throw new Error('Real route database migration ledger does not match the full repository chain');
   env.PLAYWRIGHT_ROUTE_LEDGER_JSON = JSON.stringify(ledger.map(name => ({ name, sha256: createHash('sha256').update(readFileSync(path.join(repoRoot, 'db/migrations', name))).digest('hex') })));
+  // Full E2E includes the historical local Admin/SERP personas. Seed only this
+  // freshly migrated isolated target, after sanitized-state capture, never dev D1.
+  for (const fixture of ['db/seeds/test-data.sql', 'db/seeds/official-templates.sql', 'db/seeds/official-local-login.sql']) {
+    run(NPX_COMMAND, [...NPX_ARGS_PREFIX, 'wrangler', 'd1', 'execute', DATABASE_NAME, '--local', '--persist-to', smokePersistPath, '--file', fixture, '--yes']);
+  }
   run(NPX_COMMAND, [...NPX_ARGS_PREFIX, "wrangler", "d1", "execute", DATABASE_NAME, "--local", "--persist-to", smokePersistPath, "--file", "scripts/data/sql/route-coverage-fixtures.sql", "--yes"]);
   const setupCommands = buildPlaywrightServerCommands({
     isolated: true,
@@ -157,13 +185,19 @@ try {
     corsAllowedOrigins: env.FRONTEND_URL,
     betterAuthSecret: "playwright-local-better-auth-secret-32-chars",
     persistPath: smokePersistPath,
+    instrumentedWorkerPath,
   });
   if (!setupCommands.setup) throw new Error("Isolated smoke setup command is missing.");
   run(process.platform === "win32" ? "cmd.exe" : "sh", [
     ...(process.platform === "win32" ? ["/d", "/s", "/c"] : ["-c"]),
     setupCommands.setup,
   ]);
+  // Advanced-mode Pages finds _worker.js inside its served asset directory.
+  // Keep this entire test-only bundle outside the production dist output.
+  const distDirectory = path.join(repoRoot, 'dist');
+  cpSync(distDirectory, instrumentedPagesDirectory, {recursive:true,filter:source => source !== path.join(distDirectory, '_worker.js')});
 } catch (error) {
+  cleanupInstrumentedWorker();
   cleanupSmokeState({
     repoRoot,
     statePath: smokePersistAbsolutePath,
@@ -177,7 +211,7 @@ try {
 const pnpmBin = "pnpm";
 const child = spawn(
   pnpmBin,
-  ["exec", "playwright", "test", "--grep", "@smoke|@real-d1", ...process.argv.slice(2)],
+  ["exec", "playwright", "test", ...invocation.args],
   {
     env,
     shell: process.platform === "win32",
@@ -187,7 +221,7 @@ const child = spawn(
 
 child.on("exit", async (code, signal) => {
   let finalCode = code ?? 1;
-  const includesRouteSuite = !process.argv.slice(2).some(arg => arg.includes('.spec.')) || process.argv.slice(2).some(arg => arg.includes('real-d1'));
+  const includesRouteSuite = invocation.gating;
   if (includesRouteSuite) {
     try {
       // Additional real Worker families contribute independently validated fragments.
@@ -206,7 +240,7 @@ child.on("exit", async (code, signal) => {
       run(NPX_COMMAND, [...NPX_ARGS_PREFIX, "wrangler", "d1", "execute", DATABASE_NAME, "--local", "--persist-to", smokePersistPath, "--file", "scripts/data/sql/route-coverage-missing-column.sql", "--yes"]);
       finalCode = await new Promise(resolve => {
         const negative = spawn(pnpmBin, ["exec", "playwright", "test", "tests/e2e/real-d1-routes.spec.ts", "--grep", "@real-d1-negative"], {
-          env: { ...env, PLAYWRIGHT_ROUTE_NEGATIVE: "1", ...(env.PLAYWRIGHT_JSON_REPORT ? { PLAYWRIGHT_JSON_REPORT: env.PLAYWRIGHT_JSON_REPORT.replace(/\.json$/, "-route-negative.json") } : {}) },
+          env: { ...env, PLAYWRIGHT_ROUTE_NEGATIVE: "1", PLAYWRIGHT_ROUTE_QUERY_EVIDENCE: "0", ...(env.PLAYWRIGHT_JSON_REPORT ? { PLAYWRIGHT_JSON_REPORT: env.PLAYWRIGHT_JSON_REPORT.replace(/\.json$/, "-route-negative.json") } : {}) },
           shell: process.platform === "win32", stdio: "inherit",
         });
         negative.on('exit', code => resolve(code ?? 1));
@@ -223,6 +257,7 @@ child.on("exit", async (code, signal) => {
     transientPaths: [smokeTransientAbsolutePath],
     reportPath: teardownReportPath,
   });
+  cleanupInstrumentedWorker();
   releaseSmokeLock();
   if (signal) {
     console.error(`Smoke tests stopped by ${signal}`);
@@ -233,6 +268,7 @@ child.on("exit", async (code, signal) => {
 });
 
 child.on("error", (error) => {
+  cleanupInstrumentedWorker();
   cleanupSmokeState({
     repoRoot,
     statePath: smokePersistAbsolutePath,

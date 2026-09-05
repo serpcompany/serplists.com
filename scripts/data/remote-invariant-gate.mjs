@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 import { migrationsInRange, migrationRangeForReport } from "./migration-range-lib.mjs";
 import { safeCanaryFailure, wrapCanarySubprocessFailure } from './canary-diagnostics.mjs';
 import { captureFullRecoveryState, fullRecoveryStatesEqual } from './recovery-restore-lib.mjs';
+import { assertRepositoryKnownLedger, privacySafeLedgerProjection } from './ledger-reporting-lib.mjs';
 
 function arg(name) { const i = process.argv.indexOf(name); return i < 0 ? null : process.argv[i + 1]; }
 const mode = process.argv[2];
@@ -25,9 +26,16 @@ const context = {
 };
 const childEnv = Object.fromEntries(["PATH", "HOME", "CI", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"].filter((key) => process.env[key]).map((key) => [key, process.env[key]]));
 let stage = 'invariant-configuration';
+let failureLedgerProjection = null;
 function expectedMigrations() {
   const files = readdirSync(new URL("../../db/migrations/", import.meta.url)).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
   return migrationsInRange(files, context.expectedMigrationRange);
+}
+function repositoryMigrations() {
+  return readdirSync(new URL("../../db/migrations/", import.meta.url)).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
+}
+function safeLedger(observedMigrations) {
+  return privacySafeLedgerProjection({ repositoryMigrations: repositoryMigrations(), observedMigrations });
 }
 function wrangler(args) {
   try { return execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "wrangler", ...args], { encoding: "utf8", env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] }); }
@@ -41,7 +49,15 @@ function verifyLiveIdentity(target) {
 function capture(target) {
   verifyLiveIdentity(target);
   stage = 'invariant-query';
-  const snapshot = captureRemoteInvariantSnapshot({ database: target.databaseName, key: process.env.INVARIANT_HMAC_KEY, runWrangler: wrangler });
+  const snapshot = captureRemoteInvariantSnapshot({
+    database: target.databaseName,
+    key: process.env.INVARIANT_HMAC_KEY,
+    runWrangler: wrangler,
+    validateLedger: (observedMigrations) => {
+      failureLedgerProjection = safeLedger(observedMigrations);
+      return assertRepositoryKnownLedger({ repositoryMigrations: repositoryMigrations(), observedMigrations });
+    },
+  });
   if (context.comparisonKind === "recovery") snapshot.fullRecovery = captureFullRecoveryState({
     key: process.env.INVARIANT_HMAC_KEY,
     query: sql => wrangler(["d1", "execute", target.databaseName, "--remote", "--json", "--command", sql]),
@@ -58,7 +74,8 @@ try {
     const evidence = { schemaVersion: 1, check: "remote-invariant-capture", verdict: "pass", ...context, snapshot };
     mkdirSync(path.dirname(state), { recursive: true });
     writeFileSync(state, JSON.stringify(evidence, null, 2) + "\n", { mode: 0o600 });
-    writeDataCheckReports({ name: "remote-invariant-capture", report: { ...evidence, migrationRange: context.expectedMigrationRange, ledger: { applied: snapshot.appliedMigrations, appliedThrough: snapshot.appliedThrough, sha256: snapshot.ledgerSha256 } }, summary: `PASS remote invariant capture commit=${context.commit} environment=${context.target.environment} binding=${context.target.binding} database=${context.target.databaseName} databaseId=${context.target.databaseId} ledger=${snapshot.appliedThrough}.`, reportDirectory });
+    const ledgerProjection = safeLedger(snapshot.appliedMigrations);
+    writeDataCheckReports({ name: "remote-invariant-capture", report: { ...evidence, migrationRange: context.expectedMigrationRange, ledger: { applied: ledgerProjection.knownMigrations, appliedThrough: ledgerProjection.appliedThrough, sha256: ledgerProjection.observedSha256, status: ledgerProjection.status, observedCount: ledgerProjection.observedCount, knownCount: ledgerProjection.knownCount, unknownCount: ledgerProjection.unknownCount } }, summary: `PASS remote invariant capture commit=${context.commit} environment=${context.target.environment} binding=${context.target.binding} database=${context.target.databaseName} databaseId=${context.target.databaseId} ledger=${ledgerProjection.appliedThrough}.`, reportDirectory });
   } else {
     stage = 'invariant-state';
     const pre = JSON.parse(readFileSync(state, "utf8"));
@@ -67,9 +84,12 @@ try {
     stage = 'invariant-comparison';
     const comparison = compareProductionInvariants({ pre: pre.snapshot.invariants, post: post.invariants, preHasEvolution: pre.snapshot.hasEvolution, postHasEvolution: post.hasEvolution, preDomain: pre.snapshot.domain, postDomain: post.domain });
     const transition = evaluateInvariantLedgerTransition({ before: pre.snapshot.appliedMigrations, after: post.appliedMigrations, comparisonKind: context.comparisonKind, expectedRange: context.expectedMigrationRange, expectedMigrations: expectedMigrations() });
+    assertRepositoryKnownLedger({ repositoryMigrations: repositoryMigrations(), observedMigrations: pre.snapshot.appliedMigrations });
+    const beforeLedger = safeLedger(pre.snapshot.appliedMigrations);
+    const afterLedger = safeLedger(post.appliedMigrations);
     const { added, removed, observedRange } = transition;
     const ledgerMatches = transition.verdict === "pass";
-    const report = { ...comparison, check: "remote-invariant-comparison", commit: context.commit, target: context.target, sourceTarget: pre.target, comparisonKind: context.comparisonKind, migrationRange: observedRange, ledger: { before: pre.snapshot.appliedMigrations, after: post.appliedMigrations, beforeSha256: pre.snapshot.ledgerSha256, afterSha256: post.ledgerSha256, added, removed, appliedThrough: post.appliedThrough, verdict: ledgerMatches ? "pass" : "fail" } };
+    const report = { ...comparison, check: "remote-invariant-comparison", commit: context.commit, target: context.target, sourceTarget: pre.target, comparisonKind: context.comparisonKind, migrationRange: observedRange, ledger: { before: beforeLedger.knownMigrations, after: afterLedger.knownMigrations, beforeSha256: beforeLedger.observedSha256, afterSha256: afterLedger.observedSha256, beforeCount: beforeLedger.observedCount, afterCount: afterLedger.observedCount, unknownCount: beforeLedger.unknownCount + afterLedger.unknownCount, status: beforeLedger.status === "known" && afterLedger.status === "known" ? "known" : "drift", added, removed, appliedThrough: afterLedger.appliedThrough, verdict: ledgerMatches ? "pass" : "fail" } };
     if (context.comparisonKind === "recovery") {
       const matches = fullRecoveryStatesEqual(pre.snapshot.fullRecovery, post.fullRecovery);
       report.fullRecovery = { before: pre.snapshot.fullRecovery, after: post.fullRecovery, verdict: matches ? "pass" : "fail" };
@@ -87,13 +107,14 @@ try {
       report.sanitizedState = binding;
     }
     if (!ledgerMatches) { report.verdict = "fail"; report.failures = [...report.failures, "migration ledger or reviewed range mismatch"]; }
-    const summary = `${report.verdict.toUpperCase()} remote invariant comparison commit=${context.commit} environment=${context.target.environment} binding=${context.target.binding} database=${context.target.databaseName} databaseId=${context.target.databaseId} migration=${observedRange.from}->${observedRange.to} ledger=${post.appliedThrough}.`;
+    const summary = `${report.verdict.toUpperCase()} remote invariant comparison commit=${context.commit} environment=${context.target.environment} binding=${context.target.binding} database=${context.target.databaseName} databaseId=${context.target.databaseId} migration=${observedRange.from}->${observedRange.to} ledger=${afterLedger.appliedThrough}.`;
     writeDataCheckReports({ name: "remote-invariant-comparison", report, summary, reportDirectory });
     if (report.verdict !== "pass") process.exitCode = 1;
   }
 } catch (error) {
   const failure = safeCanaryFailure(stage, error);
-  const report = { check: mode === "capture" ? "remote-invariant-capture" : "remote-invariant-comparison", verdict: "fail", commit: context.commit ?? "unknown", target: context.target, migrationRange: migrationRangeForReport(context.expectedMigrationRange), comparisonKind: context.comparisonKind, error: failure.message, failedStage: failure.stage, errorCode: failure.code, checks: [{ name: failure.check, verdict: 'fail' }], ...(failure.exitStatus === undefined ? {} : { exitStatus: failure.exitStatus }) };
+  const safeFailureLedger = failureLedgerProjection ? { applied: failureLedgerProjection.knownMigrations, appliedThrough: failureLedgerProjection.appliedThrough, sha256: failureLedgerProjection.observedSha256, status: failureLedgerProjection.status, observedCount: failureLedgerProjection.observedCount, knownCount: failureLedgerProjection.knownCount, unknownCount: failureLedgerProjection.unknownCount } : null;
+  const report = { check: mode === "capture" ? "remote-invariant-capture" : "remote-invariant-comparison", verdict: "fail", commit: context.commit ?? "unknown", target: context.target, migrationRange: migrationRangeForReport(context.expectedMigrationRange), comparisonKind: context.comparisonKind, error: failure.message, failedStage: failure.stage, errorCode: failure.code, checks: [{ name: failure.check, verdict: 'fail' }], ...(safeFailureLedger ? { ledger: safeFailureLedger } : {}), ...(failure.exitStatus === undefined ? {} : { exitStatus: failure.exitStatus }) };
   const summary = `BLOCKED remote invariants commit=${report.commit} environment=${context.target.environment ?? "unknown"} binding=${context.target.binding ?? "unknown"} database=${database ?? "unknown"} databaseId=${context.target.databaseId ?? "unknown"} migration=${report.migrationRange.from}->${report.migrationRange.to} stage=${failure.stage}: ${failure.code}. ${failure.message}`;
   try { writeDataCheckReports({ name: report.check, report, summary, reportDirectory }); }
   catch { console.error('Remote invariant failure report could not be persisted.'); }

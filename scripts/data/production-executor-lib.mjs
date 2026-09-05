@@ -259,7 +259,18 @@ export function assertApprovalMatchesRequest({ approval, request }) {
   const expectedAuthors = [...new Set((request?.changeProvenance?.changeAuthors ?? []).map(normalizeLogin))].sort();
   if (!approver || !authors.size || authors.has(null) || authors.has(approver)) throw new Error("Production approval is not independent of every change author.");
   if (request?.classification !== approval.classification || JSON.stringify([...authors].sort()) !== JSON.stringify(expectedAuthors)) throw new Error("Production approval classification or change authors do not match the reviewed request.");
-  if (["backfill", "destructive", "irreversible"].includes(request.classification) && (typeof approval.decision !== "string" || approval.decision.trim().length < 20)) throw new Error("Production approval lacks the written risky-change decision required by the reviewed request.");
+  const reference = approval.reviewReference;
+  if (reference?.repository !== "serpcompany/serplists.com" || !/^\d+$/.test(reference?.runId ?? "") || !/^\d+$/.test(reference?.runAttempt ?? "") || !/^[0-9a-f]{40}$/.test(reference?.commit ?? '') || reference?.commit !== request?.commit || reference?.environment !== "production") {
+    throw new Error("Production approval lacks its canonical protected review reference.");
+  }
+  if (["backfill", "destructive", "irreversible"].includes(request.classification) &&
+      (approval.riskDecision?.policy !== "meaningful-written-risk-reason-v1" ||
+       !/^[0-9a-f]{64}$/.test(approval.riskDecision?.sha256 ?? "") ||
+       !Number.isInteger(approval.riskDecision?.characterCount) || !Number.isInteger(approval.riskDecision?.wordCount) ||
+       approval.riskDecision?.characterCount < 20 || approval.riskDecision?.wordCount < 3 ||
+       !/^[0-9a-f]{64}$/.test(approval.decisionSha256 ?? ""))) {
+    throw new Error("Production approval lacks the written risky-change decision required by the reviewed request.");
+  }
   return approval;
 }
 
@@ -358,7 +369,15 @@ export function validateApprovalEvidence({
   changeAuthors,
   repositoryOwnerApprover,
   ownerPermission,
+  recoveryToken,
+  reviewContext,
 }) {
+  if (reviewContext?.repository !== "serpcompany/serplists.com" || !/^\d+$/.test(reviewContext?.runId ?? "") || !/^\d+$/.test(reviewContext?.runAttempt ?? "") || !/^[0-9a-f]{40}$/.test(reviewContext?.commit ?? "")) {
+    throw new Error("Protected production approval requires the canonical GitHub workflow review reference.");
+  }
+  if (typeof recoveryToken !== "string" || !/^recovery:\d+:\d+:\d+:[0-9a-f]{64}$/.test(recoveryToken)) {
+    throw new Error("Protected production approval requires the exact verified recovery receipt token.");
+  }
   const authors = new Set((changeAuthors ?? []).map(normalizeLogin));
   if (!authors.size || authors.has(null)) throw new Error("Verified change author provenance is required.");
   const approved = (reviews ?? []).filter(isProductionHumanApproval);
@@ -381,7 +400,15 @@ export function validateApprovalEvidence({
       : "Independent production approval from a non-author is missing.");
   }
   const decision = String(independent.comment ?? "").trim();
-  if (["backfill", "destructive", "irreversible"].includes(classification) && decision.length < 20) {
+  const tokenOccurrences = decision.split(recoveryToken).length - 1;
+  if (tokenOccurrences !== 1) {
+    throw new Error("Production approval must name the exact verified recovery receipt once.");
+  }
+  const riskReason = decision.replace(recoveryToken, " ").replace(/\s+/g, " ").trim();
+  const riskWordCount = [...new Intl.Segmenter("und", { granularity: "word" }).segment(riskReason)]
+    .filter((segment) => segment.isWordLike).length;
+  const meaningfulRiskReason = riskReason.length >= 20 && riskWordCount >= 3;
+  if (["backfill", "destructive", "irreversible"].includes(classification) && !meaningfulRiskReason) {
     throw new Error(`${classification} approval requires a written production review decision and recovery evidence.`);
   }
   if (classification === "irreversible") {
@@ -393,6 +420,7 @@ export function validateApprovalEvidence({
     const ownerReview = (reviews ?? []).filter(isProductionOwnerApproval)
       .find((review) => normalizeLogin(review.user.login) === owner);
     if (!ownerReview) throw new Error("Irreversible migration requires repository-owner approval bound to production.");
+    if (String(ownerReview.comment ?? "").split(recoveryToken).length - 1 !== 1) throw new Error("Irreversible repository-owner approval must name the exact verified recovery receipt once.");
     if (owner === approver) throw new Error("Irreversible migration requires a distinct additional repository-owner approver.");
   }
   return {
@@ -400,7 +428,15 @@ export function validateApprovalEvidence({
     dispatcher: normalizeLogin(actor),
     changeAuthors: [...authors].sort(),
     classification,
-    decision,
+    reviewReference: { ...reviewContext, environment: "production" },
+    decisionSha256: signatureFor(decision),
+    riskDecision: {
+      policy: "meaningful-written-risk-reason-v1",
+      sha256: signatureFor(riskReason),
+      characterCount: riskReason.length,
+      wordCount: riskWordCount,
+    },
+    recoveryTokenSha256: signatureFor(recoveryToken),
     environment: "production",
     ...(classification === "irreversible" ? { repositoryOwnerApprover: owner } : {}),
     source: "github-environment-review",

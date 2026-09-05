@@ -17,11 +17,14 @@ const gitCommit = "0123456789abcdef0123456789abcdef01234567";
 const legacyContext = { migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, sourceSchema: "0023_add_sitemap_revision_state.sql" };
 const currentContext = { migrationRange: { from: null, to: null }, sourceSchema: "0024_safe_template_evolution.sql" };
 function generate(overrides = {}) { return generateSanitizedRehearsalArtifact({ repoRoot, rawExport, sourceDatabaseId, sourceDate: "2026-09-05", gitCommit, issueNumber: 95, requestedApproverIdentity: "@devinschumacher", generatedAt, retentionDeadline, ...legacyContext, ...overrides }); }
+function addSourceLedgerTable(database) { database.exec("CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)"); }
 
 // Synthetic source fixture, exported from actual SQLite migration results.
 // This is additional edge-case testing, not observed production coverage.
 function exportRows(database) {
-  return ["users", "templates", "checklist_runs"].flatMap((table) => database.prepare(`SELECT * FROM ${table}`).all().map((row) =>
+  const tables = ["users", "templates", "checklist_runs"];
+  if (database.prepare("SELECT name FROM sqlite_schema WHERE name='d1_migrations'").get()) tables.push("d1_migrations");
+  return tables.flatMap((table) => database.prepare(`SELECT * FROM ${table}`).all().map((row) =>
     `INSERT INTO ${table} (${Object.keys(row).join(",")}) VALUES (${Object.values(row).map((value) => value == null ? "NULL" : typeof value === "number" ? value : `'${String(value).replaceAll("'", "''")}'`).join(",")});`
   )).join("\n");
 }
@@ -29,8 +32,10 @@ function exportRows(database) {
 it("accepts an actual post0024 export for application-only rehearsal without inventing legacy shapes", () => {
   const database = replayMigrations({ through: "0023_add_sitemap_revision_state.sql" });
   try {
+    addSourceLedgerTable(database);
     database.exec(rawExport);
     database.exec(readFileSync(path.join(repoRoot, "db/migrations/0024_safe_template_evolution.sql"), "utf8"));
+    database.prepare("INSERT INTO d1_migrations(id,name,applied_at) VALUES (24,?,?)").run("0024_safe_template_evolution.sql", "2026-09-05");
     const artifact = normalizeRehearsalDataExport({ repoRoot, rawExport: exportRows(database), migrationRange: { from: null, to: null }, sourceSchema: "0024_safe_template_evolution.sql" });
     expect(artifact.coveredShapes).not.toContain("legacy-flat-items");
     expect(artifact.sql).toContain("content_version");
@@ -76,6 +81,75 @@ describe("source-derived rehearsal sanitizer", () => {
     for (const input of ["CREATE TABLE stolen(value TEXT); INSERT INTO stolen VALUES ('x');", "INSERT INTO unknown_customer_table VALUES ('x');", "INSERT INTO users (id,email) VALUES ('only-user','nobody');", rawExport.replace(/INSERT INTO checklist_runs[\s\S]*$/m, "")]) expect(() => normalizeRehearsalDataExport({ repoRoot, rawExport: input, ...legacyContext })).toThrow();
   });
 
+  it.each([false, true])("preserves SQL-like customer strings and removes only real sqlite_sequence statements (current=%s)", (current) => {
+    const context = current ? currentContext : legacyContext;
+    const source = syntheticSourceDatabase(repoRoot, current);
+    const phrase = "customer, value; INSERT INTO sqlite_sequence VALUES('fake', 99); -- not a comment\n/* still customer text */";
+    const customerItems = JSON.stringify([{ id: "section", title: phrase, items: [{ id: "item", title: phrase, isCompleted: false }] }]);
+    try {
+      source.prepare("UPDATE users SET email=?, name=?, avatar_url=?, username=?, display_username=?, affiliate_code=?").run(...Array(6).fill(phrase));
+      source.prepare("UPDATE templates SET title=?, description=?, items=?, category=?, tags=?, seo_title=?, seo_description=?, rules=?").run(
+        phrase, phrase, customerItems, JSON.stringify([phrase]), JSON.stringify([phrase]), phrase, phrase, JSON.stringify([{ value: phrase }]),
+      );
+      source.prepare("UPDATE templates SET slug=? || id").run(phrase);
+      source.prepare("UPDATE checklist_runs SET title=?, items=?, share_token=?").run(phrase, customerItems, phrase);
+      const exported = [
+        "-- INSERT INTO unknown_customer_table VALUES ('comment only');",
+        "/* CREATE TABLE comment_only(value TEXT); */",
+        exportSyntheticRows(source),
+        "DELETE FROM sqlite_sequence;",
+        "INSERT INTO `sqlite_sequence` VALUES('d1_migrations', 999);",
+      ].join("\n");
+      const artifact = normalizeRehearsalDataExport({ repoRoot, rawExport: exported, ...context });
+      expect(artifact.sourceCounts).toEqual({ users: 1, templates: 2, checklistRuns: 2 });
+      expect(artifact.selectedCounts).toEqual({ users: 1, templates: 2, checklistRuns: 2 });
+      expect(artifact.sql).not.toContain(phrase);
+    } finally { source.close(); }
+  });
+
+  it("requires the complete ordered source ledger even when a caller supplies names and the correct export hash", () => {
+    const source = syntheticSourceDatabase(repoRoot, false);
+    try {
+      const complete = exportSyntheticRows(source);
+      const withoutLedger = exportSyntheticRows(source, { includeLedger: false });
+      const names = source.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((row) => row.name);
+      const sourceExportSha256 = createHash("sha256").update(withoutLedger).digest("hex");
+      expect(() => normalizeRehearsalDataExport({ repoRoot, rawExport: withoutLedger, ...legacyContext })).toThrow(/ledger/i);
+      expect(() => normalizeRehearsalDataExport({ repoRoot, rawExport: withoutLedger, sourceLedgerCapture: { sourceExportSha256, names }, ...legacyContext })).toThrow(/ledger/i);
+      expect(() => normalizeRehearsalDataExport({ repoRoot, rawExport: withoutLedger, sourceLedgerCapture: { sourceExportSha256: "0".repeat(64), names }, ...legacyContext })).toThrow(/ledger/i);
+      expect(() => normalizeRehearsalDataExport({ repoRoot, rawExport: complete.replace("0023_add_sitemap_revision_state.sql", "0023_wrong.sql"), ...legacyContext })).toThrow(/ledger/i);
+      expect(() => normalizeRehearsalDataExport({ repoRoot, rawExport: complete.replace(/^INSERT INTO d1_migrations[^\n]+\n/m, ""), ...legacyContext })).toThrow(/ledger/i);
+    } finally { source.close(); }
+  });
+
+  it("accepts Wrangler-style replace/char values and quoted INSERT metadata", () => {
+    const source = syntheticSourceDatabase(repoRoot, false);
+    try {
+      source.prepare("UPDATE users SET name='encoded-marker'").run();
+      const encoded = exportSyntheticRows(source)
+        .replace("INSERT INTO users (", "INSERT OR REPLACE INTO [users] (")
+        .replace("'encoded-marker'", "replace('customer\\nINSERT INTO sqlite_sequence, -- comment; /* text */', '\\n', char(10))");
+      const artifact = normalizeRehearsalDataExport({ repoRoot, rawExport: encoded, ...legacyContext });
+      expect(artifact.sourceCounts).toEqual({ users: 1, templates: 2, checklistRuns: 2 });
+    } finally { source.close(); }
+  });
+
+  it("accepts full positional current exports but rejects omitted evolution columns", () => {
+    const source = syntheticSourceDatabase(repoRoot, true);
+    try {
+      const explicit = exportSyntheticRows(source);
+      const positional = explicit.replace(/^(INSERT INTO [a-z_]+) \([^\n]+?\) VALUES/gm, '$1 VALUES');
+      expect(positional).not.toBe(explicit);
+      const expected = normalizeRehearsalDataExport({ repoRoot, rawExport: explicit, ...currentContext });
+      expect(normalizeRehearsalDataExport({ repoRoot, rawExport: positional, ...currentContext }).sql).toBe(expected.sql);
+      const omitted = positional.replace(/^(INSERT INTO templates VALUES \()[^,]+,/m, '$1');
+      expect(() => normalizeRehearsalDataExport({ repoRoot, rawExport: omitted, ...currentContext })).toThrow();
+      const omittedName = explicit.replace(/^(INSERT INTO templates \([^\n]+),\s*content_version\)/m, '$1)');
+      expect(omittedName).not.toBe(explicit);
+      expect(() => normalizeRehearsalDataExport({ repoRoot, rawExport: omittedName, ...currentContext })).toThrow();
+    } finally { source.close(); }
+  });
+
   it("does not include authentication, billing, password, session, or share-token material", () => {
     const sql = generate().sql;
     expect(sql).not.toMatch(/INSERT INTO (?:account|session|verification|stripe_)/i);
@@ -88,8 +162,10 @@ describe("source-derived rehearsal sanitizer", () => {
   it("preserves current source versions and retired data; rejects rehashed privacy and metadata tampering", () => {
     const db = replayMigrations({ through: legacyContext.sourceSchema });
     try {
+      addSourceLedgerTable(db);
       db.exec(rawExport);
       db.exec(readFileSync(path.join(repoRoot, "db/migrations", currentContext.sourceSchema), "utf8"));
+      db.prepare("INSERT INTO d1_migrations(id,name,applied_at) VALUES (24,?,?)").run(currentContext.sourceSchema, "2026-09-05");
       db.exec("UPDATE checklist_runs SET revision=9, template_version=3, retired_items='[{\"id\":\"retired-source-id\",\"notes\":\"private retired note\"}]'");
       const artifact = generate({ ...currentContext, rawExport: exportRows(db) });
       expect(artifact.manifest.selection.absentSourceShapes).toContain("legacy-flat-items");
@@ -131,6 +207,7 @@ describe("source-derived rehearsal sanitizer", () => {
   it("reports absent legacy edge cases honestly while retaining separate synthetic requirements", () => {
     const db = replayMigrations({ through: legacyContext.sourceSchema });
     try {
+      addSourceLedgerTable(db);
       db.exec(rawExport);
       db.exec("UPDATE templates SET items='[]'; UPDATE checklist_runs SET items='[]'");
       const artifact = generate({ rawExport: exportRows(db) });

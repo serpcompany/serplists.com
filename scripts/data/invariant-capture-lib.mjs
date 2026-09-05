@@ -303,11 +303,11 @@ export function compareProductionInvariants({ pre, post, preHasEvolution = true,
 
 const OWNER_SQL = "SELECT 'template' kind,id,user_id,CASE WHEN deleted_at IS NULL THEN 'active' ELSE 'deleted' END deleted_state FROM templates UNION ALL SELECT 'run',id,user_id,CASE WHEN deleted_at IS NULL THEN 'active' ELSE 'deleted' END FROM checklist_runs";
 
-export function captureRemoteInvariantSnapshot({ database, key, runWrangler }) {
-  const ledger = parseAppliedMigrationLedger(runWrangler([
+export function captureRemoteInvariantSnapshot({ database, key, runWrangler, validateLedger = (ledger) => ledger }) {
+  const ledger = validateLedger(parseAppliedMigrationLedger(runWrangler([
     "d1", "execute", database, "--remote", "--json", "--command",
     "SELECT id, name FROM d1_migrations ORDER BY id",
-  ]));
+  ])));
   const selected = selectInvariantSqlFiles({ appliedMigrations: ledger });
   const combined = selected.flatMap((definition) => {
     const parsed = JSON.parse(runWrangler([

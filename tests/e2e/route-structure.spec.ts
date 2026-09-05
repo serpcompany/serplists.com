@@ -65,7 +65,8 @@ async function mockAuthenticatedRouteApi(page: Page) {
 
 async function signInAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: /fill admin/i }).click();
+  await page.locator('#email').fill('admin@test.com');
+  await page.locator('#password').fill('password123');
   await page.getByRole('button', { name: /^sign in$/i }).click();
   await expect(page).toHaveURL(/\/dashboard\/settings$/, { timeout: 30_000 });
 }

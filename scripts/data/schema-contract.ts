@@ -30,6 +30,7 @@ export interface DrizzleContract {
 
 export interface DatabaseCatalog {
   tables: Record<string, {
+    sql?: string;
     columns: Array<{ name: string; type: string; notNull: boolean; defaultValue: string | null; primaryKey: number }>;
     indexes: Array<{ name: string; unique: boolean; partial: boolean; columns: string[]; predicate: string | null }>;
     foreignKeys: Array<{ columns: string[]; referencedTable: string; referencedColumns: string[]; onUpdate: string; onDelete: string }>;
@@ -87,7 +88,7 @@ function relationFromTuple(tuple: readonly string[]) {
 export function parseRemoteTableInventory(output: string) {
   const parsed = JSON.parse(output);
   const rows = (Array.isArray(parsed) ? parsed : [parsed]).flatMap((entry) => entry?.results ?? []);
-  const names = rows.map((row) => row?.name).filter((name) => typeof name === "string" && !name.startsWith("sqlite_")).sort();
+  const names = rows.map((row) => row?.name).filter((name) => typeof name === "string" && !name.startsWith("sqlite_") && name !== "_cf_METADATA").sort();
   if (!names.length) throw new Error("Remote table inventory is empty or malformed.");
   return [...new Set(names)];
 }
@@ -293,6 +294,96 @@ export function normalizeSql(sql: unknown, preserveQuotes = false): string | nul
   return normalized;
 }
 
+export function normalizeTableDefinition(sql: unknown): string | null {
+  if (sql == null) return null;
+  const source = withoutSqlComments(String(sql));
+  const tokens: Array<{ value: string; wordLike: boolean }> = [];
+  let index = 0;
+
+  while (index < source.length) {
+    const character = source[index];
+    if (/\s/.test(character)) {
+      index++;
+      continue;
+    }
+    if (["'", '"', '`', '['].includes(character)) {
+      const end = character === '[' ? ']' : character;
+      let value = character;
+      index++;
+      let terminated = false;
+      while (index < source.length) {
+        const current = source[index];
+        value += current;
+        index++;
+        if (current === end) {
+          if (end !== ']' && source[index] === end) {
+            value += source[index];
+            index++;
+          } else {
+            terminated = true;
+            break;
+          }
+        }
+      }
+      if (!terminated) throw new Error('Unterminated quoted token in SQL table definition.');
+      tokens.push({ value, wordLike: true });
+      continue;
+    }
+    const word = source.slice(index).match(/^[a-z0-9_$]+/i)?.[0];
+    if (word) {
+      tokens.push({ value: word.toLowerCase(), wordLike: true });
+      index += word.length;
+      continue;
+    }
+    const operator = ['->>', '||', '<<', '>>', '<=', '>=', '<>', '!=', '==', '->']
+      .find((candidate) => source.startsWith(candidate, index));
+    if (operator) {
+      tokens.push({ value: operator, wordLike: false });
+      index += operator.length;
+      continue;
+    }
+    tokens.push({ value: character.toLowerCase(), wordLike: false });
+    index++;
+  }
+
+  const canonicalTokens: typeof tokens = [];
+  for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
+    const token = tokens[tokenIndex];
+    if (token.value === 'default') {
+      let cursor = tokenIndex + 1;
+      let openingParentheses = 0;
+      while (tokens[cursor]?.value === '(') {
+        openingParentheses++;
+        cursor++;
+      }
+      if (openingParentheses > 0 && /^current_(?:date|time|timestamp)$/.test(tokens[cursor]?.value ?? '')) {
+        const defaultValue = tokens[cursor];
+        cursor++;
+        let closingParentheses = 0;
+        while (tokens[cursor]?.value === ')' && closingParentheses < openingParentheses) {
+          closingParentheses++;
+          cursor++;
+        }
+        if (closingParentheses === openingParentheses) {
+          canonicalTokens.push(token, defaultValue);
+          tokenIndex = cursor - 1;
+          continue;
+        }
+      }
+    }
+    canonicalTokens.push(token);
+  }
+
+  let normalized = '';
+  let previousWordLike = false;
+  for (const token of canonicalTokens) {
+    if (normalized && previousWordLike && token.wordLike) normalized += ' ';
+    normalized += token.value;
+    previousWordLike = token.wordLike;
+  }
+  return normalized.replace(/;$/, '');
+}
+
 function normalizeDefault(sql: unknown) {
   // Double-quoted SQLite defaults can be string literals; retain their content.
   return normalizeSql(sql, true);
@@ -302,7 +393,7 @@ function canonicalizeCatalog(catalog: DatabaseCatalog): DatabaseCatalog {
   const byName = (left: { name: string }, right: { name: string }) => left.name.localeCompare(right.name, "en");
   return {
     tables: Object.fromEntries(Object.entries(catalog.tables).sort(([a], [b]) => a.localeCompare(b, "en")).map(([name, table]) => [name, {
-      ...table,
+      ...(table.sql === undefined ? {} : { sql: normalizeTableDefinition(table.sql) ?? '' }),
       columns: table.columns.map(column => ({ ...column, defaultValue: normalizeDefault(column.defaultValue) })),
       indexes: [...table.indexes].sort(byName),
       foreignKeys: [...table.foreignKeys].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b), "en")),
@@ -350,9 +441,11 @@ function pragmaBoolean(value: unknown) {
 }
 
 export function inspectDatabase(database: Database): DatabaseCatalog {
-  const tableNames = (database.prepare(
-    "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-  ).all() as Array<{ name: string }>).map((row) => row.name);
+  const tableDefinitions = database.prepare(
+    "SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+  ).all() as Array<{ name: string; sql: string }>;
+  const tableNames = tableDefinitions.map((row) => row.name);
+  const tableSql = new Map(tableDefinitions.map((row) => [row.name, normalizeTableDefinition(row.sql) ?? '']));
 
   const tables = Object.fromEntries(tableNames.map((tableName) => {
     const escapedTableName = tableName.replaceAll("'", "''");
@@ -394,7 +487,7 @@ export function inspectDatabase(database: Database): DatabaseCatalog {
         onDelete: String(rows[0]?.on_delete ?? "no action").toLowerCase(),
       };
     });
-    return [tableName, { columns, indexes, foreignKeys }];
+    return [tableName, { sql: tableSql.get(tableName) ?? '', columns, indexes, foreignKeys }];
   }));
 
   const triggers = (database.prepare(
@@ -467,6 +560,12 @@ export function catalogFromPragmaResults(tableNames: string[], results: PragmaRe
     };
   });
   const objects = results.at(-1)?.results ?? [];
+  const tableDefinitions = new Map(objects
+    .filter((row) => row.object_type === "table" && typeof row.name === "string" && typeof row.sql === "string")
+    .map((row) => [String(row.name), normalizeTableDefinition(row.sql) ?? '']));
+  for (const name of tableNames) {
+    if (tableDefinitions.has(name)) tables[name].sql = tableDefinitions.get(name);
+  }
   const triggers = objects.filter((row) => row.object_type === "trigger").map((row) => ({ name: String(row.name), table: String(row.table_name), sql: normalizeSql(row.sql) ?? "" }));
   const views = objects.filter((row) => row.object_type === "view").map((row) => ({ name: String(row.name), sql: normalizeSql(row.sql) ?? "" }));
   return canonicalizeCatalog({ tables, triggers, views });

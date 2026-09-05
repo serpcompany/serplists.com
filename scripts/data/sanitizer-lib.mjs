@@ -80,20 +80,126 @@ export function loadSanitizerPolicy({ repoRoot }) {
   return { ...JSON.parse(readFileSync(path.join(repoRoot, "scripts/data/sanitizer-policy.json"), "utf8")), __repoRoot: repoRoot };
 }
 
-function assertRawDataOnlyExport(rawExport) {
-  if (/\b(?:CREATE|ALTER|DROP)\s+(?:TABLE|INDEX|TRIGGER|VIEW)\b/i.test(rawExport)) throw new Error("Sanitizer source must be a Wrangler data-only export created with --no-schema.");
-  if (!/\bINSERT\s+INTO\b/i.test(rawExport)) throw new Error("Sanitizer source did not contain data-export INSERT statements.");
-  const tables = [...rawExport.matchAll(/\bINSERT\s+INTO\s+["'`]?([a-z0-9_]+)/gi)].map((match) => match[1].toLowerCase());
-  const unexpected = tables.find((table) => !SOURCE_TABLES.has(table));
-  if (unexpected) throw new Error(`Rehearsal data-only export contains an unexpected table: ${unexpected}.`);
+function invalidSourceSql(message = "Sanitizer source is not a supported Wrangler data-only SQL export.") { throw new Error(message); }
+
+// Parse only the data-export envelope needed here while retaining the original
+// SQL bytes. Quoted values and comments are opaque, so SQL-looking customer
+// content cannot become statement metadata or a statement delimiter.
+function parseDataExportStatements(sql) {
+  const statements = [];
+  let segmentStart = 0, statementStart = null, tokens = [], i = 0;
+  const add = (value, kind, start) => {
+    if (statementStart === null) statementStart = start;
+    tokens.push({ value, kind });
+  };
+  const finish = (end) => {
+    if (!tokens.length || statementStart === null) invalidSourceSql();
+    statements.push({ prefix: sql.slice(segmentStart, statementStart), sql: sql.slice(statementStart, end), tokens });
+    segmentStart = end; statementStart = null; tokens = [];
+  };
+  while (i < sql.length) {
+    const start = i, char = sql[i];
+    if (/\s/.test(char)) { i++; continue; }
+    if (sql.startsWith("--", i)) {
+      const end = sql.indexOf("\n", i + 2);
+      i = end < 0 ? sql.length : end + 1;
+      continue;
+    }
+    if (sql.startsWith("/*", i)) {
+      const end = sql.indexOf("*/", i + 2);
+      if (end < 0) invalidSourceSql("Sanitizer source contains an unterminated SQL comment.");
+      i = end + 2;
+      continue;
+    }
+    if ("'\"`[".includes(char)) {
+      const close = char === "[" ? "]" : char;
+      i++;
+      let closed = false;
+      while (i < sql.length) {
+        if (sql[i++] !== close) continue;
+        if (char !== "[" && sql[i] === close) { i++; continue; }
+        closed = true;
+        break;
+      }
+      if (!closed) invalidSourceSql("Sanitizer source contains an unterminated SQL quote.");
+      add(sql.slice(start, i), char === "'" ? "string" : "identifier", start);
+      continue;
+    }
+    const word = /^[A-Za-z_][A-Za-z_0-9$]*/.exec(sql.slice(i));
+    if (word) { add(word[0].toUpperCase(), "word", start); i += word[0].length; continue; }
+    const number = /^(?:0[xX][0-9a-fA-F]+|\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(sql.slice(i));
+    if (number) { add(number[0], "number", start); i += number[0].length; continue; }
+    if (char === ";") { finish(++i); continue; }
+    if (char === "\0") invalidSourceSql("Sanitizer source contains a NUL byte.");
+    add(char, "symbol", start); i++;
+  }
+  if (tokens.length) finish(sql.length);
+  return { statements, tail: sql.slice(segmentStart) };
 }
 
-function assertSourceColumns(sql, sourceProfile) {
+function identifier(token) {
+  if (!token || !["word", "identifier", "string"].includes(token.kind)) invalidSourceSql();
+  if (token.kind === "word") return token.value.toLowerCase();
+  const close = token.value[0] === "[" ? "]" : token.value[0];
+  return token.value.slice(1, -1).replaceAll(close + close, close).toLowerCase();
+}
+
+function insertMetadata(statement) {
+  const tokens = statement.tokens;
+  if (tokens[0]?.kind !== "word" || tokens[0].value !== "INSERT") return null;
+  let index = 1;
+  if (tokens[index]?.value === "OR") {
+    if (!["ROLLBACK", "ABORT", "REPLACE", "FAIL", "IGNORE"].includes(tokens[index + 1]?.value)) invalidSourceSql();
+    index += 2;
+  }
+  if (tokens[index]?.value !== "INTO") invalidSourceSql();
+  const table = identifier(tokens[++index]);
+  index++;
+  const columns = [];
+  if (tokens[index]?.value === "(") {
+    index++;
+    while (tokens[index]?.value !== ")") {
+      columns.push(identifier(tokens[index++]));
+      if (tokens[index]?.value === ",") index++;
+      else if (tokens[index]?.value !== ")") invalidSourceSql();
+    }
+    index++;
+  }
+  if (tokens[index]?.value !== "VALUES") invalidSourceSql("Sanitizer source INSERT is not a literal Wrangler VALUES statement.");
+  return { table, columns };
+}
+
+function isSqliteSequenceStatement(statement) {
+  const insert = insertMetadata(statement);
+  if (insert) return insert.table === "sqlite_sequence";
+  const tokens = statement.tokens;
+  return tokens.length === 3 && tokens[0]?.value === "DELETE" && tokens[1]?.value === "FROM" && identifier(tokens[2]) === "sqlite_sequence";
+}
+
+function assertRawDataOnlyExport(parsed) {
+  const inserts = [];
+  for (const statement of parsed.statements) {
+    const insert = insertMetadata(statement);
+    if (insert) { inserts.push(insert); continue; }
+    const first = statement.tokens[0]?.value;
+    if (isSqliteSequenceStatement(statement) || ["PRAGMA", "BEGIN", "COMMIT", "END"].includes(first)) continue;
+    if (["CREATE", "ALTER", "DROP"].includes(first)) throw new Error("Sanitizer source must be a Wrangler data-only export created with --no-schema.");
+    invalidSourceSql();
+  }
+  if (!inserts.length) throw new Error("Sanitizer source did not contain data-export INSERT statements.");
+  const unexpected = inserts.find(({ table }) => !SOURCE_TABLES.has(table));
+  if (unexpected) throw new Error(`Rehearsal data-only export contains an unexpected table: ${unexpected.table}.`);
+  return inserts;
+}
+
+function assertSourceColumns(inserts, sourceProfile) {
   if (sourceProfile.profile !== "current-template-run-v1") return;
-  for (const match of sql.matchAll(/\bINSERT\s+INTO\s+["'`]?([a-z_]+)["'`]?\s*\(([^)]+)\)\s*VALUES/gi)) {
-    const required = { templates: ["content_version"], checklist_runs: ["template_version", "revision", "retired_items"] }[match[1].toLowerCase()];
-    const columns = match[2].split(",").map((column) => column.trim().replaceAll(/["'`]/g, "").toLowerCase());
-    if (required?.some((column) => !columns.includes(column))) throw new Error("Production-shaped current source omits evolution columns; defaults cannot substitute for source values.");
+  for (const { table, columns } of inserts) {
+    const required = { templates: ["content_version"], checklist_runs: ["template_version", "revision", "retired_items"] }[table];
+    // A positional VALUES insert must supply every writable table column;
+    // SQLite enforces that arity during import. Explicit column lists can omit
+    // defaulted evolution fields, so those lists need this additional check.
+    if (columns.length && required?.some((column) => !columns.includes(column))) throw new Error("Production-shaped current source omits evolution columns; defaults cannot substitute for source values.");
   }
 }
 
@@ -258,7 +364,8 @@ function assertSanitizedJson(value) {
 }
 
 function assertSanitizedArtifactRows({ repoRoot, sql, sourceProfile }) {
-  assertSourceColumns(sql, sourceProfile);
+  const parsed = parseDataExportStatements(sql);
+  assertSourceColumns(assertRawDataOnlyExport(parsed), sourceProfile);
   const database = replaySchema(repoRoot, sourceProfile.sourceSchema);
   try {
     emptyData(database);
@@ -281,20 +388,29 @@ function assertSanitizedArtifactRows({ repoRoot, sql, sourceProfile }) {
   } finally { database.close(); }
 }
 
+function expectedSourceLedger(repoRoot, sourceSchema) {
+  const files = readdirSync(path.join(repoRoot, "db/migrations")).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
+  return files.slice(0, files.indexOf(sourceSchema) + 1);
+}
+
+function validateSourceLedger({ repoRoot, sourceSchema, embeddedLedger }) {
+  const expected = expectedSourceLedger(repoRoot, sourceSchema);
+  if (!embeddedLedger.length) throw new Error("Production-shaped source ledger is missing; the protected source export must include its complete migration ledger.");
+  if (JSON.stringify(embeddedLedger) !== JSON.stringify(expected)) throw new Error("Production-shaped source ledger disagrees with the complete ordered repository prefix through the reviewed source schema.");
+}
+
 export function normalizeRehearsalDataExport({ repoRoot, rawExport, migrationRange, sourceSchema }) {
   const sourceProfile = resolveSanitizerProfile({ repoRoot, migrationRange, sourceSchema });
-  assertRawDataOnlyExport(rawExport);
-  assertSourceColumns(rawExport, sourceProfile);
+  const parsed = parseDataExportStatements(rawExport);
+  const inserts = assertRawDataOnlyExport(parsed);
+  assertSourceColumns(inserts, sourceProfile);
   const database = replaySchema(repoRoot, sourceSchema);
   try {
     emptyData(database);
-    const importSql = rawExport.split("\n").filter((line) => !/\b(?:DELETE\s+FROM|INSERT\s+INTO)\s+["'`]?sqlite_sequence\b/i.test(line)).join("\n");
+    const importSql = parsed.statements.map((statement) => statement.prefix + (isSqliteSequenceStatement(statement) ? "" : statement.sql)).join("") + parsed.tail;
     database.exec(importSql);
     const sourceLedger = database.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((row) => row.name);
-    if (sourceLedger.length) {
-      const files = readdirSync(path.join(repoRoot, "db/migrations")).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
-      if (JSON.stringify(sourceLedger) !== JSON.stringify(files.slice(0, files.indexOf(sourceSchema) + 1))) throw new Error("Production-shaped source ledger disagrees with the reviewed source schema.");
-    }
+    validateSourceLedger({ repoRoot, sourceSchema, embeddedLedger: sourceLedger });
     const result = buildSanitizedSql(database, sourceProfile);
     return { ...result, sourceProfile, sourceSha256: sha256(rawExport), artifactSha256: sha256(result.sql) };
   } catch (error) {

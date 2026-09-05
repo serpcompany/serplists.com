@@ -4,6 +4,8 @@ import { json, jsonError } from "../utils/response";
 import { assertStripeWebhookConfigured, verifyStripeWebhookSignature } from "../utils/stripe";
 import { eq } from "drizzle-orm";
 
+const EVENT_PROCESSING_ERROR = "Stripe webhook processing in progress";
+
 type StripeEvent = {
   id: string;
   type: string;
@@ -67,30 +69,39 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
     const db = createDb(env);
     const { stripe_webhook_events, stripe_customers, stripe_subscriptions } = schema;
     const nowIso = new Date().toISOString();
-    let shouldRefreshProcessedEvent = false;
 
-    // Idempotency: insert event id once; ignore duplicates.
-    try {
-      await db.insert(stripe_webhook_events).values({
+    // Claim the event by its primary key. Only a completed event is an
+    // acknowledged duplicate; an absent or unfinished claim must fail closed.
+    const claimedEvents = await db
+      .insert(stripe_webhook_events)
+      .values({
         id: event.id,
         type: event.type,
         created: event.created ?? verification.timestamp,
         livemode: Boolean(event.livemode),
         processed_at: nowIso,
-        error: null,
-      });
-    } catch {
+        error: EVENT_PROCESSING_ERROR,
+      })
+      .onConflictDoNothing({ target: stripe_webhook_events.id })
+      .returning({ id: stripe_webhook_events.id });
+
+    if (claimedEvents.length === 0) {
       const [existingEvent] = await db
-        .select({ error: stripe_webhook_events.error })
+        .select({
+          id: stripe_webhook_events.id,
+          error: stripe_webhook_events.error,
+        })
         .from(stripe_webhook_events)
         .where(eq(stripe_webhook_events.id, event.id))
         .limit(1);
 
-      if (!existingEvent || existingEvent.error === null) {
-        return json({ received: true, duplicate: true });
+      if (!existingEvent) {
+        throw new Error("Stripe webhook event claim was not persisted");
       }
 
-      shouldRefreshProcessedEvent = true;
+      if (existingEvent.error === null) {
+        return json({ received: true, duplicate: true });
+      }
     }
 
     const object = isRecord(event.data?.object) ? (event.data.object as Record<string, unknown>) : null;
@@ -102,19 +113,18 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
           : getEventUserIdFallback(object);
         const stripeCustomerId = typeof object?.customer === "string" ? object.customer : null;
         if (userId && stripeCustomerId) {
-          try {
-            await db.insert(stripe_customers).values({
+          await db
+            .insert(stripe_customers)
+            .values({
               user_id: userId,
               stripe_customer_id: stripeCustomerId,
               created_at: nowIso,
               updated_at: nowIso,
+            })
+            .onConflictDoUpdate({
+              target: stripe_customers.user_id,
+              set: { stripe_customer_id: stripeCustomerId, updated_at: nowIso },
             });
-          } catch {
-            await db
-              .update(stripe_customers)
-              .set({ stripe_customer_id: stripeCustomerId, updated_at: nowIso })
-              .where(eq(stripe_customers.user_id, userId));
-          }
         }
       }
 
@@ -144,22 +154,22 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
         userId = userId ?? getEventUserIdFallback(object);
 
         if (userId && stripeSubscriptionId && stripeCustomerId && status && priceId) {
-          try {
-            await db.insert(stripe_customers).values({
+          await db
+            .insert(stripe_customers)
+            .values({
               user_id: userId,
               stripe_customer_id: stripeCustomerId,
               created_at: nowIso,
               updated_at: nowIso,
+            })
+            .onConflictDoUpdate({
+              target: stripe_customers.user_id,
+              set: { stripe_customer_id: stripeCustomerId, updated_at: nowIso },
             });
-          } catch {
-            await db
-              .update(stripe_customers)
-              .set({ stripe_customer_id: stripeCustomerId, updated_at: nowIso })
-              .where(eq(stripe_customers.user_id, userId));
-          }
 
-          try {
-            await db.insert(stripe_subscriptions).values({
+          await db
+            .insert(stripe_subscriptions)
+            .values({
               stripe_subscription_id: stripeSubscriptionId,
               user_id: userId,
               stripe_customer_id: stripeCustomerId,
@@ -171,11 +181,10 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
               trial_end: trialEnd,
               created_at: nowIso,
               updated_at: nowIso,
-            });
-          } catch {
-            await db
-              .update(stripe_subscriptions)
-              .set({
+            })
+            .onConflictDoUpdate({
+              target: stripe_subscriptions.stripe_subscription_id,
+              set: {
                 user_id: userId,
                 stripe_customer_id: stripeCustomerId,
                 price_id: priceId,
@@ -185,18 +194,15 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
                 canceled_at: canceledAt,
                 trial_end: trialEnd,
                 updated_at: nowIso,
-              })
-              .where(eq(stripe_subscriptions.stripe_subscription_id, stripeSubscriptionId));
-          }
+              },
+            });
         }
       }
 
-      if (shouldRefreshProcessedEvent) {
-        await db
-          .update(stripe_webhook_events)
-          .set({ error: null, processed_at: nowIso })
-          .where(eq(stripe_webhook_events.id, event.id));
-      }
+      await db
+        .update(stripe_webhook_events)
+        .set({ error: null, processed_at: nowIso })
+        .where(eq(stripe_webhook_events.id, event.id));
 
       return json({ received: true });
     } catch (err) {

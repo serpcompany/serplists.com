@@ -4,9 +4,10 @@ const API_BASE_URL = process.env.VITE_API_URL ?? "http://localhost:8788/api";
 
 async function signInAsAdmin(page: Page) {
   await page.goto("/login");
-  await page.getByRole("button", { name: /fill admin/i }).click();
+  await page.locator('#email').fill('admin@test.com');
+  await page.locator('#password').fill('password123');
   await page.getByRole("button", { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/account/);
+  await expect(page).toHaveURL(/\/dashboard\/settings$/);
 }
 
 test("template import API returns structured per-template failures for rejected imports", async ({ page }) => {

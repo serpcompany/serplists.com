@@ -86,6 +86,9 @@ test('public creator profile page stays available under /profile/:username', asy
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1600 });
+  const profile = await page.request.get(`${process.env.PLAYWRIGHT_API_URL}/profiles/by-username?username=serp`);
+  expect(profile.status()).toBe(200);
+  expect(await profile.json()).toMatchObject({id:'serp-user',username:'serp',full_name:'SERP'});
   await page.goto('/profile/serp');
 
   const firstTemplateCard = page.getByRole('link', {
@@ -97,7 +100,7 @@ test('public creator profile page stays available under /profile/:username', asy
   const firstTemplateSurface = firstTemplateCard.locator('..');
 
   await expect(
-    page.getByRole('heading', { level: 1, name: 'SERP Lists Library' }),
+    page.getByRole('heading', { level: 1, name: 'SERP', exact: true }),
   ).toBeVisible();
   await expect(
     page.locator('main').getByText('@serp', { exact: true }).first(),

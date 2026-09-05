@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from 'node:crypto';
 import path from "node:path";
 import assert from "node:assert/strict";
 import { generateSanitizedRehearsalArtifact } from "./sanitizer-lib.mjs";
@@ -7,10 +8,12 @@ import { prepareSanitizedSmoke } from "./prepare-sanitized-smoke.mjs";
 import { captureSanitizedState, validateSanitizedStateBinding } from "./sanitized-state-lib.mjs";
 import { captureFullRecoveryState, prepareRecoveryExport, withPreparedRecoveryImport } from "./recovery-restore-lib.mjs";
 import { parseAppliedMigrationLedger } from './invariant-capture-lib.mjs';
+import { writeDataCheckReports } from './reporting.mjs';
 
 const repoRoot = path.resolve(new URL("../..", import.meta.url).pathname);
 const migration = "0024_safe_template_evolution.sql";
 const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
+const restorations = [];
 
 
 // Keep synchronous Wrangler calls out of the Vitest worker event loop.
@@ -51,6 +54,7 @@ function runRealLocalD1Proof() {
           execute: file => run(["d1", "execute", "synthetic-source", "--local", "--config", originalRestoreConfig, "--file", file, "--yes"]),
         });
         assert.deepEqual(captureFullRecoveryState({ key: "synthetic-local-recovery-key-issue120", query: statement => run(["d1", "execute", "synthetic-source", "--local", "--config", originalRestoreConfig, "--json", "--command", statement]) }), originalState);
+        restorations.push({kind:'original-source', sourceBoundary:current?'post0024':'pre0024', migrationLedger:sourceLedger, fullStateEquality:true, exportSha256:createHash('sha256').update(readFileSync(fullSourceExport)).digest('hex')});
         source(["export", "synthetic-source", "--local", "--no-schema", "--output", sourceExport]);
         const now = new Date();
         const artifact = generateSanitizedRehearsalArtifact({ repoRoot, rawExport: readFileSync(sourceExport, "utf8"), migrationRange: { from: current ? null : migration, to: current ? null : migration }, sourceSchema: current ? migration : "0023_add_sitemap_revision_state.sql", sourceDatabaseId: "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1", sourceDate: now.toISOString().slice(0, 10), gitCommit: commit, issueNumber: 117, requestedApproverIdentity: "@devinschumacher", generatedAt: now, retentionDeadline: new Date(now.getTime() + 3600000).toISOString() });
@@ -105,9 +109,23 @@ function runRealLocalD1Proof() {
         assert.deepEqual(captureFullRecoveryState({ query: restoreQuery, key: equalityKey }), fullBefore);
         const restored = captureSanitizedState({ sourceSha256: artifact.manifest.artifact.sha256, query: restoreQuery });
         validateSanitizedStateBinding(after, restored);
+        restorations.push({kind:'prepared-target', sourceBoundary:current?'post0024':'pre0024', fullStateEquality:true, exportSha256:prepared.metadata.sourceSha256});
       }
     } finally { rmSync(directory, { recursive: true, force: true }); rmSync(artifactDirectory, { recursive: true, force: true }); }
+    assert.equal(existsSync(directory) || existsSync(artifactDirectory), false);
 }
 runRealLocalD1Proof();
+if (process.env.DATA_REPORT_DIR) {
+  assert.equal(process.env.DATA_REGRESSION_START_COMMIT, commit);
+  const reportRoot = path.join(repoRoot,'tmp/data-reports');
+  const output = path.resolve(process.env.DATA_REPORT_DIR);
+  assert(output === reportRoot || output.startsWith(reportRoot + path.sep));
+  mkdirSync(output,{recursive:true});
+  const migrationFiles = readdirSync(path.join(repoRoot, 'db/migrations')).filter(name => /^\d{4}_.+\.sql$/.test(name)).sort();
+  const target = {environment:'local',binding:'DB',databaseName:'serp-checklists-db',databaseId:'local:miniflare:full-export-recovery',synthetic:true};
+  const migrationRange = {from:migrationFiles[0],to:migrationFiles.at(-1)};
+  const checks = restorations.map(row => ({name:`${row.kind}:${row.sourceBoundary}`,verdict:'pass'}));
+  const report = {schemaVersion:1,commit,target,migrationRange,verdict:'pass',restorations,checks,teardown:{leakedStatePaths:0,verdict:'pass'}};
+  writeDataCheckReports({name:'full-export-recovery',report,reportDirectory:output,summary:`PASS local synthetic full-export recovery: binding=${target.binding} database=${target.databaseName} (${target.databaseId}) commit=${commit} migration=${migrationRange.from}->${migrationRange.to}\n${checks.map(check=>`PASS ${check.name}: complete state equality`).join('\n')}\nPASS disposable source and restore cleanup; no production data or operations.`});
+}
 console.log("PASS actual pre/post0024 source and prepared-target export restores, complete state equality and sanitized profiles.");
-

@@ -14,8 +14,8 @@ const migration = history.at(-1)!;
 function fixture(current = false) {
   const db = replayMigrations({ through: current ? migration : history.at(-2) });
   const appliedMigrations = current ? history : history.slice(0, -1);
-  db.exec('CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY, name TEXT NOT NULL)');
-  appliedMigrations.forEach((name, i) => db.prepare('INSERT INTO d1_migrations VALUES (?,?)').run(i + 1, name));
+  db.exec('CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)');
+  appliedMigrations.forEach((name, i) => db.prepare('INSERT INTO d1_migrations(id,name) VALUES (?,?)').run(i + 1, name));
   const binding = { commit, database, appliedMigrations, pendingMigrations: current ? [] : [migration], ledgerSha256: digest(appliedMigrations) };
   const queries: string[] = [];
   const inspect = () => inspectSourceSchema({ ...binding, execute: (sql: string) => {
@@ -47,7 +47,7 @@ describe('exact source catalog before writes', () => {
       expect(proof.appliedThrough).toBe(current ? migration : history.at(-2));
       if (!current) {
         f.db.exec(readFileSync(new URL(`../../db/migrations/${migration}`, import.meta.url), 'utf8'));
-        f.db.prepare('INSERT INTO d1_migrations VALUES (?,?)').run(history.length, migration);
+        f.db.prepare('INSERT INTO d1_migrations(id,name) VALUES (?,?)').run(history.length, migration);
         expect(inspectSourceSchema({ ...f.binding, pendingMigrations: [], execute: (sql: string) => JSON.stringify([{ results: f.db.prepare(sql).all() }]) }).verdict).toBe('pass');
       }
     } finally { f.db.close(); }
@@ -104,7 +104,7 @@ describe('exact source catalog before writes', () => {
       else {
         const preparation = prepare();
         const receipt = { preparationSha256: digest(preparation), runId: '1', runAttempt: '1', artifactId: '1' };
-        const approval = { recovery: receipt, decision: approvalToken(receipt) };
+        const approval = { recovery: receipt, recoveryTokenSha256: digest(approvalToken(receipt)) };
         drift();
         expect(() => runProductionDataPhase({ ...f.binding, preparation, receipt, approval, run })).toThrow(/source catalog/);
       }

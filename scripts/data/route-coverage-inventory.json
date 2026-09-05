@@ -54,7 +54,7 @@
     {
       "path": "functions/api/handlers/billing.ts",
       "kind": "query-family",
-      "sha256": "bbbc638bebb439324c54880c6d2cf03a9d2c764777d33dc13380682dd294710f",
+      "sha256": "819db475fe7d226cd97a2fd5106b9475943c5d47106a7b98317dcd1ca3901d9d",
       "scenarios": [
         "free-entitlement",
         "user-override-entitlement",
@@ -74,7 +74,7 @@
     {
       "path": "functions/api/handlers/stripe.ts",
       "kind": "query-family",
-      "sha256": "46610e28e2ce9330fb7ea27ce3131a571dcbc73f36a3b6340fd731a07eb933ea",
+      "sha256": "d52684f60c7bba3f8fb837503a701fa3ef2ddceeae8f593a2925fb4421258dd3",
       "scenarios": [
         "stripe-mutations"
       ]
@@ -91,7 +91,7 @@
     {
       "path": "functions/api/handlers/templates.ts",
       "kind": "query-family",
-      "sha256": "759cf9d51fc9ee9afd488a7b86f756441a4e25e35a8cbb3034421bbffdf26563",
+      "sha256": "0916e4fa8bfaa38c6d34ae64ea13a1fd304681aef14ac07f24d714a15e859855",
       "scenarios": [
         "public-content",
         "template-run-read-branches",
