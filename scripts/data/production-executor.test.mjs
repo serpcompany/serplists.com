@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  assertApprovalMatchesRequest,
   assertDeployEvidence,
   assertProductionWorkflowContext,
   assertMigrationClassification,
@@ -109,11 +110,27 @@ function validIdentityCheck() {
 
 function validProductionResults() {
   const steps = ["identity", "recovery-bookmark", "recovery-export", "reviewed-pending-range", "pre-invariants", "migration-apply", "ledger-clean", "schema-contract", "post-invariants"];
-  return Object.fromEntries(steps.map((step) => [step, { verdict: "pass", artifact: `${step}.txt`, outputLength: 1, identityChecks: step === "identity" ? [] : [validIdentityCheck()] }]));
+  return Object.fromEntries(steps.map((step) => [step, validStepResult(step)]));
+}
+
+function validStepResult(step) {
+  const pendingMigrations = ["0024_safe_template_evolution.sql"];
+  const summaries = {
+    identity: { type: step, databaseName: production.databaseName, databaseId: production.databaseId },
+    "recovery-bookmark": { type: step, captured: true, bookmark: "bookmark-verified" },
+    "recovery-export": { type: step, encryptedBackupSha256: "b".repeat(64), encryptedBackupByteLength: 128 },
+    "reviewed-pending-range": { type: step, pendingMigrations, from: pendingMigrations[0], to: pendingMigrations[0] },
+    "pre-invariants": { type: step, invariantCount: 20, appliedThrough: "0023_add_sitemap_revision_state.sql", ledgerSha256: "c".repeat(64), domainDigest: "d".repeat(64) },
+    "migration-apply": { type: step, appliedMigrations: pendingMigrations },
+    "ledger-clean": { type: step, pendingMigrations: [], appliedThrough: pendingMigrations[0] },
+    "schema-contract": { type: step, verdict: "pass", appliedThrough: pendingMigrations[0], schemaDigest: "e".repeat(64) },
+    "post-invariants": { type: step, invariantCount: 20, failureCount: 0, preDomainDigest: "f".repeat(64), postDomainDigest: "f".repeat(64) },
+  };
+  return { verdict: "pass", artifact: `${step}.txt`, outputLength: 1, artifactByteLength: 1, artifactSha256: "a".repeat(64), summary: summaries[step], identityChecks: step === "identity" ? [] : [validIdentityCheck()] };
 }
 
 function validSignedProductionEvidence(request = validPromotionEvidence()) {
-  return createSignedEvidence({ payload: { verdict: "pass", commit, database: structuredClone(production), migrationRange: structuredClone(request.migrationRange), results: validProductionResults(), approval: validApproval() } });
+  return createSignedEvidence({ payload: { verdict: "pass", commit, classification: request.classification, database: structuredClone(production), pendingMigrations: structuredClone(request.pendingMigrations), migrationRange: structuredClone(request.migrationRange), results: validProductionResults(), approval: validApproval() } });
 }
 
 describe("protected production executor", () => {
@@ -266,6 +283,15 @@ describe("protected production executor", () => {
     expect(() => validateApprovalEvidence({ reviews: [productionReview("independent", "short")], classification: "destructive", actor: "dispatcher", changeAuthors })).toThrow(/decision/i);
   });
 
+  it("rejects mismatched approval before any protected data mutation can start", () => {
+    const request = validPromotionEvidence();
+    expect(assertApprovalMatchesRequest({ approval: validApproval(), request })).toEqual(validApproval());
+    expect(() => assertApprovalMatchesRequest({ approval: { ...validApproval(), approver: "author" }, request })).toThrow(/independent/i);
+    expect(() => assertApprovalMatchesRequest({ approval: { ...validApproval(), classification: "additive" }, request })).toThrow(/classification/i);
+    expect(() => assertApprovalMatchesRequest({ approval: { ...validApproval(), changeAuthors: ["other"] }, request })).toThrow(/authors/i);
+    expect(() => assertApprovalMatchesRequest({ approval: { ...validApproval(), decision: "short" }, request })).toThrow(/decision/i);
+  });
+
   it("requires distinct verified repository-admin production approval for irreversible changes", () => {
     const review = (login, environment = "production") => ({ state: "approved", comment: "Reviewed irreversible recovery evidence.", user: { login, type: "User" }, environments: [{ name: environment }] });
     const base = { reviews: [review("independent"), review("repo-owner", "production-owner-approval")], classification: "irreversible", actor: "dispatcher", changeAuthors: ["author"], repositoryOwnerApprover: "repo-owner" };
@@ -405,7 +431,7 @@ describe("protected production executor", () => {
     try {
       mkdirSync(fakeBin);
       writeFileSync(requestPath, JSON.stringify(validPromotionEvidence()));
-      writeFileSync(approvalPath, "{}\n");
+      writeFileSync(approvalPath, JSON.stringify(validApproval()));
       writeFileSync(fakePnpm, `#!/bin/sh
 case "$*" in
   *"d1 info"*) printf '%s\\n' '[{"uuid":"${production.databaseId}","name":"${production.databaseName}"}]' ;;
@@ -449,9 +475,10 @@ esac
       database: production,
       pendingMigrations: ["0024_safe_template_evolution.sql"],
       approval: validApproval(),
+      classification: "backfill",
       run: (step) => {
         calls.push(step);
-        return { verdict: "pass", artifact: `${step}.json`, outputLength: 1, identityChecks: step === "identity" ? [] : [validIdentityCheck()] };
+        return validStepResult(step);
       },
     });
 
@@ -517,8 +544,19 @@ esac
     ["data range", (fixture) => { fixture.signedEvidence.payload.migrationRange.to = "0025_other.sql"; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["missing production step", (fixture) => { delete fixture.signedEvidence.payload.results["recovery-export"]; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["failed production step", (fixture) => { fixture.signedEvidence.payload.results["pre-invariants"].verdict = "fail"; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["empty production step output", (fixture) => { fixture.signedEvidence.payload.results["pre-invariants"].outputLength = 0; fixture.signedEvidence.payload.results["pre-invariants"].artifactByteLength = 0; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["missing production artifact digest", (fixture) => { delete fixture.signedEvidence.payload.results["recovery-export"].artifactSha256; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["empty recovery artifact", (fixture) => { fixture.signedEvidence.payload.results["recovery-export"].summary.encryptedBackupByteLength = 0; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["mismatched pending summary", (fixture) => { fixture.signedEvidence.payload.results["reviewed-pending-range"].summary.pendingMigrations = []; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["empty invariant summary", (fixture) => { fixture.signedEvidence.payload.results["pre-invariants"].summary.invariantCount = 0; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["unclean ledger summary", (fixture) => { fixture.signedEvidence.payload.results["ledger-clean"].summary.pendingMigrations = ["hidden.sql"]; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["empty schema summary", (fixture) => { fixture.signedEvidence.payload.results["schema-contract"].summary.schemaDigest = ""; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["missing step identity", (fixture) => { fixture.signedEvidence.payload.results["migration-apply"].identityChecks = []; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["missing independent approval", (fixture) => { fixture.signedEvidence.payload.approval = {}; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["self approval in signed evidence", (fixture) => { fixture.signedEvidence.payload.approval.approver = "AUTHOR"; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["approval classification", (fixture) => { fixture.signedEvidence.payload.approval.classification = "additive"; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["approval author set", (fixture) => { fixture.signedEvidence.payload.approval.changeAuthors = ["different-author"]; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
+    ["missing risky decision", (fixture) => { fixture.signedEvidence.payload.approval.decision = "short"; fixture.signedEvidence.digest = createSignedEvidence({ payload: fixture.signedEvidence.payload }).digest; }],
     ["smoke commit", (fixture) => { fixture.smoke.commit = "f".repeat(40); }],
     ["smoke environment", (fixture) => { fixture.smoke.target.environment = "staging"; }],
     ["smoke database name", (fixture) => { fixture.smoke.target.databaseName = "other"; }],

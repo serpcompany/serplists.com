@@ -84,8 +84,8 @@ its teardown.
 ## Production-shaped rehearsal
 
 Raw production data must never enter Git, fixtures, logs, reports, or an
-ordinary local test. The separate #97 production executor will create two
-different exports:
+ordinary local test. The protected production executor implements two distinct
+export operations:
 
 - `recovery-export` is the complete protected backup and never enters a
   rehearsal or sanitizer input.
@@ -270,16 +270,23 @@ node scripts/data/data-command.mjs rehearsal-export \
 A production bookmark/export/source-export is never executable from the
 general data CLI. Even a caller that sets every GitHub-looking environment
 variable receives a blocking error before Wrangler runs. The general command
-may render the exact production plan for review only. Issue #97 must implement
-the separate executor whose non-forgeable credential/OIDC boundary and GitHub
-Environment approval authorize the production action.
+may render the exact production plan for review only. The separate protected
+executor is implemented in
+[`scripts/data/production-executor.mjs`](../../scripts/data/production-executor.mjs),
+but it remains unavailable for production use until the external GitHub
+Environment, independent human approval, scoped secret, and Cloudflare
+credential boundaries are installed and proven. Repository code cannot make an
+imitated environment variable into authorization.
 
 Remote rehearsal imports and sanitizer execution record workflow-request
 fields for the exact Git SHA, repository, environment label, run ID, workflow
 name, and requested approver. Those fields are explicitly
 `unverified-request-metadata`: environment variables can be imitated and are
-not proof of authorization, identity, or approval. They become trustworthy
-evidence only when #97 binds them to signed/OIDC-backed workflow evidence.
+not proof of authorization, identity, or approval. They become trustworthy only
+when the protected workflow binds them to GitHub run metadata, independently
+recorded Environment approval, exact change provenance, and artifact
+attestation; until those live controls are configured and proven, production is
+blocked.
 
 Production recovery uses `recovery-bookmark` followed by `recovery-export`;
 the sanitizer source uses the distinct `sanitizer-source-export`. Schema-only

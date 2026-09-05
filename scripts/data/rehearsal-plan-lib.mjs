@@ -17,24 +17,78 @@ export const FIXTURE_PROFILE_CONTRACTS = Object.freeze({
 });
 function exactArray(left, right) { return JSON.stringify(left) === JSON.stringify(right); }
 export function rehearsalPlanDigest(plan) { return createHash("sha256").update(JSON.stringify(plan)).digest("hex"); }
+function sqlStatementsWithoutComments(sql) {
+  const statements = [];
+  let current = "";
+  let quote = null;
+  let bracket = false;
+  let lineComment = false;
+  let blockComment = false;
+  for (let index = 0; index < sql.length; index += 1) {
+    const character = sql[index];
+    const next = sql[index + 1];
+    if (lineComment) {
+      if (character === "\n") { lineComment = false; current += " "; }
+      continue;
+    }
+    if (blockComment) {
+      if (character === "*" && next === "/") { blockComment = false; current += " "; index += 1; }
+      continue;
+    }
+    if (!quote && !bracket && character === "-" && next === "-") { lineComment = true; index += 1; continue; }
+    if (!quote && !bracket && character === "/" && next === "*") { blockComment = true; index += 1; continue; }
+    if (bracket) {
+      current += character;
+      if (character === "]") bracket = false;
+      continue;
+    }
+    if (quote) {
+      current += character;
+      if (character === quote) {
+        if (next === quote) { current += next; index += 1; }
+        else quote = null;
+      }
+      continue;
+    }
+    if (character === "[") { bracket = true; current += character; continue; }
+    if (["'", "\"", "`"].includes(character)) { quote = character; current += character; continue; }
+    if (character === ";") {
+      if (current.trim()) statements.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  if (quote || bracket || blockComment) throw new Error("Unsupported SQL: unterminated quote, identifier, or comment prevents complete affected-table detection.");
+  if (current.trim()) statements.push(current.trim());
+  return statements;
+}
 export function affectedTablesFromSql(sql) {
-  const source = sql.replace(/--[^\n]*/g, " ").replace(/\/\*[\s\S]*?\*\//g, " ");
-  const identifier = String.raw`(?:\[[^\]]+\]|["'\x60][^"'\x60]+["'\x60]|[a-z_][a-z0-9_]*)(?:\s*\.\s*(?:\[[^\]]+\]|["'\x60][^"'\x60]+["'\x60]|[a-z_][a-z0-9_]*))?`;
-  const patterns = [
-    new RegExp(String.raw`(?:ALTER|CREATE|DROP)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?(${identifier})`, "gi"),
-    new RegExp(String.raw`INSERT(?:\s+OR\s+[A-Z]+)?\s+INTO\s+(${identifier})`, "gi"),
-    new RegExp(String.raw`UPDATE(?:\s+OR\s+[A-Z]+)?\s+(${identifier})`, "gi"),
-    new RegExp(String.raw`DELETE\s+FROM\s+(${identifier})`, "gi"),
-    new RegExp(String.raw`CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?${identifier}\s+ON\s+(${identifier})`, "gi"),
+  const identifierPart = String.raw`(?:\[[^\]]+\]|"(?:[^"]|"")+"|\x60(?:[^\x60]|\x60\x60)+\x60|[a-z_][a-z0-9_$]*)`;
+  const identifier = String.raw`${identifierPart}(?:\s*\.\s*${identifierPart})?`;
+  const normalize = (value) => {
+    const parts = value.match(new RegExp(identifierPart, "g"));
+    const table = parts?.at(-1)?.trim();
+    if (!table) throw new Error("Unsupported SQL identifier prevents complete affected-table detection.");
+    return table.replace(/^\[|\]$/g, "").replace(/^"|"$/g, "").replace(/^`|`$/g, "").replace(/""/g, "\"").replace(/``/g, "`");
+  };
+  const recognizers = [
+    new RegExp(String.raw`^(?:ALTER|CREATE|DROP)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?(${identifier})(?=\s|\(|$)`, "i"),
+    new RegExp(String.raw`^(?:INSERT(?:\s+OR\s+(?:ROLLBACK|ABORT|FAIL|IGNORE|REPLACE))?|REPLACE)\s+INTO\s+(${identifier})(?=\s|\()`, "i"),
+    new RegExp(String.raw`^UPDATE(?:\s+OR\s+(?:ROLLBACK|ABORT|FAIL|IGNORE|REPLACE))?\s+(${identifier})(?=\s)`, "i"),
+    new RegExp(String.raw`^DELETE\s+FROM\s+(${identifier})(?=\s|$)`, "i"),
+    new RegExp(String.raw`^CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?${identifier}\s+ON\s+(${identifier})(?=\s|\()`, "i"),
   ];
-  const normalize = (value) => value.split(".").at(-1).trim().replace(/^\[|\]$/g, "").replace(/^["'`]|["'`]$/g, "");
-  const tables = patterns.flatMap((pattern) => [...source.matchAll(pattern)].map((match) => normalize(match[1])));
-  const unsupported = source.split(";").map((statement) => statement.trim()).filter(Boolean).filter((statement) => {
-    if (/^WITH\b/i.test(statement)) return true;
-    return /^(?:CREATE\s+(?:UNIQUE\s+)?INDEX\b|DROP\s+INDEX\b|CREATE\s+TRIGGER\b|DROP\s+TRIGGER\b|ALTER\s+TABLE\b|CREATE\s+TABLE\b|DROP\s+TABLE\b|INSERT\b|UPDATE\b|DELETE\b)/i.test(statement) &&
-      !patterns.some((pattern) => { pattern.lastIndex = 0; return pattern.test(statement); });
-  });
-  if (unsupported.length) throw new Error(`Unsupported SQL statement prevents complete affected-table detection: ${unsupported[0].split(/\s+/).slice(0, 4).join(" ")}.`);
+  const tables = [];
+  for (const statement of sqlStatementsWithoutComments(sql)) {
+    if (/^(?:BEGIN(?:\s+TRANSACTION)?|COMMIT|END(?:\s+TRANSACTION)?|ROLLBACK)\b/i.test(statement) || /^PRAGMA\b/i.test(statement) || /^SELECT\b/i.test(statement)) continue;
+    if (/^WITH\b/i.test(statement) || /^CREATE\s+VIRTUAL\s+TABLE\b/i.test(statement) || /^(?:DROP\s+INDEX|CREATE\s+TRIGGER|DROP\s+TRIGGER|CREATE\s+VIEW|DROP\s+VIEW)\b/i.test(statement)) {
+      throw new Error(`Unsupported SQL statement prevents complete affected-table detection: ${statement.split(/\s+/).slice(0, 4).join(" ")}.`);
+    }
+    const match = recognizers.map((pattern) => statement.match(pattern)).find(Boolean);
+    if (!match) throw new Error(`Unsupported SQL statement prevents complete affected-table detection: ${statement.split(/\s+/).slice(0, 4).join(" ")}.`);
+    tables.push(normalize(match[1]));
+  }
   return [...new Set(tables)].sort();
 }
 

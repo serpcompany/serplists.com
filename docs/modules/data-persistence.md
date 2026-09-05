@@ -23,12 +23,20 @@ The persistence layer uses Cloudflare D1 for transactional data, Cloudflare Page
 
 ## Source Of Truth
 
-- Migration files in `db/migrations/` define schema history.
+- Numbered SQL in `db/migrations/` is the sole D1 schema/data-change history;
+  generate new entries only with `pnpm db:generate -- --name descriptive_name`.
 - D1 records applied migrations in `d1_migrations`.
-- Drizzle schema in `db/schema/` mirrors the SQL for runtime queries.
-- `db/schema.sql` is a reference snapshot only.
+- Drizzle schema in `db/schema/` is the runtime contract and must change in the
+  same pull request as matching Wrangler SQL when runtime-visible schema changes.
+- `db/schema.sql` is a derived review snapshot generated from a complete replay,
+  never a migration input.
 
-Do not add seed data to migrations. Use `db/seeds/` for repeatable local/staging seed data and `db/maintenance/` for explicit one-off maintenance tasks.
+Do not add seed data to migrations. Use `db/seeds/` for repeatable local/staging
+seed data. `db/maintenance/` is reserved for separately classified, idempotent
+one-off operations; maintenance SQL is currently blocked from execution until
+its reviewed rehearsal and protected execution path exists. Never handwrite or
+edit numbered migrations or invoke Drizzle's generate/push/migrate commands
+directly.
 
 ## Core Tables
 

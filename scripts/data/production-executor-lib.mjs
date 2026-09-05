@@ -240,6 +240,17 @@ function normalizeLogin(value) {
   return typeof value === "string" && value.trim() ? value.trim().replace(/^@/, "").toLowerCase() : null;
 }
 
+export function assertApprovalMatchesRequest({ approval, request }) {
+  if (approval?.environment !== "production" || approval?.source !== "github-environment-review") throw new Error("Production request lacks protected-environment approval evidence.");
+  const approver = normalizeLogin(approval.approver);
+  const authors = new Set((approval.changeAuthors ?? []).map(normalizeLogin));
+  const expectedAuthors = [...new Set((request?.changeProvenance?.changeAuthors ?? []).map(normalizeLogin))].sort();
+  if (!approver || !authors.size || authors.has(null) || authors.has(approver)) throw new Error("Production approval is not independent of every change author.");
+  if (request?.classification !== approval.classification || JSON.stringify([...authors].sort()) !== JSON.stringify(expectedAuthors)) throw new Error("Production approval classification or change authors do not match the reviewed request.");
+  if (["backfill", "destructive", "irreversible"].includes(request.classification) && (typeof approval.decision !== "string" || approval.decision.trim().length < 20)) throw new Error("Production approval lacks the written risky-change decision required by the reviewed request.");
+  return approval;
+}
+
 export function validateChangeProvenance({ pulls, commits, commitAuthors, mergeCommit, mergeAuthors, expectedCommit }) {
   assertSha(expectedCommit, "Expected change commit");
   const matches = (pulls ?? []).filter((pull) =>
@@ -399,7 +410,7 @@ export function verifySignedEvidence({ signedEvidence }) {
   return signedEvidence.payload;
 }
 
-export function runProductionDataPhase({ commit, database, pendingMigrations, approval = null, run }) {
+export function runProductionDataPhase({ commit, database, pendingMigrations, classification, approval = null, run }) {
   const steps = [
     "identity", "recovery-bookmark", "recovery-export", "reviewed-pending-range",
     "pre-invariants", "migration-apply", "ledger-clean", "schema-contract", "post-invariants",
@@ -413,7 +424,9 @@ export function runProductionDataPhase({ commit, database, pendingMigrations, ap
   const payload = {
     verdict: "pass",
     commit,
+    classification,
     database,
+    pendingMigrations: [...pendingMigrations],
     migrationRange: {
       from: pendingMigrations[0] ?? null,
       to: pendingMigrations.at(-1) ?? null,
@@ -424,7 +437,44 @@ export function runProductionDataPhase({ commit, database, pendingMigrations, ap
   return createSignedEvidence({ payload });
 }
 
-export function assertDeployEvidence({ signedEvidence, commit, database }) {
+function hasSha256(value) { return /^[0-9a-f]{64}$/.test(value ?? ""); }
+function assertProductionStepSummary({ step, summary, payload }) {
+  if (summary?.type !== step) throw new Error(`Signed production ${step} evidence lacks a typed summary.`);
+  switch (step) {
+    case "identity":
+      if (summary.databaseName !== payload.database.databaseName || summary.databaseId !== payload.database.databaseId) throw new Error("Signed production identity summary does not match the target database.");
+      break;
+    case "recovery-bookmark":
+      if (summary.captured !== true || typeof summary.bookmark !== "string" || !summary.bookmark.trim()) throw new Error("Signed production recovery bookmark summary is incomplete.");
+      break;
+    case "recovery-export":
+      if (!hasSha256(summary.encryptedBackupSha256) || !Number.isInteger(summary.encryptedBackupByteLength) || summary.encryptedBackupByteLength <= 0) throw new Error("Signed production recovery export summary lacks a nonempty encrypted artifact digest and size.");
+      break;
+    case "reviewed-pending-range":
+      if (!Array.isArray(summary.pendingMigrations) || JSON.stringify(summary.pendingMigrations) !== JSON.stringify(payload.pendingMigrations) ||
+          summary.from !== payload.migrationRange.from || summary.to !== payload.migrationRange.to) throw new Error("Signed production pending-range summary does not match the reviewed request.");
+      break;
+    case "pre-invariants":
+      if (!Number.isInteger(summary.invariantCount) || summary.invariantCount <= 0 || !summary.appliedThrough || !hasSha256(summary.ledgerSha256) || !hasSha256(summary.domainDigest)) throw new Error("Signed production pre-invariant ledger summary is incomplete.");
+      break;
+    case "migration-apply":
+      if (!Array.isArray(summary.appliedMigrations) || JSON.stringify(summary.appliedMigrations) !== JSON.stringify(payload.pendingMigrations)) throw new Error("Signed production migration-apply summary does not match the reviewed pending range.");
+      break;
+    case "ledger-clean":
+      if (!Array.isArray(summary.pendingMigrations) || summary.pendingMigrations.length !== 0 || !summary.appliedThrough) throw new Error("Signed production ledger summary is incomplete or not clean.");
+      break;
+    case "schema-contract":
+      if (summary.verdict !== "pass" || !summary.appliedThrough || !hasSha256(summary.schemaDigest)) throw new Error("Signed production schema-contract summary is incomplete.");
+      break;
+    case "post-invariants":
+      if (!Number.isInteger(summary.invariantCount) || summary.invariantCount <= 0 || summary.failureCount !== 0 || !hasSha256(summary.preDomainDigest) || !hasSha256(summary.postDomainDigest)) throw new Error("Signed production post-invariant summary is incomplete or failed.");
+      break;
+    default:
+      throw new Error(`Unknown signed production summary ${step}.`);
+  }
+}
+
+export function assertDeployEvidence({ signedEvidence, commit, database, request = null }) {
   const payload = verifySignedEvidence({ signedEvidence });
   if (payload.verdict !== "pass" || payload.commit !== commit ||
       payload.database?.databaseName !== database.databaseName || payload.database?.databaseId !== database.databaseId) {
@@ -434,7 +484,9 @@ export function assertDeployEvidence({ signedEvidence, commit, database }) {
   if (JSON.stringify(resultKeys) !== JSON.stringify(REQUIRED_PRODUCTION_STEPS)) throw new Error("Signed production data evidence does not contain the exact required step set.");
   for (const step of REQUIRED_PRODUCTION_STEPS) {
     const result = payload.results[step];
-    if (result?.verdict !== "pass" || typeof result.artifact !== "string" || !result.artifact || !Number.isInteger(result.outputLength) || result.outputLength < 0) throw new Error(`Signed production ${step} evidence is incomplete.`);
+    if (result?.verdict !== "pass" || typeof result.artifact !== "string" || !result.artifact || !Number.isInteger(result.outputLength) || result.outputLength <= 0 ||
+        !Number.isInteger(result.artifactByteLength) || result.artifactByteLength <= 0 || result.artifactByteLength !== result.outputLength || !hasSha256(result.artifactSha256)) throw new Error(`Signed production ${step} evidence is incomplete.`);
+    assertProductionStepSummary({ step, summary: result.summary, payload });
     if (IDENTITY_BOUND_STEPS.has(step)) {
       if (!Array.isArray(result.identityChecks) || result.identityChecks.length === 0 || result.identityChecks.some((check) =>
         check?.environment !== "production" || check?.binding !== "DB" || check?.databaseName !== database.databaseName || check?.databaseId !== database.databaseId ||
@@ -443,6 +495,10 @@ export function assertDeployEvidence({ signedEvidence, commit, database }) {
     }
   }
   if (payload.approval?.environment !== "production" || payload.approval?.source !== "github-environment-review" || typeof payload.approval?.approver !== "string" || !payload.approval.approver || !Array.isArray(payload.approval.changeAuthors) || !payload.approval.changeAuthors.length) throw new Error("Signed production evidence lacks validated independent approval.");
+  if (request) {
+    if (payload.classification !== request.classification || JSON.stringify(payload.pendingMigrations) !== JSON.stringify(request.pendingMigrations)) throw new Error("Signed production classification or pending migrations do not match the reviewed request.");
+    assertApprovalMatchesRequest({ approval: payload.approval, request });
+  }
   return payload;
 }
 
@@ -453,7 +509,7 @@ export function validateFinalProductionRelease({
   deploymentUrl,
   expectedCustomDomain = "https://serplists.com",
 }) {
-  const data = assertDeployEvidence({ signedEvidence, commit: request.commit, database: request.database });
+  const data = assertDeployEvidence({ signedEvidence, commit: request.commit, database: request.database, request });
   validateControlledCanaryChecks(smoke);
   if (data.migrationRange?.from !== request.migrationRange?.from || data.migrationRange?.to !== request.migrationRange?.to) {
     throw new Error("Production data evidence migration range does not match the request.");

@@ -26,6 +26,27 @@ describe("reviewed rehearsal plan", () => {
     expect(() => affectedTablesFromSql("WITH changed AS (SELECT 1) UPDATE [users] SET referral_count=1;")).toThrow(/unsupported SQL/i);
     expect(() => affectedTablesFromSql("DROP INDEX audit_probe;")).toThrow(/unsupported SQL/i);
   });
+  it("parses quoted and schema-qualified targets without treating comments or strings as SQL", () => {
+    const sql = `
+      -- UPDATE hidden SET value = 1;
+      INSERT OR REPLACE INTO main."templates" (id, title) VALUES ('a; -- DELETE FROM users', '/* DROP TABLE teams */');
+      REPLACE INTO [main].[checklist_runs] (id) VALUES ('r');
+      UPDATE OR FAIL \`main\`.\`users\` SET name = 'semi;colon';
+      CREATE UNIQUE INDEX "audit;probe" ON main.[audit_events](created_at);
+      DELETE FROM main."archive.templates" WHERE id = 'old';
+      /* CREATE TABLE secrets(id TEXT); */
+    `;
+    expect(affectedTablesFromSql(sql)).toEqual(["archive.templates", "audit_events", "checklist_runs", "templates", "users"]);
+  });
+  it.each([
+    ["virtual table", "CREATE VIRTUAL TABLE search USING fts5(content);"],
+    ["schema view", "CREATE VIEW active_templates AS SELECT * FROM templates;"],
+    ["trigger", "CREATE TRIGGER template_audit AFTER UPDATE ON templates BEGIN SELECT 1; END;"],
+    ["unknown replace variant", "REPLACE OR IGNORE INTO templates(id) VALUES ('t');"],
+    ["unknown database mutation", "VACUUM;"],
+  ])("fails closed for unaccounted %s SQL", (_name, sql) => {
+    expect(() => affectedTablesFromSql(sql)).toThrow(/unsupported SQL/i);
+  });
   it("rejects maintenance SQL declarations until a classified execution path exists", () => {
     const directory = mkdtempSync(path.join(tmpdir(), "rehearsal-maintenance-"));
     try {
