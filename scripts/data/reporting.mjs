@@ -10,6 +10,18 @@ function escapeXml(value) {
     .replaceAll("'", "&apos;");
 }
 
+/**
+ * Reports may carry arbitrary additional evidence. Verdicts/checks are untrusted:
+ * malformed or non-passing values are rendered as failures, not asserted valid.
+ * @template {object} Report
+ * @param {{ name: string, report: Report & {
+ *   verdict?: unknown, checks?: unknown, evidenceChecks?: unknown, commit?: unknown,
+ *   target?: { environment?: unknown, databaseName?: unknown, databaseId?: unknown },
+ *   migrationRange?: { from?: unknown, to?: unknown }, sanitizerVersion?: unknown,
+ *   sanitizedSource?: { sanitizerVersion?: unknown }
+ * }, summary: unknown, reportDirectory?: string }} options
+ * @returns {{ json: string, junit: string, markdown: string, text: string }}
+ */
 export function writeDataCheckReports({ name, report, summary, reportDirectory = "tmp/data-reports" }) {
   mkdirSync(reportDirectory, { recursive: true });
   const junitChecks = [...(Array.isArray(report?.checks) ? report.checks : []), ...(Array.isArray(report?.evidenceChecks) ? report.evidenceChecks : [])]
@@ -61,6 +73,18 @@ export function writeDataCheckReports({ name, report, summary, reportDirectory =
   return paths;
 }
 
+/**
+ * Preserve the requested target even when identity resolution failed. Errors are
+ * untrusted thrown values; the report serializes their message, never the object.
+ * @param {{
+ *   check: string,
+ *   commit?: string,
+ *   error: unknown,
+ *   migrationFiles?: string[],
+ *   requestedTarget: { environment: string, binding?: string, database?: string, databaseName?: string, mode: string },
+ *   resolvedIdentity?: { databaseName: string, databaseId: string } | null
+ * }} options
+ */
 export function buildFailureReport({
   check,
   commit = "unknown",

@@ -15,7 +15,7 @@
     "build": "pnpm run sitemap:generate && dotenv -e .dev.vars -- vite build",
     "build:dev": "pnpm run sitemap:generate && dotenv -e .dev.vars -- vite build --mode development",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --project tsconfig.app.json --noEmit && tsc --project tsconfig.worker.json --noEmit && tsc --project tsconfig.node.json --noEmit",
     "typecheck:env": "node scripts/check-env.mjs",
     "check:preview:d1-binding": "node scripts/check-preview-d1-binding.mjs",
     "check:data:schema-contract": "tsx scripts/data/check-schema-contract.ts",

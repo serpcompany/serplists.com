@@ -1,24 +1,68 @@
 import type { ChecklistSection } from "@/types/checklist";
+import { legacySectionsSchema, parseLegacySections } from '../schemas/legacyChecklistSchema';
 
-export function isSectionsShape(value: unknown): value is ChecklistSection[] {
-  if (!Array.isArray(value)) return false;
-  if (value.length === 0) return true;
-  const first = value[0] as Record<string, unknown>;
-  return typeof first?.items !== "undefined";
+export class InvalidChecklistContentError extends Error {
+  constructor() {
+    super('This checklist contains invalid content. Its stored data has not been changed.');
+    this.name = 'InvalidChecklistContentError';
+  }
+}
+
+export function mapReadableChecklists<T, U>(records: T[], map: (record: T) => U) {
+  const readable: U[] = [];
+  let invalidCount = 0;
+  for (const record of records) {
+    try { readable.push(map(record)); }
+    catch (error) {
+      if (!(error instanceof InvalidChecklistContentError)) throw error;
+      invalidCount += 1;
+    }
+  }
+  return { readable, invalidCount };
+}
+
+export function isSectionsShape(value: unknown): boolean {
+  return legacySectionsSchema.safeParse(value).success;
+}
+
+export function normalizeRecordSections(record: Record<string, unknown>): ChecklistSection[] {
+  if (record.content_error !== undefined) throw new InvalidChecklistContentError();
+  if (record.sections !== undefined) return normalizeSections(record.sections);
+  if (record.items !== undefined) return normalizeSections(record.items);
+  return [];
 }
 
 export function normalizeSections(raw: unknown): ChecklistSection[] {
-  if (!Array.isArray(raw)) return [];
-
-  return raw.map((section, sectionIndex) => {
-    const s = (section ?? {}) as Record<string, unknown>;
-    const rawItems = Array.isArray(s.items) ? (s.items as unknown[]) : [];
+  const parsed = parseLegacySections(raw);
+  if (!parsed.success) throw new InvalidChecklistContentError();
+  // Reserve every supplied identity before creating a read-only identity for a
+  // missing legacy field. Never collide with a later supplied or generated ID.
+  const usedIds = new Set<string>();
+  for (const section of parsed.data) {
+    if (section.id !== undefined) usedIds.add(section.id);
+    for (const item of section.items) {
+      if (item.id !== undefined) usedIds.add(item.id);
+      for (const child of item.subItems ?? []) if (child.id !== undefined) usedIds.add(child.id);
+      for (const content of item.contents ?? []) {
+        if (content.id !== undefined) usedIds.add(content.id);
+        for (const child of content.subItems ?? []) if (child.id !== undefined) usedIds.add(child.id);
+      }
+    }
+  }
+  function identity(supplied: string | undefined, base: string): string {
+    if (supplied !== undefined) return supplied;
+    let candidate = base;
+    for (let suffix = 1; usedIds.has(candidate); suffix++) candidate = `${base}-legacy-${suffix}`;
+    usedIds.add(candidate);
+    return candidate;
+  }
+  return parsed.data.map((s, sectionIndex) => {
 
     return {
-      id: typeof s.id === "string" ? s.id : String(sectionIndex + 1),
+      ...s,
+      id: identity(s.id, String(sectionIndex + 1)),
       title: typeof s.title === "string" ? s.title : "Checklist",
-      items: rawItems.map((item, itemIndex) => {
-        const it = (item ?? {}) as Record<string, unknown>;
+      items: s.items.map((it, itemIndex) => {
         const isCompleted =
           typeof it.isCompleted === "boolean"
             ? it.isCompleted
@@ -26,33 +70,21 @@ export function normalizeSections(raw: unknown): ChecklistSection[] {
               ? it.completed
               : false;
 
-        const rawContents = Array.isArray(it.contents) ? (it.contents as unknown[]) : undefined;
-        const contents = rawContents?.map((c) => {
-          const content = (c ?? {}) as Record<string, unknown>;
-          if (content.type === "subItems" && Array.isArray(content.subItems)) {
-            return {
-              ...content,
-              subItems: (content.subItems as unknown[]).map((si) => {
-                const subItem = (si ?? {}) as Record<string, unknown>;
-                return {
-                  ...subItem,
-                  isCompleted:
-                    typeof subItem.isCompleted === "boolean"
-                      ? subItem.isCompleted
-                      : typeof subItem.completed === "boolean"
-                        ? subItem.completed
-                        : false,
-                };
-              }),
-            };
-          }
-          return content;
-        });
-
-        const { completed: _completed, ...rest } = it;
+        const contents = it.contents?.map((content, contentIndex) => ({
+          ...content,
+          id: identity(content.id, `${sectionIndex + 1}-${itemIndex + 1}-content-${contentIndex + 1}`),
+          value: content.value ?? '',
+          subItems: content.subItems?.map((subItem, subIndex) => ({
+            ...subItem,
+            id: identity(subItem.id, `${sectionIndex + 1}-${itemIndex + 1}-content-${contentIndex + 1}-sub-${subIndex + 1}`),
+            title: subItem.title ?? '',
+            isCompleted: subItem.isCompleted ?? subItem.completed ?? false,
+          })),
+        }));
+        const { completed: _legacyCompletion, ...canonicalItem } = it;
         return {
-          ...rest,
-          id: typeof it.id === "string" ? it.id : `${sectionIndex + 1}-${itemIndex + 1}`,
+          ...canonicalItem,
+          id: identity(it.id, `${sectionIndex + 1}-${itemIndex + 1}`),
           title: typeof it.title === "string" ? it.title : "",
           isCompleted,
           contents,
@@ -105,4 +137,3 @@ export function resetSectionsCompletion(sections: ChecklistSection[]): Checklist
     })),
   }));
 }
-

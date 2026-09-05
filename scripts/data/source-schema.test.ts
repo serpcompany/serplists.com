@@ -5,12 +5,25 @@ import { inspectSourceSchema, SOURCE_CATALOG_SQL } from './source-schema';
 import { assertSourceSchemaProof } from './source-schema-proof.mjs';
 import { digest, prepareProduction, approvalToken } from './production-preparation-lib.mjs';
 import { runProductionDataPhase } from './production-executor-lib.mjs';
+import type { ProductionStepResult } from './production-executor-lib.mjs';
 import { captureRemoteInvariantSnapshot } from './invariant-capture-lib.mjs';
 
 const commit = 'a'.repeat(40);
 const database = { databaseName: 'local-only', databaseId: 'local-only-id' };
 const history = listMigrationFiles().map(m => m.name);
-const migration = history.at(-1)!;
+const latestMigration = history.at(-1);
+if (latestMigration === undefined) throw new Error('Source-schema fixture requires migration history.');
+const migration = latestMigration;
+
+function assertPreparationResults(value: unknown): asserts value is Record<string, ProductionStepResult> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Fixture preparation results must be an object.');
+  for (const result of Object.values(value)) {
+    if (!result || typeof result !== 'object' || !('verdict' in result) || typeof result.verdict !== 'string' ||
+        !('summary' in result) || !result.summary || typeof result.summary !== 'object') {
+      throw new Error('Fixture preparation step requires a verdict and summary.');
+    }
+  }
+}
 function fixture(current = false) {
   const db = replayMigrations({ through: current ? migration : history.at(-2) });
   const appliedMigrations = current ? history : history.slice(0, -1);
@@ -102,11 +115,14 @@ describe('exact source catalog before writes', () => {
       const prepare = () => prepareProduction({ request, context: { commit }, run });
       if (phase === 'prepare') expect(prepare).toThrow(/source catalog/);
       else {
-        const preparation = prepare();
+        const prepared = prepare();
+        const results: unknown = prepared.results;
+        assertPreparationResults(results);
+        const preparation = { ...prepared, results };
         const receipt = { preparationSha256: digest(preparation), runId: '1', runAttempt: '1', artifactId: '1' };
         const approval = { recovery: receipt, recoveryTokenSha256: digest(approvalToken(receipt)) };
         drift();
-        expect(() => runProductionDataPhase({ ...f.binding, preparation, receipt, approval, run })).toThrow(/source catalog/);
+        expect(() => runProductionDataPhase({ ...f.binding, classification: 'destructive', preparation, receipt, approval, run })).toThrow(/source catalog/);
       }
       expect(writes).toBe(0);
       expect(f.db.prepare('SELECT total_changes() AS n').get()).toEqual(changes);

@@ -92,7 +92,7 @@ class ApiClient {
 
   // Templates methods
   async getPublicTemplates(params?: { category?: string; search?: string; limit?: number; offset?: number }) {
-    const query = new URLSearchParams(params as unknown).toString();
+    const query = new URLSearchParams(Object.entries(params ?? {}).map(([key, value]) => [key, String(value)])).toString();
     return this.request(`/templates/public${query ? `?${query}` : ''}`);
   }
 
@@ -132,7 +132,7 @@ class ApiClient {
 
   // Checklists methods
   async getChecklists(params?: { status?: string; limit?: number; offset?: number }) {
-    const query = new URLSearchParams(params as unknown).toString();
+    const query = new URLSearchParams(Object.entries(params ?? {}).map(([key, value]) => [key, String(value)])).toString();
     return this.request(`/checklists${query ? `?${query}` : ''}`);
   }
 

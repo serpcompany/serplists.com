@@ -194,7 +194,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       ) {
         try {
           const body = await request.clone().json();
-          const email = typeof body?.email === 'string' ? body.email : '';
+          const email = body && typeof body === 'object' && 'email' in body && typeof body.email === 'string' ? body.email : '';
           if (email && isBlockedTestEmail(email)) {
             log('warn', 'blocked_test_user_auth', { email, path });
             response = jsonError('Test accounts are disabled in production', 403);

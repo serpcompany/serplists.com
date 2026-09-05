@@ -512,6 +512,7 @@ describe('Checklists Handlers', () => {
         team_id: null,
         title: 'Archived Run',
         items: '[]',
+        retired_items: '[]', // 0024 applies this NOT NULL default to every stored run.
         status: 'in_progress',
         is_public: false,
         share_token: null,

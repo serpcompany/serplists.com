@@ -4,7 +4,11 @@ import { join, relative } from 'node:path';
 import ts from 'typescript';
 export { createRouteQueryRuntime } from './route-query-runtime.mjs';
 
-const QUERY_METHODS = new Set(['select', 'insert', 'update', 'delete', 'batch', 'execute']);
+const QUERY_METHODS = new Set(['select', 'insert', 'update', 'delete', 'batch', 'execute', 'exec', 'findMany', 'findFirst', 'all', 'get', 'run', 'values']);
+const EAGER_METHODS = new Set(['exec', 'execute', 'batch', 'all', 'get', 'run', 'raw', 'first', 'values']);
+const BUILDER_METHODS = new Set(['from', 'where', 'limit', 'offset', 'orderBy', 'groupBy', 'having',
+  'leftJoin', 'rightJoin', 'innerJoin', 'fullJoin', 'crossJoin', 'set', 'values', 'select', 'returning',
+  'onConflictDoNothing', 'onConflictDoUpdate', 'bind', '$dynamic', 'union', 'unionAll', 'intersect', 'except']);
 const EXCLUSION_BOUNDARIES = new Set(['package-adapter', 'outbound-provider', 'unrouted-module']);
 
 function digest(value) {
@@ -44,33 +48,65 @@ function semanticTokens(node, sourceFile) {
   return tokens.join('|');
 }
 
+function isAccess(node) {
+  return ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node);
+}
+
+function isErasedExpressionWrapper(node) {
+  return ts.isParenthesizedExpression(node) || ts.isAsExpression(node) ||
+    ts.isTypeAssertionExpression(node) || ts.isSatisfiesExpression(node) || ts.isNonNullExpression(node) || ts.isExpressionWithTypeArguments(node);
+}
+
+function importedDatabaseAdapters(sourceFile) {
+  const adapters = new Map();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier) || statement.importClause?.isTypeOnly) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      if (element.isTypeOnly) continue;
+      const exported = (element.propertyName ?? element.name).text;
+      if (statement.moduleSpecifier.text === 'drizzle-orm/d1' && exported === 'drizzle') adapters.set(element.name.text, 'factory');
+      if (statement.moduleSpecifier.text === 'better-auth/adapters/drizzle' && exported === 'drizzleAdapter') adapters.set(element.name.text, 'consumer');
+    }
+  }
+  return adapters;
+}
+
+function accessName(node) {
+  if (ts.isPropertyAccessExpression(node)) return node.name.text;
+  if (ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression)) return node.argumentExpression.text;
+  return null;
+}
+
 function propertyCallName(node) {
-  if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return null;
-  return node.expression.name.text;
+  return ts.isCallExpression(node) ? accessName(node.expression) : null;
+}
+
+function isPromiseConsumer(node) {
+  return ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) &&
+    ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'Promise' &&
+    ['all', 'allSettled', 'race', 'any', 'resolve'].includes(node.expression.name.text);
 }
 
 function isQueryRoot(node, lineage) {
   const method = propertyCallName(node);
   if (!method) return false;
-  if (method === 'prepare') {
-    const receiver = node.expression.expression;
-    return (ts.isPropertyAccessExpression(receiver) && receiver.name.text === 'DB') ||
-      (ts.isIdentifier(receiver) && lineage.isDatabaseIdentifier(receiver));
-  }
+  if (method === 'prepare') return lineage.isDatabaseExpression(node.expression.expression);
   if (!QUERY_METHODS.has(method)) return false;
   const receiver = node.expression.expression;
-  if (!ts.isIdentifier(receiver)) return false;
   // select/insert/update/batch/execute are sufficiently database-specific in
   // Worker handlers to discover an injected or renamed database parameter.
   // delete remains restricted to known DB lineage because R2 also has delete.
-  return lineage.isDatabaseIdentifier(receiver) || method !== 'delete';
+  return lineage.isDatabaseExpression(receiver) ||
+    (ts.isIdentifier(receiver) && ['select', 'insert', 'update', 'batch', 'execute', 'exec'].includes(method));
 }
 
 function outerQueryChain(root, boundary) {
   let current = root;
   while (current.parent && current !== boundary) {
     const parent = current.parent;
-    if (ts.isPropertyAccessExpression(parent) && parent.expression === current) {
+    if (isAccess(parent) && parent.expression === current) {
       current = parent;
       continue;
     }
@@ -88,8 +124,7 @@ function outerQueryChain(root, boundary) {
 }
 
 function assertSupportedBuilderExecution(root, expression, boundary, sourceFile) {
-  if (expression !== root) return;
-  let current = root;
+  let current = expression;
   while (current !== boundary && current.parent) {
     const parent = current.parent;
     if (ts.isParenthesizedExpression(parent) || ts.isConditionalExpression(parent) || ts.isArrayLiteralExpression(parent)) {
@@ -98,10 +133,7 @@ function assertSupportedBuilderExecution(root, expression, boundary, sourceFile)
     }
     if (ts.isCallExpression(parent) && parent.arguments.includes(current)) {
       const callee = parent.expression;
-      const supportedPromiseCombinator = ts.isPropertyAccessExpression(callee) &&
-        ts.isIdentifier(callee.expression) && callee.expression.text === 'Promise' &&
-        ['all', 'allSettled', 'race', 'any'].includes(callee.name.text);
-      if (supportedPromiseCombinator) {
+      if (isPromiseConsumer(parent) || propertyCallName(parent) === 'batch') {
         current = parent;
         continue;
       }
@@ -114,19 +146,38 @@ function assertSupportedBuilderExecution(root, expression, boundary, sourceFile)
 function queryExpressions(boundary, { skipNestedAwait = false, adapterNames = new Set(), lineage, sourceFile } = {}) {
   const expressions = [];
   const visit = (node) => {
+    if (ts.isFunctionLike(node)) return;
     if (skipNestedAwait && ts.isAwaitExpression(node)) return;
     const adapterRoot = ts.isCallExpression(node) && ts.isIdentifier(node.expression) && adapterNames.has(node.expression.text);
     const builderDefinition = ts.isIdentifier(node) ? lineage.builderDefinition(node) : null;
-    const builderRoot = Boolean(builderDefinition) &&
+    const builderRoot = Boolean(builderDefinition) && !lineage.isExecutedResult(node) &&
       !(ts.isVariableDeclaration(node.parent) && node.parent.name === node);
     if (isQueryRoot(node, lineage) || adapterRoot || builderRoot) {
       const expression = outerQueryChain(node, boundary);
-      if (builderRoot) assertSupportedBuilderExecution(node, expression, boundary, sourceFile);
+      if (builderRoot) {
+        let definition = builderDefinition;
+        const seen = new Set();
+        while (!seen.has(definition)) {
+          seen.add(definition);
+          if (ts.isParenthesizedExpression(definition) || ts.isAsExpression(definition) || ts.isNonNullExpression(definition)) definition = definition.expression;
+          else if (ts.isIdentifier(definition) && lineage.builderDefinition(definition)) definition = lineage.builderDefinition(definition);
+          else break;
+        }
+        if (ts.isFunctionLike(definition)) {
+          throw new Error(`Unsupported database execution through function-valued builder alias at ${sourceFile.fileName}:${sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1}; use a named function declaration with one query origin.`);
+        }
+        if (ts.isArrayLiteralExpression(definition) || ts.isConditionalExpression(definition)) {
+          throw new Error(`Unsupported database execution through aggregate builder alias at ${sourceFile.fileName}:${sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1}; consume individual query branches directly.`);
+        }
+        assertSupportedBuilderExecution(node, expression, boundary, sourceFile);
+      }
       expressions.push({
         node: expression,
         semantic: builderDefinition
-          ? `${semanticTokens(builderDefinition, sourceFile)}=>${semanticTokens(expression, sourceFile)}`
-          : semanticTokens(expression, sourceFile),
+          ? `${lineage.builderSemantic(node)}=>${semanticTokens(expression, sourceFile)}`
+          : adapterRoot
+            ? `${semanticTokens(adapterNames.get(node.expression.text), sourceFile)}=>${semanticTokens(expression, sourceFile)}`
+            : semanticTokens(expression, sourceFile),
       });
       // A D1 batch is the execution unit. Its lazy statement builders must not
       // be wrapped or counted before the batch actually succeeds.
@@ -138,11 +189,13 @@ function queryExpressions(boundary, { skipNestedAwait = false, adapterNames = ne
   return [...new Map(expressions.map((entry) => [`${entry.node.pos}:${entry.node.end}`, entry])).values()];
 }
 
-function queryLineage(sourceFile) {
+function queryLineage(sourceFile, adapterNames = new Set()) {
+  const packageAdapters = importedDatabaseAdapters(sourceFile);
   const declarations = [];
   const declarationsByName = new Map();
   const databaseBindings = new Set();
   const builderDefinitions = new Map();
+  const executedBindings = new Set();
   function scopeOf(declaration) {
     if (ts.isParameter(declaration)) return declaration.parent;
     for (let current = declaration.parent; current; current = current.parent) {
@@ -166,7 +219,7 @@ function queryLineage(sourceFile) {
       })[0] ?? null;
   }
   const collect = (node) => {
-    if ((ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isBindingElement(node)) && ts.isIdentifier(node.name)) {
+    if ((ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isBindingElement(node) || ts.isFunctionDeclaration(node)) && node.name && ts.isIdentifier(node.name)) {
       declarations.push(node);
       const named = declarationsByName.get(node.name.text) ?? [];
       named.push(node);
@@ -183,8 +236,12 @@ function queryLineage(sourceFile) {
   }
   const inferReceivers = (node) => {
     const method = propertyCallName(node);
-    if (method && (method === 'prepare' || (QUERY_METHODS.has(method) && method !== 'delete')) && ts.isIdentifier(node.expression.expression)) {
-      const binding = resolveBinding(node.expression.expression);
+    let receiver = method ? node.expression.expression : null;
+    if (['findMany', 'findFirst'].includes(method)) {
+      while (receiver && isAccess(receiver)) receiver = receiver.expression;
+    }
+    if (method && ['prepare', 'select', 'insert', 'update', 'batch', 'execute', 'exec', 'findMany', 'findFirst'].includes(method) && ts.isIdentifier(receiver)) {
+      const binding = resolveBinding(receiver);
       if (binding) databaseBindings.add(binding);
     }
     ts.forEachChild(node, inferReceivers);
@@ -192,13 +249,40 @@ function queryLineage(sourceFile) {
   inferReceivers(sourceFile);
   function isDatabaseIdentifier(identifier) {
     const binding = resolveBinding(identifier);
-    return identifier.text === 'db' || Boolean(binding && databaseBindings.has(binding));
+    return binding ? databaseBindings.has(binding) : identifier.text === 'db' && !packageAdapters.has(identifier.text);
   }
   function builderDefinition(identifier) {
     const binding = resolveBinding(identifier);
     return binding ? builderDefinitions.get(binding) ?? null : null;
   }
-  const lineageApi = { isDatabaseIdentifier, builderDefinition };
+  function isDatabaseExpression(node) {
+    if (ts.isIdentifier(node)) return isDatabaseIdentifier(node);
+    if (isErasedExpressionWrapper(node) || ts.isAwaitExpression(node)) return isDatabaseExpression(node.expression);
+    if (isAccess(node)) return accessName(node) === 'DB' || isDatabaseExpression(node.expression);
+    return ts.isCallExpression(node) && ts.isIdentifier(node.expression) &&
+      (node.expression.text === 'createDb' ||
+        (!resolveBinding(node.expression) && packageAdapters.get(node.expression.text) === 'factory'));
+  }
+  function builderSemantic(identifier, seen = new Set()) {
+    const binding = resolveBinding(identifier);
+    const definition = binding && builderDefinitions.get(binding);
+    if (!definition || seen.has(binding)) return '';
+    seen.add(binding);
+    const dependencies = [];
+    const visit = (node) => {
+      if (ts.isIdentifier(node)) {
+        const semantic = builderSemantic(node, seen);
+        if (semantic) dependencies.push(semantic);
+        const adapter = adapterNames.get?.(node.text);
+        if (adapter) dependencies.push(semanticTokens(adapter, sourceFile));
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(definition);
+    return [...dependencies, semanticTokens(definition, sourceFile)].join('=>');
+  }
+  const lineageApi = { isDatabaseIdentifier, isDatabaseExpression, builderDefinition, builderSemantic, resolveBinding,
+    isExecutedResult: (identifier) => executedBindings.has(resolveBinding(identifier)) };
 
   let changed = true;
   while (changed) {
@@ -207,10 +291,7 @@ function queryLineage(sourceFile) {
       const initializer = declaration.initializer;
       if (!initializer) continue;
       const initializerBinding = ts.isIdentifier(initializer) ? resolveBinding(initializer) : null;
-      const isDatabase =
-        (initializerBinding && databaseBindings.has(initializerBinding)) ||
-        (ts.isPropertyAccessExpression(initializer) && initializer.name.text === 'DB') ||
-        (ts.isCallExpression(initializer) && ts.isIdentifier(initializer.expression) && ['createDb', 'drizzle'].includes(initializer.expression.text));
+      const isDatabase = isDatabaseExpression(initializer);
       if (isDatabase && !databaseBindings.has(declaration)) {
         databaseBindings.add(declaration);
         changed = true;
@@ -220,7 +301,8 @@ function queryLineage(sourceFile) {
       const inspect = (node) => {
         if (ts.isAwaitExpression(node) || (node !== initializer && ts.isFunctionLike(node))) return;
         const binding = ts.isIdentifier(node) ? resolveBinding(node) : null;
-        if (isQueryRoot(node, lineageApi) || (binding && builderDefinitions.has(binding))) buildsQuery = true;
+        if (isQueryRoot(node, lineageApi) || (binding && builderDefinitions.has(binding)) ||
+          (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && adapterNames.has(node.expression.text))) buildsQuery = true;
         ts.forEachChild(node, inspect);
       };
       inspect(initializer);
@@ -228,24 +310,153 @@ function queryLineage(sourceFile) {
         builderDefinitions.set(declaration, initializer);
         changed = true;
       }
+      const method = propertyCallName(initializer);
+      if (!executedBindings.has(declaration) && ((initializerBinding && executedBindings.has(initializerBinding)) ||
+        (buildsQuery && isPromiseConsumer(initializer)) ||
+        (buildsQuery && EAGER_METHODS.has(method) && (method !== 'values' || isDatabaseExpression(initializer.expression.expression))))) {
+        executedBindings.add(declaration);
+        changed = true;
+      }
     }
   }
   return lineageApi;
 }
 
-function lazyQueryAdapterNames(sourceFile, lineage) {
-  const names = new Set();
+// Discovery must reject execution syntax it cannot preserve, including code in
+// branches the current fixtures never enter. This is a syntax boundary, not a
+// coverage exclusion. In particular .then can recover query failures or execute
+// synchronously; treating its returned value as query success would be unsound.
+function assertSupportedDatabaseCalls(sourceFile, lineage, adapterNames) {
+  const failHandle = node => {
+    throw new Error(`Unsupported database handle transfer at ${sourceFile.fileName}:${sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1}; keep a direct database alias and directly consume queries.`);
+  };
+  // The same resolved import mapping owns both accepted input handles and
+  // factory output lineage, including `import { drizzle as makeDb }`.
+  const packageAdapters = importedDatabaseAdapters(sourceFile);
+  const trackedCallArgument = (call, argument) => {
+    if (!ts.isCallExpression(call) || !ts.isIdentifier(call.expression)) return false;
+    const target = lineage.resolveBinding(call.expression);
+    if (!target) return packageAdapters.has(call.expression.text);
+    if (!ts.isFunctionDeclaration(target)) return false;
+    const parameter = target.parameters[call.arguments.indexOf(argument)];
+    return parameter && !parameter.dotDotDotToken && ts.isIdentifier(parameter.name) && lineage.isDatabaseExpression(parameter.name);
+  };
+  // An inline options object may deliver a handle to an independently tracked
+  // destructured parameter of a local named function. Stored/returned objects,
+  // arbitrary callbacks and external containers have no proven handle lineage.
+  const trackedObjectParameter = property => {
+    const object = property.parent;
+    const call = object.parent;
+    if (!ts.isObjectLiteralExpression(object) || !ts.isCallExpression(call) || !ts.isIdentifier(call.expression)) return false;
+    const target = lineage.resolveBinding(call.expression);
+    if (!target || !ts.isFunctionDeclaration(target)) return false;
+    const parameter = target.parameters[call.arguments.indexOf(object)];
+    if (!parameter || !ts.isObjectBindingPattern(parameter.name)) return false;
+    const name = property.name && (ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) ? property.name.text : null;
+    return name !== null && parameter.name.elements.some(element => {
+      const key = element.propertyName ?? element.name;
+      return !element.dotDotDotToken && (ts.isIdentifier(key) || ts.isStringLiteralLike(key)) && key.text === name &&
+        ts.isIdentifier(element.name) && lineage.isDatabaseExpression(element.name);
+    });
+  };
+  const isBuilder = (node) => {
+    if (ts.isIdentifier(node)) return Boolean(lineage.builderDefinition(node));
+    if (isErasedExpressionWrapper(node)) return isBuilder(node.expression);
+    if (isAccess(node)) return isBuilder(node.expression);
+    if (ts.isConditionalExpression(node)) return isBuilder(node.whenTrue) || isBuilder(node.whenFalse);
+    if (ts.isCallExpression(node)) return isQueryRoot(node, lineage) ||
+      (ts.isIdentifier(node.expression) && (adapterNames.has(node.expression.text) || isBuilder(node.expression))) ||
+      (isAccess(node.expression) && isBuilder(node.expression.expression));
+    return false;
+  };
+  const assertHandleUse = node => {
+    if (!lineage.isDatabaseExpression(node)) return;
+    const parent = node.parent;
+    // Declaration/property names are syntax, not evaluated handle values.
+    if ((ts.isVariableDeclaration(parent) || ts.isParameter(parent) || ts.isBindingElement(parent) || ts.isFunctionDeclaration(parent)) && parent.name === node) return;
+    if ((ts.isPropertyAccessExpression(parent) || ts.isPropertyAssignment(parent) || ts.isMethodDeclaration(parent) || ts.isPropertyDeclaration(parent)) && parent.name === node) return;
+    // Audit the outer wrapper/receiver, never mistake a type assertion for an
+    // execution boundary. Every other evaluated use needs positive lineage.
+    if ((isErasedExpressionWrapper(parent) || ts.isAwaitExpression(parent)) && parent.expression === node) return;
+    if (isAccess(parent) && parent.expression === node) return;
+    if (ts.isCallExpression(parent) && parent.expression === node && isAccess(node)) return;
+    if (ts.isVariableDeclaration(parent) && parent.initializer === node && ts.isIdentifier(parent.name)) return;
+    if (ts.isCallExpression(parent) && parent.arguments.includes(node) && trackedCallArgument(parent, node)) return;
+    if (((ts.isPropertyAssignment(parent) && parent.initializer === node) || ts.isShorthandPropertyAssignment(parent)) && trackedObjectParameter(parent)) return;
+    if (ts.isArrowFunction(parent) && parent.body === node &&
+      ts.isVariableDeclaration(parent.parent) && ts.isIdentifier(parent.parent.name) && parent.parent.name.text === 'createDb' &&
+      ts.isCallExpression(node) && ts.isIdentifier(node.expression) && packageAdapters.has(node.expression.text) &&
+      !lineage.resolveBinding(node.expression)) return;
+    // In particular aggregates, yield, tagged templates, class fields, returns,
+    // assignments and unrecognized future syntax cannot discard the origin.
+    failHandle(node);
+  };
+  const visit = (node) => {
+    // Instantiation expressions are classified as TypeNodes by TypeScript but
+    // still evaluate their expression (e.g. handle<T>); audit that operand.
+    if ((ts.isTypeNode(node) && !ts.isExpressionWithTypeArguments(node)) || ts.isImportDeclaration(node)) return;
+    assertHandleUse(node);
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
+      let databaseAssignment = false;
+      const inspect = (child) => {
+        if (ts.isAwaitExpression(child) || ts.isFunctionLike(child)) return;
+        if (isBuilder(child) || lineage.isDatabaseExpression(child)) databaseAssignment = true;
+        ts.forEachChild(child, inspect);
+      };
+      inspect(node.left);
+      inspect(node.right);
+      if (databaseAssignment) throw new Error(`Unsupported database execution assignment at ${sourceFile.fileName}:${sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1}; use a declaration initializer and directly consume each query branch.`);
+    }
+    if (isQueryRoot(node, lineage) || (ts.isIdentifier(node) && lineage.builderDefinition(node) &&
+      !(ts.isVariableDeclaration(node.parent) && node.parent.name === node))) {
+      assertSupportedBuilderExecution(node, outerQueryChain(node, sourceFile), sourceFile, sourceFile);
+    }
+    if (ts.isCallExpression(node) && isAccess(node.expression)) {
+      const receiver = node.expression.expression;
+      const database = lineage.isDatabaseExpression(receiver);
+      const builder = isBuilder(receiver);
+      const method = propertyCallName(node);
+      if ((database || builder) && (!method || ['then', 'catch', 'finally'].includes(method) ||
+        (database && method !== 'prepare' && !QUERY_METHODS.has(method)) ||
+        (builder && !BUILDER_METHODS.has(method) && !EAGER_METHODS.has(method)))) {
+        throw new Error(`Unsupported database execution ${node.expression.getText(sourceFile)} at ${sourceFile.fileName}:${sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1}; use a statically named, directly awaited query.`);
+      }
+    }
+    // Detached/dynamic method values lose their receiver and execution lineage.
+    // Reject at extraction, before an alias or destructuring can hide the call.
+    if (isAccess(node) && (lineage.isDatabaseExpression(node.expression) || isBuilder(node.expression)) &&
+      !(ts.isCallExpression(node.parent) && node.parent.expression === node) &&
+      (!accessName(node) || QUERY_METHODS.has(accessName(node)) || EAGER_METHODS.has(accessName(node)) ||
+        ['prepare', 'then', 'catch', 'finally'].includes(accessName(node)))) {
+      throw new Error(`Unsupported database execution method extraction at ${sourceFile.fileName}:${sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1}; call the statically named method directly.`);
+    }
+    if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && node.initializer &&
+      (lineage.isDatabaseExpression(node.initializer) || isBuilder(node.initializer))) {
+      throw new Error(`Unsupported database execution destructuring at ${sourceFile.fileName}:${sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1}; alias the database or builder itself.`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+}
+
+function lazyQueryAdapterNames(sourceFile, lineage, adapterNames = new Map()) {
+  const names = new Map();
   const visit = (node) => {
     if (ts.isFunctionDeclaration(node) && node.name && !node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword)) {
       let returnsLazyQuery = false;
       const inspect = (child) => {
+        if (child !== node && ts.isFunctionLike(child)) return;
         if (ts.isReturnStatement(child) && child.expression) {
-          returnsLazyQuery ||= queryExpressions(child.expression, { lineage, sourceFile }).some((entry) => propertyCallName(entry.node) !== 'batch');
+          returnsLazyQuery ||= queryExpressions(child.expression, { lineage, sourceFile, adapterNames }).some((entry) => propertyCallName(entry.node) !== 'batch');
         }
         ts.forEachChild(child, inspect);
       };
       inspect(node);
-      if (returnsLazyQuery) names.add(node.name.text);
+      if (returnsLazyQuery) {
+        if (names.has(node.name.text)) throw new Error(`Unsupported database execution: ambiguous lazy adapter ${node.name.text} in ${sourceFile.fileName}`);
+        names.set(node.name.text, node);
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -264,15 +475,22 @@ function unitId(kind, path, owner, semantic, duplicateIndex) {
 
 export function discoverRouteQueryUnitsFromSource(source, path) {
   const sourceFile = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, path.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-  const lineage = queryLineage(sourceFile);
-  const adapterNames = lazyQueryAdapterNames(sourceFile, lineage);
+  let lineage = queryLineage(sourceFile);
+  let adapterNames = new Map();
+  for (;;) {
+    const next = lazyQueryAdapterNames(sourceFile, lineage, adapterNames);
+    if (next.size === adapterNames.size) break;
+    adapterNames = next;
+    lineage = queryLineage(sourceFile, adapterNames);
+  }
+  assertSupportedDatabaseCalls(sourceFile, lineage, adapterNames);
   const candidates = [];
   const visit = (node) => {
     if (ts.isIfStatement(node) && isEndpointCondition(node.expression)) {
       candidates.push({ kind: 'endpoint', node, instrumentNode: node, semantic: semanticTokens(node.expression, sourceFile), owner: functionName(node) });
     }
     if (ts.isAwaitExpression(node)) {
-      for (const expression of queryExpressions(node.expression, { lineage, adapterNames, sourceFile })) {
+      for (const expression of queryExpressions(node.expression, { lineage, skipNestedAwait: true, adapterNames, sourceFile })) {
         candidates.push({ kind: 'query', node: expression.node, instrumentNode: expression.node, semantic: expression.semantic, owner: functionName(node) });
       }
     } else if (ts.isReturnStatement(node) && node.expression) {
@@ -284,12 +502,85 @@ export function discoverRouteQueryUnitsFromSource(source, path) {
         }
       }
     }
+    // Eager database APIs execute even without await/return. Find their complete
+    // source chain, but retain a single unit when an enclosing await also finds it.
+    if (ts.isCallExpression(node) && EAGER_METHODS.has(propertyCallName(node)) &&
+      (propertyCallName(node) !== 'values' || lineage.isDatabaseExpression(node.expression.expression))) {
+      for (const expression of queryExpressions(node, { lineage, skipNestedAwait: true, adapterNames, sourceFile })) {
+        if (expression.node === node) candidates.push({ kind: 'query', node, instrumentNode: node, semantic: expression.semantic, owner: functionName(node) });
+      }
+    }
+    if (isPromiseConsumer(node)) {
+      for (const expression of queryExpressions(node, { lineage, skipNestedAwait: true, adapterNames, sourceFile })) {
+        candidates.push({ kind: 'query', node: expression.node, instrumentNode: expression.node, semantic: expression.semantic, owner: functionName(node) });
+      }
+    }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
 
+  // Every construction must be attributable to a real consumer. Expand only
+  // lexical initializer and named-adapter edges; do not infer mutable data flow.
+  // Batch owns its complete statement input (including conditional arrays/maps).
+  const accounted = new Set();
+  const dependencies = (start) => {
+    const seen = new Set();
+    const origins = new Set();
+    const semantics = [];
+    const walk = (node) => {
+      if (seen.has(node)) return;
+      seen.add(node);
+      if (isQueryRoot(node, lineage) || (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && adapterNames.has(node.expression.text))) origins.add(node);
+      if (ts.isIdentifier(node)) {
+        const definition = lineage.builderDefinition(node);
+        if (definition && !seen.has(definition)) {
+          semantics.push(semanticTokens(definition, sourceFile));
+          walk(definition);
+        }
+        const adapter = adapterNames.get(node.text);
+        if (adapter && !seen.has(adapter)) {
+          semantics.push(semanticTokens(adapter, sourceFile));
+          walk(adapter);
+        }
+      }
+      ts.forEachChild(node, walk);
+    };
+    walk(start);
+    return { origins, semantics };
+  };
+  const failOrigin = (node, reason) => {
+    throw new Error(`Unsupported database origin at ${path}:${sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1}; ${reason}`);
+  };
+  for (const adapter of adapterNames.values()) {
+    const returns = [];
+    const inspect = (node) => {
+      if (node !== adapter && ts.isFunctionLike(node)) return;
+      if (ts.isReturnStatement(node)) returns.push(node);
+      ts.forEachChild(node, inspect);
+    };
+    inspect(adapter);
+    let returned = returns[0]?.expression;
+    while (returned && (ts.isParenthesizedExpression(returned) || ts.isAsExpression(returned) || ts.isNonNullExpression(returned))) returned = returned.expression;
+    if (returns.length !== 1 || returns[0].parent !== adapter.body || [...dependencies(adapter).origins].filter((node) => isQueryRoot(node, lineage)).length !== 1 ||
+      (returned && (ts.isConditionalExpression(returned) || ts.isBinaryExpression(returned)))) {
+      failOrigin(adapter, 'lazy adapters must have one unconditional return and one transitive query origin; directly consume alternative branches.');
+    }
+  }
+  for (const candidate of candidates.filter((entry) => entry.kind === 'query')) {
+    const { origins, semantics } = dependencies(candidate.node);
+    for (const origin of origins) accounted.add(origin);
+    candidate.semantic += semantics.length ? `=>${semantics.join('=>')}` : '';
+  }
+  const auditOrigins = (node) => {
+    if ((isQueryRoot(node, lineage) || (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && adapterNames.has(node.expression.text))) && !accounted.has(node)) {
+      failOrigin(node, 'query construction has no proven execution consumer; await it directly or use a consumed named lazy adapter or batch statement array.');
+    }
+    ts.forEachChild(node, auditOrigins);
+  };
+  auditOrigins(sourceFile);
+
   const duplicates = new Map();
-  return candidates
+  return [...new Map(candidates.map((candidate) => [`${candidate.kind}:${candidate.node.getStart(sourceFile)}:${candidate.node.end}`, candidate])).values()]
     .sort((a, b) => a.node.getStart(sourceFile) - b.node.getStart(sourceFile) || a.kind.localeCompare(b.kind))
     .map((candidate) => {
       const key = `${candidate.kind}\n${candidate.owner}\n${candidate.semantic}`;
@@ -321,9 +612,11 @@ export function instrumentRouteQuerySource(source, path) {
       if (query) {
         const original = ts.visitEachChild(node, visitor, context);
         return factory.createCallExpression(
-          factory.createPropertyAccessExpression(runtimeAccess(factory), 'run'),
+          factory.createPropertyAccessExpression(runtimeAccess(factory), 'observe'),
           undefined,
-          [factory.createStringLiteral(query.id), factory.createArrowFunction(undefined, undefined, [], undefined, factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken), original)],
+          // Evaluate in the original lexical context. Moving an expression into
+          // a thunk breaks nested await/yield and can change argument evaluation.
+          [factory.createStringLiteral(query.id), original],
         );
       }
       if (ts.isIfStatement(node)) {

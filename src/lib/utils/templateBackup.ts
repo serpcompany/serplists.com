@@ -14,6 +14,7 @@ import type {
   TemplateBackup
 } from "@/lib/schemas/checklistSchema";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
+import type { ChecklistTemplate as DomainChecklistTemplate } from "@/types/checklist";
 import {
   detectTemplateSourceExtension,
   isMarkdownTemplateExtension,
@@ -267,7 +268,7 @@ export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
-    reader.onload = (event: Event) => {
+    reader.onload = (event: ProgressEvent<FileReader>) => {
       try {
         const jsonString = event.target?.result as string;
         const data = JSON.parse(jsonString);
@@ -331,7 +332,7 @@ export const parseTemplatesFromData = (data: unknown): TemplateImportResult => {
 export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImportResult> => {
   const jsonString = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (event: Event) => resolve(event.target?.result as string);
+    reader.onload = (event: ProgressEvent<FileReader>) => resolve(event.target?.result as string);
     reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsText(file);
   });
@@ -350,7 +351,7 @@ export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImport
 export const parseTemplatesFromFile = async (file: File): Promise<TemplateImportResult> => {
   const sourceString = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (event: Event) => resolve(event.target?.result as string);
+    reader.onload = (event: ProgressEvent<FileReader>) => resolve(event.target?.result as string);
     reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsText(file);
   });
@@ -381,9 +382,9 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
 /**
  * Generate unique IDs for imported templates to avoid conflicts
  */
-export const generateUniqueIds = (templates: ChecklistTemplate[]): ChecklistTemplate[] => {
+export const generateUniqueIds = (templates: DomainChecklistTemplate[]): DomainChecklistTemplate[] => {
   return templates.map(template => {
-    const newTemplate: ChecklistTemplate = {
+    const newTemplate: DomainChecklistTemplate = {
       ...template,
       id: `imported_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       sections: template.sections.map(section => ({
@@ -416,10 +417,10 @@ export const generateUniqueIds = (templates: ChecklistTemplate[]): ChecklistTemp
  * Prepare templates for import (clean and validate)
  */
 export const prepareTemplatesForImport = (
-  templates: ChecklistTemplate[], 
+  templates: DomainChecklistTemplate[],
   userId: string,
   options: TemplateImportOptions = {}
-): ChecklistTemplate[] => {
+): DomainChecklistTemplate[] => {
   const templatesWithUniqueIds = generateUniqueIds(templates);
   const visibility = options.visibility ?? "preserve";
   

@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Play, Edit } from 'lucide-react';
 
 interface TemplateActionsProps {
-  user: unknown;
+  user: { id: string } | null | undefined;
   template: { userId: string; id: string };
   onStartRun: () => void;
   onEditTemplate: () => void;

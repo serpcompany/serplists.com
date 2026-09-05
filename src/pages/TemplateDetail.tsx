@@ -186,6 +186,7 @@ const TemplateDetail = () => {
     billingState,
     loading,
     notFound,
+    contentError,
     saveTemplate,
     shareTemplate,
     startRun,
@@ -441,6 +442,7 @@ const TemplateDetail = () => {
     );
   }
 
+  if (contentError) return <div role="alert">{contentError}</div>;
   if (notFound || !displayTemplate) {
     return (
       <DashboardContentShell>

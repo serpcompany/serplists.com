@@ -28,7 +28,7 @@ import {
   buildCanonicalPublicTemplatePath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
-import { normalizeSections } from '@/lib/utils/checklistSections';
+import { normalizeRecordSections, mapReadableChecklists } from '@/lib/utils/checklistSections';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 type UserProfileRecord = {
@@ -108,24 +108,13 @@ const normalizeUsername = (value: string | undefined) =>
 const mapApiTemplate = (
   template: Record<string, unknown>,
 ): ChecklistTemplate => {
-  const sections = Array.isArray(template.sections)
-    ? template.sections
-    : Array.isArray(template.items)
-      ? [
-          {
-            id: '1',
-            title: 'Checklist',
-            items: template.items,
-          },
-        ]
-      : [];
 
   return {
     id: String(template.id),
     title: String(template.title),
     description:
       typeof template.description === 'string' ? template.description : '',
-    sections: normalizeSections(sections),
+    sections: normalizeRecordSections(template),
     userId: String(template.user_id),
     createdAt: String(template.created_at),
     updatedAt:
@@ -229,6 +218,7 @@ const UserProfile = () => {
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [invalidCount, setInvalidCount] = useState(0);
 
   useEffect(() => {
     let isCancelled = false;
@@ -242,6 +232,7 @@ const UserProfile = () => {
 
       setLoading(true);
       setError(null);
+      setInvalidCount(0);
 
       try {
         const profileData = (await api.getProfileByUsername(
@@ -258,9 +249,12 @@ const UserProfile = () => {
             profileData.id,
           )) as Array<Record<string, unknown>>;
 
+          const readableTemplates = mapReadableChecklists(publicTemplates, mapApiTemplate);
+          if (isCancelled) return;
+          setInvalidCount(readableTemplates.invalidCount);
           resolvedTemplates = mergeProfileTemplates(
             profileData.username,
-            publicTemplates.map(mapApiTemplate),
+            readableTemplates.readable,
           );
         } catch (caughtTemplateError) {
           console.error('Error fetching public templates:', caughtTemplateError);
@@ -369,6 +363,7 @@ const UserProfile = () => {
 
   return (
     <PublicPageContainer className="pb-16 pt-8">
+      {invalidCount > 0 ? <div role="alert">Some templates contain invalid content and are unavailable. Other templates remain available; stored data has not been changed.</div> : null}
       <div className="mx-auto max-w-4xl">
         <section className="mb-10">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">

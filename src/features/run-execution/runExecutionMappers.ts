@@ -1,7 +1,7 @@
 import {
   calculateSectionsProgress,
-  isSectionsShape,
   normalizeSections,
+  normalizeRecordSections,
 } from '@/lib/utils/checklistSections';
 import type {
   ChecklistRun,
@@ -14,39 +14,8 @@ type ApiRecord = Record<string, unknown>;
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' ? value : undefined;
 
-const parseJsonArray = (value: unknown): unknown[] => {
-  if (Array.isArray(value)) {
-    return value;
-  }
-
-  if (typeof value !== 'string' || !value) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-
 const normalizeChecklistSections = (checklist: ApiRecord): ChecklistSection[] => {
-  const rawSections = Array.isArray(checklist.sections)
-    ? checklist.sections
-    : parseJsonArray(checklist.items);
-
-  if (isSectionsShape(rawSections)) {
-    return normalizeSections(rawSections);
-  }
-
-  return normalizeSections([
-    {
-      id: '1',
-      title: 'Checklist',
-      items: rawSections,
-    },
-  ]);
+  return normalizeRecordSections(checklist);
 };
 
 export const mapChecklistToRun = (

@@ -3,6 +3,7 @@ import { generateSlug } from '../utils/slug';
 import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema } from '../utils/payloads';
+import { parseLegacySections, validRetiredChecklistContent } from '../../../src/lib/schemas/legacyChecklistSchema';
 import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
@@ -91,7 +92,7 @@ async function updateTemplateWithHistory(
     whereClause: SQL | undefined;
     updatedAt: string;
   }> = [],
-): Promise<unknown[]> {
+): Promise<readonly unknown[]> {
   const { audit_events, checklist_runs, template_versions, templates } = schema;
 
   const statements = [
@@ -149,12 +150,14 @@ async function generateUniqueSlug(env: Env, title: string, templateId: string): 
   return `${base}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-function parseTemplateRow(template: Record<string, unknown>) {
-  let sections: unknown[] = [];
+function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
+  let sections: unknown[] | undefined = [];
+  let content_error: string | undefined;
   if (typeof template.items !== 'undefined') {
     const normalized = normalizeSectionsPayload(template.items);
     if (normalized.error) {
-      console.warn('Failed to parse template items JSON', { templateId: template.id });
+      sections = undefined;
+      content_error = 'invalid_checklist_content';
     } else {
       sections = normalized.sections;
     }
@@ -176,6 +179,7 @@ function parseTemplateRow(template: Record<string, unknown>) {
   return {
     ...template,
     sections,
+    content_error,
     rules,
     categories: normalizeStringArray(template.category),
     tags: normalizeStringArray(template.tags),
@@ -449,8 +453,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
       const [userRow] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
 
+      if (rows.some(row => !parseLegacySections(row.items).success)) {
+        return jsonError('Export blocked: a template contains invalid content. Stored data has not been changed.', 409);
+      }
       const exportedTemplates = rows.map((row) => {
-        const parsed = parseTemplateRow(row as unknown as Record<string, unknown>);
+        const parsed = parseTemplateRow(row);
         return {
           id: parsed.id,
           title: parsed.title,
@@ -944,6 +951,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       if (!(typeof templateRecord.deleted_at === 'string' && templateRecord.deleted_at)) {
         return jsonError('Template is not archived', 400);
       }
+      if (!parseLegacySections(existingTemplate.items).success) {
+        return jsonError('Template content is invalid; stored data has not been changed.', 409);
+      }
 
       const teamId = templateRecord.owner_type === 'team' && typeof templateRecord.team_id === 'string'
         ? templateRecord.team_id
@@ -1062,6 +1072,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       if (!source || !source.is_public) {
         return jsonError('Template not found', 404);
       }
+      if (!parseLegacySections(source.items).success) {
+        return jsonError('Template content is invalid; stored data has not been changed.', 409);
+      }
 
       const isPublic = visibility === 'public' ? true : visibility === 'preserve' ? true : false;
 
@@ -1074,12 +1087,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         user_id: userId,
         title: source.title || '',
         description: source.description || '',
-        type: typeof (source as Record<string, unknown>).type === 'string' ? (source as Record<string, unknown>).type : 'checklist',
-        seo_title: typeof (source as Record<string, unknown>).seo_title === 'string' ? (source as Record<string, unknown>).seo_title : '',
-        seo_description: typeof (source as Record<string, unknown>).seo_description === 'string' ? (source as Record<string, unknown>).seo_description : '',
-        rules: typeof (source as Record<string, unknown>).rules === 'string' ? (source as Record<string, unknown>).rules : null,
+        type: typeof source.type === 'string' ? source.type : 'checklist',
+        seo_title: typeof source.seo_title === 'string' ? source.seo_title : '',
+        seo_description: typeof source.seo_description === 'string' ? source.seo_description : '',
+        rules: typeof source.rules === 'string' ? source.rules : null,
         items: source.items,
-        version: typeof (source as Record<string, unknown>).version === 'number' ? (source as Record<string, unknown>).version : 1,
+        version: typeof source.version === 'number' ? source.version : 1,
         is_public: isPublic,
         category: source.category,
         tags: source.tags,
@@ -1320,6 +1333,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     if (!(await canEditTemplate(env, existingTemplate as unknown as Record<string, unknown>, userId))) {
       return jsonError('Forbidden', 403);
     }
+    if (!parseLegacySections(existingTemplate.items).success) {
+      return jsonError('Template content is invalid; stored data has not been changed.', 409);
+    }
     if (incomingSections) {
       const previousSections = parseJsonArray(existingTemplate.items) ?? [];
       const stableSections = assignMissingStableTemplateIdentities(incomingSections, previousSections);
@@ -1433,6 +1449,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       && !run.is_public
       && !run.deleted_at
     );
+    if (activeRuns.some((run) => !parseLegacySections(run.items).success || !validRetiredChecklistContent(run.retired_items))) {
+      return jsonError('An affected run contains invalid content; stored data has not been changed.', 409);
+    }
 
     const nextTemplateSections = syncedItems === null ? [] : (parseJsonArray(syncedItems) ?? []);
     const reconciledRunUpdates = activeRuns.map((run) => {

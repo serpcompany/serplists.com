@@ -10,6 +10,7 @@ export interface DrizzleContract {
   strictObjects?: boolean;
   allowedForeignKeys?: Record<string, Array<{ columns: string[]; referencedTable: string; referencedColumns: string[]; onUpdate: string; onDelete: string }>>;
   tables: Record<string, {
+    foreignKeys?: DatabaseCatalog["tables"][string]["foreignKeys"];
     columns: Array<{
       name: string;
       affinity: string;
@@ -35,7 +36,7 @@ export interface DatabaseCatalog {
     indexes: Array<{ name: string; unique: boolean; partial: boolean; columns: string[]; predicate: string | null }>;
     foreignKeys: Array<{ columns: string[]; referencedTable: string; referencedColumns: string[]; onUpdate: string; onDelete: string }>;
   }>;
-  triggers: Array<{ name: string; table: string; sql: string }>;
+  triggers: Array<{ name: string; table: string; sql: string | null }>;
   views: Array<{ name: string; sql: string }>;
 }
 
@@ -93,7 +94,7 @@ export function parseRemoteTableInventory(output: string) {
   return [...new Set(names)];
 }
 
-export function diffUnapprovedSqlOnlyObjects(contract: DrizzleContract, catalog: DatabaseCatalog, allowlist = SQL_ONLY_OBJECT_ALLOWLIST) {
+export function diffUnapprovedSqlOnlyObjects(contract: DrizzleContract, catalog: DatabaseCatalog, allowlist: Readonly<Record<'tables' | 'indexes' | 'triggers' | 'views', readonly string[]>> = SQL_ONLY_OBJECT_ALLOWLIST) {
   const runtimeTables = new Set(Object.keys(contract.tables));
   const expectedIndexes = new Set(Object.values(contract.tables).flatMap((table) => table.indexes.map((index) => index.name)));
   const unexpectedTables = Object.keys(catalog.tables).filter((name) => !runtimeTables.has(name) && !allowlist.tables.includes(name));
@@ -163,22 +164,30 @@ export function buildDrizzleContract(schema: Record<string, unknown>): DrizzleCo
       }));
       const columnUniqueIndexes = table.columns
         .filter((column) => column.isUnique)
-        .map((column) => ({
-          name: column.uniqueName,
+        .map((column) => {
+          const name = column.uniqueName;
+          if (typeof name !== 'string') throw new Error('Drizzle unique column has no resolved name.');
+          return {
+            name,
+            unique: true,
+            partial: false,
+            columns: [column.name],
+            matchByColumns: true,
+            predicate: null,
+          };
+        });
+      const tableUniqueIndexes = table.uniqueConstraints.map((constraint) => {
+        const name = constraint.getName();
+        if (typeof name !== 'string') throw new Error('Drizzle unique constraint has no resolved name.');
+        return {
+          name,
           unique: true,
           partial: false,
-          columns: [column.name],
+          columns: constraint.columns.map((column) => column.name),
           matchByColumns: true,
           predicate: null,
-        }));
-      const tableUniqueIndexes = table.uniqueConstraints.map((constraint) => ({
-        name: constraint.config.name,
-        unique: true,
-        partial: false,
-        columns: constraint.config.columns.map((column) => column.name),
-        matchByColumns: true,
-        predicate: null,
-      }));
+        };
+      });
       const indexes = [...explicitIndexes, ...columnUniqueIndexes, ...tableUniqueIndexes]
         .sort((left, right) => left.name.localeCompare(right.name, "en"));
       return [

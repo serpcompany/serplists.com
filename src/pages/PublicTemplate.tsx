@@ -40,6 +40,7 @@ const PublicTemplate = () => {
     billingState,
     loading,
     notFound,
+    contentError,
     saveTemplate,
     startRun,
     template,
@@ -156,6 +157,7 @@ const PublicTemplate = () => {
     );
   }
 
+  if (contentError) return <div role="alert">{contentError}</div>;
   if (notFound || !displayTemplate) {
     return (
       <PageContainer className="py-16" width="narrow">

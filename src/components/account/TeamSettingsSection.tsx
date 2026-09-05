@@ -61,7 +61,7 @@ const teamActivityActionLabels: Record<string, string> = {
   'template.updated': 'Template updated',
 };
 
-const formatRole = (role: TeamRole): string =>
+const formatRole = (role: TeamRole | TeamMemberStatus): string =>
   role.charAt(0).toUpperCase() + role.slice(1);
 
 const formatTeamActivityAction = (action: string): string =>

@@ -6,6 +6,7 @@ export type ChecklistSubItem = {
 };
 
 export type ChecklistItemContent = {
+  id: string;
   type: "text" | "image" | "video" | "file" | "embed" | "subItems";
   value: string; // URL for image/video/file, embed code, markdown for text, or empty for subItems
   uploadType?: "url" | "upload"; // For image/video/file: whether it's a URL or uploaded file
@@ -90,6 +91,7 @@ export type ChecklistRun = {
   completedAt?: string;
   userId: string;
   templateVersion?: number;
+  templateOwner?: { username?: string; full_name?: string };
   revision?: number;
   isStale?: boolean;
   isPublic?: boolean;

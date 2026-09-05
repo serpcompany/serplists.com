@@ -111,6 +111,7 @@ function collectPlaywrightSpecs(suites: PlaywrightSuite[]): PlaywrightSpec[] {
 }
 
 const requiredChecks = [
+  ['malformed checklist content write safety','rejects malformed checklist content without changing stored template or run state on migrated real D1'],
   ['mandatory rules atomic failure proof','fails missing mandatory rules without partial template history or audit writes on real D1'],
   ['billing write failure and retry proof','fails billing persistence faults and recovers webhook retries without duplicate state on real D1'],
   ['query-unit instrumentation adversarial controls', 'executes query-unit discovery negative controls and real Worker D1 instrumentation parity'],
@@ -200,17 +201,17 @@ let routeNegativePassed = false;
 let authenticatedRehearsal = { applicable: false, verdict: "not-applicable" } as Record<string, unknown>;
 const sanitizedPathArg = valueAfter("--sanitized");
 const sanitizerManifestArg = valueAfter("--sanitizer-manifest");
-let sanitizedArtifactSha256: string | null = null;
+let sanitizedArtifact: { sqlPath: string; manifestPath: string; sha256: string } | null = null;
 if ((sanitizedPathArg == null) !== (sanitizerManifestArg == null)) {
   browserFailure = "Sanitized rehearsal requires both --sanitized and --sanitizer-manifest.";
 } else if (sanitizedPathArg && sanitizerManifestArg) {
   try {
     const sanitizedSql = readFileSync(path.resolve(repoRoot, sanitizedPathArg), "utf8");
-    const manifest = JSON.parse(readFileSync(path.resolve(repoRoot, sanitizerManifestArg), "utf8"));
-    validateSanitizedRehearsalArtifact({ sql: sanitizedSql, manifest, policy: loadSanitizerPolicy({ repoRoot }), now: new Date(), migrationRange: rehearsalPlan?.migrationRange, sourceSchema: rehearsalPlan?.preMigration });
+    const manifestInput: unknown = JSON.parse(readFileSync(path.resolve(repoRoot, sanitizerManifestArg), "utf8"));
+    const manifest = validateSanitizedRehearsalArtifact({ sql: sanitizedSql, manifest: manifestInput, policy: loadSanitizerPolicy({ repoRoot }), now: new Date(), migrationRange: rehearsalPlan?.migrationRange, sourceSchema: rehearsalPlan?.preMigration });
     if (manifest.provenance.gitCommit !== startCommit) throw new Error("Sanitizer manifest commit does not match this candidate.");
-    sanitizedArtifactSha256 = manifest.artifact.sha256;
-    authenticatedRehearsal = { applicable: true, verdict: "fail", sanitizerArtifactSha256: sanitizedArtifactSha256 };
+    sanitizedArtifact = { sqlPath: path.resolve(repoRoot, sanitizedPathArg), manifestPath: path.resolve(repoRoot, sanitizerManifestArg), sha256: manifest.artifact.sha256 };
+    authenticatedRehearsal = { applicable: true, verdict: "fail", sanitizerArtifactSha256: sanitizedArtifact.sha256 };
   } catch (error) { browserFailure = error instanceof Error ? error.message : String(error); }
 }
 let browserTeardown = {
@@ -236,10 +237,10 @@ try {
         DATA_REGRESSION_MIGRATION_FROM: rehearsalPlan?.migrationRange.from ?? "none",
         DATA_REGRESSION_MIGRATION_TO: rehearsalPlan?.migrationRange.to ?? "none",
         PLAYWRIGHT_CANDIDATE_AUTH_PROOF: candidateAuthenticatedProofPath,
-        ...(sanitizedArtifactSha256 && rehearsalPlan ? {
-          PLAYWRIGHT_SANITIZED_REHEARSAL_SQL: path.resolve(repoRoot, sanitizedPathArg),
-          PLAYWRIGHT_SANITIZER_SHA256: sanitizedArtifactSha256,
-          PLAYWRIGHT_SANITIZER_MANIFEST: path.resolve(repoRoot, sanitizerManifestArg),
+        ...(sanitizedArtifact && rehearsalPlan ? {
+          PLAYWRIGHT_SANITIZED_REHEARSAL_SQL: sanitizedArtifact.sqlPath,
+          PLAYWRIGHT_SANITIZER_SHA256: sanitizedArtifact.sha256,
+          PLAYWRIGHT_SANITIZER_MANIFEST: sanitizedArtifact.manifestPath,
           PLAYWRIGHT_REHEARSAL_PROOF: authenticatedRehearsalProofPath,
         } : {}),
       },
@@ -294,7 +295,7 @@ try {
   const candidateBound = candidateProof.verdict === "pass" && candidateProof.commit === startCommit && candidateChecks.templateRead === true && candidateChecks.templateWriteReadback === true && candidateChecks.runRead === true && candidateChecks.runWriteReadback === true;
   candidateAuthenticated = { ...candidateProof, verdict: candidateBound ? "pass" : "fail" };
   if (!candidateBound) browserFailure = "Authenticated candidate template/run read-write proof is incomplete.";
-  if (sanitizedArtifactSha256 && rehearsalPlan) {
+  if (sanitizedArtifact && rehearsalPlan) {
     const proof = JSON.parse(readFileSync(authenticatedRehearsalProofPath, "utf8"));
     const falseEmptyDetection = checks.find((check) => check.name === "authenticated false-empty detection")?.verdict;
     const apiErrorDetection = checks.find((check) => check.name === "authenticated API error detection")?.verdict;
@@ -302,7 +303,7 @@ try {
     let strictChecks = false;
     try { validateAuthenticatedCandidateEvidence({ ...proof, checks: combinedChecks }, { requireDetectors: true }); strictChecks = true; } catch { strictChecks = false; }
     validateSanitizedStateBinding(proof.postMigrationState, proof.postMigrationState);
-    const bound = strictChecks && proof.handlerStateReadback === true && proof.transformation?.verdict === "pass" && proof.postMigrationState.sourceSha256 === sanitizedArtifactSha256 && proof.commit === startCommit && proof.sanitizerArtifactSha256 === sanitizedArtifactSha256 && migrationRangesEqual(proof.migrationRange, rehearsalPlan.migrationRange);
+    const bound = strictChecks && proof.handlerStateReadback === true && proof.transformation?.verdict === "pass" && proof.postMigrationState.sourceSha256 === sanitizedArtifact.sha256 && proof.commit === startCommit && proof.sanitizerArtifactSha256 === sanitizedArtifact.sha256 && migrationRangesEqual(proof.migrationRange, rehearsalPlan.migrationRange);
     authenticatedRehearsal = { ...proof, checks: combinedChecks, applicable: true, verdict: bound ? "pass" : "fail" };
     if (!bound) browserFailure = "Authenticated sanitized candidate-handler evidence is incomplete or mismatched.";
   }

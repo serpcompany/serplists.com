@@ -14,6 +14,8 @@
     "stripe-mutations",
     "sitemap-queries",
     "template-run-mutations",
+    "legacy-content-safety",
+    "legacy-extension-save",
     "team-mutations",
     "legacy-route-aliases"
   ],
@@ -21,7 +23,7 @@
     {
       "path": "functions/api/better-auth.ts",
       "kind": "query-family",
-      "sha256": "004a6e9d440496ed3a166ff98e4e16ece76fd0c419bd54524c57e9268b20e9eb",
+      "sha256": "6e789fbc08449d79244bbec5b299fa05b95e72a09531e62848beb443aa8dd41b",
       "scenarios": [
         "owned-pages"
       ]
@@ -64,7 +66,7 @@
     {
       "path": "functions/api/handlers/checklists.ts",
       "kind": "query-family",
-      "sha256": "2f47544ee08e0b22d7681b4d013421eadfbd0fbd552ae7b67e98a13c8b037072",
+      "sha256": "0c5c3366ed5d7e1934c7aa2f8144d93e967c9ee79bc14bbec8331a684d1abd61",
       "scenarios": [
         "public-content",
         "template-run-read-branches",
@@ -91,7 +93,7 @@
     {
       "path": "functions/api/handlers/templates.ts",
       "kind": "query-family",
-      "sha256": "0916e4fa8bfaa38c6d34ae64ea13a1fd304681aef14ac07f24d714a15e859855",
+      "sha256": "a4a192e31843b387d545501153c509afe6b04e55fdf3b7f0ec7568c7c6d646d9",
       "scenarios": [
         "public-content",
         "template-run-read-branches",
@@ -191,7 +193,7 @@
     {
       "path": "src/pages/CategoryDetail.tsx",
       "kind": "page",
-      "sha256": "c9d08b0f83163a1498c7fe4febba224b4bae09751e978570740ba37116e886cd",
+      "sha256": "bacf303ad25812db7d4580dbf6e650f532082966b273a3f0d664296dc31ae887",
       "scenarios": [
         "public-static-pages"
       ]
@@ -359,7 +361,7 @@
     {
       "path": "src/pages/UserProfile.tsx",
       "kind": "page",
-      "sha256": "46960eb770de0181fefb3e7acd733822d3936bf29f7d9c1dc3fbc870860bcd1c",
+      "sha256": "05ea7f53c9b4e98b0dfdad4878aa485e9575fa3445bf95f98808c1d72594181b",
       "scenarios": [
         "public-content"
       ]
@@ -385,7 +387,7 @@
     {
       "path": "src/components/account/TeamSettingsSection.tsx",
       "kind": "query-consumer",
-      "sha256": "46a2768b1ab318d3a757e6864780f34079a5a3d262e21ee52adee6844703ab4d",
+      "sha256": "ce7001becbe2c9ab0220a2b82860f3220b84f07a3b8cd2f008b863e5ab92c619",
       "scenarios": [
         "owned-pages",
         "public-content"
@@ -457,7 +459,7 @@
     {
       "path": "src/contexts/TemplatesContext.tsx",
       "kind": "query-consumer",
-      "sha256": "e54d477344952aedfdfdf2995962e4e588d77cf97f5cbf9b57eed1f435888c37",
+      "sha256": "f03de4fab2c1eb9067cf43d1559d766a15cc8ca1d044f40126238339c528198a",
       "scenarios": [
         "owned-pages",
         "public-content"
@@ -475,7 +477,7 @@
     {
       "path": "src/features/run-execution/useRunExecutionModel.ts",
       "kind": "query-consumer",
-      "sha256": "86120ffbd6db90f6056be676af8cad3c4dbdd785c45969120445f3c39a98aa59",
+      "sha256": "5fc2626f3217530b8a0707bb548d1147370c2478fbe4b693a8fa2bd7fdef662b",
       "scenarios": [
         "owned-pages",
         "public-content"
@@ -493,7 +495,7 @@
     {
       "path": "src/features/template-detail/useTemplateDetailModel.ts",
       "kind": "query-consumer",
-      "sha256": "ed900c79cbd29d6a1d4f2e12aec9c03f276cd24a42565fa4ee3ffefaac3bc7a5",
+      "sha256": "438e9403037f93235cfa3ca4ec65e1b214593b86f9789a55b8950b4c0b2f51a8",
       "scenarios": [
         "owned-pages",
         "public-content"
@@ -520,7 +522,7 @@
     {
       "path": "src/lib/api/client.ts",
       "kind": "query-consumer",
-      "sha256": "0b7471a33f36b2e3020e83a9c63ec5e60ac2c1040e30052432fe26094477bf33",
+      "sha256": "9c051af99e1e7c730cc61341696b4f63b748326e78c64a03ec0eab8d4c3f5990",
       "scenarios": [
         "owned-pages",
         "public-content"
@@ -547,7 +549,7 @@
     {
       "path": "functions/api/[[route]].ts",
       "kind": "server-module",
-      "sha256": "54f4ce7538a4f5d09208d895606a2ea78dcc483415289078fb7bad97be953b45",
+      "sha256": "f257fde5fc67f89dd976f95506b73bc2f3b66ee18541b3d759cc14ee9fa4959c",
       "scenarios": [
         "public-content",
         "owned-pages"
@@ -579,7 +581,7 @@
     {
       "path": "functions/api/types.ts",
       "kind": "server-module",
-      "sha256": "0e5a94e16709513b05d248de107b6d3cd6664eb3d2ef4b1bc0070a3b21413a28",
+      "sha256": "37678c9c12bd664c311c62e92a4a0e5f30fb658727583db8aeaf25a9040a1597",
       "scenarios": [
         "public-content",
         "owned-pages"
@@ -624,7 +626,7 @@
     {
       "path": "functions/api/utils/crypto.ts",
       "kind": "server-module",
-      "sha256": "052c9e0adab281db9cea6addd5526d1c9bc235b900990e2a8262aaf4374ff6cd",
+      "sha256": "1639f2066df8070607976b7d7a093b4049d4216907d9f2aed773bf8e48a3dfee",
       "scenarios": [
         "public-content",
         "owned-pages"
@@ -651,7 +653,7 @@
     {
       "path": "functions/api/utils/payloads.ts",
       "kind": "server-module",
-      "sha256": "faab934da60b22b0df6912aed0c0b8c7cbce5daf4c02193bdd60ae368275e24a",
+      "sha256": "df48e8958aadef17a239ad85f6023ea7176d4ced87c884500b5b68b5f4c17d70",
       "scenarios": [
         "public-content",
         "owned-pages"

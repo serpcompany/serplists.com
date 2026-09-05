@@ -243,7 +243,9 @@ const CategoryDetail = () => {
           sortBy="popular"
           trailingControls={
             <div className="flex items-center gap-2">
-              <Select value={sortBy} onValueChange={setSortBy}>
+              <Select value={sortBy} onValueChange={(value) => {
+                if (value === 'popular' || value === 'recent' || value === 'trending' || value === 'name') setSortBy(value);
+              }}>
                 <SelectTrigger className="w-40 border-border bg-card">
                   <SelectValue>{sortLabels[sortBy]}</SelectValue>
                 </SelectTrigger>

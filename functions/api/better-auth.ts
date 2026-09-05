@@ -143,7 +143,7 @@ export function createBetterAuth(env: Env, request: Request) {
   const isSecure = origin.startsWith("https://");
 
   const db = createDb(env);
-  const plugins = [username()];
+  const plugins: Array<ReturnType<typeof username> | ReturnType<typeof haveIBeenPwned>> = [username()];
 
   if (shouldCheckBreachedPassword(env, request)) {
     plugins.push(

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { getAccessFailure } from '@/lib/api-errors';
+import { InvalidChecklistContentError } from '@/lib/utils/checklistSections';
 import { api, type TemplateHistoryResponse } from '@/lib/api';
 import { getBillingStatusQueryKey } from '@/lib/billing';
 import {
@@ -89,6 +90,7 @@ export type TemplateDetailHistoryState = {
 type LoadTemplateDetailResult = {
   notFound: boolean;
   template: ChecklistTemplate | null;
+  contentError?: string;
 };
 
 type TemplateDetailDependencies = {
@@ -188,7 +190,8 @@ export const loadTemplateDetailData = async (
       }
 
       return { template: mappedTemplate, notFound: false };
-    } catch {
+    } catch (error) {
+      if (error instanceof InvalidChecklistContentError) return { template: null, notFound: false, contentError: error.message };
       return { template: null, notFound: true };
     }
   }
@@ -216,7 +219,8 @@ export const loadTemplateDetailData = async (
     );
 
     return { template: mappedTemplate, notFound: false };
-  } catch {
+  } catch (error) {
+    if (error instanceof InvalidChecklistContentError) return { template: null, notFound: false, contentError: error.message };
     return { template: null, notFound: true };
   }
 };
@@ -306,6 +310,7 @@ export const useTemplateDetailModel = (
   const [template, setTemplate] = useState<ChecklistTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [contentError, setContentError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const cachedTemplates =
     options.mode === 'public' ? options.cachedTemplates : null;
@@ -352,6 +357,7 @@ export const useTemplateDetailModel = (
     const loadTemplate = async () => {
       setLoading(true);
       setNotFound(false);
+      setContentError(null);
 
       const result = await loadTemplateDetailData(
         options.mode === 'public'
@@ -375,6 +381,7 @@ export const useTemplateDetailModel = (
 
       setTemplate(result.template);
       setNotFound(result.notFound);
+      setContentError(result.contentError ?? null);
       setLoading(false);
     };
 
@@ -499,6 +506,7 @@ export const useTemplateDetailModel = (
     } satisfies TemplateDetailHistoryState,
     loading,
     notFound,
+    contentError,
     saveTemplate,
     shareTemplate,
     startRun,

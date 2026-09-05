@@ -1,4 +1,31 @@
 import { normalizeMigrationRange } from "./migration-range-lib.mjs";
+/**
+ * @typedef {{ name: string, verdict: string, test?: string }} RegressionCheck
+ * @typedef {{ environment: string, databaseName: string, databaseId: string, binding: string }} RegressionTarget
+ * @typedef {{ leakedUsers: number, leakedTemplates: number, leakedRuns: number, leakedSmokeStatePaths: number, verdict: string }} RegressionTeardown
+ * @typedef {{ applicable: boolean, verdict?: string, failure?: string | null, failureArtifacts: string[] }} BrowserEvidence
+ * @typedef {{
+ *   commit: string,
+ *   workingTreeDirty?: boolean,
+ *   workingTreeDirtyPaths?: string[],
+ *   workspaceCleanlinessVerdict?: string,
+ *   unexpectedFilesystemChanges?: import('./workspace-cleanliness-lib.mjs').WorkspaceChange[],
+ *   target: RegressionTarget,
+ *   migrationRange: { from: string | null, to: string | null },
+ *   checks: RegressionCheck[],
+ *   invariants: Record<string, unknown>,
+ *   teardown: RegressionTeardown,
+ *   browserEvidence: BrowserEvidence
+ * }} RegressionReportOptions
+ * @typedef {Required<RegressionReportOptions> & { check: string, evidenceChecks: RegressionCheck[], verdict: 'pass' | 'fail' }} RegressionReport
+ */
+
+/**
+ * Required evidence and identity fields are checked at runtime too. Invariants
+ * carry domain-specific evidence; known nonzero counters and fail verdicts block.
+ * @param {RegressionReportOptions} options
+ * @returns {RegressionReport}
+ */
 export function buildDataRegressionReport({
   commit,
   workingTreeDirty = false,
@@ -61,6 +88,13 @@ export function buildDataRegressionReport({
   };
 }
 
+/**
+ * @param {RegressionReport & {
+ *   runContext?: { mode: string, startCommit: string | null, endCommit: string | null },
+ *   coverage?: { planId?: string | null, declarationSha256?: string | null, affectedTables?: string[] }
+ * }} report
+ * @returns {string}
+ */
 export function renderDataRegressionMarkdown(report) {
   const status = report.verdict.toUpperCase();
   const lines = [

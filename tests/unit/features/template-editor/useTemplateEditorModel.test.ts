@@ -43,6 +43,60 @@ const buildTemplate = (
 });
 
 describe("loadTemplateEditorData", () => {
+  it('blocks ambiguous cached content identities before editor load and before persistence', async () => {
+    const sourceSections = [{ id: 's', title: 'Section', items: [{ id: 'i', title: 'Item', contents: [
+      { id: 'duplicate', type: 'text' as const, value: 'A', extension: 'A' },
+      { id: 'duplicate', type: 'text' as const, value: 'B', extension: 'B' },
+    ] }] }];
+    const loaded = await loadTemplateEditorData({ id: 'template-1', getCachedTemplate: () => buildTemplate({ sections: sourceSections }) });
+    expect(loaded.loadError).toContain('invalid content');
+    const saveTemplate = vi.fn();
+    const result = await saveTemplateEditorData({ id: 'template-1', values: loaded.initialValues, sourceSections }, { saveTemplate });
+    expect(result.success).toBe(false);
+    expect(saveTemplate).not.toHaveBeenCalled();
+  });
+  it('allocates collision-free read identities for mixed legacy data without changing supplied IDs or values', async () => {
+    const apiClient = { getTemplateById: vi.fn().mockResolvedValue({ id: 'legacy', items: [{ items: [
+      { title: 'Missing item ID', completed: true, isCompleted: false, contents: [
+        { type: 'text', value: 'A', extension: 'A' },
+        { id: '1-1-content-1', type: 'text', value: 'B', extension: 'B' },
+      ] },
+      { id: '1-1', title: 'Supplied item ID' },
+    ] }, { id: '1', items: [] }] }) };
+    const loaded = await loadTemplateEditorData({ id: 'legacy', getCachedTemplate: () => undefined }, { apiClient });
+    expect(loaded.loadError).toBeNull();
+    const source = loaded.sourceSections!;
+    expect(source[0].id).not.toBe('1');
+    expect(source[1].id).toBe('1');
+    expect(source[0].items[0].id).not.toBe('1-1');
+    expect(source[0].items[1].id).toBe('1-1');
+    expect(source[0].items[0].isCompleted).toBe(false);
+    expect(source[0].items[0]).not.toHaveProperty('completed');
+    expect(source[0].items[0].contents![0].id).not.toBe('1-1-content-1');
+    const saveTemplate = vi.fn().mockResolvedValue({ success: true, errors: [] });
+    await saveTemplateEditorData({ id: 'legacy', values: loaded.initialValues, sourceSections: source }, { saveTemplate });
+    expect(saveTemplate.mock.calls[0][0].sections[0].items[0].contents.map((content: { extension: string }) => content.extension)).toEqual(['A', 'B']);
+  });
+  it('preserves extension fields by stable identity through editor save without resurrecting removed content', async () => {
+    const sourceSections = [{ id: 'section', title: 'Section', extension: 'section data', items: [
+      { id: 'kept', title: 'Old title', extension: { untouched: true }, description: 'Remove me', contents: [
+        { id: 'keep-content', type: 'text' as const, value: 'Old text', extension: ['content data'] },
+        { id: 'removed-content', type: 'text' as const, value: 'Remove', extension: 'do not revive' },
+      ] },
+      { id: 'removed', title: 'Remove', extension: 'do not revive' },
+    ] }];
+    const loaded = await loadTemplateEditorData({ id: 'template-1', getCachedTemplate: () => buildTemplate({ sections: sourceSections }) });
+    loaded.initialValues.sections = [{ id: 'section', title: 'Edited section', items: [
+      { id: 'kept', title: 'Edited title', contents: [{ id: 'keep-content', type: 'text', value: 'Edited text' }] },
+      { id: 'new', title: 'New item' },
+    ] }];
+    const saveTemplate = vi.fn().mockResolvedValue({ success: true, errors: [] });
+    await saveTemplateEditorData({ id: 'template-1', values: loaded.initialValues, sourceSections }, { saveTemplate });
+    expect(saveTemplate.mock.calls[0][0].sections).toEqual([{ id: 'section', title: 'Edited section', extension: 'section data', items: [
+      { id: 'kept', title: 'Edited title', extension: { untouched: true }, contents: [{ id: 'keep-content', type: 'text', value: 'Edited text', extension: ['content data'] }] },
+      { id: 'new', title: 'New item' },
+    ] }]);
+  });
   it("loads an existing template from cached data first", async () => {
     const template = buildTemplate();
     const getCachedTemplate = vi.fn(() => template);

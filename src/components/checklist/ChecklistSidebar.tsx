@@ -20,12 +20,12 @@ export const ChecklistSidebar: React.FC<ChecklistSidebarProps> = ({
         <CardTitle className="text-lg">Tasks</CardTitle>
       </CardHeader>
       <CardContent className="space-y-1 p-0">
-        {template.sections.map((section: { id: unknown; title: unknown; items: unknown }) => (
+        {template.sections.map((section) => (
           <div key={section.id}>
             <div className="px-4 py-2 text-sm font-medium text-muted-foreground bg-muted/30">
               {section.title}
             </div>
-            {section.items.map((item: { id: unknown; title: unknown; contents: unknown }) => {
+            {section.items.map((item) => {
               const isSelected = selectedItemId === item.id;
               
               return (

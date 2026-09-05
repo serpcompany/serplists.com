@@ -14,7 +14,7 @@ export type PublicSiteLink = {
   placements: PublicSiteLinkPlacement[];
 };
 
-export const publicSiteLinks = [
+export const publicSiteLinks: readonly PublicSiteLink[] = [
   {
     href: buildPublicTemplatesPath(),
     label: 'Templates',

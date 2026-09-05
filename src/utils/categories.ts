@@ -14,5 +14,5 @@ export const PREDEFINED_CATEGORIES = [
 export const getPredefinedCategories = () => PREDEFINED_CATEGORIES;
 
 export const isPredefinedCategory = (category: string): boolean => {
-  return PREDEFINED_CATEGORIES.includes(category as unknown);
+  return PREDEFINED_CATEGORIES.some((predefined) => predefined === category);
 };

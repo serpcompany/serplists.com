@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseLegacySections } from '../../../src/lib/schemas/legacyChecklistSchema';
 
 const boundedOptionalString = (max: number) => z.string().trim().max(max).optional();
 const boundedRequiredString = (max: number) => z.string().trim().min(1).max(max);
@@ -16,6 +17,10 @@ const templateRuleSchema = z.object({
   value: z.unknown().optional(),
   severity: z.enum(["error", "warning"]).optional(),
 });
+const checklistContentPayload = z.unknown().refine(
+  value => value === undefined || parseLegacySections(value).success,
+  'sections/items contain invalid checklist content',
+).optional();
 
 export const templatePayloadSchema = z.object({
   teamId: z.string().trim().min(1).optional(),
@@ -30,8 +35,8 @@ export const templatePayloadSchema = z.object({
   categories: stringListField(20, 80),
   category: boundedOptionalString(80),
   tags: stringListField(20, 80),
-  sections: z.unknown().optional(),
-  items: z.unknown().optional(),
+  sections: checklistContentPayload,
+  items: checklistContentPayload,
   slug: z
     .string()
     .trim()
@@ -47,8 +52,8 @@ export const checklistPayloadSchema = z.object({
   team_id: z.string().trim().min(1).optional(),
   template_id: z.string().trim().min(1).nullable().optional(),
   title: boundedRequiredString(160).optional(),
-  sections: z.unknown().optional(),
-  items: z.unknown().optional(),
+  sections: checklistContentPayload,
+  items: checklistContentPayload,
   status: z.enum(["in_progress", "completed"]).optional(),
   progress: z.number().min(0).max(100).optional(),
   completed_at: z.string().datetime().nullable().optional(),
@@ -81,29 +86,9 @@ export function normalizeStringArray(value: unknown): string[] {
 }
 
 export function normalizeSectionsPayload(input: unknown): { sections: unknown[]; error?: string } {
-  if (input === undefined || input === null) return { sections: [] };
+  if (input === undefined) return { sections: [] };
 
-  const parsed = parseJsonArray(input);
-  if (!parsed) {
-    return { sections: [], error: "sections/items must be a JSON array" };
-  }
-
-  if (parsed.length === 0) return { sections: [] };
-
-  const first = parsed[0] as Record<string, unknown> | null;
-  const isSectionsShape = !!first && typeof first === "object" && "items" in first;
-
-  if (isSectionsShape) {
-    return { sections: parsed };
-  }
-
-  return {
-    sections: [
-      {
-        id: "1",
-        title: "Checklist",
-        items: parsed,
-      },
-    ],
-  };
+  const parsed = parseLegacySections(input);
+  if (!parsed.success) return { sections: [], error: 'sections/items contain invalid checklist content' };
+  return { sections: parsed.data };
 }

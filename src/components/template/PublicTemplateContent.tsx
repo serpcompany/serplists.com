@@ -173,7 +173,7 @@ export function PublicTemplateContent({
                   <div className="mt-3 space-y-3">
                     {hasDescription ? (
                       <p className="whitespace-pre-line text-sm leading-7 text-muted-foreground">
-                        {normalizeDisplayText(item.description)}
+                        {normalizeDisplayText(item.description ?? '')}
                       </p>
                     ) : null}
 

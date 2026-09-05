@@ -3,12 +3,16 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
+import { parsePendingMigrationNames } from "./pending-migrations-lib.mjs";
 import { withPreparedRecoveryImport } from "./recovery-restore-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
+import { wrapCanarySubprocessFailure } from "./canary-diagnostics.mjs";
 
 import {
   loadEnvironmentInventory,
@@ -67,14 +71,14 @@ export function assertLiveIdentity({ output, expected }) {
   let liveIdentity;
   try {
     liveIdentity = extractD1Identity(output);
-  } catch (error) {
-    throw new Error("Could not parse live D1 identity JSON; refusing to continue.", { cause: error });
+  } catch {
+    throw new Error("Could not parse live D1 identity JSON; refusing to continue.");
   }
   const liveDatabaseId = liveIdentity.databaseId;
   const liveDatabaseName = liveIdentity.databaseName;
   if (liveDatabaseId !== expected.databaseId || liveDatabaseName !== expected.databaseName) {
     throw new Error(
-      `Live database identity mismatch: expected ${expected.databaseName} (${expected.databaseId}), received ${liveDatabaseName ?? "unknown"} (${liveDatabaseId ?? "unknown"}).`,
+      "Live database identity mismatch; refusing to continue.",
     );
   }
 }
@@ -101,6 +105,19 @@ export function assertFixtureResults(output, expectedCounts) {
   return observed;
 }
 
+function publicInvariantResults(output, sqlFiles) {
+  const expected = sqlFiles.flatMap(file => [...readFileSync(file, 'utf8').matchAll(/SELECT '([^']+)' AS invariant/g)].map(match => match[1]));
+  const parsed = JSON.parse(output);
+  const entries = Array.isArray(parsed) ? parsed : [parsed];
+  if (entries.some(entry => !Array.isArray(entry?.results) || entry.success === false)) throw new Error('Malformed invariant result.');
+  const rows = entries.flatMap(entry => entry.results);
+  if (rows.length !== expected.length || new Set(rows.map(row => row?.invariant)).size !== expected.length) throw new Error('Incomplete invariant result.');
+  return [{ results: rows.map(row => {
+    if (!expected.includes(row?.invariant) || !Number.isSafeInteger(row.total_rows) || row.total_rows < 0) throw new Error('Invalid invariant result.');
+    return { invariant: row.invariant, total_rows: row.total_rows };
+  }) }];
+}
+
 export function runDataCommand({
   argv,
   repoRoot,
@@ -109,7 +126,9 @@ export function runDataCommand({
   env = process.env,
   write,
   runCommand,
+  onStage = () => {},
 }) {
+  onStage('data-configuration');
   const { operation, values, flags } = parseArgs(argv);
   if (!operation) throw new Error("A data operation is required.");
 
@@ -163,6 +182,7 @@ export function runDataCommand({
     });
   }
 
+  onStage('data-configuration', plan.report);
   write(JSON.stringify(plan.report, null, 2));
 
   if (!flags.has("--execute")) {
@@ -215,13 +235,28 @@ export function runDataCommand({
 
   const assertCurrentIdentity = () => {
     if (!plan.preflightCommand) return;
-    const identityOutput = runCommand(plan.preflightCommand);
-    assertLiveIdentity({ output: identityOutput, expected: plan.report });
+    onStage('data-identity');
+    try {
+      const identityOutput = runCommand(plan.preflightCommand);
+      assertLiveIdentity({ output: identityOutput, expected: plan.report });
+    } catch (error) { throw wrapCanarySubprocessFailure('data-identity', error); }
   };
   const runIdentityBound = (command, { after = true } = {}) => {
     assertCurrentIdentity();
-    const result = runCommand(command);
+    const stage = command.includes('time-travel') ? 'data-bookmark'
+      : command.includes('export') ? 'data-export'
+      : command.includes('create') ? 'data-create'
+      : command.includes('delete') ? 'data-delete'
+      : command.includes('list') ? 'data-migration-list'
+      : command.some(part => part.includes('SELECT id, name FROM d1_migrations')) ? 'data-ledger'
+      : operation === 'recovery-restore' ? 'data-restore'
+      : ['migration-apply', 'rehearsal-baseline'].includes(operation) ? 'data-migration-apply' : 'data-query';
+    onStage(stage);
+    let result;
+    try { result = runCommand(command); }
+    catch (error) { throw wrapCanarySubprocessFailure(stage, error); }
     if (after) assertCurrentIdentity();
+    onStage(stage);
     return result;
   };
   if (plan.preconditionCommand) {
@@ -233,19 +268,23 @@ export function runDataCommand({
   }
   if (plan.rawOutputPath) mkdirSync(path.dirname(plan.rawOutputPath), { recursive: true });
   let invariantContext;
+  let invariantSqlFiles;
   let output;
   if (operation === "invariant-capture") {
     const appliedMigrations = parseAppliedMigrationLedger(runIdentityBound(plan.invariantLedgerCommand));
     const selectedFiles = selectInvariantSqlFiles({ appliedMigrations });
+    const repositoryMigrations = readdirSync(path.join(repoRoot, 'db/migrations')).filter(name => /^\d{4}_[a-z0-9_]+\.sql$/.test(name));
+    if (appliedMigrations.some(name => !repositoryMigrations.includes(name))) throw new Error('Unknown applied migration.');
+    invariantSqlFiles = selectedFiles.map(entry => entry.path);
     invariantContext = {
       appliedThrough: appliedMigrations.at(-1),
       sqlVersions: selectedFiles.map((entry) => entry.minimumMigration),
     };
-    write(JSON.stringify({ invariantContext }, null, 2));
-    const outputs = [runIdentityBound(plan.command)];
+    const outputs = [JSON.stringify(publicInvariantResults(runIdentityBound(plan.command), [selectedFiles[0].path]))];
     for (const definition of plan.versionedInvariantCommands) {
       if (appliedMigrations.includes(definition.minimumMigration)) {
-        outputs.push(runIdentityBound(definition.command));
+        const sqlPath = definition.command[definition.command.indexOf('--file') + 1];
+        outputs.push(JSON.stringify(publicInvariantResults(runIdentityBound(definition.command), [sqlPath])));
       }
     }
     const combined = outputs.flatMap((entry) => {
@@ -272,10 +311,11 @@ export function runDataCommand({
         const command = [...plan.command];
         command[command.indexOf("--file") + 1] = file;
         try { return runIdentityBound(command); }
-        catch { throw new Error("Recovery import failed; plaintext diagnostics suppressed."); }
+        catch (error) { throw wrapCanarySubprocessFailure('data-restore', error); }
       },
     });
     output = JSON.stringify({ recoveryRestore: { ...plan.report.recoveryRestore, transformation: restored.metadata, preparedPlaintextCleanup: "pass" } });
+    onStage('data-reporting');
     writeDataCheckReports({ name: "recovery-import", reportDirectory: resolveEvidencePath(repoRoot, values["--report-dir"] ?? "tmp/data-reports/rehearsal/recovery"),
       report: { verdict: "pass", commit: gitCommit, target: plan.report, transformation: restored.metadata, preparedPlaintextCleanup: "pass" },
       summary: "PASS actual full-export import completed; prepared plaintext removed. Post-restore equality remains a separate blocking gate.",
@@ -305,30 +345,61 @@ export function runDataCommand({
         format: "data-only-source-derived-content-free",
       },
     }, null, 2));
+    output = '';
   }
   if (operation === "fixture-setup" || operation === "fixture-teardown") {
-    assertFixtureResults(output, plan.report.expectedCounts);
+    const counts = assertFixtureResults(output, plan.report.expectedCounts);
+    output = JSON.stringify({ fixtureCounts: Object.fromEntries(Object.keys(plan.report.expectedCounts).map(name => [name, counts[name]])) });
   }
-  if (output) write(output);
   if (operation === "rehearsal-create") {
     const createdDatabaseId = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i.exec(output)?.[0];
     if (!createdDatabaseId) {
       throw new Error("Wrangler created a rehearsal but its exact database UUID could not be recorded.");
     }
     if (values["--expected-database-id"] && values["--expected-database-id"] !== createdDatabaseId) throw new Error("Created rehearsal database ID does not match --expected-database-id.");
+    onStage('data-identity');
     const createdIdentityOutput = runCommand(["pnpm", "exec", "wrangler", "d1", "info", plan.report.databaseName, "--json"]);
     assertLiveIdentity({ output: createdIdentityOutput, expected: { ...plan.report, databaseId: createdDatabaseId } });
+    onStage('data-reporting');
     const evidencePath = resolveEvidencePath(repoRoot, values["--evidence"]);
     const creationEvidence = { schemaVersion: 1, verdict: "pass", commit: gitCommit, runId: env.GITHUB_RUN_ID, createdAt: now.toISOString(), target: { environment: "rehearsal", binding: "DB", databaseName: plan.report.databaseName, databaseId: createdDatabaseId } };
     mkdirSync(path.dirname(evidencePath), { recursive: true });
     writeFileSync(evidencePath, `${JSON.stringify(creationEvidence, null, 2)}\n`, { mode: 0o600 });
-    write(JSON.stringify({
+    output = JSON.stringify({
       createdIdentity: {
         environment: "rehearsal",
         databaseName: plan.report.databaseName,
         databaseId: createdDatabaseId,
       },
-    }, null, 2));
+    }, null, 2);
+    write(output);
   }
+  onStage('data-reporting');
+  if (operation === 'identify') {
+    if (plan.command) assertLiveIdentity({ output, expected: plan.report });
+    output = JSON.stringify({ identity: { environment: plan.report.environment, binding: plan.report.binding, databaseName: plan.report.databaseName, databaseId: plan.report.databaseId } });
+  } else if (operation === 'migration-ledger') {
+    const names = readdirSync(path.join(repoRoot, 'db/migrations')).filter(name => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
+    output = JSON.stringify({ pendingMigrations: parsePendingMigrationNames(output, names) });
+  } else if (operation === 'recovery-bookmark') {
+    const parsed = JSON.parse(output);
+    // D1 Time Travel's documented bookmark representation; fail closed on new formats.
+    // https://developers.cloudflare.com/d1/reference/time-travel/
+    if (typeof parsed?.bookmark !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{32}$/.test(parsed.bookmark)) throw new Error('Malformed recovery bookmark.');
+    output = JSON.stringify({ bookmark: parsed.bookmark });
+  } else if (operation === 'invariant-capture') {
+    output = JSON.stringify(publicInvariantResults(output, invariantSqlFiles));
+  } else if (['export', 'recovery-export', 'sanitizer-source-export'].includes(operation)) {
+    const bytes = readFileSync(plan.outputPath);
+    if (!bytes.length) throw new Error('Missing export artifact.');
+    output = JSON.stringify({ export: { outputPath: plan.outputPath, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), verification: 'separate-verification-required' } });
+  }
+  if (invariantContext) write(JSON.stringify({ invariantContext }, null, 2));
+  if (['migration-apply', 'rehearsal-import', 'rehearsal-teardown'].includes(operation)) {
+    // These commands return human-oriented provider chatter, not data evidence.
+    // The ordered ledger/invariant/restore gates remain separate authorities.
+    output = JSON.stringify({ operation, status: 'command-completed', verification: 'separate-verification-required' });
+  }
+  if (output && operation !== 'rehearsal-create') write(output);
   return { executed: true, plan, output, invariantContext };
 }

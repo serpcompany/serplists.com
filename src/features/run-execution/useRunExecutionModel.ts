@@ -40,7 +40,7 @@ type RunExecutionLoadOptions = {
 };
 
 type RunExecutionMutationParams = {
-  run?: ChecklistRun;
+  run?: ChecklistRun | null;
   shareToken?: string;
 };
 

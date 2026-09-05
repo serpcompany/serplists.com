@@ -20,6 +20,12 @@ const stagingId = "fcaf4325-5be7-4ead-ab60-45932a04177b";
 const productionId = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1";
 const rehearsalId = "8ab2b7e9-0ce8-4d1e-b42f-8601eb256b67";
 const fullGitCommit = "0123456789abcdef0123456789abcdef01234567";
+function invariantTransport(command) {
+  const names = command.some(part => part.endsWith('capture-invariants-0024.sql'))
+    ? ['templates_invalid_content_version', 'runs_invalid_template_version', 'runs_invalid_revision', 'runs_invalid_retired_json']
+    : ['users', 'templates', 'templates_active', 'templates_deleted', 'templates_invalid_json', 'templates_invalid_version', 'template_owners', 'runs', 'runs_active', 'runs_deleted', 'runs_invalid_json', 'run_owners', 'orphaned_templates', 'orphaned_runs'];
+  return JSON.stringify([{ results: names.map(invariant => ({ invariant, total_rows: invariant === 'templates' ? 20 : 0 })) }]);
+}
 const productionExportFixture = readFileSync(path.join(repoRoot, "scripts/data/fixtures/production-export-edge-cases.sql"), "utf8");
 const creationEvidencePath = path.join(repoRoot, "tmp/data-reports/unit-creation.json");
 mkdirSync(path.dirname(creationEvidencePath), { recursive: true });
@@ -105,7 +111,7 @@ describe("data command", () => {
         if (command.includes("SELECT id, name FROM d1_migrations ORDER BY id")) {
           return JSON.stringify([{ results: [{ id: 1, name: "0023_add_sitemap_revision_state.sql" }] }]);
         }
-        return JSON.stringify([{ results: [{ invariant: "templates", total_rows: 20 }] }]);
+        return invariantTransport(command);
       },
     });
 
@@ -143,7 +149,7 @@ describe("data command", () => {
             { id: 2, name: "0024_safe_template_evolution.sql" },
           ] }]);
         }
-        return JSON.stringify([{ results: [{ invariant: "ok", total_rows: 0 }] }]);
+        return invariantTransport(command);
       },
     });
 

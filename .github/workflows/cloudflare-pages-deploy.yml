@@ -23,6 +23,10 @@ permissions:
   contents: read
   actions: read
   attestations: read
+defaults:
+  run:
+    # Explicit Bash enables -e -o pipefail for every privileged pipeline.
+    shell: bash
 env:
   COREPACK_ENABLE_AUTO_PIN: "0"
   CLOUDFLARE_PAGES_PROJECT: serplists-com
@@ -277,9 +281,11 @@ jobs:
           CORRECTION_REPORT=$(find tmp/evidence/ci -name contract-correction.json -print -quit)
           SCHEMA_REPORT=$(find tmp/evidence/ci -name schema-contract.json -print -quit)
           STAGING_REPORT=$(find tmp/evidence/staging -name staging-promotion.json -print)
-          test "$(printf '%s\n' "$STAGING_REPORT" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1
+          STAGING_REPORT_COUNT=$(printf '%s\n' "$STAGING_REPORT" | sed '/^$/d' | wc -l | tr -d ' ')
+          test "$STAGING_REPORT_COUNT" -eq 1
           REHEARSAL_REPORT=$(find tmp/evidence/rehearsal -name rehearsal-promotion.json -print)
-          test "$(printf '%s\n' "$REHEARSAL_REPORT" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1
+          REHEARSAL_REPORT_COUNT=$(printf '%s\n' "$REHEARSAL_REPORT" | sed '/^$/d' | wc -l | tr -d ' ')
+          test "$REHEARSAL_REPORT_COUNT" -eq 1
           node scripts/data/production-request.mjs --commit "$EXPECTED_COMMIT" --classification "$MIGRATION_CLASSIFICATION" --migration-from "$MIGRATION_FROM" --migration-to "$MIGRATION_TO" --database-name serp-checklists-db --database-id "$CONFIRM_PRODUCTION_DATABASE_ID" --ci-report "$CI_REPORT" --correction-report "$CORRECTION_REPORT" --schema-report "$SCHEMA_REPORT" --staging-report "$STAGING_REPORT" --rehearsal-report "$REHEARSAL_REPORT" --ci-run-metadata tmp-ci-run.json --staging-run-metadata tmp-staging-run.json --merge-commit tmp/change-merge-commit.json --change-provenance tmp/change-provenance.json --output tmp/production-request.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
@@ -485,9 +491,13 @@ jobs:
           node scripts/data/production-executor.mjs verify-deploy --request tmp/production-request.json --evidence tmp/production-data-evidence.json
       - run: BETTER_AUTH_SECRET=ci-build-placeholder-secret-32-chars-minimum pnpm run build
       - name: Deploy exact compatible production commit
+        id: production_pages_deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
         run: pnpm exec wrangler pages deploy ./dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch main --commit-hash "$GITHUB_SHA" | tee tmp/production-deploy.txt
+      - name: Record exact production deployment result
+        if: always()
+        run: node scripts/data/record-deployment.mjs --environment production --commit "$GITHUB_SHA" --tree "$(git rev-parse 'HEAD^{tree}')" --database-name serp-checklists-db --database-id b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1 --outcome "${{ steps.production_pages_deploy.outcome }}" --raw-output tmp/production-deploy.txt --report-dir tmp/data-reports/production-deploy
       - name: Record exact deployment URL
         run: |
           grep -Eo 'https://[a-zA-Z0-9.-]+\.pages\.dev' tmp/production-deploy.txt | tail -1 > tmp/production-deployment-url.txt
@@ -500,6 +510,7 @@ jobs:
           path: |
             tmp/production-deploy.txt
             tmp/production-deployment-url.txt
+            tmp/data-reports/production-deploy/
           if-no-files-found: error
           retention-days: 90
 

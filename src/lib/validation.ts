@@ -59,7 +59,7 @@ export const sanitizeMarkdown = (content: string): string => {
 };
 
 // Validate and sanitize form data
-export const validateTemplateData = (data: unknown) => {
+export const validateTemplateData = (data: { title?: unknown; description?: unknown; slug?: unknown }) => {
   return {
     title: templateTitleSchema.parse(data.title),
     description: templateDescriptionSchema.parse(data.description),
@@ -67,20 +67,20 @@ export const validateTemplateData = (data: unknown) => {
   };
 };
 
-export const validateSectionData = (data: unknown) => {
+export const validateSectionData = (data: { title?: unknown }) => {
   return {
     title: sectionTitleSchema.parse(data.title),
   };
 };
 
-export const validateItemData = (data: unknown) => {
+export const validateItemData = (data: { title?: unknown; description?: string }) => {
   return {
     title: itemTitleSchema.parse(data.title),
     description: markdownContentSchema.parse(sanitizeMarkdown(data.description || '')),
   };
 };
 
-export const validateContentData = (data: unknown) => {
+export const validateContentData = (data: { type?: unknown; value?: string }) => {
   const baseValidation = {
     type: z.enum(["text", "image", "video", "file", "embed", "subItems"]).parse(data.type),
   };

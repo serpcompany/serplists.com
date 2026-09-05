@@ -14,6 +14,8 @@ import {
 } from "@/lib/forms/templateEditorForm";
 import { api } from "@/lib/api";
 import type { ChecklistTemplate } from "@/types/checklist";
+import { preserveTemplateEditorExtensions } from '@/lib/forms/templateEditorExtensions';
+import { normalizeSections, InvalidChecklistContentError } from '@/lib/utils/checklistSections';
 
 type TemplateEditorApiClient = Pick<typeof api, "getTemplateById">;
 
@@ -35,6 +37,7 @@ type LoadTemplateEditorDataOptions = {
 type SaveTemplateEditorDataOptions = {
   id?: string;
   values: TemplateEditorFormValues;
+  sourceSections?: ChecklistTemplate['sections'];
 };
 
 type SaveTemplateEditorDependencies = {
@@ -45,6 +48,7 @@ export type TemplateEditorLoadResult = {
   initialValues: TemplateEditorFormValues;
   loadError: string | null;
   templateSlug?: string;
+  sourceSections?: ChecklistTemplate['sections'];
 };
 
 export const buildDefaultTemplateEditorTemplate =
@@ -81,11 +85,15 @@ export const shouldNavigateToTemplatesAfterSave = (params: {
 
 const buildLoadResult = (
   template?: Partial<ChecklistTemplate>,
-): TemplateEditorLoadResult => ({
-  initialValues: buildTemplateEditorFormValues(template),
+): TemplateEditorLoadResult => {
+  const sourceSections = normalizeSections(template?.sections ?? []);
+  return {
+  initialValues: buildTemplateEditorFormValues({ ...template, sections: sourceSections }),
+  sourceSections,
   loadError: null,
   templateSlug: template?.slug ?? template?.seoUrl,
-});
+  };
+};
 
 const getApiClient = (
   dependencies?: TemplateEditorModelDependencies,
@@ -110,12 +118,9 @@ export const loadTemplateEditorData = async (
     return buildLoadResult(buildDefaultTemplateEditorTemplate());
   }
 
-  const cachedTemplate = options.getCachedTemplate(options.id);
-  if (cachedTemplate) {
-    return buildLoadResult(cachedTemplate);
-  }
-
   try {
+    const cachedTemplate = options.getCachedTemplate(options.id);
+    if (cachedTemplate) return buildLoadResult(cachedTemplate);
     const fetchedTemplate = await getApiClient(dependencies).getTemplateById(
       options.id,
     );
@@ -141,11 +146,17 @@ export const saveTemplateEditorData = async (
   dependencies: SaveTemplateEditorDependencies,
 ): Promise<SaveTemplateResult> => {
   const normalizedForm = normalizeTemplateEditorFormForSave(options.values);
+  let sections: ChecklistTemplate['sections'];
+  try { sections = preserveTemplateEditorExtensions(options.sourceSections ?? [], normalizedForm.sections); }
+  catch (error) {
+    if (!(error instanceof InvalidChecklistContentError)) throw error;
+    return { success: false, errors: [{ type: 'content', message: error.message }] };
+  }
   return dependencies.saveTemplate({
     id: options.id,
     title: normalizedForm.title,
     description: normalizedForm.description,
-    sections: normalizedForm.sections,
+    sections,
     seoTitle: normalizedForm.seoTitle,
     seoDescription: normalizedForm.seoDescription,
     seoUrl: normalizedForm.seoUrl,
@@ -166,6 +177,7 @@ export const useTemplateEditorModel = (
     isSaving,
   } = useTemplateSave();
   const loadedTemplateIdRef = useRef<string | null>(null);
+  const sourceSectionsRef = useRef<ChecklistTemplate['sections']>([]);
   const baseGetTemplateRef = useRef(getTemplate);
   const apiClientRef = useRef<TemplateEditorApiClient | undefined>(
     dependencies?.apiClient,
@@ -190,6 +202,7 @@ export const useTemplateEditorModel = (
     const load = async () => {
       if (!options.id) {
         loadedTemplateIdRef.current = null;
+        sourceSectionsRef.current = [];
         setInitialValues(
           buildTemplateEditorFormValues(buildDefaultTemplateEditorTemplate()),
         );
@@ -222,6 +235,7 @@ export const useTemplateEditorModel = (
       }
 
       loadedTemplateIdRef.current = options.id;
+      sourceSectionsRef.current = result.sourceSections ?? [];
       setInitialValues(result.initialValues);
       setLoadError(result.loadError);
       setTemplateSlug(result.templateSlug);
@@ -242,6 +256,7 @@ export const useTemplateEditorModel = (
       {
         id: options.id,
         values,
+        sourceSections: sourceSectionsRef.current,
       },
       {
         saveTemplate: dependencies?.saveTemplate ?? persistTemplateSave,
@@ -249,6 +264,7 @@ export const useTemplateEditorModel = (
     );
 
     if (result.success) {
+      sourceSectionsRef.current = preserveTemplateEditorExtensions(sourceSectionsRef.current, values.sections);
       const savedState = buildTemplateEditorSavedState(values);
       setInitialValues(savedState.initialValues);
       setLoadError(null);

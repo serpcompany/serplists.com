@@ -4,11 +4,13 @@ import {it} from 'vitest';
 import {readdirSync} from 'node:fs';
 import path from 'node:path';
 import {writeDataCheckReports} from './reporting.mjs';
-import {runRepositoryGit} from './git-subprocess-env.mjs';
+import {captureRepositoryGitState} from './git-subprocess-env.mjs';
 
 function runProof(args, name, databaseName, databaseId) {
   const repoRoot = fileURLToPath(new URL('../..',import.meta.url));
-  const commit = runRepositoryGit({repoRoot,args:['rev-parse','HEAD']}).trim();
+  const sourceState = captureRepositoryGitState({repoRoot});
+  const commit = sourceState.commit;
+  const evidenceScope = sourceState.paths.length ? 'working-tree-diagnostic' : 'committed-candidate';
   const migrations = readdirSync(path.join(repoRoot,'db/migrations')).filter(name=>/^\d{4}_.+\.sql$/.test(name)).sort();
   let verdict = 'fail';
   try {
@@ -26,8 +28,8 @@ function runProof(args, name, databaseName, databaseId) {
       const target = {environment:'local',binding:'DB',databaseName,databaseId,synthetic:true};
       const migrationRange = {from:migrations[0],to:migrations.at(-1)};
       writeDataCheckReports({name,reportDirectory:process.env.DATA_REPORT_DIR,
-        report:{commit,target,migrationRange,verdict,checks:[{name,verdict}]},
-        summary:`${verdict.toUpperCase()} ${name}: environment=local binding=DB database=${databaseName} (${databaseId}) commit=${commit} migration=${migrationRange.from}->${migrationRange.to}. Synthetic fixture proof only.`,
+        report:{commit,evidenceScope,dirtyPaths:sourceState.paths,target,migrationRange,verdict,checks:[{name,verdict}]},
+        summary:`${verdict.toUpperCase()} ${name}: environment=local binding=DB database=${databaseName} (${databaseId}) commit=${commit} migration=${migrationRange.from}->${migrationRange.to}. Evidence scope=${evidenceScope}. Synthetic fixture proof only.`,
       });
     }
   }
@@ -39,4 +41,8 @@ it('fails missing mandatory rules without partial template history or audit writ
 
 it('fails billing persistence faults and recovers webhook retries without duplicate state on real D1',()=>{
   runProof(['scripts/data/run-stripe-write-failure-proof.mjs'],'billing-write-failure-recovery','issue131-stripe-write-failure','local:miniflare:13113113-1131-4131-8131-131131131131');
+},100_000);
+
+it('rejects malformed checklist content without changing stored template or run state on migrated real D1',()=>{
+  runProof(['--test','scripts/data/issue136-content-contract.node-test.mjs'],'checklist-content-write-safety','content-contract','local:miniflare:11111111-1111-4111-8111-111111111111');
 },100_000);

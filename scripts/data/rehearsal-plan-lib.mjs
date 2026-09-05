@@ -100,6 +100,18 @@ export function affectedTablesFromSql(sql) {
   return [...new Set(tables)].sort();
 }
 
+/**
+ * @typedef {{ id: string, migrationFrom: string | null, migrationTo: string | null, preMigration: string, artifacts: string[], fixtureProfile: keyof typeof FIXTURE_PROFILE_CONTRACTS, affectedTables: string[], invariants: string[] }} RehearsalPlan
+ * @typedef {{ repoRoot: string, commit: string, migrationFrom?: string | null, migrationTo?: string | null, baseRef?: string, planPath?: string }} ResolveRehearsalOptions
+ * @typedef {RehearsalPlan & { commit: string, migrationRange: { from: string | null, to: string | null }, artifactSha256: Record<string, string>, changedArtifacts: string[], observedAffectedTables: string[], declarationSha256: string }} ResolvedRehearsalPlan
+ */
+
+/**
+ * Validates declaration structure, range syntax, artifact policy, and the exact
+ * table/invariant claims supported by the named fixture profile.
+ * @param {{ repoRoot: string, planPath?: string }} options
+ * @returns {{ schemaVersion: 1, plans: RehearsalPlan[] }}
+ */
 export function loadRehearsalPlans({ repoRoot, planPath = path.join(repoRoot, "scripts/data/rehearsal-plans.json") }) {
   const declaration = JSON.parse(readFileSync(planPath, "utf8"));
   if (declaration?.schemaVersion !== 1 || !Array.isArray(declaration.plans)) throw new Error("Rehearsal plan declaration is missing or invalid.");
@@ -114,6 +126,13 @@ export function loadRehearsalPlans({ repoRoot, planPath = path.join(repoRoot, "s
   return declaration;
 }
 
+/**
+ * Omitted endpoints select the reviewed default or base diff; explicit endpoints
+ * must form a complete range (including null/null or CLI none/none). Resolution
+ * verifies the checked-out commit, contiguous artifacts, tables, and Git bytes.
+ * @param {ResolveRehearsalOptions} options
+ * @returns {ResolvedRehearsalPlan}
+ */
 export function resolveRehearsalPlan({ repoRoot, commit, migrationFrom, migrationTo, baseRef, planPath }) {
   if (!/^[0-9a-f]{40}$/.test(commit ?? "")) throw new Error("Rehearsal plan resolution requires the exact candidate commit.");
   const checkedOutCommit = runRepositoryGit({ repoRoot, args: ["rev-parse", "HEAD"] }).trim();
@@ -164,6 +183,9 @@ export function validateCoverageMatch({ evidence, expected }) {
   return evidence;
 }
 
+/** @param {Omit<ResolveRehearsalOptions, 'migrationFrom' | 'migrationTo'> & { pending: string[] }} options
+ * @returns {ResolvedRehearsalPlan}
+ */
 export function resolvePendingRehearsalPlan({ pending, ...options }) {
   const files = readdirSync(path.join(options.repoRoot, "db/migrations")).filter((name) => MIGRATION.test(name)).sort();
   const range = rangeFromPending(files, pending);
@@ -172,6 +194,9 @@ export function resolvePendingRehearsalPlan({ pending, ...options }) {
 
 // CI must produce the default change coverage plus reviewed outstanding ranges.
 // These are evidence candidates, never permission to apply a migration.
+/** @param {ResolveRehearsalOptions} options
+ * @returns {ResolvedRehearsalPlan[]}
+ */
 export function resolveCiRehearsalPlans(options) {
   const primary = resolveRehearsalPlan(options);
   const declaration = loadRehearsalPlans(options);

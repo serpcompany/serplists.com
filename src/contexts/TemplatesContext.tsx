@@ -27,6 +27,8 @@ export type {
 
 import { generateSlug } from "@/utils/urlHelpers";
 import { calculateSectionsProgress, isSectionsShape, normalizeSections, resetSectionsCompletion } from "@/lib/utils/checklistSections";
+import { mapReadableChecklists, normalizeRecordSections } from '@/lib/utils/checklistSections';
+import { mapChecklistToRun } from '@/features/run-execution/runExecutionMappers';
 import {
   isRepoTemplate,
   mergeAccountTemplateCollections,
@@ -36,6 +38,8 @@ import {
 
 
 const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
+const EMPTY_TEMPLATES: ChecklistTemplate[] = [];
+const EMPTY_RUNS: ChecklistRun[] = [];
 
 type CreateRunRequest = {
   apiPayload: {
@@ -107,21 +111,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     seoDescription: typeof template.seoDescription === 'string' ? template.seoDescription : '',
     rules: Array.isArray(template.rules) ? template.rules as ChecklistTemplate["rules"] : undefined,
     seoUrl: typeof template.slug === 'string' ? template.slug : '',
-    sections: normalizeSections((() => {
-      if (template.sections) return template.sections;
-      if (template.items) {
-        const parsedItems = typeof template.items === 'string' ? JSON.parse(template.items) : template.items;
-        if (Array.isArray(parsedItems) && parsedItems.length > 0 && parsedItems[0]?.items) {
-          return parsedItems;
-        }
-        return [{
-          id: '1',
-          title: 'Checklist',
-          items: parsedItems
-        }];
-      }
-      return [];
-    })()),
+    sections: normalizeRecordSections(template),
     categories: Array.isArray(template.categories)
       ? template.categories as string[]
       : (template.category ? [String(template.category)] : []),
@@ -148,36 +138,40 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   // Fetch catalog templates for public-facing pages. The merge step keeps only public templates.
-  const { data: catalogApiTemplates = [], isLoading: catalogTemplatesLoading } = useQuery({
+  const { data: catalogResult, isLoading: catalogTemplatesLoading } = useQuery({
     queryKey: ['catalog-templates', user?.id],
     queryFn: async () => {
       try {
         const templatesData = await api.getTemplates();
-        return templatesData.map((template: Record<string, unknown>) => mapApiTemplate(template));
+        return mapReadableChecklists(templatesData, mapApiTemplate);
       } catch (error) {
         console.error('Error fetching templates:', error);
-        return [];
+        throw error;
       }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Fetch the templates owned by the active console workspace.
-  const { data: workspaceTemplates = [], isLoading: workspaceTemplatesLoading } = useQuery({
+  const { data: workspaceResult, isLoading: workspaceTemplatesLoading } = useQuery({
     queryKey: ['templates', user?.id ?? 'visitor', workspaceScopeId],
     queryFn: async () => {
       try {
         const templatesData = await api.getTemplates(
           activeTeamId ? { teamId: activeTeamId } : undefined,
         );
-        return templatesData.map((template: Record<string, unknown>) => mapApiTemplate(template));
+        return mapReadableChecklists(templatesData, mapApiTemplate);
       } catch (error) {
         console.error('Error fetching workspace templates:', error);
-        return [];
+        throw error;
       }
     },
     staleTime: 5 * 60 * 1000,
   });
+
+  const catalogApiTemplates = catalogResult?.readable ?? EMPTY_TEMPLATES;
+  const workspaceTemplates = workspaceResult?.readable ?? EMPTY_TEMPLATES;
+  const invalidTemplateCount = Math.max(catalogResult?.invalidCount ?? 0, workspaceResult?.invalidCount ?? 0);
 
   // Fetch user's own templates (both public and private) if logged in
   const { data: userTemplates = [] } = useQuery({
@@ -199,53 +193,37 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   // Fetch user's runs (only if logged in)
-  const { data: runs = [], isLoading: runsLoading } = useQuery({
+  const { data: runsResult, isLoading: runsLoading } = useQuery({
     queryKey: ['runs', user?.id, workspaceScopeId],
     queryFn: async () => {
-      if (!user) return [];
+      if (!user) return { readable: [], invalidCount: 0 };
       
       try {
         const checklistsData = await api.getChecklists(
           activeTeamId ? { teamId: activeTeamId } : undefined,
         );
         // Transform to run format
-        const transformedRuns = checklistsData.map((checklist: Record<string, unknown>) => {
-          const sections = (() => {
-            const raw = typeof checklist.items === 'string' ? JSON.parse(checklist.items) : (checklist.items || []);
-            if (isSectionsShape(raw)) return raw as ChecklistSection[];
-            return [{ id: '1', title: 'Checklist', items: raw }];
-          })();
-
+        const transformedRuns = mapReadableChecklists(checklistsData, (checklist: Record<string, unknown>) => {
           return ({
-          id: checklist.id,
-          templateId: checklist.template_id || '',
-          title: checklist.title,
-          status: (checklist.status || 'in_progress') as "in_progress" | "completed",
-          sections: normalizeSections(sections),
-          startedAt: checklist.started_at || checklist.created_at,
-          completedAt: checklist.completed_at || undefined,
-          userId: checklist.user_id || '',
+          ...mapChecklistToRun(checklist, typeof checklist.id === 'string' ? checklist.id : ''),
           teamId: typeof checklist.team_id === 'string' ? checklist.team_id : undefined,
-          templateVersion: typeof checklist.template_version === 'number' ? checklist.template_version : 1,
-          revision: typeof checklist.revision === 'number' ? checklist.revision : 1,
-          isStale: checklist.is_stale === true,
-          isPublic: checklist.is_public === true || checklist.is_public === 1,
         });
         });
 
-        return transformedRuns.map((r: ChecklistRun) => ({
+        return { ...transformedRuns, readable: transformedRuns.readable.map((r: ChecklistRun) => ({
           ...r,
           progress: calculateSectionsProgress(r.sections),
-        }));
+        })) };
       } catch (error) {
         console.error('Error fetching runs:', error);
-        return [];
+        throw error;
       }
     },
     enabled: !!user,
     staleTime: 5 * 60 * 1000,
   });
 
+  const runs = runsResult?.readable ?? EMPTY_RUNS;
   const publicTemplates = useMemo(
     () => mergePublicTemplateCollections(repoTemplates, catalogApiTemplates),
     [catalogApiTemplates],
@@ -581,6 +559,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   return (
     <TemplatesContext.Provider value={value}>
+      {invalidTemplateCount > 0 ? <div role="alert">Some templates contain invalid content and cannot be opened or edited. Their stored data has not been changed. Other templates remain available.</div> : null}
+      {(runsResult?.invalidCount ?? 0) > 0 ? <div role="alert">Some runs contain invalid content and cannot be opened or edited. Their stored data has not been changed. Other runs remain available.</div> : null}
       {children}
     </TemplatesContext.Provider>
   );

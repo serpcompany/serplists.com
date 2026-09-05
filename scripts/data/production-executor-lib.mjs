@@ -458,6 +458,41 @@ export function verifySignedEvidence({ signedEvidence }) {
   return signedEvidence.payload;
 }
 
+/**
+ * @typedef {{ preparationSha256: string, runId: string, runAttempt: string, artifactId: string, requestSha256?: string }} RecoveryReceipt
+ * @typedef {{ verdict: string, summary: object }} ProductionStepResult
+ * @typedef {{ version: number, requestSha256: string, context: object, preparedAt: string, results: Record<string, ProductionStepResult> }} ProductionPreparation
+ * @typedef {{ recovery: RecoveryReceipt, recoveryTokenSha256: string }} RecoveryBoundApproval
+ */
+
+/**
+ * Approval may be omitted at the call boundary but is rejected by
+ * assertRecoveryApproval. This phase requires the receipt binding, preparation
+ * digest/freshness, ledger prefix, and source proof before invoking write steps;
+ * full independent-approval evidence is checked by the surrounding executor.
+ * Step summaries have different shapes and remain subject to their runtime gates.
+ * @param {{
+ *   commit: string,
+ *   database: { databaseName: string, databaseId: string },
+ *   pendingMigrations: string[],
+ *   classification: 'additive' | 'backfill' | 'destructive' | 'irreversible',
+ *   approval?: RecoveryBoundApproval | null,
+ *   preparation: ProductionPreparation,
+ *   receipt: RecoveryReceipt,
+ *   run: (step: string) => ProductionStepResult,
+ *   clock?: () => number
+ * }} options
+ * @returns {{
+ *   payload: {
+ *     verdict: 'pass', commit: string,
+ *     classification: 'additive' | 'backfill' | 'destructive' | 'irreversible',
+ *     database: { databaseName: string, databaseId: string }, pendingMigrations: string[],
+ *     migrationRange: { from: string | null, to: string | null },
+ *     approval: RecoveryBoundApproval, recovery: RecoveryReceipt,
+ *     results: Record<string, ProductionStepResult>
+ *   }, digest: string, provenance: 'requires-github-artifact-attestation'
+ * }}
+ */
 export function runProductionDataPhase({ commit, database, pendingMigrations, classification, approval = null, preparation, receipt, run, clock = Date.now }) {
   assertRecoveryApproval({ approval, receipt });
   if (digest(preparation) !== receipt.preparationSha256) throw new Error('Production preparation does not match the approved receipt.');

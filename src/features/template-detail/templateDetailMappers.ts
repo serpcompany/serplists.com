@@ -1,7 +1,6 @@
 import { resolvePublicTemplateOwnerSlug } from '@/lib/routes';
 import {
-  isSectionsShape,
-  normalizeSections as normalizeChecklistSections,
+  normalizeRecordSections,
 } from '@/lib/utils/checklistSections';
 import type { ChecklistSection, ChecklistTemplate } from '@/types/checklist';
 
@@ -14,38 +13,7 @@ const asStringArray = (value: unknown): string[] | undefined =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : undefined;
 
 const normalizeTemplateSections = (rawTemplate: ApiRecord): ChecklistSection[] => {
-  if (Array.isArray(rawTemplate.sections)) {
-    return normalizeChecklistSections(rawTemplate.sections);
-  }
-
-  if (!('items' in rawTemplate)) {
-    return [];
-  }
-
-  try {
-    const rawItems =
-      typeof rawTemplate.items === 'string'
-        ? JSON.parse(rawTemplate.items)
-        : rawTemplate.items;
-
-    if (!Array.isArray(rawItems)) {
-      return [];
-    }
-
-    if (isSectionsShape(rawItems)) {
-      return normalizeChecklistSections(rawItems);
-    }
-
-    return normalizeChecklistSections([
-      {
-        id: '1',
-        title: 'Checklist',
-        items: rawItems,
-      },
-    ]);
-  } catch {
-    return [];
-  }
+  return normalizeRecordSections(rawTemplate);
 };
 
 export const mapApiTemplateToChecklistTemplate = (

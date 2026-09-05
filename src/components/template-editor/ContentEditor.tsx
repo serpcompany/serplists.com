@@ -59,7 +59,7 @@ export function ContentEditor({
 
   function handleContentMetaChange(
     contentIndex: number,
-    updates: Partial<TemplateEditorFormValues["sections"][number]["items"][number]["contents"][number]>,
+    updates: Partial<NonNullable<TemplateEditorFormValues["sections"][number]["items"][number]["contents"]>[number]>,
   ): void {
     const currentContent = contents[contentIndex];
     if (!currentContent) {

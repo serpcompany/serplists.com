@@ -2,6 +2,7 @@ import { Env } from '../types';
 import { and, desc, eq, getTableColumns, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { checklistPayloadSchema, normalizeSectionsPayload, parseJsonArray } from '../utils/payloads';
+import { parseLegacySections, validRetiredChecklistContent } from '../../../src/lib/schemas/legacyChecklistSchema';
 import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
@@ -59,9 +60,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function resetCompletionState(value: unknown): unknown {
+function resetCompletionState(value: unknown, position: 'section' | 'item' | 'content' | 'subItem' = 'section'): unknown {
   if (Array.isArray(value)) {
-    return value.map(resetCompletionState);
+    return value.map(entry => resetCompletionState(entry, position));
   }
 
   if (!isRecord(value)) {
@@ -69,14 +70,21 @@ function resetCompletionState(value: unknown): unknown {
   }
 
   const next: Record<string, unknown> = { ...value };
-  if (Object.prototype.hasOwnProperty.call(next, 'isCompleted')) {
+  const isTask = position === 'item' || position === 'subItem';
+  if (isTask && Object.prototype.hasOwnProperty.call(next, 'isCompleted')) {
     next.isCompleted = false;
   }
-  if (Array.isArray(next.items)) {
-    next.items = next.items.map(resetCompletionState);
+  if (isTask && Object.prototype.hasOwnProperty.call(next, 'completed')) {
+    next.completed = false;
   }
-  if (Array.isArray(next.subItems)) {
-    next.subItems = next.subItems.map(resetCompletionState);
+  if (position === 'section' && Array.isArray(next.items)) {
+    next.items = next.items.map(entry => resetCompletionState(entry, 'item'));
+  }
+  if ((position === 'item' || (position === 'content' && next.type === 'subItems')) && Array.isArray(next.subItems)) {
+    next.subItems = next.subItems.map(entry => resetCompletionState(entry, 'subItem'));
+  }
+  if (position === 'item' && Array.isArray(next.contents)) {
+    next.contents = next.contents.map(entry => resetCompletionState(entry, 'content'));
   }
 
   return next;
@@ -196,7 +204,7 @@ async function resolveTemplateRunSource(
     return { error: jsonError('Template not found', 404) };
   }
 
-  const normalizedSections = normalizeSectionsPayload(parseJsonArray(sourceTemplate.items) ?? []);
+  const normalizedSections = normalizeSectionsPayload(sourceTemplate.items);
   if (normalizedSections.error) {
     return { error: jsonError('Template content is invalid', 500) };
   }
@@ -290,6 +298,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
 
       if (!existingSharedRun) {
         return jsonError('Shared run not found', 404);
+      }
+      if (!parseLegacySections(existingSharedRun.items).success) {
+        return jsonError('Checklist content is invalid; stored data has not been changed.', 409);
       }
 
       const currentRevision = typeof existingSharedRun.revision === 'number' ? existingSharedRun.revision : 1;
@@ -507,6 +518,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       if (!(typeof runRecord.deleted_at === 'string' && runRecord.deleted_at)) {
         return jsonError('Checklist is not archived', 400);
       }
+      if (!parseLegacySections(existingRun.items).success || !validRetiredChecklistContent(existingRun.retired_items)) {
+        return jsonError('Checklist content is invalid; stored data has not been changed.', 409);
+      }
 
       const teamId = typeof runRecord.team_id === 'string' && runRecord.team_id ? runRecord.team_id : null;
       if (runRecord.status === 'in_progress') {
@@ -620,6 +634,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         return jsonError('Source template not found', 404);
       }
 
+      if (!parseLegacySections(existingRun.items).success || !parseLegacySections(sourceTemplate.items).success || !validRetiredChecklistContent(existingRun.retired_items)) {
+        return jsonError('Checklist content is invalid; stored data has not been changed.', 409);
+      }
       const previousSections = parseJsonArray(existingRun.items) ?? [];
       const previousRetired = parseJsonArray(existingRun.retired_items) ?? [];
       const templateSections = parseJsonArray(sourceTemplate.items) ?? [];
@@ -781,7 +798,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         }
       }
 
-      const sourceItems = parseJsonArray(sourceTemplate.items) ?? [];
+      const sourceItems = sourceTemplate.items;
       const normalizedSections = normalizeSectionsPayload(sourceItems);
       if (normalizedSections.error) {
         return jsonError(normalizedSections.error, 400);
@@ -797,7 +814,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         team_id: effectiveTeamId,
         template_id: templateId,
         title: runName,
-        items: JSON.stringify(normalizedSections.sections),
+        items: JSON.stringify(resetCompletionState(normalizedSections.sections)),
         status: 'in_progress',
         started_at: now,
         created_by_user_id: userId,
@@ -1070,6 +1087,10 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     }
     if (!(await canUpdateRun(env, existingRun as unknown as Record<string, unknown>, userId))) {
       return jsonError('Forbidden', 403);
+    }
+
+    if (!parseLegacySections(existingRun.items).success) {
+      return jsonError('Checklist content is invalid; stored data has not been changed.', 409);
     }
 
     const currentRevision = typeof existingRun.revision === 'number' ? existingRun.revision : 1;

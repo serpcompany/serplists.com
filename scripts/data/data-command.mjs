@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { runDataCommand } from "./data-command-lib.mjs";
 import { runRepositoryGit, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
+import { safeCanaryFailure } from "./canary-diagnostics.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
@@ -14,20 +15,32 @@ function runCommand(command) {
     cwd: repoRoot,
     env: sanitizedGitEnvironment(),
     encoding: "utf8",
-    stdio: ["inherit", "pipe", process.argv[2] === "recovery-restore" ? "pipe" : "inherit"],
+    stdio: ["ignore", "pipe", "pipe"],
   });
 }
 
+let stage = 'data-configuration';
+let gitCommit = 'unknown';
+let context = {};
 try {
-  const gitCommit = runRepositoryGit({ repoRoot, args: ["rev-parse", "HEAD"] }).trim();
+  gitCommit = runRepositoryGit({ repoRoot, args: ["rev-parse", "HEAD"], stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  if (!/^[0-9a-f]{40}$/.test(gitCommit)) throw new Error('Invalid commit.');
+  const output = [];
   runDataCommand({
     argv: process.argv.slice(2),
     repoRoot,
     gitCommit,
-    write: (value) => process.stdout.write(`${value}\n`),
+    write: (value) => output.push(value),
+    onStage: (value, report) => {
+      stage = value;
+      if (report) context = { target: { environment: report.environment, binding: report.binding, databaseName: report.databaseName, databaseId: report.databaseId }, migrationRange: report.migrationRange };
+    },
     runCommand,
   });
+  stage = 'data-reporting';
+  for (const value of output) process.stdout.write(`${value}\n`);
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
+  const failure = safeCanaryFailure(stage, error);
+  console.error(JSON.stringify({ verdict: 'fail', commit: /^[0-9a-f]{40}$/.test(gitCommit) ? gitCommit : 'unknown', ...context, failedStage: failure.stage, ...failure }));
   process.exit(1);
 }

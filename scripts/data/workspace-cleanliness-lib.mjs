@@ -3,6 +3,12 @@ import path from "node:path";
 
 const DEFAULT_EXCLUDED_ROOTS = [".git", "node_modules"];
 
+/**
+ * @typedef {{ type: 'directory' } | { type: 'file' | 'symlink', size: number, mtimeMs: number }} WorkspaceEntry
+ * @typedef {Record<string, WorkspaceEntry>} WorkspaceMetadata
+ * @typedef {{ path: string, change: 'created' | 'deleted' | 'modified', metadata?: WorkspaceEntry }} WorkspaceChange
+ */
+
 function normalizeRelativePath(value) {
   return String(value).split(path.sep).join("/").replace(/^\.\//, "").replace(/\/$/, "");
 }
@@ -15,11 +21,15 @@ function isExcluded(candidate, excludedRoots) {
   return excludedRoots.some((root) => isAtOrBelow(candidate, root));
 }
 
+/** @param {{ repoRoot: string, excludedRoots?: string[] }} options
+ * @returns {WorkspaceMetadata}
+ */
 export function captureWorkspaceMetadata({
   repoRoot,
   excludedRoots = DEFAULT_EXCLUDED_ROOTS,
 }) {
   const normalizedExcludedRoots = excludedRoots.map(normalizeRelativePath);
+  /** @type {WorkspaceMetadata} */
   const entries = {};
 
   function visit(relativeDirectory) {
@@ -41,6 +51,9 @@ export function captureWorkspaceMetadata({
   return entries;
 }
 
+/** @param {{ before: WorkspaceMetadata, after: WorkspaceMetadata }} options
+ * @returns {WorkspaceChange[]}
+ */
 export function compareWorkspaceMetadata({ before, after }) {
   const paths = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort();
   return paths.flatMap((relativePath) => {
@@ -56,6 +69,9 @@ export function compareWorkspaceMetadata({ before, after }) {
   });
 }
 
+/** @param {string} output
+ * @returns {string[]}
+ */
 export function parsePorcelainStatus(output) {
   return String(output)
     .split("\n")
@@ -63,6 +79,11 @@ export function parsePorcelainStatus(output) {
     .map((line) => line.slice(3));
 }
 
+/**
+ * Metadata is optional for externally supplied changes; only a known directory
+ * may receive the ancestor-of-an-allowed-output exemption.
+ * @param {{ nonGating?: boolean, paths: string[], filesystemChanges?: WorkspaceChange[], allowedOutputRoots?: string[] }} options
+ */
 export function evaluateWorkspaceCleanliness({
   nonGating = false,
   paths,
@@ -88,6 +109,7 @@ export function evaluateWorkspaceCleanliness({
   };
 }
 
+/** @param {{ startCommit: string | null, endCommit: string | null, startPaths: string[], endPaths: string[], nonGating?: boolean }} options */
 export function evaluateImmutableRunContext({ startCommit, endCommit, startPaths, endPaths, nonGating = false }) {
   const failures = [];
   if (!/^[0-9a-f]{40}$/.test(startCommit ?? "") || endCommit !== startCommit) failures.push(`HEAD changed from ${startCommit ?? "unknown"} to ${endCommit ?? "unknown"}`);

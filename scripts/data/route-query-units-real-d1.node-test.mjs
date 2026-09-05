@@ -7,6 +7,7 @@ import {
   discoverRouteQueryUnits,
   discoverRouteQueryUnitsFromSource,
   evaluateRouteQueryUnitCoverage,
+  instrumentRouteQuerySource,
   routeQuerySourceDigest,
 } from './route-query-units-lib.mjs';
 import { readFileSync } from 'node:fs';
@@ -88,4 +89,66 @@ test('instrumented application handlers emit successful units from real Worker a
   } finally {
     await mf.dispose();
   }
+});
+
+test('exec, relational, literal-computed and nested queries execute against real D1 and reject missing columns', async () => {
+  const source = `
+    import { drizzle } from 'drizzle-orm/d1';
+    import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+    const users = sqliteTable('users', { id: text('id').primaryKey() });
+    export async function handle(env, broken) {
+      const db = drizzle(env.DB, { schema: { users } });
+      if (broken) return await env.DB.exec('SELECT missing_column FROM users');
+      return await Promise.all([
+        env.DB.exec('SELECT id FROM users'),
+        db.query.users.findMany(),
+        db['select']().from(users),
+        env.DB.prepare('SELECT ? AS value').bind((await db.query.users.findFirst()).id).first(),
+      ]);
+    }
+  `;
+  const transformed = instrumentRouteQuerySource(source, 'functions/query-forms.ts');
+  assert.equal(transformed.units.length, 6, 'each nested or conditional query has one unit');
+  const sourceDigest = routeQuerySourceDigest(transformed.units);
+  const bundle = await build({
+    stdin: { contents: `${transformed.code}
+      import { createRouteQueryRuntime } from './scripts/data/route-query-runtime.mjs';
+      globalThis.__SERPLISTS_D1_COVERAGE__ = createRouteQueryRuntime('${sourceDigest}');
+      export default { async fetch(request, env) {
+        if (new URL(request.url).pathname === '/snapshot') return Response.json(globalThis.__SERPLISTS_D1_COVERAGE__.snapshot());
+        try { return Response.json(await handle(env, new URL(request.url).pathname === '/broken')); }
+        catch { return new Response('query failed', { status: 500 }); }
+      }};
+    `, resolveDir: repoRoot, loader: 'ts' },
+    bundle: true, write: false, format: 'esm', platform: 'browser',
+    conditions: ['workerd', 'worker', 'browser'], external: ['node:*'], target: 'es2022', logLevel: 'silent',
+  });
+  const mf = new Miniflare({
+    modules: true, script: bundle.outputFiles[0].text,
+    compatibilityDate: '2025-12-01', compatibilityFlags: ['nodejs_compat'],
+    d1Databases: { DB: 'query-forms-local-only' },
+  });
+  try {
+    const db = await mf.getD1Database('DB');
+    await db.prepare('CREATE TABLE users (id TEXT PRIMARY KEY)').run();
+    await db.prepare("INSERT INTO users (id) VALUES ('fixture')").run();
+    const response = await mf.dispatchFetch('http://localhost/positive');
+    assert.equal(response.status, 200);
+    const [, relational, computed, nested] = await response.json();
+    assert.deepEqual(relational, [{ id: 'fixture' }]);
+    assert.deepEqual(computed, relational);
+    assert.deepEqual(nested, { value: 'fixture' });
+    const before = await (await mf.dispatchFetch('http://localhost/snapshot')).json();
+    assert.equal(before.sourceDigest, sourceDigest);
+    const missing = evaluateRouteQueryUnitCoverage(transformed.units, before.outcomes);
+    assert.equal(missing.verdict, 'fail');
+    assert.equal(missing.counts.executed, 5);
+    assert.equal(missing.counts.missing, 1);
+    assert.equal((await mf.dispatchFetch('http://localhost/broken')).status, 500);
+    const after = await (await mf.dispatchFetch('http://localhost/snapshot')).json();
+    const failed = evaluateRouteQueryUnitCoverage(transformed.units, after.outcomes);
+    assert.equal(failed.verdict, 'fail');
+    assert.equal(failed.counts.failed, 1);
+    assert.equal(failed.counts.missing, 0);
+  } finally { await mf.dispose(); }
 });
