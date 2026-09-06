@@ -23,7 +23,7 @@ const migration = "0024_safe_template_evolution.sql";
 // the separate local-D1 integration test proves the actual Wrangler transport.
 function exportFixtureDatabase(database) {
   const identifier = name => '"' + name.replaceAll('"', '""') + '"';
-  const tables = database.prepare("SELECT name,sql FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY rowid").all();
+  const tables = database.prepare("SELECT name,sql FROM sqlite_schema WHERE type='table' AND name NOT GLOB 'sqlite_*' ORDER BY rowid").all();
   const statements = ['PRAGMA defer_foreign_keys=TRUE;'];
   for (const table of tables) {
     statements.push(`${table.sql};`);

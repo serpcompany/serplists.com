@@ -240,7 +240,7 @@ function replaySchema(repoRoot, through) {
 function emptyData(database) {
   database.exec("PRAGMA foreign_keys=OFF;");
   for (const { name } of database.prepare("SELECT name FROM sqlite_schema WHERE type='trigger'").all()) database.exec(`DROP TRIGGER "${String(name).replaceAll('"', '""')}";`);
-  for (const { name } of database.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()) database.exec(`DELETE FROM "${String(name).replaceAll('"', '""')}";`);
+  for (const { name } of database.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT GLOB 'sqlite_*'").all()) database.exec(`DELETE FROM "${String(name).replaceAll('"', '""')}";`);
 }
 
 function parseJson(value) {

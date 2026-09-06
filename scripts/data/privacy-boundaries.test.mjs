@@ -74,40 +74,7 @@ describe.skipIf(process.platform === "win32")("issue 128 provider and ledger pri
     }
   });
 
-  it("redacts direct production identity-bound provider stdout/stderr from console and preserves the subprocess status", () => {
-    const directory = providerFixture();
-    try {
-      const result = spawnSync(process.execPath, [
-        "scripts/data/production-identity-bound-command.mjs", "sanitizer-export",
-        "--database-name", databaseName,
-        "--database-id", databaseId,
-        "--output", "tmp/production-sensitive/source.sql",
-        "--evidence", "tmp/data-evidence/source.identity.json",
-      ], {
-        cwd: process.cwd(),
-        encoding: "utf8",
-        env: {
-          ...process.env,
-          PATH: `${directory}:${process.env.PATH}`,
-          GITHUB_ACTIONS: "true",
-          GITHUB_REPOSITORY: "serpcompany/serplists.com",
-          GITHUB_REF_PROTECTED: "true",
-          GITHUB_EVENT_NAME: "workflow_dispatch",
-          DATA_PROMOTION_WORKFLOW: "data-promotion",
-          GITHUB_REF: "refs/heads/main",
-          DATA_PROTECTED_ENVIRONMENT: "production",
-          GITHUB_SHA: spawnSync("git", ["rev-parse", "HEAD"], { cwd: process.cwd(), encoding: "utf8" }).stdout.trim(),
-          GITHUB_RUN_ID: "128",
-          CLOUDFLARE_API_TOKEN: "fixture-token",
-        },
-      });
-      expect(result.status).toBe(1);
-      expectPrivateFree(result.stdout + result.stderr);
-      expect(result.stderr).toContain("production-identity-bound-command");
-      expect(result.stderr).toContain("CANARY_SUBPROCESS_FAILED");
-      expect(result.stderr).toContain('"exitStatus":31');
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
+  // Sanitizer CLI provider redaction/status coverage lives in
+  // sanitizer-export-cli.test.mjs, whose copied installed-provider double cannot
+  // accidentally dispatch the real Wrangler after a launcher change.
 });

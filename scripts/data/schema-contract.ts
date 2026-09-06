@@ -490,7 +490,7 @@ function indexDefinition(index: Record<string, unknown>, sql: unknown, rows: Arr
 
 export function inspectDatabase(database: Database): DatabaseCatalog {
   const tableDefinitions = database.prepare(
-    "SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    "SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND name NOT GLOB 'sqlite_*' ORDER BY name",
   ).all() as Array<{ name: string; sql: string }>;
   const tableNames = tableDefinitions.map((row) => row.name);
   const tableSql = new Map(tableDefinitions.map((row) => [row.name, normalizeTableDefinition(row.sql) ?? '']));
@@ -786,7 +786,7 @@ export function generateSchemaSnapshot(database: Database) {
     SELECT type, name, sql
     FROM sqlite_schema
     WHERE sql IS NOT NULL
-      AND name NOT LIKE 'sqlite_%'
+      AND name NOT GLOB 'sqlite_*'
     ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 WHEN 'trigger' THEN 3 ELSE 4 END, name
   `).all() as Array<{ type: string; name: string; sql: string }>);
 

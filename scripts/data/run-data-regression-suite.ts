@@ -120,6 +120,7 @@ function collectPlaywrightSpecs(suites: PlaywrightSuite[]): PlaywrightSpec[] {
 }
 
 const requiredChecks = [
+  ['sanitizer export output ownership actual CLI', 'mandatory actual sanitizer-export CLI with installed-provider double'],
   ['malformed checklist content write safety','rejects malformed checklist content without changing stored template or run state on migrated real D1'],
   ['mandatory rules atomic failure proof','fails missing mandatory rules without partial template history or audit writes on real D1'],
   ['billing write failure and retry proof','fails billing persistence faults and recovers webhook retries without duplicate state on real D1'],

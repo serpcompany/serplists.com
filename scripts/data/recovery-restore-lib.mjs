@@ -162,7 +162,9 @@ export function captureFullRecoveryState({ query, key }) {
   };
   const digest = value => createHmac("sha256", key).update(JSON.stringify(value)).digest("hex");
   const quoteId = name => '"' + name.replaceAll('"', '""') + '"';
-  const catalog = rows("SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name NOT GLOB '_cf_*' AND tbl_name NOT GLOB '_cf_*' ORDER BY type, name");
+  // Keep application objects even when their names resemble platform names.
+  // Unlike schema comparison, recovery includes the ledger and sqlite_sequence.
+  const catalog = rows("SELECT type, name, tbl_name, sql FROM sqlite_master WHERE NOT (type = 'table' AND name = '_cf_METADATA') ORDER BY type, name");
   const data = [];
   for (const table of catalog.filter(row => row.type === "table")) {
     const columns = rows(`PRAGMA table_xinfo(${quoteId(table.name)})`).filter(row => row.hidden !== 1);

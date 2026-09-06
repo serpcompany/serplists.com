@@ -110,14 +110,14 @@ try {
     stage = 'schema-query';
     return output;
   };
-  const inventoryOutput = executeRemote("schema-table-inventory", [...targetArgs, "--json", "--command", "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name!='d1_migrations' AND name!='_cf_METADATA' ORDER BY name"]);
+  const inventoryOutput = executeRemote("schema-table-inventory", [...targetArgs, "--json", "--command", "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT GLOB 'sqlite_*' AND name!='d1_migrations' AND name!='_cf_METADATA' ORDER BY name"]);
   const tableNames = [...new Set([...expectedTableNames, ...parseRemoteTableInventory(inventoryOutput)])].sort();
   const sql = [
     ...tableNames.map((name) => `${tableInfoSql(name)};`),
     ...tableNames.map((name) => `PRAGMA index_list('${name.replaceAll("'", "''")}');`),
     ...tableNames.map((name) => `SELECT il.name AS index_name, ii.seqno, ii.cid, ii.name AS column_name, ii.name IS NULL AS column_name_is_null, ii.coll, ii.desc, ii.key, sm.sql AS index_sql, sm.sql IS NULL AS index_sql_is_null FROM pragma_index_list('${name.replaceAll("'", "''")}') AS il JOIN pragma_index_xinfo(il.name) AS ii LEFT JOIN sqlite_schema AS sm ON sm.type = 'index' AND sm.name = il.name ORDER BY il.name, ii.seqno;`),
     ...tableNames.map((name) => `PRAGMA foreign_key_list('${name.replaceAll("'", "''")}');`),
-    "SELECT type AS object_type, name, tbl_name AS table_name, sql FROM sqlite_schema WHERE type IN ('table','trigger','view') AND name NOT LIKE 'sqlite_%' ORDER BY type,name;",
+    "SELECT type AS object_type, name, tbl_name AS table_name, sql FROM sqlite_schema WHERE type IN ('table','trigger','view') AND name NOT GLOB 'sqlite_*' ORDER BY type,name;",
   ].join(" ");
   const args = [...targetArgs];
   args.push("--json", "--command", sql);

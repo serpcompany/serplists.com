@@ -8,14 +8,14 @@ import { buildCatalogContract, diffDrizzleContract, catalogFromPragmaResults, co
 
 // Execute the CLI's catalog query shape against SQLite, without transforming values.
 function remoteCatalog(db: DatabaseSync, shuffle = false, transform = (rows: Record<string, unknown>[]) => rows) {
-  const names = (db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all() as { name: string }[]).map(row => row.name);
+  const names = (db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT GLOB 'sqlite_*' ORDER BY name").all() as { name: string }[]).map(row => row.name);
   const quoted = names.map(name => `'${name.replaceAll("'", "''")}'`);
   const queries = [
     ...quoted.map(name => `PRAGMA table_info(${name})`),
     ...quoted.map(name => `PRAGMA index_list(${name})`),
     ...quoted.map(name => `SELECT il.name AS index_name, ii.seqno, ii.cid, ii.name AS column_name, ii.name IS NULL AS column_name_is_null, ii.coll, ii.desc, ii.key, sm.sql AS index_sql, sm.sql IS NULL AS index_sql_is_null FROM pragma_index_list(${name}) AS il JOIN pragma_index_xinfo(il.name) AS ii LEFT JOIN sqlite_schema AS sm ON sm.type = 'index' AND sm.name = il.name ORDER BY il.name, ii.seqno`),
     ...quoted.map(name => `PRAGMA foreign_key_list(${name})`),
-    "SELECT type AS object_type, name, tbl_name AS table_name, sql FROM sqlite_schema WHERE type IN ('table','trigger','view') AND name NOT LIKE 'sqlite_%' ORDER BY type,name",
+    "SELECT type AS object_type, name, tbl_name AS table_name, sql FROM sqlite_schema WHERE type IN ('table','trigger','view') AND name NOT GLOB 'sqlite_*' ORDER BY type,name",
   ];
   return catalogFromPragmaResults(names, queries.map((sql, index) => {
     const results = transform(db.prepare(sql).all());
@@ -268,6 +268,11 @@ describe.skipIf(process.platform === 'win32')('direct schema CLI with real SQLit
   `;
   it.each([
     ['complete replay', '', 'pass'],
+    ['complete replay with D1 metadata', 'CREATE TABLE _cf_METADATA(key INTEGER PRIMARY KEY, value BLOB)', 'pass'],
+    ['legal sqlite lookalike table', 'CREATE TABLE sqlitex_retained(v TEXT)', 'fail'],
+    ['legal cf lookalike table', 'CREATE TABLE acfx_retained(v TEXT)', 'fail'],
+    ['legal sqlite lookalike view', 'CREATE VIEW sqlitex_retained AS SELECT 1', 'fail'],
+    ['legal sqlite lookalike trigger', 'CREATE TRIGGER sqlitex_retained AFTER INSERT ON users BEGIN SELECT 1; END', 'fail'],
     ['index NOCASE drift', 'DROP INDEX idx_users_username; CREATE UNIQUE INDEX idx_users_username ON users(username COLLATE NOCASE)', 'fail'],
     ['index DESC drift', 'DROP INDEX idx_users_username; CREATE UNIQUE INDEX idx_users_username ON users(username DESC)', 'fail'],
     ['index expression drift', 'DROP INDEX idx_users_username; CREATE UNIQUE INDEX idx_users_username ON users(lower(username))', 'fail'],
@@ -297,7 +302,7 @@ describe.skipIf(process.platform === 'win32')('direct schema CLI with real SQLit
     // Only the subprocess transport is replaced. SQL executes as received against
     // the replay; index SQL NULLs use Wrangler's observed string-null encoding.
     writeFileSync(stub, `#!${process.execPath}
-const {DatabaseSync}=require('node:sqlite');
+const {DatabaseSync}=await import('node:sqlite');
 const args=process.argv.slice(2);
 if(args.includes('info')){console.log(JSON.stringify({name:'serp-checklists-rehearsal-canonicalization',uuid:'${databaseId}'}));process.exit(0);}
 const sql=args[args.indexOf('--command')+1];
