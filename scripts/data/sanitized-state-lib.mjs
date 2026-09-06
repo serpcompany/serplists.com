@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { parseAppliedMigrationLedger, privacySafeDomainSnapshot, compareDomainSnapshots } from "./invariant-capture-lib.mjs";
+import { parseAppliedMigrationLedger, privacySafeDomainSnapshot, compareDomainSnapshots, captureTypedRows, SQLITE_TYPES } from "./invariant-capture-lib.mjs";
 import { parseLegacySections, validRetiredChecklistContent } from '../../src/lib/schemas/legacyChecklistSchema.ts';
 import { validateQueryResultEnvelopes } from './d1-query-envelope.mjs';
 import { parseExactJson } from './strict-json-lib.mjs';
@@ -7,8 +7,43 @@ import { parseExactJson } from './strict-json-lib.mjs';
 const hash = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
+  if (value?.[SQLITE_TYPES]) return { values: canonical({ ...value }), storageTypes: canonical(value[SQLITE_TYPES]) };
   if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
   return value;
+}
+
+// Keep the storage classes separate from application fields, but serializable:
+// the browser/handler proof reloads this state from JSON. BLOBs use hex in that
+// file and regain their byte representation only for the invariant projection.
+function restoreState(state) {
+  if (!state.storageTypes) return state;
+  const restore = (rows, kind) => rows.map(row => {
+    const types = state.storageTypes[kind]?.[row.id];
+    if (!types || Object.keys(types).length !== Object.keys(row).length || Object.keys(row).some(name => !Object.hasOwn(types, name))) throw new Error('Sanitized storage type evidence is missing or malformed.');
+    for (const [name, type] of Object.entries(types)) {
+      const value = row[name];
+      const valid = type === 'null' ? value === null
+        : type === 'text' ? typeof value === 'string'
+        : type === 'integer' ? Number.isInteger(value)
+        : type === 'real' ? typeof value === 'number' && Number.isFinite(value)
+        : type === 'blob' ? typeof value === 'string' && /^(?:[0-9A-F]{2})*$/.test(value) : false;
+      if (!valid) throw new Error('Sanitized storage value evidence is malformed.');
+    }
+    const copy = { ...row };
+    Object.defineProperty(copy, SQLITE_TYPES, { value: types });
+    return copy;
+  });
+  const restored = { ...state };
+  // Browser proof omits both collections; remote invariant proof omits rows
+  // only. Absence is a summary contract, but present collections must be full.
+  for (const [field, kinds] of [['rows', ['templates', 'runs']], ['cohort', ['principals', 'teams', 'members']]]) {
+    if (!Object.hasOwn(state, field)) continue;
+    const collection = state[field];
+    if (!collection || Array.isArray(collection) || typeof collection !== 'object' ||
+        Object.keys(collection).length !== kinds.length || kinds.some(kind => !Object.hasOwn(collection, kind) || !Array.isArray(collection[kind]))) throw new Error('Sanitized storage collection evidence is missing or malformed.');
+    restored[field] = Object.fromEntries(kinds.map(kind => [kind, restore(collection[kind], kind)]));
+  }
+  return restored;
 }
 
 export function sanitizedSourceRole(state, row, principal) {
@@ -62,10 +97,20 @@ export function deriveSanitizedRequirements(state) {
 // substitute for the protected HMAC used to inspect production/customer rows.
 export function sanitizedState({ templates, runs, principals = [], teams = [], members = [], ledger, sourceSha256 }) {
   if (!/^[a-f0-9]{64}$/.test(sourceSha256 ?? "")) throw new Error("Sanitized source digest is required.");
-  const ordered = (rows) => [...rows].sort((a, b) => String(a.id).localeCompare(String(b.id), "en"));
-  const rows = { templates: ordered(templates), runs: ordered(runs) };
-  const cohort = { principals: ordered(principals), teams: ordered(teams), members: ordered(members) };
-  const state = { sourceSha256, domainSha256: hash(canonical(rows)), cohortSha256: hash(canonical(cohort)), cohort, ledger, ledgerSha256: hash(ledger), rows };
+  const storageTypes = {};
+  const ordered = (rows, kind) => {
+    if (rows.some(row => row[SQLITE_TYPES]) && (rows.some(row => !row[SQLITE_TYPES] || typeof row.id !== 'string' || !row.id) || new Set(rows.map(row => row.id)).size !== rows.length)) throw new Error('Sanitized typed row identities are missing or duplicated.');
+    storageTypes[kind] = Object.fromEntries(rows.filter(row => row[SQLITE_TYPES]).map(row => [row.id, row[SQLITE_TYPES]]));
+    return rows.map(row => {
+      const copy = Object.fromEntries(Object.entries(row).map(([name, value]) => [name, value instanceof Uint8Array ? Buffer.from(value).toString('hex').toUpperCase() : value]));
+      if (row[SQLITE_TYPES]) Object.defineProperty(copy, SQLITE_TYPES, { value: row[SQLITE_TYPES] });
+      return copy;
+    }).sort((a, b) => String(a.id).localeCompare(String(b.id), "en"));
+  };
+  const rows = { templates: ordered(templates, 'templates'), runs: ordered(runs, 'runs') };
+  const cohort = { principals: ordered(principals, 'principals'), teams: ordered(teams, 'teams'), members: ordered(members, 'members') };
+  const typed = Object.values(storageTypes).some(types => Object.keys(types).length);
+  const state = { sourceSha256, domainSha256: hash(canonical(rows)), cohortSha256: hash(canonical(cohort)), cohort, ledger, ledgerSha256: hash(ledger), rows, ...(typed ? { storageTypes } : {}) };
   const requirements = deriveSanitizedRequirements(state);
   return { ...state, requirements, requirementsSha256: hash(canonical(requirements)) };
 }
@@ -81,28 +126,49 @@ export function captureSanitizedState({ query, sourceSha256 }) {
     return entries[0].results;
   };
   const domainRows = (table) => {
-    const columns = rows(`PRAGMA table_info(${table})`).map((row) => row.name);
-    if (!columns.length || columns.some((name) => !/^[a-z_][a-z0-9_]*$/.test(name))) throw new Error("Sanitized domain columns are missing or unsupported.");
-    // Wrangler's display serializer changes SQL NULL into the text "null".
-    // Serialize inside SQLite so null, text, numbers and every column survive
-    // identically across local and remote execution without lossy coercion.
-    return rows(`SELECT json_object(${columns.map((name) => `'${name}',"${name}"`).join(",")}) AS row_json FROM ${table} ORDER BY id`).map((row) => JSON.parse(row.row_json));
+    try { return captureTypedRows({ table, query: rows }); }
+    catch { throw new Error('Sanitized typed state capture is missing, malformed, or unsupported.'); }
   };
-  return sanitizedState({ templates: domainRows("templates"), runs: domainRows("checklist_runs"), principals: domainRows('users').map(({ id }) => ({ id })), teams: domainRows('teams'), members: domainRows('team_members'), ledger: parseAppliedMigrationLedger(query("SELECT id,name FROM d1_migrations ORDER BY id")), sourceSha256 });
+  return sanitizedState({ templates: domainRows("templates"), runs: domainRows("checklist_runs"), principals: domainRows('users').map(row => {
+    const principal = { id: row.id };
+    Object.defineProperty(principal, SQLITE_TYPES, { value: { id: row[SQLITE_TYPES].id } });
+    return principal;
+  }), teams: domainRows('teams'), members: domainRows('team_members'), ledger: parseAppliedMigrationLedger(query("SELECT id,name FROM d1_migrations ORDER BY id")), sourceSha256 });
 }
 
 export function verifySanitizedTransformation({ before, after, expectedLedger }) {
+  before = restoreState(before);
+  after = restoreState(after);
   if (!before.cohortSha256 || before.cohortSha256 !== after.cohortSha256) throw new Error('Sanitized transformation changed the selected authorization cohort.');
   if (before.sourceSha256 !== after.sourceSha256 || JSON.stringify(after.ledger) !== JSON.stringify(expectedLedger)) throw new Error("Sanitized state source or exact migration ledger mismatch.");
-  const domain = (state) => privacySafeDomainSnapshot({ templateRows: state.rows.templates, runRows: state.rows.runs, key: state.sourceSha256, hasEvolution: state.ledger.includes("0024_safe_template_evolution.sql") });
+  const domainRows = rows => rows.map(row => {
+    const copy = { ...row };
+    if (row[SQLITE_TYPES]) {
+      Object.defineProperty(copy, SQLITE_TYPES, { value: row[SQLITE_TYPES] });
+      for (const [name, type] of Object.entries(row[SQLITE_TYPES])) if (type === 'blob') copy[name] = Uint8Array.from(Buffer.from(row[name], 'hex'));
+    }
+    return copy;
+  });
+  // Version columns are handled numerically by the migration projection; their
+  // original storage classes (and identity classes) must still be preserved.
+  for (const kind of ['templates', 'runs']) for (const row of before.rows[kind]) {
+    const actual = after.rows[kind].find(candidate => candidate.id === row.id);
+    if (row[SQLITE_TYPES] && Object.entries(row[SQLITE_TYPES]).some(([name, type]) => actual?.[SQLITE_TYPES]?.[name] !== type)) throw new Error('Sanitized transformation changed preserved storage types.');
+  }
+  const domain = (state) => privacySafeDomainSnapshot({ templateRows: domainRows(state.rows.templates), runRows: domainRows(state.rows.runs), key: state.sourceSha256, hasEvolution: state.ledger.includes("0024_safe_template_evolution.sql") });
   const result = compareDomainSnapshots({ pre: domain(before), post: domain(after), preHasEvolution: before.ledger.includes("0024_safe_template_evolution.sql"), postHasEvolution: after.ledger.includes("0024_safe_template_evolution.sql") });
   if (result.verdict !== "pass") throw new Error(`Sanitized transformation failed: ${result.failures.join("; ")}`);
   return result;
 }
 
 export function validateSanitizedStateBinding(local, remote) {
+  // Browser summaries omit rows and cohort; remote summaries omit rows only.
+  // Retained collections still require complete storage and digest validation.
+  local = restoreState(local);
+  remote = restoreState(remote);
   for (const state of [local, remote]) if (!state?.requirements || hash(canonical(state.requirements)) !== state.requirementsSha256) throw new Error('Authenticated source requirements digest mismatch.');
-  for (const state of [local, remote]) if (state?.cohort && hash(canonical(state.cohort)) !== state.cohortSha256) throw new Error('Authenticated selected cohort digest mismatch.');
+  for (const state of [local, remote]) if (Object.hasOwn(state, 'cohort') && hash(canonical(state.cohort)) !== state.cohortSha256) throw new Error('Authenticated selected cohort digest mismatch.');
+  for (const state of [local, remote]) if (Object.hasOwn(state, 'rows') && hash(canonical(state.rows)) !== state.domainSha256) throw new Error('Authenticated sanitized domain digest mismatch.');
   for (const field of ["sourceSha256", "domainSha256", "cohortSha256", "ledgerSha256", "requirementsSha256"]) {
     if (!/^[a-f0-9]{64}$/.test(local?.[field] ?? "") || local[field] !== remote?.[field]) throw new Error(`Authenticated post-migration sanitized ${field} mismatch.`);
   }
@@ -111,6 +177,8 @@ export function validateSanitizedStateBinding(local, remote) {
 }
 
 export function verifySanitizedRefusalPreservation({ before, after, proof }) {
+  before = restoreState(before);
+  after = restoreState(after);
   // The harness also has explicitly synthetic route fixtures. Scope this check
   // to imported principals/teams, including every current member of those teams
   // so an injected privilege grant cannot hide outside the original member IDs.
@@ -140,19 +208,25 @@ export function verifySanitizedRefusalPreservation({ before, after, proof }) {
     if (!actual) throw new Error('Handler lost an imported source row.');
     const write = proof.cohortProof.contexts.find(row => row.kind === kind && row.id === original.id && row.write === 'pass');
     const expected = { ...original };
+    const expectedTypes = original[SQLITE_TYPES] && { ...original[SQLITE_TYPES] };
     if (write) {
       if (typeof actual.updated_at !== 'string' || !Number.isFinite(Date.parse(actual.updated_at))) throw new Error('Handler canary timestamp is invalid.');
       expected.updated_at = actual.updated_at;
       if (kind === 'templates') Object.assign(expected, { title: 'Sanitized Template Handler Verified', version: original.version + 1, updated_by_user_id: write.principal });
       else Object.assign(expected, { progress: 42, revision: original.revision + 1 });
+      if (expectedTypes) Object.assign(expectedTypes, kind === 'templates'
+        ? { title: 'text', version: 'integer', updated_by_user_id: 'text', updated_at: 'text' }
+        : { progress: 'integer', revision: 'integer', updated_at: 'text' });
       writtenRows++;
     } else untouchedRows++;
+    if (expectedTypes) Object.defineProperty(expected, SQLITE_TYPES, { value: expectedTypes });
     if (hash(canonical(expected)) !== hash(canonical(actual))) throw new Error('Handler changed an unapproved source field or untouched row.');
   }
   return { verdict: 'pass', cohortSha256: after.cohortSha256, withheldRows: withheld.length, malformedRows: proof.malformedSourceChecks.length, untouchedRows, writtenRows };
 }
 
 export function validateSanitizedCohortProof(proof, { state, selection }) {
+  if (state.storageTypes) state = restoreState(state);
   const fail = () => { throw new Error('Authenticated selected cohort evidence is missing or inconsistent.'); };
   if (!proof || proof.cohortSha256 !== state.cohortSha256 || JSON.stringify(proof.selectedCounts) !== JSON.stringify(selection.selectedCounts) || JSON.stringify(proof.profileExclusions) !== JSON.stringify(selection.profileExclusions)) fail();
   const requirements = state.requirements;

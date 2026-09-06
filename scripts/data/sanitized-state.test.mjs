@@ -11,6 +11,21 @@ const ledger = listMigrationFiles().map((file) => file.name);
 const artifact = generateSanitizedRehearsalArtifact({ migrationRange: { from: "0024_safe_template_evolution.sql", to: "0024_safe_template_evolution.sql" }, sourceSchema: "0023_add_sitemap_revision_state.sql", repoRoot, rawExport: readFileSync(path.join(repoRoot, "scripts/data/fixtures/production-export-edge-cases.sql"), "utf8"), sourceDatabaseId: "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1", sourceDate: "2026-09-05", gitCommit: "a".repeat(40), issueNumber: 95, requestedApproverIdentity: "@devinschumacher", generatedAt: new Date("2026-09-05T00:00:00Z"), retentionDeadline: "2026-09-05T12:00:00Z" });
 const snapshot = (db, applied) => sanitizedState({ templates: db.prepare("SELECT * FROM templates").all(), runs: db.prepare("SELECT * FROM checklist_runs").all(), ledger: applied, sourceSha256: artifact.manifest.artifact.sha256 });
 
+function withTypedDatabase(check) {
+  const db = replayMigrations();
+  try {
+    db.exec(artifact.sql);
+    db.exec('CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY, name TEXT NOT NULL)');
+    ledger.forEach((name, i) => db.prepare('INSERT INTO d1_migrations VALUES (?,?)').run(i + 1, name));
+    const capture = (transform = rows => rows) => captureSanitizedState({ sourceSha256: artifact.manifest.artifact.sha256,
+      query: sql => JSON.stringify([{ success: true, meta: {}, results: transform(db.prepare(sql).all()) }]),
+    });
+    check(db, capture);
+  } finally { db.close(); }
+}
+const stateFileRoundTrip = state => JSON.parse(JSON.stringify(state));
+const noWrites = state => ({ malformedSourceChecks: [], cohortProof: { withheldRows: state.requirements.withheldRows, contexts: [] } });
+
 function writtenSource() {
   const before = sanitizedState({
     templates: [{ id: 't', user_id: 'rehearsal-owner-1', team_id: null, items: '[]', is_public: 0, deleted_at: null, title: 'Original', version: 1 }],
@@ -40,6 +55,100 @@ function writtenSource() {
 }
 
 describe("sanitized candidate state", () => {
+  it.each([
+    ['NULL and text null', 'NULL', "'null'"],
+    ['integer and text', '1', "'1'"],
+    ['integer and REAL', '1', '1.0'],
+    ['BLOB and text', "x'70726976617465'", "'70726976617465'"],
+    ['BLOB bytes', "x'00FF01'", "x'00FF02'"],
+    ['empty BLOB and text', "x''", "''"],
+  ])('preserves %s through typed capture and a state-file round trip', (_name, first, second) => {
+    withTypedDatabase((db, capture) => {
+      // Deliberately affinity-free synthetic field exercises storage classes
+      // independently of the production schema's numeric/text affinities.
+      db.exec(`ALTER TABLE checklist_runs ADD COLUMN typed_probe; UPDATE checklist_runs SET typed_probe=${first}`);
+      const before = stateFileRoundTrip(capture());
+      expect(validateSanitizedStateBinding(before, capture())).toBe(true);
+      expect(verifySanitizedTransformation({ before, after: stateFileRoundTrip(capture()), expectedLedger: ledger }).verdict).toBe('pass');
+      expect(verifySanitizedRefusalPreservation({ before, after: stateFileRoundTrip(capture()), proof: noWrites(before) }).verdict).toBe('pass');
+      db.exec(`UPDATE checklist_runs SET typed_probe=${second}`);
+      const after = stateFileRoundTrip(capture());
+      expect(after.domainSha256).not.toBe(before.domainSha256);
+      for (const operation of [
+        () => verifySanitizedTransformation({ before, after, expectedLedger: ledger }),
+        () => verifySanitizedRefusalPreservation({ before, after, proof: noWrites(before) }),
+      ]) {
+        let failure;
+        try { operation(); } catch (error) { failure = error.message; }
+        expect(failure).toMatch(/Sanitized transformation|Handler/);
+        expect(failure).not.toMatch(/private|70726976617465|00FF|typed_probe|rehearsal-owner/);
+      }
+    });
+  });
+  it.each(['items', 'retired_items'])('preserves BLOB %s bytes across state files', field => {
+    withTypedDatabase((db, capture) => {
+      db.exec(`UPDATE checklist_runs SET ${field}=x'5B5D'`);
+      const before = stateFileRoundTrip(capture());
+      expect(verifySanitizedTransformation({ before, after: capture(), expectedLedger: ledger }).verdict).toBe('pass');
+      db.exec(`UPDATE checklist_runs SET ${field}=x'5B5D20'`);
+      expect(() => verifySanitizedTransformation({ before, after: capture(), expectedLedger: ledger })).toThrow(/Sanitized transformation/);
+    });
+  });
+  it('preserves approved typed handler writes through state files and rejects extra effects', () => {
+    withTypedDatabase((db, capture) => {
+      const before = stateFileRoundTrip(capture());
+      const template = before.rows.templates.find(row => row.deleted_at == null);
+      const run = before.rows.runs.find(row => row.deleted_at == null);
+      const principal = before.cohort.principals[0].id;
+      const proof = noWrites(before);
+      proof.cohortProof.contexts = [{ kind: 'templates', id: template.id, principal, write: 'pass' }, { kind: 'runs', id: run.id, principal, write: 'pass' }];
+      db.prepare("UPDATE templates SET title='Sanitized Template Handler Verified', version=version+1, updated_by_user_id=?, updated_at='2026-09-06T00:00:00Z' WHERE id=?").run(principal, template.id);
+      db.prepare("UPDATE checklist_runs SET progress=42, revision=revision+1, updated_at='2026-09-06T00:00:00Z' WHERE id=?").run(run.id);
+      expect(verifySanitizedRefusalPreservation({ before, after: stateFileRoundTrip(capture()), proof })).toMatchObject({ verdict: 'pass', writtenRows: 2 });
+      db.prepare("UPDATE checklist_runs SET title='PRIVATE_UNAPPROVED_VALUE' WHERE id=?").run(run.id);
+      expect(() => verifySanitizedRefusalPreservation({ before, after: stateFileRoundTrip(capture()), proof })).toThrow('Handler changed an unapproved source field or untouched row.');
+    });
+  });
+  it.each([
+    row => ({ ...row, extra: 'PRIVATE_TRANSPORT_VALUE' }),
+    () => ({ typed_row: null }),
+    row => ({ typed_row: row.typed_row.replace('"id":', '"id":["text","PRIVATE_TRANSPORT_VALUE"],"id":') }),
+    row => { const cells = JSON.parse(row.typed_row); delete cells.id; return { typed_row: JSON.stringify(cells) }; },
+    ...[['null', 'null'], ['integer', '1'], ['real', 1], ['real', '1e999'], ['real', '1e-999'], ['blob', 'zz'], ['text', null], ['unknown', 'PRIVATE_TRANSPORT_VALUE'], ['text', 'x', 'extra']].map(cell => row => {
+      const cells = JSON.parse(row.typed_row); cells.id = cell; return { typed_row: JSON.stringify(cells) };
+    }),
+  ])('rejects malformed typed row envelopes without raw values %#', corrupt => {
+    withTypedDatabase((_db, capture) => {
+      expect(() => capture(rows => rows.map(row => Object.hasOwn(row, 'typed_row') ? corrupt(row) : row))).toThrow('Sanitized typed state capture is missing, malformed, or unsupported.');
+    });
+  });
+  it('rejects unsupported SQLite numeric transport without raw values', () => {
+    withTypedDatabase((db, capture) => {
+      db.exec('UPDATE checklist_runs SET progress=1e999');
+      expect(() => capture()).toThrow('Sanitized typed state capture is missing, malformed, or unsupported.');
+      db.exec('UPDATE checklist_runs SET progress=9007199254740993');
+      expect(() => capture()).toThrow('Sanitized typed state capture is missing, malformed, or unsupported.');
+    });
+  });
+  it('detects adjacent SQLite REAL changes in transformation and post-handler preservation', () => {
+    const db = replayMigrations();
+    try {
+      db.exec(artifact.sql);
+      db.exec('CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY, name TEXT NOT NULL)');
+      ledger.forEach((name, i) => db.prepare('INSERT INTO d1_migrations VALUES (?,?)').run(i + 1, name));
+      db.exec('UPDATE checklist_runs SET progress=1.0000000000000002');
+      const capture = () => captureSanitizedState({ sourceSha256: artifact.manifest.artifact.sha256,
+        query: sql => JSON.stringify([{ success: true, meta: {}, results: db.prepare(sql).all() }]),
+      });
+      const before = stateFileRoundTrip(capture());
+      const proof = { malformedSourceChecks: [], cohortProof: { withheldRows: before.requirements.withheldRows, contexts: [] } };
+      expect(verifySanitizedTransformation({ before, after: capture(), expectedLedger: ledger }).verdict).toBe('pass');
+      expect(verifySanitizedRefusalPreservation({ before, after: capture(), proof }).verdict).toBe('pass');
+      db.exec('UPDATE checklist_runs SET progress=1.0000000000000004');
+      expect(() => verifySanitizedTransformation({ before, after: capture(), expectedLedger: ledger })).toThrow(/preserved state/);
+      expect(() => verifySanitizedRefusalPreservation({ before, after: capture(), proof })).toThrow(/source row|unapproved/);
+    } finally { db.close(); }
+  });
   it.each(Array.from({ length: 11 }, (_, i) => i + 1))('rejects invalid sanitized query envelope at statement %i before state proof', failAt => {
     const db = replayMigrations();
     try {
@@ -82,12 +191,71 @@ describe("sanitized candidate state", () => {
       db.exec(readFileSync(path.join(repoRoot, 'db/migrations', migration), 'utf8'));
       db.prepare('INSERT INTO d1_migrations VALUES (?,?)').run(ledger.length, migration);
       const after = capture();
-      expect(verifySanitizedTransformation({ before, after, expectedLedger: ledger }).verdict).toBe('pass');
+      expect(verifySanitizedTransformation({ before: stateFileRoundTrip(before), after: stateFileRoundTrip(after), expectedLedger: ledger }).verdict).toBe('pass');
       expect(validateSanitizedStateBinding(after, capture())).toBe(true);
       expect(after.cohortSha256).toBe(before.cohortSha256);
       expect(after.rows.templates).toHaveLength(artifact.manifest.selection.selectedCounts.templates);
       expect(after.rows.runs).toHaveLength(artifact.manifest.selection.selectedCounts.checklistRuns);
     } finally { db.close(); }
+  });
+  it('binds typed state-file metadata while permitting row-free remote summaries', () => {
+    withTypedDatabase((_db, capture) => {
+      const state = stateFileRoundTrip(capture());
+      const { rows: _rows, ...summary } = state;
+      expect(validateSanitizedStateBinding(state, summary)).toBe(true);
+      for (const corrupt of [
+        value => { delete value.storageTypes; },
+        value => { delete value.storageTypes.runs[value.rows.runs[0].id].progress; },
+        value => { value.storageTypes.runs[value.rows.runs[0].id].progress = 'real'; },
+        value => { value.rows.runs[0].progress = 99; },
+        value => { value.storageTypes.runs[value.rows.runs[0].id].progress = 'unsupported'; },
+      ]) {
+        const damaged = stateFileRoundTrip(state);
+        corrupt(damaged);
+        expect(() => validateSanitizedStateBinding(damaged, state)).toThrow(/digest|storage/);
+      }
+    });
+  });
+  it('validates the actual browser-produced summary against runner and finalizer states', () => {
+    // Execute the producer's real projection, rather than maintaining a second
+    // approximation of which fields the browser writes into its proof file.
+    const browserSource = readFileSync(path.join(repoRoot, 'tests/e2e/sanitized-rehearsal-handler.spec.ts'), 'utf8');
+    const projections = browserSource.match(/const \{[^\n]*\.\.\.postMigrationState \} = state;/g);
+    expect(projections).toHaveLength(1);
+    const produce = new Function('state', `${projections[0]} return postMigrationState;`);
+    withTypedDatabase((_db, capture) => {
+      const preparedState = stateFileRoundTrip(capture());
+      const browserSummary = stateFileRoundTrip(produce(preparedState));
+      expect(browserSummary).not.toHaveProperty('rows');
+      expect(browserSummary).not.toHaveProperty('cohort');
+      expect(browserSummary.storageTypes).toEqual(preparedState.storageTypes);
+      const { rows: _rows, ...remoteSummary } = stateFileRoundTrip(capture());
+      // Runner: browser proof vs prepare-sanitized-smoke's full state file.
+      expect(validateSanitizedStateBinding(browserSummary, preparedState)).toBe(true);
+      // Aggregate/source proof: the serialized browser summary binds itself.
+      expect(validateSanitizedStateBinding(browserSummary, browserSummary)).toBe(true);
+      // Finalizer binding: remote invariant summary retains the cohort.
+      // The executor's separate cohort-presence gate is not exercised here.
+      expect(validateSanitizedStateBinding(browserSummary, remoteSummary)).toBe(true);
+      for (const corrupt of [
+        state => { state.rows.runs[0].progress = 99; },
+        state => { delete state.storageTypes.runs[state.rows.runs[0].id].progress; },
+        state => { state.cohort.principals[0].id = 'rehearsal-owner-altered'; },
+        state => { delete state.storageTypes.principals[state.cohort.principals[0].id].id; },
+        ...['rows', 'cohort'].flatMap(field => [null, undefined, {}, []].map(value => state => { state[field] = value; })),
+      ]) {
+        const damaged = stateFileRoundTrip(preparedState);
+        corrupt(damaged);
+        expect(() => validateSanitizedStateBinding(browserSummary, damaged)).toThrow(/digest|storage/);
+        expect(() => validateSanitizedStateBinding(damaged, browserSummary)).toThrow(/digest|storage/);
+      }
+      const damagedRemote = stateFileRoundTrip(remoteSummary);
+      delete damagedRemote.storageTypes.principals[damagedRemote.cohort.principals[0].id].id;
+      expect(() => validateSanitizedStateBinding(browserSummary, damagedRemote)).toThrow(/storage/);
+      for (const field of ['domainSha256', 'cohortSha256', 'requirementsSha256', 'ledgerSha256', 'sourceSha256']) {
+        expect(() => validateSanitizedStateBinding({ ...browserSummary, [field]: 'f'.repeat(64) }, remoteSummary)).toThrow(/digest|mismatch/);
+      }
+    });
   });
   it('rejects an extra imported-personal template after valid canaries before cohort proof can pass', () => {
     const { before, after, proof, selection } = writtenSource();
@@ -245,7 +413,9 @@ describe("sanitized candidate state", () => {
       const capture = captureSanitizedState({ sourceSha256: artifact.manifest.artifact.sha256, query: (sql) => JSON.stringify([{ success: true, meta: { duration: 0 }, results: db.prepare(sql).all().map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value === null ? "null" : value]))) }]) });
       expect(capture.rows.templates[0].deleted_at).toBeNull();
       expect(capture.rows.templates[0].description).toBe("null");
-      expect(capture.domainSha256).toBe(snapshot(db, ledger).domainSha256);
+      const local = captureSanitizedState({ sourceSha256: artifact.manifest.artifact.sha256, query: sql => JSON.stringify([{ success: true, meta: {}, results: db.prepare(sql).all() }]) });
+      expect(capture.domainSha256).toBe(local.domainSha256);
+      expect(validateSanitizedStateBinding(JSON.parse(JSON.stringify(local)), capture)).toBe(true);
     } finally { db.close(); }
   });
   it("rejects a corrupted transformation with a valid final schema before authenticated rehearsal can pass", () => {

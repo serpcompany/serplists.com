@@ -6,7 +6,7 @@ import { assertPre0024Compatibility } from "./pre0024-compatibility-lib.mjs";
 import { validateQueryResultEnvelopes as resultEnvelopes } from './d1-query-envelope.mjs';
 
 const MIGRATION_PATTERN = /^\d{4}_[a-z0-9_]+\.sql$/;
-const SQLITE_TYPES = Symbol("captured SQLite storage types");
+export const SQLITE_TYPES = Symbol("captured SQLite storage types");
 const BASELINE_FILE = fileURLToPath(new URL("./sql/capture-invariants.sql", import.meta.url));
 const EVOLUTION_FILE = fileURLToPath(
   new URL("./sql/capture-invariants-0024.sql", import.meta.url),
@@ -227,10 +227,7 @@ function resultRows(output, label) {
   return entries[0].results;
 }
 
-function captureTypedRows({ table, database, runWrangler }) {
-  const query = sql => resultRows(runWrangler([
-    "d1", "execute", database, "--remote", "--json", `--command=${sql}`,
-  ]), "Typed source rows");
+export function captureTypedRows({ table, query }) {
   // Discover the actual pre/post schema. Encode inside SQLite before Wrangler
   // changes NULL cells. REAL uses round-trip text: plain json_object rounds it.
   const columns = query(`SELECT name FROM pragma_table_xinfo('${table}') WHERE hidden != 1 ORDER BY cid`).map(row => row.name);
@@ -443,8 +440,11 @@ export function captureRemoteInvariantSnapshot({ database, key, runWrangler, val
   const ownerRows = resultRows(runWrangler([
     "d1", "execute", database, "--remote", "--json", `--command=${OWNER_SQL}`,
   ]), "Source row ownership");
-  const templateRows = captureTypedRows({ table: "templates", database, runWrangler });
-  const runRows = captureTypedRows({ table: "checklist_runs", database, runWrangler });
+  const query = sql => resultRows(runWrangler([
+    "d1", "execute", database, "--remote", "--json", `--command=${sql}`,
+  ]), "Typed source rows");
+  const templateRows = captureTypedRows({ table: "templates", query });
+  const runRows = captureTypedRows({ table: "checklist_runs", query });
   const hasEvolution = ledger.includes("0024_safe_template_evolution.sql");
   assertCompleteSourceRows({ invariants, templateRows, runRows, ownerRows });
   invariants.ownershipDigest = privacySafeOwnershipDigest({ rows: ownerRows, key });
