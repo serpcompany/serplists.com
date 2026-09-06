@@ -187,7 +187,7 @@ Treat confirmed customer-data loss, ownership exposure, or unrecoverable mutatio
 
 ## Review ownership
 
-Repository protection must require independent human review for these paths:
+These paths retain accountable review routing. The repository owner has waived the separate-human pull-request approval requirement. Pull requests still require the blocking checks; incident #91 additionally requires independent Standards, Spec, and red-team approval of the exact candidate. This PR exception does not change the fresh, independent human production-approval requirement.
 
 | Paths | Required owner |
 | --- | --- |
@@ -196,11 +196,11 @@ Repository protection must require independent human review for these paths:
 | `wrangler.toml`, D1 binding checks, `.github/workflows/**` production gates | Production platform owner |
 | This standard | Database contract owner and production platform owner |
 
-The current `.github/CODEOWNERS` mapping to repository owner `@devinschumacher` is accountable routing: it identifies who must receive review requests and who must designate the durable owners. It is not proof of independent approval. No qualified second human or GitHub team is currently designated in this repository. Do not invent or assign one.
+The current `.github/CODEOWNERS` mapping to repository owner `@devinschumacher` is accountable routing: it identifies who receives review requests and designates durable owners. It is not proof of independent production approval. No qualified second human or GitHub team is currently designated in this repository. Do not invent or assign one.
 
-Issue [#97](https://github.com/serpcompany/serplists.com/issues/97) cannot close, and production promotion remains blocked, until the repository owner designates at least one qualified independent human or `@serpcompany/<team>` and updates CODEOWNERS plus branch and protected-environment rules to require that independent approval. Keep `@devinschumacher` as accountable routing until the replacement or additional owner is verified; do not remove ownership during the transition. An author cannot satisfy the independent approval.
+Issue [#97](https://github.com/serpcompany/serplists.com/issues/97) cannot close, and production promotion remains blocked, until the repository owner designates a qualified independent human or `@serpcompany/<team>` and the protected production environment enforces that fresh approval. Keep `@devinschumacher` as accountable CODEOWNERS routing and retain the required PR/check protections, including administrator enforcement. The PR-review exception does not let a change author satisfy independent production approval.
 
-A qualified independent CODEOWNERS pull-request approval approves the code and evidence only. Accountable routing to the author or repository owner does not satisfy that gate. Pull-request approval never authorizes a production action. The protected production environment must request and record a fresh approval event immediately before the exact production mutation or deployment, even when the same eligible human previously reviewed the pull request. CODEOWNERS and protected-branch/environment rules are the intended enforcement; until those protections are installed and tested, production promotion remains blocked rather than relying on voluntary review.
+Code review and production approval remain separate. Pull-request approval never authorizes a production action. The protected production environment must request and record a fresh approval event immediately before the exact production mutation or deployment, even when the same eligible human previously reviewed the pull request. Until the required branch and environment protections are installed and tested, production promotion remains blocked rather than relying on voluntary review.
 
 ## Pull request checklist
 

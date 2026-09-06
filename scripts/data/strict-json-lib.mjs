@@ -2,6 +2,35 @@ export class DuplicateJsonKeyError extends Error {
   constructor() { super("Duplicate JSON object keys are unsupported."); }
 }
 
+export class InexactJsonNumberError extends Error {
+  constructor() { super("Unsupported JSON numeric value."); }
+}
+
+// Exact decimal equality permits equivalent notation without accepting a
+// rounded Number. Keep coefficient/exponent separate to avoid expanding powers.
+function canonicalDecimal(token) {
+  const match = typeof token === "string" && token.match(/^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/);
+  if (!match) return null;
+  const [, sign, integer, fraction = "", exponent = "0"] = match;
+  const digits = (integer + fraction).replace(/^0+/, "");
+  if (!digits) return "0";
+  const coefficient = digits.replace(/0+$/, "");
+  const power = BigInt(exponent) - BigInt(fraction.length) + BigInt(digits.length - coefficient.length);
+  return `${sign}${coefficient}e${power}`;
+}
+
+// Opt-in exact-number contract; parseStrictJson retains its existing reviver
+// contract for callers that need to inspect or handle primitive tokens directly.
+export function parseExactJson(source) {
+  return parseStrictJson(source, (_name, value, context) => {
+    if (typeof value === "number" && (!Number.isFinite(value) || Object.is(value, -0) ||
+        canonicalDecimal(context?.source) !== canonicalDecimal(JSON.stringify(value)))) {
+      throw new InexactJsonNumberError();
+    }
+    return value;
+  });
+}
+
 // Check each object's decoded keys before JSON.parse discards earlier values.
 // The scan does not convert numbers; the caller's reviver retains raw tokens.
 export function parseStrictJson(source, reviver) {

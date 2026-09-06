@@ -20,6 +20,7 @@
     "templates": 1,
     "checklistRuns": 1
   },
+  "verificationSql": "scripts/data/sql/verify-deterministic-fixtures.sql",
   "setupSql": "scripts/data/sql/deterministic-fixtures.sql",
   "teardownSql": "scripts/data/sql/teardown-deterministic-fixtures.sql"
 }

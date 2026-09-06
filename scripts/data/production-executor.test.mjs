@@ -100,7 +100,15 @@ function validStepResult(step) {
     "migration-apply": { type: step, appliedMigrations: pendingMigrations },
     "ledger-clean": { type: step, pendingMigrations: [], appliedThrough: pendingMigrations[0] },
     "schema-contract": { type: step, verdict: "pass", appliedThrough: pendingMigrations[0], schemaDigest: "e".repeat(64) },
-    "post-invariants": { type: step, invariantCount: 20, failureCount: 0, preDomainDigest: "f".repeat(64), postDomainDigest: "f".repeat(64) },
+    "post-invariants": { type: step, invariantCount: 20, failureCount: 0, preDomainDigest: "d".repeat(64), postDomainDigest: "f".repeat(64) },
+  };
+  if (["pre-invariants", "post-invariants"].includes(step)) summaries[step].foreignKeyViolations = 0;
+  if (["pre-invariants", "post-invariants"].includes(step)) {
+    summaries[step].aggregateCounts = { templates: 0, runs: 0 };
+    summaries[step].sourceCoverage = { verdict: "pass", templateCount: 0, runCount: 0, domainDigest: step === "pre-invariants" ? summaries[step].domainDigest : summaries[step].postDomainDigest };
+  }
+  if (step === "pre-invariants") summaries[step].pre0024Compatibility = {
+    migration: "0024_safe_template_evolution.sql", verdict: "pass", templateCount: 0, runCount: 0, domainDigest: summaries[step].domainDigest,
   };
   return { verdict: "pass", artifact: `${step}.txt`, outputLength: 1, artifactByteLength: 1, artifactSha256: "a".repeat(64), summary: summaries[step], identityChecks: step === "identity" ? [] : [validIdentityCheck()] };
 }
@@ -123,6 +131,16 @@ function preparedHandshake(run = validStepResult, request = validPromotionEviden
   const decision = `Reviewed recovery and approve ${approvalToken(receipt)}`;
   const approval = { ...validApproval(), recovery: receipt, decisionSha256: digest(decision), recoveryTokenSha256: digest(approvalToken(receipt)) };
   return { request, commit: request.commit, database: request.database, classification: request.classification, pendingMigrations: request.pendingMigrations, preparation, receipt, approval, bundle };
+}
+
+// Model internally consistent artifact digests/receipts to isolate semantic
+// consumer validation. This fixture is not an external attestation or approval.
+function preparedWithCorruptedInvariants(change) {
+  const handshake = preparedHandshake();
+  handshake.preparation.results['pre-invariants'] = change('pre-invariants');
+  handshake.receipt.preparationSha256 = digest(handshake.preparation);
+  handshake.approval.recoveryTokenSha256 = digest(approvalToken(handshake.receipt));
+  return handshake;
 }
 
 const driftCases = {
@@ -400,6 +418,7 @@ function executorSandbox() {
 const fs = require('node:fs');
 const path = require('node:path');
 const args = process.argv.slice(2), config = JSON.parse(fs.readFileSync('transport.json'));
+const querySql = args.find(arg => arg.startsWith('--command='))?.slice('--command='.length) ?? args[args.indexOf('--command') + 1];
 const state = fs.existsSync('state.json') ? JSON.parse(fs.readFileSync('state.json')) : { applied: false, ledgers: 0, pendingQueries: 0 };
 const command = args.join(' ');
 const stage = command.includes('d1 info') ? 'identity' : command.includes('time-travel') ? 'bookmark' : command.includes('d1 export') ? 'export' : command.includes('migrations apply') ? 'migration' : command.includes('migrations list') ? 'pending' : command.includes('check:prod:d1-schema') ? 'schema' : command.includes('FROM d1_migrations') ? 'ledger' : command.includes('FROM sqlite_schema') ? 'source-schema' : 'invariant';
@@ -427,22 +446,42 @@ else if (stage === 'ledger') {
   state.ledgers++;
   let names = state.applied ? config.history : config.history.slice(0, config.history.length - config.pending.length);
   if (config.drift && (!config.driftAfter || state.ledgers >= config.driftAfter)) names = config.drift;
-  output([{ results: names.map((name, index) => ({id: index + 1, name})) }]);
+  output([{ success: true, meta: { duration: 0 }, results: names.map((name, index) => ({id: index + 1, name})) }]);
 } else if (stage === 'source-schema') {
   state.catalogQueries = (state.catalogQueries || 0) + 1;
   const db = new (require('node:sqlite').DatabaseSync)(':memory:');
   for (const sql of config.sql.slice(0, config.history.length - (state.applied ? 0 : config.pending.length))) db.exec(sql);
   if (config.sourceDrift && state.catalogQueries >= (config.sourceDriftAfter || 1)) db.exec(config.sourceDrift);
-  output([{results: db.prepare(args[args.indexOf('--command') + 1]).all()}]);
+  output([{success:true,meta:{duration:0},results: db.prepare(querySql).all()}]);
   db.close();
 } else if (stage === 'schema') {
   const dir = args[args.indexOf('--report-dir') + 1];
   const db = config.database;
   fs.writeFileSync(path.join(dir, 'd1-schema-production.json'), JSON.stringify({verdict: 'pass', identityChecks: [{...db, before: db, after: db}]}));
-} else if (args.includes('--file')) {
-  const sql = fs.readFileSync(args[args.indexOf('--file') + 1], 'utf8');
-  output([{results: [...sql.matchAll(/SELECT '([^']+)' AS invariant/g)].map(match => ({invariant: match[1], total_rows: 0}))}]);
-} else output([{results: []}]);
+} else if (stage === 'invariant') {
+  const db = new (require('node:sqlite').DatabaseSync)(':memory:');
+  const before = config.history.length - config.pending.length;
+  for (const sql of config.sql.slice(0, before)) db.exec(sql);
+  if (config.rawSourceSql) db.exec(config.rawSourceSql);
+  if (state.applied) for (const sql of config.sql.slice(before)) db.exec(sql);
+  const sql = args.includes('--file') ? fs.readFileSync(args[args.indexOf('--file') + 1], 'utf8') : querySql;
+  const response = sql.split(';').map(part => part.replace(/^\\s*--.*$/gm, '').trim()).filter(Boolean).map(statement => ({success:true,meta:{duration:0},results: db.prepare(statement).all().map(row => Object.fromEntries(Object.entries(row).map(([key,value]) => [key,value === null ? 'null' : value])))}));
+  if (config.sourceRowsFault && (!config.sourceFaultAfterApply || state.applied) && sql.endsWith('AS typed_row FROM "' + config.sourceTable + '" ORDER BY "id"')) {
+    const rows = response[0].results;
+    if (config.sourceRowsFault === 'omitted') response[0].results = [];
+    if (config.sourceRowsFault === 'duplicate') rows[1] = rows[0];
+    if (config.sourceRowsFault === 'replaced') { const row = JSON.parse(rows[1].typed_row); row.id = ['text','private-replaced']; rows[1].typed_row = JSON.stringify(row); }
+  }
+  if (config.foreignKeyEvidence && (!config.foreignKeyAfterApply || state.applied)) {
+    for (const entry of response) entry.results = entry.results.flatMap(row => row.invariant !== 'foreign_key_violations' ? [row]
+      : config.foreignKeyEvidence === 'missing' ? []
+      : [{...row, total_rows: config.foreignKeyEvidence === 'nonzero' ? 1 : config.foreignKeyEvidence === 'fractional' ? 0.5 : '0'}]);
+  }
+  const serialized = JSON.stringify(response);
+  console.log(config.rawForeignKeyFields && sql.includes('pragma_foreign_key_check')
+    ? serialized.replace('"total_rows":0', config.rawForeignKeyFields) : serialized);
+  db.close();
+} else output([{success:true,meta:{duration:0},results: []}]);
 fs.writeFileSync('state.json', JSON.stringify(state));
 `;
   writeFileSync(path.join(bin, 'pnpm'), fake); chmodSync(path.join(bin, 'pnpm'), 0o755);
@@ -467,6 +506,146 @@ fs.writeFileSync('state.json', JSON.stringify(state));
 // against the local provider transport. Measured cases take 5.2–7.3 seconds;
 // bound only this integration suite at 20 seconds per test.
 describe('local executor subprocess boundaries', { timeout: 20000 }, () => {
+  it.each(['templates', 'checklist_runs'].flatMap(table => ['prepare', 'after-approval', 'post-migration'].flatMap(phase =>
+    ['omitted', 'duplicate', 'replaced'].map(fault => [table, phase, fault]))))
+  ('blocks incomplete raw %s rows at %s: %s', (table, phase, fault) => {
+    const {cwd, configuration, invoke, approve} = executorSandbox();
+    try {
+      configuration.rawSourceSql = `
+        INSERT INTO users(id,email,password_hash,created_at) VALUES ('private-owner','private@example.invalid','synthetic','2026-01-01');
+        INSERT INTO templates(id,user_id,title,items,created_at) VALUES ('private-one','private-owner','Private','[]','2026-01-01'),('private-two','private-owner','Private','[]','2026-01-01');
+        INSERT INTO checklist_runs(id,user_id,template_id,title,items,started_at,created_at) SELECT 'run-'||id,user_id,id,title,items,created_at,created_at FROM templates;
+      `;
+      if (phase !== 'prepare') { expect(invoke('prepare').status).toBe(0); approve(); }
+      configuration.sourceTable = table;
+      configuration.sourceRowsFault = fault;
+      configuration.sourceFaultAfterApply = phase === 'post-migration';
+      const result = invoke(phase === 'prepare' ? 'prepare' : 'data');
+      expect(result.status, result.stderr).toBe(1);
+      expect(existsSync(path.join(cwd, 'evidence.json'))).toBe(false);
+      expect(readFileSync(path.join(cwd, 'calls.txt'), 'utf8').split('\n').filter(call => call === 'migration')).toHaveLength(phase === 'post-migration' ? 1 : 0);
+      const report = JSON.parse(readFileSync(path.join(cwd, 'reports/production-data-promotion.json')));
+      expect(report.operations.activeStep).toBe(phase === 'post-migration' ? 'post-invariants' : 'pre-invariants');
+      for (const suffix of ['json', 'junit.xml', 'txt', 'md']) expect(readFileSync(path.join(cwd, `reports/production-data-promotion.${suffix}`), 'utf8')).not.toMatch(/private-|private@/);
+    } finally { rmSync(cwd, {recursive:true, force:true}); }
+  });
+
+  it.each(['prepare-data', 'prepare-verify', 'deploy-verify', 'release-finalize'].flatMap(boundary =>
+    ['underflow', 'duplicate', 'equivalent'].map(notation => [boundary, notation])))
+  ('validates original artifact bytes at %s: %s', (boundary, notation) => {
+    const {cwd, request, invoke, approve} = executorSandbox();
+    try {
+      expect(invoke('prepare').status).toBe(0); approve();
+      const preparation = boundary.startsWith('prepare');
+      if (!preparation) expect(invoke('data').status).toBe(0);
+      const filename = preparation ? 'preparation.json' : 'evidence.json';
+      const original = readFileSync(path.join(cwd, filename), 'utf8');
+      const replacement = notation === 'underflow' ? '"foreignKeyViolations":1e-400'
+        : notation === 'duplicate' ? '"foreignKeyViolations":1,"foreignKeyViolations":0' : '"foreignKeyViolations":0.0e0';
+      const altered = original.replace(/"foreignKeyViolations":\s*0/, replacement);
+      expect(altered).not.toBe(original);
+      // The original digest is unchanged by a lossy parse: this is the bypass.
+      expect(JSON.parse(altered)).toEqual(JSON.parse(original));
+      writeFileSync(path.join(cwd, filename), altered);
+      const cli = (script, args) => spawnSync(process.execPath, [fileURLToPath(new URL(script, import.meta.url)), ...args], {
+        cwd, encoding: 'utf8', env: {...context, PATH: path.join(cwd, 'bin')},
+      });
+      let result;
+      if (boundary === 'prepare-data') result = invoke('data');
+      else if (boundary === 'prepare-verify') result = cli('./verify-production-preparation.mjs', [
+        '--request', 'request.json', '--preparation', filename, '--encrypted-export', `reports/production-recovery-${commit}.sql.enc`,
+        '--preparation-digest', digest(JSON.parse(original)), '--artifact-id', '123', '--output', 'receipt.json',
+      ]);
+      else if (boundary === 'deploy-verify') result = cli('./production-executor.mjs', ['verify-deploy', '--request', 'request.json', '--evidence', filename]);
+      else {
+        const smoke = {...validProductionSmoke(), target: {environment:'production', binding:'DB', ...production}, migrationRange: request.migrationRange};
+        writeFileSync(path.join(cwd, 'smoke.json'), JSON.stringify(smoke));
+        writeFileSync(path.join(cwd, 'url.txt'), smoke.deploymentUrl);
+        writeFileSync(path.join(cwd, 'deploy.json'), JSON.stringify({verdict:'pass', commit, tree:request.mergeContext.tree, target:smoke.target, migrationRange:request.migrationRange}));
+        result = cli('./finalize-production-release.mjs', ['--request', 'request.json', '--evidence', filename, '--deploy', 'deploy.json', '--smoke', 'smoke.json', '--deployment-url-file', 'url.txt', '--report-dir', 'final']);
+      }
+      expect(result.status, result.stderr).toBe(notation === 'equivalent' ? 0 : 1);
+      if (preparation && notation !== 'equivalent') expect(readFileSync(path.join(cwd, 'calls.txt'), 'utf8').split('\n')).not.toContain('migration');
+      expect(result.stdout + result.stderr).not.toContain(replacement);
+    } finally { rmSync(cwd, {recursive:true, force:true}); }
+  });
+
+  it.each(['"total_rows":1e-400', '"total_rows":-1e-400', '"total_rows":1,"total_rows":0'])
+  ('blocks raw FK evidence at the CLI before preparation: %s', fields => {
+    const {cwd, configuration, invoke} = executorSandbox();
+    try {
+      configuration.rawForeignKeyFields = fields;
+      const result = invoke('prepare');
+      expect(result.status, result.stderr).toBe(1);
+      expect(readFileSync(path.join(cwd, 'calls.txt'), 'utf8').split('\n')).not.toContain('migration');
+      for (const suffix of ['json', 'junit.xml', 'txt', 'md']) {
+        const report = readFileSync(path.join(cwd, `reports/production-data-promotion.${suffix}`), 'utf8');
+        expect(report).not.toContain(fields);
+      }
+      expect(existsSync(path.join(cwd, 'preparation.json'))).toBe(false);
+    } finally { rmSync(cwd, {recursive: true, force: true}); }
+  });
+
+  it.each(['prepare', 'after-approval'])('blocks actual raw 0024 collisions at %s without source writes', phase => {
+    const {cwd, configuration, invoke, approve} = executorSandbox();
+    try {
+      if (phase === 'after-approval') { expect(invoke('prepare').status).toBe(0); approve(); }
+      configuration.rawSourceSql = `
+        INSERT INTO users(id,email,password_hash,created_at) VALUES ('private-owner','private@example.invalid','synthetic','2026-01-01');
+        INSERT INTO templates(id,user_id,title,items,created_at) VALUES ('private-template','private-owner','Private','[{"id":"section","items":[{"id":"legacy-item-1-2"},{}]}]','2026-01-01');
+      `;
+      const result = invoke(phase === 'prepare' ? 'prepare' : 'data');
+      expect(result.status, result.stderr).toBe(1);
+      const report = JSON.parse(readFileSync(path.join(cwd, 'reports/production-data-promotion.json')));
+      expect(report.operations.activeStep).toBe('pre-invariants');
+      expect(readFileSync(path.join(cwd, 'calls.txt'), 'utf8').split('\n')).not.toContain('migration');
+      for (const suffix of ['json', 'junit.xml', 'txt', 'md']) expect(readFileSync(path.join(cwd, `reports/production-data-promotion.${suffix}`), 'utf8')).not.toMatch(/private-|private@|legacy-item/);
+      expect(existsSync(path.join(cwd, 'evidence.json'))).toBe(false);
+    } finally { rmSync(cwd, {recursive: true, force: true}); }
+  });
+
+  it('carries actual raw opaque-content compatibility through summaries, signing and deployment validation', () => {
+    const {cwd, configuration, request, invoke, approve} = executorSandbox();
+    try {
+      configuration.rawSourceSql = `
+        INSERT INTO users(id,email,password_hash,created_at) VALUES ('private-owner','private@example.invalid','synthetic','2026-01-01');
+        INSERT INTO templates(id,user_id,title,items,created_at) VALUES ('private-template','private-owner','Private','[{"id":"section","items":[{"id":"first","contents":[{"id":"opaque"}]},{"id":"second","contents":[{"id":"opaque"}]}]}]','2026-01-01');
+        INSERT INTO checklist_runs(id,user_id,template_id,title,items,started_at,created_at) SELECT 'private-run',user_id,id,title,items,created_at,created_at FROM templates;
+      `;
+      const prepared = invoke('prepare'); expect(prepared.status, prepared.stderr).toBe(0); approve();
+      const executed = invoke('data'); expect(executed.status, executed.stderr).toBe(0);
+      const signedEvidence = JSON.parse(readFileSync(path.join(cwd, 'evidence.json')));
+      const payload = assertDeployEvidence({ signedEvidence, request, commit, database: production });
+      const pre = payload.results['pre-invariants'].summary;
+      expect(pre.foreignKeyViolations).toBe(0);
+      expect(pre.aggregateCounts).toEqual({templates:1, runs:1});
+      expect(pre.sourceCoverage).toEqual({verdict:'pass', templateCount:1, runCount:1, domainDigest:pre.domainDigest});
+      const post = payload.results['post-invariants'].summary;
+      expect(post.aggregateCounts).toEqual({templates:1, runs:1});
+      expect(post.sourceCoverage).toEqual({verdict:'pass', templateCount:1, runCount:1, domainDigest:post.postDomainDigest});
+      expect(payload.results['post-invariants'].summary.foreignKeyViolations).toBe(0);
+      expect(pre.pre0024Compatibility).toEqual({ migration: '0024_safe_template_evolution.sql', verdict: 'pass', templateCount: 1, runCount: 1, domainDigest: pre.domainDigest });
+      expect(JSON.stringify(signedEvidence)).not.toMatch(/private-|private@|opaque/);
+    } finally { rmSync(cwd, {recursive: true, force: true}); }
+  });
+  it.each(['prepare', 'pre-mutation', 'post-migration'].flatMap(phase =>
+    ['missing', 'nonzero', 'fractional', 'string'].map(evidence => [phase, evidence])))
+  ('blocks %s with %s foreign-key evidence at the executor CLI', (phase, evidence) => {
+    const {cwd, configuration, invoke, approve} = executorSandbox();
+    try {
+      if (phase !== 'prepare') { expect(invoke('prepare').status).toBe(0); approve(); }
+      configuration.foreignKeyEvidence = evidence;
+      configuration.foreignKeyAfterApply = phase === 'post-migration';
+      const result = invoke(phase === 'prepare' ? 'prepare' : 'data');
+      expect(result.status, result.stderr).toBe(1);
+      const report = JSON.parse(readFileSync(path.join(cwd, 'reports/production-data-promotion.json')));
+      expect(report.verdict).toBe('fail');
+      expect(report.operations.activeStep).toBe(phase === 'post-migration' ? 'post-invariants' : 'pre-invariants');
+      expect(existsSync(path.join(cwd, 'evidence.json'))).toBe(false);
+      const calls = readFileSync(path.join(cwd, 'calls.txt'), 'utf8').trim().split('\n');
+      expect(calls.filter(call => call === 'migration')).toHaveLength(phase === 'post-migration' ? 1 : 0);
+    } finally { rmSync(cwd, {recursive: true, force: true}); }
+  });
   it.each(cohortEvidenceMutations)('executor rejects %s before any provider transport', (_name, mutate) => {
     const { cwd, request, invoke } = executorSandbox();
     try {
@@ -636,12 +815,168 @@ describe('local executor subprocess boundaries', { timeout: 20000 }, () => {
       const prepared = invoke('prepare'); expect(prepared.status, prepared.stderr).toBe(0);
       approve();
       const executed = invoke('data'); expect(executed.status, executed.stderr).toBe(0);
-      expect(JSON.parse(readFileSync(path.join(cwd, 'evidence.json'))).payload.verdict).toBe('pass');
+      const signedEvidence = JSON.parse(readFileSync(path.join(cwd, 'evidence.json')));
+      expect(assertDeployEvidence({ signedEvidence, request, commit, database: production }).verdict).toBe('pass');
+      for (const step of ['pre-invariants', 'post-invariants']) expect(signedEvidence.payload.results[step].summary.foreignKeyViolations).toBe(0);
+      expect(signedEvidence.payload.results['pre-invariants'].summary.pre0024Compatibility).toEqual(noMigrations ? null : {
+        migration: '0024_safe_template_evolution.sql', verdict: 'pass', templateCount: 0, runCount: 0,
+        domainDigest: signedEvidence.payload.results['pre-invariants'].summary.domainDigest,
+      });
     } finally { rmSync(cwd, {recursive: true, force: true}); }
   });
 });
 
 describe("protected production executor", () => {
+  it.each([
+    ["missing aggregates", summary => { delete summary.aggregateCounts; }],
+    ["untyped aggregates", summary => { summary.aggregateCounts.templates = "0"; }],
+    ["negative aggregates", summary => { summary.aggregateCounts.runs = -1; }],
+    ["fractional aggregates", summary => { summary.aggregateCounts.templates = 0.5; }],
+    ["changed aggregates", summary => { summary.aggregateCounts.runs = 987654; }],
+    ["missing coverage", summary => { delete summary.sourceCoverage; }],
+    ["failed coverage", summary => { summary.sourceCoverage.verdict = "fail"; }],
+    ["changed template coverage", summary => { summary.sourceCoverage.templateCount = 987654; }],
+    ["changed run coverage", summary => { summary.sourceCoverage.runCount = 987654; }],
+    ["changed domain binding", summary => { summary.sourceCoverage.domainDigest = "a".repeat(64); }],
+  ])("rejects %s in prepared, fresh, post and signed source evidence", (_label, corrupt) => {
+    const change = step => {
+      const result = validStepResult(step);
+      corrupt(result.summary);
+      return result;
+    };
+    for (const phase of ["prepared", "fresh", "post"]) {
+      const handshake = phase === "prepared" ? preparedWithCorruptedInvariants(change) : preparedHandshake();
+      const calls = [];
+      expect(() => runProductionDataPhase({ ...handshake, run: step => {
+        calls.push(step);
+        return step === (phase === "post" ? "post-invariants" : phase === "fresh" ? "pre-invariants" : "none") ? change(step) : validStepResult(step);
+      } })).toThrow(/coverage/i);
+      expect(calls.includes("migration-apply")).toBe(phase === "post");
+    }
+    const request = validPromotionEvidence();
+    for (const step of ['pre-invariants', 'post-invariants']) {
+      const signed = validSignedProductionEvidence(request);
+      signed.payload.results[step] = change(step);
+      expect(() => assertDeployEvidence({ signedEvidence:createSignedEvidence({payload:signed.payload}), request, commit, database:production })).toThrow(/coverage/i);
+    }
+  });
+
+  it.each(['counts', 'source digest'])('rejects changed post-migration %s even when post fields agree internally', change => {
+    const corrupt = () => {
+      const result = validStepResult('post-invariants');
+      if (change === 'counts') { result.summary.aggregateCounts.templates = 1; result.summary.sourceCoverage.templateCount = 1; }
+      else result.summary.preDomainDigest = 'a'.repeat(64);
+      return result;
+    };
+    expect(() => runProductionDataPhase({...preparedHandshake(), run:step => step === 'post-invariants' ? corrupt() : validStepResult(step)})).toThrow(/across the comparison/);
+    const request = validPromotionEvidence();
+    const signed = validSignedProductionEvidence(request);
+    signed.payload.results['post-invariants'] = corrupt();
+    expect(() => assertDeployEvidence({signedEvidence:createSignedEvidence({payload:signed.payload}), request, commit, database:production})).toThrow(/across the comparison/);
+  });
+
+  it.each(["templateCount", "runCount"])("durable preparation rejects a changed compatibility %s before approval", field => {
+    const { bundle } = preparedHandshake();
+    bundle.preparation.results['pre-invariants'].summary.pre0024Compatibility[field] = 987654;
+    bundle.expectedDigest = digest(bundle.preparation);
+    expect(() => verifyRecoveryBundle(bundle)).toThrow(/counts|compatibility/i);
+  });
+
+  it.each(["templateCount", "runCount"])("rejects mismatched proof %s in prepared, fresh and signed evidence", field => {
+    const corrupt = step => {
+      const result = validStepResult(step);
+      if (step === "pre-invariants") result.summary.pre0024Compatibility[field] = 987654;
+      return result;
+    };
+    for (const phase of ["prepared", "fresh"]) {
+      const handshake = phase === "prepared" ? preparedWithCorruptedInvariants(corrupt) : preparedHandshake();
+      const calls = [];
+      expect(() => runProductionDataPhase({ ...handshake, run: step => {
+        calls.push(step);
+        return phase === "fresh" ? corrupt(step) : validStepResult(step);
+      } })).toThrow(/counts|compatibility/i);
+      expect(calls).not.toContain("migration-apply");
+    }
+    const request = validPromotionEvidence();
+    const signed = validSignedProductionEvidence(request);
+    signed.payload.results['pre-invariants'] = corrupt('pre-invariants');
+    expect(() => assertDeployEvidence({ signedEvidence: createSignedEvidence({payload: signed.payload}), request, commit, database:production })).toThrow(/counts|compatibility/i);
+  });
+
+  const invalidCompatibility = [
+    ["missing", () => undefined], ["null", () => null], ["untyped", () => "pass"],
+    ["failed", proof => ({ ...proof, verdict: "fail" })],
+    ["wrong migration", proof => ({ ...proof, migration: "0023_add_sitemap_revision_state.sql" })],
+    ["missing rows", proof => ({ ...proof, templateCount: undefined })],
+    ["string rows", proof => ({ ...proof, runCount: "0" })],
+    ["fractional rows", proof => ({ ...proof, templateCount: 0.5 })],
+    ["negative rows", proof => ({ ...proof, runCount: -1 })],
+    ["wrong domain", proof => ({ ...proof, domainDigest: "a".repeat(64) })],
+  ];
+  it.each(invalidCompatibility)("rejects %s 0024 compatibility proof at mutation and deployment consumers", (_label, corrupt) => {
+    const change = step => {
+      const result = validStepResult(step);
+      if (step === "pre-invariants") result.summary.pre0024Compatibility = corrupt(result.summary.pre0024Compatibility);
+      return result;
+    };
+    for (const phase of ["prepared", "fresh"]) {
+      const handshake = phase === "prepared" ? preparedWithCorruptedInvariants(change) : preparedHandshake();
+      const calls = [];
+      expect(() => runProductionDataPhase({ ...handshake, run: step => {
+        calls.push(step);
+        return phase === "fresh" ? change(step) : validStepResult(step);
+      } })).toThrow(/0024 compatibility/i);
+      expect(calls).not.toContain("migration-apply");
+    }
+    const request = validPromotionEvidence();
+    const signed = validSignedProductionEvidence(request);
+    signed.payload.results["pre-invariants"] = change("pre-invariants");
+    expect(() => assertDeployEvidence({ signedEvidence: createSignedEvidence({ payload: signed.payload }), request, commit, database: production })).toThrow(/0024 compatibility/i);
+  });
+
+  it.each([undefined, null, "0", 0.5, 1])("rejects signed FK count %s before deployment", (count) => {
+    const request = validPromotionEvidence();
+    expect(assertDeployEvidence({ signedEvidence: validSignedProductionEvidence(request), request, commit, database: production }).verdict).toBe("pass");
+    for (const step of ["pre-invariants", "post-invariants"]) {
+      const signed = validSignedProductionEvidence(request);
+      signed.payload.results[step].summary.foreignKeyViolations = count;
+      const signedEvidence = createSignedEvidence({ payload: signed.payload });
+      expect(() => assertDeployEvidence({ signedEvidence, request, commit, database: production })).toThrow(/foreign.key/i);
+    }
+  });
+
+  it.each([undefined, null, "0", 0.5, 1])("rejects prepared and fresh FK count %s before migration", (count) => {
+    for (const phase of ["prepared", "fresh"]) {
+      const result = step => {
+        const result = validStepResult(step);
+        if (step === "pre-invariants") result.summary.foreignKeyViolations = count;
+        return result;
+      };
+      const handshake = phase === "prepared" ? preparedWithCorruptedInvariants(result) : preparedHandshake();
+      const calls = [];
+      expect(() => runProductionDataPhase({ ...handshake, run: step => {
+        calls.push(step);
+        return phase === "fresh" ? result(step) : validStepResult(step);
+      } })).toThrow(/foreign.key/i);
+      expect(calls).not.toContain("migration-apply");
+    }
+  });
+
+  it.each([undefined, null, "0", 0.5, 1])("rejects post-migration FK count %s before signing deployment evidence", (count) => {
+    const calls = [];
+    let evidence;
+    expect(() => {
+      evidence = runProductionDataPhase({ ...preparedHandshake(), run: step => {
+        calls.push(step);
+        const result = validStepResult(step);
+        if (step === "post-invariants") result.summary.foreignKeyViolations = count;
+        return result;
+      } });
+    }).toThrow(/foreign.key/i);
+    expect(calls).toContain("migration-apply");
+    expect(evidence).toBeUndefined();
+  });
+
   it('rejects source proof replay for another request even when invariant metadata supplies the old identity', () => {
     const request = validPromotionEvidence();
     request.database = { ...production, databaseId: '11111111-1111-4111-8111-111111111111' };
@@ -1167,8 +1502,8 @@ esac
   });
 
   it("blocks row/owner loss and nonzero invalid or orphan invariants", () => {
-    const values = { users: 2, templates: 4, templates_active: 4, templates_deleted: 0, template_owners: 2, runs: 2, runs_active: 2, runs_deleted: 0, run_owners: 2, templates_invalid_json: 0, templates_invalid_version: 0, runs_invalid_json: 0, orphaned_templates: 0, orphaned_runs: 0, templates_invalid_content_version: 0, runs_invalid_template_version: 0, runs_invalid_revision: 0, runs_invalid_retired_json: 0 };
-    const output = JSON.stringify([{ results: Object.entries(values).map(([invariant, total_rows]) => ({ invariant, total_rows })) }]);
+    const values = { foreign_key_violations: 0, users: 2, templates: 4, templates_active: 4, templates_deleted: 0, template_owners: 2, runs: 2, runs_active: 2, runs_deleted: 0, run_owners: 2, templates_invalid_json: 0, templates_invalid_version: 0, runs_invalid_json: 0, orphaned_templates: 0, orphaned_runs: 0, templates_invalid_content_version: 0, runs_invalid_template_version: 0, runs_invalid_revision: 0, runs_invalid_retired_json: 0 };
+    const output = JSON.stringify([{ success: true, meta: { duration: 0 }, results: Object.entries(values).map(([invariant, total_rows]) => ({ invariant, total_rows })) }]);
     const pre = parseInvariantOutput(output);
     pre.ownershipDigest = "digest";
     const domain = { templates: [], runs: [], emptyRetiredItemsDigest: "empty", digest: "domain" };

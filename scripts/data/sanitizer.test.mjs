@@ -59,6 +59,112 @@ it("accepts an actual post0024 export for application-only rehearsal without inv
 });
 
 describe("source-derived rehearsal sanitizer", () => {
+  it.each(['templates', 'checklist_runs'])('preserves valid opaque content IDs through raw and sanitized 0024 replay for %s', table => {
+    const source = syntheticSourceDatabase(repoRoot);
+    const target = replayMigrations({ through: legacyContext.sourceSchema });
+    try {
+      const items = [{ id: 'section-safe', items: [
+        { id: 'item-safe', title: 'A', contents: [{ id: 'legacy-item-1-2', type: 'text', value: 'synthetic' }] },
+        { title: 'B' },
+      ] }];
+      expect(parseLegacySections(items).success).toBe(true);
+      source.prepare(`UPDATE ${table} SET items=?`).run(JSON.stringify(items));
+      const exported = exportSyntheticRows(source);
+      const migration = readFileSync(path.join(repoRoot, 'db/migrations', currentContext.sourceSchema), 'utf8');
+      source.exec(migration);
+      const rawAfter = JSON.parse(source.prepare(`SELECT items FROM ${table} LIMIT 1`).get().items);
+      expect(parseLegacySections(rawAfter).success).toBe(true);
+      expect(rawAfter[0].items.map(item => item.id)).toEqual(['item-safe', 'legacy-item-1-2']);
+      expect(rawAfter[0].items[0].contents).toEqual(items[0].items[0].contents);
+      const artifact = generate({ rawExport: exported });
+      target.exec(artifact.sql);
+      const sanitizedBefore = JSON.parse(target.prepare(`SELECT items FROM ${table} LIMIT 1`).get().items);
+      expect(parseLegacySections(sanitizedBefore).success).toBe(true);
+      target.exec(migration);
+      const sanitizedAfter = JSON.parse(target.prepare(`SELECT items FROM ${table} LIMIT 1`).get().items);
+      expect(parseLegacySections(sanitizedAfter).success).toBe(true);
+      expect(sanitizedAfter[0].items[0].contents).toEqual(sanitizedBefore[0].items[0].contents);
+      expect(sanitizedAfter[0].items.map(item => item.id)).toEqual([sanitizedBefore[0].items[0].id, 'legacy-item-1-2']);
+      expect(artifact.sql).not.toMatch(/section-safe|item-safe|synthetic/);
+    } finally { source.close(); target.close(); }
+  });
+  it.each([false, true])('samples 42 templates with personal, active-team and archived-team coverage (current=%s)', current => {
+    const source = syntheticSourceDatabase(repoRoot, current);
+    const context = current ? currentContext : legacyContext;
+    const target = replayMigrations({ through: context.sourceSchema });
+    try {
+      const owner = source.prepare('SELECT id FROM users LIMIT 1').get().id;
+      source.exec('DELETE FROM checklist_runs; DELETE FROM templates');
+      for (const state of ['active', 'archived']) {
+        source.prepare("INSERT INTO teams(id,name,created_by_user_id,archived_at,created_at) VALUES (?,?,?,?,'2020-01-01')").run(`PRIVATE_${state}`, 'Private', owner, state === 'archived' ? '2020-01-01' : null);
+        source.prepare("INSERT INTO team_members(id,team_id,user_id,role,status,created_at) VALUES (?,?,?,'viewer','active','2020-01-01')").run(`PRIVATE_MEMBER_${state}`, `PRIVATE_${state}`, owner);
+      }
+      const ids = Array.from({ length: 42 }, (_, i) => `PRIVATE_TEMPLATE_${i}`).sort((a,b) => createHash('sha256').update(a).digest('hex').localeCompare(createHash('sha256').update(b).digest('hex')));
+      ids.forEach((id, i) => source.prepare("INSERT INTO templates(id,user_id,title,items,slug,owner_type,team_id,created_at) VALUES (?,?,'Private','[]',?,?,?,'2020-01-01')").run(id, owner, id, i < 14 ? 'user' : 'team', i < 14 ? null : i < 28 ? 'PRIVATE_active' : 'PRIVATE_archived'));
+      source.prepare("INSERT INTO checklist_runs(id,user_id,template_id,title,items,created_at,started_at) VALUES ('PRIVATE_RUN',?,?,'Private','[]','2020-01-01','2020-01-01')").run(owner, ids[0]);
+      const exported = exportSyntheticRows(source);
+      const artifact = generate({ ...context, rawExport: exported });
+      target.exec(artifact.sql);
+      expect(target.prepare('SELECT archived_at IS NOT NULL archived FROM teams ORDER BY archived').all()).toEqual([{ archived: 0 }, { archived: 1 }]);
+      expect(artifact.manifest.selection.selectedCounts.templates).toBe(16);
+      expect(artifact.manifest.selection.ownershipCoverage.source).toEqual(artifact.manifest.selection.ownershipCoverage.selected);
+      expect(artifact.manifest.selection.ownershipCoverage.source).toEqual(expect.arrayContaining(['personal-owner', 'team-state:active', 'team-state:archived', 'team-state:archived:role:viewer:active']));
+      expect(generate({ ...context, rawExport: exported })).toEqual(artifact);
+      expect(JSON.stringify(artifact)).not.toMatch(/PRIVATE_|Private/);
+      const old = structuredClone(artifact);
+      old.manifest.schemaVersion = 3;
+      expect(() => validateSanitizedRehearsalArtifact({ ...old, policy: loadSanitizerPolicy({ repoRoot }), now: generatedAt, ...context })).toThrow(/MANIFEST_STRUCTURE/);
+      const tampered = structuredClone(artifact);
+      for (const key of ['source', 'selected']) tampered.manifest.selection.ownershipCoverage[key] = tampered.manifest.selection.ownershipCoverage[key].filter(shape => !shape.includes('archived'));
+      const { manifestIntegritySha256: _ignored, ...unsigned } = tampered.manifest;
+      tampered.manifest.manifestIntegritySha256 = createHash('sha256').update(JSON.stringify(unsigned)).digest('hex');
+      expect(() => validateSanitizedRehearsalArtifact({ ...tampered, policy: loadSanitizerPolicy({ repoRoot }), now: generatedAt, ...context })).toThrow(/ownership coverage mismatch/);
+      expect(target.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      // Twenty distinct archival/role/status contexts cannot fit sixteen
+      // representatives. Refuse instead of silently discarding a refusal case.
+      for (let i = 0; i < 20; i++) {
+        source.prepare("INSERT INTO teams(id,name,created_by_user_id,archived_at,created_at) VALUES (?,'Private',?,?,'2020-01-01')").run(`PRIVATE_OVERFLOW_${i}`, owner, i < 10 ? null : '2020-01-01');
+        source.prepare("INSERT INTO team_members(id,team_id,user_id,role,status,created_at) VALUES (?,?,?,?,?,'2020-01-01')").run(`PRIVATE_OVERFLOW_MEMBER_${i}`, `PRIVATE_OVERFLOW_${i}`, owner, ['owner','admin','editor','runner','viewer'][i % 5], i % 10 < 5 ? 'active' : 'disabled');
+        source.prepare("UPDATE templates SET owner_type='team',team_id=? WHERE id=?").run(`PRIVATE_OVERFLOW_${i}`, ids[i]);
+      }
+      expect(() => generate({ ...context, rawExport: exportSyntheticRows(source) })).toThrow('Production-shaped sample cannot fit personal-owner representatives and observed shapes within its bounds.');
+    } finally { source.close(); target.close(); }
+  });
+  it.each(['templates', 'checklist_runs'])("rejects raw %s collisions that sanitization hides from immutable 0024", table => {
+    const source = syntheticSourceDatabase(repoRoot);
+    const target = replayMigrations({ through: legacyContext.sourceSchema });
+    try {
+      const items = JSON.stringify([{ id: 'private-section', title: 'Private', items: [{ id: 'legacy-item-1-2', title: 'Private' }, { title: 'Private' }] }]);
+      source.prepare(`UPDATE ${table} SET items=?`).run(items);
+      const exported = exportSyntheticRows(source);
+      const migration = readFileSync(path.join(repoRoot, 'db/migrations', currentContext.sourceSchema), 'utf8');
+      // Independent SQL oracle: the unchanged migration duplicates the raw ID.
+      source.exec(migration);
+      const migrated = JSON.parse(source.prepare(`SELECT items FROM ${table} LIMIT 1`).get().items);
+      expect(migrated[0].items.map(item => item.id)).toEqual(['legacy-item-1-2', 'legacy-item-1-2']);
+      expect(() => generate({ rawExport: exported })).toThrow('Production-shaped source is incompatible with immutable 0024 (GENERATED_ID_COLLISION).');
+      // A nearby noncolliding source remains supported through public generation.
+      const safe = exported.replaceAll('legacy-item-1-2', 'private-safe-item');
+      const artifact = generate({ rawExport: safe });
+      target.exec(artifact.sql);
+      target.exec(migration);
+      const sanitized = JSON.parse(target.prepare(`SELECT items FROM ${table} LIMIT 1`).get().items);
+      expect(new Set(sanitized[0].items.map(item => item.id)).size).toBe(2);
+      expect(JSON.stringify(artifact)).not.toMatch(/private-|Private/);
+    } finally { source.close(); target.close(); }
+  });
+  it('rejects a collision even on a raw template outside the selected sample', () => {
+    const source = oversizedPersonalSource(false, false);
+    try {
+      source.exec('DELETE FROM checklist_runs WHERE progress=72');
+      const items = [{ id: 'private-section', items: [{ id: 'private-safe' }, {}] }];
+      source.prepare('UPDATE templates SET items=?').run(JSON.stringify(items));
+      expect(generate({ rawExport: exportSyntheticRows(source) }).manifest.selection.selectedCounts.templates).toBe(16);
+      items[0].items[0].id = 'legacy-item-1-2';
+      source.prepare('UPDATE templates SET items=? WHERE version=702').run(JSON.stringify(items));
+      expect(() => generate({ rawExport: exportSyntheticRows(source) })).toThrow(/GENERATED_ID_COLLISION/);
+    } finally { source.close(); }
+  });
   it.each([false, true])("accepts equal decoded keys in distinct objects before source attestation (current=%s)", current => {
     const context = current ? currentContext : legacyContext;
     const source = syntheticSourceDatabase(repoRoot, current);
@@ -548,23 +654,30 @@ describe("source-derived rehearsal sanitizer", () => {
     } finally { source.close(); target.close(); }
   });
   it("retains duplicate identities and malformed nested shapes without making them writable", () => {
-    const source = syntheticSourceDatabase(repoRoot, false), target = replayMigrations({ through: legacyContext.sourceSchema });
+    const source = syntheticSourceDatabase(repoRoot, true), target = replayMigrations();
     try {
       const malformed = [{ id: "private-section", items: [
         { id: "private-duplicate", contents: [{ type: "private-invalid", value: "private-value" }] },
         { id: "private-duplicate", contents: { type: "text", value: "private-value" } },
-        { id: null, contents: [null, { type: false, subItems: "private-invalid-array" }] },
+        { id: 'private-third', contents: [null, { type: false, subItems: "private-invalid-array" }] },
       ] }];
       expect(parseLegacySections(malformed).success).toBe(false);
       source.prepare("UPDATE templates SET items=?").run(JSON.stringify(malformed));
-      const artifact = generate({ ...legacyContext, rawExport: exportSyntheticRows(source) });
+      const legacy = syntheticSourceDatabase(repoRoot, false);
+      try {
+        legacy.prepare('UPDATE templates SET items=?').run(JSON.stringify(malformed));
+        const exported = exportSyntheticRows(legacy);
+        expect(() => legacy.exec(readFileSync(path.join(repoRoot, 'db/migrations', currentContext.sourceSchema), 'utf8'))).toThrow();
+        expect(() => generate({ rawExport: exported })).toThrow(/PRE0024_COMPATIBILITY/);
+      } finally { legacy.close(); }
+      const artifact = generate({ ...currentContext, rawExport: exportSyntheticRows(source) });
       target.exec(artifact.sql);
       const result = JSON.parse(target.prepare("SELECT items FROM templates LIMIT 1").get().items);
       expect(parseLegacySections(result).success).toBe(false);
       expect(result[0].items).toHaveLength(3);
       expect(result[0].items[0].id).toBe(result[0].items[1].id);
       expect(Array.isArray(result[0].items[1].contents)).toBe(false);
-      expect(result[0].items[2]).toEqual({ id: null, contents: [null, { type: false, subItems: "sanitized-subItems" }] });
+      expect(result[0].items[2]).toEqual({ id: expect.stringMatching(/^shape-id-/), contents: [null, { type: false, subItems: "sanitized-subItems" }] });
       expect(artifact.sql).not.toContain("private-");
     } finally { source.close(); target.close(); }
   });
@@ -632,7 +745,7 @@ describe("source-derived rehearsal sanitizer", () => {
   });
   it("preserves source relationships and migration-edge shapes without source values", () => {
     const artifact = generate();
-    expect(artifact.manifest).toMatchObject({ schemaVersion: 3, artifactType: "sanitized-production-shaped", sanitizerVersion: "source-derived-shape-v5", selection: { sourceCounts: { users: 1, templates: 2, checklistRuns: 2 }, selectedCounts: { users: 1, templates: 2, checklistRuns: 2 } }, privacy: { directIdentifiers: "removed", customerContent: "removed", credentialsAndSessions: "excluded", passwordMaterial: "excluded" }, handling: { accessOwner: "@devinschumacher", retentionDeadline } });
+    expect(artifact.manifest).toMatchObject({ schemaVersion: 4, artifactType: "sanitized-production-shaped", sanitizerVersion: "source-derived-shape-v5", selection: { sourceCounts: { users: 1, templates: 2, checklistRuns: 2 }, selectedCounts: { users: 1, templates: 2, checklistRuns: 2 } }, privacy: { directIdentifiers: "removed", customerContent: "removed", credentialsAndSessions: "excluded", passwordMaterial: "excluded" }, handling: { accessOwner: "@devinschumacher", retentionDeadline } });
     expect(artifact.manifest.selection.coveredShapes).toEqual(expect.arrayContaining(artifact.manifest.selection.requiredShapes));
     for (const secret of ["private.person@example.com", "Private Person", "Customer", "Confidential", "secret note", "private-access-token", "private-session-token", "private-share-token", "8ab2b7e9", "987654321012345"]) expect(artifact.sql).not.toContain(secret);
     expect(artifact.sql).toContain('"order":17');

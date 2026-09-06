@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readdirSync } from "node:fs";
 import { wrapCanarySubprocessFailure } from './canary-diagnostics.mjs';
 import { assertSourceSchemaProof } from './source-schema-proof.mjs';
+import { assertInvariantSafetySummary } from './invariant-capture-lib.mjs';
 
 export const RECOVERY_MAX_AGE_MS = 15 * 60 * 1000;
 export const repositoryMigrationHistory = () => readdirSync(new URL('../../db/migrations/', import.meta.url)).filter(name => /^\d{4}_.*\.sql$/.test(name)).sort();
@@ -35,6 +36,7 @@ export function prepareProduction({ request, context, run, clock = Date.now }) {
     if (results[step]?.verdict !== "pass") throw new Error(`Production preparation ${step} failed.`);
   }
   assertRepositoryAppliedPrefix({ ...results['pre-invariants'].summary, pendingMigrations: request.pendingMigrations });
+  assertInvariantSafetySummary({ step: 'pre-invariants', summary: results['pre-invariants'].summary, pendingMigrations: request.pendingMigrations });
   assertSourceSchemaProof(results['source-schema'].summary, { ...results['pre-invariants'].summary, commit: request.commit, database: request.database, pendingMigrations: request.pendingMigrations });
   assertRecoveryFreshness({ preparedAt: now }, clock);
   return { version: 1, requestSha256: digest(request), context, preparedAt: now, results };
@@ -48,6 +50,7 @@ export function verifyRecoveryBundle({ request, preparation, encrypted, expected
   }
   if (JSON.stringify(Object.keys(preparation.results ?? {})) !== JSON.stringify(PREPARATION_STEPS) || PREPARATION_STEPS.some(step => preparation.results[step]?.verdict !== "pass")) throw new Error("Recovery preparation is incomplete.");
   const result = (step) => preparation.results[step].summary;
+  assertInvariantSafetySummary({ step: 'pre-invariants', summary: result('pre-invariants'), pendingMigrations: request.pendingMigrations });
   assertRepositoryAppliedPrefix({ ...result('pre-invariants'), pendingMigrations: request.pendingMigrations });
   assertSourceSchemaProof(result('source-schema'), { ...result('pre-invariants'), commit: request.commit, database: request.database, pendingMigrations: request.pendingMigrations });
   if (result("identity")?.databaseId !== request.database.databaseId || result("identity")?.databaseName !== request.database.databaseName || !result("recovery-bookmark")?.bookmark) throw new Error("Recovery identity or bookmark is missing.");

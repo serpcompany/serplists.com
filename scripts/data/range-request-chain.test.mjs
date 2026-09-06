@@ -40,9 +40,9 @@ describe("reviewed range request chain", () => {
   });
 
   it('still rejects genuinely reordered applied ledger rows and application sequence IDs', () => {
-    const rows = names => JSON.stringify([{ results: names.map((name, index) => ({ id: index + 1, name })) }]);
+    const rows = names => JSON.stringify([{ success: true, meta: { duration: 0 }, results: names.map((name, index) => ({ id: index + 1, name })) }]);
     expect(() => parseAppliedMigrationLedger(rows([files[1], files[0]]))).toThrow(/canonical migration order/i);
-    expect(() => parseAppliedMigrationLedger(JSON.stringify([{ results: [{ id: 2, name: files[0] }, { id: 1, name: files[1] }] }]))).toThrow(/sequence/i);
+    expect(() => parseAppliedMigrationLedger(JSON.stringify([{ success: true, meta: { duration: 0 }, results: [{ id: 2, name: files[0] }, { id: 1, name: files[1] }] }]))).toThrow(/sequence/i);
   });
 
   it.each([
@@ -66,7 +66,7 @@ if (args[0] === 'run') { execFileSync(process.execPath, ['scripts/data/check-mig
 else if (args[0] === 'exec' && args[1] === 'drizzle-kit') execFileSync(process.env.TEST_REAL_PNPM, args, {stdio:'inherit'});
 else if (args[3] === 'info') console.log(JSON.stringify({name:'serp-checklists-staging-db',uuid:'${stagingId}'}));
 else if (args[3] === 'migrations') console.log('Migrations to be applied:\\n┌──────────────────────────────────┐\\n│ ${migration} │\\n└──────────────────────────────────┘');
-else if (args[3] === 'execute') console.log(JSON.stringify([{results:JSON.parse(process.env.TEST_APPLIED_LEDGER).map((name,index)=>({id:index+1,name}))}]));
+else if (args[3] === 'execute') console.log(JSON.stringify([{success:true,meta:{duration:0},results:JSON.parse(process.env.TEST_APPLIED_LEDGER).map((name,index)=>({id:index+1,name}))}]));
 else process.exit(97);
 `);
       chmodSync(transport, 0o755);

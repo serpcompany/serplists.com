@@ -340,6 +340,7 @@ node scripts/data/data-command.mjs rehearsal-create \
 
 node scripts/data/data-command.mjs rehearsal-create \
   --database-name serp-checklists-rehearsal-issue-95-run-suffix \
+  --evidence tmp/data-reports/rehearsal/issue-95-run-suffix-creation.json \
   --execute
 
 node scripts/data/data-command.mjs identify \
@@ -368,3 +369,20 @@ prints the same exact identity before deletion; Wrangler reports successful
 deletion; and a final read-only D1 info lookup for the unique name reports that
 the resource no longer exists. Preserve command output with Git SHA and run
 suffix, but no credentials or database content.
+
+Creation execution requires a nonempty numeric `GITHUB_RUN_ID` for the actual
+run and a full Git commit resolved from this checkout. If `GITHUB_SHA` is set,
+it must match. These fields are attribution, not authorization. The evidence
+destination must be a new file under `tmp/data-reports/`, with no symlink
+parents or existing destination; the command reserves and writes it before
+calling create. Use a fresh name and receipt path for each authorized run.
+
+A failed create command leaves the allocation outcome unknown. A validated
+`creationResponse` records only the name and UUID returned by create;
+`remoteIdentity` is populated only after a separate info lookup matches both
+exactly. If verification or receipt persistence fails, the command exits
+nonzero and preserves the validated receipt in its JSON failure diagnostic
+(and the receipt file when writable). Retain that diagnostic for separately
+authorized cleanup and verify ownership and live identity first. A failed
+receipt never authorizes later writes, and the command never automatically
+deletes a resource or treats an arbitrary UUID in provider output as ownership.

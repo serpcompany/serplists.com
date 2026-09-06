@@ -10,8 +10,8 @@ const providerSentinels = [
   "PROVIDER_STDERR_PRIVATE_SENTINEL_128",
   "9999_PRIVATE_LEDGER_SENTINEL_128.sql",
 ];
-const databaseName = "fixture-db";
-const databaseId = "11111111-1111-4111-8111-111111111111";
+const databaseName = "serp-checklists-db";
+const databaseId = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1";
 
 function expectPrivateFree(text) {
   for (const sentinel of providerSentinels) expect(text).not.toContain(sentinel);

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { validateGitHubRunEvidence } from "./production-executor-lib.mjs";
+import { safeCanaryFailure } from './canary-diagnostics.mjs';
 function arg(name) { const index = process.argv.indexOf(name); return index < 0 ? null : process.argv[index + 1]; }
 try {
   validateGitHubRunEvidence({
@@ -11,8 +12,9 @@ try {
     headBranch: arg("--branch"),
     workflowPath: arg("--path"),
   });
-  console.log(`Verified GitHub-produced ${arg("--workflow")} evidence for ${arg("--commit")}.`);
+  console.log('Verified GitHub-produced run evidence.');
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
+  const failure = safeCanaryFailure('production-configuration', error);
+  console.error(`${failure.stage} ${failure.code}: ${failure.message}`);
+  process.exitCode = 1;
 }

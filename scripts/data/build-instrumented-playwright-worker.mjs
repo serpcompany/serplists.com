@@ -22,13 +22,21 @@ function sourceFiles(directory) {
   });
 }
 
-export async function buildInstrumentedPlaywrightWorker({ repoRoot, outputPath }) {
+export function resolveInstrumentedOutput({ repoRoot, outputPath }) {
   const resolvedRoot = path.resolve(repoRoot);
   const resolvedOutput = path.resolve(outputPath);
+  const relative = path.relative(resolvedRoot, resolvedOutput).replaceAll('\\', '/');
   assert(
-    resolvedOutput.startsWith(path.join(resolvedRoot, 'tmp') + path.sep),
-    'Instrumented Playwright Worker must be written under repository tmp/',
+    resolvedOutput.startsWith(path.join(resolvedRoot, 'tmp') + path.sep) ||
+      /^\.wrangler\/smoke-invocation-[a-zA-Z0-9]+\/pages\/_worker\.js$/.test(relative),
+    'Instrumented Playwright Worker must use repository tmp/ or an isolated smoke invocation',
   );
+  return resolvedOutput;
+}
+
+export async function buildInstrumentedPlaywrightWorker({ repoRoot, outputPath }) {
+  const resolvedRoot = path.resolve(repoRoot);
+  const resolvedOutput = resolveInstrumentedOutput({ repoRoot, outputPath });
   const require = createRequire(path.join(resolvedRoot, 'package.json'));
   const wranglerRequire = createRequire(require.resolve('wrangler/package.json'));
   const { build } = wranglerRequire('esbuild');
@@ -36,6 +44,9 @@ export async function buildInstrumentedPlaywrightWorker({ repoRoot, outputPath }
   mkdirSync(path.dirname(resolvedOutput), { recursive: true });
   const intermediateDirectory = mkdtempSync(path.join(path.dirname(resolvedOutput), '.pages-router-'));
   try {
+    // Wrangler 4.54.0 Pages temp discovery walks up from cwd to package.json.
+    // Own its project root as well as --outdir, including on build failure.
+    writeFileSync(path.join(intermediateDirectory, 'package.json'), '{"private":true}');
     const functionsDirectory = path.join(resolvedRoot, 'functions');
     const routerDirectory = path.join(intermediateDirectory, 'router');
     const wranglerLogDirectory = path.join(intermediateDirectory, 'wrangler-logs');
@@ -53,7 +64,7 @@ export async function buildInstrumentedPlaywrightWorker({ repoRoot, outputPath }
       '--fallback-service', 'ASSETS',
       ...externalSources.flatMap((file) => ['--external', file]),
     ], {
-      cwd: resolvedRoot,
+      cwd: intermediateDirectory,
       env: {PATH:process.env.PATH,TMPDIR:process.env.TMPDIR,CI:'true',WRANGLER_SEND_METRICS:'false',WRANGLER_LOG_PATH:wranglerLogDirectory},
       maxBuffer: 10 * 1024 * 1024,
     });

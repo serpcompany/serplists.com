@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -11,7 +11,7 @@ const databaseName = "serp-checklists-staging-db";
 const databaseId = "fcaf4325-5be7-4ead-ab60-45932a04177b";
 const schemaMigrations = readdirSync(new URL('../../db/migrations/', import.meta.url)).filter(name => /^\d{4}_.+\.sql$/.test(name)).sort();
 
-function runFinalizer({ mutate = () => {}, rawFiles = {}, missingData = false } = {}) {
+function runFinalizer({ mutate = () => {}, rawFiles = {}, missingData = false, publicationFailure = false } = {}) {
   const directory = mkdtempSync(path.join(tmpdir(), "staging-finalizer-"));
   const reports = {
     data: { verdict: "pass", commit, teardown: { verdict: "pass", leakedUsers: 0, leakedTemplates: 0, leakedRuns: 0 } },
@@ -32,11 +32,20 @@ function runFinalizer({ mutate = () => {}, rawFiles = {}, missingData = false } 
   const args = [];
   for (const [name, value] of Object.entries(reports)) {
     const file = path.join(directory, name === 'data' && missingData ? 'PRIVATE_CUSTOMER_EMAIL@example.com.json' : `${name}.json`);
-    if (!(name === 'data' && missingData)) writeFileSync(file, Object.hasOwn(rawFiles, name) ? rawFiles[name] : JSON.stringify(value));
+    if (!(name === 'data' && missingData)) writeFileSync(file, Object.hasOwn(rawFiles, name) ? (typeof rawFiles[name] === 'function' ? rawFiles[name](JSON.stringify(value)) : rawFiles[name]) : JSON.stringify(value));
     args.push(`--${name}`, file);
   }
   const output = path.join(directory, "output", "staging-promotion.json");
+  const nodeArgs = [];
+  if (publicationFailure) {
+    const preload = path.join(directory, 'publication-fault.mjs');
+    writeFileSync(preload, `import fs from 'node:fs'; import { syncBuiltinESMExports } from 'node:module';
+const write = fs.writeFileSync;
+fs.writeFileSync = function(file, ...rest) { if (String(file).endsWith('staging-promotion.md')) throw new Error('PRIVATE_PATH_SENTINEL_128'); return write.call(this, file, ...rest); }; syncBuiltinESMExports();`);
+    nodeArgs.push('--import', preload);
+  }
   const result = spawnSync(process.execPath, [
+    ...nodeArgs,
     fileURLToPath(new URL("./finalize-staging-promotion.mjs", import.meta.url)),
     ...args, "--commit", commit, "--tree", tree, "--database-name", databaseName,
     "--database-id", databaseId, "--binding", "DB", "--output", output,
@@ -45,6 +54,44 @@ function runFinalizer({ mutate = () => {}, rawFiles = {}, missingData = false } 
 }
 
 describe("staging promotion finalizer", () => {
+  it('contains partial success publication failures and removes every PASS artifact', () => {
+    const run = runFinalizer({ publicationFailure: true });
+    try {
+      expect(run.result.status).toBe(1);
+      expect(String(run.result.stderr)).toContain('data-reporting CANARY_STAGE_FAILED');
+      expect(String(run.result.stdout) + String(run.result.stderr)).not.toContain('PRIVATE_PATH_SENTINEL_128');
+      expect(String(run.result.stderr)).not.toMatch(/\n\s+at /);
+      for (const ext of ['json', 'md', 'txt', 'junit.xml']) expect(existsSync(run.output.replace(/\.json$/, `.${ext}`))).toBe(false);
+    } finally { rmSync(run.directory, { recursive: true, force: true }); }
+  });
+  it.each(['1e-9999', '1e9999', '9007199254740993', '0.00000000000000000000000001e-9999', '-0', '0,"foreignKeyViolations":0', '1,"foreignKey\\u0056iolations":0'])('rejects raw FK evidence %s before summarizing it', token => {
+    const run = runFinalizer({ rawFiles: { invariants: json => json.replace(/}$/, `,"foreignKeyViolations":${token},"private":"PRIVATE_RAW_EVIDENCE"}`) } });
+    try {
+      expect(run.result.status).toBe(1);
+      expect(JSON.parse(readFileSync(run.output))).toMatchObject({ verdict: 'fail', commit, target: { environment: 'staging', binding: 'DB', databaseName, databaseId }, migrationRange: { from: '0024_safe_template_evolution.sql', to: '0024_safe_template_evolution.sql' } });
+      for (const suffix of ['json', 'md', 'txt', 'junit.xml']) expect(readFileSync(run.output.replace(/\.json$/, `.${suffix}`), 'utf8')).not.toContain('PRIVATE_RAW_EVIDENCE');
+      expect(String(run.result.stdout) + String(run.result.stderr)).not.toContain('PRIVATE_RAW_EVIDENCE');
+    } finally { rmSync(run.directory, { recursive: true, force: true }); }
+  });
+  it.each(['range', 'data', 'schema', 'invariants', 'deploy', 'smoke'])('guards the first %s artifact read and accepts exact equivalent notation', name => {
+    for (const [evidence, passes] of [
+      ['"foreignKeyViolations":0.0e+99,"count":1.00e2', true],
+      ['"foreignKeyViolations":1e-9999', false],
+      ['"verdict":"PRIVATE_RAW_EVIDENCE","ver\\u0064ict":"pass"', false],
+      ['"private":"PRIVATE_RAW_EVIDENCE",', false],
+    ]) {
+      const run = runFinalizer({ rawFiles: { [name]: json => json.replace(/}$/, `,${evidence}}`) } });
+      try {
+        expect(run.result.status).toBe(passes ? 0 : 1);
+        const report = JSON.parse(readFileSync(run.output));
+        expect(report.verdict).toBe(passes ? 'pass' : 'fail');
+        expect(report.commit).toBe(!passes && name === 'range' ? 'unknown' : commit);
+        expect(report.migrationRange).toEqual(!passes && name === 'range' ? { from: 'invalid', to: 'invalid' } : { from: '0024_safe_template_evolution.sql', to: '0024_safe_template_evolution.sql' });
+        for (const suffix of ['json', 'md', 'txt', 'junit.xml']) expect(readFileSync(run.output.replace(/\.json$/, `.${suffix}`), 'utf8')).not.toContain('PRIVATE_RAW_EVIDENCE');
+        expect(String(run.result.stdout) + String(run.result.stderr)).not.toContain('PRIVATE_RAW_EVIDENCE');
+      } finally { rmSync(run.directory, { recursive: true, force: true }); }
+    }
+  });
   it('redacts missing input paths while retaining validated failure identity', () => {
     const run = runFinalizer({ missingData: true });
     try {

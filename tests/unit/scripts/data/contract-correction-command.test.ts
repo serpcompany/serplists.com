@@ -5,7 +5,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runRepositoryGit, sanitizedGitEnvironment } from "../../../../scripts/data/git-subprocess-env.mjs";
 
-const contractBaseRef = "origin/staging";
+// Historical correction fixtures must compare against the pre-correction schema after merges.
+const contractBaseRef = "11a0fc1914b012277c0d0275ad1662f857800c03";
 const contractCorrectionFiles = "db/schema/auth.ts\ndb/schema/checklistRuns.ts\ndb/schema/users.ts\n";
 
 describe("contract-correction command", () => {
@@ -102,7 +103,7 @@ describe("contract-correction command", () => {
     try {
       execFileSync("git", ["clone", "--quiet", "--local", "--no-hardlinks", process.cwd(), clone], { env: sanitizedGitEnvironment() });
       const cloneBaseRef = "refs/remotes/upstream/staging";
-      execFileSync("git", ["fetch", "--quiet", process.cwd(), `refs/remotes/origin/staging:${cloneBaseRef}`], { cwd: clone, env: sanitizedGitEnvironment() });
+      execFileSync("git", ["fetch", "--quiet", process.cwd(), `${contractBaseRef}:${cloneBaseRef}`], { cwd: clone, env: sanitizedGitEnvironment() });
       symlinkSync(path.join(process.cwd(), "node_modules"), path.join(clone, "node_modules"), "dir");
       const historicalMigration = path.join(clone, "db/migrations/0008_better_auth.sql");
       writeFileSync(historicalMigration, `${readFileSync(historicalMigration, "utf8")}\nDROP TABLE account;\n`);

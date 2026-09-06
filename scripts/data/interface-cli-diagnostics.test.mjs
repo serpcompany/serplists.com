@@ -24,13 +24,14 @@ process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');process.ex
 `, { mode: 0o700 });
   writeFileSync(path.join(dir, 'bin/pnpm'), `#!${process.execPath}
 const fs=require('node:fs');const a=process.argv.slice(2);const calls='calls.jsonl';
+const commandSql=a.find(arg=>arg.startsWith('--command='))?.slice('--command='.length)??(a.includes('--command')?a[a.indexOf('--command')+1]:null);
 const originalLog=console.log;
 console.log=value=>{
 if(process.env.BAD_RESULT){try{const p=JSON.parse(value);const rows=(Array.isArray(p)?p:[p]).flatMap(x=>x.results||[]);if(rows.some(row=>row.invariant)){
 if(process.env.BAD_RESULT==='missing')rows.pop();
 else if(process.env.BAD_RESULT==='name')rows[0].invariant=${JSON.stringify(sentinel)};
 else if(process.env.BAD_RESULT==='count')rows[0].total_rows=${JSON.stringify(sentinel)};
-value=JSON.stringify([{results:rows}]);
+value=JSON.stringify([{success:true,meta:{},results:rows}]);
 }else if(p.bookmark){p.bookmark=${JSON.stringify(sentinel)};value=JSON.stringify(p);}}catch{}}
 if(process.env.CONTAMINATE==='true'){
 try{const p=JSON.parse(value);for(const item of Array.isArray(p)?p:[p]){item.private=${JSON.stringify(sentinel)};for(const row of item.results||[])row.private=${JSON.stringify(sentinel)};}value=JSON.stringify(p);}
@@ -50,14 +51,15 @@ if(n===Number(process.env.MALFORMED_AT)){console.log(${JSON.stringify(sentinel)}
 if(a[0]==='run'){process.exit(0);}
 if(a.includes('time-travel')){console.log(JSON.stringify({bookmark:${JSON.stringify(bookmark)}}));process.exit(0);}
 if(a.includes('info')){console.log(JSON.stringify({name:process.env.DB_NAME,uuid:process.env.DB_ID}));process.exit(0);}
-if(a.includes('create')){console.log(${JSON.stringify(sentinel)}+' '+process.env.DB_ID);process.exit(0);}
+if(a.includes('create')){console.log(JSON.stringify({name:process.env.DB_NAME,uuid:process.env.DB_ID,private:${JSON.stringify(sentinel)}}));process.exit(0);}
 if(a.includes('list')){console.log('No migrations to apply!');process.exit(0);}
-if(a.some(v=>v.includes('SELECT id, name FROM d1_migrations'))){console.log(JSON.stringify([{results:fs.readdirSync('db/migrations').filter(n=>/^\\d{4}_[a-z0-9_]+\\.sql$/.test(n)).sort().map((name,i)=>({id:i+1,name}))}]));process.exit(0);}
-if(a.some(v=>v.includes('total_objects'))){console.log(JSON.stringify([{results:[{total_objects:0}]}]));process.exit(0);}
+if(a.some(v=>v.includes('SELECT id, name FROM d1_migrations'))){console.log(JSON.stringify([{success:true,meta:{},results:fs.readdirSync('db/migrations').filter(n=>/^\\d{4}_[a-z0-9_]+\\.sql$/.test(n)).sort().map((name,i)=>({id:i+1,name}))}]));process.exit(0);}
+if(a.some(v=>v.includes('total_objects'))){console.log(JSON.stringify([{success:true,meta:{},results:[{total_objects:0}]}]));process.exit(0);}
 if(a.includes('export')){fs.writeFileSync(a[a.indexOf('--output')+1],'CREATE TABLE example(id TEXT);');}
-if(a.includes('--file')&&a.some(v=>v.includes('capture-invariants'))){const sql=fs.readFileSync(a[a.indexOf('--file')+1],'utf8');console.log(JSON.stringify([{results:[...sql.matchAll(/SELECT '([^']+)' AS invariant/g)].map(m=>({invariant:m[1],total_rows:0}))}]));process.exit(0);}
-if(a.includes('--file')&&a.some(v=>v.includes('fixture'))){const teardown=a.some(v=>v.includes('teardown'));const counts=JSON.parse(fs.readFileSync('scripts/data/fixture-inventory.json','utf8')).expectedCounts;console.log(JSON.stringify([{results:[['users','users'],['templates','templates'],['checklist_runs','checklistRuns']].map(([name,key])=>({fixture_table:name,fixture_rows:teardown?0:counts[key]}))}]));process.exit(0);}
-console.log(JSON.stringify([{results:[]}]));
+if(commandSql?.includes(' AS invariant')){const sql=commandSql;console.log(JSON.stringify([{success:true,meta:{},results:[...sql.matchAll(/SELECT '([^']+)' AS invariant/g)].map(m=>({invariant:m[1],total_rows:0}))}]));process.exit(0);}
+if(a.includes('--file')&&a.some(v=>v.includes('fixture'))){fs.writeFileSync('fixture-state',a.some(v=>v.includes('teardown'))?'0':'1');console.log(JSON.stringify([{success:true,meta:{},finalBookmark:'fixture-bookmark',results:[{'Total queries executed':1,'Rows read':0,'Rows written':0,'Database size (MB)':'0.00'}]}]));process.exit(0);}
+if(commandSql?.includes(' AS fixture_table')){const teardown=fs.readFileSync('fixture-state','utf8')==='0';const counts=JSON.parse(fs.readFileSync('scripts/data/fixture-inventory.json','utf8')).expectedCounts;console.log(JSON.stringify([{success:true,meta:{},results:[['users','users'],['templates','templates'],['checklist_runs','checklistRuns']].map(([name,key])=>({fixture_table:name,fixture_rows:teardown?0:counts[key]}))}]));process.exit(0);}
+console.log(JSON.stringify([{success:true,meta:{},results:[]}]));
 `, { mode: 0o700 });
   mkdirSync(path.join(dir, 'tmp/data-reports'), { recursive: true });
   mkdirSync(path.join(dir, 'tmp/rehearsal-sensitive'), { recursive: true });
@@ -68,7 +70,7 @@ console.log(JSON.stringify([{results:[]}]));
 
 function run(dir, operation, failAt, malformedAt, overrides = {}) {
   const rehearsal = ['recovery-restore', 'rehearsal-create', 'rehearsal-teardown'].includes(operation);
-  const args = operation === 'reviewed' ? ['scripts/data/check-staging-reviewed-range.mjs'] : ['scripts/data/data-command.mjs', operation, '--environment', overrides.LOCAL === 'true' ? 'local' : rehearsal ? 'rehearsal' : 'staging', '--confirm-database-id', rehearsal ? rehearsalId : stagingId, '--execute',
+  const args = operation === 'reviewed' ? ['scripts/data/check-staging-reviewed-range.mjs'] : operation === 'rehearsal-create' ? ['scripts/data/data-command.mjs', operation, '--database-name', 'serp-checklists-rehearsal-134', '--expected-database-id', rehearsalId, '--evidence', 'tmp/data-reports/created.json', '--execute'] : ['scripts/data/data-command.mjs', operation, '--environment', overrides.LOCAL === 'true' ? 'local' : rehearsal ? 'rehearsal' : 'staging', '--confirm-database-id', rehearsal ? rehearsalId : stagingId, '--execute',
     ...(rehearsal ? ['--database-name', 'serp-checklists-rehearsal-134', '--database-id', rehearsalId, '--approver-identity', '@devinschumacher', '--creation-evidence', 'tmp/data-reports/creation.json', '--input', path.join(dir, 'tmp/rehearsal-sensitive/input.sql'), '--evidence', 'tmp/data-reports/created.json'] : []),
     ...(operation === 'export' ? ['--output', `tmp/data-evidence/${failAt ? sentinel : 'export'}.sql`] : [])];
   return spawnSync(process.execPath, args, { cwd: dir, encoding: 'utf8', timeout: 20000, env: {

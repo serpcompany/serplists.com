@@ -28,16 +28,16 @@ function fixture(failure) {
   const stub = join(directory, 'pnpm');
   writeFileSync(stub, `#!${process.execPath}
 const fs=require('node:fs'); const {DatabaseSync}=require('node:sqlite');
-const args=process.argv.slice(2); const sql=args.includes('--command') ? args[args.indexOf('--command')+1] : args.includes('--file') ? fs.readFileSync(args[args.indexOf('--file')+1],'utf8') : '';
+const args=process.argv.slice(2); const sql=args.find(arg=>arg.startsWith('--command='))?.slice('--command='.length) ?? (args.includes('--command') ? args[args.indexOf('--command')+1] : args.includes('--file') ? fs.readFileSync(args[args.indexOf('--file')+1],'utf8') : '');
 const identity=args.includes('info'); const inventory=sql.startsWith('SELECT name FROM sqlite_schema');
 fs.appendFileSync(${JSON.stringify(calls)},JSON.stringify({identity,inventory,privateArgument:sql.includes(${JSON.stringify(secretTable)}),domainQuery:sql.startsWith('SELECT * FROM')})+'\\n');
-if(identity){console.log(JSON.stringify({name:args[args.indexOf('info')+1]===${JSON.stringify(invariantDatabase)}?${JSON.stringify(invariantDatabase)}:'fixture-db',uuid:${JSON.stringify(databaseId)}}));process.exit(0);}
-if(${JSON.stringify(failure)}==='unknown-ledger' && sql.includes('SELECT id, name FROM d1_migrations')){console.log(JSON.stringify([{results:[{id:1,name:'0001_initial_schema.sql'},{id:2,name:'9999_unknown_ledger_sentinel_128.sql'}]}]));process.exit(0);}
-if(${JSON.stringify(failure)}==='schema' && inventory){console.log(JSON.stringify([{results:[{name:${JSON.stringify(secretTable)}}]}]));process.exit(0);}
+if(identity){console.log(JSON.stringify({name:args[args.indexOf('info')+1]===${JSON.stringify(invariantDatabase)}?${JSON.stringify(invariantDatabase)}:'serp-checklists-rehearsal-diagnostics',uuid:${JSON.stringify(databaseId)}}));process.exit(0);}
+if(${JSON.stringify(failure)}==='unknown-ledger' && sql.includes('SELECT id, name FROM d1_migrations')){console.log(JSON.stringify([{success:true,meta:{duration:0},results:[{id:1,name:'0001_initial_schema.sql'},{id:2,name:'9999_unknown_ledger_sentinel_128.sql'}]}]));process.exit(0);}
+if(${JSON.stringify(failure)}==='schema' && inventory){console.log(JSON.stringify([{success:true,meta:{duration:0},results:[{name:${JSON.stringify(secretTable)}}]}]));process.exit(0);}
 if((${JSON.stringify(failure)}==='schema' && sql.includes(${JSON.stringify(secretTable)})) || (${JSON.stringify(failure)}==='invariant' && sql.includes("SELECT 'template' kind"))) {
 process.stdout.write(${JSON.stringify(markers.join(' '))});process.stderr.write(${JSON.stringify(markers.join(' '))});process.exit(31);}
 const db=new DatabaseSync(${JSON.stringify(databaseFile)},{readOnly:true});
-try{const results=sql.split(';').map(s=>s.replace(/^\\s*--.*$/gm,'').trim()).filter(Boolean).map(s=>({results:db.prepare(s).all()}));
+try{const results=sql.split(';').map(s=>s.replace(/^\\s*--.*$/gm,'').trim()).filter(Boolean).map(s=>({success:true,meta:{duration:0},results:db.prepare(s).all()}));
 if(${JSON.stringify(failure)}==='schema-drift') for(const entry of results) for(const row of entry.results) if(Object.hasOwn(row,'dflt_value') && row.name==='title') { row.dflt_value="'PRIVATE_VALUE_SENTINEL_118'"; row.default_is_null=0; }
 console.log(JSON.stringify(results));}finally{db.close();}
 `);
@@ -47,7 +47,7 @@ console.log(JSON.stringify(results));}finally{db.close();}
 
 function run(f, kind, mode = 'capture') {
   const args = kind === 'schema'
-    ? ['--import', 'tsx', 'scripts/data/check-d1-schema.ts', '--database', 'fixture-db', '--database-id', databaseId, '--label', 'staging', '--report-dir', f.reports]
+    ? ['--import', 'tsx', 'scripts/data/check-d1-schema.ts', '--database', 'serp-checklists-rehearsal-diagnostics', '--database-id', databaseId, '--label', 'rehearsal', '--report-dir', f.reports]
     : ['scripts/data/remote-invariant-gate.mjs', mode, '--database', invariantDatabase, '--database-id', databaseId, '--environment', 'rehearsal', '--binding', 'DB', '--commit', commit, '--migration-from', 'none', '--migration-to', 'none', '--state', f.state, '--report-dir', f.reports];
   return spawnSync(process.execPath, args, { cwd: root, env: { PATH: `${f.directory}:${process.env.PATH}`, HOME: process.env.HOME, CI: '1', INVARIANT_HMAC_KEY: 'INVARIANT_KEY_SENTINEL_118_'.repeat(3) }, encoding: 'utf8', timeout: 20_000 });
 }
@@ -55,6 +55,20 @@ function run(f, kind, mode = 'capture') {
 function reportFiles(f) { return readdirSync(f.reports).map(name => readFileSync(join(f.reports, name), 'utf8')); }
 
 describe.skipIf(process.platform === 'win32')('direct schema and invariant CLI privacy', () => {
+  it.each(['1e-400', '0,"foreign_key_violations":1,"foreign_key_violations":0'])('rejects malformed saved invariant bytes before comparison: %s', token => {
+    const f = fixture();
+    try {
+      expect(run(f, 'invariant').status).toBe(0);
+      const original = readFileSync(f.state, 'utf8');
+      const changed = original.replace(/"foreign_key_violations":\s*0/, `"foreign_key_violations":${token}`);
+      expect(JSON.parse(changed)).toEqual(JSON.parse(original));
+      writeFileSync(f.state, changed);
+      const result = run(f, 'invariant', 'compare');
+      expect(result.status, result.stderr).toBe(1);
+      for (const output of [...reportFiles(f), result.stdout, result.stderr]) expectPrivateFree(output);
+    } finally { rmSync(f.directory, {recursive:true, force:true}); }
+  });
+
   it.each(['schema', 'invariant'])('redacts %s transport arguments and stdout/stderr and stops later reads', kind => {
     const f = fixture(kind);
     try {
@@ -62,12 +76,12 @@ describe.skipIf(process.platform === 'win32')('direct schema and invariant CLI p
       expect(result.status, result.stderr).toBe(1);
       const contents = [...reportFiles(f), result.stdout, result.stderr];
       for (const text of contents) expectPrivateFree(text);
-      const file = kind === 'schema' ? 'd1-schema-staging.json' : 'remote-invariant-capture.json';
+      const file = kind === 'schema' ? 'd1-schema-rehearsal.json' : 'remote-invariant-capture.json';
       const report = JSON.parse(readFileSync(join(f.reports, file), 'utf8'));
       expect(report).toMatchObject({ verdict: 'fail', commit, failedStage: `${kind}-query`, exitStatus: 31 });
       expect(report.target.databaseId).toBe(databaseId);
       expect(report.migrationRange).toBeDefined();
-      for (const text of reportFiles(f)) for (const context of [commit, databaseId, kind === 'schema' ? 'fixture-db' : invariantDatabase]) expect(text).toContain(context);
+      for (const text of reportFiles(f)) for (const context of [commit, databaseId, kind === 'schema' ? 'serp-checklists-rehearsal-diagnostics' : invariantDatabase]) expect(text).toContain(context);
       expect(readFileSync(join(f.reports, file.replace('.json', '.junit.xml')), 'utf8')).toMatch(/failures="[1-9][0-9]*"/);
       const calls = readFileSync(f.calls, 'utf8').trim().split('\n').map(line => JSON.parse(line));
       expect(calls[0].identity).toBe(true);
@@ -84,7 +98,7 @@ describe.skipIf(process.platform === 'win32')('direct schema and invariant CLI p
         const result = run(f, kind, mode);
         expect(result.status, result.stdout + result.stderr).toBe(0);
       }
-      for (const file of kind === 'schema' ? ['d1-schema-staging.json'] : ['remote-invariant-capture.json', 'remote-invariant-comparison.json']) expect(JSON.parse(readFileSync(join(f.reports, file), 'utf8')).verdict).toBe('pass');
+      for (const file of kind === 'schema' ? ['d1-schema-rehearsal.json'] : ['remote-invariant-capture.json', 'remote-invariant-comparison.json']) expect(JSON.parse(readFileSync(join(f.reports, file), 'utf8')).verdict).toBe('pass');
       for (const text of reportFiles(f)) expectPrivateFree(text);
     } finally { rmSync(f.directory, { recursive: true, force: true }); }
   });
@@ -94,7 +108,7 @@ describe.skipIf(process.platform === 'win32')('direct schema and invariant CLI p
     try {
       const result = run(f, 'schema');
       expect(result.status).toBe(1);
-      const report = JSON.parse(readFileSync(join(f.reports, 'd1-schema-staging.json'), 'utf8'));
+      const report = JSON.parse(readFileSync(join(f.reports, 'd1-schema-rehearsal.json'), 'utf8'));
       expect(report.schemaDifferences.runtime.verdict).toBe('fail');
       expect(report.schemaDifferences.runtime.differenceCount).toBeGreaterThan(0);
       for (const text of [...reportFiles(f), result.stdout, result.stderr]) expectPrivateFree(text);

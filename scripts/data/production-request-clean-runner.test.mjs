@@ -144,7 +144,7 @@ test('a clean production-request runner validates before installing and loads it
       json(fixture, 'run.json', { ...metadata, ...change });
       const rejected = cli(fixture, 'verify-github-run-evidence', args);
       assert.equal(rejected.status, 1, JSON.stringify(change));
-      assert.match(rejected.stderr, /GitHub run is not successful exact-commit evidence/);
+      assert.match(rejected.stderr, /production-configuration CANARY_STAGE_FAILED/);
     }
     for (const evidence of [
       { name: 'Protected data promotion and Pages deploy', event: 'push', branch: 'staging', file: '.github/workflows/cloudflare-pages-deploy.yml', bindCommit: false },
@@ -170,7 +170,8 @@ test('a clean production-request runner validates before installing and loads it
       '--ci-report', 'absent-ci-report.json', '--output', 'tmp/production-request.json',
     ]);
     assert.equal(absentEvidence.status, 1);
-    assert.match(absentEvidence.stderr, /ENOENT.*absent-ci-report\.json/);
+    assert.match(absentEvidence.stderr, /production-configuration CANARY_STAGE_FAILED/);
+    assert.doesNotMatch(absentEvidence.stderr, /absent-ci-report\.json|ENOENT/);
     assert.doesNotMatch(absentEvidence.stderr, /ERR_MODULE_NOT_FOUND/);
     assert.equal(existsSync(path.join(fixture, 'tmp/production-request.json')), false);
     const failureReport = JSON.parse(readFileSync(path.join(fixture, 'tmp/data-reports/production-request/production-request.json')));

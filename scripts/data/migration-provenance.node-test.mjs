@@ -383,7 +383,6 @@ test("a fresh clone generates and stages the complete next Drizzle provenance se
       FAKE_PENDING_MIGRATION: sqlName,
       STAGING_BASE_SHA: base,
       GITHUB_SHA: head,
-      DATA_REPORT_DIR: "tmp/data-reports/staging-range",
     };
     const staging = spawnSync(process.execPath, ["scripts/data/check-staging-reviewed-range-under-test.mjs"], {
       cwd: clone,
@@ -393,7 +392,17 @@ test("a fresh clone generates and stages the complete next Drizzle provenance se
     // Genuine generation proves provenance, not reviewed domain coverage. This
     // users-table probe has no supported rehearsal profile and must stay blocked.
     assert.equal(staging.status, 1, `${staging.stdout}\n${staging.stderr}`);
-    assert.match(`${staging.stdout}\n${staging.stderr}`, /no rehearsal plan/);
+    const stagingReport = () => JSON.parse(readFileSync(path.join(clone, 'tmp/data-reports/staging/staging-reviewed-range.json'), 'utf8'));
+    assert.equal(stagingReport().failedStage, 'staging-range-plan');
+    assert.equal(stagingReport().code, 'CANARY_SUBPROCESS_FAILED');
+    assert.equal(stagingReport().exitStatus, 1);
+    // Check the private resolver's actual cause separately. The public producer
+    // must retain the safe stage/code, not leak its child's diagnostic text.
+    const uncoveredPlan = spawnSync(process.execPath, ['--input-type=module', '-e',
+      'import { resolvePendingRehearsalPlan } from "./scripts/data/rehearsal-plan-lib.mjs"; resolvePendingRehearsalPlan({repoRoot:process.cwd(),commit:process.argv[1],baseRef:process.argv[2],pending:[process.argv[3]]});',
+      head, base, sqlName], { cwd: clone, encoding: 'utf8', env: sanitizedGitEnvironment(poisoned) });
+    assert.equal(uncoveredPlan.status, 1);
+    assert.match(`${uncoveredPlan.stdout}\n${uncoveredPlan.stderr}`, /no rehearsal plan/);
 
     rmSync(path.join(clone, "db/migrations/meta", snapshotName));
     const missingMetadata = spawnSync(process.execPath, ["scripts/data/check-staging-reviewed-range-under-test.mjs"], {
@@ -402,7 +411,9 @@ test("a fresh clone generates and stages the complete next Drizzle provenance se
       env: stagingEnvironment,
     });
     assert.equal(missingMetadata.status, 1);
-    assert.match(`${missingMetadata.stdout}\n${missingMetadata.stderr}`, /snapshot|provenance/i);
+    assert.equal(stagingReport().failedStage, 'staging-range-provenance');
+    assert.equal(stagingReport().code, 'CANARY_SUBPROCESS_FAILED');
+    assert.equal(stagingReport().exitStatus, 1);
     assert.equal(runGit(parent, ["config", "user.name"]), "Untouched Parent");
     assert.equal(runGit(parent, ["config", "core.bare"]), "false");
   } finally {

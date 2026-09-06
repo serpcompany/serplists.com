@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { prepareRecoveryExport } from "./recovery-restore-lib.mjs";
+import { normalizeMigrationRange, migrationsInRange } from "./migration-range-lib.mjs";
 
 import { getRepositoryMigrationRange } from "./environment-identity-lib.mjs";
 import { selectInvariantSqlFiles } from "./invariant-capture-lib.mjs";
@@ -25,6 +26,13 @@ const PRODUCTION_PLAN_ONLY_OPERATIONS = new Set([
   "sanitizer-source-export",
 ]);
 
+export function validateRehearsalRecoveryExportRange({ repoRoot, range }) {
+  const normalized = normalizeMigrationRange(range);
+  const files = readdirSync(path.join(repoRoot, 'db/migrations')).filter(name => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
+  migrationsInRange(files, normalized);
+  return normalized;
+}
+
 function wranglerTargetArgs(identity, persistTo) {
   if (!identity.isRemote) {
     return [identity.databaseName, "--local", ...(persistTo ? ["--persist-to", persistTo] : [])];
@@ -42,8 +50,15 @@ function commandForQuery(identity, sql, persistTo) {
   const [database, ...mode] = wranglerTargetArgs(identity, persistTo);
   return [
     "pnpm", "exec", "wrangler", "d1", "execute", database, ...mode,
-    "--command", sql, "--json",
+    `--command=${sql}`, "--json",
   ];
+}
+
+// Repository SQL remains authoritative; remote --file is an import, not a query.
+function commandForInvariantFile(identity, filePath, persistTo) {
+  return identity.isRemote
+    ? commandForQuery(identity, readFileSync(filePath, "utf8"), persistTo)
+    : commandForSql(identity, filePath, persistTo);
 }
 
 function reportFor({ operation, identity, repoRoot, gitCommit }) {
@@ -135,6 +150,7 @@ export function buildDataOperationPlan({
   let commands;
   let preconditionCommand;
   let expectedAppliedMigrations;
+  let fixtureVerificationCommand;
 
   switch (operation) {
     case "identify":
@@ -182,7 +198,12 @@ export function buildDataOperationPlan({
     case "export":
     case "rehearsal-export":
     case "sanitizer-source-export":
+    case "rehearsal-recovery-export":
     case "recovery-export": {
+      if (operation === "rehearsal-recovery-export" && identity.environment !== "rehearsal") {
+        throw new Error("Full rehearsal recovery exports require an isolated rehearsal database.");
+      }
+      if (operation === "rehearsal-recovery-export") report.migrationRange = validateRehearsalRecoveryExportRange({ repoRoot, range: migrationRange });
       if (operation === "rehearsal-export" && identity.environment !== "rehearsal") {
         throw new Error("Data export is allowed only from an approved sanitized rehearsal database.");
       }
@@ -193,7 +214,7 @@ export function buildDataOperationPlan({
         throw new Error("Sanitizer source export is reserved for the protected production workflow.");
       }
       if (!outputPath) throw new Error("Export requires --output under tmp/data-evidence/.");
-      const allowedRoot = path.resolve(repoRoot, "tmp/data-evidence");
+      const allowedRoot = path.resolve(repoRoot, operation === "rehearsal-recovery-export" ? "tmp/rehearsal-sensitive" : "tmp/data-evidence");
       const resolvedOutput = path.resolve(repoRoot, outputPath);
       if (resolvedOutput !== allowedRoot && !resolvedOutput.startsWith(`${allowedRoot}${path.sep}`)) {
         throw new Error("Export output must stay under ignored tmp/data-evidence/.");
@@ -215,7 +236,7 @@ export function buildDataOperationPlan({
       break;
     }
     case "invariant-capture": {
-      command = commandForSql(identity, path.join(repoRoot, "scripts/data/sql/capture-invariants.sql"), resolvedPersistTo);
+      command = commandForInvariantFile(identity, path.join(repoRoot, "scripts/data/sql/capture-invariants.sql"), resolvedPersistTo);
       invariantLedgerCommand = commandForQuery(
         identity,
         "SELECT id, name FROM d1_migrations ORDER BY id",
@@ -225,7 +246,8 @@ export function buildDataOperationPlan({
         appliedMigrations: ["0024_safe_template_evolution.sql"],
       }).slice(1).map((definition) => ({
         minimumMigration: definition.minimumMigration,
-        command: commandForSql(identity, definition.path, resolvedPersistTo),
+        sqlPath: definition.path,
+        command: commandForInvariantFile(identity, definition.path, resolvedPersistTo),
       }));
       break;
     }
@@ -239,6 +261,10 @@ export function buildDataOperationPlan({
       }
       const sqlField = operation === "fixture-setup" ? "setupSql" : "teardownSql";
       command = commandForSql(identity, path.join(repoRoot, fixtureInventory[sqlField]), resolvedPersistTo);
+      if (identity.isRemote) {
+        fixtureVerificationCommand = commandForQuery(identity,
+          readFileSync(path.join(repoRoot, fixtureInventory.verificationSql), "utf8"), resolvedPersistTo);
+      }
       report.fixtureSet = fixtureInventory.fixtureSet;
       report.expectedCounts = operation === "fixture-teardown"
         ? { users: 0, templates: 0, checklistRuns: 0 }
@@ -312,12 +338,13 @@ export function buildDataOperationPlan({
     expectedAppliedMigrations,
     invariantLedgerCommand,
     versionedInvariantCommands,
+    fixtureVerificationCommand,
     outputPath: outputPathForReport,
     rawOutputPath,
     mutates: MUTATING_OPERATIONS.has(operation),
-    requiresConfirmation: operation === "rehearsal-export",
+    requiresConfirmation: ["rehearsal-export", "rehearsal-recovery-export"].includes(operation),
     requiresWorkflowRequestContext:
-      operation === "rehearsal-export" || operation === "rehearsal-import" || operation === "recovery-restore" || operation === "rehearsal-baseline",
+      operation === "rehearsal-recovery-export" || operation === "rehearsal-export" || operation === "rehearsal-import" || operation === "recovery-restore" || operation === "rehearsal-baseline",
     requiresStagingExecutionBoundary:
       identity.environment === "staging" && MUTATING_OPERATIONS.has(operation),
     requiresIssue97ExecutionBoundary:

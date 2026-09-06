@@ -20,7 +20,7 @@ function remoteCatalog(db: DatabaseSync, shuffle = false, transform = (rows: Rec
   return catalogFromPragmaResults(names, queries.map((sql, index) => {
     const results = transform(db.prepare(sql).all());
     // Metadata sets are unordered; index_info.seqno and FK.seq retain key order.
-    return { results: shuffle && index >= names.length ? results.reverse() : results };
+    return { success: true, meta: { duration: 0 }, results: shuffle && index >= names.length ? results.reverse() : results };
   }));
 }
 
@@ -61,7 +61,7 @@ describe('shared SQLite catalog canonicalization', () => {
     } finally { db.close(); }
   });
   it('exempts only the exact D1 metadata table from remote inventory', () => {
-    const output = JSON.stringify([{ results: [
+    const output = JSON.stringify([{ success: true, meta: { duration: 0 }, results: [
       { name: '_cf_METADATA' },
       { name: '_cf_unreviewed' },
       { name: 'templates' },
@@ -299,25 +299,25 @@ describe.skipIf(process.platform === 'win32')('direct schema CLI with real SQLit
     writeFileSync(stub, `#!${process.execPath}
 const {DatabaseSync}=require('node:sqlite');
 const args=process.argv.slice(2);
-if(args.includes('info')){console.log(JSON.stringify({name:'fixture-db',uuid:'${databaseId}'}));process.exit(0);}
+if(args.includes('info')){console.log(JSON.stringify({name:'serp-checklists-rehearsal-canonicalization',uuid:'${databaseId}'}));process.exit(0);}
 const sql=args[args.indexOf('--command')+1];
 const db=new DatabaseSync(${JSON.stringify(file)},{readOnly:true});
-try{console.log(JSON.stringify(sql.split(';').map(s=>s.trim()).filter(Boolean).map(s=>({results:db.prepare(s).all().map(row=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key,['index_sql','column_name'].includes(key)&&value===null?'null':value])))}))));}finally{db.close();}
+try{console.log(JSON.stringify(sql.split(';').map(s=>s.trim()).filter(Boolean).map(s=>({success:true,meta:{duration:0},results:db.prepare(s).all().map(row=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key,['index_sql','column_name'].includes(key)&&value===null?'null':value])))}))));}finally{db.close();}
 `);
     chmodSync(stub, 0o700);
     try {
-      const result = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/data/check-d1-schema.ts', '--database', 'fixture-db', '--database-id', databaseId, '--label', 'staging', '--report-dir', directory], {
+      const result = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/data/check-d1-schema.ts', '--database', 'serp-checklists-rehearsal-canonicalization', '--database-id', databaseId, '--label', 'rehearsal', '--report-dir', directory], {
         cwd: resolve('.'), env: { PATH: `${directory}:${process.env.PATH}`, HOME: directory, CI: '1' }, encoding: 'utf8', timeout: 20_000,
       });
       expect(result.status, result.stdout + result.stderr).toBe(verdict === 'pass' ? 0 : 1);
-      const report = JSON.parse(readFileSync(join(directory, 'd1-schema-staging.json'), 'utf8'));
+      const report = JSON.parse(readFileSync(join(directory, 'd1-schema-rehearsal.json'), 'utf8'));
       expect(report.verdict).toBe(verdict);
       expect(report).toMatchObject({
         commit: expect.stringMatching(/^[a-f0-9]{40}$/),
         target: {
-          environment: 'staging',
+          environment: 'rehearsal',
           binding: 'DB',
-          databaseName: 'fixture-db',
+          databaseName: 'serp-checklists-rehearsal-canonicalization',
           databaseId,
         },
         migrationRange: {
@@ -325,21 +325,21 @@ try{console.log(JSON.stringify(sql.split(';').map(s=>s.trim()).filter(Boolean).m
           to: listMigrationFiles().at(-1)!.name,
         },
       });
-      const readable = readFileSync(join(directory, 'd1-schema-staging.md'), 'utf8');
-      for (const value of ['environment=staging', 'binding=DB', 'databaseName=fixture-db', `databaseId=${databaseId}`, `commit=${report.commit}`, `migration=${report.migrationRange.from}->${report.migrationRange.to}`]) {
+      const readable = readFileSync(join(directory, 'd1-schema-rehearsal.md'), 'utf8');
+      for (const value of ['environment=rehearsal', 'binding=DB', 'databaseName=serp-checklists-rehearsal-canonicalization', `databaseId=${databaseId}`, `commit=${report.commit}`, `migration=${report.migrationRange.from}->${report.migrationRange.to}`]) {
         expect(readable).toContain(value);
       }
       expect(report.schemaDifferences.migrationObjects.verdict).toBe(schemaVerdict);
       if (schemaVerdict === 'fail') expect(report.schemaDifferences.migrationObjects.differenceCount).toBe(1);
       if (privateMarker) {
-        for (const contents of [result.stdout, result.stderr, ...['json', 'md', 'txt', 'junit.xml'].map(extension => readFileSync(join(directory, `d1-schema-staging.${extension}`), 'utf8'))]) {
+        for (const contents of [result.stdout, result.stderr, ...['json', 'md', 'txt', 'junit.xml'].map(extension => readFileSync(join(directory, `d1-schema-rehearsal.${extension}`), 'utf8'))]) {
           expect(contents).not.toContain(privateMarker);
         }
         expect(report.ledger).toMatchObject({ status: 'drift', unknownCount: 1, knownCount: listMigrationFiles().length, verdict: 'fail' });
         expect(report.ledger).not.toHaveProperty('applied');
         expect(report.ledger).not.toHaveProperty('unexpected');
       }
-      expect(readFileSync(join(directory, 'd1-schema-staging.junit.xml'), 'utf8')).toContain(`failures="${verdict === 'pass' ? 0 : 1}"`);
+      expect(readFileSync(join(directory, 'd1-schema-rehearsal.junit.xml'), 'utf8')).toContain(`failures="${verdict === 'pass' ? 0 : 1}"`);
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 });

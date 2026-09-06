@@ -57,6 +57,7 @@ export function buildPlaywrightServerCommands({
   betterAuthSecret,
   persistPath,
   instrumentedWorkerPath,
+  wranglerCwd,
 }) {
   const setup = isolated
     ? `pnpm exec vite build --mode development${instrumentedWorkerPath ? ` && node scripts/data/build-instrumented-playwright-worker.mjs --output ${instrumentedWorkerPath}` : ''}`
@@ -67,14 +68,19 @@ export function buildPlaywrightServerCommands({
       ? `pnpm exec vite preview --host ${frontendHost} --port ${frontendPort} --strictPort`
       : `pnpm exec vite --host ${frontendHost} --port ${frontendPort} --strictPort`;
   const build = isolated ? "" : "pnpm run build:dev && ";
+  // Runner-generated relative cwd has no shell metacharacters. Wrangler state
+  // and asset paths resolve from it; the launcher also needs the env-file path
+  // before the cwd change, so use an absolute path for that file.
+  if (wranglerCwd && (!isolated || !/^\.wrangler\/smoke-invocation-[a-zA-Z0-9]+$/.test(wranglerCwd.replaceAll('\\', '/')))) throw new Error('Invalid isolated Wrangler cwd');
+  const fromCwd = value => wranglerCwd ? path.relative(wranglerCwd, value) : value;
   const envFile = isolated
-    ? " --env-file tests/fixtures/playwright-safe.env"
+    ? ` --env-file ${path.resolve('tests/fixtures/playwright-safe.env')}`
     : hasDevVars ? " --env-file .dev.vars" : "";
-  const persist = persistPath ? ` --persist-to ${persistPath}` : "";
+  const persist = persistPath ? ` --persist-to ${fromCwd(persistPath)}` : "";
   if (instrumentedWorkerPath && path.basename(instrumentedWorkerPath) !== '_worker.js') throw new Error('Instrumented Pages must use a test-only _worker.js asset entrypoint.');
-  const pagesDirectory = instrumentedWorkerPath ? path.dirname(instrumentedWorkerPath) : './dist';
+  const pagesDirectory = fromCwd(instrumentedWorkerPath ? path.dirname(instrumentedWorkerPath) : './dist');
   const api =
-    `${build}npx wrangler pages dev ${pagesDirectory} --local --port ${apiPort}${envFile}${persist} ` +
+    `${build}npx wrangler${wranglerCwd ? ` --cwd ${wranglerCwd}` : ''} pages dev ${pagesDirectory} --local --port ${apiPort}${envFile}${persist} ` +
     `-b FRONTEND_URL=${frontendUrlForApi} ` +
     `-b CORS_ALLOWED_ORIGINS=${corsAllowedOrigins} ` +
     `-b BETTER_AUTH_SECRET=${betterAuthSecret} ` +

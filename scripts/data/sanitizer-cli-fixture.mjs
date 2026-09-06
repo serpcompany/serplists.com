@@ -26,7 +26,7 @@ export function createSanitizerCliFixture(sourceRoot) {
     git(allocation, ["clone", "--quiet", "--no-local", "--depth=1", "--no-checkout", "--", pathToFileURL(sourceRoot).href, repoRoot]);
     git(repoRoot, ["checkout", "--quiet", "--detach", commit]);
     git(repoRoot, ["remote", "remove", "origin"]);
-    for (const name of ["sanitizer-lib.mjs", "sanitize-rehearsal-export.mjs", "strict-json-lib.mjs"]) {
+    for (const name of ["sanitizer-lib.mjs", "sanitize-rehearsal-export.mjs", "strict-json-lib.mjs", "pre0024-compatibility-lib.mjs"]) {
       copyFileSync(path.join(sourceRoot, "scripts/data", name), path.join(repoRoot, "scripts/data", name));
     }
     // Runtime packages only; the CLI itself must be a real file in this checkout

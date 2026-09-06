@@ -21,10 +21,10 @@ const productionId = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1";
 const rehearsalId = "8ab2b7e9-0ce8-4d1e-b42f-8601eb256b67";
 const fullGitCommit = "0123456789abcdef0123456789abcdef01234567";
 function invariantTransport(command) {
-  const names = command.some(part => part.endsWith('capture-invariants-0024.sql'))
+  const names = command.some(part => part.endsWith('capture-invariants-0024.sql') || part.includes("SELECT 'templates_invalid_content_version'"))
     ? ['templates_invalid_content_version', 'runs_invalid_template_version', 'runs_invalid_revision', 'runs_invalid_retired_json']
-    : ['users', 'templates', 'templates_active', 'templates_deleted', 'templates_invalid_json', 'templates_invalid_version', 'template_owners', 'runs', 'runs_active', 'runs_deleted', 'runs_invalid_json', 'run_owners', 'orphaned_templates', 'orphaned_runs'];
-  return JSON.stringify([{ results: names.map(invariant => ({ invariant, total_rows: invariant === 'templates' ? 20 : 0 })) }]);
+    : ['foreign_key_violations', 'users', 'templates', 'templates_active', 'templates_deleted', 'templates_invalid_json', 'templates_invalid_version', 'template_owners', 'runs', 'runs_active', 'runs_deleted', 'runs_invalid_json', 'run_owners', 'orphaned_templates', 'orphaned_runs'];
+  return JSON.stringify([{ success: true, meta: { duration: 0 }, results: names.map(invariant => ({ invariant, total_rows: invariant === 'templates' ? 20 : 0 })) }]);
 }
 const productionExportFixture = readFileSync(path.join(repoRoot, "scripts/data/fixtures/production-export-edge-cases.sql"), "utf8");
 const creationEvidencePath = path.join(repoRoot, "tmp/data-reports/unit-creation.json");
@@ -67,6 +67,191 @@ function protectedEnvironment(target = "staging") {
 }
 
 describe("data command", () => {
+  it.each([null, false, '', '0', [], {}, -1, 0.5, 1, undefined].map(value => [value]))('rejects nonzero or untyped empty-catalog count %j', total_objects => {
+    expect(() => runDataCommand({
+      argv: ['rehearsal-baseline', '--environment', 'rehearsal', '--database-name', 'serp-checklists-rehearsal-issue-95', '--database-id', rehearsalId, '--confirm-database-id', rehearsalId, '--approver-identity', '@devinschumacher', '--before', '0001_initial_schema.sql', '--creation-evidence', creationEvidencePath, '--execute'],
+      repoRoot, gitCommit: fullGitCommit, now: new Date('2026-09-05T00:30:00.000Z'), env: protectedEnvironment(), write: () => {},
+      runCommand: command => {
+        if (command.includes('info')) return JSON.stringify({ uuid: rehearsalId, name: 'serp-checklists-rehearsal-issue-95' });
+        return JSON.stringify([{ success: true, meta: {}, results: command.includes('--command=SELECT id, name FROM d1_migrations ORDER BY id') ? [] : [{ total_objects }] }]);
+      },
+    })).toThrow(/newly created empty database/);
+  });
+
+  const fixtureRows = () => ['users', 'templates', 'checklist_runs'].map(fixture_table => ({ fixture_table, fixture_rows: 0 }));
+  const fixtureOutput = rows => JSON.stringify([{ success: true, meta: {}, results: rows }]);
+  const invalidFixtureRows = [
+    ...[null, false, '', '0', [], {}, -1, 0.5, 9007199254740992, undefined].map(value => [`count ${JSON.stringify(value)}`, rows => { rows[0].fixture_rows = value; return rows; }]),
+    ['duplicate conflict', rows => [{ fixture_table: 'users', fixture_rows: 999 }, ...rows]],
+    ['duplicate equal', rows => [...rows, rows[0]]],
+    ['alias duplicate', rows => [...rows, { fixture_table: 'checklistRuns', fixture_rows: 0 }]],
+    ['unknown extra', rows => [...rows, { fixture_table: 'PRIVATE_UNKNOWN', fixture_rows: 0 }]],
+    ['missing', rows => rows.slice(1)],
+    ['missing name', rows => [...rows, { fixture_rows: 0 }]],
+    ['untyped name', rows => [...rows, { fixture_table: false, fixture_rows: 0 }]],
+    ['empty name', rows => [...rows, { fixture_table: '', fixture_rows: 0 }]],
+    ['prototype name', rows => [...rows, { fixture_table: '__proto__', fixture_rows: 0 }]],
+  ];
+  it.each(invalidFixtureRows)('rejects %s fixture evidence through helper and command', (_name, corrupt) => {
+    const output = fixtureOutput(corrupt(fixtureRows()));
+    const writes = [];
+    expect(() => runDataCommand({
+      argv: ['fixture-teardown', '--environment', 'local', '--execute'], repoRoot, gitCommit: fullGitCommit,
+      write: value => writes.push(value), runCommand: () => output,
+    })).toThrow(/fixture/i);
+    expect(() => assertFixtureResults(output, { users: 0, templates: 0, checklistRuns: 0 })).toThrow(/fixture/i);
+    expect(writes.join('\n')).not.toContain('PRIVATE_UNKNOWN');
+    expect(writes.join('\n')).not.toContain('"fixtureCounts"');
+  });
+
+  it.each([null, [], new Date(0), { users: null }, { users: false }, { users: '0' }, { users: -1 }, { users: 0.5 }, { users: NaN }, { users: Infinity }, { users: 9007199254740992 }, { '': 0 }, { checklist_runs: 0, checklistRuns: 0 }].map(value => [value]))('rejects malformed expected fixture contract %j', expected => {
+    expect(() => assertFixtureResults(fixtureOutput([]), expected)).toThrow(/fixture/i);
+  });
+
+  it.each([-1, 0.5, 9007199254740992])('rejects matching invalid expected and observed fixture count %j', count => {
+    expect(() => assertFixtureResults(fixtureOutput([{ fixture_table: 'custom', fixture_rows: count }]), { custom: count })).toThrow(/fixture/i);
+  });
+
+  it('supports exact caller-defined fixture domains, aliases, and the safe integer range', () => {
+    const expected = Object.fromEntries([['custom_table', Number.MAX_SAFE_INTEGER], ['constructor', 2], ['__proto__', 0], ['checklistRuns', 1]]);
+    const rows = [
+      { fixture_table: 'checklist_runs', fixture_rows: 1 },
+      { fixture_table: '__proto__', fixture_rows: 0 },
+      { fixture_table: 'constructor', fixture_rows: 2 },
+      { fixture_table: 'custom_table', fixture_rows: Number.MAX_SAFE_INTEGER },
+    ];
+    expect(assertFixtureResults(fixtureOutput(rows), expected)).toEqual(expected);
+    expect(assertFixtureResults(fixtureOutput([]), {})).toEqual({});
+    expect(assertFixtureResults(fixtureOutput([{ fixture_table: 'custom', fixture_rows: 0 }]), Object.assign(Object.create(null), { custom: 0 }))).toEqual({ custom: 0 });
+    expect(assertFixtureResults(fixtureOutput([{ fixture_table: 'checklistRuns', fixture_rows: 0 }]), { checklist_runs: 0 })).toEqual({ checklist_runs: 0 });
+  });
+
+  it('rejects duplicate fixture aliases across separate successful envelopes', () => {
+    const output = JSON.stringify([
+      { success: true, meta: {}, results: [{ fixture_table: 'checklist_runs', fixture_rows: 999 }] },
+      { success: true, meta: {}, results: [{ fixture_table: 'checklistRuns', fixture_rows: 0 }] },
+    ]);
+    expect(() => assertFixtureResults(output, { checklistRuns: 0 })).toThrow(/fixture/i);
+  });
+
+  const invalidEnvelopes = [
+    ['failed', entry => [{ ...entry, success: false }]],
+    ['conflicting error', entry => [{ ...entry, error: 'private-provider-error' }]],
+    ['conflicting errors', entry => [{ ...entry, errors: ['private-provider-error'] }]],
+    ['malformed errors', entry => [{ ...entry, errors: {} }]],
+    ['error-only tail', entry => [entry, { error: 'private-provider-error', results: [] }]],
+    ['missing status', ({ success, ...entry }) => [entry]],
+    ['string status', entry => [{ ...entry, success: 'true' }]],
+    ['missing metadata', ({ meta, ...entry }) => [entry]],
+    ['null metadata', entry => [{ ...entry, meta: null }]],
+    ['array metadata', entry => [{ ...entry, meta: [] }]],
+    ['string metadata', entry => [{ ...entry, meta: 'private-provider-error' }]],
+  ];
+
+  it.each(invalidEnvelopes.flatMap(([name, corrupt]) => ['baseline', '0024'].map(target => [name, target, corrupt])))('rejects %s at public %s invariant query boundary', (_name, target, corrupt) => {
+      const writes = [];
+      expect(() => runDataCommand({
+        argv: ['invariant-capture', '--environment', 'staging', '--execute'], repoRoot, gitCommit: fullGitCommit,
+        write: value => writes.push(value),
+        runCommand: command => {
+          if (command.includes('info')) return JSON.stringify({ uuid: stagingId, name: 'serp-checklists-staging-db' });
+          if (command.includes('--command=SELECT id, name FROM d1_migrations ORDER BY id')) return JSON.stringify([{ success: true, meta: {}, results: [{ id: 1, name: '0023_add_sitemap_revision_state.sql' }, { id: 2, name: '0024_safe_template_evolution.sql' }] }]);
+          const entry = JSON.parse(invariantTransport(command))[0];
+          const versioned = command.some(part => part.endsWith('capture-invariants-0024.sql') || part.includes("SELECT 'templates_invalid_content_version'"));
+          return JSON.stringify(versioned === (target === '0024') ? corrupt(entry) : [entry]);
+        },
+      })).toThrow(/result/);
+      expect(writes.join('\n')).not.toContain('private-provider-error');
+      expect(writes.join('\n')).not.toContain('"results"');
+  });
+
+  it.each(['"total_rows":1e-400', '"total_rows":-1e-400', '"total_rows":1,"total_rows":0'])
+  ('rejects raw invariant count corruption before public normalization: %s', fields => {
+    expect(() => runDataCommand({
+      argv: ['invariant-capture', '--environment', 'staging', '--execute'], repoRoot, gitCommit: fullGitCommit, write: () => {},
+      runCommand: command => {
+        if (command.includes('info')) return JSON.stringify({uuid:stagingId, name:'serp-checklists-staging-db'});
+        if (command.includes('--command=SELECT id, name FROM d1_migrations ORDER BY id')) return JSON.stringify([{success:true,meta:{duration:0},results:[{id:1,name:'0023_add_sitemap_revision_state.sql'}]}]);
+        return invariantTransport(command).replace('"total_rows":0', fields);
+      },
+    })).toThrow();
+  });
+
+  it.each(invalidEnvelopes.flatMap(([name, corrupt]) => ['fixture-teardown', 'rehearsal-baseline'].map(operation => [name, operation, corrupt])))('rejects %s at %s query gate', (_name, operation, corrupt) => {
+      const fixture = operation === 'fixture-teardown';
+      const writes = [];
+      expect(() => runDataCommand({
+        argv: fixture ? [operation, '--environment', 'local', '--execute'] : [operation, '--environment', 'rehearsal', '--database-name', 'serp-checklists-rehearsal-issue-95', '--database-id', rehearsalId, '--confirm-database-id', rehearsalId, '--approver-identity', '@devinschumacher', '--before', '0001_initial_schema.sql', '--creation-evidence', creationEvidencePath, '--execute'],
+        repoRoot, gitCommit: fullGitCommit, now: new Date('2026-09-05T00:30:00.000Z'), env: protectedEnvironment(),
+        write: value => writes.push(value),
+        runCommand: command => {
+          if (command.includes('info')) return JSON.stringify({ uuid: rehearsalId, name: 'serp-checklists-rehearsal-issue-95' });
+          if (command.includes('--command=SELECT id, name FROM d1_migrations ORDER BY id')) return JSON.stringify([{ success: true, meta: {}, results: [] }]);
+          const results = fixture ? ['users', 'templates', 'checklist_runs'].map(fixture_table => ({ fixture_table, fixture_rows: 0 })) : [{ total_objects: 0 }];
+          return JSON.stringify(corrupt({ success: true, meta: {}, results }));
+        },
+      })).toThrow(/result/);
+      expect(writes.join('\n')).not.toContain('private-provider-error');
+      expect(writes.join('\n')).not.toContain('"fixtureCounts"');
+  });
+
+  it.each([
+    ['pre0024', false, false, 15],
+    ['empty pre0024', false, true, 15],
+    ['current', true, false, 19],
+    ['empty current', true, true, 19],
+  ])('preserves privacy-safe %s capture output', (_name, current, empty, count) => {
+    const writes = [];
+    const result = runDataCommand({
+      argv: ['invariant-capture', '--environment', 'local', '--execute'], repoRoot, gitCommit: fullGitCommit, write: value => writes.push(value),
+      runCommand: command => {
+        if (command.includes('--command=SELECT id, name FROM d1_migrations ORDER BY id')) return JSON.stringify({ success: true, meta: {}, results: [
+          { id: 1, name: '0023_add_sitemap_revision_state.sql' }, ...(current ? [{ id: 2, name: '0024_safe_template_evolution.sql' }] : []),
+        ] });
+        const entry = JSON.parse(invariantTransport(command))[0];
+        if (empty) entry.results.forEach(row => { row.total_rows = 0; });
+        entry.results.forEach(row => { row.private = 'private-provider-row'; });
+        return JSON.stringify([{ success: true, meta: {}, results: [] }, { ...entry, errors: [] }]);
+      },
+    });
+    expect(result.executed).toBe(true);
+    const entries = JSON.parse(result.output);
+    expect(entries).toHaveLength(1);
+    expect(Object.keys(entries[0])).toEqual(['results']);
+    expect(entries[0].results).toHaveLength(count);
+    expect(entries[0].results.find(row => row.invariant === 'templates')).toEqual({ invariant: 'templates', total_rows: empty ? 0 : 20 });
+    expect(entries[0].results.every(row => Object.keys(row).join(',') === 'invariant,total_rows')).toBe(true);
+    expect(writes.join('\n')).not.toContain('private-provider-row');
+  });
+
+  it.each([['fixture-setup', 1], ['fixture-teardown', 0]])('preserves successful %s count output', (operation, count) => {
+    const result = runDataCommand({
+      argv: [operation, '--environment', 'local', '--execute'], repoRoot, gitCommit: fullGitCommit, write: () => {},
+      runCommand: () => JSON.stringify([
+        { success: true, meta: {}, results: [] },
+        { success: true, meta: {}, results: ['users', 'templates', 'checklist_runs'].map(fixture_table => ({ fixture_table, fixture_rows: count })) },
+      ]),
+    });
+    expect(result.executed).toBe(true);
+    expect(JSON.parse(result.output)).toEqual({ fixtureCounts: { users: count, templates: count, checklistRuns: count } });
+  });
+
+  it.each(['missing', 'duplicate', 'unknown', 'negative', 'string', 'fraction', 'unsafe', 'empty'])('rejects %s aggregate evidence', kind => {
+    expect(() => runDataCommand({
+      argv: ['invariant-capture', '--environment', 'local', '--execute'], repoRoot, gitCommit: fullGitCommit, write: () => {},
+      runCommand: command => {
+        if (command.includes('--command=SELECT id, name FROM d1_migrations ORDER BY id')) return JSON.stringify([{ success: true, meta: {}, results: [{ id: 1, name: '0023_add_sitemap_revision_state.sql' }] }]);
+        const entry = JSON.parse(invariantTransport(command))[0];
+        if (kind === 'missing') entry.results.pop();
+        else if (kind === 'empty') entry.results = [];
+        else if (kind === 'duplicate') entry.results[0] = entry.results[1];
+        else if (kind === 'unknown') entry.results[0].invariant = 'unknown';
+        else entry.results[0].total_rows = { negative: -1, string: '0', fraction: 0.5, unsafe: 9007199254740992 }[kind];
+        return JSON.stringify([entry]);
+      },
+    })).toThrow(/result/);
+  });
+
   it("executes the shared prepared full export and persists only transformation evidence", () => {
     const privateRoot = path.join(repoRoot, "tmp/rehearsal-sensitive"); mkdirSync(privateRoot, { recursive: true });
     const directory = mkdtempSync(path.join(privateRoot, "restore-command-test-"));
@@ -81,7 +266,7 @@ describe("data command", () => {
         repoRoot, gitCommit: fullGitCommit, now: new Date("2026-09-05T00:30:00.000Z"), env: protectedEnvironment(), write: () => {},
         runCommand: command => {
           if (command.includes("info")) return JSON.stringify({ uuid: rehearsalId, name: "serp-checklists-rehearsal-issue-95" });
-          if (command.some(part => String(part).includes("total_objects"))) return JSON.stringify([{ results: [{ total_objects: 0 }] }]);
+          if (command.some(part => String(part).includes("total_objects"))) return JSON.stringify([{ success: true, meta: { duration: 0 }, results: [{ total_objects: 0 }] }]);
           importedPath = command[command.indexOf("--file") + 1];
           expect(importedPath).not.toBe(input);
           db.exec("PRAGMA foreign_keys=ON; BEGIN;");
@@ -108,8 +293,8 @@ describe("data command", () => {
         if (command.includes("info")) {
           return JSON.stringify({ uuid: stagingId, name: "serp-checklists-staging-db" });
         }
-        if (command.includes("SELECT id, name FROM d1_migrations ORDER BY id")) {
-          return JSON.stringify([{ results: [{ id: 1, name: "0023_add_sitemap_revision_state.sql" }] }]);
+        if (command.includes("--command=SELECT id, name FROM d1_migrations ORDER BY id")) {
+          return JSON.stringify([{ success: true, meta: { duration: 0 }, results: [{ id: 1, name: "0023_add_sitemap_revision_state.sql" }] }]);
         }
         return invariantTransport(command);
       },
@@ -143,8 +328,8 @@ describe("data command", () => {
         if (command.includes("info")) {
           return JSON.stringify({ uuid: stagingId, name: "serp-checklists-staging-db" });
         }
-        if (command.includes("SELECT id, name FROM d1_migrations ORDER BY id")) {
-          return JSON.stringify([{ results: [
+        if (command.includes("--command=SELECT id, name FROM d1_migrations ORDER BY id")) {
+          return JSON.stringify([{ success: true, meta: { duration: 0 }, results: [
             { id: 1, name: "0023_add_sitemap_revision_state.sql" },
             { id: 2, name: "0024_safe_template_evolution.sql" },
           ] }]);
@@ -154,7 +339,7 @@ describe("data command", () => {
     });
 
     expect(commands.some((command) => command.some((part) =>
-      String(part).endsWith("capture-invariants-0024.sql"),
+      String(part).includes("SELECT 'templates_invalid_content_version'"),
     ))).toBe(true);
     expect(result.invariantContext.sqlVersions).toEqual([
       "0001_initial_schema.sql",
@@ -272,7 +457,7 @@ describe("data command", () => {
           commands.push(command);
           return command.includes("info")
             ? JSON.stringify({ uuid: rehearsalId, name: "serp-checklists-rehearsal-issue-95" })
-            : JSON.stringify([{ results: [] }]);
+            : JSON.stringify([{ success: true, meta: { duration: 0 }, results: [] }]);
         },
       });
       expect(result.executed).toBe(true);
@@ -316,11 +501,11 @@ describe("data command", () => {
       runCommand: (command) => {
         commands.push(command);
         if (command.includes("info")) return JSON.stringify({ uuid: rehearsalId, name: "serp-checklists-rehearsal-issue-95" });
-        if (command.some((part) => String(part).includes("total_objects"))) return JSON.stringify([{ results: [{ total_objects: 0 }] }]);
+        if (command.some((part) => String(part).includes("total_objects"))) return JSON.stringify([{ success: true, meta: { duration: 0 }, results: [{ total_objects: 0 }] }]);
         if (command.some((part) => String(part).includes("SELECT id, name FROM d1_migrations ORDER BY id"))) {
-          return JSON.stringify([{ results: expectedLedger.map((name, index) => ({ id: index + 1, name })) }]);
+          return JSON.stringify([{ success: true, meta: { duration: 0 }, results: expectedLedger.map((name, index) => ({ id: index + 1, name })) }]);
         }
-        return JSON.stringify([{ results: [] }]);
+        return JSON.stringify([{ success: true, meta: { duration: 0 }, results: [] }]);
       },
     });
     expect(result.executed).toBe(true);
@@ -346,8 +531,8 @@ describe("data command", () => {
       write: () => {},
       runCommand: (command) => {
         if (command.includes("info")) return JSON.stringify({ uuid: rehearsalId, name: "serp-checklists-rehearsal-issue-95" });
-        if (command.some((part) => String(part).includes("total_objects"))) return JSON.stringify([{ results: [{ total_objects: 1 }] }]);
-        return JSON.stringify([{ results: [{ total_objects: 1 }] }]);
+        if (command.some((part) => String(part).includes("total_objects"))) return JSON.stringify([{ success: true, meta: { duration: 0 }, results: [{ total_objects: 1 }] }]);
+        return JSON.stringify([{ success: true, meta: { duration: 0 }, results: [{ total_objects: 1 }] }]);
       },
     })).toThrow(/newly created empty database/i);
   });
@@ -369,8 +554,8 @@ describe("data command", () => {
       write: () => {},
       runCommand: (command) => {
         if (command.includes("info")) return JSON.stringify({ uuid: rehearsalId, name: "serp-checklists-rehearsal-issue-95" });
-        if (command.some((part) => String(part).includes("total_objects"))) return JSON.stringify([{ results: [{ total_objects: 0 }] }]);
-        return JSON.stringify([{ results: [] }]);
+        if (command.some((part) => String(part).includes("total_objects"))) return JSON.stringify([{ success: true, meta: { duration: 0 }, results: [{ total_objects: 0 }] }]);
+        return JSON.stringify([{ success: true, meta: { duration: 0 }, results: [] }]);
       },
     });
     expect(result.plan.expectedAppliedMigrations).toEqual([]);
@@ -536,6 +721,7 @@ describe("data command", () => {
       assertFixtureResults(
         JSON.stringify([
           {
+            success: true, meta: {},
             results: [
               { fixture_table: "users", fixture_rows: 0 },
               { fixture_table: "templates", fixture_rows: 1 },

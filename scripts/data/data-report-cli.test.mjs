@@ -227,13 +227,33 @@ test('remote capture CLI prints the reviewed range with complete identity using 
   try {
     const target = { environment: 'rehearsal', binding: 'DB', databaseName: 'serp-checklists-rehearsal-fixture', databaseId: '12345678-1234-4234-8234-123456789abc' };
     writeFileSync(path.join(f.root, 'bin/pnpm'), `#!${node}
+import {DatabaseSync} from 'node:sqlite';
+import {readFileSync,readdirSync} from 'node:fs';
 const args=process.argv.slice(2);
 if(args[0]!=='exec'||args[1]!=='wrangler') process.exit(99);
 if(args.includes('info')) console.log(JSON.stringify({name:'serp-checklists-rehearsal-fixture',uuid:'12345678-1234-4234-8234-123456789abc'}));
 else {
-  const sql=args[args.indexOf('--command')+1];
-  const rows=sql==='SELECT id, name FROM d1_migrations ORDER BY id'?[{id:1,name:'0001_initial_schema.sql'}]:args.includes('--file')?[{invariant:'users',total_rows:0}]:[];
-  console.log(JSON.stringify([{results:rows}]));
+  // Execute received capture queries against the real migration chain, including
+  // column inventories and SQLite's typed JSON projections. Only transport is doubled.
+  const db=new DatabaseSync(':memory:');
+  try {
+    db.exec('PRAGMA foreign_keys=ON; CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY, name TEXT NOT NULL)');
+    const migrations=readdirSync('db/migrations').filter(name=>name.endsWith('.sql')).sort((a,b)=>a.localeCompare(b,'en'));
+    migrations.forEach((name,index)=>{
+      db.exec(readFileSync('db/migrations/'+name,'utf8'));
+      db.prepare('INSERT INTO d1_migrations VALUES (?,?)').run(index+1,name);
+    });
+    const sql=args.includes('--file')?readFileSync(args[args.indexOf('--file')+1],'utf8'):(args.find(arg=>arg.startsWith('--command='))?.slice('--command='.length)??args[args.indexOf('--command')+1]);
+    const results=sql.split(';').map(s=>s.trim()).filter(Boolean).map(s=>({
+      success:true,meta:{duration:0},results:db.prepare(s).all().map(row=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key,value===null?'null':value])))
+    }));
+    // Wrangler 4.54.0 executeRemotely uses the import API for --file and
+    // returns a summary, not SELECT rows (unlike executeLocally).
+    console.log(JSON.stringify(args.includes('--file') ? [{
+      results:[{'Total queries executed':results.length,'Rows read':0,'Rows written':0,'Database size (MB)':'0.00'}],
+      success:true,finalBookmark:'fixture-bookmark',meta:{duration:0,rows_read:0,rows_written:0,size_after:0}
+    }] : results));
+  } finally { db.close(); }
 }
 `, { mode: 0o700 });
     f.env.INVARIANT_HMAC_KEY = 'synthetic-fixture-key-'.repeat(3);

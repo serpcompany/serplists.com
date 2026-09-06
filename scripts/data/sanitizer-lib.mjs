@@ -6,6 +6,7 @@ import path from "node:path";
 import { z } from "zod";
 import { normalizeMigrationRange } from "./migration-range-lib.mjs";
 import { DuplicateJsonKeyError, parseStrictJson } from "./strict-json-lib.mjs";
+import { assertPre0024Compatibility } from "./pre0024-compatibility-lib.mjs";
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const GIT_SHA = /^[0-9a-f]{40}$/;
@@ -58,7 +59,7 @@ const SOURCE_TABLES = new Set([
 ]);
 
 const manifestSchema = z.object({
-  schemaVersion: z.literal(3),
+  schemaVersion: z.literal(4),
   artifactType: z.literal("sanitized-production-shaped"),
   sanitizerVersion: z.string().min(1),
   sourceProfile: z.object({ profile: z.enum(["legacy-template-evolution-v1", "current-template-run-v1"]), migrationRange: z.object({ from: z.string().nullable(), to: z.string().nullable() }).strict(), sourceSchema: z.string() }).strict(),
@@ -352,7 +353,7 @@ function assertSemanticJsonNumbers(value) {
   });
 }
 
-function buildSanitizedSql(database, sourceProfile, preserveSample = false) {
+function buildSanitizedSql(database, sourceProfile, preserveSample = false, repoRoot) {
   const identities = new Map();
   const sanitizedJsonText = (value, fallback) => { const parsed = parseJson(value); return JSON.stringify(parsed === null ? fallback : sanitizeJson(parsed, [], identities)); };
   const users = database.prepare("SELECT * FROM users").all();
@@ -361,6 +362,7 @@ function buildSanitizedSql(database, sourceProfile, preserveSample = false) {
   assertLifecycleScalars(templates, runs, sourceProfile.profile === "current-template-run-v1");
   for (const row of templates) for (const key of ["items", "category", "tags", "rules"]) assertSemanticJsonNumbers(row[key]);
   for (const row of runs) for (const key of ["items", "retired_items"]) assertSemanticJsonNumbers(row[key]);
+  if (sourceProfile.profile === "legacy-template-evolution-v1") assertPre0024Compatibility({ repoRoot, templates, runs });
   const teams = database.prepare("SELECT * FROM teams").all();
   const members = database.prepare("SELECT * FROM team_members").all();
   const teamsById = new Map(teams.map(row => [row.id, row]));
@@ -378,7 +380,11 @@ function buildSanitizedSql(database, sourceProfile, preserveSample = false) {
   for (const row of [...templates, ...runs]) if (!Array.isArray(parseJson(row.items))) throw new Error("Production-shaped source has invalid item JSON; a replacement shape is prohibited.");
   if (sourceProfile.profile === "current-template-run-v1") for (const row of runs) if (!Array.isArray(parseJson(row.retired_items))) throw new Error("Production-shaped current source has invalid retired-item JSON; a replacement shape is prohibited.");
   const bySampleId = (a, b) => Number(a.id.split("-").at(-1)) - Number(b.id.split("-").at(-1));
-  const ownershipShapes = row => [row.team_id == null ? 'personal-owner' : 'team-owner', ...(row.team_id == null ? [] : members.filter(member => member.team_id === row.team_id).map(member => `role:${member.role}:${member.status}`))];
+  const ownershipShapes = row => {
+    if (row.team_id == null) return ['personal-owner'];
+    const context = `team-state:${teamsById.get(row.team_id).archived_at == null ? 'active' : 'archived'}`;
+    return ['team-owner', context, ...members.filter(member => member.team_id === row.team_id).flatMap(member => [`role:${member.role}:${member.status}`, `${context}:role:${member.role}:${member.status}`])];
+  };
   const selectedTemplates = preserveSample ? templates.sort(bySampleId) : selectRepresentativeRows(templates, (row) => new Set([...collectShapes(row.items), ...ownershipShapes(row)]), 16);
   const selectedRuns = preserveSample ? runs.sort(bySampleId) : selectRepresentativeRows(runs, (row) => new Set([...collectShapes(row.items), ...ownershipShapes(row), `status:${row.status ?? "null"}`, row.deleted_at ? "deleted-run" : "active-run"]), 24);
   for (const run of selectedRuns) { const template = templatesById.get(run.template_id); if (template && !selectedTemplates.includes(template)) selectedTemplates.push(template); }
@@ -489,7 +495,7 @@ function assertSanitizedArtifactRows({ repoRoot, sql, sourceProfile }) {
     for (const row of database.prepare("SELECT items FROM checklist_runs").all()) assertSanitizedJson(row.items);
     if (sourceProfile.profile === "current-template-run-v1") for (const row of database.prepare("SELECT retired_items FROM checklist_runs").all()) assertSanitizedJson(row.retired_items);
     for (const table of ["account", "session", "verification", "stripe_customers", "stripe_subscriptions", "stripe_webhook_events"]) if (database.prepare(`SELECT COUNT(*) total FROM ${table}`).get().total) throw new Error("Sanitized artifact contains authentication, session, or billing rows.");
-    const normalized = buildSanitizedSql(database, sourceProfile, true);
+    const normalized = buildSanitizedSql(database, sourceProfile, true, repoRoot);
     // The generator's canonical form closes privacy gaps in less-visible columns,
     // JSON keys and numeric values, even if an attacker recomputes public hashes.
     if (normalized.sql !== sql) throw new Error("Sanitized artifact is not canonical content-free source data.");
@@ -524,7 +530,7 @@ export function normalizeRehearsalDataExport({ repoRoot, rawExport, migrationRan
     database.exec(importSql);
     const sourceLedger = database.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((row) => row.name);
     validateSourceLedger({ repoRoot, sourceSchema, embeddedLedger: sourceLedger });
-    const result = buildSanitizedSql(database, sourceProfile);
+    const result = buildSanitizedSql(database, sourceProfile, false, repoRoot);
     return { ...result, sourceProfile, sourceSha256: sha256(rawExport), artifactSha256: sha256(result.sql) };
   } catch (error) {
     if (error instanceof DuplicateJsonKeyError) throw new Error("Production-shaped source contains duplicate JSON object keys.");
@@ -542,7 +548,7 @@ export function generateSanitizedRehearsalArtifact({ repoRoot, rawExport, source
   if (sourceDatabaseId !== productionDatabaseId) throw new Error("Production-shaped sanitizer source must match the checked-in production database ID.");
   const normalized = normalizeRehearsalDataExport({ repoRoot, rawExport, migrationRange, sourceSchema });
   const manifest = {
-    schemaVersion: 3, artifactType: "sanitized-production-shaped", sanitizerVersion: policy.sanitizerVersion, sourceProfile: normalized.sourceProfile,
+    schemaVersion: 4, artifactType: "sanitized-production-shaped", sanitizerVersion: policy.sanitizerVersion, sourceProfile: normalized.sourceProfile,
     provenance: { generator: policy.generator, gitCommit, sourceKind: policy.sourceKind, sourceDate, sourceExportSha256: normalized.sourceSha256, sourceDatabaseIdSha256: sha256(sourceDatabaseId), generatedAt: generatedAt.toISOString(), issueNumber },
     handling: { accessOwner: requestedApproverIdentity, purpose: "staging-rehearsal-only", retentionDeadline, rawSourceCleanup: "delete-after-sanitizer-exit", artifactTeardown: "delete-rehearsal-databases-and-expire-artifact" },
     selection: { sourceCounts: normalized.sourceCounts, selectedCounts: normalized.selectedCounts, cohortLimits: COHORT_LIMITS, profileExclusions: PROFILE_EXCLUSIONS, ownershipCoverage: normalized.ownershipCoverage, requiredShapes: normalized.observedSourceShapes, coveredShapes: normalized.coveredShapes, observedSourceShapes: normalized.observedSourceShapes, absentSourceShapes: REQUIRED_SHAPES.filter((shape) => !normalized.observedSourceShapes.includes(shape)), syntheticEdgeCaseRequirements: normalized.sourceProfile.profile === "legacy-template-evolution-v1" ? REQUIRED_SHAPES : [], sourceShapeDigest: sha256(JSON.stringify({ counts: normalized.sourceCounts, shapes: normalized.observedSourceShapes })) },

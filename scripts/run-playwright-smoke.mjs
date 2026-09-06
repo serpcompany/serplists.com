@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { rmSync, readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync, cpSync } from "node:fs";
+import { rmSync, readdirSync, readFileSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
 import { routeFragmentDirectory, finalizeRouteCoverage } from "./data/route-coverage-evidence.mjs";
 import { prepareSanitizedSmoke } from "./data/prepare-sanitized-smoke.mjs";
 import { captureSanitizedState, verifySanitizedRefusalPreservation, validateSanitizedCohortProof, validateSanitizedStateBinding } from './data/sanitized-state-lib.mjs';
@@ -12,7 +12,7 @@ import {
   buildPlaywrightServerCommands,
   buildSmokeChildEnvironment,
 } from "./data/smoke-environment-lib.mjs";
-import { cleanupSmokeState } from "./data/smoke-teardown-lib.mjs";
+import { cleanupSmokeState, createSmokeWorkspace } from "./data/smoke-teardown-lib.mjs";
 import { acquireSmokeRunLock } from "./data/smoke-run-lock-lib.mjs";
 import { browserGateArguments } from './data/runtime-gate-contract.mjs';
 import { normalizeMigrationRange } from './data/migration-range-lib.mjs';
@@ -25,14 +25,12 @@ const NPX_ARGS_PREFIX = process.platform === "win32" ? ["/d", "/s", "/c", "npx"]
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
 const invocation = browserGateArguments(process.argv.slice(2));
-const smokePersistPath = path.join(".wrangler", "smoke-state");
-const smokePersistAbsolutePath = path.resolve(repoRoot, smokePersistPath);
-const smokeTransientAbsolutePath = path.resolve(repoRoot, ".wrangler", "tmp");
+let workspace;
+let smokePersistPath;
+let smokePersistAbsolutePath;
 const smokeLockAbsolutePath = path.resolve(repoRoot, ".wrangler", "smoke-state.lock");
-const instrumentedWorkerPath = path.join('tmp', 'playwright-pages-runtime', '_worker.js');
-const instrumentedWorkerAbsolutePath = path.resolve(repoRoot, instrumentedWorkerPath);
-const instrumentedPagesDirectory = path.dirname(instrumentedWorkerAbsolutePath);
-let ownsInstrumentedPagesDirectory = false;
+let instrumentedWorkerPath;
+let instrumentedPagesDirectory;
 const teardownReportPath = path.resolve(
   repoRoot,
   process.env.PLAYWRIGHT_TEARDOWN_REPORT ?? "tmp/data-reports/browser-smoke-teardown.json",
@@ -44,7 +42,6 @@ const selectedRange = normalizeMigrationRange({ from: env.DATA_REGRESSION_MIGRAT
 env.DATA_REGRESSION_MIGRATION_FROM = selectedRange.from ?? 'none';
 env.DATA_REGRESSION_MIGRATION_TO = selectedRange.to ?? 'none';
 env.PLAYWRIGHT_JSON_REPORT ??= path.join(repoRoot, 'tmp/data-reports/browser-smoke-playwright.json');
-env.PLAYWRIGHT_INSTRUMENTED_WORKER_PATH = instrumentedWorkerPath;
 env.PLAYWRIGHT_ROUTE_QUERY_EVIDENCE = invocation.gating ? '1' : '0';
 
 function parsePort(value, fallback) {
@@ -57,6 +54,9 @@ function buildLocalUrl(port) {
 }
 
 function run(command, args, options = {}) {
+  if (command === NPX_COMMAND && args[NPX_ARGS_PREFIX.length] === 'wrangler') {
+    return runWrangler(args.slice(NPX_ARGS_PREFIX.length + 1), { stdio: 'inherit', ...options });
+  }
   execFileSync(command, args, {
     cwd: repoRoot,
     env: {
@@ -67,26 +67,17 @@ function run(command, args, options = {}) {
   });
 }
 
-function cleanupInstrumentedWorker() {
-  const tmpRoot = path.join(repoRoot, 'tmp') + path.sep;
-  if (!instrumentedWorkerAbsolutePath.startsWith(tmpRoot)) throw new Error('Refusing to remove instrumented Worker outside repository tmp/');
-  if (ownsInstrumentedPagesDirectory) {
-    rmSync(instrumentedPagesDirectory, { recursive: true, force: true });
-    ownsInstrumentedPagesDirectory = false;
-  }
+function runWrangler(args, options = {}) {
+  args = args.map((arg, index) => args[index - 1] === '--file' ? path.resolve(repoRoot, arg) : arg);
+  return execFileSync(NPX_COMMAND, [...NPX_ARGS_PREFIX, 'wrangler', '--cwd', workspace.root,
+    ...(!args.includes('--config') ? ['--config', path.join(workspace.root, 'wrangler.toml')] : []), ...args], {
+    cwd: repoRoot, encoding: 'utf8', ...options, env: { ...env, CI: '1', ...options.env },
+  });
 }
 
 function prepareSmokeD1() {
-  const wranglerStateRoot = path.resolve(repoRoot, ".wrangler");
-
-  if (!smokePersistAbsolutePath.startsWith(wranglerStateRoot)) {
-    throw new Error(`Refusing to reset unexpected smoke D1 path: ${smokePersistAbsolutePath}`);
-  }
-
-  rmSync(smokePersistAbsolutePath, { recursive: true, force: true });
-  rmSync(smokeTransientAbsolutePath, { recursive: true, force: true });
   if (env.PLAYWRIGHT_SANITIZED_REHEARSAL_SQL) {
-    prepareSanitizedSmoke({ repoRoot, persistPath: smokePersistAbsolutePath, env, wrangler: (args) => execFileSync(NPX_COMMAND, [...NPX_ARGS_PREFIX, "wrangler", ...args], { cwd: repoRoot, env: { ...env, CI: "1" }, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }) });
+    prepareSanitizedSmoke({ repoRoot, persistPath: smokePersistAbsolutePath, env, wrangler: args => runWrangler(args, { stdio: ['ignore', 'pipe', 'inherit'] }) });
     return;
   }
   run(
@@ -136,7 +127,6 @@ if (shouldPickOpenPorts) {
   env.PLAYWRIGHT_API_PORT = String(apiPort);
   env.PLAYWRIGHT_BASE_URL = frontendUrl;
   env.PLAYWRIGHT_API_URL = apiUrl;
-  env.PLAYWRIGHT_WRANGLER_PERSIST_TO = smokePersistPath;
   env.VITE_API_URL = apiUrl;
   env.FRONTEND_URL ??= frontendUrl;
 
@@ -158,15 +148,29 @@ const releaseSmokeLock = env.PLAYWRIGHT_SMOKE_LOCK_HELD === "1"
   ? () => {}
   : await acquireSmokeRunLock({ lockPath: smokeLockAbsolutePath });
 try {
-  if (existsSync(instrumentedPagesDirectory)) throw new Error('Refusing to overwrite an existing test Pages runtime directory.');
+  workspace = createSmokeWorkspace({ repoRoot });
+  smokePersistAbsolutePath = smokePersistPath = workspace.statePath;
+  instrumentedWorkerPath = path.relative(repoRoot, workspace.workerPath);
+  instrumentedPagesDirectory = path.dirname(workspace.workerPath);
+  // Wrangler 4.54.0 src/pages/utils.ts finds the nearest package.json from cwd;
+  // src/paths.ts creates .wrangler/tmp under that project root. --persist-to
+  // controls D1 state separately. No Wrangler temp-root environment flag exists.
+  writeFileSync(path.join(workspace.root, 'package.json'), '{"private":true}');
+  writeFileSync(path.join(workspace.root, 'wrangler.toml'), readFileSync(path.join(repoRoot, 'wrangler.toml'), 'utf8')
+    .replaceAll('migrations_dir = "db/migrations"', `migrations_dir = ${JSON.stringify(path.join(repoRoot, 'db/migrations'))}`)
+    .replace('pages_build_output_dir = "dist"', 'pages_build_output_dir = "pages"'));
+  mkdirSync(path.join(workspace.root, 'os-tmp'));
+  env.TMPDIR = env.TMP = env.TEMP = path.join(workspace.root, 'os-tmp');
+  env.PLAYWRIGHT_WRANGLER_CWD = path.relative(repoRoot, workspace.root);
+  env.PLAYWRIGHT_WRANGLER_PERSIST_TO = smokePersistPath;
+  env.PLAYWRIGHT_INSTRUMENTED_WORKER_PATH = instrumentedWorkerPath;
   mkdirSync(instrumentedPagesDirectory, {recursive:true});
-  ownsInstrumentedPagesDirectory = true;
-  run(process.execPath, ['--test', 'scripts/data/route-coverage.node-test.mjs']);
+  run(process.execPath, ['--experimental-vm-modules', '--test', 'scripts/data/route-coverage.node-test.mjs', 'scripts/data/smoke-runner-ownership.node-test.mjs']);
   const fragments = path.resolve(repoRoot, routeFragmentDirectory(env));
   if (!fragments.startsWith(path.join(repoRoot, 'tmp') + path.sep)) throw new Error('Route coverage artifacts must stay under repository tmp/');
   rmSync(fragments, { recursive: true, force: true });
   prepareSmokeD1();
-  const ledgerOutput = execFileSync(NPX_COMMAND, [...NPX_ARGS_PREFIX, 'wrangler', 'd1', 'execute', DATABASE_NAME, '--local', '--persist-to', smokePersistPath, '--command', 'SELECT name FROM d1_migrations ORDER BY id', '--json'], { cwd: repoRoot, env: { ...env, CI: '1' }, encoding: 'utf8' });
+  const ledgerOutput = runWrangler(['d1', 'execute', DATABASE_NAME, '--local', '--persist-to', smokePersistPath, '--command', 'SELECT name FROM d1_migrations ORDER BY id', '--json']);
   const ledger = JSON.parse(ledgerOutput)[0].results.map(row => row.name);
   if (JSON.stringify(ledger) !== JSON.stringify(migrationFiles)) throw new Error('Real route database migration ledger does not match the full repository chain');
   env.PLAYWRIGHT_ROUTE_LEDGER_JSON = JSON.stringify(ledger.map(name => ({ name, sha256: createHash('sha256').update(readFileSync(path.join(repoRoot, 'db/migrations', name))).digest('hex') })));
@@ -197,36 +201,26 @@ try {
   // Keep this entire test-only bundle outside the production dist output.
   const distDirectory = path.join(repoRoot, 'dist');
   cpSync(distDirectory, instrumentedPagesDirectory, {recursive:true,filter:source => source !== path.join(distDirectory, '_worker.js')});
-} catch (error) {
-  cleanupInstrumentedWorker();
-  cleanupSmokeState({
-    repoRoot,
-    statePath: smokePersistAbsolutePath,
-    transientPaths: [smokeTransientAbsolutePath],
-    reportPath: teardownReportPath,
+  const pnpmBin = "pnpm";
+  const { code, signal } = await new Promise((resolve, reject) => {
+    const child = spawn(
+      pnpmBin,
+      ["exec", "playwright", "test", ...invocation.args],
+      {
+        env,
+        shell: process.platform === "win32",
+        stdio: "inherit",
+      },
+    );
+    child.once('error', reject);
+    child.once('close', (code, signal) => resolve({ code, signal }));
   });
-  releaseSmokeLock();
-  throw error;
-}
-
-const pnpmBin = "pnpm";
-const child = spawn(
-  pnpmBin,
-  ["exec", "playwright", "test", ...invocation.args],
-  {
-    env,
-    shell: process.platform === "win32",
-    stdio: "inherit",
-  },
-);
-
-child.on("exit", async (code, signal) => {
   let finalCode = code ?? 1;
   if (finalCode === 0 && !signal && env.PLAYWRIGHT_SANITIZED_REHEARSAL_SQL) {
     try {
       const before = JSON.parse(readFileSync(env.PLAYWRIGHT_REHEARSAL_STATE, 'utf8'));
       const proof = JSON.parse(readFileSync(env.PLAYWRIGHT_REHEARSAL_PROOF, 'utf8'));
-      const after = captureSanitizedState({ sourceSha256: before.sourceSha256, query: sql => execFileSync(NPX_COMMAND, [...NPX_ARGS_PREFIX, 'wrangler', 'd1', 'execute', DATABASE_NAME, '--local', '--persist-to', smokePersistPath, '--command', sql, '--json'], { cwd: repoRoot, env: { ...env, CI: '1' }, encoding: 'utf8' }) });
+      const after = captureSanitizedState({ sourceSha256: before.sourceSha256, query: sql => runWrangler(['d1', 'execute', DATABASE_NAME, '--local', '--persist-to', smokePersistPath, '--command', sql, '--json']) });
       proof.cohortProof.postHandlerPreservation = verifySanitizedRefusalPreservation({ before, after, proof });
       validateSanitizedStateBinding(proof.postMigrationState, before);
       validateSanitizedCohortProof(proof.cohortProof, { state: before, selection: JSON.parse(readFileSync(env.PLAYWRIGHT_SANITIZER_MANIFEST, 'utf8')).selection });
@@ -255,7 +249,7 @@ child.on("exit", async (code, signal) => {
           env: { ...env, PLAYWRIGHT_ROUTE_NEGATIVE: "1", PLAYWRIGHT_ROUTE_QUERY_EVIDENCE: "0", ...(env.PLAYWRIGHT_JSON_REPORT ? { PLAYWRIGHT_JSON_REPORT: env.PLAYWRIGHT_JSON_REPORT.replace(/\.json$/, "-route-negative.json") } : {}) },
           shell: process.platform === "win32", stdio: "inherit",
         });
-        negative.on('exit', code => resolve(code ?? 1));
+        negative.on('close', code => resolve(code ?? 1));
         negative.on('error', () => resolve(1));
       });
     } catch (error) {
@@ -263,31 +257,22 @@ child.on("exit", async (code, signal) => {
       finalCode = 1;
     }
   }
-  const teardown = cleanupSmokeState({
-    repoRoot,
-    statePath: smokePersistAbsolutePath,
-    transientPaths: [smokeTransientAbsolutePath],
-    reportPath: teardownReportPath,
-  });
-  cleanupInstrumentedWorker();
-  releaseSmokeLock();
   if (signal) {
     console.error(`Smoke tests stopped by ${signal}`);
-    process.exitCode = 1;
-    return;
   }
-  process.exitCode = teardown.verdict === "pass" ? finalCode : 1;
-});
-
-child.on("error", (error) => {
-  cleanupInstrumentedWorker();
-  cleanupSmokeState({
-    repoRoot,
-    statePath: smokePersistAbsolutePath,
-    transientPaths: [smokeTransientAbsolutePath],
-    reportPath: teardownReportPath,
-  });
-  releaseSmokeLock();
+  process.exitCode = signal ? 1 : finalCode;
+} catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
-});
+} finally {
+  try {
+    if (workspace) {
+      const teardown = cleanupSmokeState({ repoRoot, statePath: workspace.statePath,
+        transientPaths: workspace.transientPaths, ownership: workspace, reportPath: teardownReportPath });
+      if (teardown.verdict !== 'pass') process.exitCode = 1;
+    }
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  } finally { releaseSmokeLock(); }
+}

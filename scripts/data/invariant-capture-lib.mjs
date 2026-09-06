@@ -1,32 +1,28 @@
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 import { createHash, createHmac } from "node:crypto";
-import { DuplicateJsonKeyError, parseStrictJson } from "./strict-json-lib.mjs";
+import { DuplicateJsonKeyError, InexactJsonNumberError, parseExactJson } from "./strict-json-lib.mjs";
+import { assertPre0024Compatibility } from "./pre0024-compatibility-lib.mjs";
+import { validateQueryResultEnvelopes as resultEnvelopes } from './d1-query-envelope.mjs';
 
 const MIGRATION_PATTERN = /^\d{4}_[a-z0-9_]+\.sql$/;
+const SQLITE_TYPES = Symbol("captured SQLite storage types");
 const BASELINE_FILE = fileURLToPath(new URL("./sql/capture-invariants.sql", import.meta.url));
 const EVOLUTION_FILE = fileURLToPath(
   new URL("./sql/capture-invariants-0024.sql", import.meta.url),
 );
 
 export function parseAppliedMigrationLedger(output, { allowEmpty = false } = {}) {
-  let parsed;
-  try {
-    parsed = JSON.parse(output);
-  } catch {
-    throw new Error("Applied migration ledger output was not valid JSON.");
-  }
-  const entries = Array.isArray(parsed) ? parsed : [parsed];
-  if (entries.length !== 1 || !Array.isArray(entries[0]?.results)) {
-    throw new Error("Applied migration ledger must contain exactly one complete result set.");
-  }
-  const rows = entries[0].results;
-  const names = rows.map((row) => row?.name);
+  const rows = resultRows(output, "Applied migration ledger");
+  const names = rows.map(row => {
+    if (typeof row.name !== 'string' || !MIGRATION_PATTERN.test(row.name)) {
+      throw new Error("Applied migration ledger contains a malformed migration identity.");
+    }
+    return row.name;
+  });
   if (names.length === 0) {
     if (allowEmpty) return [];
     throw new Error("Applied migration ledger did not contain recognized migration names.");
-  }
-  if (names.some((name) => typeof name !== "string" || !MIGRATION_PATTERN.test(name))) {
-    throw new Error("Applied migration ledger contains a malformed migration identity.");
   }
   const ids = rows.map((row) => row?.id);
   if (ids.some((id) => !Number.isInteger(id) || id < 1) || new Set(ids).size !== ids.length || ids.some((id, index) => index > 0 && id <= ids[index - 1])) {
@@ -71,8 +67,13 @@ export function selectInvariantSqlFiles({ appliedMigrations }) {
 }
 
 export function parseInvariantOutput(output) {
-  const parsed = JSON.parse(output);
-  const rows = (Array.isArray(parsed) ? parsed : [parsed]).flatMap((entry) => entry?.results ?? []);
+  const rows = resultEnvelopes(output, "Invariant").flatMap(entry => entry.results);
+  const foreignKeys = rows.filter((row) => row?.invariant === "foreign_key_violations");
+  if (foreignKeys.length !== 1 || !Number.isSafeInteger(foreignKeys[0].total_rows) || foreignKeys[0].total_rows < 0) {
+    throw new Error("Foreign-key violation count is missing or malformed.");
+  }
+  if (rows.some(row => typeof row?.invariant !== "string" || !Number.isSafeInteger(row.total_rows) || row.total_rows < 0) ||
+      new Set(rows.map(row => row.invariant)).size !== rows.length) throw new Error("Invariant counts are missing or malformed.");
   const values = Object.fromEntries(rows.filter((row) => typeof row?.invariant === "string").map((row) => [row.invariant, Number(row.total_rows)]));
   if (!Object.keys(values).length || Object.values(values).some((value) => !Number.isFinite(value))) throw new Error("Remote invariant output is missing or malformed.");
   return values;
@@ -97,6 +98,9 @@ function canonicalJson(value) {
 }
 
 function normalizedItems(raw) {
+  // BLOBs are stored bytes, not JavaScript strings. Do not normalize or decode
+  // them: even valid SQLite JSON BLOBs must retain their exact stored value.
+  if (raw instanceof Uint8Array) return { sqliteBlob: Buffer.from(raw).toString("hex") };
   let value = preservedItems(raw, "Active");
   if (Array.isArray(value) && value.length && !Object.hasOwn(value[0] ?? {}, "items")) {
     value = [{ title: "Checklist", items: value }];
@@ -113,25 +117,24 @@ function normalizedItems(raw) {
   return canonicalJson(stripStableIds(value));
 }
 
+function parseInvariantTransport(output) {
+  try {
+    return parseExactJson(output);
+  } catch {
+    throw new Error("Invariant transport evidence is missing or malformed.");
+  }
+}
+
 function preservedItems(raw, label) {
   let value;
-  let unsupportedNumber = false;
   try {
     // Preserve identities, references, JSON types, and array positions in full.
-    value = parseStrictJson(raw, (_name, entry, context) => {
-      // Node 22 supplies the original primitive token. Accept numeric tokens
-      // only when serialization reproduces them exactly; rounded, overflowing,
-      // underflowing, and noncanonical numeric spellings fail closed.
-      if (typeof entry === "number" && (!Number.isFinite(entry) || context?.source !== JSON.stringify(entry))) {
-        unsupportedNumber = true;
-      }
-      return entry;
-    });
+    value = parseExactJson(raw);
   } catch (error) {
     if (error instanceof DuplicateJsonKeyError) throw error;
+    if (error instanceof InexactJsonNumberError) throw new Error(`${label} invariant capture contains an unsupported numeric value.`);
     return { invalidJson: true };
   }
-  if (unsupportedNumber) throw new Error(`${label} invariant capture contains an unsupported numeric value.`);
   return canonicalJson(value);
 }
 
@@ -214,13 +217,56 @@ function expected0024StableIdentityDigests(raw, key) {
   return stableIdentityDigests(JSON.stringify(value), key);
 }
 
+export { resultEnvelopes as validateQueryResultEnvelopes };
+
 function resultRows(output, label) {
-  const parsed = JSON.parse(output);
-  const entries = Array.isArray(parsed) ? parsed : [parsed];
-  if (entries.length !== 1 || !Array.isArray(entries[0]?.results)) {
+  const entries = resultEnvelopes(output, label);
+  if (entries.length !== 1) {
     throw new Error(`${label} must contain exactly one complete result set.`);
   }
   return entries[0].results;
+}
+
+function captureTypedRows({ table, database, runWrangler }) {
+  const query = sql => resultRows(runWrangler([
+    "d1", "execute", database, "--remote", "--json", `--command=${sql}`,
+  ]), "Typed source rows");
+  // Discover the actual pre/post schema. Encode inside SQLite before Wrangler
+  // changes NULL cells. REAL uses round-trip text: plain json_object rounds it.
+  const columns = query(`SELECT name FROM pragma_table_xinfo('${table}') WHERE hidden != 1 ORDER BY cid`).map(row => row.name);
+  if (!columns.length || columns.some(name => typeof name !== "string" || !name) || new Set(columns).size !== columns.length) {
+    throw new Error("Typed source row column inventory is missing or malformed.");
+  }
+  const identifier = name => `"${name.replaceAll('"', '""')}"`;
+  const fields = columns.map(name => {
+    const column = identifier(name);
+    return `'${name.replaceAll("'", "''")}',json_array(typeof(${column}),CASE typeof(${column}) WHEN 'real' THEN printf('%!.26g',${column}) WHEN 'blob' THEN hex(${column}) ELSE ${column} END)`;
+  }).join(",");
+  return query(`SELECT json_object(${fields}) AS typed_row FROM ${identifier(table)} ORDER BY "id"`).map(envelope => {
+    if (typeof envelope?.typed_row !== "string" || Object.keys(envelope).length !== 1) throw new Error("Typed source row envelope is missing or malformed.");
+    const values = parseInvariantTransport(envelope.typed_row);
+    if (!values || Array.isArray(values) || typeof values !== "object" || Object.keys(values).length !== columns.length || columns.some(name => !Object.hasOwn(values, name))) {
+      throw new Error("Typed source row fields do not match the captured schema.");
+    }
+    const types = {};
+    const row = Object.fromEntries(columns.map(name => {
+      const cell = values[name];
+      if (!Array.isArray(cell) || cell.length !== 2) throw new Error("Typed source row value is malformed.");
+      const [type, value] = cell;
+      let decoded;
+      if (type === "null" && value === null) decoded = null;
+      else if (type === "text" && typeof value === "string") decoded = value;
+      else if (type === "integer" && typeof value === "number" && Number.isInteger(value)) decoded = value;
+      else if (type === "real" && typeof value === "string" && /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(value) && Number.isFinite(Number(value)) &&
+          (Number(value) !== 0 || !/[1-9]/.test(value.split(/[eE]/)[0]))) decoded = Number(value);
+      else if (type === "blob" && typeof value === "string" && /^(?:[0-9A-F]{2})*$/.test(value)) decoded = Uint8Array.from(Buffer.from(value, "hex"));
+      else throw new Error("Typed source row value is malformed.");
+      Object.defineProperty(types, name, {value:type, enumerable:true});
+      return [name, decoded];
+    }));
+    Object.defineProperty(row, SQLITE_TYPES, {value:types});
+    return row;
+  });
 }
 
 export function privacySafeDomainSnapshot({ templateRows, runRows, key, hasEvolution }) {
@@ -230,20 +276,28 @@ export function privacySafeDomainSnapshot({ templateRows, runRows, key, hasEvolu
     const projection = Object.fromEntries(Object.entries(row)
       .filter(([name]) => name !== "id" && !evolvingColumns.includes(name))
       .map(([name, value]) => [name, name === "items" ? normalizedItems(value) : value]));
+    const storageTypes = row[SQLITE_TYPES] && Object.fromEntries(Object.entries(row[SQLITE_TYPES])
+      .filter(([name]) => name !== "id" && !evolvingColumns.includes(name)));
+    const numericVersion = name => {
+      if (typeof row[name] !== "number" || !Number.isFinite(row[name])) throw new Error("Invariant version value has an unsupported SQLite type.");
+      return row[name];
+    };
     return {
       key: hmac(`${kind}\u001f${row.id}`, key),
-      stateDigest: hmac(`${kind}\u001f${JSON.stringify(canonicalJson(projection))}`, key),
+      stateDigest: hmac(`${kind}\u001f${JSON.stringify(canonicalJson({ values: projection, storageTypes }))}`, key),
       stableIdentityDigests: stableIdentityDigests(row.items, key),
       stableIdValueDigests: stableIdValueDigests(row.items, key),
       expected0024StableIdentityDigests: hasEvolution ? null : expected0024StableIdentityDigests(row.items, key),
       ...(kind === "template" ? {
-        version: Number(row.version),
-        contentVersion: hasEvolution ? Number(row.content_version) : null,
+        version: numericVersion("version"),
+        contentVersion: hasEvolution ? numericVersion("content_version") : null,
       } : {
         hasTemplate: row.template_id != null,
-        templateVersion: hasEvolution ? Number(row.template_version) : null,
-        revision: hasEvolution ? Number(row.revision) : null,
-        retiredItemsDigest: hasEvolution ? hmac(JSON.stringify(preservedItems(row.retired_items, "Retired")), key) : null,
+        templateVersion: hasEvolution ? numericVersion("template_version") : null,
+        revision: hasEvolution ? numericVersion("revision") : null,
+        retiredItemsDigest: hasEvolution ? hmac(row.retired_items instanceof Uint8Array
+          ? `blob\u0000${Buffer.from(row.retired_items).toString("hex")}`
+          : JSON.stringify(preservedItems(row.retired_items, "Retired")), key) : null,
       }),
     };
   }).sort((left, right) => left.key.localeCompare(right.key, "en"));
@@ -311,6 +365,8 @@ export function compareProductionInvariants({ pre, post, preHasEvolution = true,
     ? compareDomainSnapshots({ pre: preDomain, post: postDomain, preHasEvolution, postHasEvolution })
     : { failures: ["per-row domain snapshot omitted"], verdict: "fail" };
   const failures = [
+    ...[pre, post].flatMap((values, index) => values.foreign_key_violations === 0
+      ? [] : [`${index === 0 ? "pre" : "post"} foreign-key violation count must be present and zero`]),
     ...omitted.map((name) => `${name} omitted`),
     ...stable.filter((name) => pre[name] !== undefined && post[name] !== pre[name]).map((name) => `${name} changed from ${pre[name]} to ${post[name]}`),
     ...zero.filter((name) => post[name] !== 0).map((name) => `${name} is ${post[name]}`),
@@ -321,37 +377,87 @@ export function compareProductionInvariants({ pre, post, preHasEvolution = true,
 
 const OWNER_SQL = "SELECT 'template' kind,id,user_id,CASE WHEN deleted_at IS NULL THEN 'active' ELSE 'deleted' END deleted_state FROM templates UNION ALL SELECT 'run',id,user_id,CASE WHEN deleted_at IS NULL THEN 'active' ELSE 'deleted' END FROM checklist_runs";
 
-export function captureRemoteInvariantSnapshot({ database, key, runWrangler, validateLedger = (ledger) => ledger }) {
+// Internal consistency of protected evidence, not a substitute for the external
+// artifact attestation and exact-request authorization enforced by the caller.
+export function assertInvariantSafetySummary({ step, summary, pendingMigrations }) {
+  if (!summary || !Object.hasOwn(summary, "foreignKeyViolations") || summary.foreignKeyViolations !== 0) throw new Error("Production foreign-key evidence must be a typed zero count.");
+  const aggregate = summary.aggregateCounts;
+  const coverage = summary.sourceCoverage;
+  const domainDigest = step === "post-invariants" ? summary.postDomainDigest : summary.domainDigest;
+  if (!Number.isSafeInteger(aggregate?.templates) || aggregate.templates < 0 ||
+      !Number.isSafeInteger(aggregate?.runs) || aggregate.runs < 0 || coverage?.verdict !== "pass" ||
+      coverage.templateCount !== aggregate.templates || coverage.runCount !== aggregate.runs ||
+      typeof domainDigest !== "string" || !/^[a-f0-9]{64}$/.test(domainDigest) || coverage.domainDigest !== domainDigest) {
+    throw new Error("Production source coverage counts or domain binding are missing or inconsistent.");
+  }
+  if (step === "pre-invariants" && pendingMigrations.includes("0024_safe_template_evolution.sql")) {
+    const proof = summary.pre0024Compatibility;
+    if (proof?.migration !== "0024_safe_template_evolution.sql" || proof.verdict !== "pass" ||
+        proof.templateCount !== aggregate.templates || proof.runCount !== aggregate.runs || proof.domainDigest !== domainDigest) {
+      throw new Error("Production 0024 compatibility counts or domain binding are missing or inconsistent.");
+    }
+  }
+}
+
+export function assertInvariantSummaryTransition({ pre, post }) {
+  if (pre.aggregateCounts.templates !== post.aggregateCounts.templates || pre.aggregateCounts.runs !== post.aggregateCounts.runs || post.preDomainDigest !== pre.domainDigest) {
+    throw new Error("Production invariant counts or source domain changed across the comparison.");
+  }
+}
+
+function assertCompleteSourceRows({ invariants, templateRows, runRows, ownerRows }) {
+  const fail = () => { throw new Error("Source row counts, identities, or ownership do not agree."); };
+  const expectedOwners = new Map();
+  for (const [kind, rows, count] of [["template", templateRows, invariants.templates], ["run", runRows, invariants.runs]]) {
+    if (!Number.isSafeInteger(count) || count < 0 || rows.length !== count) fail();
+    for (const row of rows) {
+      if (typeof row?.id !== "string" || !row.id || typeof row.user_id !== "string" || !row.user_id) fail();
+      const identity = JSON.stringify([kind, row.id]);
+      if (expectedOwners.has(identity)) fail();
+      expectedOwners.set(identity, { user_id: row.user_id, deleted_state: row.deleted_at == null ? "active" : "deleted" });
+    }
+  }
+  if (ownerRows.length !== expectedOwners.size) fail();
+  for (const owner of ownerRows) {
+    const identity = JSON.stringify([owner?.kind, owner?.id]);
+    const expected = expectedOwners.get(identity);
+    if (!expected || owner.user_id !== expected.user_id || owner.deleted_state !== expected.deleted_state) fail();
+    expectedOwners.delete(identity);
+  }
+  if (expectedOwners.size) fail();
+}
+
+export function captureRemoteInvariantSnapshot({ database, key, runWrangler, validateLedger = (ledger) => ledger, repoRoot = fileURLToPath(new URL("../../", import.meta.url)) }) {
   const ledger = validateLedger(parseAppliedMigrationLedger(runWrangler([
-    "d1", "execute", database, "--remote", "--json", "--command",
-    "SELECT id, name FROM d1_migrations ORDER BY id",
+    "d1", "execute", database, "--remote", "--json",
+    "--command=SELECT id, name FROM d1_migrations ORDER BY id",
   ])));
   const selected = selectInvariantSqlFiles({ appliedMigrations: ledger });
   const combined = selected.flatMap((definition) => {
-    const parsed = JSON.parse(runWrangler([
-      "d1", "execute", database, "--remote", "--json", "--file", definition.path,
-    ]));
-    return Array.isArray(parsed) ? parsed : [parsed];
+    return resultEnvelopes(runWrangler([
+      "d1", "execute", database, "--remote", "--json", `--command=${readFileSync(definition.path, "utf8")}`,
+    ]), "Invariant");
   });
   const invariants = parseInvariantOutput(JSON.stringify(combined));
-  const ownerOutput = JSON.parse(runWrangler([
-    "d1", "execute", database, "--remote", "--json", "--command", OWNER_SQL,
-  ]));
-  const ownerEntries = Array.isArray(ownerOutput) ? ownerOutput : [ownerOutput];
-  invariants.ownershipDigest = privacySafeOwnershipDigest({
-    rows: ownerEntries.flatMap((entry) => entry.results ?? []),
-    key,
-  });
-  const templateRows = resultRows(runWrangler([
-    "d1", "execute", database, "--remote", "--json", "--command", "SELECT * FROM templates ORDER BY id",
-  ]), "Template domain invariants");
-  const runRows = resultRows(runWrangler([
-    "d1", "execute", database, "--remote", "--json", "--command", "SELECT * FROM checklist_runs ORDER BY id",
-  ]), "Run domain invariants");
+  if (invariants.foreign_key_violations !== 0) throw new Error("Foreign-key violation count must be zero before invariant evidence can pass.");
+  const ownerRows = resultRows(runWrangler([
+    "d1", "execute", database, "--remote", "--json", `--command=${OWNER_SQL}`,
+  ]), "Source row ownership");
+  const templateRows = captureTypedRows({ table: "templates", database, runWrangler });
+  const runRows = captureTypedRows({ table: "checklist_runs", database, runWrangler });
   const hasEvolution = ledger.includes("0024_safe_template_evolution.sql");
+  assertCompleteSourceRows({ invariants, templateRows, runRows, ownerRows });
+  invariants.ownershipDigest = privacySafeOwnershipDigest({ rows: ownerRows, key });
+  const domain = privacySafeDomainSnapshot({ templateRows, runRows, key, hasEvolution });
+  if (!hasEvolution) assertPre0024Compatibility({ repoRoot, templates: templateRows, runs: runRows });
   return {
     invariants,
-    domain: privacySafeDomainSnapshot({ templateRows, runRows, key, hasEvolution }),
+    domain,
+    sourceCoverage: { verdict: "pass", templateCount: templateRows.length, runCount: runRows.length, domainDigest: domain.digest },
+    pre0024Compatibility: hasEvolution ? null : {
+      migration: "0024_safe_template_evolution.sql", verdict: "pass",
+      templateCount: templateRows.length, runCount: runRows.length, domainDigest: domain.digest,
+    },
     hasEvolution,
     appliedThrough: ledger.at(-1),
     appliedMigrations: ledger,

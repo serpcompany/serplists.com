@@ -1,4 +1,5 @@
 -- Aggregate-only evidence. Never select customer content or direct identifiers.
+SELECT 'foreign_key_violations' AS invariant, COUNT(*) AS total_rows FROM pragma_foreign_key_check;
 SELECT 'users' AS invariant, COUNT(*) AS total_rows FROM users;
 SELECT 'templates' AS invariant, COUNT(*) AS total_rows FROM templates;
 SELECT 'templates_active' AS invariant, COUNT(*) AS total_rows FROM templates WHERE deleted_at IS NULL;

@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getTableConfig, SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
+import { validateQueryResultEnvelopes } from './d1-query-envelope.mjs';
 
 type Database = InstanceType<typeof DatabaseSync>;
 
@@ -42,10 +43,6 @@ export interface DatabaseCatalog {
   }>;
   triggers: Array<{ name: string; table: string; sql: string | null }>;
   views: Array<{ name: string; sql: string }>;
-}
-
-interface PragmaResult {
-  results?: Array<Record<string, unknown>>;
 }
 
 const migrationsDirectory = fileURLToPath(new URL("../../db/migrations/", import.meta.url));
@@ -91,9 +88,13 @@ function relationFromTuple(tuple: readonly string[]) {
 }
 
 export function parseRemoteTableInventory(output: string) {
-  const parsed = JSON.parse(output);
-  const rows = (Array.isArray(parsed) ? parsed : [parsed]).flatMap((entry) => entry?.results ?? []);
-  const names = rows.map((row) => row?.name).filter((name) => typeof name === "string" && !name.startsWith("sqlite_") && name !== "_cf_METADATA").sort();
+  const entries = validateQueryResultEnvelopes(output, 'Remote table inventory');
+  if (entries.length !== 1) throw new Error('Remote table inventory requires exactly one result set.');
+  const rows = entries[0].results;
+  const names = rows.map(row => {
+    if (typeof row.name !== 'string' || !row.name.length) throw new Error('Remote table inventory is malformed.');
+    return row.name;
+  }).filter(name => !name.startsWith('sqlite_') && name !== '_cf_METADATA').sort();
   if (!names.length) throw new Error("Remote table inventory is empty or malformed.");
   return [...new Set(names)];
 }
@@ -581,8 +582,9 @@ function remoteIndexText(row: Record<string, unknown>, field: 'index_sql' | 'col
   return Number(flag) === 1 ? null : value as string;
 }
 
-export function catalogFromPragmaResults(tableNames: string[], results: PragmaResult[]): DatabaseCatalog {
-  if (results.length !== tableNames.length * 4 + 1 || results.some((result) => !Array.isArray(result?.results))) {
+export function catalogFromPragmaResults(tableNames: string[], input: unknown): DatabaseCatalog {
+  const results = validateQueryResultEnvelopes(input, 'Wrangler schema');
+  if (results.length !== tableNames.length * 4 + 1) {
     throw new Error(`Malformed or truncated Wrangler schema output: expected ${tableNames.length * 4 + 1} result sets, received ${results.length}.`);
   }
   const tables: DatabaseCatalog["tables"] = {};

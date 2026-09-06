@@ -144,3 +144,50 @@ export function getRepositoryMigrationRange({ repoRoot }) {
   if (files.length === 0) throw new Error("No numbered D1 migrations were found.");
   return { first: files[0], latest: files.at(-1), count: files.length };
 }
+
+// Direct read checks share the inventory boundary, not production write authority.
+export function resolveDirectCheckIdentity({ repoRoot, environment, binding = 'DB', databaseName, databaseId, local, remote, preview, persistTo, argv = process.argv.slice(2) }) {
+  const values = new Set(['--database', '--database-id', '--label', '--binding', '--persist-to', '--report-dir']);
+  const flags = new Set(['--local', '--remote', '--preview']);
+  const seen = new Set();
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index];
+    // pnpm run forwards its package separator. Consume it once without ending
+    // validation: duplicates and unknown/missing options on either side fail.
+    if (argument === '--' && !seen.has('--')) {
+      seen.add('--');
+      continue;
+    }
+    const option = argument.split('=')[0];
+    if (seen.has(option) || (!values.has(option) && !flags.has(option)) || (flags.has(option) && argument !== option)) {
+      throw new Error('Direct check arguments are unknown, duplicated, or ambiguous.');
+    }
+    seen.add(option);
+    if (values.has(option)) {
+      const value = argument.includes('=') ? argument.slice(option.length + 1) : argv[++index];
+      if (!value || value.startsWith('--')) throw new Error('Direct check argument value is missing.');
+    }
+  }
+  const inventory = loadEnvironmentInventory({ repoRoot });
+  const wranglerToml = readFileSync(path.join(repoRoot, 'wrangler.toml'), 'utf8');
+  validateEnvironmentInventory({ inventory, wranglerToml });
+  if (binding !== inventory.binding || ['d1_databases', 'env.preview.d1_databases', 'env.production.d1_databases']
+    .some(table => readTomlString(readTomlArrayTable(wranglerToml, table), 'binding') !== binding)) {
+    throw new Error('Direct check binding does not match the configured inventory.');
+  }
+  if (local === remote || local !== (environment === 'local') || (preview && environment !== 'staging') || (persistTo != null && !local)) {
+    throw new Error('Direct check mode does not match the configured environment.');
+  }
+  if (environment === 'production' && !databaseId) throw new Error('Production checks require an explicit exact database UUID.');
+  const identity = resolveEnvironmentIdentity({ environment, inventory, databaseName, databaseId });
+  if (identity.isRemote !== remote) throw new Error('Direct check mode does not match the inventory.');
+  return identity;
+}
+
+/** @param {{ expected: { databaseName: string, databaseId: string }, observed: { databaseName: string, databaseId: string } }} options */
+export function validateDirectCheckObservation({ expected, observed }) {
+  if (observed.databaseName !== expected.databaseName || observed.databaseId !== expected.databaseId) {
+    throw new Error('Observed D1 identity does not match the configured environment.');
+  }
+  return observed;
+}

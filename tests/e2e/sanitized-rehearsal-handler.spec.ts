@@ -56,7 +56,8 @@ test('@smoke exact sanitized rows pass authenticated candidate template and run 
       if (process.env.PLAYWRIGHT_SANITIZED_PAGE_NEGATIVE === '1' && !injectedPageFailure) {
         expect(process.env.PLAYWRIGHT_USE_DEV_VARS).toBe('0');
         expect(process.env.PLAYWRIGHT_WRANGLER_PERSIST_TO).toBeTruthy();
-        execFileSync('npx', ['wrangler', 'd1', 'execute', 'serp-checklists-db', '--local', '--persist-to', process.env.PLAYWRIGHT_WRANGLER_PERSIST_TO!, '--command', 'ALTER TABLE templates RENAME COLUMN title TO missing_title_negative_control'], { env: process.env, stdio: 'pipe' });
+        expect(process.env.PLAYWRIGHT_WRANGLER_CWD).toBeTruthy();
+        execFileSync('npx', ['wrangler', '--cwd', process.env.PLAYWRIGHT_WRANGLER_CWD!, 'd1', 'execute', 'serp-checklists-db', '--local', '--persist-to', process.env.PLAYWRIGHT_WRANGLER_PERSIST_TO!, '--command', 'ALTER TABLE templates RENAME COLUMN title TO missing_title_negative_control'], { env: process.env, stdio: 'pipe' });
         injectedPageFailure = true;
       }
       await page.goto(listPath);

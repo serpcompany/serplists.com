@@ -40,6 +40,55 @@ function writtenSource() {
 }
 
 describe("sanitized candidate state", () => {
+  it.each(Array.from({ length: 11 }, (_, i) => i + 1))('rejects invalid sanitized query envelope at statement %i before state proof', failAt => {
+    const db = replayMigrations();
+    try {
+      db.exec(artifact.sql);
+      db.exec('CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY, name TEXT NOT NULL)');
+      ledger.forEach((name, i) => db.prepare('INSERT INTO d1_migrations VALUES (?,?)').run(i + 1, name));
+      for (const corrupt of [
+        entries => { entries[0].success = false; },
+        entries => { delete entries[0].success; },
+        entries => { entries[0].errors = ['PRIVATE_SANITIZED_ERROR']; },
+        entries => { entries[0].error = null; },
+        entries => { entries[0].meta = []; },
+        entries => { entries.push({ success: false, meta: {}, results: [] }); },
+        entries => { entries.push({ success: true, meta: {}, results: [] }); },
+        'duplicate',
+      ]) {
+        let calls = 0;
+        expect(() => captureSanitizedState({ sourceSha256: artifact.manifest.artifact.sha256, query: sql => {
+          calls++;
+          expect(calls).toBeLessThanOrEqual(failAt);
+          const entries = [{ success: true, meta: { duration: 0 }, results: db.prepare(sql).all() }];
+          if (calls === failAt && typeof corrupt === 'function') corrupt(entries);
+          const output = JSON.stringify(entries);
+          return calls === failAt && corrupt === 'duplicate' ? output.replace('"success":true', '"success":false,"success":true') : output;
+        } })).toThrow(/sanitized|applied migration ledger/i);
+        expect(calls).toBe(failAt);
+      }
+    } finally { db.close(); }
+  });
+  it('captures healthy source and upgraded cohort through successful query envelopes', () => {
+    const db = replayMigrations({ through: '0023_add_sitemap_revision_state.sql' });
+    try {
+      db.exec(artifact.sql);
+      db.exec('CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY, name TEXT NOT NULL)');
+      ledger.slice(0, -1).forEach((name, i) => db.prepare('INSERT INTO d1_migrations VALUES (?,?)').run(i + 1, name));
+      const capture = () => captureSanitizedState({ sourceSha256: artifact.manifest.artifact.sha256,
+        query: sql => JSON.stringify([{ success: true, errors: [], meta: { duration: 0, rows_written: 0 }, results: db.prepare(sql).all() }]),
+      });
+      const before = capture();
+      db.exec(readFileSync(path.join(repoRoot, 'db/migrations', migration), 'utf8'));
+      db.prepare('INSERT INTO d1_migrations VALUES (?,?)').run(ledger.length, migration);
+      const after = capture();
+      expect(verifySanitizedTransformation({ before, after, expectedLedger: ledger }).verdict).toBe('pass');
+      expect(validateSanitizedStateBinding(after, capture())).toBe(true);
+      expect(after.cohortSha256).toBe(before.cohortSha256);
+      expect(after.rows.templates).toHaveLength(artifact.manifest.selection.selectedCounts.templates);
+      expect(after.rows.runs).toHaveLength(artifact.manifest.selection.selectedCounts.checklistRuns);
+    } finally { db.close(); }
+  });
   it('rejects an extra imported-personal template after valid canaries before cohort proof can pass', () => {
     const { before, after, proof, selection } = writtenSource();
     proof.cohortProof.postHandlerPreservation = verifySanitizedRefusalPreservation({ before, after, proof });
@@ -193,7 +242,7 @@ describe("sanitized candidate state", () => {
       db.exec("CREATE TABLE d1_migrations(id INTEGER, name TEXT)");
       ledger.forEach((name, index) => db.prepare("INSERT INTO d1_migrations VALUES (?,?)").run(index + 1, name));
       db.exec("UPDATE templates SET description='null'");
-      const capture = captureSanitizedState({ sourceSha256: artifact.manifest.artifact.sha256, query: (sql) => JSON.stringify([{ results: db.prepare(sql).all().map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value === null ? "null" : value]))) }]) });
+      const capture = captureSanitizedState({ sourceSha256: artifact.manifest.artifact.sha256, query: (sql) => JSON.stringify([{ success: true, meta: { duration: 0 }, results: db.prepare(sql).all().map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value === null ? "null" : value]))) }]) });
       expect(capture.rows.templates[0].deleted_at).toBeNull();
       expect(capture.rows.templates[0].description).toBe("null");
       expect(capture.domainSha256).toBe(snapshot(db, ledger).domainSha256);

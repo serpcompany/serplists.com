@@ -19,13 +19,13 @@ import {
 
 describe("Drizzle to D1 schema contract", () => {
   it("inventories rogue live tables before querying their indexes and foreign keys", () => {
-    expect(parseRemoteTableInventory(JSON.stringify([{ results: [{ name: "templates" }, { name: "rogue_live" }, { name: "sqlite_sequence" }] }]))).toEqual(["rogue_live", "templates"]);
+    expect(parseRemoteTableInventory(JSON.stringify([{ success: true, meta: {}, results: [{ name: "templates" }, { name: "rogue_live" }, { name: "sqlite_sequence" }] }]))).toEqual(["rogue_live", "templates"]);
     const catalog = catalogFromPragmaResults(["rogue_live"], [
-      { results: [{ name: "id", type: "TEXT", notnull: 0, dflt_value: "null", pk: 1 }, { name: "template_id", type: "TEXT", notnull: 0, dflt_value: "null", pk: 0 }] },
-      { results: [{ name: "rogue_template_idx", origin: "c", unique: 0, partial: 0 }] },
-      { results: [{ index_name: "rogue_template_idx", seqno: 0, cid: 1, column_name: "template_id", column_name_is_null: 0, coll: "BINARY", desc: 0, key: 1, index_sql: "CREATE INDEX rogue_template_idx ON rogue_live(template_id)", index_sql_is_null: 0 }] },
-      { results: [{ id: 0, seq: 0, table: "templates", from: "template_id", to: "id", on_update: "NO ACTION", on_delete: "CASCADE" }] },
-      { results: [] },
+      { success: true, meta: {}, results: [{ name: "id", type: "TEXT", notnull: 0, dflt_value: "null", pk: 1 }, { name: "template_id", type: "TEXT", notnull: 0, dflt_value: "null", pk: 0 }] },
+      { success: true, meta: {}, results: [{ name: "rogue_template_idx", origin: "c", unique: 0, partial: 0 }] },
+      { success: true, meta: {}, results: [{ index_name: "rogue_template_idx", seqno: 0, cid: 1, column_name: "template_id", column_name_is_null: 0, coll: "BINARY", desc: 0, key: 1, index_sql: "CREATE INDEX rogue_template_idx ON rogue_live(template_id)", index_sql_is_null: 0 }] },
+      { success: true, meta: {}, results: [{ id: 0, seq: 0, table: "templates", from: "template_id", to: "id", on_update: "NO ACTION", on_delete: "CASCADE" }] },
+      { success: true, meta: {}, results: [] },
     ]);
     expect(catalog.tables.rogue_live.indexes[0].columns).toEqual(["template_id"]);
     expect(catalog.tables.rogue_live.foreignKeys[0]).toMatchObject({ referencedTable: "templates", onDelete: "cascade" });
@@ -35,15 +35,15 @@ describe("Drizzle to D1 schema contract", () => {
     const catalog = catalogFromPragmaResults(
       ["templates"],
       [
-        { results: [{ name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 }] },
-        { results: [{ name: "idx_templates_owner", origin: "c", unique: 0, partial: 0 }] },
-        { results: [
+        { success: true, meta: {}, results: [{ name: "id", type: "TEXT", notnull: 0, dflt_value: null, pk: 1 }] },
+        { success: true, meta: {}, results: [{ name: "idx_templates_owner", origin: "c", unique: 0, partial: 0 }] },
+        { success: true, meta: {}, results: [
           { index_name: "idx_templates_owner", seqno: 0, cid: 1, column_name: "owner_type", column_name_is_null: 0, coll: "BINARY", desc: 0, key: 1, index_sql: "CREATE INDEX idx_templates_owner ON templates(owner_type, user_id)", index_sql_is_null: 0 },
           { index_name: "idx_templates_owner", seqno: 1, cid: 2, column_name: "user_id", column_name_is_null: 0, coll: "BINARY", desc: 0, key: 1, index_sql: "CREATE INDEX idx_templates_owner ON templates(owner_type, user_id)", index_sql_is_null: 0 },
           { index_name: "idx_templates_owner", seqno: 2, cid: -1, column_name: "null", column_name_is_null: 1, coll: "BINARY", desc: 0, key: 0, index_sql: "CREATE INDEX idx_templates_owner ON templates(owner_type, user_id)", index_sql_is_null: 0 },
         ] },
-        { results: [] },
-        { results: [] },
+        { success: true, meta: {}, results: [] },
+        { success: true, meta: {}, results: [] },
       ],
     );
 

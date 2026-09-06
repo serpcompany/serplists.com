@@ -9,10 +9,10 @@ it.skipIf(process.platform === 'win32')('post-schema CLI validates actual local 
   const directory = mkdtempSync(path.join(tmpdir(), 'post-schema-real-d1-'));
   const config = path.join(directory, 'wrangler.toml');
   const databaseId = '11111111-1111-4111-8111-111111111111';
-  const name = 'post-schema-local-proof';
+  const name = 'serp-checklists-rehearsal-post-schema';
   const cli = path.join(root, 'node_modules/wrangler/bin/wrangler.js');
   const target = ['--local', '--config', config, '--persist-to', path.join(directory, 'state')];
-  const safeEnv = { PATH: process.env.PATH, HOME: process.env.HOME, CI: 'true', WRANGLER_SEND_METRICS: 'false' };
+  const safeEnv = { PATH: process.env.PATH, HOME: directory, CI: 'true', WRANGLER_SEND_METRICS: 'false' };
   writeFileSync(config, `name="post-schema-proof"\ncompatibility_date="2026-09-05"\n[[d1_databases]]\nbinding="DB"\ndatabase_name="${name}"\ndatabase_id="${databaseId}"\nmigrations_dir=${JSON.stringify(path.join(root, 'db/migrations'))}\n`);
   const execute = (sql: string) => execFileSync(process.execPath, [cli, 'd1', 'execute', name, '--json', '--command', sql, ...target], { cwd: directory, env: safeEnv, encoding: 'utf8' });
   const shim = path.join(directory, 'pnpm');
@@ -27,13 +27,13 @@ process.stdout.write(execFileSync(process.execPath,[${JSON.stringify(cli)},...ar
 `);
   chmodSync(shim, 0o700);
   const reportDir = path.join(directory, 'reports');
-  const check = () => spawnSync(process.execPath, ['--import', 'tsx', 'scripts/data/check-d1-schema.ts', '--database', name, '--database-id', databaseId, '--label', 'staging', '--report-dir', reportDir], { cwd: root, env: { ...safeEnv, PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8' });
+  const check = () => spawnSync(process.execPath, ['--import', 'tsx', 'scripts/data/check-d1-schema.ts', '--database', name, '--database-id', databaseId, '--label', 'rehearsal', '--report-dir', reportDir], { cwd: root, env: { ...safeEnv, PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8' });
   try {
     execFileSync(process.execPath, [cli, 'd1', 'migrations', 'apply', name, ...target], { cwd: directory, env: safeEnv, stdio: 'pipe' });
     expect(JSON.parse(execute("SELECT name FROM sqlite_schema WHERE name='_cf_METADATA'"))[0].results).toHaveLength(1);
     const healthy = check();
     expect(healthy.status, healthy.stdout + healthy.stderr).toBe(0);
-    expect(JSON.parse(readFileSync(path.join(reportDir, 'd1-schema-staging.json'), 'utf8')).verdict).toBe('pass');
+    expect(JSON.parse(readFileSync(path.join(reportDir, 'd1-schema-rehearsal.json'), 'utf8')).verdict).toBe('pass');
     for (const definition of [
       'CREATE UNIQUE INDEX idx_users_username ON users(username COLLATE NOCASE)',
       'CREATE UNIQUE INDEX idx_users_username ON users(username DESC)',
@@ -44,7 +44,7 @@ process.stdout.write(execFileSync(process.execPath,[${JSON.stringify(cli)},...ar
       execute(`DROP INDEX idx_users_username; ${definition}`);
       const drift = check();
       expect(drift.status, drift.stdout + drift.stderr).toBe(1);
-      const report = JSON.parse(readFileSync(path.join(reportDir, 'd1-schema-staging.json'), 'utf8'));
+      const report = JSON.parse(readFileSync(path.join(reportDir, 'd1-schema-rehearsal.json'), 'utf8'));
       expect(report.schemaDifferences.migrationObjects.verdict).toBe('fail');
       execute('DROP INDEX idx_users_username; CREATE UNIQUE INDEX idx_users_username ON users(username)');
     }
@@ -53,7 +53,7 @@ process.stdout.write(execFileSync(process.execPath,[${JSON.stringify(cli)},...ar
       execute(`CREATE TABLE ${table}(id TEXT)`);
       const drift = check();
       expect(drift.status, drift.stdout + drift.stderr).toBe(1);
-      expect(JSON.parse(readFileSync(path.join(reportDir, 'd1-schema-staging.json'), 'utf8')).verdict).toBe('fail');
+      expect(JSON.parse(readFileSync(path.join(reportDir, 'd1-schema-rehearsal.json'), 'utf8')).verdict).toBe('fail');
       execute(`DROP TABLE ${table}`);
     }
     // D1 itself reserves _cf_ names. Verify rejection rather than mocking a

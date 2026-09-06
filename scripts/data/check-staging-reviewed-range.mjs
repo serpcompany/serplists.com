@@ -82,7 +82,7 @@ try {
     verdict: "pass",
     commit: head,
     baseCommit: base,
-    target: { environment: "staging", databaseName: "serp-checklists-staging-db", databaseId: "fcaf4325-5be7-4ead-ab60-45932a04177b" },
+    target,
     migrationRange: { from: pending[0] ?? null, to: pending.at(-1) ?? null },
     pendingMigrations: pending,
     ledger: { before: applied },

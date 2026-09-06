@@ -154,7 +154,7 @@ describe("pending migration gate", () => {
         [
           "scripts/data/check-pending-migrations.mjs",
           "--database", "serp-checklists-db",
-          "--label", "test",
+          "--label", "local",
           "--local",
           "--persist-to", persistence,
           "--report-dir", join(persistence, "reports"),
@@ -163,7 +163,7 @@ describe("pending migration gate", () => {
       );
 
       expect(result.status).toBe(1);
-      expect(result.stdout).toContain("BLOCKED test:serp-checklists-db");
+      expect(result.stdout).toContain("BLOCKED local:serp-checklists-db (local:miniflare:DB)");
       expect(result.stdout).toContain("0024_safe_template_evolution.sql");
     } finally {
       rmSync(persistence, { recursive: true, force: true });
@@ -207,7 +207,7 @@ describe("pending migration gate", () => {
         [
           "scripts/data/check-pending-migrations.mjs",
           "--database", "serp-checklists-db",
-          "--label", "test",
+          "--label", "local",
           "--local",
           "--persist-to", persistence,
           "--report-dir", join(persistence, "reports"),
@@ -216,7 +216,7 @@ describe("pending migration gate", () => {
       );
 
       expect(result.status).toBe(0);
-      expect(result.stdout).toContain("PASS test:serp-checklists-db");
+      expect(result.stdout).toContain("PASS local:serp-checklists-db (local:miniflare:DB)");
       expect(result.stdout).toContain("no pending migrations");
       const liveCatalog = catalogFromPragmaResults(tableNames, JSON.parse(schemaOutput));
       expect(diffDrizzleContract(contract, liveCatalog).verdict).toBe("pass");
@@ -228,7 +228,7 @@ describe("pending migration gate", () => {
         'exec', 'wrangler', 'd1', 'execute', 'serp-checklists-db', '--local', '--persist-to', persistence, '--json', '--command',
         `CREATE TABLE default_probe(none TEXT, sql_null TEXT DEFAULT NULL, literal_null TEXT DEFAULT 'null'); CREATE TABLE changed_default_probe(none TEXT DEFAULT NULL, sql_null TEXT, literal_null TEXT DEFAULT NULL); ${tableInfoSql('default_probe')}; ${tableInfoSql('changed_default_probe')};`,
       ], { cwd: process.cwd(), encoding: 'utf8' }));
-      const catalog = (columns: { results: Array<Record<string, unknown>> }) => catalogFromPragmaResults(['default_probe'], [columns, { results: [] }, { results: [] }, { results: [] }, { results: [] }]);
+      const catalog = (columns: { success: boolean; meta: Record<string, unknown>; results: Array<Record<string, unknown>> }) => catalogFromPragmaResults(['default_probe'], [columns, { success: true, meta: {}, results: [] }, { success: true, meta: {}, results: [] }, { success: true, meta: {}, results: [] }, { success: true, meta: {}, results: [] }]);
       const originalDefaults = catalog(defaultOutput.at(-2));
       const changedDefaults = catalog(defaultOutput.at(-1));
       expect(originalDefaults.tables.default_probe.columns.map(column => column.defaultValue)).toEqual([null, 'null', "'null'"]);

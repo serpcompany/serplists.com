@@ -38,6 +38,7 @@ const serverCommands = buildPlaywrightServerCommands({
   betterAuthSecret,
   persistPath: wranglerPersistFlag,
   instrumentedWorkerPath: process.env.PLAYWRIGHT_INSTRUMENTED_WORKER_PATH,
+  wranglerCwd: process.env.PLAYWRIGHT_WRANGLER_CWD,
 });
 const executionPolicy = buildSmokeExecutionPolicy({
   isolated: process.env.PLAYWRIGHT_USE_DEV_VARS === "0",

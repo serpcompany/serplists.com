@@ -32,15 +32,39 @@ function fixture(current = false) {
   appliedMigrations.forEach((name, i) => db.prepare('INSERT INTO d1_migrations(id,name) VALUES (?,?)').run(i + 1, name));
   const binding = { commit, database, appliedMigrations, pendingMigrations: current ? [] : [migration], ledgerSha256: digest(appliedMigrations) };
   const queries: string[] = [];
+  let catalogEnvelope = {};
   const inspect = () => inspectSourceSchema({ ...binding, execute: (sql: string) => {
     queries.push(sql);
     expect(sql).toMatch(/^SELECT /);
-    return JSON.stringify([{ results: db.prepare(sql).all() }]);
+    return JSON.stringify([{ success: true, meta: { duration: 0 }, results: db.prepare(sql).all(), ...(sql === SOURCE_CATALOG_SQL ? catalogEnvelope : {}) }]);
   } });
-  return { db, binding, inspect, queries };
+  return { db, binding, inspect, queries, failCatalog: () => { catalogEnvelope = { errors: ['private query failure'] }; } };
 }
 
 describe('exact source catalog before writes', () => {
+  it.each([
+    { success: undefined }, { success: false }, { error: null }, { errors: ['PRIVATE_SOURCE_ERROR'] },
+    { errors: {} }, { meta: undefined }, { meta: [] },
+  ])('rejects source envelope %j before producing proof', change => {
+    const f = fixture();
+    try {
+      const queries: string[] = [];
+      expect(() => inspectSourceSchema({ ...f.binding, execute: sql => {
+        queries.push(sql);
+        return JSON.stringify([{ success: true, meta: { duration: 0 }, results: f.db.prepare(sql).all(), ...(sql === SOURCE_CATALOG_SQL ? change : {}) }]);
+      } })).toThrow('Production source catalog verification failed before migration writes.');
+      expect(queries).toHaveLength(2);
+    } finally { f.db.close(); }
+  });
+  it('rejects duplicate source success keys before producing proof', () => {
+    const f = fixture();
+    try {
+      expect(() => inspectSourceSchema({ ...f.binding, execute: sql => {
+        const output = JSON.stringify([{ success: true, meta: { duration: 0 }, results: f.db.prepare(sql).all() }]);
+        return sql === SOURCE_CATALOG_SQL ? output.replace('"success":true', '"success":false,"success":true') : output;
+      } })).toThrow('Production source catalog verification failed before migration writes.');
+    } finally { f.db.close(); }
+  });
   it.each([
     'CREATE UNIQUE INDEX idx_users_username ON users(username COLLATE NOCASE)',
     'CREATE UNIQUE INDEX idx_users_username ON users(username DESC)',
@@ -64,7 +88,7 @@ describe('exact source catalog before writes', () => {
   it.each([{ rows: null }, { rows: {} }, { rows: [null] }, { rows: [[]] }, { rows: [{ type: 'table', name: 'fixture', tbl_name: 'fixture', sql: 42 }] }])('rejects malformed catalog transport rows without trusting a cast (%j)', ({ rows }) => {
     const f = fixture();
     try {
-      expect(() => inspectSourceSchema({ ...f.binding, execute: sql => JSON.stringify([{ results: sql === SOURCE_CATALOG_SQL ? rows : f.db.prepare(sql).all() }]) })).toThrow('Production source catalog verification failed before migration writes.');
+      expect(() => inspectSourceSchema({ ...f.binding, execute: sql => JSON.stringify([{ success: true, meta: { duration: 0 }, results: sql === SOURCE_CATALOG_SQL ? rows : f.db.prepare(sql).all() }]) })).toThrow('Production source catalog verification failed before migration writes.');
     } finally { f.db.close(); }
   });
   it.each([false, true])('accepts correct applied prefix (current=%s) without demanding candidate columns early', current => {
@@ -76,7 +100,7 @@ describe('exact source catalog before writes', () => {
       if (!current) {
         f.db.exec(readFileSync(new URL(`../../db/migrations/${migration}`, import.meta.url), 'utf8'));
         f.db.prepare('INSERT INTO d1_migrations(id,name) VALUES (?,?)').run(history.length, migration);
-        expect(inspectSourceSchema({ ...f.binding, pendingMigrations: [], execute: (sql: string) => JSON.stringify([{ results: f.db.prepare(sql).all() }]) }).verdict).toBe('pass');
+        expect(inspectSourceSchema({ ...f.binding, pendingMigrations: [], execute: (sql: string) => JSON.stringify([{ success: true, meta: { duration: 0 }, results: f.db.prepare(sql).all() }]) }).verdict).toBe('pass');
       }
     } finally { f.db.close(); }
   });
@@ -102,7 +126,10 @@ describe('exact source catalog before writes', () => {
     } finally { f.db.close(); }
   });
 
-  it.each(['prepare', 'after-approval'])('actual 0024 trigger deletion is rejected at %s with zero migration writes', phase => {
+  it.each([
+    ['prepare', 'trigger'], ['after-approval', 'trigger'],
+    ['prepare', 'failed-envelope'], ['after-approval', 'failed-envelope'],
+  ])('actual source verification at %s rejects %s with zero migration writes', (phase, failure) => {
     const f = fixture();
     try {
       f.db.exec(readFileSync(new URL('./fixtures/production-export-edge-cases.sql', import.meta.url), 'utf8'));
@@ -113,17 +140,18 @@ describe('exact source catalog before writes', () => {
         if (step === 'source-schema') return { verdict: 'pass', summary: f.inspect() };
         if (step === 'pre-invariants') {
           const snapshot = captureRemoteInvariantSnapshot({ database: database.databaseName, key: 'local-source-schema-invariant-key-000000', runWrangler: (args: string[]) => {
-            const sql = args.includes('--file') ? readFileSync(args[args.indexOf('--file') + 1], 'utf8') : args[args.indexOf('--command') + 1];
+            const sql = args.includes('--file') ? readFileSync(args[args.indexOf('--file') + 1], 'utf8')
+              : args.find(argument => argument.startsWith('--command='))?.slice('--command='.length) ?? args[args.indexOf('--command') + 1];
             return JSON.stringify(sql.split(';').map(statement => statement.replace(/^\s*--.*$/gm, '').trim()).filter(Boolean)
-              .map(statement => ({ results: f.db.prepare(statement).all() })));
+              .map(statement => ({ success: true, meta: { duration: 0 }, results: f.db.prepare(statement).all() })));
           } });
           expect(snapshot.ledgerSha256).toBe(f.binding.ledgerSha256);
-          return { verdict: 'pass', summary: snapshot };
+          return { verdict: 'pass', summary: { ...snapshot, aggregateCounts: { templates: snapshot.invariants.templates, runs: snapshot.invariants.runs }, foreignKeyViolations: snapshot.invariants.foreign_key_violations, domainDigest: snapshot.domain.digest } };
         }
         if (step === 'migration-apply') { writes++; f.db.exec(readFileSync(new URL(`../../db/migrations/${migration}`, import.meta.url), 'utf8')); }
         return { verdict: 'pass', summary: { type: step } };
       };
-      const drift = () => f.db.exec('CREATE TRIGGER drift AFTER UPDATE ON templates BEGIN DELETE FROM checklist_runs WHERE user_id=NEW.user_id; END');
+      const drift = () => failure === 'failed-envelope' ? f.failCatalog() : f.db.exec('CREATE TRIGGER drift AFTER UPDATE ON templates BEGIN DELETE FROM checklist_runs WHERE user_id=NEW.user_id; END');
       if (phase === 'prepare') drift();
       const before = f.db.prepare('SELECT count(*) AS n FROM checklist_runs').get();
       expect(before?.n).toBe(2);

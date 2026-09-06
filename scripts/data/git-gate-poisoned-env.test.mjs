@@ -30,7 +30,7 @@ describe("poisoned Git environment isolation across data gates", () => {
       expect(JSON.parse(readFileSync(path.join(schemaDir, "schema-contract.json"), "utf8"))).toMatchObject({ commit: intendedCommit, target: { environment: "local", binding: "not-applicable:in-memory", databaseName: "fresh-migration-replay", databaseId: "local:ephemeral" } });
       expect(JSON.parse(readFileSync(path.join(schemaDir, "contract-correction.json"), "utf8"))).toMatchObject({ commit: intendedCommit, repositoryRoot: repoRoot });
 
-      for (const [script, reportName, expectedDatabase] of [["scripts/data/check-d1-schema.ts", "d1-schema-unknown.json", "unknown"], ["scripts/data/check-pending-migrations.mjs", "pending-migrations-unknown.json", "intended-db"]]) {
+      for (const [script, reportName, expectedDatabase] of [["scripts/data/check-d1-schema.ts", "d1-schema-unknown.json", "unknown"], ["scripts/data/check-pending-migrations.mjs", "pending-migrations-unknown.json", "unknown"]]) {
         const reportDir = path.join(root, reportName);
         const result = runScript([script, "--database", "intended-db", "--report-dir", reportDir], env);
         expect(result.status).toBe(1);

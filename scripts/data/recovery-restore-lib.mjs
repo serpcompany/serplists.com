@@ -2,6 +2,7 @@ import { createHash, createHmac } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { validateQueryResultEnvelopes } from './d1-query-envelope.mjs';
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const unsupported = () => { throw new Error("Unsupported or ambiguous D1 full export; restore refused."); };
@@ -155,10 +156,9 @@ export function withPreparedRecoveryImport({ inputPath, expectedSourceSha256, ex
 export function captureFullRecoveryState({ query, key }) {
   if (typeof key !== "string" || key.length < 32) throw new Error("Recovery equality requires an HMAC key of at least 32 characters.");
   const rows = sql => {
-    const result = JSON.parse(query(sql));
-    const entries = Array.isArray(result) ? result : [result];
-    if (!entries.length || entries.some(entry => entry.success === false || !Array.isArray(entry.results))) throw new Error("Recovery equality query failed.");
-    return entries.flatMap(entry => entry.results);
+    const entries = validateQueryResultEnvelopes(query(sql), 'Recovery equality');
+    if (entries.length !== 1) throw new Error('Recovery equality requires exactly one query result set.');
+    return entries[0].results;
   };
   const digest = value => createHmac("sha256", key).update(JSON.stringify(value)).digest("hex");
   const quoteId = name => '"' + name.replaceAll('"', '""') + '"';

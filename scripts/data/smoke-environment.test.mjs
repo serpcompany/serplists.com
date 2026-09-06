@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 import {
   buildSmokeExecutionPolicy,
@@ -7,6 +11,22 @@ import {
 } from "./smoke-environment-lib.mjs";
 
 describe("isolated smoke child environment", () => {
+  it('loads the generated safe env file through the pinned launcher from repository cwd', () => {
+    const fixtureHome = mkdtempSync(path.join(tmpdir(), 'smoke-launcher-env-'));
+    try {
+      const commands = buildPlaywrightServerCommands({ isolated: true,
+        wranglerCwd: '.wrangler/smoke-invocation-probe',
+        instrumentedWorkerPath: '.wrangler/smoke-invocation-probe/pages/_worker.js' });
+      const envFile = commands.api.match(/--env-file (\S+)/)?.[1];
+      expect(envFile).toBeTruthy();
+      const version = execFileSync('npx', ['--no-install', 'wrangler', '--env-file', envFile, '--version'], {
+        cwd: process.cwd(), encoding: 'utf8', timeout: 15000,
+        env: { PATH: process.env.PATH, HOME: fixtureHome, CI: 'true', WRANGLER_SEND_METRICS: 'false', WRANGLER_LOG_PATH: path.join(fixtureHome, 'logs') },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      expect(version.trim()).toBe('4.54.0');
+    } finally { rmSync(fixtureHome, { recursive: true, force: true }); }
+  });
   it("allowlists runtime variables and drops every developer/cloud/email secret sentinel", () => {
     const child = buildSmokeChildEnvironment({
       PATH: "/safe/bin",

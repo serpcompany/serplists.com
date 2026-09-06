@@ -6,6 +6,7 @@ import { replayMigrations, listMigrationFiles } from "./schema-contract.ts";
 import { validRetiredChecklistContent } from "../../src/lib/schemas/legacyChecklistSchema.ts";
 import {
   parseAppliedMigrationLedger,
+  parseInvariantOutput,
   compareMigrationLedger,
   compareDomainSnapshots,
   compareProductionInvariants,
@@ -37,20 +38,22 @@ function retiredFixtureDatabase(through) {
   return database;
 }
 
-function captureLocal(database, through) {
+function captureLocal(database, through, transport = (output) => output) {
   const migrations = listMigrationFiles().map(({ name }) => name);
   const applied = through ? migrations.slice(0, migrations.indexOf(through) + 1) : migrations;
   return captureRemoteInvariantSnapshot({
     database: "owner150-in-memory-only",
     key: "owner150-synthetic-hmac-key-1234567890",
     runWrangler: (args) => {
-      const command = args.includes("--command") ? args[args.indexOf("--command") + 1] : null;
+      const command = args.find(arg => arg.startsWith('--command='))?.slice('--command='.length)
+        ?? (args.includes("--command") ? args[args.indexOf("--command") + 1] : null);
       if (command === "SELECT id, name FROM d1_migrations ORDER BY id") {
-        return JSON.stringify([{ results: ledgerRows(...applied) }]);
+        return transport(JSON.stringify([{ success: true, meta: { duration: 0 }, results: ledgerRows(...applied) }]), command);
       }
       const sql = command ?? readFileSync(args[args.indexOf("--file") + 1], "utf8");
-      return JSON.stringify(sql.split(";").map((part) => part.replace(/^\s*--.*$/gm, "").trim())
-        .filter(Boolean).map((statement) => ({ results: database.prepare(statement).all() })));
+      return transport(JSON.stringify(sql.split(";").map((part) => part.replace(/^\s*--.*$/gm, "").trim())
+        .filter(Boolean).map((statement) => ({ success: true, meta: { duration: 0 }, results: database.prepare(statement).all().map(row =>
+          Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value === null ? "null" : value]))) }))), sql);
     },
   });
 }
@@ -66,7 +69,341 @@ function writeRetired(database, entries) {
   database.prepare("UPDATE checklist_runs SET retired_items = ? WHERE id = 'owner150-run'").run(JSON.stringify(entries));
 }
 
+describe("Wrangler capture result envelopes", () => {
+  const families = [
+    ["ledger", sql => sql.includes('FROM d1_migrations')],
+    ["aggregate", sql => sql.includes('pragma_foreign_key_check')],
+    ["evolution aggregate", sql => sql.includes('templates_invalid_content_version')],
+    ["ownership", sql => sql.includes("SELECT 'template' kind")],
+    ["template metadata", sql => sql.includes("pragma_table_xinfo('templates')")],
+    ["run metadata", sql => sql.includes("pragma_table_xinfo('checklist_runs')")],
+    ["template rows", sql => sql.endsWith('AS typed_row FROM "templates" ORDER BY "id"')],
+    ["run rows", sql => sql.endsWith('AS typed_row FROM "checklist_runs" ORDER BY "id"')],
+  ];
+  const corruptions = [
+    ["false", entries => { entries[0].success = false; }],
+    ["conflicting error", entries => { entries[0].error = 'private-provider-error'; }],
+    ["conflicting errors", entries => { entries[0].errors = [{message:'private-provider-error'}]; }],
+    ["missing success", entries => { delete entries[0].success; }],
+    ["string success", entries => { entries[0].success = 'true'; }],
+    ["malformed errors", entries => { entries[0].errors = {}; }],
+    ["malformed metadata", entries => { entries[0].meta = []; }],
+    ["null row", entries => { entries[0].results = [null]; }],
+    ["array row", entries => { entries[0].results = [[]]; }],
+    ["missing results", entries => { delete entries[0].results; }],
+    ["non-array results", entries => { entries[0].results = {}; }],
+    ["error-only suffix", entries => { entries.push({error:'private-provider-error'}); }],
+    ["null suffix", entries => { entries.push(null); }],
+  ];
+  it('accepts pinned local metadata and remote query metadata without exposing it', () => {
+    const database = retiredFixtureDatabase();
+    try {
+      const local = captureLocal(database);
+      const remote = captureLocal(database, undefined, output => JSON.stringify(JSON.parse(output).map(entry => ({
+        ...entry, errors: [], meta: {duration: 0.25, rows_read: 1, rows_written: 0, served_by: 'private-provider'},
+      }))));
+      expect(compareCaptured(local, remote).verdict).toBe('pass');
+      expect(JSON.stringify(remote)).not.toContain('private-provider');
+    } finally { database.close(); }
+  });
+  it.each(families.flatMap(([family, matches]) => corruptions.map(([label, corrupt]) => [family, label, matches, corrupt])))
+  ("rejects %s %s before capture/comparison can pass", (_family, _label, matches, corrupt) => {
+    const database = retiredFixtureDatabase();
+    try {
+      const before = captureLocal(database);
+      let reached = false;
+      let report;
+      expect(() => {
+        const after = captureLocal(database, undefined, (output, sql) => {
+          if (!matches(sql)) return output;
+          reached = true;
+          const entries = JSON.parse(output);
+          corrupt(entries);
+          return JSON.stringify(entries);
+        });
+        report = compareCaptured(before, after);
+      }).toThrow(/result|envelope/i);
+      expect(reached).toBe(true);
+      expect(report).toBeUndefined();
+      try { captureLocal(database, undefined, (output, sql) => {
+        if (!matches(sql)) return output;
+        const entries = JSON.parse(output); corrupt(entries); return JSON.stringify(entries);
+      }); } catch (error) { expect(error.message).not.toMatch(/private-provider|owner150-/); }
+    } finally { database.close(); }
+  });
+});
+
+describe("raw source 0024 compatibility evidence", () => {
+  it.each([["templates", "items"], ["checklist_runs", "items"], ["checklist_runs", "retired_items"]])
+  ("preserves exact BLOB JSON bytes and storage in %s.%s", (table, column) => {
+    const database = retiredFixtureDatabase();
+    try {
+      for (const deleted of [false, true]) {
+        database.exec(`UPDATE ${table} SET deleted_at=${deleted ? "'2026-01-02'" : "NULL"}`);
+        const write = value => database.prepare(`UPDATE ${table} SET ${column}=?`).run(value);
+        const raw = '[{"note":"private-one"}]';
+        write(Buffer.from(raw));
+        const before = captureLocal(database);
+        const changes = database.prepare('SELECT total_changes() AS n').get();
+        expect(compareCaptured(before, captureLocal(database)).verdict).toBe("pass");
+        expect(database.prepare('SELECT total_changes() AS n').get()).toEqual(changes);
+        for (const value of [Buffer.from(raw.replace('one', 'two')), Buffer.from(raw + ' '), raw]) {
+          write(value);
+          const after = captureLocal(database);
+          expect(after.invariants).toEqual(before.invariants);
+          expect(compareCaptured(before, after).verdict).toBe("fail");
+          expect(JSON.stringify({before, after})).not.toMatch(/private-|owner150-|70726976617465/);
+        }
+      }
+    } finally { database.close(); }
+  });
+
+  it("does not collapse distinct SQLite REAL values during row serialization", () => {
+    const database = retiredFixtureDatabase();
+    try {
+      database.exec("UPDATE checklist_runs SET progress=1.0000000000000002");
+      const before = captureLocal(database);
+      database.exec("UPDATE checklist_runs SET progress=1.0000000000000004");
+      const after = captureLocal(database);
+      expect(after.invariants).toEqual(before.invariants);
+      expect(compareCaptured(before, after).verdict).toBe("fail");
+    } finally { database.close(); }
+  });
+
+  it("preserves SQL NULL and literal text null through the pinned local transport representation", () => {
+    const database = retiredFixtureDatabase();
+    try {
+      database.exec("UPDATE templates SET description=NULL");
+      const before = captureLocal(database);
+      expect(compareCaptured(before, captureLocal(database)).verdict).toBe("pass");
+      database.exec("UPDATE templates SET description='null'");
+      const after = captureLocal(database);
+      expect(after.invariants).toEqual(before.invariants);
+      expect(compareCaptured(before, after).verdict).toBe("fail");
+    } finally { database.close(); }
+  });
+
+  it("captures a standalone SQL-NULL-linked run across the immutable migration using typed rows", () => {
+    const through = "0023_add_sitemap_revision_state.sql";
+    const database = retiredFixtureDatabase(through);
+    try {
+      database.exec("UPDATE checklist_runs SET template_id=NULL");
+      const pre = captureLocal(database, through);
+      expect(pre.domain.runs[0].hasTemplate).toBe(false);
+      database.exec(listMigrationFiles().find(({name}) => name === evolutionMigration).sql);
+      const post = captureLocal(database);
+      expect(post.domain.runs[0].templateVersion).toBe(1);
+      expect(compareCaptured(pre, post).verdict).toBe("pass");
+    } finally { database.close(); }
+  });
+
+  it.each(['{"id":1,"id":2}', 'null', '{"id":"private"}', '{"private":1e-400}'])
+  ("rejects malformed typed row evidence without falling back to raw cells: %s", encoded => {
+    const database = retiredFixtureDatabase();
+    try {
+      expect(() => captureLocal(database, undefined, (output, sql) => {
+        if (!sql.endsWith('AS typed_row FROM "templates" ORDER BY "id"')) return output;
+        const parsed = JSON.parse(output);
+        parsed[0].results[0].typed_row = encoded;
+        return JSON.stringify(parsed);
+      })).toThrow(/typed source row|transport evidence/i);
+    } finally { database.close(); }
+  });
+
+  it.each([['real','1e-400'], ['real','-1e-400'], ['real','1e400'], ['null','null'], ['integer','0'], ['text',null], ['blob','NOT_HEX']])
+  ("rejects invalid SQLite typed cells %s %s before evidence", (type, value) => {
+    const database = retiredFixtureDatabase();
+    try {
+      expect(() => captureLocal(database, undefined, (output, sql) => {
+        if (!sql.endsWith('AS typed_row FROM "checklist_runs" ORDER BY "id"')) return output;
+        const response = JSON.parse(output);
+        const row = JSON.parse(response[0].results[0].typed_row);
+        row.progress = [type, value];
+        response[0].results[0].typed_row = JSON.stringify(row);
+        return JSON.stringify(response);
+      })).toThrow(/typed source row value/i);
+    } finally { database.close(); }
+  });
+
+  it("preserves BLOB versus text SQLite storage types in projected content", () => {
+    const database = retiredFixtureDatabase();
+    try {
+      database.exec("UPDATE templates SET description='null'");
+      const before = captureLocal(database);
+      database.exec("UPDATE templates SET description=x'6e756c6c'");
+      const after = captureLocal(database);
+      expect(after.invariants).toEqual(before.invariants);
+      expect(compareCaptured(before, after).verdict).toBe("fail");
+    } finally { database.close(); }
+  });
+
+  it.each(["templates", "checklist_runs"].flatMap(table => ["omitted", "truncated", "duplicate", "replaced", "owner", "deletion", "owner-omitted", "owner-duplicate", "owner-replaced"].map(kind => [table, kind])))
+  ("rejects incomplete or inconsistent %s source rows: %s", (table, kind) => {
+    for (const through of [undefined, "0023_add_sitemap_revision_state.sql"]) {
+      const database = retiredFixtureDatabase(through);
+      try {
+        if (table === "templates") database.exec("INSERT INTO templates(id,user_id,title,items,created_at) SELECT 'private-second',user_id,title,items,created_at FROM templates");
+        else database.exec("INSERT INTO checklist_runs(id,user_id,title,items,started_at,created_at) SELECT 'private-second',user_id,title,items,started_at,created_at FROM checklist_runs");
+        expect(compareCaptured(captureLocal(database, through), captureLocal(database, through)).verdict).toBe("pass");
+        let snapshot;
+        expect(() => {
+          snapshot = captureLocal(database, through, (output, sql) => {
+            const response = JSON.parse(output);
+            if (kind.startsWith("owner-") && sql.includes("SELECT 'template' kind")) {
+              const target = table === "templates" ? "template" : "run";
+              const rows = response[0].results;
+              const index = rows.findIndex(row => row.kind === target);
+              if (kind === "owner-omitted") rows.splice(index, 1);
+              if (kind === "owner-duplicate") rows[index + 1] = rows[index];
+              if (kind === "owner-replaced") rows[index].id = "private-replaced";
+            } else if (sql.endsWith(`AS typed_row FROM "${table}" ORDER BY "id"`)) {
+              const rows = response[0].results;
+              if (kind === "omitted") response[0].results = [];
+              if (kind === "truncated") rows.pop();
+              if (kind === "duplicate") rows[1] = rows[0];
+              if (["replaced", "owner", "deletion"].includes(kind)) {
+                const row = JSON.parse(rows[1].typed_row);
+                if (kind === "replaced") row.id = ["text", "private-replaced"];
+                if (kind === "owner") row.user_id = ["text", "private-replaced"];
+                if (kind === "deletion") row.deleted_at = ["text", "2026-01-02"];
+                rows[1].typed_row = JSON.stringify(row);
+              }
+            }
+            return JSON.stringify(response);
+          });
+        }).toThrow(/source row/i);
+        expect(snapshot).toBeUndefined();
+      } finally { database.close(); }
+    }
+  });
+
+  const through = "0023_add_sitemap_revision_state.sql";
+  it.each(["templates", "checklist_runs"])("blocks immutable migration collisions in every raw %s row", (table) => {
+    const database = retiredFixtureDatabase(through);
+    try {
+      const raw = '[{"id":"private-section","items":[{"id":"legacy-item-1-2","title":"Private existing"},{"title":"Private missing"}]}]';
+      if (table === "templates") database.prepare("INSERT INTO templates(id,user_id,title,items,created_at) VALUES ('private-last','owner150-user','Private',?,'2026-01-01')").run(raw);
+      else database.prepare("INSERT INTO checklist_runs(id,user_id,title,items,started_at,created_at) VALUES ('private-last','owner150-user','Private',?,'2026-01-01','2026-01-01')").run(raw);
+      const before = database.prepare("SELECT total_changes() AS n").get();
+      expect(() => captureLocal(database, through)).toThrow("Production-shaped source is incompatible with immutable 0024 (GENERATED_ID_COLLISION).");
+      expect(database.prepare("SELECT total_changes() AS n").get()).toEqual(before);
+      expect(database.prepare(`SELECT items FROM ${table} WHERE id='private-last'`).get().items).toBe(raw);
+      database.exec(listMigrationFiles().find(({ name }) => name === evolutionMigration).sql);
+      const migrated = JSON.parse(database.prepare(`SELECT items FROM ${table} WHERE id='private-last'`).get().items);
+      expect(migrated[0].items.map(item => item.id)).toEqual(["legacy-item-1-2", "legacy-item-1-2"]);
+    } finally { database.close(); }
+  });
+
+  it("attests all rows and accepts opaque content IDs across actual 0024 migration and recovery comparisons", () => {
+    const database = retiredFixtureDatabase(through);
+    try {
+      const raw = '[{"id":"section","items":[{"id":"item-one","contents":[{"id":"opaque","type":"text","text":"Private one"}]},{"id":"item-two","contents":[{"id":"opaque","type":"text","text":"Private two"}],"extension":{"id":"opaque"}}]}]';
+      for (const table of ["templates", "checklist_runs"]) database.prepare(`UPDATE ${table} SET items=?`).run(raw);
+      const pre = captureLocal(database, through);
+      expect(pre.pre0024Compatibility).toEqual({ migration: evolutionMigration, verdict: "pass", templateCount: 1, runCount: 1, domainDigest: pre.domain.digest });
+      expect(compareCaptured(pre, captureLocal(database, through)).verdict).toBe("pass");
+      database.exec(listMigrationFiles().find(({ name }) => name === evolutionMigration).sql);
+      const post = captureLocal(database);
+      expect(compareCaptured(pre, post).verdict).toBe("pass");
+      expect(compareCaptured(post, captureLocal(database)).verdict).toBe("pass");
+      expect(post.pre0024Compatibility).toBeNull();
+      expect(JSON.stringify({ pre, post })).not.toMatch(/Private|opaque|owner150-/);
+    } finally { database.close(); }
+  });
+});
+
+describe("complete foreign-key production invariants", () => {
+  it.each(['"total_rows":1e-400', '"total_rows":-1e-400', '"total_rows":1,"total_rows":0'])
+  ("rejects raw transport corruption before normalization: %s", (fields) => {
+    const database = retiredFixtureDatabase();
+    try {
+      let snapshot;
+      expect(() => {
+        snapshot = captureLocal(database, undefined, (output, sql) => sql.includes('pragma_foreign_key_check')
+          ? output.replace('"total_rows":0', fields) : output);
+      }).toThrow(/invariant|duplicate/i);
+      expect(snapshot).toBeUndefined();
+    } finally { database.close(); }
+  });
+
+  it("requires typed zero foreign-key evidence on both sides of migration and restore comparisons", () => {
+    const database = retiredFixtureDatabase();
+    try {
+      const healthy = captureLocal(database);
+      expect(compareCaptured(healthy, healthy).verdict).toBe("pass");
+      for (const value of [undefined, null, false, "0", {}, [], NaN, Infinity, -1, 0.5, 1]) {
+        const changed = structuredClone(healthy);
+        if (value === undefined) delete changed.invariants.foreign_key_violations;
+        else changed.invariants.foreign_key_violations = value;
+        for (const [pre, post] of [[healthy, changed], [changed, healthy], [changed, changed]]) {
+          expect(compareCaptured(pre, post).verdict).toBe("fail");
+        }
+      }
+      for (const value of [undefined, null, false, "0", {}, [], -1, 0.5, 1e100]) {
+        const rows = [{ invariant: "users", total_rows: 1 }];
+        if (value !== undefined) rows.push({ invariant: "foreign_key_violations", total_rows: value });
+        expect(() => parseInvariantOutput(JSON.stringify([{ success: true, meta: { duration: 0 }, results: rows }]))).toThrow(/foreign.key/i);
+      }
+      expect(() => parseInvariantOutput(JSON.stringify([{ success: true, meta: { duration: 0 }, results: [
+        { invariant: "foreign_key_violations", total_rows: 1 },
+        { invariant: "foreign_key_violations", total_rows: 0 },
+      ] }]))).toThrow(/foreign.key/i);
+    } finally { database.close(); }
+  });
+
+  it.each(["history author", "run template"])("blocks existing and newly introduced dangling %s references", (relation) => {
+    const database = retiredFixtureDatabase();
+    try {
+      const healthy = captureLocal(database);
+      expect(compareCaptured(healthy, healthy).verdict).toBe("pass");
+      database.exec("PRAGMA foreign_keys = OFF");
+      if (relation === "history author") database.exec(`
+        INSERT INTO template_versions (id,template_id,version,changed_by_user_id,subject_type,subject_id,snapshot_json,created_at)
+        VALUES ('private-history','owner150-template',1,'private-missing-user','template','owner150-template','{}','2026-01-01');
+      `);
+      else database.exec("UPDATE checklist_runs SET template_id = 'private-missing-template'");
+      for (const before of [healthy, undefined]) {
+        let report;
+        expect(() => {
+          const captured = captureLocal(database);
+          report = compareCaptured(before ?? captured, captured);
+        }).toThrow(/foreign.key/i);
+        expect(report).toBeUndefined();
+      }
+      expect(healthy.invariants.foreign_key_violations).toBe(0);
+      expect(JSON.stringify(healthy)).not.toMatch(/private-|owner150-/);
+    } finally { database.close(); }
+  });
+});
+
 describe("unambiguous JSON production invariants", () => {
+  it.each([["templates", "items"], ["checklist_runs", "items"], ["checklist_runs", "retired_items"]])(
+    "preserves mathematically equivalent numeric notation in %s %s", (table, column) => {
+      const database = retiredFixtureDatabase();
+      try {
+        for (const [canonical, tokens] of [
+          ["1", ["1.0", "1e0", "10e-1", "0.1e1"]],
+          ["0.5", ["5e-1", "0.50", "50E-2"]],
+          ["-12.5", ["-125e-1", "-12.5000"]],
+          ["0", ["0.0", "0e999999999999999999999"]],
+        ]) {
+          const document = (token) => column === "items"
+            ? `[{"id":"private-section","items":[{"id":${token},"fileSize":${token}}]}]`
+            : `[{"kind":"item","sectionId":"private-section","item":{"id":${token},"fileSize":${token}}}]`;
+          database.prepare(`UPDATE ${table} SET ${column} = ?`).run(document(canonical));
+          const pre = captureLocal(database);
+          for (const token of tokens) {
+            database.prepare(`UPDATE ${table} SET ${column} = ?`).run(document(token));
+            const post = captureLocal(database);
+            expect(compareCaptured(post, captureLocal(database)).verdict).toBe("pass");
+            expect(compareCaptured(pre, post).verdict).toBe("pass");
+            expect(post.domain.digest).toBe(pre.domain.digest);
+            expect(JSON.stringify({ pre, post })).not.toMatch(/private-|owner150-/);
+          }
+        }
+      } finally { database.close(); }
+    },
+  );
   const pathCases = [
     ["literal dot", (section) => { section["a.b"] = { id: "private-one" }; section.a = { b: { id: "private-two" } }; }],
     ["literal bracket", (section) => { section["a[0]"] = { id: "private-one" }; section.a = [{ id: "private-two" }]; }],
@@ -290,8 +627,6 @@ describe("retired identity production invariants", () => {
     ["overflow", "sectionId", "1e400"],
     ["underflow", "subItem", "1e-400"],
     ["negative zero", "content", "-0"],
-    ["noncanonical decimal spelling", "item", "1.0"],
-    ["noncanonical exponent spelling", "itemId", "1e0"],
   ])("fails capture without private diagnostics for unsupported %s", (_label, location, token) => {
     const database = retiredFixtureDatabase();
     try {
@@ -444,9 +779,18 @@ describe("retired identity production invariants", () => {
 });
 
 describe("ledger-aware invariant capture", () => {
+  it('rejects a remote import summary instead of count rows before capturing source content', () => {
+    const database = retiredFixtureDatabase();
+    try {
+      expect(() => captureLocal(database, undefined, (output, sql) => sql.includes(' AS invariant')
+        ? JSON.stringify([{ success: true, meta: { duration: 0 }, finalBookmark: 'fixture-bookmark',
+          results: [{ 'Total queries executed': 1, 'Rows read': 0, 'Rows written': 0, 'Database size (MB)': '0.00' }] }])
+        : output)).toThrow(/Foreign-key violation count/);
+    } finally { database.close(); }
+  });
   it("runs the baseline invariants on an exact 0023 database without selecting 0024 columns", () => {
     const appliedMigrations = parseAppliedMigrationLedger(JSON.stringify([
-      { results: ledgerRows("0023_add_sitemap_revision_state.sql") },
+      { success: true, meta: { duration: 0 }, results: ledgerRows("0023_add_sitemap_revision_state.sql") },
     ]));
     const files = selectInvariantSqlFiles({ appliedMigrations });
     const database = replayMigrations({ through: "0023_add_sitemap_revision_state.sql" });
@@ -463,7 +807,7 @@ describe("ledger-aware invariant capture", () => {
   it("adds content/template/revision/retired-item invariants only after 0024 is applied", () => {
     const appliedMigrations = parseAppliedMigrationLedger(JSON.stringify([
       {
-        results: ledgerRows("0023_add_sitemap_revision_state.sql", "0024_safe_template_evolution.sql"),
+        success: true, meta: { duration: 0 }, results: ledgerRows("0023_add_sitemap_revision_state.sql", "0024_safe_template_evolution.sql"),
       },
     ]));
     const files = selectInvariantSqlFiles({ appliedMigrations });
@@ -489,18 +833,18 @@ describe("ledger-aware invariant capture", () => {
     for (const output of [
       "",
       "[]",
-      JSON.stringify([{ results: [{}] }]),
-      JSON.stringify([{ results: ledgerRows("0023_add_sitemap_revision_state.sql", "not-a-migration") }]),
-      JSON.stringify([{ results: ledgerRows("0023_add_sitemap_revision_state.sql", "0023_add_sitemap_revision_state.sql") }]),
-      JSON.stringify([{ results: ledgerRows("0024_safe_template_evolution.sql", "0023_add_sitemap_revision_state.sql") }]),
-      JSON.stringify([{ results: [{ id: 2, name: "0023_add_sitemap_revision_state.sql" }, { id: 1, name: "0024_safe_template_evolution.sql" }] }]),
+      JSON.stringify([{ success: true, meta: { duration: 0 }, results: [{}] }]),
+      JSON.stringify([{ success: true, meta: { duration: 0 }, results: ledgerRows("0023_add_sitemap_revision_state.sql", "not-a-migration") }]),
+      JSON.stringify([{ success: true, meta: { duration: 0 }, results: ledgerRows("0023_add_sitemap_revision_state.sql", "0023_add_sitemap_revision_state.sql") }]),
+      JSON.stringify([{ success: true, meta: { duration: 0 }, results: ledgerRows("0024_safe_template_evolution.sql", "0023_add_sitemap_revision_state.sql") }]),
+      JSON.stringify([{ success: true, meta: { duration: 0 }, results: [{ id: 2, name: "0023_add_sitemap_revision_state.sql" }, { id: 1, name: "0024_safe_template_evolution.sql" }] }]),
     ]) {
       expect(() => parseAppliedMigrationLedger(output)).toThrow(/ledger/i);
     }
   });
 
   it("allows an explicitly expected empty ledger only for a first-migration rehearsal baseline", () => {
-    const empty = JSON.stringify([{ results: [] }]);
+    const empty = JSON.stringify([{ success: true, meta: { duration: 0 }, results: [] }]);
     expect(parseAppliedMigrationLedger(empty, { allowEmpty: true })).toEqual([]);
     expect(() => parseAppliedMigrationLedger(empty)).toThrow(/ledger/i);
   });
@@ -515,28 +859,22 @@ describe("ledger-aware invariant capture", () => {
 
   it("centralizes ledger-aware remote capture and privacy-safe ownership digest", () => {
     const calls = [];
+    const database = retiredFixtureDatabase();
+    try {
     const snapshot = captureRemoteInvariantSnapshot({
       database: "rehearsal-db",
       key: "protected-invariant-key-1234567890",
       runWrangler: (args) => {
         calls.push(args);
-        const command = args[args.indexOf("--command") + 1];
-        const file = args[args.indexOf("--file") + 1];
+        const command = args.find(arg => arg.startsWith('--command='))?.slice('--command='.length)
+          ?? (args.includes("--command") ? args[args.indexOf("--command") + 1] : null);
         if (command === "SELECT id, name FROM d1_migrations ORDER BY id") {
-          return JSON.stringify([{ results: ledgerRows("0023_add_sitemap_revision_state.sql", "0024_safe_template_evolution.sql") }]);
+          return JSON.stringify([{ success: true, meta: { duration: 0 }, results: ledgerRows(...listMigrationFiles().map(({ name }) => name)) }]);
         }
-        if (command?.includes("SELECT 'template'")) {
-          return JSON.stringify([{ results: [{ kind: "template", id: "t1", user_id: "u1", deleted_state: "active" }] }]);
-        }
-        if (command === "SELECT * FROM templates ORDER BY id") {
-          return JSON.stringify([{ results: [{ id: "t1", user_id: "u1", items: "[]", version: 2, content_version: 2 }] }]);
-        }
-        if (command === "SELECT * FROM checklist_runs ORDER BY id") {
-          return JSON.stringify([{ results: [{ id: "r1", user_id: "u1", template_id: "t1", items: "[]", template_version: 2, revision: 1, retired_items: "[]" }] }]);
-        }
-        const sql = readFileSync(file, "utf8");
-        const names = sql.match(/'([a-z_]+)'\s+AS invariant/g)?.map((match) => match.match(/'([^']+)'/)[1]) ?? [];
-        return JSON.stringify([{ results: names.map((invariant) => ({ invariant, total_rows: 0 })) }]);
+        const sql = command ?? readFileSync(args[args.indexOf("--file") + 1], "utf8");
+        return JSON.stringify(sql.split(";").map(part => part.replace(/^\s*--.*$/gm, "").trim()).filter(Boolean)
+          .map(statement => ({ success: true, meta: { duration: 0 }, results: database.prepare(statement).all().map(row =>
+            Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value === null ? "null" : value]))) })));
       },
     });
 
@@ -544,8 +882,12 @@ describe("ledger-aware invariant capture", () => {
     expect(snapshot.sqlVersions).toEqual(["0001_initial_schema.sql", "0024_safe_template_evolution.sql"]);
     expect(snapshot.invariants.ownershipDigest).toMatch(/^[0-9a-f]{64}$/);
     expect(snapshot.domain.digest).toMatch(/^[0-9a-f]{64}$/);
-    expect(JSON.stringify(snapshot.domain)).not.toContain("u1");
-    expect(calls.filter((args) => args.includes("--file"))).toHaveLength(2);
+    expect(JSON.stringify(snapshot.domain)).not.toContain("owner150-");
+    expect(calls.some((args) => args.includes("--file"))).toBe(false);
+    for (const { path } of selectInvariantSqlFiles({ appliedMigrations: snapshot.appliedMigrations })) {
+      expect(calls.some(args => args.includes(`--command=${readFileSync(path, 'utf8')}`))).toBe(true);
+    }
+    } finally { database.close(); }
   });
 
   it("proves per-row notes, progress, lifecycle, snapshots, and reviewed 0024 version transitions", () => {

@@ -37,11 +37,21 @@ describe("data operation plans", () => {
       migrationRange: { latest: "0024_safe_template_evolution.sql" },
     });
     expect(plan.command).toContain("--preview");
+    expect(plan.command.some(arg => arg.startsWith('--command='))).toBe(true);
+    expect(plan.command).not.toContain("--file");
     expect(plan.invariantLedgerCommand).toEqual(expect.arrayContaining([
-      "--command",
-      "SELECT id, name FROM d1_migrations ORDER BY id",
+      "--command=SELECT id, name FROM d1_migrations ORDER BY id",
     ]));
     expect(plan.versionedInvariantCommands).toHaveLength(1);
+  });
+
+  it('preserves local file execution and persistence for both invariant SQL versions', () => {
+    const plan = buildDataOperationPlan({ operation: 'invariant-capture', identity: identity('local'), repoRoot,
+      gitCommit: '0123456789abcdef', persistTo: '.wrangler/rehearsals/issue152' });
+    for (const command of [plan.command, ...plan.versionedInvariantCommands.map(entry => entry.command)]) {
+      expect(command).toEqual(expect.arrayContaining(['--local', '--file', '--persist-to', path.join(repoRoot, '.wrangler/rehearsals/issue152')]));
+      expect(command).not.toContain('--command');
+    }
   });
 
   it("provides a ledger command for each environment before promotion", () => {

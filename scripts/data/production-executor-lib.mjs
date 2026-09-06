@@ -8,6 +8,7 @@ import { evaluateInvariantLedgerTransition } from "./remote-invariant-evidence-l
 import { assertRecoveryApproval, assertRecoveryFreshness, assertRepositoryAppliedPrefix, digest, repositoryMigrationHistory } from "./production-preparation-lib.mjs";
 import { wrapCanarySubprocessFailure } from './canary-diagnostics.mjs';
 import { assertSourceSchemaProof } from './source-schema-proof.mjs';
+import { assertInvariantSafetySummary, assertInvariantSummaryTransition } from './invariant-capture-lib.mjs';
 export {
   compareProductionInvariants,
   parseInvariantOutput,
@@ -542,6 +543,7 @@ export function runProductionDataPhase({ request, commit, database, pendingMigra
   assertApprovalMatchesRequest({ approval, request });
   if (digest(preparation) !== receipt.preparationSha256) throw new Error('Production preparation does not match the approved receipt.');
   assertRecoveryFreshness(preparation, clock);
+  assertInvariantSafetySummary({ step: "pre-invariants", summary: preparation.results?.['pre-invariants']?.summary, pendingMigrations });
   assertRepositoryAppliedPrefix({ ...preparation.results['pre-invariants'].summary, pendingMigrations });
   assertSourceSchemaProof(preparation.results['source-schema']?.summary, { ...preparation.results['pre-invariants'].summary, commit, database, pendingMigrations });
   const steps = [
@@ -554,6 +556,8 @@ export function runProductionDataPhase({ request, commit, database, pendingMigra
     let result;
     try { result = run(step); } catch (error) { throw wrapCanarySubprocessFailure(`production-${step}`, error); }
     if (result?.verdict !== "pass") throw new Error(`Production ${step} gate failed.`);
+    if (["pre-invariants", "post-invariants"].includes(step)) assertInvariantSafetySummary({ step, summary: result.summary, pendingMigrations });
+    if (step === "post-invariants") assertInvariantSummaryTransition({ pre: results['pre-invariants'].summary, post: result.summary });
     if (["identity", "reviewed-pending-range"].includes(step) && JSON.stringify(result.summary) !== JSON.stringify(preparation.results[step].summary)) throw new Error(`Production ${step} changed after recovery preparation.`);
     if (step === "pre-invariants" && result.summary?.ledgerSha256 !== preparation.results[step].summary?.ledgerSha256) throw new Error("Production ledger changed after recovery preparation; fresh preparation and approval required.");
     if (step === 'pre-invariants') assertRepositoryAppliedPrefix({ ...result.summary, pendingMigrations });
@@ -607,6 +611,7 @@ function assertProductionStepSummary({ step, summary, payload }) {
           summary.from !== payload.migrationRange.from || summary.to !== payload.migrationRange.to) throw new Error("Signed production pending-range summary does not match the reviewed request.");
       break;
     case "pre-invariants":
+      assertInvariantSafetySummary({ step, summary, pendingMigrations: payload.pendingMigrations });
       if (!Number.isInteger(summary.invariantCount) || summary.invariantCount <= 0 || !summary.appliedThrough || !hasSha256(summary.ledgerSha256) || !hasSha256(summary.domainDigest)) throw new Error("Signed production pre-invariant ledger summary is incomplete.");
       break;
     case "migration-apply":
@@ -619,6 +624,7 @@ function assertProductionStepSummary({ step, summary, payload }) {
       if (summary.verdict !== "pass" || !summary.appliedThrough || !hasSha256(summary.schemaDigest)) throw new Error("Signed production schema-contract summary is incomplete.");
       break;
     case "post-invariants":
+      assertInvariantSafetySummary({ step, summary, pendingMigrations: payload.pendingMigrations });
       if (!Number.isInteger(summary.invariantCount) || summary.invariantCount <= 0 || summary.failureCount !== 0 || !hasSha256(summary.preDomainDigest) || !hasSha256(summary.postDomainDigest)) throw new Error("Signed production post-invariant summary is incomplete or failed.");
       break;
     default:
@@ -649,6 +655,7 @@ export function assertDeployEvidence({ signedEvidence, commit, database, request
     }
   }
   if (payload.approval?.environment !== "production" || payload.approval?.source !== "github-environment-review" || typeof payload.approval?.approver !== "string" || !payload.approval.approver || !Array.isArray(payload.approval.changeAuthors) || !payload.approval.changeAuthors.length) throw new Error("Signed production evidence lacks validated independent approval.");
+  assertInvariantSummaryTransition({ pre: payload.results['pre-invariants'].summary, post: payload.results['post-invariants'].summary });
   assertRecoveryApproval({ approval: payload.approval, receipt: payload.recovery });
   if (payload.recovery.requestSha256 !== digest(request)) throw new Error("Signed production recovery does not bind this exact request.");
   if (payload.classification !== request.classification || JSON.stringify(payload.pendingMigrations) !== JSON.stringify(request.pendingMigrations) || !migrationRangesEqual(payload.migrationRange, request.migrationRange)) throw new Error("Signed production classification or pending migrations do not match the reviewed request.");

@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { runRepositoryGit, sanitizedGitEnvironment } from "./git-subprocess-env.mjs";
 import { runProductionIdentityBoundCommand } from "./production-identity-bound-command-lib.mjs";
 import { safeCanaryFailure, wrapCanarySubprocessFailure } from "./canary-diagnostics.mjs";
+import { resolveDirectCheckIdentity, validateDirectCheckObservation } from './environment-identity-lib.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const childEnv = sanitizedGitEnvironment();
@@ -25,6 +26,7 @@ function readArg(name) {
 
 const database = readArg("--database") ?? "unknown";
 const environment = readArg("--label") ?? "unknown";
+const binding = readArg('--binding') ?? 'DB';
 const local = process.argv.includes("--local");
 const remote = process.argv.includes("--remote");
 const preview = process.argv.includes("--preview");
@@ -44,21 +46,25 @@ let resolvedIdentity = null;
 let stage = "pending-migrations-configuration";
 
 try {
-  if (database === "unknown" || environment === "unknown" || local === remote) {
+  const valueOptions = ['--database', '--label', '--binding', '--database-id', '--report-dir', '--persist-to'];
+  const missingValue = process.argv.some((argument, index) => valueOptions.some(option =>
+    argument === `${option}=` || (argument === option && (!process.argv[index + 1] || process.argv[index + 1].startsWith('--')))));
+  if (missingValue || database === "unknown" || environment === "unknown" || local === remote) {
     throw new Error("Usage: check-pending-migrations --database NAME --label ENV (--local | --remote) [--preview] [--persist-to PATH]");
   }
   const assertedDatabaseId = readArg("--database-id") ?? process.env.D1_DATABASE_ID;
+  const expectedIdentity = resolveDirectCheckIdentity({ repoRoot, environment, binding, databaseName: database, databaseId: assertedDatabaseId, local, remote, preview, persistTo });
   if (environment === "production" && remote && !assertedDatabaseId) throw new Error("Production migration verification requires the exact allowlisted database UUID.");
   const d1Arguments = ["d1", "migrations", "list", database, local ? "--local" : "--remote"];
-  if (preview) d1Arguments.push("--preview");
+  // Preview uses the exact inventory staging name, without Wrangler redirection.
   if (persistTo) d1Arguments.push("--persist-to", persistTo);
   stage = "pending-migrations-identity";
   resolvedIdentity = local
-    ? { databaseId: `local:${database}`, databaseName: database }
-    : resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
+    ? { databaseId: expectedIdentity.databaseId, databaseName: expectedIdentity.databaseName }
+    : validateDirectCheckObservation({ expected: expectedIdentity, observed: resolveRemoteD1Identity(database, { repoRoot, env: childEnv }) });
   const assertAdjacentIdentity = () => {
     if (local) return;
-    const adjacent = resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
+    const adjacent = validateDirectCheckObservation({ expected: expectedIdentity, observed: resolveRemoteD1Identity(database, { repoRoot, env: childEnv }) });
     if (adjacent.databaseId !== resolvedIdentity.databaseId || adjacent.databaseName !== resolvedIdentity.databaseName) throw new Error("D1 identity changed during migration-list verification.");
   };
   const runWrangler = (args) => {
@@ -99,28 +105,33 @@ try {
     pendingMigrations: parsePendingMigrationNames(output, migrationFiles),
   });
   report.identityChecks = identityChecks;
-  const summary = renderPendingMigrationSummary(report);
+  Object.assign(report.target, { binding, databaseName: resolvedIdentity.databaseName });
+  const summary = `${renderPendingMigrationSummary(report)}\nBinding: ${binding}.`;
   const paths = writeDataCheckReports({ name: `pending-migrations-${environment}`, report, summary, reportDirectory });
   console.log(summary);
   console.log(`Reports: ${paths.text}, ${paths.json}, ${paths.junit}`);
   if (report.verdict === "fail") process.exitCode = 1;
 } catch (error) {
   const failure = safeCanaryFailure(stage, error);
+  const safeEnvironment = ['local', 'staging', 'rehearsal', 'production'].includes(environment) ? environment : 'unknown';
+  const safeDatabase = resolvedIdentity?.databaseName ?? 'unknown';
   const report = buildFailureReport({
     check: "pending-migrations",
     commit,
     error: new Error(failure.message),
     migrationFiles,
-    requestedTarget: { environment, database, mode: local ? "local" : preview ? "preview" : "remote" },
+    requestedTarget: { environment: safeEnvironment, binding: binding === 'DB' ? 'DB' : 'unknown', databaseName: safeDatabase, mode: local ? "local" : preview ? "preview" : "remote" },
     resolvedIdentity,
   });
   report.failedStage = failure.stage;
   report.errorCode = failure.code;
   report.checks = [{ name: failure.check, verdict: "fail" }];
   if (failure.exitStatus !== undefined) report.exitStatus = failure.exitStatus;
-  const summary = `BLOCKED ${environment}:${database} at ${failure.stage}: ${failure.code}. ${failure.message}`;
-  const paths = writeDataCheckReports({ name: `pending-migrations-${environment}`, report, summary, reportDirectory });
+  const summary = `BLOCKED ${safeEnvironment}:${safeDatabase} at ${failure.stage}: ${failure.code}. ${failure.message}`;
+  let paths;
+  try { paths = writeDataCheckReports({ name: `pending-migrations-${safeEnvironment}`, report, summary, reportDirectory }); }
+  catch { console.error('Pending migration failure report could not be persisted.'); }
   console.error(summary);
-  console.error(`Reports: ${paths.text}, ${paths.json}, ${paths.junit}`);
+  if (paths) console.error(`Reports: ${paths.text}, ${paths.json}, ${paths.junit}`);
   process.exitCode = 1;
 }

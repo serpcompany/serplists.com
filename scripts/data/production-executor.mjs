@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { parseExactJson } from "./strict-json-lib.mjs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
@@ -40,7 +41,7 @@ function run(command, args, env = baseChildEnv) {
 function pnpm(args) { return run(process.platform === "win32" ? "pnpm.cmd" : "pnpm", args, cloudflareChildEnv); }
 function extractBookmark(output) {
   let parsed;
-  try { parsed = JSON.parse(output); } catch { throw new Error("Production recovery bookmark output is not valid JSON."); }
+  try { parsed = parseExactJson(output); } catch { throw new Error("Production recovery bookmark output is not valid JSON."); }
   const queue = [parsed];
   while (queue.length) {
     const value = queue.shift();
@@ -77,7 +78,7 @@ const operationState = {
 };
 try {
   if (!requestPath) throw new Error("Protected executor requires --request.");
-  const requestInput = JSON.parse(readFileSync(requestPath, "utf8"));
+  const requestInput = parseExactJson(readFileSync(requestPath, "utf8"));
   const reportIdentity = validateReportIdentity({ commit: requestInput?.commit, target: { environment: 'production', binding: 'DB', databaseName: requestInput?.database?.databaseName, databaseId: requestInput?.database?.databaseId }, migrationRange: requestInput?.migrationRange });
   requestSnapshot = reportIdentity;
   const knownMigrations = repositoryMigrationHistory();
@@ -90,7 +91,7 @@ try {
   if (mode === "verify-deploy") {
     if (!evidencePath) throw new Error("Deploy verification requires --evidence.");
     const payload = assertDeployEvidence({
-      signedEvidence: JSON.parse(readFileSync(evidencePath, "utf8")),
+      signedEvidence: parseExactJson(readFileSync(evidencePath, "utf8")),
       commit: request.commit,
       database: request.database,
       request,
@@ -102,9 +103,9 @@ try {
   let approval, preparation, receipt;
   if (mode === "data") {
     if (!approvalPath || !arg("--preparation") || !arg("--encrypted-export")) throw new Error("Protected execution requires durable preparation and approval.");
-    approval = JSON.parse(readFileSync(approvalPath, "utf8"));
+    approval = parseExactJson(readFileSync(approvalPath, "utf8"));
     assertApprovalMatchesRequest({ approval, request });
-    preparation = JSON.parse(readFileSync(arg("--preparation"), "utf8"));
+    preparation = parseExactJson(readFileSync(arg("--preparation"), "utf8"));
     receipt = verifyRecoveryBundle({ request, preparation, encrypted: readFileSync(arg("--encrypted-export")), expectedDigest: arg("--preparation-digest"), artifactId: arg("--artifact-id"), context });
   }
 
@@ -186,7 +187,7 @@ try {
           preInvariantSnapshot = captureInvariants("pre");
           output = JSON.stringify(preInvariantSnapshot);
           assertRepositoryAppliedPrefix({ ...preInvariantSnapshot, pendingMigrations: request.pendingMigrations });
-          summary = { type: step, invariantCount: Object.keys(preInvariantSnapshot.invariants).length, appliedThrough: preInvariantSnapshot.appliedThrough, appliedMigrations: preInvariantSnapshot.appliedMigrations, ledgerSha256: preInvariantSnapshot.ledgerSha256, domainDigest: preInvariantSnapshot.domain.digest };
+          summary = { type: step, aggregateCounts: { templates: preInvariantSnapshot.invariants.templates, runs: preInvariantSnapshot.invariants.runs }, sourceCoverage: preInvariantSnapshot.sourceCoverage, foreignKeyViolations: preInvariantSnapshot.invariants.foreign_key_violations, pre0024Compatibility: preInvariantSnapshot.pre0024Compatibility, invariantCount: Object.keys(preInvariantSnapshot.invariants).length, appliedThrough: preInvariantSnapshot.appliedThrough, appliedMigrations: preInvariantSnapshot.appliedMigrations, ledgerSha256: preInvariantSnapshot.ledgerSha256, domainDigest: preInvariantSnapshot.domain.digest };
           break;
         case "source-schema":
           sourceSchemaProof = inspectSourceSchema({ commit: request.commit, database, pendingMigrations: request.pendingMigrations, wrapFailure: wrapCanarySubprocessFailure,
@@ -205,7 +206,7 @@ try {
           });
           if (comparison.verdict !== "pass") throw new Error(`Production invariant comparison failed: ${comparison.failures.join("; ")}`);
           output = JSON.stringify(comparison);
-          summary = { type: step, invariantCount: Object.keys(comparison.post).length, failureCount: comparison.failures.length, preDomainDigest: comparison.preDomainDigest, postDomainDigest: comparison.postDomainDigest };
+          summary = { type: step, aggregateCounts: { templates: post.invariants.templates, runs: post.invariants.runs }, sourceCoverage: post.sourceCoverage, foreignKeyViolations: post.invariants.foreign_key_violations, invariantCount: Object.keys(comparison.post).length, failureCount: comparison.failures.length, preDomainDigest: comparison.preDomainDigest, postDomainDigest: comparison.postDomainDigest };
           break;
         }
         case "migration-apply":
@@ -235,7 +236,7 @@ try {
           let schemaEvidence;
           try {
             output = pnpm(["run", "check:prod:d1-schema", "--", "--database-id", database.databaseId, "--report-dir", privateReports]);
-            schemaEvidence = JSON.parse(readFileSync(path.join(privateReports, "d1-schema-production.json"), "utf8"));
+            schemaEvidence = parseExactJson(readFileSync(path.join(privateReports, "d1-schema-production.json"), "utf8"));
           } finally { rmSync(privateReports, { recursive: true, force: true }); }
           if (schemaEvidence.verdict !== "pass" || !Array.isArray(schemaEvidence.identityChecks) || schemaEvidence.identityChecks.length === 0) throw new Error("Production schema contract evidence lacks identity-bound D1 checks.");
           for (const check of schemaEvidence.identityChecks) {

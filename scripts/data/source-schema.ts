@@ -4,6 +4,8 @@ import { digest } from './production-preparation-lib.mjs';
 import { sourceSchemaBinding } from './source-schema-proof.mjs';
 import { parseAppliedMigrationLedger } from './invariant-capture-lib.mjs';
 import { wrapCanarySubprocessFailure } from './canary-diagnostics.mjs';
+import { parseExactJson } from './strict-json-lib.mjs';
+import { validateQueryResultEnvelopes } from './d1-query-envelope.mjs';
 
 // Full definitions retain CHECK/UNIQUE/conflict clauses, generated columns,
 // collations, index expressions/order, and table options absent from PRAGMAs.
@@ -40,9 +42,10 @@ export function inspectSourceSchema({ commit, database, pendingMigrations, execu
     const binding = sourceSchemaBinding({ commit, database, pendingMigrations, appliedMigrations, ledgerSha256: digest(appliedMigrations) });
     expected = appliedMigrations.length ? replayMigrations({ through: appliedMigrations.at(-1) }) : new DatabaseSync(':memory:');
     const expectedCatalog = canonicalCatalog(expected.prepare(SOURCE_CATALOG_SQL).all());
-    const response = JSON.parse(execute(SOURCE_CATALOG_SQL));
-    if (!Array.isArray(response) || response.length !== 1 || response[0]?.success === false) throw new Error('Invalid catalog response.');
-    const actualCatalog = canonicalCatalog(response[0].results);
+    const response = parseExactJson(execute(SOURCE_CATALOG_SQL));
+    const entries = validateQueryResultEnvelopes(response, 'Source catalog');
+    if (!Array.isArray(response) || entries.length !== 1) throw new Error('Invalid catalog response.');
+    const actualCatalog = canonicalCatalog(entries[0].results);
     if (JSON.stringify(actualCatalog) !== JSON.stringify(expectedCatalog)) throw new Error('Source catalog drift.');
     const ledgerAfter = parseAppliedMigrationLedger(execute('SELECT id, name FROM d1_migrations ORDER BY id'));
     if (digest(ledgerAfter) !== binding.ledgerSha256) throw new Error('Source ledger changed.');

@@ -746,7 +746,12 @@ describe("protected staging and production data-promotion workflow", () => {
     expect(text).toContain("remote-invariant-gate.mjs compare");
     expect(text).toContain("finalize-recovery-rehearsal.mjs");
     expect(text).toMatch(/rm -f tmp\/rehearsal-sensitive\/recovery\.sql/);
-    expect(text).toMatch(/recovery-export-identity-before[\s\S]*wrangler d1 export[\s\S]*recovery-export-identity-after/);
+    expect(text).toMatch(/recovery-export-identity-before[\s\S]*data-command\.mjs rehearsal-recovery-export[\s\S]*recovery-export-identity-after/);
+    expect(text).not.toMatch(/^\s*pnpm exec wrangler d1 export/m);
+    const exportCommand = text.split('\n').find(line => line.includes('data-command.mjs rehearsal-recovery-export'));
+    for (const argument of ['--environment rehearsal', '--database-name "$DATABASE_NAME"', '--database-id "$DATABASE_ID"', '--confirm-database-id "$DATABASE_ID"', '--migration-from "$MIGRATION_FROM"', '--migration-to "$MIGRATION_TO"', '--output tmp/rehearsal-sensitive/recovery.sql', '--execute']) {
+      expect(exportCommand).toContain(argument);
+    }
     const upload = rehearsal.steps.find((step) => String(step.uses ?? "").includes("upload-artifact"));
     expect(String(upload.with.path)).not.toContain("rehearsal-sensitive");
     const cleanupSteps = rehearsal.steps.filter((step) => /always teardown .* rehearsal/i.test(String(step.name)));

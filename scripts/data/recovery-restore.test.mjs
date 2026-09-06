@@ -31,7 +31,7 @@ CREATE VIEW "probe_view" AS SELECT value FROM probe;
 -- trailing comment without newline`;
 const key = "synthetic-issue120-equality-key-12345";
 function state(db) {
-  return captureFullRecoveryState({ key, query: sql => JSON.stringify([{ success: true, results: db.prepare(sql).all() }]) });
+  return captureFullRecoveryState({ key, query: sql => JSON.stringify([{ success: true, meta: { duration: 0 }, results: db.prepare(sql).all() }]) });
 }
 function restored(sql) {
   const db = new DatabaseSync(":memory:");
@@ -40,6 +40,35 @@ function restored(sql) {
 }
 
 describe("actual-export recovery preparation", () => {
+  it.each(['catalog', 'columns', 'values', 'foreign-keys', 'integrity'])('rejects invalid %s query envelopes before recovery proof', stage => {
+    const db = syntheticSourceDatabase(new URL('../..', import.meta.url).pathname, true);
+    const matches = sql => stage === 'catalog' ? sql.includes('FROM sqlite_master')
+      : stage === 'columns' ? sql.startsWith('PRAGMA table_xinfo')
+      : stage === 'values' ? sql.startsWith('SELECT typeof(')
+      : stage === 'foreign-keys' ? sql === 'PRAGMA foreign_key_check' : sql === 'PRAGMA quick_check';
+    try {
+      for (const corrupt of [
+        entries => { entries[0].success = false; },
+        entries => { delete entries[0].success; },
+        entries => { entries[0].errors = ['PRIVATE_RECOVERY_ERROR']; },
+        entries => { entries[0].error = null; },
+        entries => { entries[0].meta = []; },
+        entries => { entries.push({ success: false, meta: {}, results: [] }); },
+        entries => { entries.push({ success: true, meta: {}, results: [] }); },
+        'duplicate',
+      ]) {
+        let poisoned = false;
+        expect(() => captureFullRecoveryState({ key, query: sql => {
+          expect(poisoned).toBe(false);
+          const entries = [{ success: true, meta: { duration: 0 }, results: db.prepare(sql).all() }];
+          if (matches(sql)) { poisoned = true; if (typeof corrupt === 'function') corrupt(entries); }
+          const output = JSON.stringify(entries);
+          return poisoned && corrupt === 'duplicate' ? output.replace('"success":true', '"success":false,"success":true') : output;
+        } })).toThrow(/Recovery/);
+        expect(poisoned).toBe(true);
+      }
+    } finally { db.close(); }
+  });
   it.each([false, true])("supports the repository's complete pre/post0024 catalog (SQLite unit coverage, current=%s)", current => {
     const source = syntheticSourceDatabase(new URL("../..", import.meta.url).pathname, current);
     let target;

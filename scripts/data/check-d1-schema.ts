@@ -22,6 +22,7 @@ import { runRepositoryGit, sanitizedGitEnvironment } from "./git-subprocess-env.
 import { runProductionIdentityBoundCommand } from "./production-identity-bound-command-lib.mjs";
 import { safeCanaryFailure, wrapCanarySubprocessFailure } from './canary-diagnostics.mjs';
 import { privacySafeLedgerProjection } from './ledger-reporting-lib.mjs';
+import { resolveDirectCheckIdentity, validateDirectCheckObservation } from './environment-identity-lib.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const childEnv = sanitizedGitEnvironment();
@@ -45,6 +46,9 @@ const database = readArg("--database") ?? "unknown";
 const environment = readArg("--label") ?? "unknown";
 const binding = readArg("--binding") ?? "DB";
 const preview = process.argv.includes("--preview");
+const local = process.argv.includes('--local');
+const remote = process.argv.includes('--remote') || !local;
+const persistTo = readArg('--persist-to');
 const reportDirectory = readArg("--report-dir") || process.env.DATA_REPORT_DIR || "tmp/data-reports";
 const migrations = (() => {
   try { return listMigrationFiles().map((migration) => migration.name); } catch { return []; }
@@ -57,15 +61,16 @@ const identityChecks: unknown[] = [];
 let stage = 'schema-configuration';
 
 try {
-  const valueOptions = ['--database', '--label', '--binding', '--database-id', '--report-dir'];
+  const valueOptions = ['--database', '--label', '--binding', '--database-id', '--report-dir', '--persist-to'];
   const missingValue = process.argv.some((argument, index) => valueOptions.some(option =>
     argument === `${option}=` || (argument === option && (!process.argv[index + 1] || process.argv[index + 1].startsWith('--')))));
   const assertedDatabaseId = readArg("--database-id") ?? process.env.D1_DATABASE_ID;
   if (missingValue || database === "unknown" || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}$/.test(database)
     || !['local', 'staging', 'rehearsal', 'production'].includes(environment) || binding !== 'DB'
-    || (assertedDatabaseId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(assertedDatabaseId))) {
+    || (assertedDatabaseId !== undefined && !(local && assertedDatabaseId === 'local:miniflare:DB') && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(assertedDatabaseId))) {
     throw new Error("Usage: check-d1-schema --database NAME --label ENV [--binding BINDING] [--preview] [--database-id ID]");
   }
+  const expectedIdentity = resolveDirectCheckIdentity({ repoRoot, environment, binding, databaseName: database, databaseId: assertedDatabaseId, local, remote, preview, persistTo });
   const runtimeContract = buildDrizzleContract(drizzleSchema);
   const migrated = replayMigrations();
   const expectedMigrationCatalog = inspectDatabase(migrated);
@@ -74,15 +79,19 @@ try {
   const expectedTableNames = [...new Set([...Object.keys(runtimeContract.tables), ...Object.keys(migrationContract.tables)])];
   if (environment === "production" && !assertedDatabaseId) throw new Error("Production schema verification requires the exact asserted database UUID.");
   stage = 'schema-identity';
-  resolvedIdentity = resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
-  if (assertedDatabaseId && assertedDatabaseId !== resolvedIdentity.databaseId) throw new Error(`Resolved database ID ${resolvedIdentity.databaseId} does not match asserted ID ${assertedDatabaseId}.`);
+  resolvedIdentity = local
+    ? { databaseName: expectedIdentity.databaseName, databaseId: expectedIdentity.databaseId }
+    : validateDirectCheckObservation({ expected: expectedIdentity, observed: resolveRemoteD1Identity(database, { repoRoot, env: childEnv }) });
   const assertAdjacentIdentity = () => {
+    if (local) return;
     stage = 'schema-identity';
-    const adjacent = resolveRemoteD1Identity(database, { repoRoot, env: childEnv });
+    const adjacent = validateDirectCheckObservation({ expected: expectedIdentity, observed: resolveRemoteD1Identity(database, { repoRoot, env: childEnv }) });
     if (adjacent.databaseId !== resolvedIdentity?.databaseId || adjacent.databaseName !== resolvedIdentity?.databaseName) throw new Error("D1 identity changed during schema verification.");
   };
-  const targetArgs = ["d1", "execute", database, "--remote"];
-  if (preview) targetArgs.push("--preview");
+  // Preview is the inventory's exact staging database. Do not let Wrangler's
+  // --preview switch redirect a verified named target to a different UUID.
+  const targetArgs = ["d1", "execute", database, local ? '--local' : '--remote'];
+  if (persistTo) targetArgs.push('--persist-to', persistTo);
   const runWrangler = (args: string[]) => {
     stage = args[1] === 'info' ? 'schema-identity' : 'schema-query';
     try { return execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "wrangler", ...args], { cwd: repoRoot, encoding: "utf8", env: childEnv, stdio: ["ignore", "pipe", "pipe"], maxBuffer: 10 * 1024 * 1024 }); }
@@ -113,8 +122,7 @@ try {
   const args = [...targetArgs];
   args.push("--json", "--command", sql);
   const output = executeRemote("schema-catalog", args);
-  const results = JSON.parse(output) as Array<{ results?: Array<Record<string, unknown>> }>;
-  const remoteCatalog = catalogFromPragmaResults(tableNames, results);
+  const remoteCatalog = catalogFromPragmaResults(tableNames, output);
   const ledgerOutput = executeRemote("schema-ledger", [...targetArgs, "--json", "--command", "SELECT id, name FROM d1_migrations ORDER BY id"]);
   const appliedMigrations = parseAppliedMigrationLedger(ledgerOutput);
   stage = 'schema-comparison';
@@ -135,7 +143,7 @@ try {
   const report = {
     check: "d1-schema-contract",
     commit,
-    target: { environment, binding, databaseName: resolvedIdentity.databaseName, databaseId, mode: preview ? "preview" : "remote" },
+    target: { environment, binding, databaseName: resolvedIdentity.databaseName, databaseId, mode: local ? 'local' : preview ? "preview" : "remote" },
     migrationRange: { from: migrations[0] ?? null, to: migrations.at(-1) ?? null },
     // Remote differences may contain SQL defaults or tenant-named objects.
     // Retain only counts on failure, never those provider-controlled values.
@@ -167,7 +175,7 @@ try {
   const assertedId = readArg('--database-id') ?? process.env.D1_DATABASE_ID;
   const safeIdentity = safeEnvironment !== 'unknown' && safeBinding !== 'unknown' && resolvedIdentity?.databaseName === database
     && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}$/.test(resolvedIdentity.databaseName)
-    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resolvedIdentity.databaseId)
+    && ((local && resolvedIdentity.databaseId === 'local:miniflare:DB') || /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resolvedIdentity.databaseId))
     && (!assertedId || assertedId === resolvedIdentity.databaseId) ? resolvedIdentity : null;
   let safeDatabaseName = safeIdentity?.databaseName ?? 'unknown';
   let safeDatabaseId = safeIdentity?.databaseId ?? 'unknown';
@@ -189,7 +197,7 @@ try {
     commit: /^[a-f0-9]{40}$/.test(commit) ? commit : 'unknown',
     error: new Error(failure.message),
     migrationFiles: migrations,
-    requestedTarget: { environment: safeEnvironment, binding: safeBinding, databaseName: safeDatabaseName, mode: preview ? "preview" : "remote" },
+    requestedTarget: { environment: safeEnvironment, binding: safeBinding, databaseName: safeDatabaseName, mode: local ? 'local' : preview ? "preview" : "remote" },
     resolvedIdentity: safeIdentity,
   });
   report.target.databaseId = safeDatabaseId;

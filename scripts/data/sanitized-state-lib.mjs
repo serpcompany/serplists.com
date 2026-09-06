@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { parseAppliedMigrationLedger, privacySafeDomainSnapshot, compareDomainSnapshots } from "./invariant-capture-lib.mjs";
 import { parseLegacySections, validRetiredChecklistContent } from '../../src/lib/schemas/legacyChecklistSchema.ts';
+import { validateQueryResultEnvelopes } from './d1-query-envelope.mjs';
+import { parseExactJson } from './strict-json-lib.mjs';
 
 const hash = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 function canonical(value) {
@@ -70,9 +72,13 @@ export function sanitizedState({ templates, runs, principals = [], teams = [], m
 
 export function captureSanitizedState({ query, sourceSha256 }) {
   const rows = (sql) => {
-    const parsed = JSON.parse(query(sql));
-    if (!Array.isArray(parsed) || parsed.length !== 1 || !Array.isArray(parsed[0]?.results)) throw new Error("Incomplete sanitized state query.");
-    return parsed[0].results;
+    const output = query(sql);
+    let parsed;
+    try { parsed = parseExactJson(output); }
+    catch { throw new Error('Sanitized state result transport evidence is missing or malformed.'); }
+    const entries = validateQueryResultEnvelopes(parsed, 'Sanitized state');
+    if (!Array.isArray(parsed) || entries.length !== 1) throw new Error("Incomplete sanitized state query.");
+    return entries[0].results;
   };
   const domainRows = (table) => {
     const columns = rows(`PRAGMA table_info(${table})`).map((row) => row.name);

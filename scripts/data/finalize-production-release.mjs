@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { parseExactJson } from "./strict-json-lib.mjs";
 import { readFileSync } from "node:fs";
 import { validateFinalProductionRelease, validatePromotionEvidence } from "./production-executor-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
@@ -8,13 +9,13 @@ import { safeCanaryFailure } from './canary-diagnostics.mjs';
 function arg(name) { const index = process.argv.indexOf(name); return index < 0 ? null : process.argv[index + 1]; }
 let identitySnapshot = { commit: 'unknown', target: { environment: 'production', binding: 'unknown', databaseName: 'unknown', databaseId: 'unknown' }, migrationRange: { from: 'invalid', to: 'invalid' } };
 try {
-  const input = JSON.parse(readFileSync(arg("--request"), "utf8"));
+  const input = parseExactJson(readFileSync(arg("--request"), "utf8"));
   const identity = validateReportIdentity({ commit: input?.commit, target: { environment: 'production', binding: 'DB', databaseName: input?.database?.databaseName, databaseId: input?.database?.databaseId }, migrationRange: input?.migrationRange });
   identitySnapshot = identity;
   const request = validatePromotionEvidence(input);
-  const signedEvidence = JSON.parse(readFileSync(arg("--evidence"), "utf8"));
-  const smoke = JSON.parse(readFileSync(arg("--smoke"), "utf8"));
-  const deploy = JSON.parse(readFileSync(arg('--deploy'), 'utf8'));
+  const signedEvidence = parseExactJson(readFileSync(arg("--evidence"), "utf8"));
+  const smoke = parseExactJson(readFileSync(arg("--smoke"), "utf8"));
+  const deploy = parseExactJson(readFileSync(arg('--deploy'), 'utf8'));
   validateReportIdentity(deploy, identity);
   validateReportIdentity(smoke, identity);
   if (deploy.verdict !== 'pass' || deploy.tree !== request.mergeContext?.tree) throw new Error('Production deployment evidence did not pass for the reviewed tree.');

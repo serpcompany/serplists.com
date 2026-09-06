@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { parseExactJson } from "./strict-json-lib.mjs";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -113,7 +114,7 @@ try {
     writeDataCheckReports({ name: "remote-invariant-capture", report: { ...evidence, migrationRange: context.expectedMigrationRange, ledger: { applied: ledgerProjection.knownMigrations, appliedThrough: ledgerProjection.appliedThrough, sha256: ledgerProjection.observedSha256, status: ledgerProjection.status, observedCount: ledgerProjection.observedCount, knownCount: ledgerProjection.knownCount, unknownCount: ledgerProjection.unknownCount } }, summary: `PASS remote invariant capture ${reportIdentitySummary({ ...context, migrationRange: context.expectedMigrationRange })}; ledger=${ledgerProjection.appliedThrough}.`, reportDirectory });
   } else {
     stage = 'invariant-state';
-    const pre = JSON.parse(readFileSync(state, "utf8"));
+    const pre = parseExactJson(readFileSync(state, "utf8"));
     validatePreInvariantEvidence({ pre, context });
     const post = capture(context.target);
     stage = 'invariant-comparison';

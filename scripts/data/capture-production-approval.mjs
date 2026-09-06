@@ -1,3 +1,4 @@
+import { parseExactJson } from "./strict-json-lib.mjs";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { validateApprovalEvidence } from "./production-executor-lib.mjs";
 import { writeDataCheckReports } from "./reporting.mjs";
@@ -5,13 +6,13 @@ import { approvalToken } from "./production-preparation-lib.mjs";
 import { safeCanaryFailure } from "./canary-diagnostics.mjs";
 function arg(name) { const i = process.argv.indexOf(name); return i < 0 ? null : process.argv[i + 1]; }
 try {
-  const provenance = JSON.parse(readFileSync(arg("--provenance"), "utf8"));
-  const recovery = JSON.parse(readFileSync(arg("--recovery-receipt"), "utf8"));
+  const provenance = parseExactJson(readFileSync(arg("--provenance"), "utf8"));
+  const recovery = parseExactJson(readFileSync(arg("--recovery-receipt"), "utf8"));
   const recoveryReceiptToken = approvalToken(recovery);
-  const reviews = JSON.parse(readFileSync(arg("--reviews"), "utf8")).filter(review => String(review.comment ?? "").includes(recoveryReceiptToken));
+  const reviews = parseExactJson(readFileSync(arg("--reviews"), "utf8")).filter(review => String(review.comment ?? "").includes(recoveryReceiptToken));
   if (reviews.some(review => String(review.state).toLowerCase() === "rejected")) throw new Error("Exact recovery request approval was denied.");
   const ownerPermission = arg("--owner-permission") && existsSync(arg("--owner-permission"))
-    ? JSON.parse(readFileSync(arg("--owner-permission"), "utf8"))
+    ? parseExactJson(readFileSync(arg("--owner-permission"), "utf8"))
     : null;
   const approval = validateApprovalEvidence({
     reviews,

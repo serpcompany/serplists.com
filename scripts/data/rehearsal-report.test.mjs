@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync, statSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -10,7 +10,8 @@ import { replayMigrations } from "./schema-contract.ts";
 import { sanitizedState } from "./sanitized-state-lib.mjs";
 import { DatabaseSync } from 'node:sqlite';
 import { captureFullRecoveryState, prepareRecoveryExport } from './recovery-restore-lib.mjs';
-import { validatePromotionEvidence } from './production-executor-lib.mjs';
+import { validatePromotionEvidence, validateGitHubRunEvidence } from './production-executor-lib.mjs';
+import { publicEvidence } from './publication-evidence-lib.mjs';
 
 const repoRoot = new URL("../..", import.meta.url).pathname;
 const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
@@ -70,7 +71,7 @@ describe("rehearsal report finalization", () => {
       const { rows: _rows, ...state } = sanitizedState({ templates: database.prepare("SELECT * FROM templates").all(), runs: database.prepare("SELECT * FROM checklist_runs").all(), principals: database.prepare('SELECT id FROM users').all(), teams: database.prepare('SELECT * FROM teams').all(), members: database.prepare('SELECT * FROM team_members').all(), ledger: readdirSync(path.join(repoRoot, "db/migrations")).filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort(), sourceSha256: artifact.manifest.artifact.sha256 });
       database.exec('CREATE TABLE d1_migrations(id INTEGER PRIMARY KEY,name TEXT NOT NULL)');
       state.ledger.forEach((name, index) => database.prepare('INSERT INTO d1_migrations VALUES(?,?)').run(index + 1, name));
-      const completeState = db => captureFullRecoveryState({ key: 'fixture-full-recovery-equality-key-0000', query: sql => JSON.stringify([{ results: db.prepare(sql).all() }]) });
+      const completeState = db => captureFullRecoveryState({ key: 'fixture-full-recovery-equality-key-0000', query: sql => JSON.stringify([{ success: true, meta: { duration: 0 }, results: db.prepare(sql).all() }]) });
       const fullBefore = completeState(database);
       const prepared = prepareRecoveryExport(exportFixtureDatabase(database));
       const restored = new DatabaseSync(':memory:');
@@ -128,7 +129,7 @@ describe("rehearsal report finalization", () => {
       const rehearsal = JSON.parse(readFileSync(files.output, 'utf8'));
       const tree = 'd'.repeat(40), stagingCommit = 'c'.repeat(40);
       const runEvidence = (head_sha, name, head_branch, workflow) => ({ id: 101, head_sha, conclusion: 'success', name, event: 'push', head_branch, path: `.github/workflows/${workflow}`, repository: { full_name: 'serpcompany/serplists.com' } });
-      expect(validatePromotionEvidence({
+      const promotionEvidence = {
         commit, classification: migration ? 'backfill' : 'additive', database: { databaseName: 'serp-checklists-db', databaseId: 'b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1' },
         pendingMigrations: migration ? [migration] : [], migrationRange: plan.migrationRange, rehearsal,
         ci: { ...source, workingTreeDirty: false },
@@ -143,9 +144,178 @@ describe("rehearsal report finalization", () => {
           data: { verdict: 'pass' }, schema: { verdict: 'pass', ledger: { verdict: 'pass' } }, invariants: { verdict: 'pass' }, deploy: { verdict: 'pass' }, teardown: { verdict: 'pass' },
           smoke: { verdict: 'pass', failures: [], controlledCanaryMutationApproved: true, canaryEvidenceDigest: 'a'.repeat(64), checks: ['template_canary_designated', 'template_write', 'template_write_readback', 'template_restore', 'run_canary_designated', 'run_write', 'run_write_readback', 'run_restore'].map(name => ({ name, verdict: 'pass' })) },
         },
-      }).rehearsal).toEqual(rehearsal);
+      };
+      expect(validatePromotionEvidence(promotionEvidence).rehearsal).toEqual(rehearsal);
       expect(JSON.parse(readFileSync(files.output, "utf8"))).toMatchObject({ commit, target: { environment: "rehearsal", databaseId: sourceId }, migrationRange: { from: migration, to: migration }, coverage: { planId: plan.id, declarationSha256: plan.declarationSha256, artifactSha256: plan.artifactSha256 }, authenticatedRehearsal: { verdict: "pass", sanitizerArtifactSha256: artifact.manifest.artifact.sha256, checks: { templateRead: true, runWriteReadback: true, falseEmptyDetection: "pass", apiErrorDetection: "pass" } }, sanitizedSource: { sanitizerVersion: "source-derived-shape-v5", accessOwner: "@devinschumacher" }, recovery: { recoveryDatabase: { id: recoveryId } } });
       for (const text of [readFileSync(files.output.replace(".json", ".md"), "utf8"), readFileSync(files.output.replace(".json", ".junit.xml"), "utf8")]) for (const value of [commit, sourceId, recoveryId, migration ?? "null", "source-derived-shape-v5"]) expect(text).toContain(value);
+
+      // Mutate raw bytes at the artifact boundary, before the real entrypoint
+      // can discard duplicate keys or round numeric evidence.
+      const sentinel = path.join(directory, 'rehearsal-promotion.json');
+      writeFileSync(sentinel, 'UNRELATED_SENTINEL');
+      for (const name of ['comparison', 'source', 'manifest', 'recovery']) {
+        const original = readFileSync(files[name], 'utf8');
+        try {
+          for (const [raw, passes] of [
+            ['"foreignKeyViolations":0.0e99,"count":1.00e2', true],
+            ['"foreignKeyViolations":1e-9999', false],
+            ['"foreignKeyViolations":1e9999', false],
+            ['"foreignKeyViolations":9007199254740993', false],
+            ['"foreignKeyViolations":-0', false],
+            ['"foreignKeyViolations":1,"foreignKey\\u0056iolations":0', false],
+            ['"private":"PRIVATE_RAW_EVIDENCE",', false],
+            ['"sanitizerVersion":"source-derived-shape-v5","sanitizer\\u0056ersion":"PRIVATE_RAW_EVIDENCE"', false],
+          ]) {
+            writeFileSync(files[name], original);
+            execFileSync(process.execPath, args, { cwd: repoRoot, stdio: 'pipe' });
+            expect(validatePromotionEvidence({ ...promotionEvidence, rehearsal: JSON.parse(readFileSync(files.output)) }).rehearsal.verdict).toBe('pass');
+            // The signed manifest must retain its mathematical contents.
+            writeFileSync(files[name], passes && name === 'manifest'
+              ? original.replace('"schemaVersion":4', '"schemaVersion":4.00e0')
+              : original.trimEnd().replace(/}$/, `,${raw}}`));
+            const result = spawnSync(process.execPath, args, { cwd: repoRoot, encoding: 'utf8' });
+            expect(result.status, `${name}: ${raw}`).toBe(passes ? 0 : 1);
+            const reportPath = files.output;
+            expect(JSON.parse(readFileSync(reportPath))).toMatchObject({ verdict: passes ? 'pass' : 'fail', commit, target: { environment: 'rehearsal', databaseName: passes ? 'source-rehearsal' : 'unknown', databaseId: passes ? sourceId : 'unknown' }, migrationRange: { from: migration, to: migration } });
+            if (!passes) expect(() => validatePromotionEvidence({ ...promotionEvidence, rehearsal: JSON.parse(readFileSync(files.output)) })).toThrow();
+            expect(readFileSync(sentinel, 'utf8')).toBe('UNRELATED_SENTINEL');
+            for (const suffix of passes ? ['json', 'md', 'junit.xml'] : ['json', 'md', 'txt', 'junit.xml']) {
+              const text = readFileSync(reportPath.replace(/\.json$/, `.${suffix}`), 'utf8');
+              expect(text).not.toContain('PRIVATE_RAW_EVIDENCE');
+              for (const value of [commit, 'rehearsal', ...(passes ? [sourceId] : [])]) expect(text).toContain(value);
+            }
+            expect(result.stdout + result.stderr).not.toContain('PRIVATE_RAW_EVIDENCE');
+          }
+        } finally { writeFileSync(files[name], original); }
+      }
+
+      const originalSource = readFileSync(files.source, 'utf8');
+      const originalManifest = readFileSync(files.manifest, 'utf8');
+      const runWithFault = (fault, command = args) => spawnSync(process.execPath, ['--input-type=module', '--eval', `
+        import fs from 'node:fs';
+        import { syncBuiltinESMExports } from 'node:module';
+        import { pathToFileURL } from 'node:url';
+        const output = ${JSON.stringify(files.output)};
+        const fault = ${JSON.stringify(fault)};
+        for (const method of ['writeFileSync', 'renameSync', 'unlinkSync', 'mkdirSync', 'mkdtempSync', 'rmSync', 'chmodSync']) {
+          const original = fs[method];
+          fs[method] = (...values) => {
+            const destination = String(method === 'renameSync' ? values[1] : values[0]);
+            if (method === 'renameSync' && destination !== output && fs.existsSync(output) && JSON.parse(fs.readFileSync(output)).verdict === 'pass') process.stdout.write('EARLY_PASS');
+            if (fault === 'no-writes') process.stderr.write('UNEXPECTED_MUTATION');
+            if (fault === 'all' || fault === 'no-writes' ||
+                (fault === 'direct' && method === 'writeFileSync' && destination === output) ||
+                (fault === 'companion' && (method === 'writeFileSync' || method === 'renameSync') && destination.endsWith('.md')) ||
+                (fault === 'companion-rename' && method === 'renameSync' && destination.endsWith('.txt')) ||
+                (fault === 'publication' && method === 'renameSync' && destination === output)) {
+              throw Object.assign(new Error('PRIVATE_IO_PATH'), { code: 'EACCES' });
+            }
+            return original(...values);
+          };
+        }
+        syncBuiltinESMExports();
+        process.argv = [process.execPath, ...${JSON.stringify(command)}];
+        await import(pathToFileURL(process.argv[1]));
+      `], { cwd: repoRoot, encoding: 'utf8' });
+
+      for (const invalidOutput of ['custom.JSON', 'custom', '.json', 'source']) {
+        const changedArgs = [...args];
+        changedArgs[changedArgs.indexOf('--output') + 1] = path.join(directory, invalidOutput);
+        const result = runWithFault('no-writes', changedArgs);
+        expect(result.status).toBe(1);
+        expect(result.stderr).not.toContain('PRIVATE_IO_PATH');
+        expect(result.stderr).not.toContain('UNEXPECTED_MUTATION');
+      }
+      for (const extension of ['json', 'md', 'txt', 'junit.xml']) {
+        const changedArgs = [...args];
+        changedArgs[changedArgs.indexOf('--source') + 1] = files.output.replace(/\.json$/, `.${extension}`);
+        const result = runWithFault('no-writes', changedArgs);
+        expect(result.status).toBe(1);
+        expect(result.stderr).not.toContain('UNEXPECTED_MUTATION');
+        expect(result.stderr).not.toContain('PRIVATE_IO_PATH');
+      }
+      for (const fault of ['direct', 'companion', 'companion-rename', 'publication', 'all']) {
+        execFileSync(process.execPath, args, { cwd: repoRoot, stdio: 'pipe' });
+        if (fault === 'direct') chmodSync(files.output, 0o400);
+        const result = runWithFault(fault);
+        expect(result.status, fault).toBe(fault === 'direct' ? 0 : 1);
+        expect(result.stderr).not.toContain('PRIVATE_IO_PATH');
+        expect(result.stdout).not.toContain('EARLY_PASS');
+        if (fault === 'direct') expect(statSync(files.output).mode & 0o777).toBe(0o400);
+        if (fault !== 'all' && fault !== 'direct' && existsSync(files.output)) expect(JSON.parse(readFileSync(files.output)).verdict).toBe('fail');
+        if (fault === 'all') {
+          expect(JSON.parse(readFileSync(files.output)).verdict).toBe('pass');
+          // Synthetic failed-attempt metadata tests the real consumer gates;
+          // historical report bytes do not supply workflow authority.
+          const run = { id: 101, run_attempt: 2, head_sha: commit, status: 'completed', conclusion: 'failure', name: 'Data migration rehearsal', event: 'workflow_dispatch', head_branch: 'main', path: '.github/workflows/data-migration-rehearsal.yml', repository: { full_name: 'serpcompany/serplists.com' }, head_repository: { full_name: 'serpcompany/serplists.com' } };
+          expect(() => validateGitHubRunEvidence({ metadata: run, commit, workflowName: run.name, eventName: run.event, headBranch: run.head_branch, workflowPath: run.path })).toThrow();
+          expect(publicEvidence({ run, envelope: { commit, runId: 101, attempt: 1, environment: 'rehearsal', databaseId: sourceId, migrationRange: plan.migrationRange }, migrationNames: state.ledger, pullNumbers: [151] })).toMatchObject({ verdict: 'fail', attempt: 2 });
+        }
+        execFileSync(process.execPath, args, { cwd: repoRoot, stdio: 'pipe' });
+        expect(JSON.parse(readFileSync(files.output)).verdict).toBe('pass');
+        for (const extension of ['json', 'md', 'txt', 'junit.xml']) expect(statSync(files.output.replace(/\.json$/, `.${extension}`)).mode & 0o077).toBe(0);
+        expect(readFileSync(sentinel, 'utf8')).toBe('UNRELATED_SENTINEL');
+        expect(readdirSync(directory).filter(name => name.startsWith('.rehearsal-publication-'))).toEqual([]);
+      }
+      // Reuse the public custom output across recovery from a failed run;
+      // never remove a companion report to make the next outcome agree.
+      for (const verdict of ['pass', 'fail', 'pass']) {
+        writeFileSync(files.source, verdict === 'fail' ? 'PRIVATE_CYCLE_INPUT' : originalSource);
+        const result = spawnSync(process.execPath, args, { cwd: repoRoot, encoding: 'utf8' });
+        expect(result.status).toBe(verdict === 'pass' ? 0 : 1);
+        const report = JSON.parse(readFileSync(files.output));
+        expect(report.verdict).toBe(verdict);
+        if (verdict === 'pass') expect(validatePromotionEvidence({ ...promotionEvidence, rehearsal: report }).rehearsal.verdict).toBe('pass');
+        else expect(() => validatePromotionEvidence({ ...promotionEvidence, rehearsal: report })).toThrow();
+        const junit = readFileSync(files.output.replace(/\.json$/, '.junit.xml'), 'utf8');
+        expect(junit).toContain(`failures="${verdict === 'pass' ? 0 : 1}"`);
+        for (const extension of ['md', 'txt']) {
+          const text = readFileSync(files.output.replace(/\.json$/, `.${extension}`), 'utf8');
+          expect(text).toContain(verdict === 'pass' ? 'rehearsal: PASS' : 'Verdict: FAIL');
+          if (verdict === 'pass') {
+            expect(text).not.toContain('BLOCKED');
+            expect(text).toContain('Selected authorization cohort digest:');
+            expect(text).toContain('Post-handler source preservation:');
+          }
+        }
+        for (const extension of ['json', 'md', 'txt', 'junit.xml']) {
+          const text = readFileSync(files.output.replace(/\.json$/, `.${extension}`), 'utf8');
+          expect(text).not.toContain('PRIVATE_CYCLE_INPUT');
+          expect(text).toContain(commit);
+          expect(text).toContain('rehearsal');
+        }
+        expect(result.stdout + result.stderr).not.toContain('PRIVATE_CYCLE_INPUT');
+        expect(readFileSync(sentinel, 'utf8')).toBe('UNRELATED_SENTINEL');
+      }
+      for (const scenario of ['unverified-version', 'missing-source', 'missing-sanitized', 'invalid-version', 'teardown']) {
+        execFileSync(process.execPath, args, { cwd: repoRoot, stdio: 'pipe' });
+        const changedArgs = [...args];
+        const originalTeardown = readFileSync(files.teardown, 'utf8');
+        try {
+          if (scenario === 'unverified-version' || scenario === 'invalid-version') {
+            writeFileSync(files.manifest, JSON.stringify({ ...JSON.parse(originalManifest), sanitizerVersion: 'PRIVATE_VERSION@example.com' }));
+            if (scenario === 'unverified-version') writeFileSync(files.source, 'PRIVATE_SOURCE');
+          } else if (scenario === 'teardown') writeFileSync(files.teardown, 'PRIVATE_TEARDOWN');
+          else changedArgs[changedArgs.indexOf(scenario === 'missing-source' ? '--source' : '--sanitized') + 1] = path.join(directory, 'PRIVATE_MISSING_INPUT@example.com');
+          const result = spawnSync(process.execPath, changedArgs, { cwd: repoRoot, encoding: 'utf8' });
+          expect(result.status).toBe(1);
+          const report = JSON.parse(readFileSync(files.output));
+          expect(() => validatePromotionEvidence({ ...promotionEvidence, rehearsal: report })).toThrow();
+          expect(report).toMatchObject({ verdict: 'fail', commit, target: { environment: 'rehearsal' }, migrationRange: { from: migration, to: migration }, sanitizerVersion: scenario === 'teardown' ? 'source-derived-shape-v5' : 'unknown', errorCode: 'CANARY_STAGE_FAILED', failedStage: scenario === 'teardown' ? 'data-delete' : scenario === 'missing-sanitized' ? 'data-export' : scenario === 'invalid-version' ? 'data-restore' : 'data-reporting' });
+          if (scenario === 'teardown') expect(report.target).toMatchObject({ databaseName: 'source-rehearsal', databaseId: sourceId });
+          for (const extension of ['json', 'md', 'txt', 'junit.xml']) {
+            const text = readFileSync(files.output.replace(/\.json$/, `.${extension}`), 'utf8');
+            expect(text).not.toContain('PRIVATE_');
+            for (const value of [commit, 'rehearsal', migration ?? (extension === 'junit.xml' ? 'none' : 'null')]) expect(text).toContain(value);
+          }
+          expect(result.stdout + result.stderr).not.toContain('PRIVATE_');
+          expect(readFileSync(sentinel, 'utf8')).toBe('UNRELATED_SENTINEL');
+        } finally {
+          writeFileSync(files.source, originalSource);
+          writeFileSync(files.manifest, originalManifest);
+          writeFileSync(files.teardown, originalTeardown);
+        }
+      }
 
       for (const field of ["sourceSha256", "domainSha256", "cohortSha256", "ledgerSha256"]) {
         const mismatched = structuredClone(comparison); mismatched.sanitizedState[field] = "f".repeat(64);
@@ -169,7 +339,7 @@ describe("rehearsal report finalization", () => {
 
       const failed = spawnSync(process.execPath, args.map((value) => value === commit ? "f".repeat(40) : value), { cwd: repoRoot, encoding: "utf8" });
       expect(failed.status).toBe(1);
-      for (const extension of ["json", "md", "junit.xml"]) expect(readFileSync(path.join(directory, `rehearsal-promotion.${extension}`), "utf8")).toContain("f".repeat(40));
+      for (const extension of ["json", "md", "junit.xml"]) expect(readFileSync(files.output.replace(/\.json$/, `.${extension}`), "utf8")).toContain("f".repeat(40));
     } finally { rmSync(directory, { recursive: true, force: true }); }
-  });
+  }, 30000);
 });
