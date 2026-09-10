@@ -144,6 +144,32 @@ test("@smoke public document installs the configured Google Tag Manager containe
   expect(csp).toContain("frame-src");
 });
 
+test("@smoke authenticated template API returns the seeded private template", async ({ request }) => {
+  const apiBaseUrl = process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api";
+  const signInResponse = await request.post(`${apiBaseUrl}/auth/sign-in/email`, {
+    data: {
+      email: "admin@test.com",
+      password: "password123",
+    },
+  });
+
+  expect(signInResponse.status()).toBe(200);
+
+  const templatesResponse = await request.get(`${apiBaseUrl}/templates`);
+  expect(templatesResponse.status()).toBe(200);
+
+  const templates = await templatesResponse.json();
+  expect(templates).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: "template-4",
+        title: "Internal Publishing Checklist",
+        is_public: false,
+      }),
+    ]),
+  );
+});
+
 test("@smoke sitemap index and every listed shard pass the public XML audit", async ({ request }) => {
   const pagesOrigin = new URL(
     process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api",
