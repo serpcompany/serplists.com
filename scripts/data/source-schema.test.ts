@@ -137,6 +137,10 @@ describe('exact source catalog before writes', () => {
       request.classification = 'destructive';
       let writes = 0;
       const run = (step: string) => {
+        if (step === 'identity') return { verdict: 'pass', summary: { type: step, ...database } };
+        if (step === 'recovery-bookmark') return { verdict: 'pass', summary: { type: step, captured: true, bookmark: 'synthetic-local-bookmark' } };
+        if (step === 'recovery-export') return { verdict: 'pass', summary: { type: step, encryptedBackupSha256: digest('synthetic-local-export'), encryptedBackupByteLength: 22 } };
+        if (step === 'reviewed-pending-range') return { verdict: 'pass', summary: { type: step, pendingMigrations: request.pendingMigrations, ...request.migrationRange } };
         if (step === 'source-schema') return { verdict: 'pass', summary: f.inspect() };
         if (step === 'pre-invariants') {
           const snapshot = captureRemoteInvariantSnapshot({ database: database.databaseName, key: 'local-source-schema-invariant-key-000000', runWrangler: (args: string[]) => {
@@ -146,7 +150,7 @@ describe('exact source catalog before writes', () => {
               .map(statement => ({ success: true, meta: { duration: 0 }, results: f.db.prepare(statement).all() })));
           } });
           expect(snapshot.ledgerSha256).toBe(f.binding.ledgerSha256);
-          return { verdict: 'pass', summary: { ...snapshot, aggregateCounts: { templates: snapshot.invariants.templates, runs: snapshot.invariants.runs }, foreignKeyViolations: snapshot.invariants.foreign_key_violations, domainDigest: snapshot.domain.digest } };
+          return { verdict: 'pass', summary: { ...snapshot, type: step, invariantCount: Object.keys(snapshot.invariants).length, aggregateCounts: { templates: snapshot.invariants.templates, runs: snapshot.invariants.runs }, foreignKeyViolations: snapshot.invariants.foreign_key_violations, domainDigest: snapshot.domain.digest } };
         }
         if (step === 'migration-apply') { writes++; f.db.exec(readFileSync(new URL(`../../db/migrations/${migration}`, import.meta.url), 'utf8')); }
         return { verdict: 'pass', summary: { type: step } };
