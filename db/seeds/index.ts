@@ -75,6 +75,7 @@ async function captureLocalSeedSitemapRevisions(db: SeedDb): Promise<SitemapRevi
     db.select().from(schema.sitemap_owner_revisions).where(inArray(schema.sitemap_owner_revisions.user_id, seedUserIds)),
     db.select().from(schema.sitemap_category_revisions).where(inArray(schema.sitemap_category_revisions.category, seedCategories)),
   ]);
+  for (const row of [...global, ...profiles, ...owners, ...categories]) revisionInstant(row.revised_at);
   return {
     global: new Map(global.map((row) => [row.kind, row.revised_at])),
     profiles: new Map(profiles.map((row) => [row.user_id, row.revised_at])),
@@ -83,14 +84,14 @@ async function captureLocalSeedSitemapRevisions(db: SeedDb): Promise<SitemapRevi
   };
 }
 
-const revisionInstant = (value: string) => {
+function revisionInstant(value: string) {
   const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value.trim())
     ? `${value.trim().replace(' ', 'T')}Z`
     : value;
   const instant = Date.parse(normalized);
   if (!Number.isFinite(instant)) throw new Error(`Invalid sitemap revision timestamp: ${value}`);
   return instant;
-};
+}
 
 const latestRevision = (prior: string | undefined, seedClock: string) => (
   prior && revisionInstant(prior) > revisionInstant(seedClock) ? prior : seedClock

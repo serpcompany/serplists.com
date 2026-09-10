@@ -156,6 +156,18 @@ describe('installed SQLite proxy Drizzle access', () => {
     const { db } = fixture();
     await db.update(schema.sitemap_revisions).set({ revised_at: 'not-a-timestamp' })
       .where(eq(schema.sitemap_revisions.kind, 'templates'));
+    await db.insert(schema.sitemap_shard_revisions).values({
+      kind: 'templates', page: 9, content_hash: 'must-survive-rejection', revised_at: '2040-01-01 00:00:00',
+    });
+    const state = async () => ({
+      users: await db.select().from(schema.users),
+      templates: await db.select().from(schema.templates),
+      teams: await db.select().from(schema.teams),
+      revisions: await db.select().from(schema.sitemap_revisions).orderBy(schema.sitemap_revisions.kind),
+      shards: await db.select().from(schema.sitemap_shard_revisions).orderBy(schema.sitemap_shard_revisions.kind, schema.sitemap_shard_revisions.page),
+    });
+    const before = await state();
     await expect(applyTestDataSeed(db)).rejects.toThrow('Invalid sitemap revision timestamp: not-a-timestamp');
+    expect(await state()).toEqual(before);
   });
 });
