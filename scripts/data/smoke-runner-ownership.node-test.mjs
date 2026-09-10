@@ -94,8 +94,6 @@ for (const failure of ['initialize', 'inventory', 'migration', 'ledger', 'fixtur
         const output = args[1].match(/--outdir (\S+)/)?.[1];
         assert(output);
         assert.equal(path.relative(process.cwd(), output), path.relative(root, path.join(ownedRoot, 'pages/_worker.js')));
-        fs.mkdirSync(output, { recursive: true });
-        fs.writeFileSync(path.join(output, 'index.js'), 'synthetic worker');
       }
       if (failure === 'build' && command === 'sh') throw new Error('build failure');
       return '';
@@ -135,7 +133,9 @@ for (const failure of ['initialize', 'inventory', 'migration', 'ledger', 'fixtur
         cpSync: (...args) => {
           if (failure === 'copy') throw new Error('copy failure');
           const sourcePath = String(args[0]);
-          if (sourcePath.endsWith(`${path.sep}pages${path.sep}_worker.js`) && !fs.existsSync(sourcePath)) {
+          if (sourcePath.startsWith(`${root}${path.sep}`)
+              && sourcePath.endsWith(`${path.sep}pages${path.sep}_worker.js`)
+              && !fs.existsSync(sourcePath)) {
             fs.mkdirSync(sourcePath, { recursive: true });
             fs.writeFileSync(path.join(sourcePath, 'index.js'), 'synthetic worker');
           }
