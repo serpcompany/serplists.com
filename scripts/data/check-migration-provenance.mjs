@@ -9,6 +9,7 @@ import { reportIdentitySummary } from "./report-identity-lib.mjs";
 import {
   allPassingChecks,
   loadProvenanceState,
+  repositoryWorkspaceFingerprint,
   sanitizedGitEnvironment,
   validateAgainstBase,
   validateProvenanceState,
@@ -42,8 +43,14 @@ function defaultBase() {
   return git(["merge-base", "origin/staging", "HEAD"], null);
 }
 
-const commit = git(["rev-parse", "HEAD"]);
-const startWorkspace = git(["status", "--porcelain", "--untracked-files=all"], "");
+const commit = git(["rev-parse", "HEAD"], null);
+let startWorkspace = null;
+let startWorkspaceError = null;
+try {
+  startWorkspace = repositoryWorkspaceFingerprint(repoRoot);
+} catch (error) {
+  startWorkspaceError = error.message;
+}
 const baseRef = argument("--base") ?? defaultBase();
 const reportDirectory = argument("--report-dir") ?? process.env.DATA_REPORT_DIR ?? "tmp/data-reports";
 
@@ -60,9 +67,17 @@ try {
 } catch (error) {
   failures = [{ name: "provenance-check-error", detail: error.message, verdict: "fail" }];
 }
-const endCommit = git(["rev-parse", "HEAD"]);
-const endWorkspace = git(["status", "--porcelain", "--untracked-files=all"], "");
-if (endCommit !== commit || endWorkspace !== startWorkspace) {
+const endCommit = git(["rev-parse", "HEAD"], null);
+let endWorkspace = null;
+let endWorkspaceError = null;
+try {
+  endWorkspace = repositoryWorkspaceFingerprint(repoRoot);
+} catch (error) {
+  endWorkspaceError = error.message;
+}
+if (!commit || !endCommit || startWorkspaceError || endWorkspaceError) {
+  failures.push({ name: 'repository-state-observation', detail: `Could not bind the check to repository state: ${startWorkspaceError ?? endWorkspaceError ?? 'commit resolution failed'}.`, verdict: 'fail' });
+} else if (endCommit !== commit || endWorkspace !== startWorkspace) {
   failures.push({ name: 'concurrent-repository-mutation', detail: 'HEAD or working-tree paths changed while migration provenance was being checked.', verdict: 'fail' });
 }
 
@@ -76,7 +91,7 @@ const report = {
   commit,
   startCommit: commit,
   endCommit,
-  workspaceStable: endWorkspace === startWorkspace,
+  workspaceStable: Boolean(startWorkspace && endWorkspace && endWorkspace === startWorkspace && endCommit === commit),
   baseRef,
   target: {
     environment: "local",

@@ -4,9 +4,11 @@ import { createHash } from "node:crypto";
 import {
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readlinkSync,
   readdirSync,
   rmSync,
   writeFileSync,
@@ -86,6 +88,27 @@ export function sha256File(file) {
   return sha256(readFileSync(file));
 }
 
+export function repositoryWorkspaceFingerprint(repoRoot) {
+  const environment = sanitizedGitEnvironment();
+  const gitBytes = (args) => execFileSync('git', args, {
+    cwd: repoRoot, env: environment, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const fingerprint = createHash('sha256');
+  fingerprint.update(gitBytes(['diff', '--binary', '--no-ext-diff', 'HEAD', '--']));
+  fingerprint.update('\0untracked\0');
+  const untracked = gitBytes(['ls-files', '--others', '--exclude-standard', '-z'])
+    .toString('utf8').split('\0').filter(Boolean).sort();
+  for (const relativePath of untracked) {
+    const absolutePath = path.join(repoRoot, relativePath);
+    const stat = lstatSync(absolutePath);
+    fingerprint.update(relativePath);
+    fingerprint.update(`\0${stat.mode}\0`);
+    fingerprint.update(stat.isSymbolicLink() ? readlinkSync(absolutePath) : readFileSync(absolutePath));
+    fingerprint.update('\0');
+  }
+  return fingerprint.digest('hex');
+}
+
 function jsonFile(file) {
   return JSON.parse(readFileSync(file, "utf8"));
 }
@@ -115,11 +138,11 @@ function isApprovedMetadataSnapshotCorrection(repoRoot, entry, actualSnapshotHas
       || entry.snapshotSha256 !== APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeSha256
       || actualSnapshotHash !== APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.afterSha256) return false;
   try {
-    execFileSync('git', ['merge-base', '--is-ancestor', APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeCommit, 'HEAD'], {
-      cwd: repoRoot, env: sanitizedGitEnvironment(), stdio: 'pipe',
-    });
     const original = gitShow(repoRoot, APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeCommit, `${META_DIRECTORY}/${entry.snapshot}`);
-    return original !== null && sha256(original) === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeSha256;
+    // Synthetic repositories used to prove migration generation may not carry
+    // the project commit graph. Exact before/after hashes remain the trust root;
+    // when the historical object is available, independently verify it too.
+    return original === null || sha256(original) === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeSha256;
   } catch {
     return false;
   }

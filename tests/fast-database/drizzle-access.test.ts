@@ -104,4 +104,14 @@ describe('installed SQLite proxy Drizzle access', () => {
     expect(await db.select().from(schema.templates)).toHaveLength(1);
     expect(await db.select().from(schema.checklist_runs)).toEqual([]);
   });
+
+  it('keeps the default local seed profile byte-for-byte deterministic', async () => {
+    const { db } = fixture();
+    await applyAllLocalSeeds(db);
+    const firstUsers = await db.select().from(schema.users).orderBy(schema.users.id);
+    const firstInvites = await db.select().from(schema.team_invites).orderBy(schema.team_invites.id);
+    await applyAllLocalSeeds(db);
+    expect(await db.select().from(schema.users).orderBy(schema.users.id)).toEqual(firstUsers);
+    expect(await db.select().from(schema.team_invites).orderBy(schema.team_invites.id)).toEqual(firstInvites);
+  });
 });

@@ -9,6 +9,7 @@ import "./migration-provenance-bootstrap.node-test.mjs";
 import {
   allPassingChecks,
   loadProvenanceState,
+  repositoryWorkspaceFingerprint,
   sanitizedGitEnvironment,
   sha256File,
   validateAgainstBase,
@@ -18,6 +19,28 @@ import {
 } from "./migration-provenance-lib.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
+
+test('repository workspace fingerprints detect byte changes behind unchanged dirty status', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'migration-workspace-fingerprint-'));
+  try {
+    runGit(root, ['init', '-q']);
+    runGit(root, ['config', 'user.email', 'test@example.invalid']);
+    runGit(root, ['config', 'user.name', 'Migration Test']);
+    writeFileSync(path.join(root, 'tracked.txt'), 'baseline\n');
+    runGit(root, ['add', 'tracked.txt']);
+    runGit(root, ['commit', '-qm', 'baseline']);
+    writeFileSync(path.join(root, 'tracked.txt'), 'dirty version one\n');
+    const first = repositoryWorkspaceFingerprint(root);
+    writeFileSync(path.join(root, 'tracked.txt'), 'dirty version two\n');
+    assert.notEqual(repositoryWorkspaceFingerprint(root), first);
+    writeFileSync(path.join(root, 'untracked.txt'), 'untracked one\n');
+    const second = repositoryWorkspaceFingerprint(root);
+    writeFileSync(path.join(root, 'untracked.txt'), 'untracked two\n');
+    assert.notEqual(repositoryWorkspaceFingerprint(root), second);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 function fixture() {
   const root = mkdtempSync(path.join(tmpdir(), "migration-provenance-test-"));
