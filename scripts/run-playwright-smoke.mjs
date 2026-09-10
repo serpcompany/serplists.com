@@ -63,24 +63,16 @@ function prepareSmokeD1() {
     },
   );
   run(
-    NPX_COMMAND,
+    "pnpm",
     [
-      ...NPX_ARGS_PREFIX,
-      "wrangler",
-      "d1",
-      "execute",
-      DATABASE_NAME,
-      "--local",
+      "exec",
+      "tsx",
+      "scripts/data/local-d1-data.ts",
+      "seed-test",
       "--persist-to",
       smokePersistPath,
-      "--file",
-      "db/seeds/test-data.sql",
     ],
-    {
-      env: {
-        CI: "1",
-      },
-    },
+    { env: { CI: "1" } },
   );
 }
 
