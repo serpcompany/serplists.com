@@ -71,6 +71,7 @@ test('production-request keeps dependency setup behind the input gate and before
 
 test('a clean production-request runner validates before installing and loads its evidence CLIs', { timeout: 180_000 }, () => {
   const fixture = mkdtempSync(path.join(tmpdir(), 'owner149-production-request-'));
+  const prefetchFixture = mkdtempSync(path.join(tmpdir(), 'owner149-pnpm-prefetch-'));
   try {
     const tracked = run(root, 'git', ['ls-files', '-z', '--', 'scripts', 'src', 'db', 'package.json', 'pnpm-lock.yaml', 'wrangler.toml']);
     passes(tracked);
@@ -87,14 +88,15 @@ test('a clean production-request runner validates before installing and loads it
       manifest.scripts[hook] = `node -e "require('node:fs').writeFileSync('lifecycle-ran', '${hook}')"`;
     }
     json(fixture, 'package.json', manifest);
-    const storePath = run(root, 'pnpm', ['store', 'path', '--silent']);
-    passes(storePath);
+    cpSync(path.join(fixture, 'package.json'), path.join(prefetchFixture, 'package.json'));
+    cpSync(path.join(fixture, 'pnpm-lock.yaml'), path.join(prefetchFixture, 'pnpm-lock.yaml'));
+    const storePath = path.join(prefetchFixture, '.pnpm-store');
     // setup-node's restored cache can support the root install without keeping
     // every registry tarball needed by a second isolated --offline install.
     // Prefetch the exact frozen lockfile first; the fixture proof itself stays
     // offline and cannot resolve or download anything from the network.
-    passes(run(root, 'pnpm', ['fetch', '--frozen-lockfile', '--ignore-scripts', '--store-dir', storePath.stdout.trim()]));
-    const bootstrap = [gate.run, ...installs.map((step) => `${step.run} --offline --store-dir ${JSON.stringify(storePath.stdout.trim())}`)].join('\n');
+    passes(run(prefetchFixture, 'pnpm', ['fetch', '--frozen-lockfile', '--ignore-scripts', '--store-dir', storePath]));
+    const bootstrap = [gate.run, ...installs.map((step) => `${step.run} --offline --store-dir ${JSON.stringify(storePath)}`)].join('\n');
     const shell = (source, extra = {}) => run(fixture, 'bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', source], extra);
     passes(shell(gate.run));
     const mismatch = shell(bootstrap, { GITHUB_SHA: 'f'.repeat(40) });
@@ -195,5 +197,6 @@ test('a clean production-request runner validates before installing and loads it
     assert.equal(readFileSync(path.join(fixture, 'pnpm-lock.yaml'), 'utf8'), lockfile);
   } finally {
     rmSync(fixture, { recursive: true, force: true });
+    rmSync(prefetchFixture, { recursive: true, force: true });
   }
 });
