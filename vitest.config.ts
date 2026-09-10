@@ -27,11 +27,11 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    // Data integration files launch synchronous Git/Wrangler/compiler children.
-    // Bound file-level parallelism on large-core developer hosts; concurrency
-    // exercised inside each test remains unchanged.
+    // Preserve the verified serial gate for long synchronous Git/Wrangler
+    // children. Concurrency exercised inside each test remains unchanged.
+    fileParallelism: false,
     minWorkers: 1,
-    maxWorkers: 2,
+    maxWorkers: 1,
     setupFiles: './tests/setup.ts',
     exclude: [
       ...dataRegressionFiles,

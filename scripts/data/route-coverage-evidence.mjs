@@ -76,7 +76,7 @@ export function finalizeRouteCoverage(env = process.env, root = process.cwd(), {
     if (!visitedRoutes.some(visit => visit.pattern === route.pattern && visit.persona === route.persona && (route.example.includes(':') || visit.exampleSha256 === pathHash(route.example)))) errors.push(`Route was not successfully visited: ${route.pattern} (${route.persona})`);
   }
   const checks = [...summarizeRouteEvidence(inventory, observed), ...errors.map(name => ({ name, verdict: 'fail' }))];
-  const report = { ...binding(env), verdict: checks.every(check => check.verdict === 'pass') ? 'pass' : 'fail', target: { environment: 'local', binding: 'DB', databaseName: 'serp-checklists-db', databaseId: 'local:miniflare:DB@isolated-data-regression' }, checks, routes: inventory.routes, visitedRoutes, surfaces: inventory.surfaces, scenarioEvidence, branchCoverage: inventory.branchCoverage };
+  const report = { ...binding(env), verdict: checks.every(check => check.verdict === 'pass') ? 'pass' : 'fail', target: { environment: 'local', binding: 'DB', databaseName: 'serp-checklists-db', databaseId: 'local:miniflare:DB@isolated-data-regression', synthetic: true }, checks, routes: inventory.routes, visitedRoutes, surfaces: inventory.surfaces, scenarioEvidence, branchCoverage: inventory.branchCoverage };
   writeDataCheckReports({ name: 'route-coverage', report, summary: `Real Worker / local D1 route coverage\n${checks.map(check => `${check.verdict}: ${check.name}`).join('\n')}\n${inventory.branchCoverage}`, reportDirectory: dirname(env.PLAYWRIGHT_ROUTE_COVERAGE_PROOF ?? 'tmp/data-reports/route-coverage.json') });
   if (report.verdict !== 'pass') throw new Error('Required real D1 scenario coverage failed; see route-coverage.json');
   return report;

@@ -75,6 +75,7 @@ export function buildDataRegressionReport({
   ];
   return {
     check: "data-regression-suite",
+    fixtureEvidence: "synthetic",
     commit,
     workingTreeDirty,
     workingTreeDirtyPaths,
@@ -104,6 +105,7 @@ export function renderDataRegressionMarkdown(report) {
     `# Data regression suite: ${status}`,
     "",
     `- Environment: ${report.target.environment}`,
+    "- Fixture evidence: synthetic local data; supplied sanitized-source checks are reported separately.",
     `- Binding: ${report.target.binding}`,
     `- Database: ${report.target.databaseName} (${report.target.databaseId})`,
     `- Commit: ${report.commit}`,
@@ -186,7 +188,7 @@ export function recordIntegrationScenario(id, env = process.env) {
   mkdirSync(env.DATA_SCENARIO_DIR, { recursive: true });
   writeFileSync(join(env.DATA_SCENARIO_DIR, `${id}-${randomUUID()}.json`), JSON.stringify({
     id, verdict: 'pass', commit: env.DATA_REGRESSION_START_COMMIT,
-    target: { environment: 'local', binding: 'DB', databaseId: 'local:miniflare:DB@isolated-data-regression' },
+    target: { environment: 'local', binding: 'DB', databaseId: 'local:miniflare:DB@isolated-data-regression', synthetic: true },
     migrationRange: normalizeMigrationRange({ from: env.DATA_REGRESSION_MIGRATION_FROM, to: env.DATA_REGRESSION_MIGRATION_TO }),
   }));
 }
