@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -90,9 +90,9 @@ test('a clean production-request runner validates before installing and loads it
     json(fixture, 'package.json', manifest);
     let storePath;
     if (process.env.PNPM_TEST_STORE_PREPARED === '1') {
-      const preparedStore = run(root, 'pnpm', ['store', 'path', '--silent']);
-      passes(preparedStore);
-      storePath = preparedStore.stdout.trim();
+      const preparedStore = process.env.PNPM_TEST_STORE_PATH;
+      assert.ok(preparedStore && path.isAbsolute(preparedStore), 'CI must provide its absolute prepared pnpm store path');
+      storePath = realpathSync(preparedStore);
     } else {
       cpSync(path.join(fixture, 'package.json'), path.join(prefetchFixture, 'package.json'));
       cpSync(path.join(fixture, 'pnpm-lock.yaml'), path.join(prefetchFixture, 'pnpm-lock.yaml'));
