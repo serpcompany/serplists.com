@@ -87,7 +87,9 @@ test('a clean production-request runner validates before installing and loads it
       manifest.scripts[hook] = `node -e "require('node:fs').writeFileSync('lifecycle-ran', '${hook}')"`;
     }
     json(fixture, 'package.json', manifest);
-    const bootstrap = [gate.run, ...installs.map((step) => `${step.run} --offline`)].join('\n');
+    const storePath = run(root, 'pnpm', ['store', 'path', '--silent']);
+    passes(storePath);
+    const bootstrap = [gate.run, ...installs.map((step) => `${step.run} --offline --store-dir ${JSON.stringify(storePath.stdout.trim())}`)].join('\n');
     const shell = (source, extra = {}) => run(fixture, 'bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', source], extra);
     passes(shell(gate.run));
     const mismatch = shell(bootstrap, { GITHUB_SHA: 'f'.repeat(40) });

@@ -5,6 +5,10 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
+import { locateMigratedDatabase } from './seed-local.ts';
+import { createSQLiteProxy } from './sqlite-proxy.ts';
+import { applyRouteCoverageSeed } from '../../db/seeds/index.ts';
 
 const repoRoot = process.cwd();
 const migrationFiles = readdirSync(path.join(repoRoot, 'db/migrations'))
@@ -67,10 +71,10 @@ test('issue130: every supported source profile contains rules and missing rules 
     const config = path.join(directory, 'wrangler.toml');
     writeFileSync(config, `name="rules-contract"\ncompatibility_date="2025-12-01"\n[[d1_databases]]\nbinding="DB"\ndatabase_name="rules-contract"\ndatabase_id="${databaseId}"\nmigrations_dir=${JSON.stringify(path.join(repoRoot,'db/migrations'))}\n`);
     const cli = path.join(repoRoot,'node_modules/wrangler/bin/wrangler.js');
-    for (const args of [
-      ['d1','migrations','apply','rules-contract','--local','--config',config],
-      ['d1','execute','rules-contract','--local','--config',config,'--file',path.join(repoRoot,'scripts/data/sql/route-coverage-fixtures.sql'),'--yes'],
-    ]) execFileSync(process.execPath,[cli,...args],{cwd:directory,env:{PATH:process.env.PATH,CI:'true',WRANGLER_SEND_METRICS:'false',WRANGLER_LOG_PATH:path.join(directory,'wrangler.log')},stdio:'pipe'});
+    execFileSync(process.execPath,[cli,'d1','migrations','apply','rules-contract','--local','--config',config],{cwd:directory,env:{PATH:process.env.PATH,CI:'true',WRANGLER_SEND_METRICS:'false',WRANGLER_LOG_PATH:path.join(directory,'wrangler.log')},stdio:'pipe'});
+    const seedDatabase = new DatabaseSync(locateMigratedDatabase(path.join(directory, '.wrangler/state')));
+    try { await applyRouteCoverageSeed(createSQLiteProxy(seedDatabase)); }
+    finally { seedDatabase.close(); }
     mf = new Miniflare({
     modules: true,
     script,

@@ -21,6 +21,7 @@ permissions:
 env:
   BETTER_AUTH_SECRET: ci-build-placeholder-secret-32-chars-minimum
   COREPACK_ENABLE_AUTO_PIN: "0"
+  SCHEMA_CONTRACT_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'push' && github.event.before || format('{0}^', github.sha) }}
 
 jobs:
   quality:
@@ -47,7 +48,7 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
       - name: Unit tests
-        run: pnpm run test:run
+        run: pnpm run test:unit
 
   database:
     name: Required / Database
@@ -78,6 +79,10 @@ jobs:
         run: pnpm run check:data:schema-contract -- --report-dir tmp/data-reports/ci
       - name: Verify generated schema snapshot
         run: pnpm run db:schema:snapshot:check
+      - name: Fast Drizzle database tests
+        run: pnpm run test:database:fast
+      - name: Process and driver integration tests
+        run: pnpm run test:process
       - name: Upload database evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

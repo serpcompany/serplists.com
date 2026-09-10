@@ -37,7 +37,7 @@ function runProof(args, name, databaseName, databaseId) {
 }
 
 it('fails missing mandatory rules without partial template history or audit writes on real D1',()=>{
-  runProof(['--test','scripts/data/issue130-rules-contract.node-test.mjs'],'mandatory-rules-write-failure','rules-contract','local:miniflare:11111111-1111-4111-8111-111111111111');
+  runProof(['--import','tsx','--test','scripts/data/issue130-rules-contract.node-test.mjs'],'mandatory-rules-write-failure','rules-contract','local:miniflare:11111111-1111-4111-8111-111111111111');
   recordIntegrationScenario('mandatory-rules-atomic-failure-proof');
   },100_000);
 
@@ -47,6 +47,6 @@ it('fails billing persistence faults and recovers webhook retries without duplic
   },100_000);
 
 it('rejects malformed checklist content without changing stored template or run state on migrated real D1',()=>{
-  runProof(['--test','scripts/data/issue136-content-contract.node-test.mjs'],'checklist-content-write-safety','content-contract','local:miniflare:11111111-1111-4111-8111-111111111111');
+  runProof(['--import','tsx','--test','scripts/data/issue136-content-contract.node-test.mjs'],'checklist-content-write-safety','content-contract','local:miniflare:11111111-1111-4111-8111-111111111111');
   recordIntegrationScenario('malformed-checklist-content-write-safety');
   },100_000);

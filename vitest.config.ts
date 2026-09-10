@@ -1,27 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
-
-// Range regression assertions are scheduled by the data gate, once per range.
-export const dataRegressionFiles = [
-  "scripts/data/sanitizer-export-cli.test.mjs",
-  "scripts/data/sanitizer-export-pinned-wrangler.test.mjs",
-  "scripts/data/data-write-failures.test.mjs",
-  "scripts/data/route-behavior-regressions.test.mjs",
-  "tests/unit/scripts/data/schema-contract.test.ts",
-  "scripts/data/production-shaped-migration-matrix.test.ts",
-  "tests/unit/functions/api/template-evolution-migration.test.ts",
-  "tests/unit/functions/api/templates-handler.test.ts",
-  "tests/unit/functions/api/checklists-handler.test.ts",
-  "scripts/data/authenticated-visibility.test.mjs",
-  "scripts/data/sanitized-state.test.mjs",
-  "scripts/data/sanitizer-local-d1.test.mjs",
-  "scripts/data/local-rehearsal-lifecycle.test.mjs",
-  "scripts/data/teardown-probe.test.ts",
-  "scripts/data/smoke-environment.test.mjs",
-  "scripts/data/smoke-teardown.test.mjs",
-  "scripts/data/workspace-cleanliness.test.mjs",
-  "scripts/data/git-subprocess-env.test.mjs"
-];
+import { d1BrowserRecoveryFiles as dataRegressionFiles } from './scripts/test/suites';
+export { d1BrowserRecoveryFiles as dataRegressionFiles } from './scripts/test/suites';
 
 export default defineConfig({
   test: {

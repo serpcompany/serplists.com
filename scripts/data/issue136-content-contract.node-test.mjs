@@ -5,6 +5,10 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
+import { locateMigratedDatabase } from './seed-local.ts';
+import { createSQLiteProxy } from './sqlite-proxy.ts';
+import { applyRouteCoverageSeed } from '../../db/seeds/index.ts';
 
 test('issue136: real migrated D1 rejects malformed content without template/run/history/audit changes', async () => {
   const root = process.cwd();
@@ -19,10 +23,10 @@ test('issue136: real migrated D1 rejects malformed content without template/run/
   try {
     const config = path.join(directory, 'wrangler.toml');
     writeFileSync(config, `name="content-contract"\ncompatibility_date="2025-12-01"\n[[d1_databases]]\nbinding="DB"\ndatabase_name="content-contract"\ndatabase_id="${databaseId}"\nmigrations_dir=${JSON.stringify(path.join(root,'db/migrations'))}\n`);
-    for (const args of [
-      ['d1','migrations','apply','content-contract','--local','--config',config],
-      ['d1','execute','content-contract','--local','--config',config,'--file',path.join(root,'scripts/data/sql/route-coverage-fixtures.sql'),'--yes'],
-    ]) execFileSync(process.execPath,[path.join(root,'node_modules/wrangler/bin/wrangler.js'),...args],{cwd:directory,env:{PATH:process.env.PATH,CI:'true',WRANGLER_SEND_METRICS:'false',WRANGLER_LOG_PATH:path.join(directory,'wrangler.log')},stdio:'pipe'});
+    execFileSync(process.execPath,[path.join(root,'node_modules/wrangler/bin/wrangler.js'),'d1','migrations','apply','content-contract','--local','--config',config],{cwd:directory,env:{PATH:process.env.PATH,CI:'true',WRANGLER_SEND_METRICS:'false',WRANGLER_LOG_PATH:path.join(directory,'wrangler.log')},stdio:'pipe'});
+    const seedDatabase = new DatabaseSync(locateMigratedDatabase(path.join(directory, '.wrangler/state')));
+    try { await applyRouteCoverageSeed(createSQLiteProxy(seedDatabase)); }
+    finally { seedDatabase.close(); }
     mf = new Miniflare({modules:true,script:built.outputFiles[0].text,compatibilityDate:'2025-12-01',compatibilityFlags:['nodejs_compat'],d1Databases:{DB:databaseId},d1Persist:path.join(directory,'.wrangler/state/v3/d1'),bindings:{BETTER_AUTH_SECRET:'issue136-local-secret-at-least-32-characters',FRONTEND_URL:'http://localhost'}});
     const db = await mf.getD1Database('DB');
     const migrations = readdirSync(path.join(root,'db/migrations')).filter(name=>/^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();

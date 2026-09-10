@@ -89,7 +89,7 @@ modification-time metadata only; it never reads file contents. `.git/` and
 `node_modules/` are excluded as immutable repository/dependency internals, but
 ignored paths everywhere else remain visible to the comparison.
 
-The command is gating by default locally, from pre-push, and in CI. It captures
+The command is gating by default as the complete local and CI verification entrypoint. Pre-push uses `pnpm verify:fast` (unit plus fast Drizzle/database integration) and deliberately leaves the browser, export, and recovery categories to this standalone command and CI. It captures
 the starting commit and worktree before any child test, fails if HEAD changes,
 and fails if the run starts or ends dirty. Only an explicit `--non-gating`
 diagnostic run may downgrade those findings to warnings, and that evidence is

@@ -12,3 +12,10 @@ export { team_invites } from "./teamInvites";
 export { team_entitlement_overrides } from "./teamEntitlementOverrides";
 export { audit_events } from "./auditEvents";
 export { template_versions } from "./templateVersions";
+export {
+  sitemap_revisions,
+  sitemap_profile_revisions,
+  sitemap_owner_revisions,
+  sitemap_category_revisions,
+  sitemap_shard_revisions,
+} from './sitemap';

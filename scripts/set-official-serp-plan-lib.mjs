@@ -2,7 +2,6 @@ import {
   OFFICIAL_SERP_EMAIL,
   OFFICIAL_SERP_USER_ID,
   OFFICIAL_SERP_USERNAME,
-  escapeSqlString,
 } from "./reset-official-serp-password-lib.mjs";
 
 export const OFFICIAL_SERP_PRO_NOTE = "Official publisher Pro override";
@@ -13,34 +12,6 @@ export function validatePlan(plan) {
   }
 
   return { ok: true, normalizedPlan: plan };
-}
-
-export function buildOfficialSerpPlanInspectSql() {
-  return [
-    `SELECT id, email, username
-FROM users
-WHERE id = '${OFFICIAL_SERP_USER_ID}'
-LIMIT 1;`,
-    `SELECT user_id, plan, expires_at, note, created_at, updated_at
-FROM entitlement_overrides
-WHERE user_id = '${OFFICIAL_SERP_USER_ID}'
-LIMIT 1;`,
-  ].join("\n\n");
-}
-
-export function buildOfficialSerpPlanSql({ plan, nowIso, note = OFFICIAL_SERP_PRO_NOTE }) {
-  const escapedNowIso = escapeSqlString(nowIso);
-  const escapedNote = escapeSqlString(note);
-
-  return [
-    `INSERT INTO entitlement_overrides (user_id, plan, expires_at, note, created_at, updated_at)
-VALUES ('${OFFICIAL_SERP_USER_ID}', '${plan}', NULL, '${escapedNote}', '${escapedNowIso}', '${escapedNowIso}')
-ON CONFLICT(user_id) DO UPDATE SET
-  plan = excluded.plan,
-  expires_at = excluded.expires_at,
-  note = excluded.note,
-  updated_at = excluded.updated_at;`,
-  ].join("\n\n");
 }
 
 export function assertOfficialSerpPlanInspectResults(results) {

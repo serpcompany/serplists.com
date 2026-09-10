@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { rmSync, readdirSync, readFileSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
+import { rmSync, readdirSync, readFileSync, writeFileSync, mkdirSync, cpSync, existsSync, statSync } from "node:fs";
 import { routeFragmentDirectory, finalizeRouteCoverage, assertRouteInventory } from "./data/route-coverage-evidence.mjs";
 import { prepareSanitizedSmoke } from "./data/prepare-sanitized-smoke.mjs";
 import { captureSanitizedState, verifySanitizedRefusalPreservation, validateSanitizedCohortProof, validateSanitizedStateBinding } from './data/sanitized-state-lib.mjs';
@@ -16,6 +16,10 @@ import { cleanupSmokeState, createSmokeWorkspace } from "./data/smoke-teardown-l
 import { acquireSmokeRunLock } from "./data/smoke-run-lock-lib.mjs";
 import { browserGateArguments } from './data/runtime-gate-contract.mjs';
 import { normalizeMigrationRange } from './data/migration-range-lib.mjs';
+import { applyLocalSeedProfile, locateMigratedDatabase } from './data/seed-local.ts';
+import { applyRouteCoverageSeed } from '../db/seeds/index.ts';
+import { createSQLiteProxy } from './data/sqlite-proxy.ts';
+import { DatabaseSync } from 'node:sqlite';
 
 const DEFAULT_SMOKE_FRONTEND_PORT = 4173;
 const DEFAULT_SMOKE_API_PORT = 8788;
@@ -37,6 +41,14 @@ const teardownReportPath = path.resolve(
 );
 const env = buildSmokeChildEnvironment(process.env);
 env.DATA_REGRESSION_START_COMMIT ??= execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).trim();
+const candidateBuildFingerprint = createHash('sha256')
+  .update(env.DATA_REGRESSION_START_COMMIT)
+  .update(execFileSync('git', ['diff', '--binary', 'HEAD'], { cwd: repoRoot }))
+  .digest('hex');
+const candidateBuildDirectory = path.join(repoRoot, 'tmp', 'data-build-cache', candidateBuildFingerprint);
+const candidateAssetsDirectory = path.join(candidateBuildDirectory, 'assets');
+const candidateWorkerPath = path.join(candidateBuildDirectory, '_worker.js');
+const candidateBuildMarker = path.join(candidateBuildDirectory, 'build.json');
 const migrationFiles = readdirSync(path.join(repoRoot, 'db/migrations')).filter(name => /^\d+.*\.sql$/.test(name)).sort();
 const selectedRange = normalizeMigrationRange({ from: env.DATA_REGRESSION_MIGRATION_FROM ?? null, to: env.DATA_REGRESSION_MIGRATION_TO ?? null });
 env.DATA_REGRESSION_MIGRATION_FROM = selectedRange.from ?? 'none';
@@ -64,6 +76,19 @@ function run(command, args, options = {}) {
     },
     stdio: "inherit",
   });
+}
+
+function artifactDigest(target) {
+  const hash = createHash('sha256');
+  const visit = (entry, relative = '') => {
+    const stat = statSync(entry);
+    hash.update(relative).update(stat.isDirectory() ? 'directory' : 'file');
+    if (stat.isDirectory()) {
+      for (const child of readdirSync(entry).sort()) visit(path.join(entry, child), path.join(relative, child));
+    } else hash.update(readFileSync(entry));
+  };
+  visit(target);
+  return hash.digest('hex');
 }
 
 function runWrangler(args, options = {}) {
@@ -175,10 +200,13 @@ try {
   env.PLAYWRIGHT_ROUTE_LEDGER_JSON = JSON.stringify(ledger.map(name => ({ name, sha256: createHash('sha256').update(readFileSync(path.join(repoRoot, 'db/migrations', name))).digest('hex') })));
   // Full E2E includes the historical local Admin/SERP personas. Seed only this
   // freshly migrated isolated target, after sanitized-state capture, never dev D1.
-  for (const fixture of ['db/seeds/test-data.sql', 'db/seeds/official-templates.sql', 'db/seeds/official-local-login.sql']) {
-    run(NPX_COMMAND, [...NPX_ARGS_PREFIX, 'wrangler', 'd1', 'execute', DATABASE_NAME, '--local', '--persist-to', smokePersistPath, '--file', fixture, '--yes']);
+  await applyLocalSeedProfile({ persistPath: smokePersistAbsolutePath, profile: 'all' });
+  const coverageDatabase = new DatabaseSync(locateMigratedDatabase(smokePersistAbsolutePath));
+  try {
+    await applyRouteCoverageSeed(createSQLiteProxy(coverageDatabase));
+  } finally {
+    coverageDatabase.close();
   }
-  run(NPX_COMMAND, [...NPX_ARGS_PREFIX, "wrangler", "d1", "execute", DATABASE_NAME, "--local", "--persist-to", smokePersistPath, "--file", "scripts/data/sql/route-coverage-fixtures.sql", "--yes"]);
   const setupCommands = buildPlaywrightServerCommands({
     isolated: true,
     hasDevVars: false,
@@ -193,14 +221,36 @@ try {
     wranglerCwd: env.PLAYWRIGHT_WRANGLER_CWD,
   });
   if (!setupCommands.setup) throw new Error("Isolated smoke setup command is missing.");
-  run(process.platform === "win32" ? "cmd.exe" : "sh", [
-    ...(process.platform === "win32" ? ["/d", "/s", "/c"] : ["-c"]),
-    setupCommands.setup,
-  ]);
+  let cachedBuild = false;
+  try {
+    const manifest = JSON.parse(readFileSync(candidateBuildMarker, 'utf8'));
+    cachedBuild = existsSync(candidateAssetsDirectory)
+      && existsSync(candidateWorkerPath)
+      && manifest.fingerprint === candidateBuildFingerprint
+      && manifest.commit === env.DATA_REGRESSION_START_COMMIT
+      && manifest.workerSha256 === artifactDigest(candidateWorkerPath);
+  } catch {
+    cachedBuild = false;
+  }
+  if (!cachedBuild) {
+    rmSync(candidateBuildDirectory, { recursive: true, force: true });
+    run(process.platform === "win32" ? "cmd.exe" : "sh", [
+      ...(process.platform === "win32" ? ["/d", "/s", "/c"] : ["-c"]),
+      setupCommands.setup,
+    ]);
+    mkdirSync(candidateBuildDirectory, { recursive: true });
+    cpSync(path.join(repoRoot, 'dist'), candidateAssetsDirectory, { recursive: true });
+    cpSync(path.resolve(repoRoot, workerPath), candidateWorkerPath, { recursive: true });
+    writeFileSync(candidateBuildMarker, JSON.stringify({
+      commit: env.DATA_REGRESSION_START_COMMIT,
+      fingerprint: candidateBuildFingerprint,
+      workerSha256: artifactDigest(candidateWorkerPath),
+    }));
+  }
   // Advanced-mode Pages finds _worker.js inside its served asset directory.
   // Keep this entire test-only bundle outside the production dist output.
-  const distDirectory = path.join(repoRoot, 'dist');
-  cpSync(distDirectory, pagesDirectory, {recursive:true,filter:source => source !== path.join(distDirectory, '_worker.js')});
+  cpSync(candidateAssetsDirectory, pagesDirectory, { recursive: true, force: true });
+  cpSync(candidateWorkerPath, path.resolve(repoRoot, workerPath), { recursive: true, force: true });
   const pnpmBin = "pnpm";
   const { code, signal } = await new Promise((resolve, reject) => {
     const child = spawn(

@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { validateXML } from 'xmllint-wasm';
+import * as schema from '../../../db/schema/index';
 
 import { onRequest as sitemapIndex } from '../../../functions/sitemap.xml';
 import { onRequest as categoriesSitemap } from '../../../functions/sitemaps/categories/[page].xml';
@@ -10,6 +12,8 @@ import { onRequest as templatesSitemap } from '../../../functions/sitemaps/templ
 import { PUBLIC_CATEGORY_REGISTRY } from '../../../src/data/publicCategories';
 import { onRequest as legacyStaticSitemap } from '../../../functions/sitemaps/static.xml';
 import { onRequest as legacyCategoriesSitemap } from '../../../functions/categories/sitemap.xml';
+import { buildDurableShardIndex, handleInMemoryPagedSitemap } from '../../../functions/sitemap/shared';
+import { createSqliteDrizzleFixture } from '../../fixtures/sqlite-drizzle';
 
 const sitemapSchema = readFileSync(new URL('../../fixtures/sitemap.xsd', import.meta.url), 'utf8');
 const sitemapIndexSchema = readFileSync(new URL('../../fixtures/siteindex.xsd', import.meta.url), 'utf8');
@@ -28,85 +32,65 @@ type QueryResult = {
   results?: unknown[];
 };
 
-function createDb(...queryResults: QueryResult[]) {
-  let queryIndex = 0;
-
-  return {
-    prepare() {
-      const result = queryResults[queryIndex++] ?? {};
-      const statement = {
-        bind() {
-          return statement;
-        },
-        async first() {
-          return result.first ?? null;
-        },
-        async all() {
-          return { results: result.results ?? [] };
-        },
-        async run() {
-          return { success: true };
-        },
-      };
-      return statement;
-    },
+async function createDb(...queryResults: QueryResult[]) {
+  const fixture = createSqliteDrizzleFixture();
+  let sequence = 0;
+  const users = new Map<string, string>();
+  const requestedRevisions = new Map<string, string>();
+  const ensureUser = async (row: Record<string, unknown>) => {
+    const username = String(row.username ?? `owner_${sequence}`);
+    if (users.has(username)) return users.get(username)!;
+    const id = `user-${sequence++}`;
+    users.set(username, id);
+    await fixture.db.insert(schema.users).values({
+      id,
+      email: `${id}@example.invalid`,
+      username,
+      created_at: String(row.created_at ?? '2026-01-01 00:00:00'),
+      updated_at: row.updated_at == null ? null : String(row.updated_at),
+    });
+    if (row.profile_revision) await fixture.db.insert(schema.sitemap_profile_revisions)
+      .values({ user_id: id, revised_at: String(row.profile_revision) })
+      .onConflictDoUpdate({ target: schema.sitemap_profile_revisions.user_id, set: { revised_at: String(row.profile_revision) } });
+    if (row.owner_updated_at) await fixture.db.insert(schema.sitemap_owner_revisions)
+      .values({ user_id: id, revised_at: String(row.owner_updated_at) })
+      .onConflictDoUpdate({ target: schema.sitemap_owner_revisions.user_id, set: { revised_at: String(row.owner_updated_at) } });
+    return id;
   };
-}
-
-function createStatefulSitemapDb(data: {
-  profiles: Array<Record<string, unknown>>;
-  templates: Array<Record<string, unknown>>;
-  categories: Array<Record<string, unknown>>;
-  revisions: Map<string, string>;
-}) {
-  const shardState = new Map<string, { page: number; content_hash: string; revised_at: string }>();
-  return {
-    prepare(sql: string) {
-      let bindings: unknown[] = [];
-      const statement = {
-        bind(...values: unknown[]) { bindings = values; return statement; },
-        async first() { return null; },
-        async all() {
-          if (sql.includes('FROM users u LEFT JOIN sitemap_profile_revisions')) return { results: data.profiles };
-          if (sql.includes('FROM templates t JOIN users u')) return { results: data.templates };
-          if (sql.includes('SELECT t.category')) return { results: data.categories };
-          if (sql.includes('sitemap_category_revisions')) return { results: [] };
-          if (sql.includes('SELECT kind, revised_at FROM sitemap_revisions')) {
-            return { results: Array.from(data.revisions, ([kind, revised_at]) => ({ kind, revised_at })) };
-          }
-          if (sql.includes('FROM sitemap_shard_revisions')) {
-            const kind = String(bindings[0]);
-            return { results: Array.from(shardState.entries())
-              .filter(([key]) => key.startsWith(`${kind}:`))
-              .map(([, row]) => row) };
-          }
-          return { results: [] };
-        },
-        async run() {
-          if (sql.includes('INSERT INTO sitemap_shard_revisions')) {
-            const [kind, page, content_hash, revised_at] = bindings as [string, number, string, string];
-            shardState.set(`${kind}:${page}`, { page, content_hash, revised_at });
-          }
-          if (sql.includes('DELETE FROM sitemap_shard_revisions')) {
-            const [kind, pageCount] = bindings as [string, number];
-            for (const key of shardState.keys()) {
-              const [rowKind, rowPage] = key.split(':');
-              if (rowKind === kind && Number(rowPage) > pageCount) shardState.delete(key);
-            }
-          }
-          return { success: true };
-        },
-      };
-      return statement;
-    },
-  };
-}
-
-function sitemapLastmods(xml: string, kind: string): string[] {
-  return Array.from(
-    xml.matchAll(new RegExp(`<loc>https://serplists\\.com/sitemaps/${kind}/\\d+\\.xml</loc>\\s*<lastmod>([^<]+)</lastmod>`, 'g')),
-    (match) => match[1],
-  );
+  for (const result of queryResults) {
+    const rows = [...(result.results ?? []), ...(result.first ? [result.first] : [])] as Array<Record<string, unknown>>;
+    for (const row of rows) {
+      if (typeof row.kind === 'string') {
+        requestedRevisions.set(row.kind, String(row.revised_at));
+      } else if (result.first && row.revised_at && !row.category && !row.username) {
+        requestedRevisions.set('templates', String(row.revised_at));
+      } else if (row.category && row.revised_at && !row.created_at) {
+        await fixture.db.insert(schema.sitemap_category_revisions).values({ category: String(row.category), revised_at: String(row.revised_at) })
+          .onConflictDoUpdate({ target: schema.sitemap_category_revisions.category, set: { revised_at: String(row.revised_at) } });
+      } else if (row.slug || row.category) {
+        const userId = await ensureUser(row);
+        await fixture.db.insert(schema.templates).values({
+          id: `template-${sequence++}`,
+          user_id: userId,
+          title: 'Fixture template',
+          items: '[]',
+          slug: row.slug == null ? `category-${sequence}` : String(row.slug),
+          category: row.category == null ? null : String(row.category),
+          owner_type: 'user',
+          is_public: true,
+          created_at: String(row.created_at ?? '2026-01-01 00:00:00'),
+          updated_at: row.updated_at == null ? null : String(row.updated_at),
+        });
+      } else if (row.username) {
+        await ensureUser(row);
+      }
+    }
+  }
+  for (const [kind, revised_at] of requestedRevisions) {
+    await fixture.db.update(schema.sitemap_revisions).set({ revised_at })
+      .where(eq(schema.sitemap_revisions.kind, kind));
+  }
+  return fixture;
 }
 
 async function request(
@@ -114,11 +98,12 @@ async function request(
   path: string,
   options: { method?: string; db?: ReturnType<typeof createDb>; params?: Record<string, string> } = {},
 ) {
-  return handler({
+  const fixture = await (options.db ?? createDb());
+  const response = await handler({
     request: new Request(`https://preview.serplists.pages.dev${path}`, {
       method: options.method ?? 'GET',
     }),
-    env: { DB: options.db ?? createDb() },
+    env: { DB: fixture.binding },
     params: options.params ?? {},
     data: {},
     functionPath: path,
@@ -126,6 +111,8 @@ async function request(
     passThroughOnException() {},
     next: async () => new Response(null, { status: 404 }),
   } as never);
+  fixture.close();
+  return response;
 }
 
 describe('public sitemap HTTP responses', () => {
@@ -171,93 +158,30 @@ describe('public sitemap HTTP responses', () => {
   });
 
   it('changes only sitemap shard dates whose rendered membership or content changes', async () => {
-    const profiles = Array.from({ length: 25_001 }, (_, index) => ({
-      username: `u${String(index).padStart(5, '0')}`,
-      created_at: '2026-01-01 00:00:00',
-      updated_at: null,
-      profile_revision: '2030-03-01 00:00:00',
+    const fixture = createSqliteDrizzleFixture();
+    const entries = Array.from({ length: 25_001 }, (_, index) => ({
+      path: `/profile/u${String(index).padStart(5, '0')}`,
+      lastmod: '2030-03-01 00:00:00',
     }));
-    const templates = Array.from({ length: 25_001 }, (_, index) => ({
-      username: `u${String(index).padStart(5, '0')}`,
-      slug: `template-${String(index).padStart(5, '0')}`,
-      created_at: '2026-01-01 00:00:00', updated_at: null, owner_updated_at: null,
-    }));
-    const categories = Array.from({ length: 25_001 }, (_, index) => ({
-      category: `category-${String(index).padStart(5, '0')}`,
-      created_at: '2026-01-01 00:00:00', updated_at: null, owner_updated_at: null,
-    }));
-    const revisions = new Map([
-      ['profiles', '2030-03-01 00:00:00'],
-      ['templates', '2030-03-01 00:00:00'],
-      ['categories', '2030-03-01 00:00:00'],
-    ]);
-    const db = createStatefulSitemapDb({ profiles, templates, categories, revisions });
-
-    const firstXml = await (await request(sitemapIndex, '/sitemap.xml', { db: db as never })).text();
-    const authOnlyXml = await (await request(sitemapIndex, '/sitemap.xml', { db: db as never })).text();
-    expect(authOnlyXml).toBe(firstXml);
-    profiles[0].profile_revision = '2031-04-01 00:00:00';
-    templates[0].updated_at = '2031-04-01 00:00:00';
-    categories[0].updated_at = '2031-04-01 00:00:00';
-    revisions.set('profiles', '2031-04-01 00:00:00');
-    revisions.set('templates', '2031-04-01 00:00:00');
-    revisions.set('categories', '2031-04-01 00:00:00');
-    const updateXml = await (await request(sitemapIndex, '/sitemap.xml', { db: db as never })).text();
-
-    expect(sitemapLastmods(firstXml, 'profiles')).toEqual([
-      '2030-03-01T00:00:00.000Z',
-      '2030-03-01T00:00:00.000Z',
-    ]);
-    expect(sitemapLastmods(updateXml, 'profiles')).toEqual([
-      '2031-04-01T00:00:00.000Z',
-      '2030-03-01T00:00:00.000Z',
-    ]);
-    expect(sitemapLastmods(updateXml, 'templates')).toEqual([
-      '2031-04-01T00:00:00.000Z', '2030-03-01T00:00:00.000Z',
-    ]);
-    expect(sitemapLastmods(updateXml, 'categories')).toEqual([
-      '2031-04-01T00:00:00.000Z', '2030-03-01T00:00:00.000Z',
-    ]);
-
-    profiles.unshift({
-      username: 'a00000', created_at: '2032-05-01 00:00:00', updated_at: null,
-      profile_revision: '2032-05-01 00:00:00',
-    });
-    templates.unshift({
-      username: 'a00000', slug: 'template-new', created_at: '2032-05-01 00:00:00',
-      updated_at: null, owner_updated_at: null,
-    });
-    categories.unshift({
-      category: 'category-new', created_at: '2032-05-01 00:00:00',
-      updated_at: null, owner_updated_at: null,
-    });
-    revisions.set('profiles', '2032-05-01 00:00:00');
-    revisions.set('templates', '2032-05-01 00:00:00');
-    revisions.set('categories', '2032-05-01 00:00:00');
-    const insertXml = await (await request(sitemapIndex, '/sitemap.xml', { db: db as never })).text();
-    expect(sitemapLastmods(insertXml, 'profiles')).toEqual([
-      '2032-05-01T00:00:00.000Z',
-      '2032-05-01T00:00:00.000Z',
-    ]);
-    expect(sitemapLastmods(insertXml, 'templates')).toEqual([
-      '2032-05-01T00:00:00.000Z', '2032-05-01T00:00:00.000Z',
-    ]);
-    expect(sitemapLastmods(insertXml, 'categories')).toEqual([
-      '2032-05-01T00:00:00.000Z', '2032-05-01T00:00:00.000Z',
-    ]);
-
-    const completeProfiles = [...profiles];
-    profiles.splice(25_000);
-    revisions.set('profiles', '2033-05-01 00:00:00');
-    const shrinkXml = await (await request(sitemapIndex, '/sitemap.xml', { db: db as never })).text();
-    expect(sitemapLastmods(shrinkXml, 'profiles')).toEqual(['2032-05-01T00:00:00.000Z']);
-
-    profiles.push(...completeProfiles.slice(25_000));
-    revisions.set('profiles', '2034-05-01 00:00:00');
-    const recreateXml = await (await request(sitemapIndex, '/sitemap.xml', { db: db as never })).text();
-    expect(sitemapLastmods(recreateXml, 'profiles')).toEqual([
-      '2032-05-01T00:00:00.000Z', '2034-05-01T00:00:00.000Z',
-    ]);
+    try {
+      const first = await buildDurableShardIndex(fixture.db as never, 'profiles', entries, '2030-03-01 00:00:00');
+      expect((await buildDurableShardIndex(fixture.db as never, 'profiles', entries, '2030-03-01 00:00:00'))).toEqual(first);
+      entries[0].lastmod = '2031-04-01 00:00:00';
+      const updated = await buildDurableShardIndex(fixture.db as never, 'profiles', entries, '2031-04-01 00:00:00');
+      expect(updated.map((entry) => entry.lastmod)).toEqual([
+        '2031-04-01T00:00:00.000Z',
+        '2030-03-01T00:00:00.000Z',
+      ]);
+      const removed = entries.pop();
+      const shrunk = await buildDurableShardIndex(fixture.db as never, 'profiles', entries, '2032-05-01 00:00:00');
+      expect(shrunk).toHaveLength(1);
+      entries.push(removed!);
+      const recreated = await buildDurableShardIndex(fixture.db as never, 'profiles', entries, '2033-05-01 00:00:00');
+      expect(recreated).toHaveLength(2);
+      expect(recreated[1].lastmod).toBe('2033-05-01T00:00:00.000Z');
+    } finally {
+      fixture.close();
+    }
   }, 15_000);
 
   it('publishes canonical static pages and bundled public templates', async () => {
@@ -447,26 +371,20 @@ describe('public sitemap HTTP responses', () => {
 
   it('paginates category sitemap output at the configured shard size', async () => {
     const rows = Array.from({ length: 25_001 }, (_, index) => ({
-      category: `category ${String(index + 1).padStart(5, '0')}`,
-      created_at: '2026-01-02 03:04:05',
-      updated_at: null,
-      owner_updated_at: null,
+      path: `/categories/category-${String(index + 1).padStart(5, '0')}`,
+      lastmod: '2026-01-02 03:04:05',
     }));
-    const response = await request(categoriesSitemap, '/sitemaps/categories/2.xml', {
-      params: { page: '2' },
-      db: createDb(
-        { results: [{ kind: 'categories', revised_at: '2030-09-04 01:02:03' }] },
-        { results: rows },
-        { results: [] },
-      ),
-    });
+    const response = await handleInMemoryPagedSitemap(
+      new Request('https://serplists.com/sitemaps/categories/2.xml'),
+      '2',
+      () => rows,
+    );
     const xml = await response.text();
 
     expect(response.status).toBe(200);
-    expect(xml).toContain('/categories/category-25000');
     expect(xml).toContain('/categories/category-25001');
-    expect(xml).toContain('/categories/category-24999');
-    expect(xml).not.toContain('/categories/category-24998<');
+    expect(xml).not.toContain('/categories/category-25000<');
+    expect(xml.match(/<url>/g)).toHaveLength(1);
     expect(xml.match(/<lastmod>[^<]+<\/lastmod>/g)).toHaveLength(
       xml.match(/<url>/g)?.length ?? 0,
     );

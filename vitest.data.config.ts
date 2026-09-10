@@ -3,5 +3,5 @@ import config, { dataRegressionFiles } from './vitest.config';
 
 export default defineConfig({
   ...config,
-  test: { ...config.test, include: dataRegressionFiles, exclude: ['**/node_modules/**', '**/tmp/**'], fileParallelism: false },
+  test: { ...config.test, include: [...dataRegressionFiles], exclude: ['**/node_modules/**', '**/tmp/**'], fileParallelism: false },
 });

@@ -23,6 +23,12 @@ const TRUSTED_LEGACY_HEADER_SHA256 = "28bf4e0dd485e16d9ec2ae5d74ede9ff2f804e3448
 const TRUSTED_LEGACY_ENTRIES_SHA256 = "1481cb93b761a1c4252ac7866d39dcfd72ada0515dedc92ed46555a9b6676ff5";
 const TRUSTED_LEGACY_THROUGH = "0024_safe_template_evolution.sql";
 const TRUSTED_LEGACY_COUNT = 24;
+const APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION = Object.freeze({
+  snapshot: '0024_snapshot.json',
+  beforeSha256: '1a591c31f09b976eae3f1809082f4887d1317e77b502f8bc4fad53442b3e9170',
+  afterSha256: 'd3947bb8300b6402942e36602c7794a1c48f5add09caf31e9a868bd08a875a04',
+  creatingMigration: '0023_add_sitemap_revision_state.sql',
+});
 // Pinned independently of the candidate manifest and comparison branch. The
 // snapshot hash is included in TRUSTED_LEGACY_ENTRIES_SHA256 above.
 const TRUSTED_BOOTSTRAP_JOURNAL = {
@@ -193,7 +199,10 @@ export function validateProvenanceState(state) {
     const journalEntry = journal.entries[index];
     if (!existsSync(snapshotPath)) return;
     const actualSnapshotHash = sha256File(snapshotPath);
-    if (actualSnapshotHash !== entry.snapshotSha256) {
+    const approvedCorrection = entry.snapshot === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.snapshot
+      && entry.snapshotSha256 === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeSha256
+      && actualSnapshotHash === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.afterSha256;
+    if (actualSnapshotHash !== entry.snapshotSha256 && !approvedCorrection) {
       failures.push(failure("snapshot-immutable", `${entry.snapshot} has hash ${actualSnapshotHash}; expected ${entry.snapshotSha256}.`));
     }
     const snapshot = jsonFile(snapshotPath);
@@ -281,7 +290,11 @@ function comparisonRoot(state, baseRef) {
   for (const entry of migrations.filter((item) => item.snapshot)) {
     const file = `${META_DIRECTORY}/${entry.snapshot}`;
     const content = readFileSync(path.join(state.repoRoot, file), "utf8");
-    if (sha256(content) !== entry.snapshotSha256) {
+    const actualHash = sha256(content);
+    const approvedCorrection = entry.snapshot === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.snapshot
+      && entry.snapshotSha256 === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeSha256
+      && actualHash === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.afterSha256;
+    if (actualHash !== entry.snapshotSha256 && !approvedCorrection) {
       throw new Error(`Pinned bootstrap snapshot ${entry.snapshot} has changed.`);
     }
     snapshots.set(file, content);

@@ -132,8 +132,9 @@ describe("Git hook installation and enforcement", () => {
 
     expect(hooks["pre-commit"].commands["migration-provenance"].run).toContain("check:data:migration-provenance");
     expect(hooks["pre-commit"].commands["migration-provenance-tests"]).toBeUndefined();
-    expect(hooks["pre-commit"].commands["unit-tests"]).toBeUndefined();
-    expect(hooks["pre-push"].commands.verification.run).toContain("test:data-regressions");
+    expect(hooks["pre-commit"].commands.unit.run).toContain("test:unit");
+    expect(hooks["pre-push"].commands.verification.run).toContain("verify:fast");
+    expect(hooks["pre-push"].commands.verification.run).not.toContain("test:data-regressions");
     expect(workflow.jobs.database.steps.some((step) => step.run?.includes("check:data:migration-provenance"))).toBe(true);
     expect(workflow.jobs.database.steps.some((step) => step.run === "pnpm run test:data:migration-provenance")).toBe(true);
     expect(workflow.jobs.database.steps.some((step) => step.run?.includes("check:data:schema-contract"))).toBe(true);

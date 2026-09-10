@@ -1,4 +1,5 @@
 import type { Env } from '../../api/types';
+import { createDb } from '../../api/db';
 import {
   bundledInventoryLastmod,
   handleInMemoryPagedSitemap,
@@ -8,12 +9,13 @@ import {
 } from '../../sitemap/shared';
 
 export const onRequest: PagesFunction<Env> = async ({ request, env, params }) => {
-  const revisions = await loadSitemapRevisions(env);
+  const db = createDb(env);
+  const revisions = await loadSitemapRevisions(db);
   return handleInMemoryPagedSitemap(
     request,
     params.page,
     () => loadCategoryEntries(
-      env,
+      db,
       mostRecentLastmod(
         revisions.get('categories'),
         bundledInventoryLastmod('categories'),

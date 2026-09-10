@@ -7,6 +7,7 @@ const dbMocks = vi.hoisted(() => {
     where: vi.fn(),
     orderBy: vi.fn(),
     limit: vi.fn(),
+    as: vi.fn(),
   };
   const insertChain = {
     values: vi.fn(),
@@ -105,6 +106,7 @@ describe("Teams handler", () => {
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
     dbMocks.selectChain.limit.mockResolvedValue([]);
+    dbMocks.selectChain.as.mockReturnValue(dbMocks.selectChain);
     dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
     dbMocks.insertChain.select.mockReturnValue(dbMocks.insertChain);
     dbMocks.insertChain.onConflictDoNothing.mockReturnValue(dbMocks.insertChain);

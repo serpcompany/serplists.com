@@ -9,13 +9,15 @@ pre-commit:
       run: pnpm typecheck
     typecheck-env:
       run: pnpm typecheck:env
+    unit:
+      run: pnpm test:unit
     migration-provenance:
       run: pnpm run check:data:migration-provenance -- --base HEAD --report-dir tmp/data-reports/pre-commit
     schema-contract:
-      run: pnpm run check:data:schema-contract -- --report-dir tmp/data-reports/pre-commit
+      run: SCHEMA_CONTRACT_BASE_SHA="$(git merge-base HEAD origin/staging)" pnpm run check:data:schema-contract -- --report-dir tmp/data-reports/pre-commit
 
 pre-push:
   parallel: false
   commands:
     verification:
-      run: pnpm secret:scan && pnpm run test:data-regressions -- --report-dir tmp/data-reports/pre-push
+      run: pnpm secret:scan && pnpm run verify:fast

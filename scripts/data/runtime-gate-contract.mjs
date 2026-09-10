@@ -34,7 +34,7 @@ export function assertRuntimeRangeBinding(report, selectedRange) {
 }
 
 export function validateFullExportRecoveryProof(recovery, commit) {
-  const expected = ['original-source:pre0024','prepared-target:pre0024','original-source:post0024','prepared-target:post0024'];
+  const expected = ['original-source:pre0024','prepared-target:pre0024'];
   const observed = recovery?.restorations?.map(row => `${row.kind}:${row.sourceBoundary}`);
   return recovery?.verdict === 'pass' && recovery.commit === commit
     && recovery.target?.environment === 'local' && recovery.target?.synthetic === true

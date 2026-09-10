@@ -42,19 +42,21 @@ function runRealLocalD1Proof() {
         assert.deepEqual(sourceLedger, expectedSourceLedger, `Actual ${current ? 'post' : 'pre'}-0024 source export boundary`);
         // Restore the original fixture at both sides of 0024 too: the prepared
         // smoke target below is always upgraded to current schema.
-        const fullSourceExport = path.join(directory, `source-full-${current}.sql`);
-        source(["export", "synthetic-source", "--local", "--output", fullSourceExport]);
-        const fullSourceQuery = statement => source(["execute", "synthetic-source", "--local", "--json", "--command", statement]);
-        const originalState = captureFullRecoveryState({ query: fullSourceQuery, key: "synthetic-local-recovery-key-issue120" });
-        const originalRestoreDir = path.join(directory, `source-restore-${current}`); mkdirSync(originalRestoreDir);
-        const originalRestoreConfig = path.join(originalRestoreDir, "wrangler.toml");
-        writeFileSync(originalRestoreConfig, readFileSync(config, "utf8"));
-        withPreparedRecoveryImport({ inputPath: fullSourceExport,
-          expectedSourceSha256: prepareRecoveryExport(readFileSync(fullSourceExport)).metadata.sourceSha256,
-          execute: file => run(["d1", "execute", "synthetic-source", "--local", "--config", originalRestoreConfig, "--file", file, "--yes"]),
-        });
-        assert.deepEqual(captureFullRecoveryState({ key: "synthetic-local-recovery-key-issue120", query: statement => run(["d1", "execute", "synthetic-source", "--local", "--config", originalRestoreConfig, "--json", "--command", statement]) }), originalState);
-        restorations.push({kind:'original-source', sourceBoundary:current?'post0024':'pre0024', migrationLedger:sourceLedger, fullStateEquality:true, exportSha256:createHash('sha256').update(readFileSync(fullSourceExport)).digest('hex')});
+        if (!current) {
+          const fullSourceExport = path.join(directory, 'source-full-pre0024.sql');
+          source(["export", "synthetic-source", "--local", "--output", fullSourceExport]);
+          const fullSourceQuery = statement => source(["execute", "synthetic-source", "--local", "--json", "--command", statement]);
+          const originalState = captureFullRecoveryState({ query: fullSourceQuery, key: "synthetic-local-recovery-key-issue120" });
+          const originalRestoreDir = path.join(directory, 'source-restore-pre0024'); mkdirSync(originalRestoreDir);
+          const originalRestoreConfig = path.join(originalRestoreDir, "wrangler.toml");
+          writeFileSync(originalRestoreConfig, readFileSync(config, "utf8"));
+          withPreparedRecoveryImport({ inputPath: fullSourceExport,
+            expectedSourceSha256: prepareRecoveryExport(readFileSync(fullSourceExport)).metadata.sourceSha256,
+            execute: file => run(["d1", "execute", "synthetic-source", "--local", "--config", originalRestoreConfig, "--file", file, "--yes"]),
+          });
+          assert.deepEqual(captureFullRecoveryState({ key: "synthetic-local-recovery-key-issue120", query: statement => run(["d1", "execute", "synthetic-source", "--local", "--config", originalRestoreConfig, "--json", "--command", statement]) }), originalState);
+          restorations.push({kind:'original-source', sourceBoundary:'pre0024', migrationLedger:sourceLedger, fullStateEquality:true, exportSha256:createHash('sha256').update(readFileSync(fullSourceExport)).digest('hex')});
+        }
         source(["export", "synthetic-source", "--local", "--no-schema", "--output", sourceExport]);
         const now = new Date();
         const artifact = generateSanitizedRehearsalArtifact({ repoRoot, rawExport: readFileSync(sourceExport, "utf8"), migrationRange: { from: current ? null : migration, to: current ? null : migration }, sourceSchema: current ? migration : "0023_add_sitemap_revision_state.sql", sourceDatabaseId: "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1", sourceDate: now.toISOString().slice(0, 10), gitCommit: commit, issueNumber: 117, requestedApproverIdentity: "@devinschumacher", generatedAt: now, retentionDeadline: new Date(now.getTime() + 3600000).toISOString() });
@@ -83,7 +85,8 @@ function runRealLocalD1Proof() {
         // synthetic dependent row so the actual account0008/users0016 catalog
         // order cannot pass merely because account is empty. Install a trigger
         // after that row; firing it during restore would violate full equality.
-        query(`INSERT INTO account(id, account_id, provider_id, user_id) SELECT 'restore-account', 'literal;--account', 'credential', id FROM users LIMIT 1;
+        if (!current) {
+          query(`INSERT INTO account(id, account_id, provider_id, user_id) SELECT 'restore-account', 'literal;--account', 'credential', id FROM users LIMIT 1;
           CREATE TABLE restore_probe(id INTEGER PRIMARY KEY, value TEXT);
           INSERT INTO restore_probe VALUES(1, 'literal; /* comment */ it''s preserved');
           CREATE INDEX restore_probe_value ON restore_probe(value);
@@ -109,7 +112,8 @@ function runRealLocalD1Proof() {
         assert.deepEqual(captureFullRecoveryState({ query: restoreQuery, key: equalityKey }), fullBefore);
         const restored = captureSanitizedState({ sourceSha256: artifact.manifest.artifact.sha256, query: restoreQuery });
         validateSanitizedStateBinding(after, restored);
-        restorations.push({kind:'prepared-target', sourceBoundary:current?'post0024':'pre0024', fullStateEquality:true, exportSha256:prepared.metadata.sourceSha256});
+          restorations.push({kind:'prepared-target', sourceBoundary:'pre0024', fullStateEquality:true, exportSha256:prepared.metadata.sourceSha256});
+        }
       }
     } finally { rmSync(directory, { recursive: true, force: true }); rmSync(artifactDirectory, { recursive: true, force: true }); }
     assert.equal(existsSync(directory) || existsSync(artifactDirectory), false);

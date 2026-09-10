@@ -64,9 +64,7 @@ serplists.com/
 - `db/types/` - Drizzle model types.
 - `db/drizzle.config.ts` - Drizzle Kit config.
 - `db/migrations/` - numbered D1 migration files tracked in D1's `d1_migrations` table.
-- `db/seeds/test-data.sql` - local dev users, sample personal/team data, invites, and audit rows.
-- `db/seeds/official-templates.sql` - official public template seed.
-- `db/seeds/official-local-login.sql` - local login support for the official publisher account.
+- `db/seeds/index.ts` and `db/seeds/data/*.json` - typed Drizzle seed modules and deterministic local fixture data for dev users, teams, official templates, login, and route coverage.
 - `db/maintenance/` - one-off maintenance SQL that should not be tracked as schema history.
 
 Current migrations:

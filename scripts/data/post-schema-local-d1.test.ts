@@ -1,19 +1,22 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { expect, it } from 'vitest';
+import { applyOrderedWranglerMigrations } from './ordered-wrangler-replay.mjs';
 
-it.skipIf(process.platform === 'win32')('post-schema CLI validates actual local D1 SQL through a controlled identity shim', () => {
+it.skipIf(process.platform === 'win32')('post-schema CLI validates actual local D1 SQL through a controlled identity shim', async () => {
   const root = path.resolve('.');
   const directory = mkdtempSync(path.join(tmpdir(), 'post-schema-real-d1-'));
   const config = path.join(directory, 'wrangler.toml');
+  const migrations = path.join(directory, 'migrations');
   const databaseId = '11111111-1111-4111-8111-111111111111';
   const name = 'serp-checklists-rehearsal-post-schema';
   const cli = path.join(root, 'node_modules/wrangler/bin/wrangler.js');
   const target = ['--local', '--config', config, '--persist-to', path.join(directory, 'state')];
   const safeEnv = { PATH: process.env.PATH, HOME: directory, CI: 'true', WRANGLER_SEND_METRICS: 'false' };
-  writeFileSync(config, `name="post-schema-proof"\ncompatibility_date="2026-09-05"\n[[d1_databases]]\nbinding="DB"\ndatabase_name="${name}"\ndatabase_id="${databaseId}"\nmigrations_dir=${JSON.stringify(path.join(root, 'db/migrations'))}\n`);
+  mkdirSync(migrations);
+  writeFileSync(config, `name="post-schema-proof"\ncompatibility_date="2026-09-05"\n[[d1_databases]]\nbinding="DB"\ndatabase_name="${name}"\ndatabase_id="${databaseId}"\nmigrations_dir=${JSON.stringify(migrations)}\n`);
   const execute = (sql: string) => execFileSync(process.execPath, [cli, 'd1', 'execute', name, '--json', '--command', sql, ...target], { cwd: directory, env: safeEnv, encoding: 'utf8' });
   const shim = path.join(directory, 'pnpm');
   // Identity is synthetic and explicit. Every catalog/ledger SQL response is
@@ -29,7 +32,11 @@ process.stdout.write(execFileSync(process.execPath,[${JSON.stringify(cli)},...ar
   const reportDir = path.join(directory, 'reports');
   const check = () => spawnSync(process.execPath, ['--import', 'tsx', 'scripts/data/check-d1-schema.ts', '--database', name, '--database-id', databaseId, '--label', 'rehearsal', '--report-dir', reportDir], { cwd: root, env: { ...safeEnv, PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8' });
   try {
-    execFileSync(process.execPath, [cli, 'd1', 'migrations', 'apply', name, ...target], { cwd: directory, env: safeEnv, stdio: 'pipe' });
+    await applyOrderedWranglerMigrations({
+      sourceDirectory: path.join(root, 'db/migrations'),
+      ownedDirectory: migrations,
+      apply: () => execFileSync(process.execPath, [cli, 'd1', 'migrations', 'apply', name, ...target], { cwd: directory, env: safeEnv, stdio: 'pipe' }),
+    });
     expect(JSON.parse(execute("SELECT name FROM sqlite_schema WHERE name='_cf_METADATA'"))[0].results).toHaveLength(1);
     const healthy = check();
     expect(healthy.status, healthy.stdout + healthy.stderr).toBe(0);

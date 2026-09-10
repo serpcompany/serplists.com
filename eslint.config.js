@@ -36,6 +36,43 @@ export default tseslint.config(
     },
   },
   {
+    files: ["functions/**/*.{ts,tsx}"],
+    ignores: ["functions/api/db.ts"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        paths: [{ name: "drizzle-orm/d1", message: "Use the shared createDb module." }],
+      }],
+      "no-restricted-syntax": [
+        "error",
+        { selector: "CallExpression[callee.property.name='prepare']", message: "Application data access must use Drizzle's typed query builder." },
+        { selector: "CallExpression[callee.property.name='exec']", message: "Application data access must not execute unrestricted SQL." },
+        { selector: "MemberExpression[object.name='env'][property.name='DB']", message: "Business modules receive a Drizzle client, not the raw D1 binding." },
+        { selector: "CallExpression[callee.object.name='sql'][callee.property.name='raw']", message: "sql.raw() is prohibited." },
+      ],
+    },
+  },
+  {
+    files: ["scripts/reset-official-serp-password*.mjs", "scripts/set-official-serp-plan*.mjs"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        { selector: "CallExpression[callee.property.name='prepare']", message: "Operational business-data tools must use the typed Drizzle module." },
+        { selector: "CallExpression[callee.property.name='exec']", message: "Operational business-data tools must not execute unrestricted SQL." },
+        { selector: "CallExpression[callee.object.name='sql'][callee.property.name='raw']", message: "sql.raw() is prohibited." },
+      ],
+    },
+  },
+  {
+    files: ["db/seeds/**/*.{ts,tsx}", "tests/fast-database/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        { selector: "CallExpression[callee.property.name='prepare']", message: "Seeds and ordinary database fixtures must use Drizzle." },
+        { selector: "CallExpression[callee.object.name='sql'][callee.property.name='raw']", message: "sql.raw() is prohibited." },
+      ],
+    },
+  },
+  {
     // Relax TypeScript rules for test files
     files: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "**/tests/**/*.{ts,tsx}"],
     rules: {

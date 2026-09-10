@@ -1,6 +1,20 @@
 {
   "schemaVersion": 1,
-  "allowedFiles": ["db/schema/auth.ts", "db/schema/checklistRuns.ts", "db/schema/users.ts"],
+  "allowedFiles": ["db/schema/auth.ts", "db/schema/checklistRuns.ts", "db/schema/index.ts", "db/schema/sitemap.ts", "db/schema/users.ts"],
+  "adoptedTables": [
+    { "table": "sitemap_category_revisions", "creatingMigration": "0023_add_sitemap_revision_state.sql" },
+    { "table": "sitemap_owner_revisions", "creatingMigration": "0023_add_sitemap_revision_state.sql" },
+    { "table": "sitemap_profile_revisions", "creatingMigration": "0023_add_sitemap_revision_state.sql" },
+    { "table": "sitemap_revisions", "creatingMigration": "0023_add_sitemap_revision_state.sql" },
+    { "table": "sitemap_shard_revisions", "creatingMigration": "0023_add_sitemap_revision_state.sql" }
+  ],
+  "snapshotCorrection": {
+    "file": "db/migrations/meta/0024_snapshot.json",
+    "beforeCommit": "e5a3aaa720e3621a13a23dc2fe028088ca042bb1",
+    "beforeSha256": "1a591c31f09b976eae3f1809082f4887d1317e77b502f8bc4fad53442b3e9170",
+    "afterSha256": "d3947bb8300b6402942e36602c7794a1c48f5add09caf31e9a868bd08a875a04",
+    "creatingMigration": "0023_add_sitemap_revision_state.sql"
+  },
   "properties": [
     { "table": "account", "column": "created_at", "attribute": "defaultValue", "expectedValue": "cast(strftime('%s','now') as integer) * 1000", "creatingMigration": "0008_better_auth.sql" },
     { "table": "account", "column": "updated_at", "attribute": "defaultValue", "expectedValue": "cast(strftime('%s','now') as integer) * 1000", "creatingMigration": "0008_better_auth.sql" },
@@ -16,5 +30,6 @@
     { "table": "users", "column": "total_earnings", "attribute": "defaultValue", "expectedValue": "0", "creatingMigration": "0002_add_username_and_profiles.sql" }
   ],
   "appliedThrough": "0024_safe_template_evolution.sql",
-  "contractFingerprint": "b3872058c6ceb5af90bcc5231093b12c3fbc4aa505c828a075a9a00a41a34666"
+  "baseContractFingerprint": "78c86636bfcb86e6e67e6eeef654e6676502cdc86900064065160289c459d36c",
+  "contractFingerprint": "48b025606849010bcbdf8ca7394c086a1ac916a11576c114b8bb2ed09e387912"
 }

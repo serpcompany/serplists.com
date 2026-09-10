@@ -1,4 +1,5 @@
-import type { Env } from '../api/types';
+import { and, between, eq, gt, isNotNull, isNull, ne, not, sql, type SQL, type SQLWrapper } from 'drizzle-orm';
+import { createDb, schema } from '../api/db';
 import bundledTemplateCatalog from './bundled-catalog.generated.json';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../src/data/publicCategories';
 
@@ -51,23 +52,35 @@ export function sitemapImplementationLastmod(): string | null {
   return validLastmod(inventoryMetadata?.implementationLastmod);
 }
 
-export const VALID_USERNAME_SQL = `
-  LENGTH(TRIM(u.username)) BETWEEN 3 AND 30
-  AND TRIM(u.username) NOT GLOB '*[^A-Za-z0-9_.]*'`;
+const trimmed = (column: SQLWrapper) => sql<string>`trim(${column})`;
 
-export const PUBLIC_TEMPLATE_SQL_WHERE = `
-  t.owner_type = 'user'
-  AND t.team_id IS NULL
-  AND t.is_public = 1
-  AND t.deleted_at IS NULL`;
+export function validUsername(column: SQLWrapper): SQL {
+  return and(
+    between(sql<number>`length(${trimmed(column)})`, 3, 30),
+    not(sql`${trimmed(column)} glob '*[^A-Za-z0-9_.]*'`),
+  )!;
+}
 
-export const VALID_TEMPLATE_SLUG_SQL = `
-  LENGTH(TRIM(t.slug)) BETWEEN 1 AND 160
-  AND TRIM(t.slug) = LOWER(TRIM(t.slug))
-  AND TRIM(t.slug) NOT GLOB '*[^a-z0-9-]*'
-  AND SUBSTR(TRIM(t.slug), 1, 1) GLOB '[a-z0-9]'
-  AND SUBSTR(TRIM(t.slug), -1, 1) GLOB '[a-z0-9]'
-  AND INSTR(TRIM(t.slug), '--') = 0`;
+export function publicTemplate(): SQL {
+  return and(
+    eq(schema.templates.owner_type, 'user'),
+    isNull(schema.templates.team_id),
+    eq(schema.templates.is_public, true),
+    isNull(schema.templates.deleted_at),
+  )!;
+}
+
+export function validTemplateSlug(column: SQLWrapper): SQL {
+  const value = trimmed(column);
+  return and(
+    between(sql<number>`length(${value})`, 1, 160),
+    eq(value, sql<string>`lower(${value})`),
+    not(sql`${value} glob '*[^a-z0-9-]*'`),
+    sql`substr(${value}, 1, 1) glob '[a-z0-9]'`,
+    sql`substr(${value}, -1, 1) glob '[a-z0-9]'`,
+    eq(sql<number>`instr(${value}, '--')`, 0),
+  )!;
+}
 
 export function xmlEscape(value: string): string {
   return value
@@ -199,11 +212,11 @@ export function buildInMemoryShardIndex(
   });
 }
 
-export async function loadSitemapRevisions(env: Env): Promise<Map<string, string>> {
-  const result = await env.DB.prepare(
-    `SELECT kind, revised_at FROM sitemap_revisions`,
-  ).all<{ kind: string; revised_at: string }>();
-  return new Map(result.results.map((row) => [row.kind, row.revised_at]));
+type Database = ReturnType<typeof createDb>;
+
+export async function loadSitemapRevisions(db: Database): Promise<Map<string, string>> {
+  const rows = await db.select().from(schema.sitemap_revisions);
+  return new Map(rows.flatMap((row) => row.kind === null ? [] : [[row.kind, row.revised_at]]));
 }
 
 async function contentHash(value: string): Promise<string> {
@@ -213,21 +226,24 @@ async function contentHash(value: string): Promise<string> {
 }
 
 export async function buildDurableShardIndex(
-  env: Env,
+  db: Database,
   kind: 'pages' | 'categories' | 'profiles' | 'templates',
   entries: SitemapEntry[],
   familyRevision?: string | null,
 ): Promise<SitemapEntry[]> {
-  const existing = await env.DB.prepare(
-    `SELECT page, content_hash, revised_at FROM sitemap_shard_revisions WHERE kind = ?`,
-  ).bind(kind).all<{ page: number; content_hash: string; revised_at: string }>();
-  const byPage = new Map(existing.results.map((row) => [Number(row.page), row]));
+  const existing = await db.select({
+    page: schema.sitemap_shard_revisions.page,
+    content_hash: schema.sitemap_shard_revisions.content_hash,
+    revised_at: schema.sitemap_shard_revisions.revised_at,
+  }).from(schema.sitemap_shard_revisions).where(eq(schema.sitemap_shard_revisions.kind, kind));
+  const byPage = new Map(existing.map((row) => [Number(row.page), row]));
   const pageCount = Math.ceil(entries.length / SITEMAP_PAGE_SIZE);
   const shards: SitemapEntry[] = [];
-  if (existing.results.some((row) => Number(row.page) > pageCount)) {
-    await env.DB.prepare(
-      `DELETE FROM sitemap_shard_revisions WHERE kind = ? AND page > ?`,
-    ).bind(kind, pageCount).run();
+  if (existing.some((row) => Number(row.page) > pageCount)) {
+    await db.delete(schema.sitemap_shard_revisions).where(and(
+      eq(schema.sitemap_shard_revisions.kind, kind),
+      gt(schema.sitemap_shard_revisions.page, pageCount),
+    ));
   }
 
   for (let page = 1; page <= pageCount; page += 1) {
@@ -239,13 +255,12 @@ export async function buildDurableShardIndex(
       : mostRecentLastmod(familyRevision, latestLastmod(pageEntries));
     if (!revisedAt) throw new Error(`Missing revision source for ${kind} sitemap shard ${page}`);
     if (!previous || previous.content_hash !== hash || previous.revised_at !== revisedAt) {
-      await env.DB.prepare(
-        `INSERT INTO sitemap_shard_revisions(kind, page, content_hash, revised_at)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(kind, page) DO UPDATE SET
-           content_hash = excluded.content_hash,
-           revised_at = excluded.revised_at`,
-      ).bind(kind, page, hash, revisedAt).run();
+      await db.insert(schema.sitemap_shard_revisions)
+        .values({ kind, page, content_hash: hash, revised_at: revisedAt })
+        .onConflictDoUpdate({
+          target: [schema.sitemap_shard_revisions.kind, schema.sitemap_shard_revisions.page],
+          set: { content_hash: hash, revised_at: revisedAt },
+        });
     }
     shards.push({ path: `/sitemaps/${kind}/${page}.xml`, lastmod: revisedAt });
   }
@@ -297,23 +312,18 @@ export async function handleInMemoryPagedSitemap(
 }
 
 export async function loadCategoryEntries(
-  env: Env,
+  db: Database,
   inventoryLastmod?: string | null,
 ): Promise<SitemapEntry[]> {
-  const result = await env.DB.prepare(
-    `SELECT t.category, t.created_at, t.updated_at,
-            r.revised_at AS owner_updated_at
-       FROM templates AS t
-       JOIN users AS u ON u.id = t.user_id
-       LEFT JOIN sitemap_owner_revisions AS r ON r.user_id = u.id
-      WHERE ${PUBLIC_TEMPLATE_SQL_WHERE}
-        AND t.category IS NOT NULL AND TRIM(t.category) <> ''`,
-  ).all<{
-    category: string | null;
-    created_at: string;
-    updated_at: string | null;
-    owner_updated_at: string | null;
-  }>();
+  const rows = await db.select({
+    category: schema.templates.category,
+    created_at: schema.templates.created_at,
+    updated_at: schema.templates.updated_at,
+    owner_updated_at: schema.sitemap_owner_revisions.revised_at,
+  }).from(schema.templates)
+    .innerJoin(schema.users, eq(schema.users.id, schema.templates.user_id))
+    .leftJoin(schema.sitemap_owner_revisions, eq(schema.sitemap_owner_revisions.user_id, schema.users.id))
+    .where(and(publicTemplate(), isNotNull(schema.templates.category), ne(trimmed(schema.templates.category), '')));
   const lastmodBySlug = new Map<string, string | null>();
   const addCategory = (category: string, lastmod: string | null | undefined) => {
     const slug = categorySlug(category);
@@ -330,17 +340,16 @@ export async function loadCategoryEntries(
   PUBLIC_CATEGORY_REGISTRY.forEach((category) => {
     addCategory(category.slug, catalogPageEntry('/categories').lastmod);
   });
-  result.results.forEach((row) => {
+  rows.forEach((row) => {
     const lastmod = mostRecentLastmod(
       row.updated_at || row.created_at,
       row.owner_updated_at,
     );
     parseCategories(row.category).forEach((category) => addCategory(category, lastmod));
   });
-  const categoryRevisions = await env.DB.prepare(
-    `SELECT category, revised_at FROM sitemap_category_revisions`,
-  ).all<{ category: string; revised_at: string }>();
-  categoryRevisions.results.forEach((row) => {
+  const categoryRevisions = await db.select().from(schema.sitemap_category_revisions);
+  categoryRevisions.forEach((row) => {
+    if (row.category === null) return;
     parseCategories(row.category).forEach((category) => {
       const slug = categorySlug(category);
       if (lastmodBySlug.has(slug)) addCategory(category, row.revised_at);
@@ -368,18 +377,16 @@ export async function loadCategoryEntries(
 
 type PagedSitemapOptions<Row> = {
   request: Request;
-  env: Env;
   params: Record<string, string | string[]>;
-  sql: string;
+  loadRows: (pagination: { limit: number; offset: number }) => Promise<Row[]>;
   toEntry: (row: Row) => SitemapEntry | null;
   prefixEntries?: SitemapEntry[];
 };
 
 export async function handlePagedDatabaseSitemap<Row>({
   request,
-  env,
   params,
-  sql,
+  loadRows,
   toEntry,
   prefixEntries = [],
 }: PagedSitemapOptions<Row>): Promise<Response> {
@@ -391,10 +398,10 @@ export async function handlePagedDatabaseSitemap<Row>({
   const prefixedPageEntries = prefixEntries.slice(offset, offset + SITEMAP_PAGE_SIZE);
   const databaseLimit = SITEMAP_PAGE_SIZE - prefixedPageEntries.length;
   const databaseOffset = Math.max(0, offset - prefixEntries.length);
-  const result = databaseLimit > 0
-    ? await env.DB.prepare(sql).bind(databaseLimit, databaseOffset).all<Row>()
-    : { results: [] as Row[] };
-  const databaseEntries = result.results
+  const rows = databaseLimit > 0
+    ? await loadRows({ limit: databaseLimit, offset: databaseOffset })
+    : [];
+  const databaseEntries = rows
     .map(toEntry)
     .filter((entry): entry is SitemapEntry => entry !== null);
   const entries = [...prefixedPageEntries, ...databaseEntries];

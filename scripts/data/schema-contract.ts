@@ -47,7 +47,7 @@ export interface DatabaseCatalog {
 
 const migrationsDirectory = fileURLToPath(new URL("../../db/migrations/", import.meta.url));
 export const SQL_ONLY_OBJECT_ALLOWLIST = Object.freeze({
-  tables: ["sitemap_revisions", "sitemap_profile_revisions", "sitemap_owner_revisions", "sitemap_category_revisions", "sitemap_shard_revisions"],
+  tables: [],
   indexes: [
     "idx_audit_events_actor", "idx_audit_events_resource", "idx_audit_events_subject",
     "idx_checklist_runs_assigned_to_user_id", "idx_checklist_runs_share_token", "idx_checklist_runs_status", "idx_checklist_runs_team_id", "idx_checklist_runs_template_id", "idx_checklist_runs_user_id",

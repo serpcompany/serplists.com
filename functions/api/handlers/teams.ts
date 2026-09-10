@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, exists, gt, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
@@ -115,20 +115,26 @@ function pendingInviteWhere(inviteId: string, now: string) {
   );
 }
 
-function acceptedInviteExistsSql(inviteId: string, userId: string, acceptedAt: string) {
+function acceptedInviteQuery(
+  db: ReturnType<typeof createDb>,
+  inviteId: string,
+  userId: string,
+  acceptedAt: string,
+) {
   const { team_invites } = schema;
-
-  return sql`exists (
-    select 1
-    from ${team_invites}
-    where ${team_invites.id} = ${inviteId}
-      and ${team_invites.accepted_by_user_id} = ${userId}
-      and ${team_invites.accepted_at} = ${acceptedAt}
-      and ${team_invites.revoked_at} is null
-  )`;
+  return db.select({ id: team_invites.id }).from(team_invites).where(and(
+    eq(team_invites.id, inviteId),
+    eq(team_invites.accepted_by_user_id, userId),
+    eq(team_invites.accepted_at, acceptedAt),
+    isNull(team_invites.revoked_at),
+  ));
 }
 
-function insertAuditEventWhenInviteAccepted(
+function acceptedInviteExists(db: ReturnType<typeof createDb>, inviteId: string, userId: string, acceptedAt: string) {
+  return exists(acceptedInviteQuery(db, inviteId, userId, acceptedAt));
+}
+
+export function insertAuditEventWhenInviteAccepted(
   db: ReturnType<typeof createDb>,
   auditEvent: typeof schema.audit_events.$inferInsert,
   inviteId: string,
@@ -137,25 +143,47 @@ function insertAuditEventWhenInviteAccepted(
 ) {
   const { audit_events } = schema;
 
-  return db.insert(audit_events).select(sql`
-    select
-      ${auditEvent.id},
-      ${auditEvent.actor_user_id},
-      ${auditEvent.subject_type},
-      ${auditEvent.subject_id},
-      ${auditEvent.resource_type},
-      ${auditEvent.resource_id},
-      ${auditEvent.action},
-      ${auditEvent.before_json},
-      ${auditEvent.after_json},
-      ${auditEvent.diff_json},
-      ${auditEvent.metadata_json},
-      ${auditEvent.request_id},
-      ${auditEvent.ip_hash},
-      ${auditEvent.user_agent},
-      ${auditEvent.created_at}
-    where ${acceptedInviteExistsSql(inviteId, userId, acceptedAt)}
-  `);
+  const accepted = acceptedInviteQuery(db, inviteId, userId, acceptedAt).as('accepted_invite_for_audit');
+  return db.insert(audit_events).select(db.select({
+    id: sql<string>`${auditEvent.id}`.as('id'),
+    actor_user_id: sql<string | null>`${auditEvent.actor_user_id ?? null}`.as('actor_user_id'),
+    subject_type: sql<string>`${auditEvent.subject_type}`.as('subject_type'),
+    subject_id: sql<string>`${auditEvent.subject_id}`.as('subject_id'),
+    resource_type: sql<string>`${auditEvent.resource_type}`.as('resource_type'),
+    resource_id: sql<string>`${auditEvent.resource_id}`.as('resource_id'),
+    action: sql<string>`${auditEvent.action}`.as('action'),
+    before_json: sql<string | null>`${auditEvent.before_json ?? null}`.as('before_json'),
+    after_json: sql<string | null>`${auditEvent.after_json ?? null}`.as('after_json'),
+    diff_json: sql<string | null>`${auditEvent.diff_json ?? null}`.as('diff_json'),
+    metadata_json: sql<string | null>`${auditEvent.metadata_json ?? null}`.as('metadata_json'),
+    request_id: sql<string | null>`${auditEvent.request_id ?? null}`.as('request_id'),
+    ip_hash: sql<string | null>`${auditEvent.ip_hash ?? null}`.as('ip_hash'),
+    user_agent: sql<string | null>`${auditEvent.user_agent ?? null}`.as('user_agent'),
+    created_at: sql<string>`${auditEvent.created_at}`.as('created_at'),
+  }).from(accepted));
+}
+
+export function insertTeamMemberWhenInviteAccepted(
+  db: ReturnType<typeof createDb>,
+  membership: typeof schema.team_members.$inferInsert,
+  inviteId: string,
+  userId: string,
+  acceptedAt: string,
+) {
+  const { team_members } = schema;
+  return db.insert(team_members)
+    .select(db.select({
+      id: sql<string>`${membership.id}`.as('id'),
+      team_id: sql<string>`${membership.team_id}`.as('team_id'),
+      user_id: sql<string>`${membership.user_id}`.as('user_id'),
+      role: sql<string>`${membership.role ?? 'viewer'}`.as('role'),
+      status: sql<string>`${membership.status ?? 'active'}`.as('status'),
+      invited_by_user_id: sql<string | null>`${membership.invited_by_user_id ?? null}`.as('invited_by_user_id'),
+      joined_at: sql<string | null>`${membership.joined_at ?? null}`.as('joined_at'),
+      created_at: sql<string>`${membership.created_at}`.as('created_at'),
+      updated_at: sql<string | null>`${membership.updated_at ?? null}`.as('updated_at'),
+    }).from(acceptedInviteQuery(db, inviteId, userId, acceptedAt).as('accepted_invite_for_membership')).where(sql`true`))
+    .onConflictDoNothing({ target: [team_members.team_id, team_members.user_id] });
 }
 
 async function acceptTeamInviteRecord({
@@ -265,7 +293,7 @@ async function acceptTeamInviteRecord({
           status: "active",
           joined_at: existingMembership.joined_at ?? now,
           updated_at: now,
-        }).where(and(eq(team_members.id, existingMembership.id), acceptedInviteExistsSql(invite.id, userId, now))),
+        }).where(and(eq(team_members.id, existingMembership.id), acceptedInviteExists(db, invite.id, userId, now))),
         insertAuditEventWhenInviteAccepted(db, auditEvent, invite.id, userId, now),
       ]);
     }
@@ -284,21 +312,7 @@ async function acceptTeamInviteRecord({
 
     await db.batch([
       db.update(team_invites).set(inviteUpdates).where(pendingInviteWhere(invite.id, now)),
-      db.insert(team_members)
-        .select(sql`
-          select
-            ${insertedMembership.id},
-            ${insertedMembership.team_id},
-            ${insertedMembership.user_id},
-            ${insertedMembership.role},
-            ${insertedMembership.status},
-            ${insertedMembership.invited_by_user_id},
-            ${insertedMembership.joined_at},
-            ${insertedMembership.created_at},
-            ${insertedMembership.updated_at}
-          where ${acceptedInviteExistsSql(invite.id, userId, now)}
-        `)
-        .onConflictDoNothing({ target: [team_members.team_id, team_members.user_id] }),
+      insertTeamMemberWhenInviteAccepted(db, insertedMembership, invite.id, userId, now),
       insertAuditEventWhenInviteAccepted(db, auditEvent, invite.id, userId, now),
     ]);
   }

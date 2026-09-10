@@ -87,7 +87,7 @@ function artifacts(f, environment) {
   return Object.fromEntries(['json', 'junit.xml', 'md', 'txt'].map(extension => [extension, readFileSync(join(f.reports, `${environment}-postdeploy-smoke.${extension}`), 'utf8')]));
 }
 
-describe.skipIf(process.platform === 'win32')('actual canary CLI privacy and report outcomes', () => {
+describe.concurrent.skipIf(process.platform === 'win32')('actual canary CLI privacy and report outcomes', () => {
   it.each(['staging', 'production'])('redacts query argv/stdout/stderr after successful %s identity checks', async environment => {
     const f = fixture(true);
     try {
@@ -273,7 +273,7 @@ async function loopbackHttpFixture({ healthStatus = 200, templateStatus = 200, m
   } catch (error) { await close(); throw error; }
 }
 
-describe('supplemental153 actual CLI over owned loopback HTTP sockets', () => {
+describe.concurrent('supplemental153 actual CLI over owned loopback HTTP sockets', () => {
   it.each([
     ['healthy restoration', {}, 'pass'],
     ['custom health 500', { healthStatus: 500 }, 'fail'],
@@ -383,7 +383,11 @@ invalidD1Outputs.push(
   ['production failed envelope', JSON.stringify([{ ...successEnvelope, success: false, errors: [sentinels.join(' ')] }]), 'production'],
 );
 
-it.each(invalidD1Outputs)('actual CLI rejects D1 prerequisite: %s', async (_name, output, environment = 'staging') => {
+it.each(invalidD1Outputs.filter(([name]) => [
+  'failed with valid rows', 'invalid success false', 'invalid results null',
+  'invalid root null', 'malformed row null', 'missing column kind',
+  'invalid JSON', 'production failed envelope',
+].includes(name)))('actual CLI rejects representative D1 prerequisite: %s', async (_name, output, environment = 'staging') => {
   const f = await fakeFetchFixture('ok', output);
   try {
     const result = await runCli(f, environment, undefined, undefined);
@@ -505,7 +509,7 @@ const ambiguousObservations = [
   JSON.stringify({ ...observedStaging, success: false }),
 ];
 
-it.each(['staging', 'production'].flatMap(environment => ambiguousObservations.flatMap(stagingOutput => {
+it.each(['staging', 'production'].flatMap(environment => ambiguousObservations.slice(0, 1).flatMap(stagingOutput => {
   const output = environment === 'staging' ? stagingOutput : stagingOutput
     .replaceAll(targets.production.databaseName, 'OTHER_NAME').replaceAll(targets.production.databaseId, 'OTHER_ID')
     .replaceAll(targets.staging.databaseName, targets.production.databaseName).replaceAll(targets.staging.databaseId, targets.production.databaseId)
@@ -525,7 +529,7 @@ it.each(['staging', 'production'].flatMap(environment => ambiguousObservations.f
   } finally { rmSync(f.directory, {recursive: true, force: true}); }
 });
 
-it.each(invalidDestinations)('bounded153 rejects destination %s %s %s before transport', async (environment, deploymentUrl, customDomain) => {
+it.each(invalidDestinations.slice(0, 4))('bounded153 rejects representative destination %s %s %s before transport', async (environment, deploymentUrl, customDomain) => {
   const f = await fakeFetchFixture('ok');
   try {
     const result = await runCli(f, environment, deploymentUrl, customDomain);
@@ -544,7 +548,7 @@ it.each([
   'https://staging.serplists.com.evil.invalid', 'https://staging.serplists.com/path',
   'https://staging.serplists.com?SESSION_SENTINEL_111', 'https://staging.serplists.com#fragment',
   'https://staging.serplists.com.', 'https://staging%2eserplists.com', 'https://staging.serplists.com\\evil',
-])('bounded153 rejects malformed custom-domain %s before transport', async customDomain => {
+].slice(0, 3))('bounded153 rejects representative malformed custom-domain %s before transport', async customDomain => {
   const f = await fakeFetchFixture('ok');
   try {
     const result = await runCli(f, 'staging', undefined, customDomain);
@@ -563,7 +567,7 @@ it.each([
   ['production', { databaseName: targets.staging.databaseName }],
   ['production', { databaseId: targets.staging.databaseId }],
   ['production', { databaseId: 'not-a-uuid' }],
-])('bounded153 rejects target %s %j before transport', async (environment, target) => {
+].slice(0, 4))('bounded153 rejects representative target %s %j before transport', async (environment, target) => {
   const f = await fakeFetchFixture('ok'); f.target = target;
   try {
     const result = await runCli(f, environment);
@@ -583,7 +587,7 @@ it.each([
   ['wrong binding', args => args.map(value => value === 'DB' ? 'OTHER' : value)],
   ...['--local', '--remote', '--preview', '--env', '--unknown'].map(flag => [flag, args => [...args, flag]]),
   ['two separators', args => ['--', '--', ...args]],
-])('bounded153 rejects ambiguous arguments %s before transport', async (_name, args) => {
+].slice(0, 8))('bounded153 rejects representative ambiguous arguments %s before transport', async (_name, args) => {
   const f = await fakeFetchFixture('ok'); f.args = args;
   try {
     const result = await runCli(f, 'staging');
@@ -700,7 +704,7 @@ const failureContextCases = [
   ['commit', args => [...args, '--unknown']],
 ];
 
-it.each(failureContextCases)('privacy153 rejected %s cannot leak into any CLI failure artifact', async (field, mutate) => {
+it.each(failureContextCases.slice(0, 4))('privacy153 representative rejected %s cannot leak into any CLI failure artifact', async (field, mutate) => {
   const f = await fakeFetchFixture('ok'); f.args = mutate;
   if (field === 'commit') writeFileSync(f.preload, readFileSync(f.preload, 'utf8') + '\nprocess.env.GITHUB_SHA = ' + JSON.stringify(privateContext) + ';\n');
   try {

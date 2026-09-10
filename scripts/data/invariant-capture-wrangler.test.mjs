@@ -4,8 +4,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import { captureRemoteInvariantSnapshot, compareProductionInvariants } from './invariant-capture-lib.mjs';
+import { applyOrderedWranglerMigrations } from './ordered-wrangler-replay.mjs';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const wrangler = path.join(repoRoot, 'node_modules/wrangler/bin/wrangler.js');
@@ -22,17 +24,15 @@ const yielding = operation => async (...args) => {
   finally { await setImmediate(); }
 };
 
-async function localDatabase(pre0024 = false) {
+async function localDatabase(pre0024 = false, { realTransport = false } = {}) {
   expect(JSON.parse(readFileSync(path.join(repoRoot, 'node_modules/wrangler/package.json'), 'utf8')).version).toBe('4.54.0');
   const directory = mkdtempSync(path.join(tmpdir(), 'serplists-owned-wrangler-capture-'));
   const migrations = path.join(directory, 'migrations');
   mkdirSync(migrations);
-  for (const name of readdirSync(migrationDirectory).filter(name => /^\d{4}_[a-z0-9_]+\.sql$/.test(name))) {
-    if (!pre0024 || name.slice(0, 4) < evolution.slice(0, 4)) copyFileSync(path.join(migrationDirectory, name), path.join(migrations, name));
-  }
   const config = path.join(directory, 'wrangler.toml');
   writeFileSync(config, 'name = "invariant-local-proof"\ncompatibility_date = "2024-09-23"\n[[d1_databases]]\nbinding = "DB"\ndatabase_name = "invariant-local-proof"\ndatabase_id = "11111111-1111-4111-8111-111111111111"\nmigrations_dir = "migrations"\n');
-  const run = args => {
+  let sqlite;
+  const runWrangler = args => {
     if (args.includes('--remote') || args[0] !== 'd1' || !args.includes('--local')) throw new Error('Real invariant test permits only local D1 commands.');
     return execFileSync(process.execPath, [wrangler, ...args, '--config', config, '--persist-to', path.join(directory, 'state')], {
       cwd:directory, encoding:'utf8', stdio:['ignore','pipe','pipe'], timeout:90000, maxBuffer:16 * 1024 * 1024,
@@ -40,18 +40,58 @@ async function localDatabase(pre0024 = false) {
         XDG_CONFIG_HOME:path.join(directory, 'config'), WRANGLER_LOG_PATH:path.join(directory, 'wrangler.log') },
     });
   };
+  const runInProcess = args => {
+    if (!sqlite) throw new Error('In-process SQLite state is unavailable.');
+    if (args[0] !== 'd1' || !args.includes('--local')) throw new Error('In-process invariant test permits only local D1 commands.');
+    if (args[1] === 'migrations') {
+      const applied = new Set(sqlite.prepare('select name from d1_migrations order by id').all().map(row => row.name));
+      for (const name of readdirSync(migrations).filter(name => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort((a, b) => a.localeCompare(b, 'en'))) {
+        if (applied.has(name)) continue;
+        sqlite.exec(readFileSync(path.join(migrations, name), 'utf8'));
+        sqlite.prepare('insert into d1_migrations(name) values (?)').run(name);
+      }
+      return '';
+    }
+    const fileIndex = args.indexOf('--file');
+    const commandArg = args.find(arg => arg.startsWith('--command='));
+    const commandIndex = args.indexOf('--command');
+    const sqlText = fileIndex >= 0 ? readFileSync(args[fileIndex + 1], 'utf8')
+      : commandArg ? commandArg.slice('--command='.length) : args[commandIndex + 1];
+    if (!sqlText) throw new Error('Missing in-process SQL.');
+    const statements = sqlText.split(';').map(statement => statement.replace(/^\s*--.*$/gm, '').trim()).filter(Boolean);
+    const results = statements.map(statement => {
+      if (/^\s*(select|pragma|with)\b/i.test(statement)) {
+        return { success: true, meta: {}, results: sqlite.prepare(statement).all() };
+      }
+      sqlite.exec(statement);
+      return { success: true, meta: {}, results: [] };
+    });
+    return JSON.stringify(results);
+  };
+  const run = realTransport ? runWrangler : runInProcess;
   const apply = () => run(['d1','migrations','apply','invariant-local-proof','--local']);
   const execute = sql => run(['d1','execute','invariant-local-proof','--local','--json',`--command=${sql}`]);
   const capture = () => captureRemoteInvariantSnapshot({ database:'invariant-local-proof', repoRoot,
     key:'synthetic-real-local-capture-key-151', runWrangler:args => run([...args.filter(arg => arg !== '--remote'), '--local']) });
-  const close = () => rmSync(directory, {recursive:true, force:true});
-  try { await yielding(apply)(); } catch (error) { close(); throw error; }
+  const close = () => { sqlite?.close(); rmSync(directory, {recursive:true, force:true}); };
+  try {
+    if (!realTransport) {
+      sqlite = new DatabaseSync(':memory:');
+      sqlite.exec('create table d1_migrations(id integer primary key autoincrement, name text unique, applied_at text default current_timestamp not null)');
+    }
+    await applyOrderedWranglerMigrations({
+      sourceDirectory: migrationDirectory,
+      ownedDirectory: migrations,
+      throughMigration: pre0024 ? '0023_add_sitemap_revision_state.sql' : evolution,
+      apply: yielding(apply),
+    });
+  } catch (error) { close(); throw error; }
   return { directory, migrations, run:yielding(run), apply:yielding(apply), execute:yielding(execute), capture:yielding(capture), close };
 }
 
 describe.sequential('real pinned Wrangler invariant capture', {timeout:180000}, () => {
   it('executes exact commented, multiline, quoted and equals SQL through the real CLI', async () => {
-    const db = await localDatabase();
+    const db = await localDatabase(false, { realTransport: true });
     try {
       for (const sql of ['SELECT \'it\'\'s a=b\' AS "quoted=value";', '-- leading a=b comment\nSELECT \'it\'\'s a=b\' AS "quoted=value";\n']) {
         expect(JSON.parse(await db.execute(sql))[0].results).toEqual([{ 'quoted=value': "it's a=b" }]);

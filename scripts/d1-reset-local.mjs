@@ -1,7 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from 'node:os';
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { applyOrderedWranglerMigrations } from './data/ordered-wrangler-replay.mjs';
+import { applyLocalSeedProfile } from './data/seed-local.ts';
 
 const DATABASE_NAME = "serp-checklists-db";
 const NPX_COMMAND = process.platform === "win32" ? "cmd.exe" : "npx";
@@ -25,19 +28,6 @@ function run(command, args) {
     env: process.env,
     stdio: "inherit",
   });
-}
-
-function executeLocalSql(filePath) {
-  run(NPX_COMMAND, [
-    ...NPX_ARGS_PREFIX,
-    "wrangler",
-    "d1",
-    "execute",
-    DATABASE_NAME,
-    "--local",
-    "--file",
-    filePath,
-  ]);
 }
 
 function sleep(milliseconds) {
@@ -64,18 +54,21 @@ function resetLocalD1State() {
 
 try {
   resetLocalD1State();
-  run(NPX_COMMAND, [
-    ...NPX_ARGS_PREFIX,
-    "wrangler",
-    "d1",
-    "migrations",
-    "apply",
-    DATABASE_NAME,
-    "--local",
-  ]);
-  executeLocalSql("./db/seeds/test-data.sql");
-  executeLocalSql("./db/seeds/official-templates.sql");
-  executeLocalSql("./db/seeds/official-local-login.sql");
+  const replayRoot = mkdtempSync(path.join(tmpdir(), 'serplists-reset-replay-'));
+  try {
+    const migrations = path.join(replayRoot, 'migrations');
+    mkdirSync(migrations);
+    const config = path.join(replayRoot, 'wrangler.toml');
+    writeFileSync(config, readFileSync(path.join(repoRoot, 'wrangler.toml'), 'utf8').replaceAll('migrations_dir = "db/migrations"', `migrations_dir = ${JSON.stringify(migrations)}`));
+    await applyOrderedWranglerMigrations({
+      sourceDirectory: path.join(repoRoot, 'db/migrations'),
+      ownedDirectory: migrations,
+      apply: () => run(NPX_COMMAND, [...NPX_ARGS_PREFIX, 'wrangler', 'd1', 'migrations', 'apply', DATABASE_NAME, '--local', '--config', config, '--persist-to', path.join(repoRoot, '.wrangler/state')]),
+    });
+  } finally {
+    rmSync(replayRoot, { recursive: true, force: true });
+  }
+  await applyLocalSeedProfile({ persistPath: path.join(repoRoot, '.wrangler/state'), profile: 'all' });
   console.log("Local D1 reset complete");
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

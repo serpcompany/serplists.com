@@ -1,7 +1,8 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createHash } from 'node:crypto';
 import { tmpdir } from "node:os";
 import * as drizzleSchema from "../../db/schema/index";
-import { buildDrizzleContract, contractFingerprint, inspectDatabase, listMigrationFiles, replayMigrations, validateContractCorrection, type DrizzleContract } from "./schema-contract";
+import { buildDrizzleContract, contractFingerprint, diffDrizzleContract, inspectDatabase, listMigrationFiles, replayMigrations, validateContractCorrection, type DrizzleContract } from "./schema-contract";
 import { writeDataCheckReports } from "./reporting.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
@@ -23,7 +24,10 @@ interface ContractCorrectionProperty {
 interface ContractCorrectionManifest {
   allowedFiles: string[];
   properties: ContractCorrectionProperty[];
+  adoptedTables?: Array<{ table: string; creatingMigration: string }>;
+  snapshotCorrection?: { file: string; beforeCommit: string; beforeSha256: string; afterSha256: string; creatingMigration: string };
   appliedThrough: string;
+  baseContractFingerprint?: string;
   contractFingerprint: string;
 }
 
@@ -47,9 +51,10 @@ function exactContractCorrectionProperties(baseContract: DrizzleContract, correc
   }
   const baseTables = Object.keys(baseContract.tables).sort();
   const correctedTables = Object.keys(correctedContract.tables).sort();
-  if (JSON.stringify(baseTables) !== JSON.stringify(correctedTables)) throw new Error("Contract correction adds or removes a table and requires a migration.");
+  const removedTables = baseTables.filter((table) => !correctedContract.tables[table]);
+  if (removedTables.length) throw new Error("Contract correction removes a table and requires a migration.");
   const differences = [] as Array<{ table: string; column: string; attribute: string; expectedValue: unknown }>;
-  for (const table of correctedTables) {
+  for (const table of baseTables) {
     const baseTable = baseContract.tables[table];
     const correctedTable = correctedContract.tables[table];
     if (JSON.stringify(baseTable.indexes) !== JSON.stringify(correctedTable.indexes)) throw new Error(`Contract correction changes indexes for ${table} and requires a migration.`);
@@ -70,6 +75,7 @@ function exactContractCorrectionProperties(baseContract: DrizzleContract, correc
 }
 let reportCommit = "unknown";
 let reportComparisonBase: string | null = null;
+let reportMetadataFingerprints: { before: string; after: string } | null = null;
 const reportEventName = process.env.GITHUB_EVENT_NAME ?? "local-working-tree";
 try {
   const topLevel = git(["rev-parse", "--show-toplevel"]).trim();
@@ -91,7 +97,7 @@ try {
     if (process.env.GITHUB_ACTIONS === "true") {
       comparisonBase = process.env.SCHEMA_CONTRACT_BASE_SHA ?? null;
       if (!comparisonBase || /^0+$/.test(comparisonBase)) throw new Error(`GitHub ${eventName} schema check requires a trustworthy comparison base SHA.`);
-    } else comparisonBase = "HEAD";
+    } else comparisonBase = process.env.SCHEMA_CONTRACT_BASE_SHA ?? "HEAD";
     reportComparisonBase = comparisonBase;
     git(["rev-parse", "--verify", comparisonBase], { stdio: ["ignore", "pipe", "pipe"] });
     git(["merge-base", "--is-ancestor", comparisonBase, "HEAD"], { stdio: ["ignore", "pipe", "pipe"] });
@@ -115,12 +121,45 @@ try {
     try {
       const baseSchema = await import(`${pathToFileURL(path.join(baseTree, "db/schema/index.ts")).href}?base=${encodeURIComponent(baseRef)}`);
       const baseContract = buildDrizzleContract(baseSchema);
+      reportMetadataFingerprints = { before: contractFingerprint(baseContract), after: contractFingerprint(contract) };
+      if (manifest.baseContractFingerprint && contractFingerprint(baseContract) !== manifest.baseContractFingerprint) throw new Error("Comparison-base Drizzle contract does not match the approved correction fingerprint.");
+      const adoptedTables = Object.keys(contract.tables).filter((table) => !baseContract.tables[table]).sort();
+      const declaredAdoptedTables = (manifest.adoptedTables ?? []).map(({ table }) => table).sort();
+      if (JSON.stringify(adoptedTables) !== JSON.stringify(declaredAdoptedTables)) throw new Error("Contract-correction adopted tables must exactly match the complete base-to-head Drizzle contract diff.");
       const exactDifferences = exactContractCorrectionProperties(baseContract, contract);
       const declaredDifferences = (manifest.properties ?? []).map(({ table, column, attribute, expectedValue }) => ({ table, column, attribute, expectedValue }))
         .sort((left, right) => `${left.table}.${left.column}.${left.attribute}`.localeCompare(`${right.table}.${right.column}.${right.attribute}`, "en"));
       if (JSON.stringify(declaredDifferences) !== JSON.stringify(exactDifferences)) throw new Error("Contract-correction properties must exactly match the complete base-to-head Drizzle contract diff.");
       const baseMigrationDirectory = path.join(baseTree, "db/migrations");
       const migrations = listMigrationFiles(baseMigrationDirectory).map((migration) => migration.name);
+      if (manifest.snapshotCorrection) {
+        const correction = manifest.snapshotCorrection;
+        if (!migrations.includes(correction.creatingMigration)) throw new Error('Contract-correction snapshot references an unknown creating migration.');
+        git(['merge-base', '--is-ancestor', correction.beforeCommit, 'HEAD'], { stdio: ['ignore', 'pipe', 'pipe'] });
+        const baseSnapshot = git(['show', `${correction.beforeCommit}:${correction.file}`]);
+        const currentSnapshot = readFileSync(path.join(repoRoot, correction.file));
+        const digest = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+        if (digest(baseSnapshot) !== correction.beforeSha256 || digest(currentSnapshot) !== correction.afterSha256) {
+          throw new Error('Contract-correction snapshot old/new metadata hashes do not match the reviewed files.');
+        }
+      }
+      for (const adopted of manifest.adoptedTables ?? []) {
+        if (!adopted.table || !migrations.includes(adopted.creatingMigration)) throw new Error("Contract-correction table adoption references an unknown migration.");
+        const creatingIndex = migrations.indexOf(adopted.creatingMigration);
+        if (creatingIndex > 0) {
+          const before = replayMigrations({ through: migrations[creatingIndex - 1], migrationDirectory: baseMigrationDirectory });
+          try {
+            if (inspectDatabase(before).tables[adopted.table]) throw new Error(`Migration ${adopted.creatingMigration} is not the creating migration for table ${adopted.table}.`);
+          } finally { before.close(); }
+        }
+        const historical = replayMigrations({ through: adopted.creatingMigration, migrationDirectory: baseMigrationDirectory });
+        try {
+          const tableContract = contract.tables[adopted.table];
+          if (!tableContract || diffDrizzleContract({ strictObjects: false, tables: { [adopted.table]: tableContract } }, inspectDatabase(historical)).verdict !== "pass") {
+            throw new Error(`Creating migration ${adopted.creatingMigration} did not establish the corrected contract for table ${adopted.table}.`);
+          }
+        } finally { historical.close(); }
+      }
       for (const property of manifest.properties ?? []) {
       if (!property.table || !property.column || !["affinity", "notNull", "defaultValue", "primaryKey"].includes(property.attribute) || !migrations.includes(property.creatingMigration)) {
         throw new Error("Contract-correction property mapping is malformed or references an unknown migration.");
@@ -156,7 +195,19 @@ try {
   const endCommit = git(["rev-parse", "HEAD"]).trim();
   if (endCommit !== startCommit) throw new Error(`Contract-correction HEAD changed from ${startCommit} to ${endCommit}.`);
   const workingTreePaths = git(["status", "--porcelain", "--untracked-files=all"]).split(/\r?\n/).filter(Boolean).map((line) => line.slice(3));
-  const report = { check: "contract-correction", verdict: "pass", commit: startCommit, startCommit, endCommit, repositoryRoot: repoRoot, eventName, comparisonBase, changedFiles: changed, workingTreePaths };
+  const report = {
+    check: "contract-correction",
+    verdict: "pass",
+    commit: startCommit,
+    startCommit,
+    endCommit,
+    repositoryRoot: repoRoot,
+    eventName,
+    comparisonBase,
+    metadataFingerprints: reportMetadataFingerprints,
+    changedFiles: changed,
+    workingTreePaths,
+  };
   writeDataCheckReports({ name: "contract-correction", report, summary: "PASS contract-correction policy.", reportDirectory });
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);

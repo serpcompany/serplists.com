@@ -30,12 +30,12 @@ function parseOptionalJson(value: unknown): unknown {
   }
 }
 
-const checklistRunSelect = {
-  ...getTableColumns(schema.checklist_runs),
-  current_template_version: sql<number | null>`(
-    SELECT content_version FROM templates WHERE templates.id = ${schema.checklist_runs.template_id}
-  )`,
-};
+function checklistRunSelect() {
+  return {
+    ...getTableColumns(schema.checklist_runs),
+    current_template_version: schema.templates.content_version,
+  };
+}
 
 function serializeChecklistRun(run: Record<string, unknown>) {
   const templateVersion = typeof run.template_version === 'number' ? run.template_version : 1;
@@ -236,8 +236,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
 
     if (request.method === 'GET') {
       const [checklist] = await db
-        .select(checklistRunSelect)
+        .select(checklistRunSelect())
         .from(checklist_runs)
+        .leftJoin(templates, eq(templates.id, checklist_runs.template_id))
         .where(and(eq(checklist_runs.share_token, shareToken), eq(checklist_runs.is_public, true), isNull(checklist_runs.deleted_at)))
         .limit(1);
 
@@ -436,8 +437,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         }
 
         const checklists = await db
-          .select(checklistRunSelect)
+          .select(checklistRunSelect())
           .from(checklist_runs)
+          .leftJoin(templates, eq(templates.id, checklist_runs.template_id))
           .where(and(eq(checklist_runs.team_id, teamId), isNotNull(checklist_runs.deleted_at)))
           .orderBy(desc(checklist_runs.updated_at));
 
@@ -445,8 +447,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
 
       const checklists = await db
-        .select(checklistRunSelect)
+        .select(checklistRunSelect())
         .from(checklist_runs)
+        .leftJoin(templates, eq(templates.id, checklist_runs.template_id))
         .where(and(eq(checklist_runs.user_id, userId), isNull(checklist_runs.team_id), isNotNull(checklist_runs.deleted_at)))
         .orderBy(desc(checklist_runs.updated_at));
 
@@ -457,8 +460,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     if (checklistsSubpath[0]) {
       const checklistId = checklistsSubpath[0];
       const [checklist] = await db
-        .select(checklistRunSelect)
+        .select(checklistRunSelect())
         .from(checklist_runs)
+        .leftJoin(templates, eq(templates.id, checklist_runs.template_id))
         .where(and(eq(checklist_runs.id, checklistId), isNull(checklist_runs.deleted_at)))
         .limit(1);
 
@@ -477,8 +481,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
 
       const checklists = await db
-        .select(checklistRunSelect)
+        .select(checklistRunSelect())
         .from(checklist_runs)
+        .leftJoin(templates, eq(templates.id, checklist_runs.template_id))
         .where(and(eq(checklist_runs.team_id, teamId), isNull(checklist_runs.deleted_at)))
         .orderBy(desc(checklist_runs.created_at));
 
@@ -486,8 +491,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     }
 
     const checklists = await db
-      .select(checklistRunSelect)
+      .select(checklistRunSelect())
       .from(checklist_runs)
+      .leftJoin(templates, eq(templates.id, checklist_runs.template_id))
       .where(and(eq(checklist_runs.user_id, userId), isNull(checklist_runs.team_id), isNull(checklist_runs.deleted_at)))
       .orderBy(desc(checklist_runs.created_at));
 

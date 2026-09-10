@@ -70,7 +70,7 @@
     {
       "path": "functions/api/handlers/checklists.ts",
       "kind": "query-family",
-      "sha256": "aa40df273bc89c85cace6216d34f9686a78a69de066bba681d02aff280788068",
+      "sha256": "2677c3b0894500d5c8250766eab08e3a29b047243af90fe7f6af201cb46f812a",
       "scenarios": [
         "public-content",
         "template-run-read-branches",
@@ -88,7 +88,7 @@
     {
       "path": "functions/api/handlers/teams.ts",
       "kind": "query-family",
-      "sha256": "bd06b2734c0c7ba14f0f3669b2bc586437e9ba08ceb448f5f7a00b3781028e56",
+      "sha256": "e70feee803dae05c41036c85e4c8b1cd836c5beb7469432f7f1ed71c4a3a48c5",
       "scenarios": [
         "team-role-reads-owner",
         "team-role-reads-admin",
@@ -133,7 +133,7 @@
     {
       "path": "functions/sitemap.xml.ts",
       "kind": "query-family",
-      "sha256": "0345b2a2e9d9bf93ae1f50caa7d81e12d9af435eec01839a464d172f770abf7c",
+      "sha256": "d44aead42a38cacc4ed5bdb7f6010c188a7a44277bf6a9c8d72ab31cd71da7f5",
       "scenarios": [
         "sitemap-queries"
       ]
@@ -141,7 +141,7 @@
     {
       "path": "functions/sitemap/shared.ts",
       "kind": "query-family",
-      "sha256": "e1dc745057c04123aac49e84ac5742df47dafaceb6ea872fefbc681f4de8319e",
+      "sha256": "25a53337478ba4539350265569c87e2340b68a102f96bba007b3f16c4e6ab34e",
       "scenarios": [
         "sitemap-queries"
       ]
@@ -149,7 +149,7 @@
     {
       "path": "functions/sitemaps/templates/[page].xml.ts",
       "kind": "query-family",
-      "sha256": "f3c5b30f1b7d3a9df2044b19ff758f9fe1a5d4f1592995e98aa1447c64b4fbc0",
+      "sha256": "64eb31c11b87ff01313fb64c6836c7fa6c14b682f4569b266fe7ee9bef32c443",
       "scenarios": [
         "sitemap-queries"
       ]
@@ -744,8 +744,8 @@
     },
     {
       "path": "functions/sitemaps/categories/[page].xml.ts",
-      "kind": "server-module",
-      "sha256": "03a0a6df428242f8c1ffc2f719132119c03ff1eb8616d9a32c9d3fc0f5059ad8",
+      "kind": "query-family",
+      "sha256": "c5dcf0f8e86bd3ad08a43e54883dfb9a2316e43915368560092b968f60d5954c",
       "scenarios": [
         "sitemap-queries"
       ]
@@ -760,8 +760,8 @@
     },
     {
       "path": "functions/sitemaps/profiles/[page].xml.ts",
-      "kind": "server-module",
-      "sha256": "aba0f21cc5e8955cd2cf50dd6ba3f23c57698d9b3ba96d4f01801a8328fcf69b",
+      "kind": "query-family",
+      "sha256": "4f82592195c42f9a72aa25aa0d86e2064f642bdbfc0f38838fae8729a62d4213",
       "scenarios": [
         "sitemap-queries"
       ]

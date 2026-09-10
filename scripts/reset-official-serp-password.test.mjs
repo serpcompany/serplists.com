@@ -5,8 +5,6 @@ import {
   OFFICIAL_SERP_USER_ID,
   OFFICIAL_SERP_USERNAME,
   assertOfficialSerpInspectResults,
-  buildOfficialSerpInspectSql,
-  buildOfficialSerpResetSql,
   validateOfficialPassword,
 } from "./reset-official-serp-password-lib.mjs";
 
@@ -20,26 +18,6 @@ describe("reset-official-serp-password helpers", () => {
       ok: true,
       normalizedPassword: "strong-pass-123",
     });
-  });
-
-  it("builds a transaction that only targets the official serp account", () => {
-    const sql = buildOfficialSerpResetSql({
-      passwordHash: "$2b$10$examplehash",
-      nowMs: 1234567890,
-    });
-
-    expect(sql).toContain(`WHERE id = '${OFFICIAL_SERP_USER_ID}'`);
-    expect(sql).toContain(`WHERE user_id = '${OFFICIAL_SERP_USER_ID}'`);
-    expect(sql).toContain("email_verified = 1");
-    expect(sql).toContain("provider_id = 'credential'");
-    expect(sql).toContain("DELETE FROM session");
-  });
-
-  it("builds the live inspection query for the official account", () => {
-    const sql = buildOfficialSerpInspectSql();
-
-    expect(sql).toContain(`WHERE u.id = '${OFFICIAL_SERP_USER_ID}'`);
-    expect(sql).toContain("FROM session");
   });
 
   it("rejects inspection results that do not match the official account contract", () => {

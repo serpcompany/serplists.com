@@ -20,53 +20,6 @@ export function validateOfficialPassword(password) {
   return { ok: true, normalizedPassword: trimmed };
 }
 
-export function escapeSqlString(value) {
-  return value.replaceAll("'", "''");
-}
-
-export function buildOfficialSerpResetSql({ passwordHash, nowMs }) {
-  const escapedPasswordHash = escapeSqlString(passwordHash);
-
-  return [
-    `UPDATE users
-SET password_hash = '${escapedPasswordHash}',
-    email_verified = 1,
-    auth_updated_at = ${nowMs}
-WHERE id = '${OFFICIAL_SERP_USER_ID}';`,
-    `UPDATE account
-SET password = '${escapedPasswordHash}',
-    updated_at = ${nowMs}
-WHERE user_id = '${OFFICIAL_SERP_USER_ID}'
-  AND provider_id = 'credential'
-  AND account_id = '${OFFICIAL_SERP_USER_ID}';`,
-    `DELETE FROM session
-WHERE user_id = '${OFFICIAL_SERP_USER_ID}';`,
-  ].join("\n\n");
-}
-
-export function buildOfficialSerpInspectSql() {
-  return [
-    `SELECT
-  u.id,
-  u.email,
-  u.username,
-  u.email_verified,
-  u.auth_updated_at,
-  a.provider_id,
-  a.account_id,
-  length(a.password) AS password_len
-FROM users u
-LEFT JOIN account a
-  ON a.user_id = u.id
- AND a.provider_id = 'credential'
-WHERE u.id = '${OFFICIAL_SERP_USER_ID}'
-LIMIT 1;`,
-    `SELECT COUNT(*) AS session_count
-FROM session
-WHERE user_id = '${OFFICIAL_SERP_USER_ID}';`,
-  ].join("\n\n");
-}
-
 export function assertOfficialSerpInspectResults(results) {
   const [userResult, sessionResult] = results ?? [];
   const userRow = userResult?.results?.[0];

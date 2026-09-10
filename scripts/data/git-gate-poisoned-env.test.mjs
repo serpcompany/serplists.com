@@ -14,7 +14,13 @@ function poisonedEnvironment(root) {
   writeFileSync(path.join(poison, "poison.txt"), "poison");
   runRepositoryGit({ repoRoot: poison, args: ["add", "poison.txt"] });
   runRepositoryGit({ repoRoot: poison, args: ["-c", "core.hooksPath=/dev/null", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "poison"] });
-  return { ...process.env, GIT_DIR: path.join(poison, ".git"), GIT_WORK_TREE: poison, GIT_INDEX_FILE: path.join(poison, ".git/index") };
+  return {
+    ...process.env,
+    SCHEMA_CONTRACT_BASE_SHA: process.env.SCHEMA_CONTRACT_BASE_SHA || runRepositoryGit({ repoRoot, args: ["merge-base", "HEAD", "origin/staging"] }).trim(),
+    GIT_DIR: path.join(poison, ".git"),
+    GIT_WORK_TREE: poison,
+    GIT_INDEX_FILE: path.join(poison, ".git/index"),
+  };
 }
 
 function runScript(args, env) { return spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["exec", "tsx", ...args], { cwd: repoRoot, encoding: "utf8", env }); }

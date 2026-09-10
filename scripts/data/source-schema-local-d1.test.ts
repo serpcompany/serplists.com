@@ -5,8 +5,9 @@ import path from 'node:path';
 import { expect, it } from 'vitest';
 import { listMigrationFiles } from './schema-contract';
 import { inspectSourceSchema } from './source-schema';
+import { applyOrderedWranglerMigrations } from './ordered-wrangler-replay.mjs';
 
-it('accepts real local D1 pre/current source catalogs and rejects an extra app object', () => {
+it('accepts real local D1 pre/current source catalogs and rejects an extra app object', async () => {
   const repoRoot = path.resolve('.');
   const directory = mkdtempSync(path.join(tmpdir(), 'source-catalog-real-d1-'));
   const migrations = path.join(directory, 'migrations'); mkdirSync(migrations);
@@ -18,8 +19,12 @@ it('accepts real local D1 pre/current source catalogs and rejects an extra app o
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).trim();
   const execute = (sql: string) => run(['execute', database.databaseName, '--json', '--command', sql]);
   try {
-    for (const file of files.slice(0, -1)) copyFileSync(path.join(repoRoot, 'db/migrations', file.name), path.join(migrations, file.name));
-    run(['migrations', 'apply', database.databaseName]);
+    await applyOrderedWranglerMigrations({
+      sourceDirectory: path.join(repoRoot, 'db/migrations'),
+      ownedDirectory: migrations,
+      throughMigration: files.at(-2)!.name,
+      apply: () => run(['migrations', 'apply', database.databaseName]),
+    });
     expect(JSON.parse(execute("SELECT type,name FROM sqlite_schema WHERE name GLOB '_cf_*'"))[0].results).toContainEqual({ type: 'table', name: '_cf_METADATA' });
     expect(inspectSourceSchema({ commit, database, pendingMigrations: [files.at(-1)!.name], execute }).appliedThrough).toBe(files.at(-2)!.name);
     copyFileSync(path.join(repoRoot, 'db/migrations', files.at(-1)!.name), path.join(migrations, files.at(-1)!.name));

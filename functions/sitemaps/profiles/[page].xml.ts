@@ -1,31 +1,37 @@
 import type { Env } from '../../api/types';
+import { eq } from 'drizzle-orm';
+import { createDb, schema } from '../../api/db';
 import {
   handlePagedDatabaseSitemap,
   isValidUsername,
   mostRecentLastmod,
-  VALID_USERNAME_SQL,
+  validUsername,
 } from '../../sitemap/shared';
 
 type ProfileRow = {
-  username: string;
+  username: string | null;
   created_at: string;
   updated_at: string | null;
   profile_revision: string | null;
 };
 
 export const onRequest: PagesFunction<Env> = async ({ request, env, params }) => {
+  const db = createDb(env);
   return handlePagedDatabaseSitemap<ProfileRow>({
     request,
-    env,
     params,
-    sql: `SELECT u.username, u.created_at, u.updated_at,
-                 r.revised_at AS profile_revision
-       FROM users AS u
-       LEFT JOIN sitemap_profile_revisions AS r ON r.user_id = u.id
-      WHERE ${VALID_USERNAME_SQL}
-      ORDER BY id
-      LIMIT ? OFFSET ?`,
-    toEntry: (row) => isValidUsername(row.username.trim()) ? ({
+    loadRows: ({ limit, offset }) => db.select({
+      username: schema.users.username,
+      created_at: schema.users.created_at,
+      updated_at: schema.users.updated_at,
+      profile_revision: schema.sitemap_profile_revisions.revised_at,
+    }).from(schema.users)
+      .leftJoin(schema.sitemap_profile_revisions, eq(schema.sitemap_profile_revisions.user_id, schema.users.id))
+      .where(validUsername(schema.users.username))
+      .orderBy(schema.users.id)
+      .limit(limit)
+      .offset(offset),
+    toEntry: (row) => row.username && isValidUsername(row.username.trim()) ? ({
         path: `/profile/${encodeURIComponent(row.username.trim())}`,
         lastmod: mostRecentLastmod(
           row.updated_at || row.created_at,

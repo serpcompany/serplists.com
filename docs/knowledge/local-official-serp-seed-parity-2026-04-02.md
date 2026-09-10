@@ -1,6 +1,6 @@
 # Local official SERP seed parity (2026-04-02)
 
-The repo already had an official publisher seed in `db/seeds/official-templates.sql`, but the default local `db:reset` flow skipped it.
+The repo's official publisher fixture now lives in `db/seeds/data/official-templates.json` and is applied through the typed Drizzle module in `db/seeds/index.ts`; the default local `db:reset` flow includes it.
 
 That created an avoidable mismatch:
 

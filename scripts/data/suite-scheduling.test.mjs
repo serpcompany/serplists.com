@@ -8,7 +8,7 @@ import quality, { dataRegressionFiles } from '../../vitest.config';
 import data from '../../vitest.data.config';
 
 const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
-const leaves = ['lint', 'typecheck', 'typecheck:env', 'test:unit', 'check:data:migration-provenance', 'test:data:migration-provenance', 'check:data:schema-contract', 'db:schema:snapshot:check', 'test:data:integration'];
+const leaves = ['lint', 'typecheck', 'typecheck:env', 'test:unit', 'check:data:migration-provenance', 'test:data:migration-provenance', 'check:data:schema-contract', 'db:schema:snapshot:check', 'test:database:fast', 'test:process', 'test:data:integration'];
 function execute(fail) {
   const directory = mkdtempSync(path.join(tmpdir(), 'serplists-scheduling-'));
   try {
@@ -43,7 +43,9 @@ describe('suite scheduling', () => {
   });
   it('gives CI Quality the unit suite and range jobs only focused integration after database success', () => {
     const jobs = yaml.load(readFileSync('.github/workflows/ci.yml', 'utf8')).jobs;
-    expect(jobs.quality.steps.filter(step => step.run === 'pnpm run test:run')).toHaveLength(1);
+    expect(jobs.quality.steps.filter(step => step.run === 'pnpm run test:unit')).toHaveLength(1);
+    expect(jobs.database.steps.filter(step => step.run === 'pnpm run test:database:fast')).toHaveLength(1);
+    expect(jobs.database.steps.filter(step => step.run === 'pnpm run test:process')).toHaveLength(1);
     expect(jobs['data-regressions'].needs).toContain('quality');
     expect(jobs['data-regressions'].needs).toContain('database');
     const runner = readFileSync('scripts/data/run-reviewed-range-suites.mjs', 'utf8');

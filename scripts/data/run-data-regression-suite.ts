@@ -126,9 +126,9 @@ checks.push({ name: 'source-derived handler positive and negative controls', tes
 try {
   const recovery = JSON.parse(readFileSync(fullExportRecoveryPath,'utf8'));
   const valid = validateFullExportRecoveryProof(recovery,startCommit);
-  checks.push({name:'actual full-export recovery artifact',test:'four fresh local D1 full-export restores and observed teardown bound to candidate',verdict:valid?'pass':'fail'});
+  checks.push({name:'actual full-export recovery artifact',test:'pre-incident source and upgraded prepared-target full-export restores with observed teardown bound to candidate',verdict:valid?'pass':'fail'});
 } catch {
-  checks.push({name:'actual full-export recovery artifact',test:'four fresh local D1 full-export restores and observed teardown bound to candidate',verdict:'fail'});
+  checks.push({name:'actual full-export recovery artifact',test:'pre-incident source and upgraded prepared-target full-export restores with observed teardown bound to candidate',verdict:'fail'});
 }
 checks.push({ name: "reviewed rehearsal coverage", test: "exact changed migration and maintenance artifacts have affected-table fixtures and invariants", verdict: rehearsalPlan ? "pass" : "fail" });
 if (commandFailure) checks.push({

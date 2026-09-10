@@ -37,7 +37,10 @@ None rationale or database-change details:
 Database checklist (required when impact is **Yes**):
 
 - [ ] I paired runtime Drizzle schema and Wrangler migration changes and generated `db/schema.sql` from a clean replay.
+- [ ] If this is a metadata-only contract correction, I named the historical creating migrations, recorded old/new metadata hashes, changed no migration bytes, and attached replay/catalog equivalence evidence.
 - [ ] I used the next numbered Wrangler SQL migration and did not use `drizzle-kit push` or `drizzle-kit migrate` to apply D1 changes.
+- [ ] Application, sitemap, operational, seed, and ordinary fixture data access uses Drizzle; any raw SQL is confined to a named infrastructure exception and no `sql.raw()` is used.
+- [ ] Unit, fast database, process/driver, and D1/browser/recovery suites are disjoint and all required suites pass.
 - [ ] Fresh-chain, upgrade, invariant, authenticated API, and teardown checks pass with generated evidence.
 - [ ] Production-shaped rehearsal and recovery-drill evidence is attached when required by classification.
 - [ ] Repository workflows enforce staging migration/invariant/deploy order; I used no manual remote mutation path.
