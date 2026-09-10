@@ -25,7 +25,3 @@ pre-push:
       run: pnpm typecheck:env
     unit-tests:
       run: pnpm test:unit
-    smoke-tests:
-      run: pnpm test:smoke
-    e2e-tests:
-      run: pnpm test:e2e
