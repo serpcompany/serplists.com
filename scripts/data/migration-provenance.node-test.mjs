@@ -71,6 +71,15 @@ test("the checked-in legacy baseline is internally valid", () => {
   assert.deepEqual(validateProvenanceState(loadProvenanceState(repoRoot)), []);
 });
 
+test('the approved snapshot correction fails closed without its pinned historical object', () => {
+  const root = fixture();
+  try {
+    assert.ok(errors(root).includes('snapshot-immutable'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("unchanged Drizzle schema produces no migration from the baseline", () => {
   assert.deepEqual(verifySchemaMatchesLatestSnapshot(repoRoot), []);
 });
@@ -455,6 +464,7 @@ test('two independently generated migration commits form a valid release range w
     symlinkSync(path.join(repoRoot, 'node_modules'), path.join(root, 'node_modules'), 'dir');
     writeFileSync(path.join(root, '.gitignore'), 'node_modules\ntmp\n');
     runGit(root, ['init', '-q', '-b', 'staging']);
+    runGit(root, ['fetch', '-q', repoRoot, 'e5a3aaa720e3621a13a23dc2fe028088ca042bb1']);
     runGit(root, ['config', 'user.name', 'Migration Test']);
     runGit(root, ['config', 'user.email', 'test@example.invalid']);
     runGit(root, ['add', '.']);

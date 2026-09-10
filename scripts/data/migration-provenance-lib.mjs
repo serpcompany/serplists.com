@@ -92,6 +92,7 @@ export function repositoryWorkspaceFingerprint(repoRoot) {
   const environment = sanitizedGitEnvironment();
   const gitBytes = (args) => execFileSync('git', args, {
     cwd: repoRoot, env: environment, stdio: ['ignore', 'pipe', 'pipe'],
+    maxBuffer: 64 * 1024 * 1024,
   });
   const fingerprint = createHash('sha256');
   fingerprint.update(gitBytes(['diff', '--binary', '--no-ext-diff', 'HEAD', '--']));
@@ -139,10 +140,7 @@ function isApprovedMetadataSnapshotCorrection(repoRoot, entry, actualSnapshotHas
       || actualSnapshotHash !== APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.afterSha256) return false;
   try {
     const original = gitShow(repoRoot, APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeCommit, `${META_DIRECTORY}/${entry.snapshot}`);
-    // Synthetic repositories used to prove migration generation may not carry
-    // the project commit graph. Exact before/after hashes remain the trust root;
-    // when the historical object is available, independently verify it too.
-    return original === null || sha256(original) === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeSha256;
+    return original !== null && sha256(original) === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeSha256;
   } catch {
     return false;
   }

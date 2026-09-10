@@ -105,13 +105,27 @@ describe('installed SQLite proxy Drizzle access', () => {
     expect(await db.select().from(schema.checklist_runs)).toEqual([]);
   });
 
-  it('keeps the default local seed profile byte-for-byte deterministic', async () => {
+  it('keeps every canonical row in the default local seed profile deterministic', async () => {
     const { db } = fixture();
+    const dump = async () => ({
+      users: await db.select().from(schema.users).orderBy(schema.users.id),
+      accounts: await db.select().from(schema.account).orderBy(schema.account.id),
+      entitlements: await db.select().from(schema.entitlement_overrides).orderBy(schema.entitlement_overrides.user_id),
+      teams: await db.select().from(schema.teams).orderBy(schema.teams.id),
+      members: await db.select().from(schema.team_members).orderBy(schema.team_members.id),
+      invites: await db.select().from(schema.team_invites).orderBy(schema.team_invites.id),
+      teamEntitlements: await db.select().from(schema.team_entitlement_overrides).orderBy(schema.team_entitlement_overrides.team_id),
+      templates: await db.select().from(schema.templates).orderBy(schema.templates.id),
+      versions: await db.select().from(schema.template_versions).orderBy(schema.template_versions.id),
+      runs: await db.select().from(schema.checklist_runs).orderBy(schema.checklist_runs.id),
+      audit: await db.select().from(schema.audit_events).orderBy(schema.audit_events.id),
+      likes: await db.select().from(schema.template_likes).orderBy(schema.template_likes.user_id, schema.template_likes.template_id),
+      analytics: await db.select().from(schema.usage_analytics).orderBy(schema.usage_analytics.id),
+    });
     await applyAllLocalSeeds(db);
-    const firstUsers = await db.select().from(schema.users).orderBy(schema.users.id);
-    const firstInvites = await db.select().from(schema.team_invites).orderBy(schema.team_invites.id);
+    const first = await dump();
+    expect(first.invites[0]?.expires_at).toBe('9999-12-31 23:59:59');
     await applyAllLocalSeeds(db);
-    expect(await db.select().from(schema.users).orderBy(schema.users.id)).toEqual(firstUsers);
-    expect(await db.select().from(schema.team_invites).orderBy(schema.team_invites.id)).toEqual(firstInvites);
+    expect(await dump()).toEqual(first);
   });
 });

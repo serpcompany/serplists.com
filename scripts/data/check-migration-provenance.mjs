@@ -43,7 +43,7 @@ function defaultBase() {
   return git(["merge-base", "origin/staging", "HEAD"], null);
 }
 
-const commit = git(["rev-parse", "HEAD"], null);
+const commit = git(["rev-parse", "HEAD"]);
 let startWorkspace = null;
 let startWorkspaceError = null;
 try {
@@ -67,7 +67,7 @@ try {
 } catch (error) {
   failures = [{ name: "provenance-check-error", detail: error.message, verdict: "fail" }];
 }
-const endCommit = git(["rev-parse", "HEAD"], null);
+const endCommit = git(["rev-parse", "HEAD"]);
 let endWorkspace = null;
 let endWorkspaceError = null;
 try {
@@ -75,7 +75,7 @@ try {
 } catch (error) {
   endWorkspaceError = error.message;
 }
-if (!commit || !endCommit || startWorkspaceError || endWorkspaceError) {
+if (commit === 'unknown' || endCommit === 'unknown' || startWorkspaceError || endWorkspaceError) {
   failures.push({ name: 'repository-state-observation', detail: `Could not bind the check to repository state: ${startWorkspaceError ?? endWorkspaceError ?? 'commit resolution failed'}.`, verdict: 'fail' });
 } else if (endCommit !== commit || endWorkspace !== startWorkspace) {
   failures.push({ name: 'concurrent-repository-mutation', detail: 'HEAD or working-tree paths changed while migration provenance was being checked.', verdict: 'fail' });
@@ -92,6 +92,8 @@ const report = {
   startCommit: commit,
   endCommit,
   workspaceStable: Boolean(startWorkspace && endWorkspace && endWorkspace === startWorkspace && endCommit === commit),
+  startWorkspaceFingerprint: startWorkspace,
+  endWorkspaceFingerprint: endWorkspace,
   baseRef,
   target: {
     environment: "local",

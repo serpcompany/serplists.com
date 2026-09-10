@@ -7,7 +7,9 @@ import officialLogin from './data/official-local-login.json';
 
 type SeedDb = ReturnType<typeof createSQLiteProxy>;
 const DEFAULT_SEED_CLOCK = new Date('2026-09-10T07:02:22.000Z');
-const DEFAULT_INVITE_EXPIRY = new Date(DEFAULT_SEED_CLOCK.getTime() + 30 * 24 * 60 * 60 * 1000);
+// Local demo data is replayable indefinitely; semantic expiry tests inject a
+// finite clock and expiry explicitly.
+const LOCAL_SEED_NON_EXPIRING_INVITE = new Date('9999-12-31T23:59:59.000Z');
 const FIXTURE_CAPTURE_CLOCK = Date.parse('2026-09-10T07:02:22.000Z');
 const teamIds = ['team-seed-growth', 'team-seed-client'];
 const teamTemplateIds = ['team-template-growth-launch', 'team-template-client-reporting'];
@@ -80,7 +82,7 @@ export async function cleanupTestDataSeed(db: SeedDb) {
   }
 }
 
-export async function applyTestDataSeed(db: SeedDb, now = DEFAULT_SEED_CLOCK, inviteExpiry = DEFAULT_INVITE_EXPIRY) {
+export async function applyTestDataSeed(db: SeedDb, now = DEFAULT_SEED_CLOCK, inviteExpiry = LOCAL_SEED_NON_EXPIRING_INVITE) {
   await cleanupTestDataSeed(db);
   await db.insert(schema.users).values(users(shiftSeedRows(testData.users, now)));
   await db.insert(schema.account).values(accounts(shiftSeedRows(testData.account, now)));
@@ -127,7 +129,7 @@ export async function applyOfficialLocalLoginSeed(db: SeedDb, now = DEFAULT_SEED
   });
 }
 
-export async function applyAllLocalSeeds(db: SeedDb, now = DEFAULT_SEED_CLOCK, inviteExpiry = DEFAULT_INVITE_EXPIRY) {
+export async function applyAllLocalSeeds(db: SeedDb, now = DEFAULT_SEED_CLOCK, inviteExpiry = LOCAL_SEED_NON_EXPIRING_INVITE) {
   await applyTestDataSeed(db, now, inviteExpiry);
   await applyOfficialTemplatesSeed(db, now);
   await applyOfficialLocalLoginSeed(db, now);
