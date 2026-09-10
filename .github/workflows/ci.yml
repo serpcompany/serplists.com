@@ -96,7 +96,13 @@ jobs:
           mkdir -p "$prefetch_root/home"
           cp package.json pnpm-lock.yaml "$prefetch_root/"
           : > "$prefetch_root/empty.npmrc"
-          (cd "$prefetch_root" && HOME="$prefetch_root/home" XDG_CONFIG_HOME="$prefetch_root/home/.config" NPM_CONFIG_USERCONFIG="$prefetch_root/empty.npmrc" pnpm fetch --frozen-lockfile --ignore-scripts --store-dir "$test_store")
+          (
+            cd "$prefetch_root"
+            export HOME="$prefetch_root/home" XDG_CONFIG_HOME="$prefetch_root/home/.config"
+            export NPM_CONFIG_USERCONFIG="$prefetch_root/empty.npmrc" npm_config_userconfig="$prefetch_root/empty.npmrc"
+            test "$(pnpm config get userconfig)" = "$prefetch_root/empty.npmrc"
+            pnpm fetch --frozen-lockfile --ignore-scripts --store-dir "$test_store"
+          )
           echo "PNPM_TEST_STORE_PATH=$test_store" >> "$GITHUB_ENV"
       - name: Process and driver integration tests
         env:
@@ -140,7 +146,13 @@ jobs:
           mkdir -p "$prefetch_root/home"
           cp package.json pnpm-lock.yaml "$prefetch_root/"
           : > "$prefetch_root/empty.npmrc"
-          (cd "$prefetch_root" && HOME="$prefetch_root/home" XDG_CONFIG_HOME="$prefetch_root/home/.config" NPM_CONFIG_USERCONFIG="$prefetch_root/empty.npmrc" pnpm fetch --frozen-lockfile --ignore-scripts --store-dir "$test_store")
+          (
+            cd "$prefetch_root"
+            export HOME="$prefetch_root/home" XDG_CONFIG_HOME="$prefetch_root/home/.config"
+            export NPM_CONFIG_USERCONFIG="$prefetch_root/empty.npmrc" npm_config_userconfig="$prefetch_root/empty.npmrc"
+            test "$(pnpm config get userconfig)" = "$prefetch_root/empty.npmrc"
+            pnpm fetch --frozen-lockfile --ignore-scripts --store-dir "$test_store"
+          )
           echo "PNPM_TEST_STORE_PATH=$test_store" >> "$GITHUB_ENV"
       - name: Data regression gate
         env:
