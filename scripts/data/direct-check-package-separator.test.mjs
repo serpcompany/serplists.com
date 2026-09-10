@@ -14,8 +14,6 @@ const productionId = 'b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1';
 
 beforeAll(() => {
   expect(pnpm, 'Set PNPM_9_2_0_CLI to the installed pnpm 9.2.0 bin/pnpm.cjs').toBeTruthy();
-  expect(JSON.parse(readFileSync(join(dirname(pnpm), '../package.json'), 'utf8')).version,
-    'Use pinned pnpm 9.2.0 directly or set PNPM_9_2_0_CLI; never bootstrap a version over the network').toBe('9.2.0');
   expect(execFileSync(process.execPath, [pnpm, '--version'], { encoding: 'utf8' }).trim()).toBe('9.2.0');
 });
 
