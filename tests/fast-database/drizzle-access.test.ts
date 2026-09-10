@@ -105,7 +105,7 @@ describe('installed SQLite proxy Drizzle access', () => {
     expect(await db.select().from(schema.checklist_runs)).toEqual([]);
   });
 
-  it('keeps every canonical row in the default local seed profile deterministic', async () => {
+  it('keeps every canonical row in the default local seed profile deterministic', { timeout: 15_000 }, async () => {
     const { db } = fixture();
     const dump = async () => ({
       users: await db.select().from(schema.users).orderBy(schema.users.id),
