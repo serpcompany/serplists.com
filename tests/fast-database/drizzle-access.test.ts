@@ -88,7 +88,8 @@ describe('installed SQLite proxy Drizzle access', () => {
   it('loads and cleans ordinary seed fixtures entirely through typed Drizzle writes', async () => {
     const { db } = fixture();
     const now = new Date('2030-01-01T00:00:00.000Z');
-    await applyAllLocalSeeds(db, now);
+    const inviteExpiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    await applyAllLocalSeeds(db, now, inviteExpiry);
     expect(await db.select().from(schema.users)).toHaveLength(5);
     expect(await db.select().from(schema.templates)).toHaveLength(8);
     expect(await db.select().from(schema.checklist_runs)).toHaveLength(5);
@@ -96,7 +97,7 @@ describe('installed SQLite proxy Drizzle access', () => {
     expect(seededUsers.filter((user) => user.id.startsWith('user-')).every((user) => user.displayUsername === user.username)).toBe(true);
     const [invite] = await db.select().from(schema.team_invites);
     expect(Date.parse(`${invite.expires_at.replace(' ', 'T')}Z`) - now.getTime()).toBe(30 * 24 * 60 * 60 * 1000);
-    await applyAllLocalSeeds(db, now);
+    await applyAllLocalSeeds(db, now, inviteExpiry);
     expect(await db.select().from(schema.users)).toHaveLength(5);
     await cleanupTestDataSeed(db);
     expect(await db.select().from(schema.users)).toEqual([expect.objectContaining({ id: 'serp-user' })]);

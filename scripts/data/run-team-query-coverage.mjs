@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
+import { and, eq, inArray } from 'drizzle-orm';
+import { createDb, schema } from '../../functions/api/db.ts';
 
 const TEST_PASSWORD_HASH =
 	"$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa";
@@ -39,25 +41,14 @@ async function dispatchJson(
 
 async function cleanupFixtures(db, { teamIds, userId }) {
 	for (const teamId of teamIds) {
-		await db
-			.prepare(
-				"DELETE FROM audit_events WHERE subject_type = ? AND subject_id = ?",
-			)
-			.bind("team", teamId)
-			.run();
-		await db
-			.prepare("DELETE FROM team_invites WHERE team_id = ?")
-			.bind(teamId)
-			.run();
-		await db
-			.prepare("DELETE FROM team_members WHERE team_id = ?")
-			.bind(teamId)
-			.run();
-		await db.prepare("DELETE FROM teams WHERE id = ?").bind(teamId).run();
+		await db.delete(schema.audit_events).where(and(eq(schema.audit_events.subject_type, 'team'), eq(schema.audit_events.subject_id, teamId)));
+		await db.delete(schema.team_invites).where(eq(schema.team_invites.team_id, teamId));
+		await db.delete(schema.team_members).where(eq(schema.team_members.team_id, teamId));
+		await db.delete(schema.teams).where(eq(schema.teams.id, teamId));
 	}
-	await db.prepare("DELETE FROM session WHERE user_id = ?").bind(userId).run();
-	await db.prepare("DELETE FROM account WHERE user_id = ?").bind(userId).run();
-	await db.prepare("DELETE FROM users WHERE id = ?").bind(userId).run();
+	await db.delete(schema.session).where(eq(schema.session.userId, userId));
+	await db.delete(schema.account).where(eq(schema.account.userId, userId));
+	await db.delete(schema.users).where(eq(schema.users.id, userId));
 }
 
 export async function runTeamQueryCoverage({ mf, db }) {
@@ -65,6 +56,7 @@ export async function runTeamQueryCoverage({ mf, db }) {
 		mf && typeof mf.dispatchFetch === "function",
 		"A real Miniflare Worker is required",
 	);
+	const orm = createDb({ DB: db });
 	assert(
 		db && typeof db.prepare === "function",
 		"A migrated local D1 binding is required",
@@ -80,29 +72,8 @@ export async function runTeamQueryCoverage({ mf, db }) {
 
 	try {
 		const nowMs = Date.now();
-		await db
-			.prepare(`
-      INSERT INTO users (
-        id, email, name, username, email_verified, created_at, auth_created_at, auth_updated_at
-      ) VALUES (?, ?, ?, ?, 1, ?, ?, ?)
-    `)
-			.bind(
-				userId,
-				email,
-				"Team Query Coverage",
-				`team_query_${nonce.slice(0, 16)}`,
-				new Date(nowMs).toISOString(),
-				nowMs,
-				nowMs,
-			)
-			.run();
-		await db
-			.prepare(`
-      INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at)
-      VALUES (?, ?, 'credential', ?, ?, ?, ?)
-    `)
-			.bind(accountId, userId, userId, TEST_PASSWORD_HASH, nowMs, nowMs)
-			.run();
+		await orm.insert(schema.users).values({ id: userId, email, name: 'Team Query Coverage', username: `team_query_${nonce.slice(0, 16)}`, email_verified: true, created_at: new Date(nowMs).toISOString(), auth_created_at: new Date(nowMs), auth_updated_at: new Date(nowMs) });
+		await orm.insert(schema.account).values({ id: accountId, accountId: userId, providerId: 'credential', userId, password: TEST_PASSWORD_HASH, createdAt: new Date(nowMs), updatedAt: new Date(nowMs) });
 
 		const login = await dispatchJson(mf, "/api/auth/sign-in/email", {
 			method: "POST",
@@ -148,21 +119,13 @@ export async function runTeamQueryCoverage({ mf, db }) {
 			"Same-named teams must have distinct slugs",
 		);
 
-		const persistedTeams = await db
-			.prepare(`
-      SELECT id, name, slug, created_by_user_id, billing_owner_user_id
-      FROM teams
-      WHERE id IN (?, ?)
-      ORDER BY id
-    `)
-			.bind(...teamIds)
-			.all();
-		assert.equal(persistedTeams.results.length, 2);
+		const persistedTeams = await orm.select({ id: schema.teams.id, name: schema.teams.name, slug: schema.teams.slug, created_by_user_id: schema.teams.created_by_user_id, billing_owner_user_id: schema.teams.billing_owner_user_id }).from(schema.teams).where(inArray(schema.teams.id, teamIds)).orderBy(schema.teams.id);
+		assert.equal(persistedTeams.length, 2);
 		assert.deepEqual(
-			new Set(persistedTeams.results.map((team) => team.slug)),
+			new Set(persistedTeams.map((team) => team.slug)),
 			new Set([baseSlug, `${baseSlug}-${secondCreate.json.id.slice(0, 8)}`]),
 		);
-		for (const team of persistedTeams.results) {
+		for (const team of persistedTeams) {
 			assert.equal(team.name, teamName);
 			assert.equal(team.created_by_user_id, userId);
 			assert.equal(team.billing_owner_user_id, userId);
@@ -176,31 +139,9 @@ export async function runTeamQueryCoverage({ mf, db }) {
 		const createdAt = new Date().toISOString();
 		const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 		const protectedTeamId = firstCreate.json.id;
-		await db
-			.prepare(`
-      INSERT INTO team_invites (
-        id, team_id, email, role, token_hash, invited_by_user_id,
-        accepted_by_user_id, expires_at, accepted_at, revoked_at, created_at, updated_at
-      ) VALUES (?, ?, ?, 'viewer', ?, ?, NULL, ?, NULL, NULL, ?, ?)
-    `)
-			.bind(
-				inviteId,
-				protectedTeamId,
-				email,
-				inviteTokenHash,
-				userId,
-				expiresAt,
-				createdAt,
-				createdAt,
-			)
-			.run();
+		await orm.insert(schema.team_invites).values({ id: inviteId, team_id: protectedTeamId, email, role: 'viewer', token_hash: inviteTokenHash, invited_by_user_id: userId, expires_at: expiresAt, created_at: createdAt, updated_at: createdAt });
 
-		const membershipBefore = await db
-			.prepare(`
-      SELECT id, role, status FROM team_members WHERE team_id = ? AND user_id = ?
-    `)
-			.bind(protectedTeamId, userId)
-			.first();
+		const [membershipBefore] = await orm.select({ id: schema.team_members.id, role: schema.team_members.role, status: schema.team_members.status }).from(schema.team_members).where(and(eq(schema.team_members.team_id, protectedTeamId), eq(schema.team_members.user_id, userId))).limit(1);
 		assert.equal(membershipBefore.role, "owner");
 		assert.equal(membershipBefore.status, "active");
 
@@ -219,34 +160,19 @@ export async function runTeamQueryCoverage({ mf, db }) {
 		assert.equal(accepted.json.team.role, "owner");
 		assert.equal(accepted.json.team.membershipStatus, "active");
 
-		const membershipAfter = await db
-			.prepare(`
-      SELECT id, role, status FROM team_members WHERE team_id = ? AND user_id = ?
-    `)
-			.bind(protectedTeamId, userId)
-			.first();
+		const [membershipAfter] = await orm.select({ id: schema.team_members.id, role: schema.team_members.role, status: schema.team_members.status }).from(schema.team_members).where(and(eq(schema.team_members.team_id, protectedTeamId), eq(schema.team_members.user_id, userId))).limit(1);
 		assert.deepEqual(
 			membershipAfter,
 			membershipBefore,
 			"Invite acceptance must preserve the active owner membership",
 		);
 
-		const protectedTeam = await db
-			.prepare(`
-      SELECT created_by_user_id, billing_owner_user_id, archived_at FROM teams WHERE id = ?
-    `)
-			.bind(protectedTeamId)
-			.first();
+		const [protectedTeam] = await orm.select({ created_by_user_id: schema.teams.created_by_user_id, billing_owner_user_id: schema.teams.billing_owner_user_id, archived_at: schema.teams.archived_at }).from(schema.teams).where(eq(schema.teams.id, protectedTeamId)).limit(1);
 		assert.equal(protectedTeam.created_by_user_id, userId);
 		assert.equal(protectedTeam.billing_owner_user_id, userId);
 		assert.equal(protectedTeam.archived_at, null);
 
-		const persistedInvite = await db
-			.prepare(`
-      SELECT role, accepted_by_user_id, accepted_at, revoked_at FROM team_invites WHERE id = ?
-    `)
-			.bind(inviteId)
-			.first();
+		const [persistedInvite] = await orm.select({ role: schema.team_invites.role, accepted_by_user_id: schema.team_invites.accepted_by_user_id, accepted_at: schema.team_invites.accepted_at, revoked_at: schema.team_invites.revoked_at }).from(schema.team_invites).where(eq(schema.team_invites.id, inviteId)).limit(1);
 		assert.equal(
 			persistedInvite.role,
 			"viewer",
@@ -259,22 +185,13 @@ export async function runTeamQueryCoverage({ mf, db }) {
 		);
 		assert.equal(persistedInvite.revoked_at, null);
 
-		const auditRows = await db
-			.prepare(`
-      SELECT actor_user_id, subject_type, subject_id, resource_type, resource_id, action, after_json
-      FROM audit_events
-      WHERE subject_type = 'team' AND subject_id = ?
-        AND resource_type = 'team_invite' AND resource_id = ?
-        AND action = 'team_invite.accepted'
-    `)
-			.bind(protectedTeamId, inviteId)
-			.all();
+		const auditRows = await orm.select().from(schema.audit_events).where(and(eq(schema.audit_events.subject_type, 'team'), eq(schema.audit_events.subject_id, protectedTeamId), eq(schema.audit_events.resource_type, 'team_invite'), eq(schema.audit_events.resource_id, inviteId), eq(schema.audit_events.action, 'team_invite.accepted')));
 		assert.equal(
-			auditRows.results.length,
+			auditRows.length,
 			1,
 			"Accepted active-member invite must append exactly one audit event",
 		);
-		const acceptanceAudit = auditRows.results[0];
+		const acceptanceAudit = auditRows[0];
 		assert.equal(acceptanceAudit.actor_user_id, userId);
 		assert.equal(acceptanceAudit.subject_id, protectedTeamId);
 		assert.equal(acceptanceAudit.resource_id, inviteId);
@@ -295,6 +212,6 @@ export async function runTeamQueryCoverage({ mf, db }) {
 			acceptedInviteAuditCount: auditRows.results.length,
 		};
 	} finally {
-		await cleanupFixtures(db, { teamIds, userId });
+		await cleanupFixtures(orm, { teamIds, userId });
 	}
 }

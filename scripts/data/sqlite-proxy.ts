@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 import * as schema from '../../db/schema/index';
 
-function rowsAsValues(rows: Array<Record<string, unknown>>): unknown[][] {
+export function rowsAsValues(rows: Array<Record<string, unknown>>): unknown[][] {
   return rows.map((row) => Object.values(row));
 }
 

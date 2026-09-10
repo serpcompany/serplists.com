@@ -13,3 +13,5 @@ The process suite keeps one real CLI launch for each distinct startup, argument,
 | Every D1 envelope, destination, identity, URL, and CLI-argument spelling | `deployment-smoke.test.mjs`, `environment-identity.test.mjs`, `d1-query-envelope` consumers, and argument validators | Representative malformed categories plus every distinct HTTP/read/write/cleanup transport failure |
 
 Any new removed process invocation must add an in-process assertion against the real parser/validator and update this table. A representative process case may not replace a distinct process boundary or failure behavior.
+
+`raw-sql-boundaries.test.mjs` separately enforces that the template-limit and team coverage harnesses use Drizzle for all fixtures, reads, and cleanup. The combined admin/billing/sitemap harness retains exactly three named infrastructure calls: migration-ledger introspection and creation/removal of the deliberate Stripe write-failure trigger.

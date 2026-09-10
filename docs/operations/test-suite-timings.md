@@ -20,7 +20,7 @@ All three runs are below the 30-second target. The suite excludes every process,
 | --- | ---: | ---: |
 | Pre-commit | not recorded for the prior candidate | 8.98s wall; all commands passed |
 | Pre-push command | prior complete gate 1,671s | 23.70s wall; secret scan, lint, types/env, provenance/schema, suite ownership, Unit, and fast Drizzle checks passed |
-| Process/driver integration | 588.63s serial | 120.36s runner / 120.89s wall; 1,778 assertions passed |
+| Process/driver integration | 588.63s serial | 125.33s runner / 125.88s wall; 1,803 passed and 28 legacy opt-in tests skipped |
 | Repeated invariant transport | 254.05s | 5.27s runner; one Wrangler transport plus isolated in-process assertions |
 | Recovery proof | 279.81s | 157.89s wall; two distinct real full-export restore boundaries passed |
 | Complete D1/browser/recovery baseline | 880.75s | Functional checks passed; final verdict intentionally failed because the pre-commit working tree was dirty |

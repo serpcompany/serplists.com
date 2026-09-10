@@ -4,6 +4,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { createHmac } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { and, count, eq } from 'drizzle-orm';
+import { createDb, schema } from '../../functions/api/db.ts';
 
 // This harness bundles the unchanged application modules into workerd. Only the
 // external Stripe transport is doubled; every application query uses local D1.
@@ -49,11 +51,13 @@ export async function runAdminBillingSitemapCoverage({ repoRoot, persistPath, en
   let uploadsBucket;
   try {
     const db = await mf.getD1Database('DB');
+    const orm = createDb({ DB: db });
     uploadsBucket = await mf.getR2Bucket('R2_UPLOADS');
     console.log('Local billing coverage: D1 ready');
     const ledger = await db.prepare('SELECT name FROM d1_migrations ORDER BY id').all();
     assert.deepEqual(ledger.results.map(row => row.name), readdirSync(path.join(repoRoot, 'db/migrations')).filter(name => /^\d+.*\.sql$/.test(name)).sort(), 'Exact full Wrangler migration ledger must exist');
-    assert(await db.prepare("SELECT id FROM users WHERE id='coverage-owner'").first(), 'Real migrated smoke fixture must exist');
+    assert((await orm.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.id, 'coverage-owner')).limit(1))[0], 'Real migrated smoke fixture must exist');
+    const [coverageAccount] = await orm.select({ password: schema.account.password, createdAt: schema.account.createdAt, updatedAt: schema.account.updatedAt }).from(schema.account).where(eq(schema.account.userId, 'coverage-owner')).limit(1);
     for (const fixture of [
       ['billing-coverage', 'billing-coverage@e2e.local', 'Billing Coverage', 'billing_coverage', 'billing-credential'],
       ['billing-blank-customer', 'billing-blank-customer@e2e.local', 'Billing Blank Customer', 'billing_blank_customer', 'billing-blank-credential'],
@@ -61,12 +65,10 @@ export async function runAdminBillingSitemapCoverage({ repoRoot, persistPath, en
       ['stripe-subscription-insert', 'stripe-subscription-insert@e2e.local', 'Stripe Subscription Insert', 'stripe_subscription_insert', 'stripe-subscription-credential'],
     ]) {
       const [id, email, name, username, accountId] = fixture;
-      await db.prepare('INSERT INTO users(id,email,name,username,email_verified,created_at,auth_created_at,auth_updated_at) VALUES(?,?,?,?,1,?,1788566400000,1788566400000)')
-        .bind(id, email, name, username, '2026-09-05').run();
-      await db.prepare("INSERT INTO account(id,account_id,provider_id,user_id,password,created_at,updated_at) SELECT ?,?,'credential',?,password,created_at,updated_at FROM account WHERE user_id='coverage-owner' LIMIT 1")
-        .bind(accountId, id, id).run();
+      await orm.insert(schema.users).values({ id, email, name, username, email_verified: true, created_at: '2026-09-05', auth_created_at: new Date(1788566400000), auth_updated_at: new Date(1788566400000) });
+      await orm.insert(schema.account).values({ id: accountId, accountId: id, providerId: 'credential', userId: id, password: coverageAccount.password, createdAt: coverageAccount.createdAt, updatedAt: coverageAccount.updatedAt });
     }
-    await db.prepare("INSERT INTO stripe_customers(user_id,stripe_customer_id,created_at,updated_at) VALUES('billing-blank-customer','','2026-09-05','2026-09-05')").run();
+    await orm.insert(schema.stripe_customers).values({ user_id: 'billing-blank-customer', stripe_customer_id: '', created_at: '2026-09-05', updated_at: '2026-09-05' });
     let cookie = '';
     async function request(route, { method = 'GET', body, headers = {}, status = 200, authenticated = true } = {}) {
       const isFormData = body instanceof FormData;
@@ -103,14 +105,14 @@ export async function runAdminBillingSitemapCoverage({ repoRoot, persistPath, en
     await request('/api/admin/entitlements/override', { method: 'POST', body: {}, status: 401 });
     await admin({ email: 'billing-coverage@e2e.local', plan: 'pro', note: 'local insert' });
     assert.equal(await plan(), 'pro');
-    assert.equal((await db.prepare("SELECT note FROM entitlement_overrides WHERE user_id='billing-coverage'").first()).note, 'local insert');
+    assert.equal((await orm.select({ note: schema.entitlement_overrides.note }).from(schema.entitlement_overrides).where(eq(schema.entitlement_overrides.user_id, 'billing-coverage')).limit(1))[0].note, 'local insert');
     await admin({ userId: 'billing-coverage', plan: 'free', note: 'local update' });
     assert.equal(await plan(), 'free');
     await admin({ userId: 'billing-coverage', plan: 'pro', expiresAt: 1 });
     assert.equal(await plan(), 'free', 'Expired override does not grant pro');
     for (const [body, status] of [[{},400], [{userId:'billing-coverage',plan:'team'},400], [{email:'absent@e2e.local'},404], ['{',400]]) await request('/api/admin/entitlements/override', { method: 'POST', body, status, headers: { 'X-Admin-Secret': 'local-admin-coverage' } });
     await request('/api/admin/entitlements/override?userId=billing-coverage', { method: 'DELETE', headers: { 'X-Admin-Secret': 'local-admin-coverage' } });
-    assert.equal(await db.prepare("SELECT * FROM entitlement_overrides WHERE user_id='billing-coverage'").first(), null);
+    assert.equal((await orm.select().from(schema.entitlement_overrides).where(eq(schema.entitlement_overrides.user_id, 'billing-coverage')).limit(1))[0] ?? null, null);
     checked.push('admin-mutations');
 
     await request('/api/billing/status', { authenticated: false, status: 401 });
@@ -118,13 +120,13 @@ export async function runAdminBillingSitemapCoverage({ repoRoot, persistPath, en
     await request('/api/billing/portal', { method: 'POST', status: 400 });
     for (let i = 0; i < 2; i++) assert.equal((await request('/api/billing/checkout', { method: 'POST' })).json().url, 'https://checkout.stripe.test/local');
     assert.equal(calls.filter(call => call.path === '/v1/customers').length, 1, 'Existing D1 customer reused');
-    assert.equal((await db.prepare("SELECT stripe_customer_id FROM stripe_customers WHERE user_id='billing-coverage'").first()).stripe_customer_id, 'cus_local_coverage');
+    assert.equal((await orm.select({ stripe_customer_id: schema.stripe_customers.stripe_customer_id }).from(schema.stripe_customers).where(eq(schema.stripe_customers.user_id, 'billing-coverage')).limit(1))[0].stripe_customer_id, 'cus_local_coverage');
     assert.equal(calls.find(call => call.path === '/v1/customers').form.email, 'billing-coverage@e2e.local');
     assert.equal(calls.find(call => call.path === '/v1/checkout/sessions').form['line_items[0][price]'], 'price_local_coverage');
     assert.equal((await request('/api/billing/portal', { method: 'POST' })).json().url, 'https://billing.stripe.test/local');
     await login('billing-blank-customer@e2e.local');
     assert.equal((await request('/api/billing/checkout', { method: 'POST' })).json().url, 'https://checkout.stripe.test/local');
-    assert.equal((await db.prepare("SELECT stripe_customer_id FROM stripe_customers WHERE user_id='billing-blank-customer'").first()).stripe_customer_id, 'cus_local_blank_customer', 'Blank existing customer mapping is updated after insert conflict');
+    assert.equal((await orm.select({ stripe_customer_id: schema.stripe_customers.stripe_customer_id }).from(schema.stripe_customers).where(eq(schema.stripe_customers.user_id, 'billing-blank-customer')).limit(1))[0].stripe_customer_id, 'cus_local_blank_customer', 'Blank existing customer mapping is updated after insert conflict');
     assert.equal(calls.filter(call => call.path === '/v1/customers' && call.form['metadata[userId]'] === 'billing-blank-customer').length, 1);
     await login('billing-coverage@e2e.local');
     checkoutMode = 'missing'; await request('/api/billing/checkout', { method: 'POST', status: 500 });
@@ -139,31 +141,31 @@ export async function runAdminBillingSitemapCoverage({ repoRoot, persistPath, en
     await request('/api/stripe/webhook', { method: 'POST', body: {}, status: 400 });
     const sub = { id: 'sub_local', customer: 'cus_local_coverage', status: 'active', items: { data: [{ price: { id: 'price_local_coverage' } }] }, current_period_end: 1999999999 };
     await webhook('evt_local_checkout_insert', 'checkout.session.completed', { client_reference_id: 'stripe-checkout-insert', customer: 'cus_checkout_insert' });
-    assert.equal((await db.prepare("SELECT stripe_customer_id FROM stripe_customers WHERE user_id='stripe-checkout-insert'").first()).stripe_customer_id, 'cus_checkout_insert', 'Checkout webhook successfully inserts a new mapping');
+    assert.equal((await orm.select({ stripe_customer_id: schema.stripe_customers.stripe_customer_id }).from(schema.stripe_customers).where(eq(schema.stripe_customers.user_id, 'stripe-checkout-insert')).limit(1))[0].stripe_customer_id, 'cus_checkout_insert', 'Checkout webhook successfully inserts a new mapping');
     await webhook('evt_local_subscription_mapping_insert', 'customer.subscription.created', { ...sub, id: 'sub_mapping_insert', customer: 'cus_subscription_insert', metadata: { userId: 'stripe-subscription-insert' } });
-    assert.equal((await db.prepare("SELECT stripe_customer_id FROM stripe_customers WHERE user_id='stripe-subscription-insert'").first()).stripe_customer_id, 'cus_subscription_insert', 'Subscription webhook successfully inserts a new mapping');
-    assert.equal((await db.prepare("SELECT user_id FROM stripe_subscriptions WHERE stripe_subscription_id='sub_mapping_insert'").first()).user_id, 'stripe-subscription-insert');
+    assert.equal((await orm.select({ stripe_customer_id: schema.stripe_customers.stripe_customer_id }).from(schema.stripe_customers).where(eq(schema.stripe_customers.user_id, 'stripe-subscription-insert')).limit(1))[0].stripe_customer_id, 'cus_subscription_insert', 'Subscription webhook successfully inserts a new mapping');
+    assert.equal((await orm.select({ user_id: schema.stripe_subscriptions.user_id }).from(schema.stripe_subscriptions).where(eq(schema.stripe_subscriptions.stripe_subscription_id, 'sub_mapping_insert')).limit(1))[0].user_id, 'stripe-subscription-insert');
     await webhook('evt_local_checkout', 'checkout.session.completed', { client_reference_id: 'billing-coverage', customer: 'cus_local_coverage' });
     await webhook('evt_local_created', 'customer.subscription.created', sub);
     assert.equal(await plan(), 'pro');
     assert.equal((await webhook('evt_local_created', 'customer.subscription.created', sub)).duplicate, true);
-    assert.equal((await db.prepare("SELECT COUNT(*) n FROM stripe_subscriptions WHERE stripe_subscription_id='sub_local'").first()).n, 1);
+    assert.equal(Number((await orm.select({ n: count() }).from(schema.stripe_subscriptions).where(eq(schema.stripe_subscriptions.stripe_subscription_id, 'sub_local')))[0].n), 1);
     await webhook('evt_local_trial', 'customer.subscription.updated', { ...sub, status: 'trialing', cancel_at_period_end: true });
     assert.equal(await plan(), 'pro');
-    assert.equal((await db.prepare("SELECT cancel_at_period_end FROM stripe_subscriptions WHERE stripe_subscription_id='sub_local'").first()).cancel_at_period_end, 1);
+    assert.equal((await orm.select({ cancel_at_period_end: schema.stripe_subscriptions.cancel_at_period_end }).from(schema.stripe_subscriptions).where(eq(schema.stripe_subscriptions.stripe_subscription_id, 'sub_local')).limit(1))[0].cancel_at_period_end, true);
     await webhook('evt_local_deleted', 'customer.subscription.deleted', { ...sub, status: 'canceled', canceled_at: 1788566400 });
     assert.equal(await plan(), 'free');
     await webhook('evt_local_metadata', 'customer.subscription.created', { ...sub, id: 'sub_local_metadata', customer: 'cus_metadata', metadata: { userId: 'billing-coverage' } });
     assert.equal(await plan(), 'pro', 'Metadata fallback creates customer mapping');
     await webhook('evt_local_ignored', 'customer.subscription.created', { id: 'incomplete' });
-    assert.equal(await db.prepare("SELECT * FROM stripe_subscriptions WHERE stripe_subscription_id='incomplete'").first(), null);
+    assert.equal((await orm.select().from(schema.stripe_subscriptions).where(eq(schema.stripe_subscriptions.stripe_subscription_id, 'incomplete')).limit(1))[0] ?? null, null);
     await webhook('evt_local_unknown', 'unhandled.local.event', {});
     await db.prepare("CREATE TRIGGER coverage_subscription_failure BEFORE UPDATE ON stripe_subscriptions BEGIN SELECT RAISE(ABORT, 'local coverage write failure'); END").run();
     await webhook('evt_local_retry', 'customer.subscription.updated', { ...sub, status: 'past_due', metadata: { userId: 'billing-coverage' } }, 500);
-    assert((await db.prepare("SELECT error FROM stripe_webhook_events WHERE id='evt_local_retry'").first()).error, 'Actual failed D1 mutation is recorded for retry');
+    assert((await orm.select({ error: schema.stripe_webhook_events.error }).from(schema.stripe_webhook_events).where(eq(schema.stripe_webhook_events.id, 'evt_local_retry')).limit(1))[0].error, 'Actual failed D1 mutation is recorded for retry');
     await db.prepare('DROP TRIGGER coverage_subscription_failure').run();
     await webhook('evt_local_retry', 'customer.subscription.updated', { ...sub, status: 'past_due', metadata: { userId: 'billing-coverage' } });
-    assert.equal((await db.prepare("SELECT error FROM stripe_webhook_events WHERE id='evt_local_retry'").first()).error, null);
+    assert.equal((await orm.select({ error: schema.stripe_webhook_events.error }).from(schema.stripe_webhook_events).where(eq(schema.stripe_webhook_events.id, 'evt_local_retry')).limit(1))[0].error, null);
     checked.push('stripe-mutations');
 
     const uploadForm = new FormData();
@@ -188,7 +190,7 @@ export async function runAdminBillingSitemapCoverage({ repoRoot, persistPath, en
 
     // Valid username is intentional: the browser fixture usernames contain '-'
     // and therefore cannot prove sitemap inclusion under VALID_USERNAME_SQL.
-    await db.prepare("INSERT INTO templates(id,user_id,title,items,owner_type,is_public,slug,category,created_at) VALUES('sitemap-coverage','billing-coverage','Sitemap Fixture','[]','user',1,'sitemap-coverage','[\"Coverage Unique Category\"]','2026-09-05')").run();
+    await orm.insert(schema.templates).values({ id: 'sitemap-coverage', user_id: 'billing-coverage', title: 'Sitemap Fixture', items: '[]', owner_type: 'user', is_public: true, slug: 'sitemap-coverage', category: '["Coverage Unique Category"]', created_at: '2026-09-05' });
     const index1 = (await request('/sitemap.xml')).text;
     assert(index1.includes('/sitemaps/profiles/1.xml'));
     assert.equal((await request('/sitemap.xml')).text, index1, 'Unchanged shard hash preserves revision');
@@ -207,13 +209,13 @@ export async function runAdminBillingSitemapCoverage({ repoRoot, persistPath, en
     await request('/categories/sitemap.xml', { method: 'POST', status: 405 });
     await request('/sitemaps/static.xml?page=2', { status: 308 });
     await request('/categories/sitemap.xml?page=bad', { status: 308 });
-    const before = await db.prepare("SELECT content_hash FROM sitemap_shard_revisions WHERE kind='templates' AND page=1").first();
-    await db.prepare("UPDATE templates SET is_public=0 WHERE id='sitemap-coverage'").run();
+    const [before] = await orm.select({ content_hash: schema.sitemap_shard_revisions.content_hash }).from(schema.sitemap_shard_revisions).where(and(eq(schema.sitemap_shard_revisions.kind, 'templates'), eq(schema.sitemap_shard_revisions.page, 1))).limit(1);
+    await orm.update(schema.templates).set({ is_public: false }).where(eq(schema.templates.id, 'sitemap-coverage'));
     assert(!(await request('/sitemaps/templates/1.xml')).text.includes('/profile/billing_coverage/sitemap-coverage'));
-    await db.prepare("INSERT INTO sitemap_shard_revisions(kind,page,content_hash,revised_at) VALUES('templates',999,'obsolete','2026-09-05')").run();
+    await orm.insert(schema.sitemap_shard_revisions).values({ kind: 'templates', page: 999, content_hash: 'obsolete', revised_at: '2026-09-05' });
     await request('/sitemap.xml');
-    assert.notEqual((await db.prepare("SELECT content_hash FROM sitemap_shard_revisions WHERE kind='templates' AND page=1").first()).content_hash, before.content_hash);
-    assert.equal(await db.prepare("SELECT * FROM sitemap_shard_revisions WHERE kind='templates' AND page=999").first(), null);
+    assert.notEqual((await orm.select({ content_hash: schema.sitemap_shard_revisions.content_hash }).from(schema.sitemap_shard_revisions).where(and(eq(schema.sitemap_shard_revisions.kind, 'templates'), eq(schema.sitemap_shard_revisions.page, 1))).limit(1))[0].content_hash, before.content_hash);
+    assert.equal((await orm.select().from(schema.sitemap_shard_revisions).where(and(eq(schema.sitemap_shard_revisions.kind, 'templates'), eq(schema.sitemap_shard_revisions.page, 999))).limit(1))[0] ?? null, null);
     checked.push('sitemap-queries');
     const { runTemplateLimitCoverage } = await import('./run-template-limit-coverage.mjs');
     const { runTeamQueryCoverage } = await import('./run-team-query-coverage.mjs');

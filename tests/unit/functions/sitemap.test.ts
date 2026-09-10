@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { validateXML } from 'xmllint-wasm';
 import * as schema from '../../../db/schema/index';
@@ -14,6 +14,12 @@ import { onRequest as legacyStaticSitemap } from '../../../functions/sitemaps/st
 import { onRequest as legacyCategoriesSitemap } from '../../../functions/categories/sitemap.xml';
 import { buildDurableShardIndex, handleInMemoryPagedSitemap } from '../../../functions/sitemap/shared';
 import { createSqliteDrizzleFixture } from '../../fixtures/sqlite-drizzle';
+
+const databaseMock = vi.hoisted(() => ({ db: null as unknown }));
+vi.mock('../../../functions/api/db', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../../functions/api/db')>(),
+  createDb: () => databaseMock.db,
+}));
 
 const sitemapSchema = readFileSync(new URL('../../fixtures/sitemap.xsd', import.meta.url), 'utf8');
 const sitemapIndexSchema = readFileSync(new URL('../../fixtures/siteindex.xsd', import.meta.url), 'utf8');
@@ -32,7 +38,7 @@ type QueryResult = {
   results?: unknown[];
 };
 
-async function createDb(...queryResults: QueryResult[]) {
+async function createSitemapFixtureFromRows(...queryResults: QueryResult[]) {
   const fixture = createSqliteDrizzleFixture();
   let sequence = 0;
   const users = new Map<string, string>();
@@ -96,14 +102,15 @@ async function createDb(...queryResults: QueryResult[]) {
 async function request(
   handler: PagesFunction,
   path: string,
-  options: { method?: string; db?: ReturnType<typeof createDb>; params?: Record<string, string> } = {},
+  options: { method?: string; db?: ReturnType<typeof createSitemapFixtureFromRows>; params?: Record<string, string> } = {},
 ) {
-  const fixture = await (options.db ?? createDb());
+  const fixture = await (options.db ?? createSitemapFixtureFromRows());
+  databaseMock.db = fixture.db;
   const response = await handler({
     request: new Request(`https://preview.serplists.pages.dev${path}`, {
       method: options.method ?? 'GET',
     }),
-    env: { DB: fixture.binding },
+    env: { DB: {} as D1Database },
     params: options.params ?? {},
     data: {},
     functionPath: path,
@@ -118,7 +125,7 @@ async function request(
 describe('public sitemap HTTP responses', () => {
   it('publishes a sitemap index with every required shard', async () => {
     const response = await request(sitemapIndex, '/sitemap.xml', {
-      db: createDb(
+      db: createSitemapFixtureFromRows(
         { results: [{ username: 'alice', created_at: '2026-01-01 00:00:00', updated_at: null, profile_revision: '2026-08-01 01:02:03' }] },
         { results: [{ username: 'alice', slug: 'seo', created_at: '2026-01-01 00:00:00', updated_at: null, owner_updated_at: null }] },
         { results: [{ category: 'SEO', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-04-05T00:00:00.000Z' }] },
@@ -224,7 +231,7 @@ describe('public sitemap HTTP responses', () => {
   it('publishes deduplicated database and bundled-template categories', async () => {
     const response = await request(categoriesSitemap, '/sitemaps/categories/1.xml', {
       params: { page: '1' },
-      db: createDb(
+      db: createSitemapFixtureFromRows(
         { results: [{ kind: 'categories', revised_at: '2020-09-04 01:02:03' }] },
         { results: [
           { category: '["SEO & Analytics", "outdoor"]', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-05-06T00:00:00.000Z', owner_updated_at: '2026-06-07T00:00:00.000Z' },
@@ -261,7 +268,7 @@ describe('public sitemap HTTP responses', () => {
   it('publishes canonical profile URLs with truthful modification dates', async () => {
     const response = await request(profilesSitemap, '/sitemaps/profiles/1.xml', {
       params: { page: '1' },
-      db: createDb({ results: [
+      db: createSitemapFixtureFromRows({ results: [
           {
             username: 'alice_bob',
             created_at: '2026-01-02 00:00:00',
@@ -291,7 +298,7 @@ describe('public sitemap HTTP responses', () => {
   it('publishes only rows supplied by the public-template inventory', async () => {
     const response = await request(templatesSitemap, '/sitemaps/templates/1.xml', {
       params: { page: '1' },
-      db: createDb(
+      db: createSitemapFixtureFromRows(
         { first: { revised_at: '2026-09-04 00:00:01' } },
         { results: [
           {
@@ -333,7 +340,7 @@ describe('public sitemap HTTP responses', () => {
   it('does not advance an unchanged sibling template after another template changes', async () => {
     const response = await request(templatesSitemap, '/sitemaps/templates/1.xml', {
       params: { page: '1' },
-      db: createDb(
+      db: createSitemapFixtureFromRows(
         { first: { revised_at: '2031-01-01 00:00:00' } },
         { results: [
           { username: 'alice', slug: 'changed', created_at: '2026-01-01 00:00:00', updated_at: '2031-01-01 00:00:00', owner_updated_at: '2026-02-01 00:00:00' },
@@ -357,11 +364,11 @@ describe('public sitemap HTTP responses', () => {
     });
     const empty = await request(templatesSitemap, '/sitemaps/templates/2.xml', {
       params: { page: '2' },
-      db: createDb({ first: { revised_at: '2026-09-04 00:00:01' } }, { results: [] }),
+      db: createSitemapFixtureFromRows({ first: { revised_at: '2026-09-04 00:00:01' } }, { results: [] }),
     });
     const emptyFirst = await request(profilesSitemap, '/sitemaps/profiles/1.xml', {
       params: { page: '1' },
-      db: createDb({ results: [] }),
+      db: createSitemapFixtureFromRows({ results: [] }),
     });
 
     expect(invalid.status).toBe(404);

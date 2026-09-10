@@ -24,6 +24,7 @@ const TRUSTED_LEGACY_ENTRIES_SHA256 = "1481cb93b761a1c4252ac7866d39dcfd72ada0515
 const TRUSTED_LEGACY_THROUGH = "0024_safe_template_evolution.sql";
 const TRUSTED_LEGACY_COUNT = 24;
 const APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION = Object.freeze({
+  beforeCommit: 'e5a3aaa720e3621a13a23dc2fe028088ca042bb1',
   snapshot: '0024_snapshot.json',
   beforeSha256: '1a591c31f09b976eae3f1809082f4887d1317e77b502f8bc4fad53442b3e9170',
   afterSha256: 'd3947bb8300b6402942e36602c7794a1c48f5add09caf31e9a868bd08a875a04',
@@ -107,6 +108,21 @@ export function loadProvenanceState(repoRoot) {
 
 function failure(name, detail) {
   return { name, detail, verdict: "fail" };
+}
+
+function isApprovedMetadataSnapshotCorrection(repoRoot, entry, actualSnapshotHash) {
+  if (entry.snapshot !== APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.snapshot
+      || entry.snapshotSha256 !== APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeSha256
+      || actualSnapshotHash !== APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.afterSha256) return false;
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeCommit, 'HEAD'], {
+      cwd: repoRoot, env: sanitizedGitEnvironment(), stdio: 'pipe',
+    });
+    const original = gitShow(repoRoot, APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeCommit, `${META_DIRECTORY}/${entry.snapshot}`);
+    return original !== null && sha256(original) === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeSha256;
+  } catch {
+    return false;
+  }
 }
 
 export function validateProvenanceState(state) {
@@ -199,9 +215,7 @@ export function validateProvenanceState(state) {
     const journalEntry = journal.entries[index];
     if (!existsSync(snapshotPath)) return;
     const actualSnapshotHash = sha256File(snapshotPath);
-    const approvedCorrection = entry.snapshot === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.snapshot
-      && entry.snapshotSha256 === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeSha256
-      && actualSnapshotHash === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.afterSha256;
+    const approvedCorrection = isApprovedMetadataSnapshotCorrection(repoRoot, entry, actualSnapshotHash);
     if (actualSnapshotHash !== entry.snapshotSha256 && !approvedCorrection) {
       failures.push(failure("snapshot-immutable", `${entry.snapshot} has hash ${actualSnapshotHash}; expected ${entry.snapshotSha256}.`));
     }
@@ -291,9 +305,7 @@ function comparisonRoot(state, baseRef) {
     const file = `${META_DIRECTORY}/${entry.snapshot}`;
     const content = readFileSync(path.join(state.repoRoot, file), "utf8");
     const actualHash = sha256(content);
-    const approvedCorrection = entry.snapshot === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.snapshot
-      && entry.snapshotSha256 === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.beforeSha256
-      && actualHash === APPROVED_METADATA_ONLY_SNAPSHOT_CORRECTION.afterSha256;
+    const approvedCorrection = isApprovedMetadataSnapshotCorrection(state.repoRoot, entry, actualHash);
     if (actualHash !== entry.snapshotSha256 && !approvedCorrection) {
       throw new Error(`Pinned bootstrap snapshot ${entry.snapshot} has changed.`);
     }

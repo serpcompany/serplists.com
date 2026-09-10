@@ -20,4 +20,4 @@ pre-push:
   parallel: false
   commands:
     verification:
-      run: pnpm secret:scan && pnpm run verify:fast
+      run: pnpm secret:scan && SCHEMA_CONTRACT_BASE_SHA="$(git merge-base HEAD origin/staging)" pnpm run verify:fast

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { and, count, eq, isNull } from 'drizzle-orm';
+import { createDb, schema } from '../../functions/api/db.ts';
 
 const PASSWORD = 'password123';
 const CREATED_AT = '2026-09-05';
@@ -9,8 +11,9 @@ const EMPTY_SECTIONS = JSON.stringify([{ id: 'limit-section', title: 'Limit Sect
 export async function runTemplateLimitCoverage({ mf, db }) {
   assert(mf?.dispatchFetch, 'runTemplateLimitCoverage requires the real Miniflare Worker');
   assert(db?.prepare, 'runTemplateLimitCoverage requires the real migrated D1 binding');
-  assert(await db.prepare("SELECT id FROM users WHERE id = 'coverage-owner'").first(), 'coverage-owner fixture is required');
-  assert(await db.prepare("SELECT id FROM templates WHERE id = 'coverage-public'").first(), 'coverage-public fixture is required');
+  const orm = createDb({ DB: db });
+  assert((await orm.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.id, 'coverage-owner')).limit(1))[0], 'coverage-owner fixture is required');
+  assert((await orm.select({ id: schema.templates.id }).from(schema.templates).where(eq(schema.templates.id, 'coverage-public')).limit(1))[0], 'coverage-public fixture is required');
 
   const prefix = `i127-template-limits-${randomUUID().slice(0, 8)}`;
   const createdIds = [];
@@ -19,15 +22,9 @@ export async function runTemplateLimitCoverage({ mf, db }) {
   async function createUser(label) {
     const id = `${prefix}-${label}`;
     const email = `${id}@e2e.local`;
-    await db.prepare(`
-      INSERT INTO users (id, email, name, username, email_verified, created_at, auth_created_at, auth_updated_at)
-      VALUES (?, ?, ?, ?, 1, ?, ?, ?)
-    `).bind(id, email, `Issue 127 ${label}`, id.replaceAll('-', '_'), CREATED_AT, AUTH_TIME, AUTH_TIME).run();
-    await db.prepare(`
-      INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at)
-      SELECT ?, ?, 'credential', ?, password, ?, ?
-      FROM account WHERE user_id = 'coverage-owner' LIMIT 1
-    `).bind(`${id}-credential`, id, id, AUTH_TIME, AUTH_TIME).run();
+    await orm.insert(schema.users).values({ id, email, name: `Issue 127 ${label}`, username: id.replaceAll('-', '_'), email_verified: true, created_at: CREATED_AT, auth_created_at: new Date(AUTH_TIME), auth_updated_at: new Date(AUTH_TIME) });
+    const [sourceAccount] = await orm.select({ password: schema.account.password }).from(schema.account).where(eq(schema.account.userId, 'coverage-owner')).limit(1);
+    await orm.insert(schema.account).values({ id: `${id}-credential`, accountId: id, providerId: 'credential', userId: id, password: sourceAccount.password, createdAt: new Date(AUTH_TIME), updatedAt: new Date(AUTH_TIME) });
     createdIds.push(id);
     return { id, email };
   }
@@ -62,52 +59,24 @@ export async function runTemplateLimitCoverage({ mf, db }) {
     return text ? JSON.parse(text) : null;
   }
 
-  async function scalar(sql, ...bindings) {
-    const row = await db.prepare(sql).bind(...bindings).first();
+  async function countRows(table, where) {
+    const [row] = await orm.select({ count: count() }).from(table).where(where);
     return Number(row?.count ?? 0);
   }
 
   async function seedTemplate({ id, userId, slug, teamId = null, isPublic = 0, rules = null }) {
-    await db.prepare(`
-      INSERT INTO templates (
-        id, user_id, title, description, items, is_public, category, tags, slug,
-        version, type, rules, owner_type, team_id, created_by_user_id, created_at
-      ) VALUES (?, ?, ?, 'Issue 127 runtime coverage', ?, ?, '[]', '[]', ?, 1, 'checklist', ?, ?, ?, ?, ?)
-    `).bind(
-      id,
-      userId,
-      `Template ${id}`,
-      EMPTY_SECTIONS,
-      isPublic,
-      slug,
-      rules,
-      teamId ? 'team' : 'user',
-      teamId,
-      userId,
-      CREATED_AT,
-    ).run();
+    await orm.insert(schema.templates).values({ id, user_id: userId, title: `Template ${id}`, description: 'Issue 127 runtime coverage', items: EMPTY_SECTIONS, is_public: Boolean(isPublic), category: '[]', tags: '[]', slug, version: 1, type: 'checklist', rules, owner_type: teamId ? 'team' : 'user', team_id: teamId, created_by_user_id: userId, created_at: CREATED_AT });
     createdIds.push(id);
   }
 
   async function seedRun({ id, userId, teamId = null, templateId = null, deletedAt = null, isPublic = 0, shareToken = null }) {
-    await db.prepare(`
-      INSERT INTO checklist_runs (
-        id, user_id, team_id, template_id, title, items, status, started_at, created_at,
-        deleted_at, is_public, share_token, created_by_user_id, started_by_user_id
-      ) VALUES (?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, ?, ?, ?, ?, ?)
-    `).bind(id, userId, teamId, templateId, `Run ${id}`, EMPTY_SECTIONS, CREATED_AT, CREATED_AT, deletedAt, isPublic, shareToken, userId, userId).run();
+    await orm.insert(schema.checklist_runs).values({ id, user_id: userId, team_id: teamId, template_id: templateId, title: `Run ${id}`, items: EMPTY_SECTIONS, status: 'in_progress', started_at: CREATED_AT, created_at: CREATED_AT, deleted_at: deletedAt, is_public: Boolean(isPublic), share_token: shareToken, created_by_user_id: userId, started_by_user_id: userId });
     createdIds.push(id);
   }
 
   async function seedTeam({ id, userId }) {
-    await db.prepare(`
-      INSERT INTO teams (id, name, slug, created_by_user_id, billing_owner_user_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(id, `Team ${id}`, id, userId, userId, CREATED_AT).run();
-    await db.prepare(`
-      INSERT INTO team_members (id, team_id, user_id, role, status, created_at)
-      VALUES (?, ?, ?, 'editor', 'active', ?)
-    `).bind(`${id}-membership`, id, userId, CREATED_AT).run();
+    await orm.insert(schema.teams).values({ id, name: `Team ${id}`, slug: id, created_by_user_id: userId, billing_owner_user_id: userId, created_at: CREATED_AT });
+    await orm.insert(schema.team_members).values({ id: `${id}-membership`, team_id: id, user_id: userId, role: 'editor', status: 'active', created_at: CREATED_AT });
     createdIds.push(id);
   }
 
@@ -124,15 +93,15 @@ export async function runTemplateLimitCoverage({ mf, db }) {
     body: templatePayload('Create Under Limit', `${prefix}-create-under`),
   });
   createdIds.push(createResult.id);
-  assert.equal(await scalar('SELECT COUNT(*) AS count FROM templates WHERE user_id = ? AND deleted_at IS NULL', createUnder.id), 1);
-  assert.equal(await scalar('SELECT COUNT(*) AS count FROM template_versions WHERE template_id = ?', createResult.id), 1);
-  assert.equal(await scalar("SELECT COUNT(*) AS count FROM audit_events WHERE resource_id = ? AND action = 'template.created'", createResult.id), 1);
+  assert.equal(await countRows(schema.templates, and(eq(schema.templates.user_id, createUnder.id), isNull(schema.templates.deleted_at))), 1);
+  assert.equal(await countRows(schema.template_versions, eq(schema.template_versions.template_id, createResult.id)), 1);
+  assert.equal(await countRows(schema.audit_events, and(eq(schema.audit_events.resource_id, createResult.id), eq(schema.audit_events.action, 'template.created'))), 1);
   scenarios.push('template-create-free-under-cap');
 
   const createOver = await createUser('create-over');
   await seedTemplate({ id: `${prefix}-create-existing`, userId: createOver.id, slug: `${prefix}-create-existing` });
   const createOverCookie = await login(createOver);
-  const createBefore = await scalar('SELECT COUNT(*) AS count FROM templates WHERE user_id = ?', createOver.id);
+  const createBefore = await countRows(schema.templates, eq(schema.templates.user_id, createOver.id));
   const createDenied = await api(createOverCookie, '/api/templates', {
     method: 'POST',
     status: 403,
@@ -140,23 +109,23 @@ export async function runTemplateLimitCoverage({ mf, db }) {
   });
   assert.equal(createDenied.code, 'limit_reached');
   assert.deepEqual(createDenied.details, { limit: 1, current: 1, resource: 'templates' });
-  assert.equal(await scalar('SELECT COUNT(*) AS count FROM templates WHERE user_id = ?', createOver.id), createBefore);
+  assert.equal(await countRows(schema.templates, eq(schema.templates.user_id, createOver.id)), createBefore);
   scenarios.push('template-create-free-over-cap');
 
   for (const atCap of [false,true]) {
     const actor = await createUser(`template-restore-${atCap ? 'over' : 'under'}`);
     const archivedId = `${actor.id}-archived`;
     await seedTemplate({id:archivedId,userId:actor.id,slug:archivedId});
-    await db.prepare('UPDATE templates SET deleted_at = ? WHERE id = ?').bind(CREATED_AT,archivedId).run();
+    await orm.update(schema.templates).set({ deleted_at: CREATED_AT }).where(eq(schema.templates.id, archivedId));
     if (atCap) await seedTemplate({id:`${actor.id}-active`,userId:actor.id,slug:`${actor.id}-active`});
     const actorCookie = await login(actor);
     const restored = await api(actorCookie,`/api/templates/${archivedId}/restore`,{method:'POST',body:{},status:atCap?403:200});
-    const row = await db.prepare('SELECT deleted_at,version,user_id FROM templates WHERE id = ?').bind(archivedId).first();
+    const [row] = await orm.select({ deleted_at: schema.templates.deleted_at, version: schema.templates.version, user_id: schema.templates.user_id }).from(schema.templates).where(eq(schema.templates.id, archivedId)).limit(1);
     assert.equal(row.user_id,actor.id);
     assert.equal(row.deleted_at,atCap?CREATED_AT:null);
-    assert.equal(await scalar('SELECT COUNT(*) AS count FROM templates WHERE user_id = ? AND deleted_at IS NULL',actor.id),1);
-    assert.equal(await scalar('SELECT COUNT(*) AS count FROM template_versions WHERE template_id = ?',archivedId),0,'restoring lifecycle state must not invent a content version');
-    assert.equal(await scalar("SELECT COUNT(*) AS count FROM audit_events WHERE resource_id = ? AND action = 'template.restored'",archivedId),atCap?0:1);
+    assert.equal(await countRows(schema.templates, and(eq(schema.templates.user_id, actor.id), isNull(schema.templates.deleted_at))),1);
+    assert.equal(await countRows(schema.template_versions, eq(schema.template_versions.template_id, archivedId)),0,'restoring lifecycle state must not invent a content version');
+    assert.equal(await countRows(schema.audit_events, and(eq(schema.audit_events.resource_id, archivedId), eq(schema.audit_events.action, 'template.restored'))),atCap?0:1);
     if (atCap) assert.deepEqual(restored.details,{limit:1,current:1,resource:'templates'});
     assert.equal(row.version,1,'restore preserves the existing content version');
     scenarios.push(`template-restore-free-${atCap?'over':'under'}-cap`);
@@ -169,22 +138,22 @@ export async function runTemplateLimitCoverage({ mf, db }) {
     body: { visibility: 'private' },
   });
   createdIds.push(cloneResult.id);
-  assert.equal((await db.prepare('SELECT user_id FROM templates WHERE id = ?').bind(cloneResult.id).first()).user_id, cloneUnder.id);
-  assert.equal(await scalar('SELECT COUNT(*) AS count FROM template_versions WHERE template_id = ?', cloneResult.id), 1);
-  assert.equal(await scalar("SELECT COUNT(*) AS count FROM audit_events WHERE resource_id = ? AND action = 'template.cloned'", cloneResult.id), 1);
+  assert.equal((await orm.select({ user_id: schema.templates.user_id }).from(schema.templates).where(eq(schema.templates.id, cloneResult.id)).limit(1))[0].user_id, cloneUnder.id);
+  assert.equal(await countRows(schema.template_versions, eq(schema.template_versions.template_id, cloneResult.id)), 1);
+  assert.equal(await countRows(schema.audit_events, and(eq(schema.audit_events.resource_id, cloneResult.id), eq(schema.audit_events.action, 'template.cloned'))), 1);
   scenarios.push('template-clone-free-under-cap');
 
   const cloneOver = await createUser('clone-over');
   await seedTemplate({ id: `${prefix}-clone-existing`, userId: cloneOver.id, slug: `${prefix}-clone-existing` });
   const cloneOverCookie = await login(cloneOver);
-  const cloneBefore = await scalar('SELECT COUNT(*) AS count FROM templates WHERE user_id = ?', cloneOver.id);
+  const cloneBefore = await countRows(schema.templates, eq(schema.templates.user_id, cloneOver.id));
   const cloneDenied = await api(cloneOverCookie, '/api/templates/coverage-public/clone', {
     method: 'POST',
     status: 403,
     body: { visibility: 'private' },
   });
   assert.equal(cloneDenied.code, 'limit_reached');
-  assert.equal(await scalar('SELECT COUNT(*) AS count FROM templates WHERE user_id = ?', cloneOver.id), cloneBefore);
+  assert.equal(await countRows(schema.templates, eq(schema.templates.user_id, cloneOver.id)), cloneBefore);
   scenarios.push('template-clone-free-over-cap');
 
   const renameUser = await createUser('rename');
@@ -199,7 +168,7 @@ export async function runTemplateLimitCoverage({ mf, db }) {
   });
   assert.equal(collisionRename.slug, `${collisionSlug}-${renameId.slice(0, 8)}`);
   assert.deepEqual(
-    await db.prepare('SELECT slug, version FROM templates WHERE id = ?').bind(renameId).first(),
+    (await orm.select({ slug: schema.templates.slug, version: schema.templates.version }).from(schema.templates).where(eq(schema.templates.id, renameId)).limit(1))[0],
     { slug: collisionRename.slug, version: 2 },
   );
   const validSlug = `${prefix}-valid-rename`;
@@ -209,10 +178,10 @@ export async function runTemplateLimitCoverage({ mf, db }) {
   });
   assert.equal(validRename.slug, validSlug);
   assert.deepEqual(
-    await db.prepare('SELECT slug, version FROM templates WHERE id = ?').bind(renameId).first(),
+    (await orm.select({ slug: schema.templates.slug, version: schema.templates.version }).from(schema.templates).where(eq(schema.templates.id, renameId)).limit(1))[0],
     { slug: validSlug, version: 3 },
   );
-  assert.equal(await scalar('SELECT COUNT(*) AS count FROM template_versions WHERE template_id = ?', renameId), 2);
+  assert.equal(await countRows(schema.template_versions, eq(schema.template_versions.template_id, renameId)), 2);
   scenarios.push('template-slug-collision-and-valid-rename');
 
   const restoreUnder = await createUser('restore-under');
@@ -223,8 +192,8 @@ export async function runTemplateLimitCoverage({ mf, db }) {
   await seedRun({ id: restoreUnderId, userId: restoreUnder.id, deletedAt: CREATED_AT });
   const restoreUnderCookie = await login(restoreUnder);
   await api(restoreUnderCookie, `/api/checklists/${restoreUnderId}/restore`, { method: 'POST', body: {} });
-  assert.equal(await scalar("SELECT COUNT(*) AS count FROM checklist_runs WHERE user_id = ? AND team_id IS NULL AND status = 'in_progress' AND deleted_at IS NULL", restoreUnder.id), 3);
-  assert.equal((await db.prepare('SELECT deleted_at FROM checklist_runs WHERE id = ?').bind(restoreUnderId).first()).deleted_at, null);
+  assert.equal(await countRows(schema.checklist_runs, and(eq(schema.checklist_runs.user_id, restoreUnder.id), isNull(schema.checklist_runs.team_id), eq(schema.checklist_runs.status, 'in_progress'), isNull(schema.checklist_runs.deleted_at))), 3);
+  assert.equal((await orm.select({ deleted_at: schema.checklist_runs.deleted_at }).from(schema.checklist_runs).where(eq(schema.checklist_runs.id, restoreUnderId)).limit(1))[0].deleted_at, null);
   scenarios.push('active-run-restore-free-under-cap');
 
   const restoreOver = await createUser('restore-over');
@@ -236,8 +205,8 @@ export async function runTemplateLimitCoverage({ mf, db }) {
   const restoreOverCookie = await login(restoreOver);
   const restoreDenied = await api(restoreOverCookie, `/api/checklists/${restoreOverId}/restore`, { method: 'POST', body: {}, status: 403 });
   assert.equal(restoreDenied.code, 'limit_reached');
-  assert.equal((await db.prepare('SELECT deleted_at FROM checklist_runs WHERE id = ?').bind(restoreOverId).first()).deleted_at, CREATED_AT);
-  assert.equal(await scalar("SELECT COUNT(*) AS count FROM checklist_runs WHERE user_id = ? AND deleted_at IS NULL", restoreOver.id), 3);
+  assert.equal((await orm.select({ deleted_at: schema.checklist_runs.deleted_at }).from(schema.checklist_runs).where(eq(schema.checklist_runs.id, restoreOverId)).limit(1))[0].deleted_at, CREATED_AT);
+  assert.equal(await countRows(schema.checklist_runs, and(eq(schema.checklist_runs.user_id, restoreOver.id), isNull(schema.checklist_runs.deleted_at))), 3);
   scenarios.push('active-run-restore-free-over-cap');
 
   const teamUser = await createUser('effective-team');
@@ -259,19 +228,19 @@ export async function runTemplateLimitCoverage({ mf, db }) {
       isPublic: 1,
       shareToken: `${prefix}-team-${label}-old-share`,
     });
-    const beforeRows = await scalar('SELECT COUNT(*) AS count FROM checklist_runs WHERE team_id = ?', teamId);
+    const beforeRows = await countRows(schema.checklist_runs, eq(schema.checklist_runs.team_id, teamId));
     const result = await api(teamCookie, `/api/checklists/${templateId}/share`, {
       method: 'POST',
       status: expectedStatus,
       body: { runName: `Effective team ${label}` },
     });
-    const afterRows = await scalar('SELECT COUNT(*) AS count FROM checklist_runs WHERE team_id = ?', teamId);
+    const afterRows = await countRows(schema.checklist_runs, eq(schema.checklist_runs.team_id, teamId));
     if (label === 'under') {
       assert.equal(afterRows, beforeRows + 1);
-      assert.equal((await db.prepare('SELECT team_id FROM checklist_runs WHERE id = ?').bind(result.id).first()).team_id, teamId);
+      assert.equal((await orm.select({ team_id: schema.checklist_runs.team_id }).from(schema.checklist_runs).where(eq(schema.checklist_runs.id, result.id)).limit(1))[0].team_id, teamId);
       assert.deepEqual(
-        await db.prepare('SELECT status, is_public FROM checklist_runs WHERE id = ?').bind(previousSharedId).first(),
-        { status: 'completed', is_public: 0 },
+        (await orm.select({ status: schema.checklist_runs.status, is_public: schema.checklist_runs.is_public }).from(schema.checklist_runs).where(eq(schema.checklist_runs.id, previousSharedId)).limit(1))[0],
+        { status: 'completed', is_public: false },
       );
       createdIds.push(result.id);
       scenarios.push('effective-team-share-reactivation-free-under-cap');
@@ -279,8 +248,8 @@ export async function runTemplateLimitCoverage({ mf, db }) {
       assert.equal(result.code, 'limit_reached');
       assert.equal(afterRows, beforeRows);
       assert.deepEqual(
-        await db.prepare('SELECT status, is_public FROM checklist_runs WHERE id = ?').bind(previousSharedId).first(),
-        { status: 'in_progress', is_public: 1 },
+        (await orm.select({ status: schema.checklist_runs.status, is_public: schema.checklist_runs.is_public }).from(schema.checklist_runs).where(eq(schema.checklist_runs.id, previousSharedId)).limit(1))[0],
+        { status: 'in_progress', is_public: true },
       );
       scenarios.push('effective-team-share-reactivation-free-over-cap');
     }
