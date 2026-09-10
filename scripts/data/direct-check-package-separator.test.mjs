@@ -9,12 +9,15 @@ import { listMigrationFiles, replayMigrations } from './schema-contract.ts';
 // that could try downloading pnpm after the test isolates HOME.
 const pnpm = realpathSync(process.env.PNPM_9_2_0_CLI ?? process.env.npm_execpath
   ?? execFileSync('which', ['pnpm'], { encoding: 'utf8' }).trim());
+const pnpmIsShellShim = /^#!.*(?:ba|z|da|k)?sh\b/.test(readFileSync(pnpm, 'utf8').split(/\r?\n/, 1)[0]);
+const pnpmCommand = pnpmIsShellShim ? pnpm : process.execPath;
+const pnpmArgs = pnpmIsShellShim ? [] : [pnpm];
 const stagingId = 'fcaf4325-5be7-4ead-ab60-45932a04177b';
 const productionId = 'b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1';
 
 beforeAll(() => {
   expect(pnpm, 'Set PNPM_9_2_0_CLI to the installed pnpm 9.2.0 bin/pnpm.cjs').toBeTruthy();
-  expect(execFileSync(process.execPath, [pnpm, '--version'], { encoding: 'utf8' }).trim()).toBe('9.2.0');
+  expect(execFileSync(pnpmCommand, [...pnpmArgs, '--version'], { encoding: 'utf8' }).trim()).toBe('9.2.0');
 });
 
 function run(alias, extra = [], drift = false, environment = {}) {
@@ -74,7 +77,7 @@ cp.execFileSync = function(file, args, options) {
 require('node:module').syncBuiltinESMExports();
 `);
   try {
-    const result = spawnSync(process.execPath, [pnpm, 'run', alias, '--', '--report-dir', reports, ...extra], {
+    const result = spawnSync(pnpmCommand, [...pnpmArgs, 'run', alias, '--', '--report-dir', reports, ...extra], {
       encoding: 'utf8', timeout: 5000,
       env: { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: dir, CI: '1', NODE_OPTIONS: `--require=${preload}`, ...environment },
     });
