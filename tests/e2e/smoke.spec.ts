@@ -180,6 +180,10 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     indexXml.matchAll(/<loc>(https:\/\/serplists\.com\/sitemaps\/(?:pages|categories|profiles|templates)\/\d+\.xml)<\/loc>/g),
     (match) => match[1],
   );
+  const shardLastmods = Array.from(
+    indexXml.matchAll(/<loc>(https:\/\/serplists\.com\/sitemaps\/(?:pages|categories|profiles|templates)\/\d+\.xml)<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/g),
+    (match) => [match[1], match[2]],
+  );
 
   expect(indexResponse.ok()).toBe(true);
   expect(indexResponse.headers()["content-type"]).toContain("application/xml");
@@ -198,6 +202,7 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
   expect(robotsResponse.ok()).toBe(true);
   expect(await robotsResponse.text()).toContain("Sitemap: https://serplists.com/sitemap.xml");
   const allPageLocations = new Set<string>();
+  const pageLocationsByShard = new Map<string, string[]>();
 
   for (const childLocation of childLocations) {
     const localLocation = childLocation.replace("https://serplists.com", pagesOrigin);
@@ -211,6 +216,7 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
       childXml.matchAll(/<lastmod>([^<]+)<\/lastmod>/g),
       (match) => match[1],
     );
+    pageLocationsByShard.set(childLocation, pageLocations);
 
     expect(childResponse.ok(), childLocation).toBe(true);
     expect(childResponse.headers()["content-type"]).toContain("application/xml");
@@ -234,6 +240,40 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     expect(headResponse.headers()["content-type"]).toContain("application/xml");
     expect(headResponse.headers()["cache-control"]).toContain("s-maxage=86400");
     expect(await headResponse.text()).toBe("");
+  }
+
+  expect(allPageLocations).toContain("https://serplists.com/profile/admin");
+  expect(allPageLocations).toContain(
+    "https://serplists.com/profile/admin/technical-seo-audit-checklist",
+  );
+  expect(allPageLocations).toContain("https://serplists.com/categories/seo");
+  expect(allPageLocations).not.toContain(
+    "https://serplists.com/profile/admin/internal-publishing-checklist",
+  );
+  expect(allPageLocations).not.toContain(
+    "https://serplists.com/profile/admin/shared-growth-launch-checklist",
+  );
+  expect(allPageLocations).not.toContain(
+    "https://serplists.com/profile/jane/client-reporting-qa-checklist",
+  );
+
+  const unchangedIndexResponse = await request.get(`${pagesOrigin}/sitemap.xml`);
+  const unchangedIndexXml = await unchangedIndexResponse.text();
+  const unchangedShardLastmods = Array.from(
+    unchangedIndexXml.matchAll(/<loc>(https:\/\/serplists\.com\/sitemaps\/(?:pages|categories|profiles|templates)\/\d+\.xml)<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/g),
+    (match) => [match[1], match[2]],
+  );
+  expect(unchangedIndexResponse.ok()).toBe(true);
+  expect(unchangedShardLastmods).toEqual(shardLastmods);
+
+  for (const childLocation of childLocations) {
+    const localLocation = childLocation.replace("https://serplists.com", pagesOrigin);
+    const unchangedChildXml = await (await request.get(localLocation)).text();
+    const unchangedPageLocations = Array.from(
+      unchangedChildXml.matchAll(/<loc>(https:\/\/serplists\.com\/[^<]*)<\/loc>/g),
+      (match) => match[1],
+    );
+    expect(unchangedPageLocations, childLocation).toEqual(pageLocationsByShard.get(childLocation));
   }
 
   expect((await request.get(`${pagesOrigin}/sitemaps/profiles/999999.xml`)).status()).toBe(404);

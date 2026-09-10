@@ -1,3 +1,11 @@
+import { and, eq } from 'drizzle-orm';
+import {
+  sitemap_owner_revisions,
+  sitemap_revisions,
+  templates,
+  users,
+} from '../../../db/schema/index';
+import { createDb } from '../../api/db';
 import type { Env } from '../../api/types';
 import {
   bundledTemplateEntries,
@@ -7,27 +15,29 @@ import {
   isValidTemplateSlug,
   isValidUsername,
   mostRecentLastmod,
-  PUBLIC_TEMPLATE_SQL_WHERE,
-  VALID_TEMPLATE_SLUG_SQL,
-  VALID_USERNAME_SQL,
+  publicTemplateCondition,
+  validTemplateSlugCondition,
+  validUsernameCondition,
 } from '../../sitemap/shared';
 
 type TemplateRow = {
-  username: string;
-  slug: string;
+  username: string | null;
+  slug: string | null;
   created_at: string;
   updated_at: string | null;
   owner_updated_at: string | null;
 };
 
 export const onRequest: PagesFunction<Env> = async ({ request, env, params }) => {
-  const revision = await env.DB.prepare(
-    `SELECT revised_at FROM sitemap_revisions WHERE kind = 'templates'`,
-  ).first<{ revised_at: string }>();
+  const db = createDb(env);
+  const [revision] = await db
+    .select({ revised_at: sitemap_revisions.revised_at })
+    .from(sitemap_revisions)
+    .where(eq(sitemap_revisions.kind, 'templates'))
+    .limit(1);
   const landingPage = catalogPageEntry('/templates');
   return handlePagedDatabaseSitemap<TemplateRow>({
     request,
-    env,
     params,
     prefixEntries: [
       {
@@ -40,22 +50,31 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, params }) =>
       },
       ...bundledTemplateEntries(),
     ],
-    sql: `SELECT u.username, t.slug, t.created_at, t.updated_at,
-                r.revised_at AS owner_updated_at
-       FROM templates AS t
-       JOIN users AS u ON u.id = t.user_id
-       LEFT JOIN sitemap_owner_revisions AS r ON r.user_id = u.id
-      WHERE ${PUBLIC_TEMPLATE_SQL_WHERE}
-        AND ${VALID_TEMPLATE_SLUG_SQL}
-        AND ${VALID_USERNAME_SQL}
-      ORDER BY t.id
-      LIMIT ? OFFSET ?`,
-    toEntry: (row) => isValidUsername(row.username.trim()) && isValidTemplateSlug(row.slug.trim()) ? ({
-        path: `/profile/${encodeURIComponent(row.username.trim())}/${encodeURIComponent(row.slug.trim())}`,
+    loadRows: async ({ limit, offset }) => await db
+      .select({
+        username: users.username,
+        slug: templates.slug,
+        created_at: templates.created_at,
+        updated_at: templates.updated_at,
+        owner_updated_at: sitemap_owner_revisions.revised_at,
+      })
+      .from(templates)
+      .innerJoin(users, eq(users.id, templates.user_id))
+      .leftJoin(sitemap_owner_revisions, eq(sitemap_owner_revisions.user_id, users.id))
+      .where(and(publicTemplateCondition, validTemplateSlugCondition, validUsernameCondition))
+      .orderBy(templates.id)
+      .limit(limit)
+      .offset(offset),
+    toEntry: (row) => {
+      const username = row.username?.trim() ?? '';
+      const slug = row.slug?.trim() ?? '';
+      return isValidUsername(username) && isValidTemplateSlug(slug) ? ({
+        path: `/profile/${encodeURIComponent(username)}/${encodeURIComponent(slug)}`,
         lastmod: mostRecentLastmod(
           row.updated_at || row.created_at,
           row.owner_updated_at,
         ),
-      }) : null,
+      }) : null;
+    },
   });
 };
