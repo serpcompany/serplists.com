@@ -7,6 +7,10 @@
       "migrationTo": "0024_safe_template_evolution.sql",
       "preMigration": "0023_add_sitemap_revision_state.sql",
       "artifacts": ["db/migrations/0024_safe_template_evolution.sql"],
+      "retiredArtifacts": [{
+        "path": "db/maintenance/cleanup-seed-data.sql",
+        "sha256": "bc623db415e944e0df22c4a3d1dd36872761a3e4001726a5df9fb913682ffc5c"
+      }],
       "fixtureProfile": "template-evolution-v1",
       "affectedTables": ["templates", "checklist_runs"],
       "invariants": [
@@ -22,6 +26,10 @@
       "migrationTo": null,
       "preMigration": "0024_safe_template_evolution.sql",
       "artifacts": [],
+      "retiredArtifacts": [{
+        "path": "db/maintenance/cleanup-seed-data.sql",
+        "sha256": "bc623db415e944e0df22c4a3d1dd36872761a3e4001726a5df9fb913682ffc5c"
+      }],
       "fixtureProfile": "application-template-run-v1",
       "affectedTables": ["templates", "checklist_runs"],
       "invariants": [

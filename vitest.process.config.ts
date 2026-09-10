@@ -9,8 +9,8 @@ export default mergeConfig(base, defineConfig({
     fileParallelism: true,
     minWorkers: 1,
     // These tests intentionally use synchronous child-process boundaries.
-    // Two workers keep Vitest's RPC event loop responsive under sustained load.
-    maxWorkers: 2,
-    maxConcurrency: 2,
+    // Three workers retain bounded parallelism without the four-worker RPC stall.
+    maxWorkers: 3,
+    maxConcurrency: 3,
   },
 }));

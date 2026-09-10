@@ -42,7 +42,7 @@ it('fails missing mandatory rules without partial template history or audit writ
   },100_000);
 
 it('fails billing persistence faults and recovers webhook retries without duplicate state on real D1',()=>{
-  runProof(['scripts/data/run-stripe-write-failure-proof.mjs'],'billing-write-failure-recovery','issue131-stripe-write-failure','local:miniflare:13113113-1131-4131-8131-131131131131');
+  runProof(['--import','tsx','scripts/data/run-stripe-write-failure-proof.mjs'],'billing-write-failure-recovery','issue131-stripe-write-failure','local:miniflare:13113113-1131-4131-8131-131131131131');
   recordIntegrationScenario('billing-write-failure-and-retry-proof');
   },100_000);
 

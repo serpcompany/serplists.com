@@ -101,7 +101,7 @@ export function affectedTablesFromSql(sql) {
 }
 
 /**
- * @typedef {{ id: string, migrationFrom: string | null, migrationTo: string | null, preMigration: string, artifacts: string[], fixtureProfile: keyof typeof FIXTURE_PROFILE_CONTRACTS, affectedTables: string[], invariants: string[] }} RehearsalPlan
+ * @typedef {{ id: string, migrationFrom: string | null, migrationTo: string | null, preMigration: string, artifacts: string[], retiredArtifacts?: {path: string, sha256: string}[], fixtureProfile: keyof typeof FIXTURE_PROFILE_CONTRACTS, affectedTables: string[], invariants: string[] }} RehearsalPlan
  * @typedef {{ repoRoot: string, commit: string, migrationFrom?: string | null, migrationTo?: string | null, baseRef?: string, planPath?: string }} ResolveRehearsalOptions
  * @typedef {RehearsalPlan & { commit: string, migrationRange: { from: string | null, to: string | null }, artifactSha256: Record<string, string>, changedArtifacts: string[], observedAffectedTables: string[], declarationSha256: string }} ResolvedRehearsalPlan
  */
@@ -120,6 +120,7 @@ export function loadRehearsalPlans({ repoRoot, planPath = path.join(repoRoot, "s
     if ((plan.migrationFrom == null) !== (plan.migrationTo == null) || (plan.migrationFrom != null && (!MIGRATION.test(plan.migrationFrom) || !MIGRATION.test(plan.migrationTo)))) throw new Error(`Rehearsal plan ${plan.id} has an invalid migration range.`);
     if (plan.artifacts.some((artifact) => !DATA_ARTIFACT.test(artifact))) throw new Error(`Rehearsal plan ${plan.id} contains an invalid data artifact.`);
     if (plan.artifacts.some((artifact) => artifact.startsWith("db/maintenance/"))) throw new Error(`Rehearsal plan ${plan.id} contains maintenance SQL, which is blocked until a classified execution path exists.`);
+    if ((plan.retiredArtifacts ?? []).some((artifact) => !/^db\/maintenance\/[a-z0-9_.-]+\.sql$/.test(artifact.path) || !/^[0-9a-f]{64}$/.test(artifact.sha256))) throw new Error(`Rehearsal plan ${plan.id} contains an invalid retired maintenance artifact.`);
     const fixtureContract = FIXTURE_PROFILE_CONTRACTS[plan.fixtureProfile];
     if (!fixtureContract || !exactArray(plan.affectedTables, fixtureContract.affectedTables) || !exactArray(plan.invariants, fixtureContract.invariants)) throw new Error(`Rehearsal plan ${plan.id} makes unsupported affected-table or invariant claims for fixture profile ${plan.fixtureProfile}.`);
   }
@@ -144,11 +145,17 @@ export function resolveRehearsalPlan({ repoRoot, commit, migrationFrom, migratio
   let requestedFrom = requested?.from;
   let requestedTo = requested?.to;
   let changedArtifacts = [];
+  let removedArtifacts = [];
   if (baseRef) {
     runRepositoryGit({ repoRoot, args: ["rev-parse", "--verify", baseRef], stdio: ["ignore", "pipe", "pipe"] });
     runRepositoryGit({ repoRoot, args: ["merge-base", "--is-ancestor", baseRef, commit], stdio: ["ignore", "pipe", "pipe"] });
-    changedArtifacts = runRepositoryGit({ repoRoot, args: ["diff", "--name-only", `${baseRef}..${commit}`, "--", "db/migrations", "db/maintenance"] }).trim().split(/\r?\n/).filter((name) => DATA_ARTIFACT.test(name));
-    if (changedArtifacts.some((artifact) => artifact.startsWith("db/maintenance/"))) throw new Error("Maintenance SQL changes are blocked until a classified rehearsal and protected execution path exists.");
+    const changedRows = runRepositoryGit({ repoRoot, args: ["diff", "--name-status", `${baseRef}..${commit}`, "--", "db/migrations", "db/maintenance"] }).trim().split(/\r?\n/).filter(Boolean)
+      .map((line) => { const [status, ...paths] = line.split('\t'); return { status, path: paths.at(-1) }; })
+      .filter((row) => row.path && DATA_ARTIFACT.test(row.path));
+    changedArtifacts = changedRows.map((row) => row.path);
+    removedArtifacts = changedRows.filter((row) => row.status === 'D').map((row) => row.path);
+    const activeMaintenance = changedRows.filter((row) => row.path.startsWith('db/maintenance/') && row.status !== 'D');
+    if (activeMaintenance.length) throw new Error("Maintenance SQL changes are blocked until a classified rehearsal and protected execution path exists.");
     const changedMigrations = changedArtifacts.filter((name) => name.startsWith("db/migrations/")).map((name) => path.basename(name)).sort();
     if (!explicit && changedMigrations.length) { requestedFrom = changedMigrations[0]; requestedTo = changedMigrations.at(-1); }
     if (migrationFrom == null && changedArtifacts.length && !changedMigrations.length) throw new Error("Maintenance-only data changes require an explicit exact rehearsal plan selection.");
@@ -165,7 +172,14 @@ export function resolveRehearsalPlan({ repoRoot, commit, migrationFrom, migratio
   const fromIndex = plan.migrationFrom == null ? -1 : migrations.indexOf(plan.migrationFrom);
   const toIndex = plan.migrationTo == null ? -1 : migrations.indexOf(plan.migrationTo);
   if (plan.migrationFrom != null && (fromIndex < 0 || toIndex < fromIndex || JSON.stringify(migrations.slice(fromIndex, toIndex + 1).map((name) => `db/migrations/${name}`)) !== JSON.stringify(plan.artifacts.filter((name) => name.startsWith("db/migrations/"))))) throw new Error(`Rehearsal plan ${plan.id} does not exactly cover its contiguous migration range.`);
-  const uncovered = changedArtifacts.filter((artifact) => !plan.artifacts.includes(artifact));
+  const retiredByPath = new Map((plan.retiredArtifacts ?? []).map((artifact) => [artifact.path, artifact.sha256]));
+  for (const artifact of removedArtifacts.filter((name) => name.startsWith('db/maintenance/'))) {
+    const expectedHash = retiredByPath.get(artifact);
+    const original = runRepositoryGit({ repoRoot, args: ['show', `${baseRef}:${artifact}`] });
+    const actualHash = createHash('sha256').update(original).digest('hex');
+    if (!expectedHash || actualHash !== expectedHash) throw new Error(`Retired maintenance artifact ${artifact} is not hash-pinned to the comparison base.`);
+  }
+  const uncovered = changedArtifacts.filter((artifact) => !plan.artifacts.includes(artifact) && !retiredByPath.has(artifact));
   if (uncovered.length) throw new Error(`Changed database artifacts lack affected-table/invariant coverage: ${uncovered.join(", ")}.`);
   const observedAffectedTables = [...new Set(plan.artifacts.flatMap((artifact) => affectedTablesFromSql(readFileSync(path.join(repoRoot, artifact), "utf8"))))].sort();
   if (plan.artifacts.length && !exactArray(observedAffectedTables, [...plan.affectedTables].sort())) throw new Error(`Rehearsal plan ${plan.id} affected tables do not exactly match executable SQL: declared=${plan.affectedTables.join(",")}; observed=${observedAffectedTables.join(",")}.`);
@@ -174,7 +188,7 @@ export function resolveRehearsalPlan({ repoRoot, commit, migrationFrom, migratio
     if (runRepositoryGit({ repoRoot, args: ["show", `${commit}:${artifact}`] }) !== sql) throw new Error("Reviewed migration bytes differ from the exact Git commit.");
     return [artifact, createHash("sha256").update(sql).digest("hex")];
   }));
-  return { ...plan, commit, migrationRange: { from: plan.migrationFrom, to: plan.migrationTo }, artifactSha256, changedArtifacts, observedAffectedTables, declarationSha256: rehearsalPlanDigest(declaration) };
+  return { ...plan, commit, migrationRange: { from: plan.migrationFrom, to: plan.migrationTo }, artifactSha256, changedArtifacts, removedArtifacts, observedAffectedTables, declarationSha256: rehearsalPlanDigest(declaration) };
 }
 
 export function validateCoverageMatch({ evidence, expected }) {

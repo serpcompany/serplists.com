@@ -1,4 +1,5 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -14,6 +15,19 @@ describe("reviewed rehearsal plan", () => {
   });
   it("derives an application-only plan when a trusted base has no changed data artifacts", () => {
     expect(resolveRehearsalPlan({ repoRoot, commit, baseRef: commit })).toMatchObject({ id: "application-only-at-0024", migrationRange: { from: null, to: null }, changedArtifacts: [] });
+  });
+  it('accepts only the hash-pinned retirement of the obsolete maintenance seed cleanup', () => {
+    const baseRef = execFileSync('git', ['merge-base', 'HEAD', 'origin/staging'], { cwd: repoRoot, encoding: 'utf8' }).trim();
+    const plan = resolveRehearsalPlan({ repoRoot, commit, baseRef, migrationFrom: '0024_safe_template_evolution.sql', migrationTo: '0024_safe_template_evolution.sql' });
+    expect(plan.removedArtifacts).toEqual(['db/maintenance/cleanup-seed-data.sql']);
+    const directory = mkdtempSync(path.join(tmpdir(), 'rehearsal-retirement-'));
+    try {
+      const declaration = JSON.parse(readFileSync(path.join(repoRoot, 'scripts/data/rehearsal-plans.json'), 'utf8'));
+      declaration.plans[0].retiredArtifacts[0].sha256 = '0'.repeat(64);
+      const planPath = path.join(directory, 'plans.json');
+      writeFileSync(planPath, JSON.stringify(declaration));
+      expect(() => resolveRehearsalPlan({ repoRoot, commit, baseRef, migrationFrom: '0024_safe_template_evolution.sql', migrationTo: '0024_safe_template_evolution.sql', planPath })).toThrow(/not hash-pinned/i);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
   });
   it("fails closed for an unconfigured synthetic 0025 other-table migration", () => {
     const sql = readFileSync(path.join(repoRoot, "scripts/data/fixtures/0025_other_table.sql"), "utf8");

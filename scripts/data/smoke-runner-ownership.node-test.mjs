@@ -70,6 +70,7 @@ for (const failure of ['initialize', 'inventory', 'migration', 'ledger', 'fixtur
     const context = vm.createContext({ process: fakeProcess, console: { log() {}, error(message) { errors.push(message); } } });
     const execFileSync = (command, args, options) => {
       calls.push({ command, args, options });
+      if (command === 'git' && args[0] === 'ls-files') return 'wrangler.toml\0';
       if (command === 'git') return 'synthetic-commit';
       const cwdIndex = args.indexOf('--cwd');
       if (cwdIndex >= 0) {
@@ -93,6 +94,8 @@ for (const failure of ['initialize', 'inventory', 'migration', 'ledger', 'fixtur
         const output = args[1].match(/--outdir (\S+)/)?.[1];
         assert(output);
         assert.equal(path.relative(process.cwd(), output), path.relative(root, path.join(ownedRoot, 'pages/_worker.js')));
+        fs.mkdirSync(output, { recursive: true });
+        fs.writeFileSync(path.join(output, 'index.js'), 'synthetic worker');
       }
       if (failure === 'build' && command === 'sh') throw new Error('build failure');
       return '';
@@ -124,7 +127,15 @@ for (const failure of ['initialize', 'inventory', 'migration', 'ledger', 'fixtur
       'node:child_process': { execFileSync, spawn }, 'node:crypto': crypto,
       'node:fs': { ...fs,
         writeFileSync: (...args) => { if (failure === 'initialize') throw new Error('initialize failure'); return fs.writeFileSync(...args); },
-        cpSync: (...args) => { if (failure === 'copy') throw new Error('copy failure'); return fs.cpSync(...args); } },
+        cpSync: (...args) => {
+          if (failure === 'copy') throw new Error('copy failure');
+          const sourcePath = String(args[0]);
+          if (sourcePath.endsWith(`${path.sep}pages${path.sep}_worker.js`) && !fs.existsSync(sourcePath)) {
+            fs.mkdirSync(sourcePath, { recursive: true });
+            fs.writeFileSync(path.join(sourcePath, 'index.js'), 'synthetic worker');
+          }
+          return fs.cpSync(...args);
+        } },
       'node:path': { default: path }, 'node:url': url,
       './data/route-coverage-evidence.mjs': { routeFragmentDirectory: () => 'tmp/data-reports/fragments', finalizeRouteCoverage() {}, assertRouteInventory() { if (failure === 'inventory') throw new Error('inventory failure'); } },
       './data/prepare-sanitized-smoke.mjs': { prepareSanitizedSmoke() { throw new Error('not requested'); } },
@@ -135,6 +146,13 @@ for (const failure of ['initialize', 'inventory', 'migration', 'ledger', 'fixtur
       './data/smoke-run-lock-lib.mjs': { acquireSmokeRunLock: async () => () => { released++; } },
       './data/runtime-gate-contract.mjs': { browserGateArguments: () => ({ gating: false, args: [] }) },
       './data/migration-range-lib.mjs': { normalizeMigrationRange: () => ({ from: null, to: null }) },
+      './data/seed-local.ts': {
+        applyLocalSeedProfile: async () => { if (failure === 'fixture') throw new Error('fixture failure'); },
+        locateMigratedDatabase: () => path.join(ownedRoot, 'state', 'fixture.sqlite'),
+      },
+      '../db/seeds/index.ts': { applyRouteCoverageSeed: async () => {} },
+      './data/sqlite-proxy.ts': { createSQLiteProxy: () => ({}) },
+      'node:sqlite': { DatabaseSync: class { close() {} } },
     };
     try {
       const runner = new vm.SourceTextModule(source, { context, initializeImportMeta(meta) { meta.url = url.pathToFileURL(path.join(root, 'scripts/run-playwright-smoke.mjs')).href; } });

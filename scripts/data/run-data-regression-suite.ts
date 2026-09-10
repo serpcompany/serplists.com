@@ -339,6 +339,7 @@ const workspaceCleanliness = evaluateWorkspaceCleanliness({
     "tests/test-results",
     "playwright-report",
     "dist",
+    "tmp/data-build-cache",
     ".wrangler/smoke-state",
   ],
 });
