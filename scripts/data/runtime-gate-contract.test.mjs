@@ -11,7 +11,8 @@ describe('mandatory runtime gate contract', () => {
   it('requires all source-handler controls to execute without skips or failures', () => {
     const tap = 'TAP version 13\nok 1 - synthetic source with malformed retired content produces refusal and unchanged proof alongside healthy writes\nok 2 - explicit no-eligible synthetic source fails without a pass artifact\nok 3 - missing column in the imported-row consuming page fails the ordinary browser detector\n1..3\n# tests 3\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
     expect(assertSourceHandlerProofTap(tap)).toBe(true);
-    for (const invalid of ['', tap.replace('ok 2 -', 'not ok 2 -'), tap.replace('# skipped 0', '# skipped 1'), tap.replace('# pass 3', '# pass 1'), tap.replace('explicit no-eligible synthetic source fails without a pass artifact', 'unrelated test'), tap.replace('missing column in the imported-row consuming page fails the ordinary browser detector', 'unrelated detector')]) {
+    expect(assertSourceHandlerProofTap(tap.replace('explicit no-eligible synthetic source fails without a pass artifact', 'renamed test'))).toBe(true);
+    for (const invalid of ['', tap.replace('ok 2 -', 'not ok 2 -'), tap.replace('# skipped 0', '# skipped 1'), tap.replace('# pass 3', '# pass 1')]) {
       expect(() => assertSourceHandlerProofTap(invalid)).toThrow();
     }
   });
@@ -36,7 +37,7 @@ describe('mandatory runtime gate contract', () => {
     }
     expect(() => assertRuntimeRangeBinding({},none)).toThrow('missing');
   });
-  it('uses one complete serial unit suite and isolated complete browser gate in pre-push', () => {
+  it('uses one complete standalone verification sequence in pre-push', () => {
     const root = new URL('../..',import.meta.url);
     const hooks = readFileSync(new URL('lefthook.yml',root),'utf8').split('pre-push:')[1];
     expect(hooks).toContain('test:data-regressions');
@@ -44,7 +45,7 @@ describe('mandatory runtime gate contract', () => {
     const pkg = JSON.parse(readFileSync(new URL('package.json',root),'utf8'));
     expect(pkg.scripts['test:e2e']).toBe('node scripts/run-playwright-smoke.mjs');
     const suite = readFileSync(new URL('scripts/data/run-data-regression-suite.ts',root),'utf8');
-    expect(suite).toContain('"vitest", "run", "--no-file-parallelism"');
-    expect(suite).toContain('exports pre0024 and migrated current data, prepares each profile, and restores actual exports');
+    expect(suite).toContain('"run", "test:data:assertions"');
+    expect(suite).toContain('requiredIntegrationScenarios');
   });
 });

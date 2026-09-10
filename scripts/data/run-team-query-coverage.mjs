@@ -63,7 +63,7 @@ async function cleanupFixtures(db, { teamIds, userId }) {
 export async function runTeamQueryCoverage({ mf, db }) {
 	assert(
 		mf && typeof mf.dispatchFetch === "function",
-		"An instrumented Miniflare Worker is required",
+		"A real Miniflare Worker is required",
 	);
 	assert(
 		db && typeof db.prepare === "function",

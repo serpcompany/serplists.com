@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { rmSync, readdirSync, readFileSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
-import { routeFragmentDirectory, finalizeRouteCoverage } from "./data/route-coverage-evidence.mjs";
+import { routeFragmentDirectory, finalizeRouteCoverage, assertRouteInventory } from "./data/route-coverage-evidence.mjs";
 import { prepareSanitizedSmoke } from "./data/prepare-sanitized-smoke.mjs";
 import { captureSanitizedState, verifySanitizedRefusalPreservation, validateSanitizedCohortProof, validateSanitizedStateBinding } from './data/sanitized-state-lib.mjs';
 import path from "node:path";
@@ -29,8 +29,8 @@ let workspace;
 let smokePersistPath;
 let smokePersistAbsolutePath;
 const smokeLockAbsolutePath = path.resolve(repoRoot, ".wrangler", "smoke-state.lock");
-let instrumentedWorkerPath;
-let instrumentedPagesDirectory;
+let workerPath;
+let pagesDirectory;
 const teardownReportPath = path.resolve(
   repoRoot,
   process.env.PLAYWRIGHT_TEARDOWN_REPORT ?? "tmp/data-reports/browser-smoke-teardown.json",
@@ -42,7 +42,6 @@ const selectedRange = normalizeMigrationRange({ from: env.DATA_REGRESSION_MIGRAT
 env.DATA_REGRESSION_MIGRATION_FROM = selectedRange.from ?? 'none';
 env.DATA_REGRESSION_MIGRATION_TO = selectedRange.to ?? 'none';
 env.PLAYWRIGHT_JSON_REPORT ??= path.join(repoRoot, 'tmp/data-reports/browser-smoke-playwright.json');
-env.PLAYWRIGHT_ROUTE_QUERY_EVIDENCE = invocation.gating ? '1' : '0';
 
 function parsePort(value, fallback) {
   const port = Number(value);
@@ -150,8 +149,8 @@ const releaseSmokeLock = env.PLAYWRIGHT_SMOKE_LOCK_HELD === "1"
 try {
   workspace = createSmokeWorkspace({ repoRoot });
   smokePersistAbsolutePath = smokePersistPath = workspace.statePath;
-  instrumentedWorkerPath = path.relative(repoRoot, workspace.workerPath);
-  instrumentedPagesDirectory = path.dirname(workspace.workerPath);
+  workerPath = path.relative(repoRoot, workspace.workerPath);
+  pagesDirectory = path.dirname(workspace.workerPath);
   // Wrangler 4.54.0 src/pages/utils.ts finds the nearest package.json from cwd;
   // src/paths.ts creates .wrangler/tmp under that project root. --persist-to
   // controls D1 state separately. No Wrangler temp-root environment flag exists.
@@ -163,9 +162,9 @@ try {
   env.TMPDIR = env.TMP = env.TEMP = path.join(workspace.root, 'os-tmp');
   env.PLAYWRIGHT_WRANGLER_CWD = path.relative(repoRoot, workspace.root);
   env.PLAYWRIGHT_WRANGLER_PERSIST_TO = smokePersistPath;
-  env.PLAYWRIGHT_INSTRUMENTED_WORKER_PATH = instrumentedWorkerPath;
-  mkdirSync(instrumentedPagesDirectory, {recursive:true});
-  run(process.execPath, ['--experimental-vm-modules', '--test', 'scripts/data/route-coverage.node-test.mjs', 'scripts/data/smoke-runner-ownership.node-test.mjs']);
+  env.PLAYWRIGHT_WORKER_PATH = workerPath;
+  mkdirSync(pagesDirectory, {recursive:true});
+  assertRouteInventory(repoRoot);
   const fragments = path.resolve(repoRoot, routeFragmentDirectory(env));
   if (!fragments.startsWith(path.join(repoRoot, 'tmp') + path.sep)) throw new Error('Route coverage artifacts must stay under repository tmp/');
   rmSync(fragments, { recursive: true, force: true });
@@ -190,7 +189,8 @@ try {
     corsAllowedOrigins: env.FRONTEND_URL,
     betterAuthSecret: "playwright-local-better-auth-secret-32-chars",
     persistPath: smokePersistPath,
-    instrumentedWorkerPath,
+    workerPath,
+    wranglerCwd: env.PLAYWRIGHT_WRANGLER_CWD,
   });
   if (!setupCommands.setup) throw new Error("Isolated smoke setup command is missing.");
   run(process.platform === "win32" ? "cmd.exe" : "sh", [
@@ -200,7 +200,7 @@ try {
   // Advanced-mode Pages finds _worker.js inside its served asset directory.
   // Keep this entire test-only bundle outside the production dist output.
   const distDirectory = path.join(repoRoot, 'dist');
-  cpSync(distDirectory, instrumentedPagesDirectory, {recursive:true,filter:source => source !== path.join(distDirectory, '_worker.js')});
+  cpSync(distDirectory, pagesDirectory, {recursive:true,filter:source => source !== path.join(distDirectory, '_worker.js')});
   const pnpmBin = "pnpm";
   const { code, signal } = await new Promise((resolve, reject) => {
     const child = spawn(
@@ -246,7 +246,7 @@ try {
       run(NPX_COMMAND, [...NPX_ARGS_PREFIX, "wrangler", "d1", "execute", DATABASE_NAME, "--local", "--persist-to", smokePersistPath, "--file", "scripts/data/sql/route-coverage-missing-column.sql", "--yes"]);
       finalCode = await new Promise(resolve => {
         const negative = spawn(pnpmBin, ["exec", "playwright", "test", "tests/e2e/real-d1-routes.spec.ts", "--grep", "@real-d1-negative"], {
-          env: { ...env, PLAYWRIGHT_ROUTE_NEGATIVE: "1", PLAYWRIGHT_ROUTE_QUERY_EVIDENCE: "0", ...(env.PLAYWRIGHT_JSON_REPORT ? { PLAYWRIGHT_JSON_REPORT: env.PLAYWRIGHT_JSON_REPORT.replace(/\.json$/, "-route-negative.json") } : {}) },
+          env: { ...env, PLAYWRIGHT_ROUTE_NEGATIVE: "1", ...(env.PLAYWRIGHT_JSON_REPORT ? { PLAYWRIGHT_JSON_REPORT: env.PLAYWRIGHT_JSON_REPORT.replace(/\.json$/, "-route-negative.json") } : {}) },
           shell: process.platform === "win32", stdio: "inherit",
         });
         negative.on('close', code => resolve(code ?? 1));
@@ -256,6 +256,22 @@ try {
       console.error(error instanceof Error ? error.message : String(error));
       finalCode = 1;
     }
+  }
+  if (finalCode === 0 && !signal && includesRouteSuite) {
+    try {
+      // A real D1 view hides qualifying stored rows while HTTP still succeeds.
+      // The ordinary page expectation must reject the resulting false empty UI.
+      runWrangler(['d1', 'execute', DATABASE_NAME, '--local', '--persist-to', smokePersistPath,
+        '--command', 'ALTER TABLE users RENAME COLUMN coverage_missing_username TO username; ALTER TABLE templates RENAME TO false_empty_templates; CREATE VIEW templates AS SELECT * FROM false_empty_templates WHERE 0;', '--yes']);
+      finalCode = await new Promise(resolve => {
+        const negative = spawn(pnpmBin, ['exec', 'playwright', 'test', 'tests/e2e/real-d1-routes.spec.ts', '--grep', '@real-d1-false-empty'], {
+          env: { ...env, PLAYWRIGHT_ROUTE_NEGATIVE: 'false-empty', PLAYWRIGHT_JSON_REPORT: env.PLAYWRIGHT_JSON_REPORT.replace(/\.json$/, '-false-empty.json') },
+          shell: process.platform === 'win32', stdio: 'inherit',
+        });
+        negative.on('close', code => resolve(code ?? 1));
+        negative.on('error', () => resolve(1));
+      });
+    } catch (error) { console.error(error instanceof Error ? error.message : String(error)); finalCode = 1; }
   }
   if (signal) {
     console.error(`Smoke tests stopped by ${signal}`);

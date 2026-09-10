@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from './data-regression-report-lib.mjs';
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -431,6 +432,7 @@ describe("sanitized candidate state", () => {
       expect(db.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
       expect(() => verifySanitizedTransformation({ before, after: snapshot(db, ledger), expectedLedger: ledger })).toThrow(/version transition/);
     } finally { db.close(); }
+    recordIntegrationScenario('sanitized-transformation-corruption-detection');
   });
 
   it("binds every stored domain field and exact ledger and rejects alternate remote state", () => {

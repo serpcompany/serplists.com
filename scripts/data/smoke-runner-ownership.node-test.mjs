@@ -12,7 +12,6 @@ import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import * as teardown from './smoke-teardown-lib.mjs';
 import * as environment from './smoke-environment-lib.mjs';
-import { resolveInstrumentedOutput } from './build-instrumented-playwright-worker.mjs';
 
 const source = fs.readFileSync(new URL('../run-playwright-smoke.mjs', import.meta.url), 'utf8');
 
@@ -52,7 +51,7 @@ test('pinned Wrangler 4.54.0 source allocates Pages and bundle temps inside the 
     assert.equal(fs.readFileSync(path.join(root, '.wrangler/tmp/retained'), 'utf8'), 'retained');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
-for (const failure of ['initialize', 'unit', 'migration', 'ledger', 'fixture', 'build', 'copy', 'spawn-throw', 'spawn-error', 'child-failure', 'child-signal', 'report', 'success']) {
+for (const failure of ['initialize', 'inventory', 'migration', 'ledger', 'fixture', 'build', 'copy', 'spawn-throw', 'spawn-error', 'child-failure', 'child-signal', 'report', 'success']) {
   test(`actual runner preserves retained state and removes owned resources: ${failure}`, async () => {
     const root = fs.realpathSync(fs.mkdtempSync(path.join(tmpdir(), 'smoke-runner-proof-')));
     const shared = path.join(root, '.wrangler/tmp');
@@ -87,14 +86,13 @@ for (const failure of ['initialize', 'unit', 'migration', 'ledger', 'fixture', '
         fs.mkdirSync(path.join(ownedRoot, 'state'), { recursive: true });
         fs.writeFileSync(path.join(shared, 'concurrent'), 'concurrent build');
       }
-      if (failure === 'unit' && args.includes('--test')) throw new Error('unit failure');
       if (failure === 'migration' && args.includes('migrations')) throw new Error('migration failure');
       if (args.includes('--json')) return JSON.stringify([{ results: failure === 'ledger' ? [] : [{ name: '0001_fixture.sql' }] }]);
       if (failure === 'fixture' && args.includes('--file')) throw new Error('fixture failure');
       if (command === 'sh') {
-        const output = args[1].match(/--output (\S+)/)?.[1];
+        const output = args[1].match(/--outdir (\S+)/)?.[1];
         assert(output);
-        assert.equal(resolveInstrumentedOutput({ repoRoot: root, outputPath: path.join(root, output) }), path.join(ownedRoot, 'pages/_worker.js'));
+        assert.equal(path.relative(process.cwd(), output), path.relative(root, path.join(ownedRoot, 'pages/_worker.js')));
       }
       if (failure === 'build' && command === 'sh') throw new Error('build failure');
       return '';
@@ -109,7 +107,7 @@ for (const failure of ['initialize', 'unit', 'migration', 'ledger', 'fixture', '
       // Same configuration builder used by playwright.config.ts.
       const commands = environment.buildPlaywrightServerCommands({ isolated: true,
         wranglerCwd: env.PLAYWRIGHT_WRANGLER_CWD,
-        instrumentedWorkerPath: env.PLAYWRIGHT_INSTRUMENTED_WORKER_PATH,
+        workerPath: env.PLAYWRIGHT_WORKER_PATH,
         persistPath: path.relative(root, env.PLAYWRIGHT_WRANGLER_PERSIST_TO) });
       assert.match(commands.api, /--cwd \.wrangler\/smoke-invocation-\w+ pages dev pages /);
       assert.match(commands.api, /--persist-to state /);
@@ -128,7 +126,7 @@ for (const failure of ['initialize', 'unit', 'migration', 'ledger', 'fixture', '
         writeFileSync: (...args) => { if (failure === 'initialize') throw new Error('initialize failure'); return fs.writeFileSync(...args); },
         cpSync: (...args) => { if (failure === 'copy') throw new Error('copy failure'); return fs.cpSync(...args); } },
       'node:path': { default: path }, 'node:url': url,
-      './data/route-coverage-evidence.mjs': { routeFragmentDirectory: () => 'tmp/data-reports/fragments', finalizeRouteCoverage() {} },
+      './data/route-coverage-evidence.mjs': { routeFragmentDirectory: () => 'tmp/data-reports/fragments', finalizeRouteCoverage() {}, assertRouteInventory() { if (failure === 'inventory') throw new Error('inventory failure'); } },
       './data/prepare-sanitized-smoke.mjs': { prepareSanitizedSmoke() { throw new Error('not requested'); } },
       './data/sanitized-state-lib.mjs': Object.fromEntries(['captureSanitizedState', 'verifySanitizedRefusalPreservation', 'validateSanitizedCohortProof', 'validateSanitizedStateBinding'].map(name => [name, () => { throw new Error('not requested'); }])),
       './dev-auto-lib.mjs': { findOpenPortPair: async () => ({ frontendPort: 4173, apiPort: 8788 }) },

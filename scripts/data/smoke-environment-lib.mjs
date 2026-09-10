@@ -26,6 +26,7 @@ const ALLOWED_PARENT_ENVIRONMENT = [
   "PLAYWRIGHT_SANITIZED_PAGE_NEGATIVE",
   "PLAYWRIGHT_ROUTE_COVERAGE_PROOF",
   "PLAYWRIGHT_ROUTE_NEGATIVE",
+  "DATA_SCENARIO_DIR",
   "DATA_REGRESSION_START_COMMIT",
   "DATA_REGRESSION_MIGRATION_FROM",
   "DATA_REGRESSION_MIGRATION_TO",
@@ -56,11 +57,11 @@ export function buildPlaywrightServerCommands({
   corsAllowedOrigins,
   betterAuthSecret,
   persistPath,
-  instrumentedWorkerPath,
+  workerPath,
   wranglerCwd,
 }) {
   const setup = isolated
-    ? `pnpm exec vite build --mode development${instrumentedWorkerPath ? ` && node scripts/data/build-instrumented-playwright-worker.mjs --output ${instrumentedWorkerPath}` : ''}`
+    ? `pnpm exec vite build --mode development${workerPath ? ` && pnpm exec wrangler${wranglerCwd ? ` --cwd ${wranglerCwd}` : ''} pages functions build ${path.resolve('functions')} --outdir ${path.resolve(workerPath)} --compatibility-date 2024-09-23 --compatibility-flags nodejs_compat` : ''}`
     : null;
   const frontend = !isolated && hasDevVars
     ? `pnpm exec dotenv -e .dev.vars -- vite --host ${frontendHost} --port ${frontendPort} --strictPort`
@@ -77,8 +78,8 @@ export function buildPlaywrightServerCommands({
     ? ` --env-file ${path.resolve('tests/fixtures/playwright-safe.env')}`
     : hasDevVars ? " --env-file .dev.vars" : "";
   const persist = persistPath ? ` --persist-to ${fromCwd(persistPath)}` : "";
-  if (instrumentedWorkerPath && path.basename(instrumentedWorkerPath) !== '_worker.js') throw new Error('Instrumented Pages must use a test-only _worker.js asset entrypoint.');
-  const pagesDirectory = fromCwd(instrumentedWorkerPath ? path.dirname(instrumentedWorkerPath) : './dist');
+  if (workerPath && path.basename(workerPath) !== '_worker.js') throw new Error('Isolated Pages must use a test-only _worker.js asset entrypoint.');
+  const pagesDirectory = fromCwd(workerPath ? path.dirname(workerPath) : './dist');
   const api =
     `${build}npx wrangler${wranglerCwd ? ` --cwd ${wranglerCwd}` : ''} pages dev ${pagesDirectory} --local --port ${apiPort}${envFile}${persist} ` +
     `-b FRONTEND_URL=${frontendUrlForApi} ` +

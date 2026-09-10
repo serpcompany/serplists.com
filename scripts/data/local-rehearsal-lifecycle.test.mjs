@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from './data-regression-report-lib.mjs';
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -73,6 +74,7 @@ describe("isolated local rehearsal lifecycle", () => {
     } finally {
       owned.cleanup();
     }
+    recordIntegrationScenario('fixture-teardown-leak-detection');
   }, 20_000);
 
   // Actual pre0024 -> current exports and both profiles are exercised by

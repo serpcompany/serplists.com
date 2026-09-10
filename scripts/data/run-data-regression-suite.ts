@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -11,7 +11,7 @@ import { loadSanitizerPolicy, validateSanitizedRehearsalArtifact } from "./sanit
 import { authenticatedCoverageAssertions, validateAuthenticatedCandidateEvidence } from "./authenticated-coverage-lib.mjs";
 import { validateSanitizedStateBinding, validateSanitizedCohortProof } from "./sanitized-state-lib.mjs";
 
-import { buildDataRegressionReport, renderDataRegressionMarkdown } from "./data-regression-report-lib.mjs";
+import { buildDataRegressionReport, renderDataRegressionMarkdown, requiredIntegrationScenarios, readIntegrationScenarios, validateIntegrationScenarios } from "./data-regression-report-lib.mjs";
 import { loadEnvironmentInventory } from "./environment-identity-lib.mjs";
 import { runProductionShapedMigrationMatrix } from "./production-shaped-migration-matrix";
 import { writeDataCheckReports } from "./reporting.mjs";
@@ -60,16 +60,24 @@ if (
 }
 const reportDirectoryRelative = path.relative(repoRoot, reportDirectory);
 const filesystemBefore = captureWorkspaceMetadata({ repoRoot });
+const scenarioDirectory = path.join(reportDirectory, 'integration-scenarios');
+rmSync(scenarioDirectory, { recursive: true, force: true });
+mkdirSync(scenarioDirectory, { recursive: true });
+const scenarioIdentity = { commit: startCommit, migrationRange: rehearsalPlan?.migrationRange ?? { from: null, to: null } };
+const scenarioEnvironment = { DATA_SCENARIO_DIR: scenarioDirectory, DATA_REGRESSION_START_COMMIT: startCommit,
+  DATA_REGRESSION_MIGRATION_FROM: scenarioIdentity.migrationRange.from ?? 'none', DATA_REGRESSION_MIGRATION_TO: scenarioIdentity.migrationRange.to ?? 'none' };
+const sourceScenarios = { 'source-malformed-preservation': 'source malformed preservation', 'source-no-eligible-refusal': 'source no-eligible refusal', 'source-missing-column': 'source missing-column detector' };
 // These source controls invoke the normal browser harness, so they must complete
 // before this aggregate owns the same lock. It is not a nested Vitest test.
 mkdirSync(reportDirectory, { recursive: true });
 try {
   const tap = execFileSync(process.execPath, ['--test', '--test-reporter=tap', 'scripts/data/sanitized-handler-proof.node-test.mjs'], {
-    cwd: repoRoot, env: { ...sanitizedGitEnvironment(), DATA_REPORT_DIR: reportDirectory },
+    cwd: repoRoot, env: { ...sanitizedGitEnvironment(), DATA_REPORT_DIR: reportDirectory, ...scenarioEnvironment },
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 540_000, maxBuffer: 4 * 1024 * 1024,
   });
   writeFileSync(path.join(reportDirectory, 'source-handler-regressions.tap'), tap);
   assertSourceHandlerProofTap(tap);
+  if (validateIntegrationScenarios(readIntegrationScenarios(scenarioDirectory), sourceScenarios, scenarioIdentity).some(check => check.verdict !== 'pass')) throw new Error('Missing source scenario outcomes');
 } catch {
   writeDataCheckReports({ name: 'data-regression-suite', reportDirectory,
     report: { verdict: 'fail', commit: startCommit,
@@ -85,69 +93,8 @@ const releaseRegressionLock = await acquireSmokeRunLock({
 });
 process.once("exit", releaseRegressionLock);
 
-interface VitestAssertionResult {
-  fullName?: string;
-  status?: string;
-  title?: string;
-}
-
-interface VitestFileResult {
-  assertionResults?: VitestAssertionResult[];
-}
-
-interface VitestJsonReport {
-  success?: boolean;
-  testResults?: VitestFileResult[];
-}
-
-interface RegressionCheck {
-  name: string;
-  test: string;
-  verdict: "pass" | "fail";
-}
-
-interface PlaywrightResult { status?: string }
-interface PlaywrightTest { results?: PlaywrightResult[] }
-interface PlaywrightSpec { title?: string; tests?: PlaywrightTest[] }
-interface PlaywrightSuite { specs?: PlaywrightSpec[]; suites?: PlaywrightSuite[] }
-interface PlaywrightJsonReport { suites?: PlaywrightSuite[] }
-
-function collectPlaywrightSpecs(suites: PlaywrightSuite[]): PlaywrightSpec[] {
-  return suites.flatMap((suite) => [
-    ...(suite.specs ?? []),
-    ...collectPlaywrightSpecs(suite.suites ?? []),
-  ]);
-}
-
-const requiredChecks = [
-  ['sanitizer export output ownership actual CLI', 'mandatory actual sanitizer-export CLI with installed-provider double'],
-  ['malformed checklist content write safety','rejects malformed checklist content without changing stored template or run state on migrated real D1'],
-  ['mandatory rules atomic failure proof','fails missing mandatory rules without partial template history or audit writes on real D1'],
-  ['billing write failure and retry proof','fails billing persistence faults and recovers webhook retries without duplicate state on real D1'],
-  ['query-unit instrumentation adversarial controls', 'executes query-unit discovery negative controls and real Worker D1 instrumentation parity'],
-  ["fresh migration chain", "accepts a fresh database built from the complete Wrangler migration chain"],
-  ["exact pre-incident schema mismatch", "rejects the pre-incident migration 0023 schema"],
-  ["0023 to 0024 invariant preservation", "preserves row counts ownership active/deleted state foreign keys JSON and versions"],
-  ["existing nested identity preservation", "preserves every existing section item and sub-item identity across 0024"],
-  ["deterministic legacy identity backfill", "backfills matching legacy identities and conservatively stales every linked snapshot"],
-  ["multiple active completion states", "preserves multiple active runs at different completion progress and notes"],
-  ["completed shared archived stale lifecycle", "keeps completed shared archived and stale lifecycle rows frozen and visible to recovery"],
-  ["section item sub-item evolution", "applies section item and sub-item add rename reorder retire and remove only to active private runs"],
-  ["explicit completed-run revalidation", "explicitly revalidates a completed run against the current template"],
-  ["template optimistic concurrency", "reports a conflict when a template changes between the read and conditional write"],
-  ["run optimistic concurrency", "reports a conflict when a run changes between the read and conditional write"],
-  ["authenticated visibility evaluator", "passes when all account-owned database rows are present in the API payload"],
-  ["authenticated false-empty detection", "fails when database rows exist but the API is incorrectly empty"],
-  ["authenticated API error detection", "fails when account-owned rows exist but the API errors"],
-  ["sanitized transformation corruption detection", "rejects a corrupted transformation with a valid final schema before authenticated rehearsal can pass"],
-  ["rollback recovery rehearsal", "exports pre0024 and migrated current data, prepares each profile, and restores actual exports"],
-  ["fixture teardown leak detection", "replays migrations, applies deterministic fixtures twice, and proves teardown leaves no rows"],
-  ["observed fixture teardown counts", "reports actual remaining fixture rows after exact cleanup"],
-  ["smoke child secret allowlist", "allowlists runtime variables and drops every developer/cloud/email secret sentinel"],
-  ["smoke state observed teardown", "removes isolated state and reports observed zero leaks"],
-  ["concurrent HEAD and worktree mutation detection", "deterministically fails a concurrent HEAD move and worktree mutation"],
-  ["poisoned Git context isolation", "ignores poisoned repository, worktree, and index variables for HEAD and cleanliness"],
-] as const;
+interface VitestJsonReport { success?: boolean; numPendingTests?: number; numFailedTests?: number }
+interface RegressionCheck { name: string; test: string; verdict: string }
 
 mkdirSync(reportDirectory, { recursive: true });
 const fullExportRecoveryPath = path.join(reportDirectory, 'full-export-recovery.json');
@@ -158,10 +105,10 @@ try {
   execFileSync(
     process.platform === "win32" ? "pnpm.cmd" : "pnpm",
     [
-      "exec", "vitest", "run", "--no-file-parallelism",
+      "run", "test:data:assertions",
       "--reporter=json", `--outputFile=${rawVitestReport}`,
     ],
-    { cwd: repoRoot, env: { ...sanitizedGitEnvironment(), DATA_REPORT_DIR: reportDirectory, DATA_REGRESSION_START_COMMIT: startCommit }, stdio: ["ignore", "inherit", "inherit"] },
+    { cwd: repoRoot, env: { ...sanitizedGitEnvironment(), DATA_REPORT_DIR: reportDirectory, ...scenarioEnvironment }, stdio: ["ignore", "inherit", "inherit"] },
   );
   vitestResult = JSON.parse(readFileSync(rawVitestReport, "utf8"));
 } catch (error) {
@@ -169,25 +116,12 @@ try {
   try {
     vitestResult = JSON.parse(readFileSync(rawVitestReport, "utf8"));
   } catch {
-    vitestResult = { success: false, testResults: [] };
+    vitestResult = { success: false };
   }
 }
 
-const assertions = (vitestResult.testResults ?? []).flatMap(
-  (result) => result.assertionResults ?? [],
-);
-const checks: RegressionCheck[] = requiredChecks.map(([name, title]) => {
-  const matches = assertions.filter((assertion) =>
-    String(assertion.fullName ?? assertion.title).includes(title),
-  );
-  return {
-    name,
-    test: title,
-    verdict: matches.length > 0 && matches.every((assertion) => assertion.status === "passed")
-      ? "pass"
-      : "fail",
-  };
-});
+const checks: RegressionCheck[] = validateIntegrationScenarios(readIntegrationScenarios(scenarioDirectory), requiredIntegrationScenarios, scenarioIdentity);
+checks.push({ name: 'native data assertion results', test: 'Vitest success with no skipped or failed data assertions', verdict: vitestResult.success && vitestResult.numPendingTests === 0 && vitestResult.numFailedTests === 0 ? 'pass' : 'fail' });
 checks.push({ name: 'source-derived handler positive and negative controls', test: 'all current-schema synthetic browser controls execute without skips or failures before the aggregate lock', verdict: 'pass' });
 try {
   const recovery = JSON.parse(readFileSync(fullExportRecoveryPath,'utf8'));
@@ -239,6 +173,7 @@ try {
       cwd: repoRoot,
       env: {
         ...sanitizedGitEnvironment(),
+        ...scenarioEnvironment,
         PLAYWRIGHT_TEARDOWN_REPORT: browserTeardownReportPath,
         PLAYWRIGHT_JSON_REPORT: browserJsonReportPath,
         PLAYWRIGHT_ROUTE_COVERAGE_PROOF: routeCoverageReportPath,
@@ -261,9 +196,8 @@ try {
   if (browserTeardown.verdict !== "pass") {
     browserFailure = "Browser smoke state teardown reported leaked local state.";
   }
-  const browserReport = JSON.parse(
-    readFileSync(browserJsonReportPath, "utf8"),
-  ) as PlaywrightJsonReport;
+  const browserReport = JSON.parse(readFileSync(browserJsonReportPath, 'utf8'));
+  if (browserReport.stats?.unexpected !== 0 || browserReport.stats?.flaky !== 0) throw new Error('Native browser results failed');
   const routeReport = JSON.parse(readFileSync(routeCoverageReportPath, "utf8"));
   if (!rehearsalPlan) throw new Error('Runtime evidence requires a resolved selected rehearsal range.');
   assertRuntimeRangeBinding(routeReport, rehearsalPlan.migrationRange);
@@ -278,28 +212,20 @@ try {
     && routeReport.checks.every((check: { verdict?: string }) => check.verdict === "pass");
   routeCoverage = { ...routeReport, verdict: routeBound ? "pass" : "fail" };
   if (!routeBound) throw new Error("Real D1 route coverage is missing, failed, or bound to a different commit or migration ledger.");
-  const routeNegative = JSON.parse(readFileSync(routeNegativeReportPath, "utf8")) as PlaywrightJsonReport;
-  const negativeSpec = collectPlaywrightSpecs(routeNegative.suites ?? []).find((spec) =>
-    String(spec.title).includes("missing column breaks the real consuming profile page"));
   const negativeEvidence = JSON.parse(readFileSync(routeNegativeEvidencePath, "utf8"));
   assertRuntimeRangeBinding(negativeEvidence, rehearsalPlan.migrationRange);
-  routeNegativePassed = negativeSpec?.tests?.some((test) => test.results?.some((result) => result.status === "passed")) === true
+  routeNegativePassed = validateIntegrationScenarios(readIntegrationScenarios(scenarioDirectory), { 'browser-missing-column': 'browser missing-column detector' }, scenarioIdentity)[0].verdict === 'pass'
     && negativeEvidence.verdict === "pass" && negativeEvidence.commit === startCommit
     && JSON.stringify(negativeEvidence.target) === JSON.stringify(routeReport.target)
     && JSON.stringify(negativeEvidence.migrationRange) === JSON.stringify(routeReport.migrationRange)
     && JSON.stringify(negativeEvidence.migrationLedger) === JSON.stringify(expectedRouteLedger);
   if (!routeNegativePassed) throw new Error("Real D1 missing-column page regression detector was missing or failed.");
-  const visibilitySpec = collectPlaywrightSpecs(browserReport.suites ?? [])
-    .find((spec) => String(spec.title).includes(
-      "authenticated account-owned D1 template is visible through API and dashboard",
-    ));
-  const visibilityPassed = visibilitySpec?.tests?.some((test) =>
-    test.results?.some((result) => result.status === "passed"),
-  );
+  const visibilityPassed = validateIntegrationScenarios(readIntegrationScenarios(scenarioDirectory), { 'browser-owned-visibility': 'authenticated API and dashboard visibility' }, scenarioIdentity)[0].verdict === 'pass';
   actualApplicationVisibilityPassed = visibilityPassed === true;
   if (!visibilityPassed) {
     browserFailure = "Actual Better Auth cookie/API/dashboard visibility journey was missing or failed.";
   }
+  if (validateIntegrationScenarios(readIntegrationScenarios(scenarioDirectory), { 'browser-false-empty': 'false-empty consuming page detector' }, scenarioIdentity)[0].verdict !== 'pass') throw new Error('Missing false-empty page detector');
   const candidateProof = JSON.parse(readFileSync(candidateAuthenticatedProofPath, "utf8"));
   const candidateChecks = candidateProof.checks ?? {};
   const candidateBound = candidateProof.verdict === "pass" && candidateProof.commit === startCommit && candidateChecks.templateRead === true && candidateChecks.templateWriteReadback === true && candidateChecks.runRead === true && candidateChecks.runWriteReadback === true;
@@ -503,6 +429,7 @@ const report = {
   },
   }),
   coverage,
+  scenarioEvidence: readIntegrationScenarios(scenarioDirectory),
   authenticatedRehearsal,
   candidateAuthenticated,
   routeCoverage,

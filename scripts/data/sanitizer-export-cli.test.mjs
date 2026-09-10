@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from './data-regression-report-lib.mjs';
 import { describe, it, expect } from 'vitest';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, statSync, existsSync, lstatSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -156,6 +157,7 @@ describe('mandatory actual sanitizer-export CLI with installed-provider double',
         }
         expect(readFileSync(f.sentinel, 'utf8')).toBe(secret);
       } finally { f.close(); }
-    });
+      if (mode === 'success') recordIntegrationScenario('sanitizer-export-ownership');
+  });
   }
 });

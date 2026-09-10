@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from './data-regression-report-lib.mjs';
 import { describe, expect, it } from "vitest";
 
 import { evaluateAuthenticatedTemplateVisibility } from "./authenticated-visibility-lib.mjs";
@@ -10,6 +11,7 @@ describe("authenticated template visibility gate evaluation", () => {
       apiRows: [{ id: "owned-template", user_id: "owner" }],
       ownerId: "owner",
     })).toMatchObject({ databaseOwnedCount: 1, apiVisibleCount: 1, verdict: "pass" });
+    recordIntegrationScenario('authenticated-visibility-evaluator');
   });
 
   it("fails when database rows exist but the API is incorrectly empty", () => {
@@ -24,6 +26,7 @@ describe("authenticated template visibility gate evaluation", () => {
       failure: "owned_rows_missing_from_authenticated_api",
       verdict: "fail",
     });
+    recordIntegrationScenario('authenticated-false-empty-detection');
   });
 
   it("fails when account-owned rows exist but the API errors", () => {
@@ -38,5 +41,6 @@ describe("authenticated template visibility gate evaluation", () => {
       failure: "authenticated_api_error",
       verdict: "fail",
     });
+    recordIntegrationScenario('authenticated-api-error-detection');
   });
 });

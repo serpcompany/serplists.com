@@ -91,5 +91,5 @@ export function validateRouteInventory(discovered, inventory, routePatterns = []
 }
 
 export function summarizeRouteEvidence(inventory, observed) {
-  return inventory.scenarios.map(name => ({ name, verdict: observed.includes(name) ? 'pass' : 'fail' }));
+  return inventory.scenarios.map(name => ({ name, verdict: observed.filter(id => id === name).length === 1 ? 'pass' : 'fail' }));
 }

@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from './data-regression-report-lib.mjs';
 import { describe, expect, it } from "vitest";
 import path from "node:path";
 import { captureRepositoryGitState } from "./git-subprocess-env.mjs";
@@ -26,6 +27,7 @@ describe("production-shaped 0023 to 0024 migration matrix", () => {
     ]);
     expect(report.pre.preservationHash).toBe(report.post.preservationHash);
     expect(report.pre.preservedRows).toEqual(report.post.preservedRows);
+    recordIntegrationScenario('0023-to-0024-invariant-preservation');
   });
 
   it("fails exact comparison on an owner swap or frozen run data loss", () => {
@@ -56,6 +58,7 @@ describe("production-shaped 0023 to 0024 migration matrix", () => {
     const changedIdentity = structuredClone(report.post);
     changedIdentity.identityRows.runs[0].id = "unexpected-replacement";
     expect(compareMigrationSnapshots(report.pre, changedIdentity)).toMatchObject({ verdict: "fail" });
+    recordIntegrationScenario('existing-nested-identity-preservation');
   });
 
   it("preserves multiple active runs at different completion progress and notes", () => {
@@ -65,6 +68,7 @@ describe("production-shaped 0023 to 0024 migration matrix", () => {
       expect.objectContaining({ id: "matrix-run-active-25", progress: 25, note: "note-25" }),
       expect.objectContaining({ id: "matrix-run-active-75", progress: 75, note: "note-75" }),
     ]);
+    recordIntegrationScenario('multiple-active-completion-states');
   });
 
   it("keeps completed shared archived and stale lifecycle rows frozen and visible to recovery", () => {
@@ -76,6 +80,7 @@ describe("production-shaped 0023 to 0024 migration matrix", () => {
       expect.objectContaining({ id: "matrix-run-archived", status: "in_progress", isPublic: 0, deletedAt: "2026-09-01T00:00:00Z" }),
     ]));
     expect(report.post.lifecycle.every((run) => run.templateVersion === 0)).toBe(true);
+    recordIntegrationScenario('completed-shared-archived-stale-lifecycle');
   });
 
   it("rejects an unconfigured synthetic 0025 other-table migration instead of reusing fixed 0024 evidence", () => {

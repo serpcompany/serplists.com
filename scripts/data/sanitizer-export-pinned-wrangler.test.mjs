@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from './data-regression-report-lib.mjs';
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -229,7 +230,8 @@ describe('mandatory actual sanitizer-export CLI with installed-provider double: 
           if (mode === 'stream-failure') expect(events.filter(event => event.type === 'fd-write').map(event => event.count)).toEqual([chunks[0].length]);
         }
       } finally { f.close(); }
-    }, 25000);
+      if (mode === 'success') recordIntegrationScenario('sanitizer-export-pinned');
+  }, 25000);
   }
   for (const mode of ['cold-update-cache', 'expired-update-cache']) {
     it(`${mode}: identifies and blocks the real vendor registry update attempt`, () => {

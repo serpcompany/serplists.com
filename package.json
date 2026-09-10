@@ -38,10 +38,10 @@
     "test:hooks": "vitest run scripts/hooks/hook-enforcement.test.mjs",
     "test:smoke": "node scripts/run-playwright-smoke.mjs",
     "test:data:routes": "node scripts/run-playwright-smoke.mjs",
-    "test:data-regressions": "tsx scripts/data/run-data-regression-suite.ts",
+    "test:data-regressions": "pnpm run verify:quality && pnpm run verify:database && pnpm run test:data:integration",
     "test:e2e": "node scripts/run-playwright-smoke.mjs",
     "test:e2e:ui": "node scripts/run-playwright-smoke.mjs --diagnostic-selection --ui",
-    "verify:release": "pnpm run lint && pnpm run typecheck && pnpm run test:run && pnpm run test:smoke",
+    "verify:release": "pnpm run test:data-regressions && pnpm run build",
     "verify:staging": "pnpm run check:preview:d1-binding && pnpm run check:data:schema-contract && pnpm run db:migrations:check:staging && pnpm run check:staging:d1-schema",
     "verify:prod:d1": "pnpm run check:data:schema-contract && pnpm run db:migrations:check:prod && pnpm run check:prod:d1-schema",
     "sre:dup": "jscpd --ignore \"**/node_modules/**,**/dist/**,**/coverage/**,**/playwright-report/**,**/test-results/**,**/.wrangler/**,**/.turbo/**,**/db/migrations/**\" src functions || true",
@@ -73,7 +73,11 @@
     "db:seed:official:staging": "node scripts/data/remote-path-blocked.mjs",
     "db:seed:official:remote": "node scripts/data/production-path-blocked.mjs",
     "db:query": "npx wrangler d1 execute serp-checklists-db --local --command",
-    "prepare": "node scripts/install-lefthook.mjs"
+    "prepare": "node scripts/install-lefthook.mjs",
+    "test:data:assertions": "vitest run --config vitest.data.config.ts",
+    "test:data:integration": "tsx scripts/data/run-data-regression-suite.ts",
+    "verify:quality": "pnpm run lint && pnpm run typecheck && pnpm run typecheck:env && pnpm run test:unit",
+    "verify:database": "pnpm run check:data:migration-provenance && pnpm run test:data:migration-provenance && pnpm run check:data:schema-contract && pnpm run db:schema:snapshot:check"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

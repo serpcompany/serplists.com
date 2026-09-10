@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from '../../../../scripts/data/data-regression-report-lib.mjs';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const dbMocks = vi.hoisted(() => {
@@ -964,6 +965,7 @@ describe('Checklists Handlers', () => {
 
     expect(response.status).toBe(409);
     expect(data.code).toBe('edit_conflict');
+    recordIntegrationScenario('run-optimistic-concurrency');
   });
 
   it('explicitly revalidates a completed run against the current template', async () => {
@@ -1033,5 +1035,6 @@ describe('Checklists Handlers', () => {
       expect.objectContaining({ id: 'item-1', title: 'Renamed', isCompleted: true, notes: 'Preserve' }),
       expect.objectContaining({ id: 'item-2', isCompleted: false }),
     ]);
+    recordIntegrationScenario('explicit-completed-run-revalidation');
   });
 });

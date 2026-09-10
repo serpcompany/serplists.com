@@ -832,3 +832,12 @@ describe("protected staging and production data-promotion workflow", () => {
     }
   });
 });
+
+
+it('source export uses the existing read-only production credential role', () => {
+  const source = rehearsalWorkflow.jobs.sanitized_source;
+  const exportStep = source.steps.find(step => step.run?.includes('sanitizer-export'));
+  expect(exportStep.env.CLOUDFLARE_API_TOKEN).toBe('${{ secrets.PRODUCTION_READONLY_CLOUDFLARE_API_TOKEN }}');
+  expect(JSON.stringify(source)).not.toContain('secrets.PRODUCTION_CLOUDFLARE_API_TOKEN');
+  expect(source.environment).toBe('production');
+});

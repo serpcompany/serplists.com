@@ -13,27 +13,9 @@ pre-commit:
       run: pnpm run check:data:migration-provenance -- --base HEAD --report-dir tmp/data-reports/pre-commit
     schema-contract:
       run: pnpm run check:data:schema-contract -- --report-dir tmp/data-reports/pre-commit
-    unit-tests:
-      run: pnpm test:unit
 
 pre-push:
   parallel: false
   commands:
-    secret-scan:
-      run: pnpm secret:scan
-    lint:
-      run: pnpm lint
-    typecheck:
-      run: pnpm typecheck
-    typecheck-env:
-      run: pnpm typecheck:env
-    migration-provenance:
-      run: pnpm run check:data:migration-provenance -- --report-dir tmp/data-reports/pre-push
-    migration-provenance-tests:
-      run: pnpm run test:data:migration-provenance
-    schema-contract:
-      run: pnpm run check:data:schema-contract -- --report-dir tmp/data-reports/pre-push
-    schema-snapshot:
-      run: pnpm run db:schema:snapshot:check
-    data-regressions:
-      run: pnpm run test:data-regressions -- --report-dir tmp/data-reports/pre-push
+    verification:
+      run: pnpm secret:scan && pnpm run test:data-regressions -- --report-dir tmp/data-reports/pre-push

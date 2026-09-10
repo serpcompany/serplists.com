@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from './data-regression-report-lib.mjs';
 // Explicit synthetic variants, not production-source attestation. This checks
 // the public rehearsal artifact through the normal local D1/browser harness.
 import { test } from 'node:test';
@@ -103,18 +104,21 @@ test('synthetic source with malformed retired content produces refusal and uncha
   assert.ok(report.cohortProof.cases.some(row => row.action === 'browser-read' && row.verdict === 'pass'));
   assert.ok(report.cohortProof.contexts.filter(row => row.write === 'pass').every(row => row.browserWriteReadback === 'pass'));
   assert.ok(report.malformedSourceChecks.some(check => check.kind === 'runs' && check.invalidItems === false && check.invalidRetiredItems === true && check.refusalStatus === 409 && check.unchanged === true && check.unchangedAfterPositiveWrites === true), 'Proof must include valid-items/invalid-retired refusal and unchanged state after healthy writes');
-});
+  recordIntegrationScenario('source-malformed-preservation');
+  });
 
 test('missing column in the imported-row consuming page fails the ordinary browser detector', () => {
   const { result, proof, variant } = runVariant('broken-page', true);
   assert.equal(result.status, 1, `Expected broken imported page refusal; inspect ${variant}/harness.log`);
   assert.match(readFileSync(path.join(variant, 'harness.log'), 'utf8'), /Imported-row browser\/API errors/);
   assert.equal(existsSync(proof), false);
-});
+  recordIntegrationScenario('source-missing-column');
+  });
 
 test('explicit no-eligible synthetic source fails without a pass artifact', () => {
   const { result, proof, variant } = runVariant('no-eligible', false);
   assert.equal(result.status, 1, `Expected no-eligible refusal; inspect ${variant}/harness.log`);
   assert.match(readFileSync(path.join(variant, 'harness.log'), 'utf8'), /Source has no eligible valid active private/);
   assert.equal(existsSync(proof), false);
-});
+  recordIntegrationScenario('source-no-eligible-refusal');
+  });

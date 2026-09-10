@@ -132,8 +132,8 @@ describe("Git hook installation and enforcement", () => {
 
     expect(hooks["pre-commit"].commands["migration-provenance"].run).toContain("check:data:migration-provenance");
     expect(hooks["pre-commit"].commands["migration-provenance-tests"]).toBeUndefined();
-    expect(hooks["pre-push"].commands["migration-provenance-tests"].run).toBe("pnpm run test:data:migration-provenance");
-    expect(hooks["pre-push"].commands["data-regressions"].run).toContain("test:data-regressions");
+    expect(hooks["pre-commit"].commands["unit-tests"]).toBeUndefined();
+    expect(hooks["pre-push"].commands.verification.run).toContain("test:data-regressions");
     expect(workflow.jobs.database.steps.some((step) => step.run?.includes("check:data:migration-provenance"))).toBe(true);
     expect(workflow.jobs.database.steps.some((step) => step.run === "pnpm run test:data:migration-provenance")).toBe(true);
     expect(workflow.jobs.database.steps.some((step) => step.run?.includes("check:data:schema-contract"))).toBe(true);
@@ -141,7 +141,7 @@ describe("Git hook installation and enforcement", () => {
     const rangeRunner = readFileSync(join(repositoryRoot, 'scripts/data/run-reviewed-range-suites.mjs'), 'utf8');
     expect(rangeRunner).toContain('resolveCiRehearsalPlans');
     expect(rangeRunner).toContain('for (const plan of plans)');
-    expect(rangeRunner).toContain('["run", "test:data-regressions", "--"');
+    expect(rangeRunner).toContain('["run", "test:data:integration", "--"');
     expect(rangeRunner).toContain('"--migration-from", plan.migrationRange.from ?? "none"');
     expect(rangeRunner).toContain('"--migration-to", plan.migrationRange.to ?? "none"');
     expect(rangeRunner).toContain('execFileSync');

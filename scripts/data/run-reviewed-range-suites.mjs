@@ -10,5 +10,5 @@ const baseRef = process.env.DATA_REGRESSION_BASE_SHA;
 if (!baseRef) throw new Error("CI range evidence requires its trusted comparison base.");
 const plans = resolveCiRehearsalPlans({ repoRoot, commit, baseRef });
 for (const plan of plans) {
-  execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["run", "test:data-regressions", "--", "--base-ref", baseRef, "--migration-from", plan.migrationRange.from ?? "none", "--migration-to", plan.migrationRange.to ?? "none", "--report-dir", `tmp/data-reports/ci/${plan.id}`], { cwd: repoRoot, env: sanitizedGitEnvironment(), stdio: "inherit" });
+  execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["run", "test:data:integration", "--", "--base-ref", baseRef, "--migration-from", plan.migrationRange.from ?? "none", "--migration-to", plan.migrationRange.to ?? "none", "--report-dir", `tmp/data-reports/ci/${plan.id}`], { cwd: repoRoot, env: sanitizedGitEnvironment(), stdio: "inherit" });
 }

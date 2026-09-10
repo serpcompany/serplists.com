@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from '../../../../scripts/data/data-regression-report-lib.mjs';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
@@ -86,6 +87,7 @@ describe('safe template evolution migration', () => {
     expect(runs.find((run) => run.id === 'orphan')?.template_version).toBe(1);
 
     db.close();
+    recordIntegrationScenario('deterministic-legacy-identity-backfill');
   });
 
   it('normalizes legacy flat arrays before assigning matching template and run identities', () => {

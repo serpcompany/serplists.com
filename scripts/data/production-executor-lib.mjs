@@ -5,7 +5,7 @@ import { validateControlledCanaryChecks } from "./deployment-smoke-lib.mjs";
 import { assertProductionKeySeparation } from "./production-key-separation-lib.mjs";
 import { normalizeMigrationRange, migrationRangesEqual, migrationsInRange } from "./migration-range-lib.mjs";
 import { evaluateInvariantLedgerTransition } from "./remote-invariant-evidence-lib.mjs";
-import { assertRecoveryApproval, assertRecoveryFreshness, assertRepositoryAppliedPrefix, digest, repositoryMigrationHistory } from "./production-preparation-lib.mjs";
+import { assertRecoveryApproval, assertRecoveryFreshness, assertRepositoryAppliedPrefix, digest, repositoryMigrationHistory, REQUIRED_PRODUCTION_STEPS, EXECUTION_STEPS, IDENTITY_BOUND_STEPS, assertProductionStepSummary, hasSha256 } from "./production-preparation-lib.mjs";
 import { wrapCanarySubprocessFailure } from './canary-diagnostics.mjs';
 import { assertSourceSchemaProof } from './source-schema-proof.mjs';
 import { assertInvariantSafetySummary, assertInvariantSummaryTransition } from './invariant-capture-lib.mjs';
@@ -24,8 +24,6 @@ const REQUIRED_CONTEXT = {
   DATA_PROTECTED_ENVIRONMENT: "production",
 };
 const RISK = ["additive", "backfill", "destructive", "irreversible"];
-const REQUIRED_PRODUCTION_STEPS = ["identity", "recovery-bookmark", "recovery-export", "reviewed-pending-range", "pre-invariants", "source-schema", "migration-apply", "ledger-clean", "schema-contract", "post-invariants"];
-const IDENTITY_BOUND_STEPS = new Set(REQUIRED_PRODUCTION_STEPS.filter((step) => step !== "identity"));
 
 function sqlStatements(sqlTexts) {
   const source = sqlTexts.join("\n");
@@ -546,17 +544,13 @@ export function runProductionDataPhase({ request, commit, database, pendingMigra
   assertInvariantSafetySummary({ step: "pre-invariants", summary: preparation.results?.['pre-invariants']?.summary, pendingMigrations });
   assertRepositoryAppliedPrefix({ ...preparation.results['pre-invariants'].summary, pendingMigrations });
   assertSourceSchemaProof(preparation.results['source-schema']?.summary, { ...preparation.results['pre-invariants'].summary, commit, database, pendingMigrations });
-  const steps = [
-    "identity", "reviewed-pending-range",
-    "pre-invariants", "source-schema", "migration-apply", "ledger-clean", "schema-contract", "post-invariants",
-  ];
   const results = { ...preparation.results };
-  for (const step of steps) {
+  for (const step of EXECUTION_STEPS) {
     if (step === 'migration-apply') assertRecoveryFreshness(preparation, clock);
     let result;
     try { result = run(step); } catch (error) { throw wrapCanarySubprocessFailure(`production-${step}`, error); }
     if (result?.verdict !== "pass") throw new Error(`Production ${step} gate failed.`);
-    if (["pre-invariants", "post-invariants"].includes(step)) assertInvariantSafetySummary({ step, summary: result.summary, pendingMigrations });
+    assertProductionStepSummary({ step, summary: result.summary, payload: { ...request, results } });
     if (step === "post-invariants") assertInvariantSummaryTransition({ pre: results['pre-invariants'].summary, post: result.summary });
     if (["identity", "reviewed-pending-range"].includes(step) && JSON.stringify(result.summary) !== JSON.stringify(preparation.results[step].summary)) throw new Error(`Production ${step} changed after recovery preparation.`);
     if (step === "pre-invariants" && result.summary?.ledgerSha256 !== preparation.results[step].summary?.ledgerSha256) throw new Error("Production ledger changed after recovery preparation; fresh preparation and approval required.");
@@ -587,48 +581,6 @@ export function runProductionDataPhase({ request, commit, database, pendingMigra
 function assertRequestTarget({ request, commit, database }) {
   if (commit !== request.commit || database?.databaseName !== request.database.databaseName || database?.databaseId !== request.database.databaseId) {
     throw new Error('Production commit or database does not match the exact request.');
-  }
-}
-
-function hasSha256(value) { return /^[0-9a-f]{64}$/.test(value ?? ""); }
-function assertProductionStepSummary({ step, summary, payload }) {
-  if (summary?.type !== step) throw new Error(`Signed production ${step} evidence lacks a typed summary.`);
-  switch (step) {
-    case "source-schema":
-      assertSourceSchemaProof(summary, { ...payload.results['pre-invariants'].summary, commit: payload.commit, database: payload.database, pendingMigrations: payload.pendingMigrations });
-      break;
-    case "identity":
-      if (summary.databaseName !== payload.database.databaseName || summary.databaseId !== payload.database.databaseId) throw new Error("Signed production identity summary does not match the target database.");
-      break;
-    case "recovery-bookmark":
-      if (summary.captured !== true || typeof summary.bookmark !== "string" || !summary.bookmark.trim()) throw new Error("Signed production recovery bookmark summary is incomplete.");
-      break;
-    case "recovery-export":
-      if (!hasSha256(summary.encryptedBackupSha256) || !Number.isInteger(summary.encryptedBackupByteLength) || summary.encryptedBackupByteLength <= 0) throw new Error("Signed production recovery export summary lacks a nonempty encrypted artifact digest and size.");
-      break;
-    case "reviewed-pending-range":
-      if (!Array.isArray(summary.pendingMigrations) || JSON.stringify(summary.pendingMigrations) !== JSON.stringify(payload.pendingMigrations) ||
-          summary.from !== payload.migrationRange.from || summary.to !== payload.migrationRange.to) throw new Error("Signed production pending-range summary does not match the reviewed request.");
-      break;
-    case "pre-invariants":
-      assertInvariantSafetySummary({ step, summary, pendingMigrations: payload.pendingMigrations });
-      if (!Number.isInteger(summary.invariantCount) || summary.invariantCount <= 0 || !summary.appliedThrough || !hasSha256(summary.ledgerSha256) || !hasSha256(summary.domainDigest)) throw new Error("Signed production pre-invariant ledger summary is incomplete.");
-      break;
-    case "migration-apply":
-      if (!Array.isArray(summary.appliedMigrations) || JSON.stringify(summary.appliedMigrations) !== JSON.stringify(payload.pendingMigrations)) throw new Error("Signed production migration-apply summary does not match the reviewed pending range.");
-      break;
-    case "ledger-clean":
-      if (!Array.isArray(summary.pendingMigrations) || summary.pendingMigrations.length !== 0 || !summary.appliedThrough) throw new Error("Signed production ledger summary is incomplete or not clean.");
-      break;
-    case "schema-contract":
-      if (summary.verdict !== "pass" || !summary.appliedThrough || !hasSha256(summary.schemaDigest)) throw new Error("Signed production schema-contract summary is incomplete.");
-      break;
-    case "post-invariants":
-      assertInvariantSafetySummary({ step, summary, pendingMigrations: payload.pendingMigrations });
-      if (!Number.isInteger(summary.invariantCount) || summary.invariantCount <= 0 || summary.failureCount !== 0 || !hasSha256(summary.preDomainDigest) || !hasSha256(summary.postDomainDigest)) throw new Error("Signed production post-invariant summary is incomplete or failed.");
-      break;
-    default:
-      throw new Error(`Unknown signed production summary ${step}.`);
   }
 }
 

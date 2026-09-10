@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from '../../scripts/data/data-regression-report-lib.mjs';
 import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 
@@ -93,4 +94,5 @@ test("@smoke authenticated account-owned D1 template is visible through API and 
   }
   const proofPath = process.env.PLAYWRIGHT_CANDIDATE_AUTH_PROOF;
   if (proofPath) writeFileSync(proofPath, JSON.stringify({ verdict: "pass", commit: process.env.DATA_REGRESSION_START_COMMIT, checks: proof }, null, 2));
-});
+  recordIntegrationScenario('browser-owned-visibility');
+  });

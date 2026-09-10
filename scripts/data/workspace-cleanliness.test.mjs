@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from './data-regression-report-lib.mjs';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, rmdirSync, existsSync, symlinkSync, readdirSync, renameSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -245,5 +246,6 @@ describe("data regression workspace cleanliness", () => {
     expect(result.verdict).toBe("fail");
     expect(result.failures).toEqual(expect.arrayContaining([expect.stringMatching(/HEAD changed/), expect.stringMatching(/concurrent-edit/)]));
     expect(evaluateImmutableRunContext({ ...result, nonGating: true }).verdict).toBe("warning");
+    recordIntegrationScenario('concurrent-head-and-worktree-mutation-detection');
   });
 });

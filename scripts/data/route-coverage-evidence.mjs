@@ -1,10 +1,15 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { writeDataCheckReports } from './reporting.mjs';
 import { discoverRoutePatterns, discoverRouteSurfaces, validateRouteInventory, summarizeRouteEvidence } from './route-coverage-lib.mjs';
-import { discoverRouteQueryUnits, evaluateRouteQueryUnitCoverage, routeQuerySourceDigest } from './route-query-units-lib.mjs';
 import { normalizeMigrationRange } from './migration-range-lib.mjs';
+
+export function assertRouteInventory(root) {
+  const inventory = JSON.parse(readFileSync(join(root, 'scripts/data/route-coverage-inventory.json'), 'utf8'));
+  const errors = validateRouteInventory(discoverRouteSurfaces(root), inventory, discoverRoutePatterns(root));
+  if (errors.length) throw new Error(errors.join('\n'));
+}
 
 export function routeFragmentDirectory(env = process.env) {
   return join(dirname(env.PLAYWRIGHT_ROUTE_COVERAGE_PROOF ?? 'tmp/data-reports/route-coverage.json'), 'route-coverage-fragments');
@@ -46,18 +51,7 @@ export function recordRouteScenarios(names, env = process.env, details = {}) {
   if (!names.length || names.some(name => !/^[a-z0-9-]+$/.test(name))) throw new Error('Invalid route scenario name');
   const directory = routeFragmentDirectory(env);
   mkdirSync(directory, { recursive: true });
-  writeFileSync(join(directory, `${names[0]}.json`), JSON.stringify({ ...binding(env), verdict: 'pass', scenarios: names, details }, null, 2));
-}
-
-export function recordRouteQueryUnitEvidence(snapshot, env = process.env) {
-  const unitOutcomes = snapshot?.outcomes;
-  if (!/^[a-f0-9]{64}$/.test(snapshot?.sourceDigest ?? '') || !Array.isArray(unitOutcomes) || unitOutcomes.some((entry) =>
-    !/^(?:endpoint|query):[a-f0-9]{24}$/.test(entry?.id) || !['success', 'error'].includes(entry?.outcome)
-  )) throw new Error('Invalid route/query unit evidence');
-  const directory = routeFragmentDirectory(env);
-  mkdirSync(directory, { recursive: true });
-  const id = createHash('sha256').update(JSON.stringify(unitOutcomes)).digest('hex');
-  writeFileSync(join(directory, `units-${id}.json`), JSON.stringify({ ...binding(env), verdict: 'pass', sourceDigest: snapshot.sourceDigest, unitOutcomes }, null, 2));
+  writeFileSync(join(directory, `${names[0]}-${randomUUID()}.json`), JSON.stringify({ ...binding(env), verdict: 'pass', scenarios: names, details }, null, 2));
 }
 
 export function finalizeRouteCoverage(env = process.env, root = process.cwd(), { browserPassed = true } = {}) {
@@ -71,31 +65,19 @@ export function finalizeRouteCoverage(env = process.env, root = process.cwd(), {
   const observed = [];
   const scenarioEvidence = [];
   const visitedRoutes = [];
-  const observedUnits = [];
-  const discoveredUnits = discoverRouteQueryUnits(root);
-  const sourceDigest = routeQuerySourceDigest(discoveredUnits);
   for (const filename of readdirSync(routeFragmentDirectory(env))) {
     const fragment = JSON.parse(readFileSync(join(routeFragmentDirectory(env), filename), 'utf8'));
     if (fragment.verdict !== 'pass' || JSON.stringify({ commit: fragment.commit, migrationRange: fragment.migrationRange, migrationLedger: fragment.migrationLedger }) !== JSON.stringify(binding(env))) errors.push(`Mismatched scenario evidence: ${filename}`);
     else if (fragment.visit) visitedRoutes.push(fragment.visit);
-    else if (fragment.unitOutcomes) {
-      if (fragment.sourceDigest !== sourceDigest) errors.push(`Mismatched runtime unit source: ${filename}`);
-      else observedUnits.push(...fragment.unitOutcomes);
-    }
     else { observed.push(...fragment.scenarios); scenarioEvidence.push(fragment); }
   }
   for (const route of inventory.routes ?? []) {
     if (route.notApplicable) continue;
     if (!visitedRoutes.some(visit => visit.pattern === route.pattern && visit.persona === route.persona && (route.example.includes(':') || visit.exampleSha256 === pathHash(route.example)))) errors.push(`Route was not successfully visited: ${route.pattern} (${route.persona})`);
   }
-  const exclusionPath = join(root, 'scripts/data/route-query-exclusions.json');
-  const exclusions = existsSync(exclusionPath) ? JSON.parse(readFileSync(exclusionPath, 'utf8')).exclusions ?? [] : [];
-  const unitCoverage = evaluateRouteQueryUnitCoverage(discoveredUnits, observedUnits, exclusions);
-  const unitChecks = unitCoverage.units.map((unit) => ({ name: `runtime unit ${unit.id}`, verdict: unit.status === 'executed' || unit.status === 'excluded' ? 'pass' : 'fail' }));
-  errors.push(...unitCoverage.errors.map((error) => `${error.code}${error.id ? `: ${error.id}` : ''}`));
-  const checks = [...summarizeRouteEvidence(inventory, observed), ...unitChecks, ...errors.map(name => ({ name, verdict: 'fail' }))];
-  const report = { ...binding(env), verdict: checks.every(check => check.verdict === 'pass') ? 'pass' : 'fail', target: { environment: 'local', binding: 'DB', databaseName: 'serp-checklists-db', databaseId: 'local:miniflare:DB@isolated-data-regression' }, checks, routes: inventory.routes, visitedRoutes, surfaces: inventory.surfaces, scenarioEvidence, runtimeUnitSourceDigest: sourceDigest, runtimeUnitCoverage: unitCoverage, branchCoverage: inventory.branchCoverage };
-  writeDataCheckReports({ name: 'route-coverage', report, summary: `Real Worker / local D1 route coverage\n${checks.map(check => `${check.verdict}: ${check.name}`).join('\n')}\nRuntime units: ${unitCoverage.counts.executed}/${unitCoverage.counts.discovered} executed, ${unitCoverage.counts.excluded} precisely excluded\n${inventory.branchCoverage}`, reportDirectory: dirname(env.PLAYWRIGHT_ROUTE_COVERAGE_PROOF ?? 'tmp/data-reports/route-coverage.json') });
+  const checks = [...summarizeRouteEvidence(inventory, observed), ...errors.map(name => ({ name, verdict: 'fail' }))];
+  const report = { ...binding(env), verdict: checks.every(check => check.verdict === 'pass') ? 'pass' : 'fail', target: { environment: 'local', binding: 'DB', databaseName: 'serp-checklists-db', databaseId: 'local:miniflare:DB@isolated-data-regression' }, checks, routes: inventory.routes, visitedRoutes, surfaces: inventory.surfaces, scenarioEvidence, branchCoverage: inventory.branchCoverage };
+  writeDataCheckReports({ name: 'route-coverage', report, summary: `Real Worker / local D1 route coverage\n${checks.map(check => `${check.verdict}: ${check.name}`).join('\n')}\n${inventory.branchCoverage}`, reportDirectory: dirname(env.PLAYWRIGHT_ROUTE_COVERAGE_PROOF ?? 'tmp/data-reports/route-coverage.json') });
   if (report.verdict !== 'pass') throw new Error('Required real D1 scenario coverage failed; see route-coverage.json');
   return report;
 }

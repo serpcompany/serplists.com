@@ -14,6 +14,7 @@ import {
   validateAgainstBase,
   validateProvenanceState,
   verifySchemaMatchesLatestSnapshot,
+  verifyNewMigrationGeneratedFromBase,
 } from "./migration-provenance-lib.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
@@ -420,4 +421,62 @@ test("a fresh clone generates and stages the complete next Drizzle provenance se
     rmSync(sandbox, { recursive: true, force: true });
   }
   assert.equal(existsSync(sandbox), false);
+});
+
+
+test('two independently generated migration commits form a valid release range with immutable adjacent transitions', async () => {
+  const root = fixture();
+  try {
+    cpSync(path.join(repoRoot, 'scripts/data'), path.join(root, 'scripts/data'), { recursive: true });
+    cpSync(path.join(repoRoot, 'package.json'), path.join(root, 'package.json'));
+    symlinkSync(path.join(repoRoot, 'node_modules'), path.join(root, 'node_modules'), 'dir');
+    writeFileSync(path.join(root, '.gitignore'), 'node_modules\ntmp\n');
+    runGit(root, ['init', '-q', '-b', 'staging']);
+    runGit(root, ['config', 'user.name', 'Migration Test']);
+    runGit(root, ['config', 'user.email', 'test@example.invalid']);
+    runGit(root, ['add', '.']);
+    runGit(root, ['commit', '-qm', 'baseline']);
+    const base = runGit(root, ['rev-parse', 'HEAD']);
+    assert.deepEqual(await verifyNewMigrationGeneratedFromBase(loadProvenanceState(root), base), []);
+    for (const number of [1, 2]) {
+      const schemaFile = path.join(root, 'db/schema/users.ts');
+      writeFileSync(schemaFile, readFileSync(schemaFile, 'utf8').replace('  updated_at: text("updated_at"),', `  release_probe_${number}: text("release_probe_${number}"),\n  updated_at: text("updated_at"),`));
+      const result = spawnSync(process.execPath, ['scripts/data/generate-drizzle-migration.mjs', '--name', `add_release_probe_${number}`], { cwd: root, env: sanitizedGitEnvironment(), encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stdout + result.stderr);
+      runGit(root, ['add', 'db']);
+      runGit(root, ['commit', '-qm', `generated migration ${number}`]);
+      const state = loadProvenanceState(root);
+      assert.deepEqual(validateProvenanceState(state), []);
+      assert.deepEqual(validateAgainstBase(state, base), []);
+      assert.deepEqual(await verifyNewMigrationGeneratedFromBase(state, base), []);
+      assert.deepEqual(verifySchemaMatchesLatestSnapshot(root), []);
+    }
+    const release = loadProvenanceState(root);
+    assert.equal(release.provenance.migrations.length, 26);
+    for (const candidate of release.provenance.migrations.slice(-2)) {
+      const sql = path.join(root, 'db/migrations', candidate.file);
+      writeFileSync(sql, readFileSync(sql, 'utf8') + '\n-- manual alteration');
+      assert.ok(validateProvenanceState(loadProvenanceState(root)).some(result => result.name === 'migration-immutable'));
+      editManifest(root, manifest => { manifest.migrations.find(entry => entry.file === candidate.file).sha256 = sha256File(sql); });
+      assert.deepEqual(validateProvenanceState(loadProvenanceState(root)), []);
+      assert.ok((await verifyNewMigrationGeneratedFromBase(loadProvenanceState(root), base)).some(result => result.name === 'generated-sql-modified'));
+      runGit(root, ['checkout', '--', 'db']);
+    }
+    const journalFile = path.join(root, 'db/migrations/meta/_journal.json');
+    const journal = JSON.parse(readFileSync(journalFile, 'utf8'));
+    [journal.entries[1], journal.entries[2]] = [journal.entries[2], journal.entries[1]];
+    writeFileSync(journalFile, JSON.stringify(journal));
+    assert.ok(errors(root).includes('journal-order'));
+    runGit(root, ['checkout', '--', 'db']);
+    rmSync(path.join(root, 'db/migrations/meta/0025_snapshot.json'));
+    assert.ok(errors(root).includes('snapshot-pairing'));
+    runGit(root, ['checkout', '--', 'db']);
+    const snapshotFile = path.join(root, 'db/migrations/meta/0026_snapshot.json');
+    const snapshot = JSON.parse(readFileSync(snapshotFile, 'utf8'));
+    snapshot.prevId = JSON.parse(readFileSync(path.join(root, 'db/migrations/meta/0024_snapshot.json'), 'utf8')).id;
+    writeFileSync(snapshotFile, JSON.stringify(snapshot));
+    editManifest(root, manifest => { manifest.migrations.at(-1).snapshotSha256 = sha256File(snapshotFile); });
+    assert.ok(errors(root).includes('snapshot-lineage'));
+    assert.ok((await verifyNewMigrationGeneratedFromBase(loadProvenanceState(root), base)).length > 0);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

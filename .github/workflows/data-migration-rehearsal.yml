@@ -73,7 +73,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Protected production source export through repository sanitizer
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_READONLY_CLOUDFLARE_API_TOKEN }}
         run: |
           mkdir -p tmp/production-sensitive tmp/data-evidence
           SOURCE_SCHEMA=$(node --input-type=module -e 'import { resolveRehearsalPlan } from "./scripts/data/rehearsal-plan-lib.mjs"; console.log(resolveRehearsalPlan({ repoRoot: process.cwd(), commit: process.env.GITHUB_SHA, migrationFrom: process.env.MIGRATION_FROM, migrationTo: process.env.MIGRATION_TO }).preMigration)')

@@ -57,6 +57,7 @@ function requiresConfiguredAuthEmail(path: string, isProdRequest: boolean): bool
 }
 
 export const onRequestGet = handleRequest;
+export const onRequestHead = handleRequest;
 export const onRequestPost = handleRequest;
 export const onRequestPut = handleRequest;
 export const onRequestDelete = handleRequest;

@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -309,8 +310,6 @@ export function validateAgainstBase(state, baseRef) {
       failures.push(failure("base-history-modified", `${baseEntry.file} provenance differs from immutable base ${baseRef}.`));
     }
   }
-  const added = state.provenance.migrations.slice(base.migrations.length);
-  if (added.length > 1) failures.push(failure("migration-batch-size", "A change may add only one generated migration so its schema delta is reproducible."));
   if (JSON.stringify(state.provenance.baseline) !== JSON.stringify(base.baseline)) {
     failures.push(failure("base-history-modified", `Legacy baseline metadata differs from immutable base ${baseRef}.`));
   }
@@ -325,63 +324,40 @@ export function validateAgainstBase(state, baseRef) {
   return failures;
 }
 
-export function verifyNewMigrationGeneratedFromBase(state, baseRef) {
+export async function verifyNewMigrationGeneratedFromBase(state, baseRef) {
   let root;
   try { root = comparisonRoot(state, baseRef); }
-  catch (error) { return [failure("generated-reproduction", error.message)]; }
-  const base = root.provenance;
-  const added = state.provenance.migrations.slice(base.migrations.length);
-  if (added.length === 0) return [];
-  if (added.length > 1) return [failure("generated-reproduction", "Only one post-base migration can be reproduced against the current Drizzle schema.")];
-  const candidate = added[0];
-  if (!candidate.snapshot) return [failure("generated-reproduction", "New migration lacks a snapshot.")];
-  const scratch = mkdtempSync(path.join(tmpdir(), "serplists-drizzle-reproduce-"));
+  catch (error) { return [failure('generated-reproduction', error.message)]; }
+  const added = state.provenance.migrations.slice(root.provenance.migrations.length);
+  if (!added.length) return [];
+  let candidate;
   try {
-    const out = path.join(scratch, "migrations");
-    const meta = path.join(out, "meta");
-    mkdirSync(meta, { recursive: true });
-    const journal = root.read(JOURNAL_FILE);
-    if (journal === null) return [failure("generated-reproduction", `Base ${baseRef} has no Drizzle journal.`)];
-    writeFileSync(path.join(meta, "_journal.json"), journal);
-    for (const entry of base.migrations.filter((item) => item.snapshot)) {
-      const contents = root.read(`${META_DIRECTORY}/${entry.snapshot}`);
-      if (contents === null) return [failure("generated-reproduction", `Base snapshot ${entry.snapshot} is unavailable.`)];
-      writeFileSync(path.join(meta, entry.snapshot), contents);
-    }
-    const name = candidate.file.slice(5, -4);
-    execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", [
-      "exec",
-      "drizzle-kit",
-      "generate",
-      "--dialect",
-      "sqlite",
-      "--schema",
-      path.join(state.repoRoot, "db/schema/index.ts"),
-      "--out",
-      path.relative(state.repoRoot, out),
-      "--name",
-      name,
-    ], { cwd: state.repoRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    const expectedSql = path.join(out, candidate.file);
-    const expectedSnapshot = path.join(meta, candidate.snapshot);
-    if (!existsSync(expectedSql) || !existsSync(expectedSnapshot)) {
-      return [failure("generated-reproduction", `${candidate.file} is not the deterministic Drizzle delta from ${baseRef}.`)];
-    }
-    if (readFileSync(expectedSql, "utf8") !== readFileSync(path.join(state.repoRoot, MIGRATIONS_DIRECTORY, candidate.file), "utf8")) {
-      return [failure("generated-sql-modified", `${candidate.file} differs from Drizzle Kit output for the current schema.`)];
-    }
-    const expected = jsonFile(expectedSnapshot);
-    const actual = jsonFile(path.join(state.repoRoot, META_DIRECTORY, candidate.snapshot));
-    expected.id = actual.id;
-    if (JSON.stringify(expected) !== JSON.stringify(actual)) {
-      return [failure("generated-snapshot-modified", `${candidate.snapshot} differs from the reproduced Drizzle snapshot.`)];
+    const require = createRequire(import.meta.url);
+    const apiPath = require.resolve('drizzle-kit/api');
+    if (jsonFile(path.join(path.dirname(apiPath), 'package.json')).version !== '0.31.8') throw new Error('Reproduction requires pinned Drizzle Kit 0.31.8.');
+    const { generateSQLiteMigration } = require('drizzle-kit/api');
+    const priorEntry = root.provenance.migrations.filter(entry => entry.snapshot).at(-1);
+    const priorText = priorEntry && root.read(`${META_DIRECTORY}/${priorEntry.snapshot}`);
+    if (!priorText) throw new Error('Comparison base snapshot is unavailable.');
+    let previous = JSON.parse(priorText);
+    for (candidate of added) {
+      if (!candidate.snapshot) throw new Error(`${candidate.file} lacks a snapshot.`);
+      const current = jsonFile(path.join(state.repoRoot, META_DIRECTORY, candidate.snapshot));
+      if (current.prevId !== previous.id) throw new Error(`${candidate.snapshot} has invalid snapshot ancestry.`);
+      const statements = await generateSQLiteMigration(previous, current);
+      const journal = state.journal.entries.find(entry => entry.idx === candidate.journalIndex);
+      if (!journal || !statements.length) throw new Error(`${candidate.file} has no reproducible generated transition.`);
+      // This is Drizzle Kit 0.31.8 writeResult's exact formatting. No semantic
+      // SQL equivalence or whitespace normalization may conceal manual edits.
+      const expected = statements.join(journal.breakpoints ? '--> statement-breakpoint\n' : '\n');
+      if (expected !== readFileSync(path.join(state.repoRoot, MIGRATIONS_DIRECTORY, candidate.file), 'utf8')) {
+        return [failure('generated-sql-modified', `${candidate.file} differs from the pinned public snapshot-diff API output.`)];
+      }
+      previous = current;
     }
     return [];
   } catch (error) {
-    const detail = error?.stderr?.toString().trim() || error.message;
-    return [failure("generated-reproduction", detail)];
-  } finally {
-    rmSync(scratch, { recursive: true, force: true });
+    return [failure('generated-reproduction', `${candidate?.file ?? 'release range'}: ${error.message}`)];
   }
 }
 

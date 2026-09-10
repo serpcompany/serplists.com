@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from './data-regression-report-lib.mjs';
 import { describe, expect, it } from "vitest";
 
 import { runFixtureTeardownProbe } from "./teardown-probe";
@@ -10,5 +11,6 @@ describe("observed data teardown probe", () => {
       leakedRuns: 0,
       verdict: "pass",
     });
+    recordIntegrationScenario('observed-fixture-teardown-counts');
   });
 });

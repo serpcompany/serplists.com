@@ -53,7 +53,7 @@ try {
   failures = [
     ...validateProvenanceState(state),
     ...validateAgainstBase(state, baseRef),
-    ...verifyNewMigrationGeneratedFromBase(state, baseRef),
+    ...await verifyNewMigrationGeneratedFromBase(state, baseRef),
     ...verifySchemaMatchesLatestSnapshot(repoRoot),
   ];
 } catch (error) {

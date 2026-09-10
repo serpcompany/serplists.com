@@ -1,3 +1,4 @@
+import { validateIntegrationScenarios } from './data-regression-report-lib.mjs';
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -126,5 +127,22 @@ describe("data regression evidence report", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+});
+
+// Scenario identity survives editorial title changes; execution and binding do not.
+describe('explicit integration outcomes', () => {
+  const identity = { commit: 'a'.repeat(40), migrationRange: { from: '0024_safe_template_evolution.sql', to: '0024_safe_template_evolution.sql' } };
+  const required = { 'owned-visibility': 'Owned content remains visible' };
+  const outcome = { id: 'owned-visibility', verdict: 'pass', ...identity, target: { environment: 'local', binding: 'DB', databaseId: 'local:miniflare:DB@isolated-data-regression' } };
+  it('ignores human-readable test descriptions', () => {
+    expect(validateIntegrationScenarios([{ ...outcome, title: 'An entirely renamed test' }], required, identity)[0].verdict).toBe('pass');
+  });
+  it.each([
+    [], [outcome, outcome], [{ ...outcome, verdict: 'fail' }], [{ ...outcome, verdict: 'skipped' }],
+    [{ ...outcome, commit: 'b'.repeat(40) }], [{ ...outcome, migrationRange: { from: null, to: null } }],
+    [{ ...outcome, migrationRange: undefined }], [{ ...outcome, target: { ...outcome.target, environment: 'production' } }],
+  ])('rejects absent, duplicate, unsuccessful or incorrectly bound results %#', (...results) => {
+    expect(validateIntegrationScenarios(results, required, identity)[0].verdict).toBe('fail');
   });
 });

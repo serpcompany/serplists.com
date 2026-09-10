@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from '../../../../scripts/data/data-regression-report-lib.mjs';
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
@@ -242,6 +243,7 @@ describe("Drizzle to D1 schema contract", () => {
     });
     expect(diff.verdict).toBe("fail");
     database.close();
+    recordIntegrationScenario('exact-pre-incident-schema-mismatch');
   });
 
   it("accepts a fresh database built from the complete Wrangler migration chain", () => {
@@ -256,6 +258,7 @@ describe("Drizzle to D1 schema contract", () => {
       verdict: "pass",
     });
     database.close();
+    recordIntegrationScenario('fresh-migration-chain');
   });
 
   it("fails when Drizzle adds a runtime column without a matching migration", () => {

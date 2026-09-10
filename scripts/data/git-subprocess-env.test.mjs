@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from './data-regression-report-lib.mjs';
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -35,5 +36,6 @@ describe("sanitized repository Git subprocesses", () => {
       expect(sanitizedGitEnvironment(env)).not.toHaveProperty("GIT_WORK_TREE");
       expect(sanitizedGitEnvironment(env)).not.toHaveProperty("GIT_INDEX_FILE");
     } finally { rmSync(root, { recursive: true, force: true }); }
+    recordIntegrationScenario('poisoned-git-context-isolation');
   });
 });

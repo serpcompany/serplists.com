@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from './data-regression-report-lib.mjs';
 import { describe, expect, it } from "vitest";
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -16,7 +17,7 @@ describe("isolated smoke child environment", () => {
     try {
       const commands = buildPlaywrightServerCommands({ isolated: true,
         wranglerCwd: '.wrangler/smoke-invocation-probe',
-        instrumentedWorkerPath: '.wrangler/smoke-invocation-probe/pages/_worker.js' });
+        workerPath: '.wrangler/smoke-invocation-probe/pages/_worker.js' });
       const envFile = commands.api.match(/--env-file (\S+)/)?.[1];
       expect(envFile).toBeTruthy();
       const version = execFileSync('npx', ['--no-install', 'wrangler', '--env-file', envFile, '--version'], {
@@ -45,6 +46,7 @@ describe("isolated smoke child environment", () => {
     expect(JSON.stringify(child)).not.toContain("sentinel");
     expect(child).not.toHaveProperty("USESEND_API_KEY");
     expect(child).not.toHaveProperty("CLOUDFLARE_API_TOKEN");
+    recordIntegrationScenario('smoke-child-secret-allowlist');
   });
 
   it("never reads .dev.vars from frontend build or API commands in isolated mode", () => {
@@ -58,14 +60,14 @@ describe("isolated smoke child environment", () => {
       corsAllowedOrigins: "http://localhost:4173",
       betterAuthSecret: "synthetic-test-secret-32-characters",
       persistPath: ".wrangler/smoke-state",
-      instrumentedWorkerPath: "tmp/playwright-pages-runtime/_worker.js",
+      workerPath: "tmp/playwright-pages-runtime/_worker.js",
     });
 
     expect(commands.setup).not.toContain("dotenv");
     expect(commands.setup).not.toContain("sitemap:check");
     expect(commands.setup).not.toContain("sitemap:generate");
     expect(commands.setup).toContain("vite build --mode development");
-    expect(commands.setup).toContain("build-instrumented-playwright-worker.mjs");
+    expect(commands.setup).toContain("pages functions build");
     expect(commands.frontend).not.toContain("dotenv");
     expect(commands.frontend).toContain("vite preview");
     expect(commands.frontend).not.toContain("vite --host");

@@ -70,7 +70,7 @@ function forge(root, schemaChanging) {
 
 for (const schemaChanging of [false, true]) {
   const scenario = schemaChanging ? "handwritten-schema" : "handwritten-data";
-  test(`bootstrap rejects ${scenario} despite internally valid forged provenance`, () => {
+  test(`bootstrap rejects ${scenario} despite internally valid forged provenance`, async () => {
     const { root, base } = fixture();
     try {
       forge(root, schemaChanging);
@@ -78,7 +78,7 @@ for (const schemaChanging of [false, true]) {
       assert.ok(report.failures.some((item) => ["generated-reproduction", "generated-sql-modified"].includes(item.name)));
       assert.equal(report.checks.find((item) => item.name === "generated-reproduction").verdict, "fail");
       // Missing local base resolution must also use the pinned root.
-      assert.ok(verifyNewMigrationGeneratedFromBase(loadProvenanceState(root), null).length > 0);
+      assert.ok((await verifyNewMigrationGeneratedFromBase(loadProvenanceState(root), null)).length > 0);
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 }

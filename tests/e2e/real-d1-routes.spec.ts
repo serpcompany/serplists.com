@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from '../../scripts/data/data-regression-report-lib.mjs';
 import { test, expect, endpoint, assertPageHealthy, get, visit, login } from './fixtures/real-d1';
 import { readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -64,7 +65,7 @@ test.describe('real local database routes', () => {
         expect((await get(page, '/billing/status')).plan).toBe(role === 'owner' ? 'pro' : 'free');
         const rename = await context.request.put(`${endpoint}/teams/coverage-team`, { data: { name: `Coverage Team ${role}` } });
         expect(rename.status(), `team write permission: ${role}`).toBe(['owner', 'admin'].includes(role) ? 200 : 403);
-      recordRouteScenarios(['team-role-reads', 'free-entitlement', 'team-entitlement'], process.env, {role});
+      recordRouteScenarios([`team-role-reads-${role}`, ...(role === 'admin' ? ['free-entitlement', 'team-entitlement'] : [])], process.env, {role});
     });
   }
 
@@ -77,7 +78,7 @@ test.describe('real local database routes', () => {
 
 });
 
-test('@real-d1-negative missing column breaks the real consuming profile page', async ({ page }) => {
+test('missing column breaks the real consuming profile page', { tag: '@real-d1-negative' }, async ({ page }) => {
   test.skip(process.env.PLAYWRIGHT_ROUTE_NEGATIVE !== '1');
   const response = page.waitForResponse(response => response.url().includes('/profiles/by-username'));
   await page.goto('/profile/coverage-owner');
@@ -86,4 +87,16 @@ test('@real-d1-negative missing column breaks the real consuming profile page', 
   expect(() => assertPageHealthy(page), 'The positive suite detector must reject the real broken query').toThrow();
   const report = { verdict: 'pass', commit: process.env.DATA_REGRESSION_START_COMMIT, target: { environment: 'local', binding: 'DB', databaseName: 'serp-checklists-db', databaseId: 'local:miniflare:DB@isolated-data-regression' }, migrationRange: { from: process.env.DATA_REGRESSION_MIGRATION_FROM, to: process.env.DATA_REGRESSION_MIGRATION_TO }, migrationLedger: JSON.parse(process.env.PLAYWRIGHT_ROUTE_LEDGER_JSON ?? '[]'), checks: [{ name: 'real missing column fails consuming page and normal detector', verdict: 'pass' }] };
   writeDataCheckReports({ name: 'route-coverage-negative', report, summary: 'Renaming users.username in disposable migrated local D1 produced HTTP500 on the qualified profile query and failed the positive browser error detector.', reportDirectory: dirname(process.env.PLAYWRIGHT_ROUTE_COVERAGE_PROOF ?? 'tmp/data-reports/route-coverage.json') });
+  recordIntegrationScenario('browser-missing-column');
+  });
+
+test('the ordinary profile expectation rejects HTTP 200 with missing content', { tag: '@real-d1-false-empty' }, async ({ page }) => {
+  test.skip(process.env.PLAYWRIGHT_ROUTE_NEGATIVE !== 'false-empty');
+  const response = page.waitForResponse(response => response.url().includes('/templates/public'));
+  await page.goto('/profile/coverage-owner');
+  const result = await response;
+  expect(result.status()).toBe(200);
+  expect(await result.json()).toEqual([]);
+  await expect(expect(page.getByText('Coverage Public Template').first()).toBeVisible({ timeout: 1500 })).rejects.toThrow();
+  recordIntegrationScenario('browser-false-empty');
 });

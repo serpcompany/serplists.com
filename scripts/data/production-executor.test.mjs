@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { completePromotionEvidence } from './fixtures/complete-promotion-evidence.mjs';
 import { completeRehearsalEvidence } from './fixtures/complete-rehearsal-evidence.mjs';
-import { prepareProduction, verifyRecoveryBundle, digest, approvalToken, repositoryMigrationHistory, RECOVERY_MAX_AGE_MS } from "./production-preparation-lib.mjs";
+import { prepareProduction, verifyRecoveryBundle, digest, approvalToken, repositoryMigrationHistory, RECOVERY_MAX_AGE_MS, REQUIRED_PRODUCTION_STEPS, PREPARATION_STEPS, EXECUTION_STEPS } from "./production-preparation-lib.mjs";
 
 import {
   assertApprovalMatchesRequest,
@@ -83,7 +83,7 @@ function validIdentityCheck() {
 }
 
 function validProductionResults() {
-  const steps = ["identity", "recovery-bookmark", "recovery-export", "reviewed-pending-range", "pre-invariants", "source-schema", "migration-apply", "ledger-clean", "schema-contract", "post-invariants"];
+  const steps = REQUIRED_PRODUCTION_STEPS;
   return Object.fromEntries(steps.map((step) => [step, validStepResult(step)]));
 }
 
@@ -381,7 +381,7 @@ describe('repository prefix and fixed recovery expiry', () => {
     const capture = () => prepareProduction({ request, context, clock: () => now, run: step => {
       calls.push(`capture:${step}`);
       const result = validStepResult(step);
-      if (step === 'recovery-export') result.summary = { encryptedBackupSha256: digest(encrypted), encryptedBackupByteLength: encrypted.length };
+      if (step === 'recovery-export') result.summary = { type: step, encryptedBackupSha256: digest(encrypted), encryptedBackupByteLength: encrypted.length };
       return result;
     } });
     const preparation = capture();
@@ -980,11 +980,15 @@ describe("protected production executor", () => {
   it('rejects source proof replay for another request even when invariant metadata supplies the old identity', () => {
     const request = validPromotionEvidence();
     request.database = { ...production, databaseId: '11111111-1111-4111-8111-111111111111' };
+    const calls = [];
     expect(() => preparedHandshake(step => {
+      calls.push(step);
       const result = validStepResult(step);
+      if (step === 'identity') Object.assign(result.summary, request.database);
       if (step === 'pre-invariants') result.summary.database = production;
       return result;
     }, request)).toThrow(/Source schema proof/);
+    expect(calls.at(-1)).toBe('source-schema');
   });
 
   it("rejects local, push, unprotected, mismatched-commit, and legacy credential contexts", () => {
@@ -1404,10 +1408,11 @@ esac
       },
     });
 
-    expect(calls).toEqual([
-      "identity", "reviewed-pending-range",
-      "pre-invariants", "source-schema", "migration-apply", "ledger-clean", "schema-contract", "post-invariants",
-    ]);
+    expect(new Set(calls).size).toBe(calls.length);
+    expect([...calls].sort()).toEqual([...EXECUTION_STEPS].sort());
+    for (const prerequisite of ['identity', 'reviewed-pending-range', 'pre-invariants', 'source-schema']) expect(calls.indexOf(prerequisite)).toBeLessThan(calls.indexOf('migration-apply'));
+    for (const [before, after] of [['migration-apply', 'ledger-clean'], ['ledger-clean', 'schema-contract'], ['schema-contract', 'post-invariants']]) expect(calls.indexOf(before)).toBeLessThan(calls.indexOf(after));
+    expect(calls).not.toContain('recovery-export');
     expect(assertDeployEvidence({ signedEvidence: result, commit, database: production, request: validPromotionEvidence() })).toMatchObject({
       verdict: "pass",
       commit,
@@ -1415,7 +1420,7 @@ esac
     });
   });
 
-  it("never reaches migration or deploy evidence when a prerequisite fails", () => {
+  it.each(EXECUTION_STEPS)("never completes a release after %s fails", failedStep => {
     const calls = [];
     expect(() => runProductionDataPhase({
       ...preparedHandshake(),
@@ -1424,10 +1429,11 @@ esac
       pendingMigrations: ["0024_safe_template_evolution.sql"],
       run: (step) => {
         calls.push(step);
-        return { ...validStepResult(step), verdict: step === "pre-invariants" ? "fail" : "pass" };
+        return { ...validStepResult(step), verdict: step === failedStep ? "fail" : "pass" };
       },
-    })).toThrow(/pre-invariants/i);
-    expect(calls).not.toContain("migration-apply");
+    })).toThrow(failedStep);
+    expect(calls.at(-1)).toBe(failedStep);
+    for (const later of EXECUTION_STEPS.slice(EXECUTION_STEPS.indexOf(failedStep) + 1)) expect(calls).not.toContain(later);
   });
 
   it.each(["success", "upload unavailable", "digest mismatch", "export mismatch", "request mismatch", "wrong attempt", "changed ledger", "changed identity", "changed pending", "denied approval", "missing approval"])("orchestrates durable recovery -> approval -> execution: %s", scenario => {
@@ -1459,7 +1465,12 @@ esac
     if (scenario === "success") {
       const evidence = orchestrate();
       expect(assertDeployEvidence({ signedEvidence: evidence, commit, database: production, request: validPromotionEvidence() }).verdict).toBe("pass");
-      expect(calls).toEqual(["prepare:identity", "prepare:recovery-bookmark", "prepare:recovery-export", "prepare:reviewed-pending-range", "prepare:pre-invariants", "prepare:source-schema", "upload", "durable-verified", "approval", "execute:identity", "execute:reviewed-pending-range", "execute:pre-invariants", "execute:source-schema", "execute:migration-apply", "execute:ledger-clean", "execute:schema-contract", "execute:post-invariants"]);
+      expect(new Set(calls).size).toBe(calls.length);
+      for (const step of PREPARATION_STEPS) expect(calls.indexOf(`prepare:${step}`)).toBeLessThan(calls.indexOf('upload'));
+      for (const [before, after] of [['upload', 'durable-verified'], ['durable-verified', 'approval'], ['approval', 'execute:identity'], ['execute:identity', 'execute:migration-apply']]) expect(calls.indexOf(before)).toBeLessThan(calls.indexOf(after));
+      for (const step of EXECUTION_STEPS) expect(calls.indexOf(`execute:${step}`)).toBeGreaterThan(calls.indexOf('approval'));
+      expect(calls).not.toContain('prepare:migration-apply');
+      expect(calls).not.toContain('execute:recovery-export');
     } else {
       expect(orchestrate).toThrow();
       expect(calls).not.toContain("execute:migration-apply");

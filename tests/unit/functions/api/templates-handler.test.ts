@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from '../../../../scripts/data/data-regression-report-lib.mjs';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const dbMocks = vi.hoisted(() => {
@@ -655,6 +656,7 @@ describe('Templates Handlers', () => {
       expect.objectContaining({ kind: 'section', section: expect.objectContaining({ id: 'section-remove' }) }),
     ]));
     expect(runUpdate).toEqual(expect.objectContaining({ template_version: 8, revision: 4 }));
+    recordIntegrationScenario('section-item-sub-item-evolution');
   });
 
   it('rejects a stale template editor version before writing', async () => {
@@ -708,6 +710,7 @@ describe('Templates Handlers', () => {
 
     expect(response.status).toBe(409);
     expect(data.code).toBe('edit_conflict');
+    recordIntegrationScenario('template-optimistic-concurrency');
   });
 
   it('should return saved SEO metadata in template responses', async () => {

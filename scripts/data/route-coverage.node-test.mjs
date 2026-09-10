@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateRouteInventory, summarizeRouteEvidence, coverageFingerprint, discoverRouteSurfaces, discoverRoutePatterns } from './route-coverage-lib.mjs';
-import { finalizeRouteCoverage, recordRouteScenarios, recordRouteVisit } from './route-coverage-evidence.mjs';
+import { finalizeRouteCoverage, recordRouteScenarios, recordRouteVisit, routeFragmentDirectory } from './route-coverage-evidence.mjs';
 const surface = { path: 'functions/api/handlers/example.ts', kind: 'query-family', sha256: 'one' };
 const inventory = { scenarios: ['real-query'], surfaces: [{ ...surface, scenarios: ['real-query'] }] };
 test('new D1 surfaces fail and edits inside existing families require coverage review', () => {
@@ -15,6 +15,7 @@ test('new D1 surfaces fail and edits inside existing families require coverage r
 test('source inventory cannot stand in for successful runtime scenarios', () => {
   assert.equal(summarizeRouteEvidence(inventory, [])[0].verdict, 'fail');
   assert.equal(summarizeRouteEvidence(inventory, ['real-query'])[0].verdict, 'pass');
+  assert.equal(summarizeRouteEvidence(inventory, ['real-query', 'real-query'])[0].verdict, 'fail');
 });
 test('page copy edits do not invalidate coverage but new queries and route paths do', () => {
   const fingerprint = source => coverageFingerprint(source, 'src/pages/Example.tsx');
@@ -39,6 +40,7 @@ test('actual aggregate fails missing/stale evidence, new indirect server modules
     recordRouteVisit('/fixture', 'anonymous', env, root);
     assert.equal(finalizeRouteCoverage(env, root).verdict, 'pass');
     const noSelectedMigrations = { ...env, DATA_REGRESSION_MIGRATION_FROM: 'none', DATA_REGRESSION_MIGRATION_TO: 'none' };
+    rmSync(routeFragmentDirectory(env), { recursive: true, force: true });
     recordRouteScenarios(['fixture'], noSelectedMigrations);
     recordRouteVisit('/fixture', 'anonymous', noSelectedMigrations, root);
     const noMigrationReport = finalizeRouteCoverage(noSelectedMigrations, root);

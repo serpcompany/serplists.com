@@ -1,3 +1,4 @@
+import { recordIntegrationScenario } from './data-regression-report-lib.mjs';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, symlinkSync, renameSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -54,6 +55,7 @@ describe("smoke state teardown", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+    recordIntegrationScenario('smoke-state-observed-teardown');
   });
 
   it("reports failure from observed remaining state instead of hard-coded zeros", () => {

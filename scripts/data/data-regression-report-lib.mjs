@@ -1,4 +1,7 @@
-import { normalizeMigrationRange } from "./migration-range-lib.mjs";
+import { mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { normalizeMigrationRange, migrationRangesEqual } from "./migration-range-lib.mjs";
 /**
  * @typedef {{ name: string, verdict: string, test?: string }} RegressionCheck
  * @typedef {{ environment: string, databaseName: string, databaseId: string, binding: string }} RegressionTarget
@@ -142,4 +145,63 @@ export function renderDataRegressionMarkdown(report) {
     "",
   ];
   return lines.join("\n");
+}
+
+export const requiredIntegrationScenarios = {
+  "sanitizer-export-ownership": "sanitizer export output ownership actual CLI",
+  "sanitizer-export-pinned": "pinned sanitizer exporter",
+  "malformed-checklist-content-write-safety": "malformed checklist content write safety",
+  "mandatory-rules-atomic-failure-proof": "mandatory rules atomic failure proof",
+  "billing-write-failure-and-retry-proof": "billing write failure and retry proof",
+  "route-inventory-and-owned-teardown": "route inventory and owned teardown",
+  "fresh-migration-chain": "fresh migration chain",
+  "exact-pre-incident-schema-mismatch": "exact pre-incident schema mismatch",
+  "0023-to-0024-invariant-preservation": "0023 to 0024 invariant preservation",
+  "existing-nested-identity-preservation": "existing nested identity preservation",
+  "deterministic-legacy-identity-backfill": "deterministic legacy identity backfill",
+  "multiple-active-completion-states": "multiple active completion states",
+  "completed-shared-archived-stale-lifecycle": "completed shared archived stale lifecycle",
+  "section-item-sub-item-evolution": "section item sub-item evolution",
+  "explicit-completed-run-revalidation": "explicit completed-run revalidation",
+  "template-optimistic-concurrency": "template optimistic concurrency",
+  "run-optimistic-concurrency": "run optimistic concurrency",
+  "authenticated-visibility-evaluator": "authenticated visibility evaluator",
+  "authenticated-false-empty-detection": "authenticated false-empty detection",
+  "authenticated-api-error-detection": "authenticated API error detection",
+  "sanitized-transformation-corruption-detection": "sanitized transformation corruption detection",
+  "rollback-recovery-rehearsal": "rollback recovery rehearsal",
+  "fixture-teardown-leak-detection": "fixture teardown leak detection",
+  "observed-fixture-teardown-counts": "observed fixture teardown counts",
+  "smoke-child-secret-allowlist": "smoke child secret allowlist",
+  "smoke-state-observed-teardown": "smoke state observed teardown",
+  "concurrent-head-and-worktree-mutation-detection": "concurrent HEAD and worktree mutation detection",
+  "poisoned-git-context-isolation": "poisoned Git context isolation"
+};
+
+// Tests emit these outcomes after their real assertions; native runner failure
+// remains independently blocking. Files are unique so duplicate IDs cannot hide.
+export function recordIntegrationScenario(id, env = process.env) {
+  if (!env.DATA_SCENARIO_DIR) return;
+  if (!/^[a-z0-9-]+$/.test(id)) throw new Error('Invalid integration scenario ID');
+  mkdirSync(env.DATA_SCENARIO_DIR, { recursive: true });
+  writeFileSync(join(env.DATA_SCENARIO_DIR, `${id}-${randomUUID()}.json`), JSON.stringify({
+    id, verdict: 'pass', commit: env.DATA_REGRESSION_START_COMMIT,
+    target: { environment: 'local', binding: 'DB', databaseId: 'local:miniflare:DB@isolated-data-regression' },
+    migrationRange: normalizeMigrationRange({ from: env.DATA_REGRESSION_MIGRATION_FROM, to: env.DATA_REGRESSION_MIGRATION_TO }),
+  }));
+}
+
+export function readIntegrationScenarios(directory) {
+  return readdirSync(directory).filter(file => file.endsWith('.json')).map(file => JSON.parse(readFileSync(join(directory, file), 'utf8')));
+}
+
+export function validateIntegrationScenarios(results, required, { commit, migrationRange }) {
+  return Object.entries(required).map(([id, name]) => {
+    const matches = results.filter(result => result.id === id);
+    const valid = matches.length === 1 && matches.every(result => result.verdict === 'pass'
+      && result.commit === commit && result.target?.environment === 'local'
+      && result.target?.binding === 'DB' && result.target?.databaseId === 'local:miniflare:DB@isolated-data-regression'
+      && result.migrationRange && migrationRangesEqual(result.migrationRange, migrationRange));
+    return { id, name, test: id, verdict: valid ? 'pass' : 'fail' };
+  });
 }

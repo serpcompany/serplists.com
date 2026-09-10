@@ -4,7 +4,6 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { createHmac } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { createRouteQueryInstrumentationPlugin, discoverRouteQueryUnits, routeQuerySourceDigest } from './route-query-units-lib.mjs';
 
 // This harness bundles the unchanged application modules into workerd. Only the
 // external Stripe transport is doubled; every application query uses local D1.
@@ -12,42 +11,18 @@ export async function runAdminBillingSitemapCoverage({ repoRoot, persistPath, en
   const require = createRequire(path.join(repoRoot, 'package.json'));
   const wranglerRequire = createRequire(require.resolve('wrangler/package.json'));
   const { Miniflare } = wranglerRequire('miniflare');
-  const { build } = wranglerRequire('esbuild');
   const config = readFileSync(path.join(repoRoot, 'wrangler.toml'), 'utf8').split('[env.')[0];
   const localId = config.match(/^preview_database_id\s*=\s*"([^"]+)"/m)?.[1];
   assert(localId, 'Resolve Wrangler local preview identity from current config');
   assert(path.resolve(persistPath).startsWith(path.join(repoRoot, '.wrangler') + path.sep), 'Disposable local persistence only');
   console.log(JSON.stringify({ environment: 'local', binding: 'DB', databaseName: 'serp-checklists-db', databaseId: `local:miniflare:${localId}`, commit: env.DATA_REGRESSION_START_COMMIT, migrationFrom: env.DATA_REGRESSION_MIGRATION_FROM, migrationTo: env.DATA_REGRESSION_MIGRATION_TO }));
-  const sourceDigest = routeQuerySourceDigest(discoverRouteQueryUnits(repoRoot));
-  const bundle = await build({
-    stdin: { contents: `
-      import {createRouteQueryRuntime} from './scripts/data/route-query-runtime.mjs';
-      import api from './functions/api/[[route]].ts';
-      import {onRequest as index} from './functions/sitemap.xml.ts';
-      import {onRequest as profiles} from './functions/sitemaps/profiles/[page].xml.ts';
-      import {onRequest as templates} from './functions/sitemaps/templates/[page].xml.ts';
-      import {onRequest as categories} from './functions/sitemaps/categories/[page].xml.ts';
-      import {onRequest as pages} from './functions/sitemaps/pages/[page].xml.ts';
-      import {onRequest as legacyPages} from './functions/sitemaps/static.xml.ts';
-      import {onRequest as legacyCategories} from './functions/categories/sitemap.xml.ts';
-      globalThis.__SERPLISTS_D1_COVERAGE__ = createRouteQueryRuntime('${sourceDigest}');
-      export default { async fetch(request, env) {
-        const p = new URL(request.url).pathname;
-        if (p === '/__test-only/route-query-units') return Response.json(globalThis.__SERPLISTS_D1_COVERAGE__.snapshot());
-        if (p.startsWith('/api/')) return api.fetch(request, env);
-        const match = p.match(/^\\/sitemaps\\/(profiles|templates|categories|pages)\\/([^/]+)\\.xml$/);
-        const handler = p === '/sitemap.xml' ? index : p === '/sitemaps/static.xml' ? legacyPages : p === '/categories/sitemap.xml' ? legacyCategories : match ? {profiles,templates,categories,pages}[match[1]] : null;
-        return handler ? handler({request, env, params: {page: match?.[2]}}) : new Response('Not Found', {status:404});
-      }};
-    `, resolveDir: repoRoot, loader: 'ts' }, bundle: true, write: false, format: 'esm', platform: 'browser', conditions: ['workerd', 'worker', 'browser'], external: ['node:*'], target: 'es2022', logLevel: 'silent', plugins: [createRouteQueryInstrumentationPlugin({ repoRoot })],
-  });
   const calls = [];
   let checkoutMode = 'ok';
   const stripeCustomerIds = {
     'billing-coverage': 'cus_local_coverage',
     'billing-blank-customer': 'cus_local_blank_customer',
   };
-  const mf = new Miniflare({ modules: true, script: bundle.outputFiles[0].text,
+  const mf = new Miniflare({ modules: true, scriptPath: path.resolve(repoRoot, env.PLAYWRIGHT_WORKER_PATH, 'index.js'),
     compatibilityDate: '2025-12-01', compatibilityFlags: ['nodejs_compat'],
     d1Persist: path.join(persistPath, 'v3/d1'), d1Databases: { DB: localId },
     r2Persist: path.join(persistPath, 'v3/r2'), r2Buckets: { R2_UPLOADS: 'route-coverage-uploads' },
@@ -244,10 +219,8 @@ export async function runAdminBillingSitemapCoverage({ repoRoot, persistPath, en
     const { runTeamQueryCoverage } = await import('./run-team-query-coverage.mjs');
     const templateLimitCoverage = await runTemplateLimitCoverage({mf,db});
     const teamQueryCoverage = await runTeamQueryCoverage({mf,db});
-    const { recordRouteQueryUnitEvidence, recordRouteScenarios } = await import('./route-coverage-evidence.mjs');
-    const runtimeUnits = await (await request('/__test-only/route-query-units')).json();
-    recordRouteQueryUnitEvidence(runtimeUnits, env);
-    const details = { externalStripeCalls: calls.length, migrationLedger: ledger.results.map(row => row.name), templateLimitCoverage, teamQueryCoverage, branchInventory: JSON.parse(readFileSync(path.join(repoRoot, 'scripts/data/admin-billing-sitemap-branches.json'), 'utf8')) };
+    const { recordRouteScenarios } = await import('./route-coverage-evidence.mjs');
+    const details = { externalStripeCalls: calls.length, migrationLedger: ledger.results.map(row => row.name), templateLimitCoverage, teamQueryCoverage, branchInventory: JSON.parse(readFileSync(path.join(repoRoot, 'scripts/data/route-coverage-inventory.json'), 'utf8')).providerAndBranchCoverage };
     recordRouteScenarios(checked, env, details);
     return { scenarios: checked, ...details };
   } finally {
