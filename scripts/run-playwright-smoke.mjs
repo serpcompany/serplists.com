@@ -62,6 +62,18 @@ function prepareSmokeD1() {
       },
     },
   );
+  run(
+    "pnpm",
+    [
+      "exec",
+      "tsx",
+      "scripts/data/local-d1-data.ts",
+      "seed-test",
+      "--persist-to",
+      smokePersistPath,
+    ],
+    { env: { CI: "1" } },
+  );
 }
 
 const env = { ...process.env };

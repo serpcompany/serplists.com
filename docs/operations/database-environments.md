@@ -14,8 +14,8 @@ deployments share the production D1 database.
 - Runtime schema/types: `db/schema/*.ts`.
 - Applied database ledger: D1's `d1_migrations` table.
 - Migration files: numbered SQL files in `db/migrations/`.
-- Seed SQL: `db/seeds/`.
-- Maintenance SQL: `db/maintenance/`.
+- Seed operations: `db/seeds/` (Drizzle modules for local fixtures; SQL retained where remote commands still require it).
+- Maintenance operations: `db/maintenance/` (Drizzle modules for local work; SQL retained where remote commands still require it).
 - Snapshot reference only: `db/schema.sql`.
 
 Do not put seed data into `db/migrations/`. If a data migration must run as part

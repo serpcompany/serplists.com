@@ -117,8 +117,8 @@ The local seed includes team data, memberships, invites, team entitlement overri
 Targeted checks:
 
 ```bash
-pnpm run test:run -- tests/unit/functions/api/teams-handler.test.ts
-pnpm run test:run -- tests/unit/components/TeamSettingsSection.test.tsx
+pnpm run test:run tests/unit/functions/api/teams-handler.test.ts
+pnpm run test:run tests/unit/components/TeamSettingsSection.test.tsx
 pnpm run test:e2e -- tests/e2e/team-workspace.spec.ts
 pnpm run test:e2e -- tests/e2e/team-invite-flow.spec.ts
 ```

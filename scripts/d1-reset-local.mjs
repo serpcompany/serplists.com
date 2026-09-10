@@ -73,9 +73,9 @@ try {
     DATABASE_NAME,
     "--local",
   ]);
-  executeLocalSql("./db/seeds/test-data.sql");
+  run("pnpm", ["exec", "tsx", "scripts/data/local-d1-data.ts", "seed-test"]);
   executeLocalSql("./db/seeds/official-templates.sql");
-  executeLocalSql("./db/seeds/official-local-login.sql");
+  run("pnpm", ["exec", "tsx", "scripts/data/local-d1-data.ts", "seed-official-login"]);
   console.log("Local D1 reset complete");
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
