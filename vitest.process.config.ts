@@ -9,8 +9,9 @@ export default mergeConfig(base, defineConfig({
     fileParallelism: true,
     minWorkers: 1,
     // These tests intentionally use synchronous child-process boundaries.
-    // Three workers retain bounded parallelism without the four-worker RPC stall.
-    maxWorkers: 3,
-    maxConcurrency: 3,
+    // Isolated worker threads keep four-way execution fast without fork RPC stalls.
+    pool: 'threads',
+    maxWorkers: 4,
+    maxConcurrency: 4,
   },
 }));

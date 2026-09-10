@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { captureRepositoryGitState } from "./git-subprocess-env.mjs";
-import { affectedTablesFromSql, resolveRehearsalPlan, validateCoverageMatch } from "./rehearsal-plan-lib.mjs";
+import { affectedTablesFromSql, parseChangedDataArtifactRows, resolveCiRehearsalPlans, resolveRehearsalPlan, validateCoverageMatch } from "./rehearsal-plan-lib.mjs";
 const repoRoot = path.resolve(new URL("../..", import.meta.url).pathname);
 const commit = captureRepositoryGitState({ repoRoot }).commit;
 describe("reviewed rehearsal plan", () => {
@@ -28,6 +28,21 @@ describe("reviewed rehearsal plan", () => {
       writeFileSync(planPath, JSON.stringify(declaration));
       expect(() => resolveRehearsalPlan({ repoRoot, commit, baseRef, migrationFrom: '0024_safe_template_evolution.sql', migrationTo: '0024_safe_template_evolution.sql', planPath })).toThrow(/not hash-pinned/i);
     } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+  it('selects the hash-pinned application plan for the real no-explicit-range CI call', () => {
+    const baseRef = execFileSync('git', ['merge-base', 'HEAD', 'origin/staging'], { cwd: repoRoot, encoding: 'utf8' }).trim();
+    expect(resolveRehearsalPlan({ repoRoot, commit, baseRef })).toMatchObject({
+      id: 'application-only-at-0024',
+      migrationRange: { from: null, to: null },
+      removedArtifacts: ['db/maintenance/cleanup-seed-data.sql'],
+    });
+    expect(resolveCiRehearsalPlans({ repoRoot, commit, baseRef }).map((plan) => plan.id)).toEqual([
+      'application-only-at-0024',
+      'safe-template-evolution-0024',
+    ]);
+  });
+  it('rejects maintenance artifact renames even when the destination is outside the SQL boundary', () => {
+    expect(() => parseChangedDataArtifactRows('R100\tdb/maintenance/cleanup-seed-data.sql\tdb/maintenance/retired.txt\n')).toThrow(/cross-boundary renames/i);
   });
   it("fails closed for an unconfigured synthetic 0025 other-table migration", () => {
     const sql = readFileSync(path.join(repoRoot, "scripts/data/fixtures/0025_other_table.sql"), "utf8");

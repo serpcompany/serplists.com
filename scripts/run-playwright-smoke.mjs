@@ -88,6 +88,22 @@ function artifactDigest(target) {
   return hash.digest('hex');
 }
 
+function inspectCandidateBuildCache() {
+  const relativePath = path.relative(repoRoot, candidateBuildDirectory);
+  try {
+    const entries = readdirSync(candidateBuildDirectory).sort();
+    if (JSON.stringify(entries) !== JSON.stringify(['_worker.js', 'assets', 'build.json'])) throw new Error('unexpected cache inventory');
+    const manifest = JSON.parse(readFileSync(candidateBuildMarker, 'utf8'));
+    if (manifest.fingerprint !== candidateBuildFingerprint
+      || manifest.commit !== env.DATA_REGRESSION_START_COMMIT
+      || manifest.workerSha256 !== artifactDigest(candidateWorkerPath)
+      || manifest.assetsSha256 !== artifactDigest(candidateAssetsDirectory)) throw new Error('cache digest mismatch');
+    return { path: relativePath, fingerprint: candidateBuildFingerprint, workerSha256: manifest.workerSha256, assetsSha256: manifest.assetsSha256, verdict: 'pass' };
+  } catch (error) {
+    return { path: relativePath, fingerprint: candidateBuildFingerprint, error: error instanceof Error ? error.message : String(error), verdict: 'fail' };
+  }
+}
+
 function runWrangler(args, options = {}) {
   args = args.map((arg, index) => args[index - 1] === '--file' ? path.resolve(repoRoot, arg) : arg);
   return execFileSync(NPX_COMMAND, [...NPX_ARGS_PREFIX, 'wrangler', '--cwd', workspace.root,
@@ -346,6 +362,12 @@ try {
     if (workspace) {
       const teardown = cleanupSmokeState({ repoRoot, statePath: workspace.statePath,
         transientPaths: workspace.transientPaths, ownership: workspace, reportPath: teardownReportPath });
+      const buildCache = inspectCandidateBuildCache();
+      writeFileSync(teardownReportPath, `${JSON.stringify({ ...teardown, buildCache }, null, 2)}\n`);
+      if (buildCache.verdict !== 'pass') {
+        console.error(`Build cache integrity failed: ${buildCache.error}`);
+        process.exitCode = 1;
+      }
       if (teardown.verdict !== 'pass') process.exitCode = 1;
     }
   } catch (error) {

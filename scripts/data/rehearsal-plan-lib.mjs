@@ -18,6 +18,14 @@ export const FIXTURE_PROFILE_CONTRACTS = Object.freeze({
 });
 function exactArray(left, right) { return JSON.stringify(left) === JSON.stringify(right); }
 export function rehearsalPlanDigest(plan) { return createHash("sha256").update(JSON.stringify(plan)).digest("hex"); }
+export function parseChangedDataArtifactRows(output) {
+  const rows = String(output).trim().split(/\r?\n/).filter(Boolean)
+    .map((line) => { const [status, ...paths] = line.split('\t'); return { status, paths, path: paths.at(-1) }; });
+  if (rows.some((row) => /^[RC]/.test(row.status) && row.paths.some((candidate) => DATA_ARTIFACT.test(candidate)))) {
+    throw new Error('Renamed or copied data artifacts require explicit delete and add review; cross-boundary renames are blocked.');
+  }
+  return rows.filter((row) => row.path && DATA_ARTIFACT.test(row.path));
+}
 function sqlStatementsWithoutComments(sql) {
   const statements = [];
   let current = "";
@@ -149,16 +157,14 @@ export function resolveRehearsalPlan({ repoRoot, commit, migrationFrom, migratio
   if (baseRef) {
     runRepositoryGit({ repoRoot, args: ["rev-parse", "--verify", baseRef], stdio: ["ignore", "pipe", "pipe"] });
     runRepositoryGit({ repoRoot, args: ["merge-base", "--is-ancestor", baseRef, commit], stdio: ["ignore", "pipe", "pipe"] });
-    const changedRows = runRepositoryGit({ repoRoot, args: ["diff", "--name-status", `${baseRef}..${commit}`, "--", "db/migrations", "db/maintenance"] }).trim().split(/\r?\n/).filter(Boolean)
-      .map((line) => { const [status, ...paths] = line.split('\t'); return { status, path: paths.at(-1) }; })
-      .filter((row) => row.path && DATA_ARTIFACT.test(row.path));
-    changedArtifacts = changedRows.map((row) => row.path);
-    removedArtifacts = changedRows.filter((row) => row.status === 'D').map((row) => row.path);
-    const activeMaintenance = changedRows.filter((row) => row.path.startsWith('db/maintenance/') && row.status !== 'D');
+    const filteredChangedRows = parseChangedDataArtifactRows(runRepositoryGit({ repoRoot, args: ["diff", "--name-status", `${baseRef}..${commit}`, "--", "db/migrations", "db/maintenance"] }));
+    changedArtifacts = filteredChangedRows.map((row) => row.path);
+    removedArtifacts = filteredChangedRows.filter((row) => row.status === 'D').map((row) => row.path);
+    const activeMaintenance = filteredChangedRows.filter((row) => row.path.startsWith('db/maintenance/') && row.status !== 'D');
     if (activeMaintenance.length) throw new Error("Maintenance SQL changes are blocked until a classified rehearsal and protected execution path exists.");
     const changedMigrations = changedArtifacts.filter((name) => name.startsWith("db/migrations/")).map((name) => path.basename(name)).sort();
     if (!explicit && changedMigrations.length) { requestedFrom = changedMigrations[0]; requestedTo = changedMigrations.at(-1); }
-    if (migrationFrom == null && changedArtifacts.length && !changedMigrations.length) throw new Error("Maintenance-only data changes require an explicit exact rehearsal plan selection.");
+    if (migrationFrom == null && changedArtifacts.some((artifact) => !removedArtifacts.includes(artifact)) && !changedMigrations.length) throw new Error("Maintenance-only data changes require an explicit exact rehearsal plan selection.");
   }
   if (!baseRef && !explicit) {
     const latest = migrations.at(-1);
@@ -166,7 +172,7 @@ export function resolveRehearsalPlan({ repoRoot, commit, migrationFrom, migratio
     if (!defaultPlan) throw new Error(`Latest migration ${latest ?? "missing"} has no reviewed rehearsal plan.`);
     requestedFrom = defaultPlan.migrationFrom; requestedTo = defaultPlan.migrationTo;
   }
-  if (baseRef && !explicit && changedArtifacts.length === 0) { requestedFrom = null; requestedTo = null; }
+  if (baseRef && !explicit && changedArtifacts.every((artifact) => removedArtifacts.includes(artifact))) { requestedFrom = null; requestedTo = null; }
   const plan = declaration.plans.find((candidate) => candidate.migrationFrom === requestedFrom && candidate.migrationTo === requestedTo);
   if (!plan) throw new Error(`Reviewed migration range ${requestedFrom ?? "none"}->${requestedTo ?? "none"} has no rehearsal plan.`);
   const fromIndex = plan.migrationFrom == null ? -1 : migrations.indexOf(plan.migrationFrom);
@@ -216,7 +222,8 @@ export function resolveCiRehearsalPlans(options) {
   const declaration = loadRehearsalPlans(options);
   const plans = [primary];
   for (const candidate of declaration.plans) {
-    if (candidate.id === primary.id || primary.changedArtifacts.some((artifact) => !candidate.artifacts.includes(artifact))) continue;
+    const candidateCoverage = new Set([...candidate.artifacts, ...(candidate.retiredArtifacts ?? []).map((artifact) => artifact.path)]);
+    if (candidate.id === primary.id || primary.changedArtifacts.some((artifact) => !candidateCoverage.has(artifact))) continue;
     plans.push(resolveRehearsalPlan({ ...options, migrationFrom: candidate.migrationFrom, migrationTo: candidate.migrationTo }));
   }
   return plans;

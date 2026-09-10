@@ -51,7 +51,7 @@ test('pinned Wrangler 4.54.0 source allocates Pages and bundle temps inside the 
     assert.equal(fs.readFileSync(path.join(root, '.wrangler/tmp/retained'), 'utf8'), 'retained');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
-for (const failure of ['initialize', 'inventory', 'migration', 'ledger', 'fixture', 'build', 'copy', 'spawn-throw', 'spawn-error', 'child-failure', 'child-signal', 'report', 'success']) {
+for (const failure of ['initialize', 'inventory', 'migration', 'ledger', 'fixture', 'build', 'copy', 'spawn-throw', 'spawn-error', 'child-failure', 'child-signal', 'cache-tamper', 'report', 'success']) {
   test(`actual runner preserves retained state and removes owned resources: ${failure}`, async () => {
     const root = fs.realpathSync(fs.mkdtempSync(path.join(tmpdir(), 'smoke-runner-proof-')));
     const shared = path.join(root, '.wrangler/tmp');
@@ -116,6 +116,11 @@ for (const failure of ['initialize', 'inventory', 'migration', 'ledger', 'fixtur
       assert.match(commands.api, /--persist-to state /);
       assert(commands.api.includes(`--env-file ${path.resolve('tests/fixtures/playwright-safe.env')}`));
       if (failure === 'spawn-throw') throw new Error('spawn failure');
+      if (failure === 'cache-tamper') {
+        const cacheRoot = path.join(root, 'tmp/data-build-cache');
+        const [fingerprint] = fs.readdirSync(cacheRoot);
+        fs.writeFileSync(path.join(cacheRoot, fingerprint, 'unexpected-private-file'), 'must fail cache integrity');
+      }
       const child = new EventEmitter();
       queueMicrotask(() => {
         if (failure === 'spawn-error') child.emit('error', new Error('spawn error'));

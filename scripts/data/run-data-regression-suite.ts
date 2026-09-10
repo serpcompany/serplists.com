@@ -158,7 +158,7 @@ if ((sanitizedPathArg == null) !== (sanitizerManifestArg == null)) {
     authenticatedRehearsal = { applicable: true, verdict: "fail", sanitizerArtifactSha256: sanitizedArtifact.sha256 };
   } catch (error) { browserFailure = error instanceof Error ? error.message : String(error); }
 }
-let browserTeardown = {
+let browserTeardown: { leakedStatePaths: number; verdict: string; buildCache?: { verdict: string; path?: string } } = {
   leakedStatePaths: 1,
   verdict: "fail",
 };
@@ -195,6 +195,9 @@ try {
   browserTeardown = JSON.parse(readFileSync(browserTeardownReportPath, "utf8"));
   if (browserTeardown.verdict !== "pass") {
     browserFailure = "Browser smoke state teardown reported leaked local state.";
+  }
+  if (browserTeardown.buildCache?.verdict !== 'pass') {
+    browserFailure = 'Browser build cache integrity verification failed.';
   }
   const browserReport = JSON.parse(readFileSync(browserJsonReportPath, 'utf8'));
   if (browserReport.stats?.unexpected !== 0 || browserReport.stats?.flaky !== 0) throw new Error('Native browser results failed');
@@ -339,7 +342,9 @@ const workspaceCleanliness = evaluateWorkspaceCleanliness({
     "tests/test-results",
     "playwright-report",
     "dist",
-    "tmp/data-build-cache",
+    ...(browserTeardown.buildCache?.verdict === 'pass' && typeof browserTeardown.buildCache.path === 'string'
+      ? [browserTeardown.buildCache.path]
+      : []),
     ".wrangler/smoke-state",
   ],
 });
