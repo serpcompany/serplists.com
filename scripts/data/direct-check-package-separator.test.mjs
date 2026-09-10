@@ -7,8 +7,8 @@ import { listMigrationFiles, replayMigrations } from './schema-contract.ts';
 
 // Require the actual pinned binary, not a globally installed version manager
 // that could try downloading pnpm after the test isolates HOME.
-const pnpm = process.env.PNPM_9_2_0_CLI ?? process.env.npm_execpath
-  ?? realpathSync(execFileSync('which', ['pnpm'], { encoding: 'utf8' }).trim());
+const pnpm = realpathSync(process.env.PNPM_9_2_0_CLI ?? process.env.npm_execpath
+  ?? execFileSync('which', ['pnpm'], { encoding: 'utf8' }).trim());
 const stagingId = 'fcaf4325-5be7-4ead-ab60-45932a04177b';
 const productionId = 'b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1';
 

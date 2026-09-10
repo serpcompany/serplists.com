@@ -89,6 +89,11 @@ test('a clean production-request runner validates before installing and loads it
     json(fixture, 'package.json', manifest);
     const storePath = run(root, 'pnpm', ['store', 'path', '--silent']);
     passes(storePath);
+    // setup-node's restored cache can support the root install without keeping
+    // every registry tarball needed by a second isolated --offline install.
+    // Prefetch the exact frozen lockfile first; the fixture proof itself stays
+    // offline and cannot resolve or download anything from the network.
+    passes(run(root, 'pnpm', ['fetch', '--frozen-lockfile', '--ignore-scripts', '--store-dir', storePath.stdout.trim()]));
     const bootstrap = [gate.run, ...installs.map((step) => `${step.run} --offline --store-dir ${JSON.stringify(storePath.stdout.trim())}`)].join('\n');
     const shell = (source, extra = {}) => run(fixture, 'bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', source], extra);
     passes(shell(gate.run));
