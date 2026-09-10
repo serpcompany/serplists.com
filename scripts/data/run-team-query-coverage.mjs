@@ -209,7 +209,7 @@ export async function runTeamQueryCoverage({ mf, db }) {
 			createdTeamCount: 2,
 			distinctPersistedSlugCount: 2,
 			preservedOwnerRole: true,
-			acceptedInviteAuditCount: auditRows.results.length,
+			acceptedInviteAuditCount: auditRows.length,
 		};
 	} finally {
 		await cleanupFixtures(orm, { teamIds, userId });

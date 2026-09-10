@@ -6,8 +6,6 @@ import officialTemplates from './data/official-templates.json';
 import officialLogin from './data/official-local-login.json';
 
 type SeedDb = ReturnType<typeof createSQLiteProxy>;
-const DEFAULT_SEED_CLOCK = new Date('2026-09-10T07:02:22.000Z');
-const DEFAULT_INVITE_EXPIRY = new Date('9999-12-31T23:59:59.000Z');
 const FIXTURE_CAPTURE_CLOCK = Date.parse('2026-09-10T07:02:22.000Z');
 const teamIds = ['team-seed-growth', 'team-seed-client'];
 const teamTemplateIds = ['team-template-growth-launch', 'team-template-client-reporting'];
@@ -80,7 +78,7 @@ export async function cleanupTestDataSeed(db: SeedDb) {
   }
 }
 
-export async function applyTestDataSeed(db: SeedDb, now = DEFAULT_SEED_CLOCK, inviteExpiry = DEFAULT_INVITE_EXPIRY) {
+export async function applyTestDataSeed(db: SeedDb, now: Date, inviteExpiry: Date) {
   await cleanupTestDataSeed(db);
   await db.insert(schema.users).values(users(shiftSeedRows(testData.users, now)));
   await db.insert(schema.account).values(accounts(shiftSeedRows(testData.account, now)));
@@ -102,13 +100,13 @@ export async function applyTestDataSeed(db: SeedDb, now = DEFAULT_SEED_CLOCK, in
   await db.insert(schema.usage_analytics).values(shiftSeedRows(testData.usage_analytics, now) as typeof schema.usage_analytics.$inferInsert[]);
 }
 
-export async function applyOfficialTemplatesSeed(db: SeedDb, now = DEFAULT_SEED_CLOCK) {
+export async function applyOfficialTemplatesSeed(db: SeedDb, now: Date) {
   const timestamp = sqliteTimestamp(now);
   await db.insert(schema.users).values(users(officialTemplates.users).map((row) => ({ ...row, created_at: timestamp }))).onConflictDoNothing();
   await db.insert(schema.templates).values(templates(officialTemplates.templates).map((row) => ({ ...row, created_at: timestamp }))).onConflictDoNothing();
 }
 
-export async function applyOfficialLocalLoginSeed(db: SeedDb, now = DEFAULT_SEED_CLOCK) {
+export async function applyOfficialLocalLoginSeed(db: SeedDb, now: Date) {
   const account = accounts(officialLogin.account)[0];
   const user = users(officialLogin.users)[0];
   const entitlement = officialLogin.entitlement_overrides[0] as typeof schema.entitlement_overrides.$inferInsert;
@@ -127,7 +125,7 @@ export async function applyOfficialLocalLoginSeed(db: SeedDb, now = DEFAULT_SEED
   });
 }
 
-export async function applyAllLocalSeeds(db: SeedDb, now = DEFAULT_SEED_CLOCK, inviteExpiry = DEFAULT_INVITE_EXPIRY) {
+export async function applyAllLocalSeeds(db: SeedDb, now: Date, inviteExpiry: Date) {
   await applyTestDataSeed(db, now, inviteExpiry);
   await applyOfficialTemplatesSeed(db, now);
   await applyOfficialLocalLoginSeed(db, now);

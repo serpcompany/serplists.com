@@ -40,11 +40,13 @@ export async function applyLocalSeedProfile({ persistPath, profile }: { persistP
   const database = new DatabaseSync(locateMigratedDatabase(persistPath));
   try {
   const db = createSQLiteProxy(database);
-  if (profile === 'all') await applyAllLocalSeeds(db);
+  const now = new Date();
+  const inviteExpiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  if (profile === 'all') await applyAllLocalSeeds(db, now, inviteExpiry);
   else if (profile === 'cleanup-test-data') await cleanupTestDataSeed(db);
-  else if (profile === 'test-data') await applyTestDataSeed(db);
-  else if (profile === 'official-templates') await applyOfficialTemplatesSeed(db);
-  else if (profile === 'official-login') await applyOfficialLocalLoginSeed(db);
+  else if (profile === 'test-data') await applyTestDataSeed(db, now, inviteExpiry);
+  else if (profile === 'official-templates') await applyOfficialTemplatesSeed(db, now);
+  else if (profile === 'official-login') await applyOfficialLocalLoginSeed(db, now);
   else throw new Error(`Unknown seed profile: ${profile}`);
     console.log(`PASS typed Drizzle seed profile=${profile} target=local persist=${path.relative(process.cwd(), persistPath)}`);
   } finally {

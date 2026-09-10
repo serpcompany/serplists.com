@@ -43,6 +43,7 @@ function defaultBase() {
 }
 
 const commit = git(["rev-parse", "HEAD"]);
+const startWorkspace = git(["status", "--porcelain", "--untracked-files=all"], "");
 const baseRef = argument("--base") ?? defaultBase();
 const reportDirectory = argument("--report-dir") ?? process.env.DATA_REPORT_DIR ?? "tmp/data-reports";
 
@@ -59,6 +60,11 @@ try {
 } catch (error) {
   failures = [{ name: "provenance-check-error", detail: error.message, verdict: "fail" }];
 }
+const endCommit = git(["rev-parse", "HEAD"]);
+const endWorkspace = git(["status", "--porcelain", "--untracked-files=all"], "");
+if (endCommit !== commit || endWorkspace !== startWorkspace) {
+  failures.push({ name: 'concurrent-repository-mutation', detail: 'HEAD or working-tree paths changed while migration provenance was being checked.', verdict: 'fail' });
+}
 
 const checks = allPassingChecks(failures);
 for (const item of failures) {
@@ -68,6 +74,9 @@ const migrationFiles = state?.files ?? [];
 const report = {
   check: "migration-provenance",
   commit,
+  startCommit: commit,
+  endCommit,
+  workspaceStable: endWorkspace === startWorkspace,
   baseRef,
   target: {
     environment: "local",

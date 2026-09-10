@@ -16,4 +16,10 @@ it('keeps ordinary coverage fixtures and assertions on Drizzle with exact infras
   expect(rawCalls[0]).toContain('d1_migrations ORDER BY id');
   expect(rawCalls[1]).toContain('CREATE TRIGGER coverage_subscription_failure');
   expect(rawCalls[2]).toContain('DROP TRIGGER coverage_subscription_failure');
+
+  const stripeCorruption = readFileSync('scripts/data/run-stripe-write-failure-proof.mjs', 'utf8');
+  const stripeRawCalls = [...stripeCorruption.matchAll(/db\.prepare\(([^\n]+)/g)].map((match) => match[1]);
+  expect(stripeRawCalls).toHaveLength(15);
+  expect(stripeRawCalls[0]).toContain('d1_migrations ORDER BY id');
+  expect(stripeRawCalls.slice(1).every((call) => call.includes('CREATE TRIGGER') || call.includes('DROP TRIGGER'))).toBe(true);
 });

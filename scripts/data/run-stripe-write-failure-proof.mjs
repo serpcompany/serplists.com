@@ -6,6 +6,8 @@ import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { count, eq } from 'drizzle-orm';
+import { createDb, schema } from '../../functions/api/db.ts';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(path.join(repoRoot, 'package.json'));
@@ -119,6 +121,7 @@ try {
   });
 
   const db = await miniflare.getD1Database('DB');
+  const orm = createDb({ DB: db });
   const applied = await db.prepare('SELECT name FROM d1_migrations ORDER BY id').all();
   assert.deepEqual(applied.results.map((row) => row.name), migrationNames());
 
@@ -130,13 +133,9 @@ try {
     ['issue131-event-update', 'issue131-event-update@e2e.local'],
   ];
   for (const [id, email] of users) {
-    await db.prepare(
-      'INSERT INTO users(id,email,name,username,email_verified,created_at,auth_created_at,auth_updated_at) VALUES(?,?,?,?,1,?,1788566400000,1788566400000)',
-    ).bind(id, email, id, id, '2026-09-05').run();
+    await orm.insert(schema.users).values({ id, email, name: id, username: id, email_verified: true, created_at: '2026-09-05', auth_created_at: new Date(1788566400000), auth_updated_at: new Date(1788566400000) });
   }
-  await db.prepare(
-    "INSERT INTO account(id,account_id,provider_id,user_id,password,created_at,updated_at) VALUES('issue131-credential','issue131-checkout','credential','issue131-checkout','$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa',1788566400000,1788566400000)",
-  ).run();
+  await orm.insert(schema.account).values({ id: 'issue131-credential', accountId: 'issue131-checkout', providerId: 'credential', userId: 'issue131-checkout', password: '$2b$10$ai6w4pGPSwjTsx8h9eRuHOHz956SooVhr7NpOMxLCB.v4MhZfVnfa', createdAt: new Date(1788566400000), updatedAt: new Date(1788566400000) });
 
   let cookie = '';
   async function request(route, { method = 'GET', body, headers = {}, expected = 200, authenticated = true } = {}) {
@@ -167,7 +166,7 @@ try {
   }
 
   async function event(id) {
-    return db.prepare('SELECT id,error FROM stripe_webhook_events WHERE id=?').bind(id).first();
+    return (await orm.select({ id: schema.stripe_webhook_events.id, error: schema.stripe_webhook_events.error }).from(schema.stripe_webhook_events).where(eq(schema.stripe_webhook_events.id, id)).limit(1))[0] ?? null;
   }
 
   async function assertFailedEvent(id) {
@@ -189,11 +188,11 @@ try {
   await db.prepare("CREATE TRIGGER issue131_checkout_insert_failure BEFORE INSERT ON stripe_customers BEGIN SELECT RAISE(ABORT, 'issue131 checkout mapping insert failure'); END").run();
   await request('/api/billing/checkout', { method: 'POST', body: {}, expected: 500 });
   assert.equal(stripeCalls.filter((call) => call.path === '/v1/checkout/sessions').length, 0);
-  assert.equal(await db.prepare("SELECT * FROM stripe_customers WHERE user_id='issue131-checkout'").first(), null);
+  assert.equal((await orm.select().from(schema.stripe_customers).where(eq(schema.stripe_customers.user_id, 'issue131-checkout')).limit(1))[0] ?? null, null);
   await db.prepare('DROP TRIGGER issue131_checkout_insert_failure').run();
   const checkoutRetry = await request('/api/billing/checkout', { method: 'POST', body: {} });
   assert.equal(checkoutRetry.json().url, 'https://checkout.stripe.test/issue131');
-  assert.equal((await db.prepare("SELECT stripe_customer_id FROM stripe_customers WHERE user_id='issue131-checkout'").first()).stripe_customer_id, 'cus_issue131_checkout_2');
+  assert.equal((await orm.select({ stripe_customer_id: schema.stripe_customers.stripe_customer_id }).from(schema.stripe_customers).where(eq(schema.stripe_customers.user_id, 'issue131-checkout')).limit(1))[0].stripe_customer_id, 'cus_issue131_checkout_2');
   assert.equal(stripeCalls.filter((call) => call.path === '/v1/checkout/sessions').length, 1);
 
   // Webhook event INSERT failure: no row is a retryable absence, never duplicate success.
@@ -202,7 +201,7 @@ try {
     client_reference_id: 'issue131-customer-insert', customer: 'cus_issue131_event_insert',
   }, 500);
   assert.equal(await event('evt_issue131_event_insert'), null);
-  assert.equal(await db.prepare("SELECT * FROM stripe_customers WHERE user_id='issue131-customer-insert'").first(), null);
+  assert.equal((await orm.select().from(schema.stripe_customers).where(eq(schema.stripe_customers.user_id, 'issue131-customer-insert')).limit(1))[0] ?? null, null);
   await db.prepare('DROP TRIGGER issue131_event_insert_failure').run();
   await webhook('evt_issue131_event_insert', 'checkout.session.completed', {
     client_reference_id: 'issue131-customer-insert', customer: 'cus_issue131_event_insert',
@@ -210,13 +209,13 @@ try {
   assert.equal((await event('evt_issue131_event_insert')).error, null);
 
   // Customer INSERT failure leaves an errored event, then applies exactly once on retry.
-  await db.prepare("DELETE FROM stripe_customers WHERE user_id='issue131-customer-insert'").run();
+  await orm.delete(schema.stripe_customers).where(eq(schema.stripe_customers.user_id, 'issue131-customer-insert'));
   await db.prepare("CREATE TRIGGER issue131_customer_insert_failure BEFORE INSERT ON stripe_customers BEGIN SELECT RAISE(ABORT, 'issue131 customer insert failure'); END").run();
   await webhook('evt_issue131_customer_insert', 'checkout.session.completed', {
     client_reference_id: 'issue131-customer-insert', customer: 'cus_issue131_customer_insert',
   }, 500);
   await assertFailedEvent('evt_issue131_customer_insert');
-  assert.equal(await db.prepare("SELECT * FROM stripe_customers WHERE user_id='issue131-customer-insert'").first(), null);
+  assert.equal((await orm.select().from(schema.stripe_customers).where(eq(schema.stripe_customers.user_id, 'issue131-customer-insert')).limit(1))[0] ?? null, null);
   await db.prepare('DROP TRIGGER issue131_customer_insert_failure').run();
   await webhook('evt_issue131_customer_insert', 'checkout.session.completed', {
     client_reference_id: 'issue131-customer-insert', customer: 'cus_issue131_customer_insert',
@@ -226,21 +225,21 @@ try {
     client_reference_id: 'issue131-customer-insert', customer: 'cus_issue131_customer_insert',
   });
   assert.equal(duplicateCustomerInsert.json().duplicate, true);
-  assert.equal((await db.prepare("SELECT COUNT(*) n FROM stripe_customers WHERE user_id='issue131-customer-insert'").first()).n, 1);
+  assert.equal(Number((await orm.select({ n: count() }).from(schema.stripe_customers).where(eq(schema.stripe_customers.user_id, 'issue131-customer-insert')))[0].n), 1);
 
   // Customer conflict UPDATE failure propagates instead of masquerading as success.
-  await db.prepare("INSERT INTO stripe_customers(user_id,stripe_customer_id,created_at) VALUES('issue131-customer-update','cus_issue131_old','2026-09-05')").run();
+  await orm.insert(schema.stripe_customers).values({ user_id: 'issue131-customer-update', stripe_customer_id: 'cus_issue131_old', created_at: '2026-09-05' });
   await db.prepare("CREATE TRIGGER issue131_customer_update_failure BEFORE UPDATE ON stripe_customers BEGIN SELECT RAISE(ABORT, 'issue131 customer update failure'); END").run();
   await webhook('evt_issue131_customer_update', 'checkout.session.completed', {
     client_reference_id: 'issue131-customer-update', customer: 'cus_issue131_new',
   }, 500);
   await assertFailedEvent('evt_issue131_customer_update');
-  assert.equal((await db.prepare("SELECT stripe_customer_id FROM stripe_customers WHERE user_id='issue131-customer-update'").first()).stripe_customer_id, 'cus_issue131_old');
+  assert.equal((await orm.select({ stripe_customer_id: schema.stripe_customers.stripe_customer_id }).from(schema.stripe_customers).where(eq(schema.stripe_customers.user_id, 'issue131-customer-update')).limit(1))[0].stripe_customer_id, 'cus_issue131_old');
   await db.prepare('DROP TRIGGER issue131_customer_update_failure').run();
   await webhook('evt_issue131_customer_update', 'checkout.session.completed', {
     client_reference_id: 'issue131-customer-update', customer: 'cus_issue131_new',
   });
-  assert.equal((await db.prepare("SELECT stripe_customer_id FROM stripe_customers WHERE user_id='issue131-customer-update'").first()).stripe_customer_id, 'cus_issue131_new');
+  assert.equal((await orm.select({ stripe_customer_id: schema.stripe_customers.stripe_customer_id }).from(schema.stripe_customers).where(eq(schema.stripe_customers.user_id, 'issue131-customer-update')).limit(1))[0].stripe_customer_id, 'cus_issue131_new');
 
   const subscriptionBase = {
     id: 'sub_issue131',
@@ -255,22 +254,22 @@ try {
   await db.prepare("CREATE TRIGGER issue131_subscription_insert_failure BEFORE INSERT ON stripe_subscriptions BEGIN SELECT RAISE(ABORT, 'issue131 subscription insert failure'); END").run();
   await webhook('evt_issue131_subscription_insert', 'customer.subscription.created', subscriptionBase, 500);
   await assertFailedEvent('evt_issue131_subscription_insert');
-  assert.equal(await db.prepare("SELECT * FROM stripe_subscriptions WHERE stripe_subscription_id='sub_issue131'").first(), null);
+  assert.equal((await orm.select().from(schema.stripe_subscriptions).where(eq(schema.stripe_subscriptions.stripe_subscription_id, 'sub_issue131')).limit(1))[0] ?? null, null);
   await db.prepare('DROP TRIGGER issue131_subscription_insert_failure').run();
   await webhook('evt_issue131_subscription_insert', 'customer.subscription.created', subscriptionBase);
   assert.equal((await event('evt_issue131_subscription_insert')).error, null);
-  assert.equal((await db.prepare("SELECT status FROM stripe_subscriptions WHERE stripe_subscription_id='sub_issue131'").first()).status, 'active');
+  assert.equal((await orm.select({ status: schema.stripe_subscriptions.status }).from(schema.stripe_subscriptions).where(eq(schema.stripe_subscriptions.stripe_subscription_id, 'sub_issue131')).limit(1))[0].status, 'active');
 
   await db.prepare("CREATE TRIGGER issue131_subscription_update_failure BEFORE UPDATE ON stripe_subscriptions BEGIN SELECT RAISE(ABORT, 'issue131 subscription update failure'); END").run();
   await webhook('evt_issue131_subscription_update', 'customer.subscription.updated', { ...subscriptionBase, status: 'past_due' }, 500);
   await assertFailedEvent('evt_issue131_subscription_update');
-  assert.equal((await db.prepare("SELECT status FROM stripe_subscriptions WHERE stripe_subscription_id='sub_issue131'").first()).status, 'active');
+  assert.equal((await orm.select({ status: schema.stripe_subscriptions.status }).from(schema.stripe_subscriptions).where(eq(schema.stripe_subscriptions.stripe_subscription_id, 'sub_issue131')).limit(1))[0].status, 'active');
   await db.prepare('DROP TRIGGER issue131_subscription_update_failure').run();
   await webhook('evt_issue131_subscription_update', 'customer.subscription.updated', { ...subscriptionBase, status: 'past_due' });
-  assert.equal((await db.prepare("SELECT status FROM stripe_subscriptions WHERE stripe_subscription_id='sub_issue131'").first()).status, 'past_due');
+  assert.equal((await orm.select({ status: schema.stripe_subscriptions.status }).from(schema.stripe_subscriptions).where(eq(schema.stripe_subscriptions.stripe_subscription_id, 'sub_issue131')).limit(1))[0].status, 'past_due');
   const duplicateSubscription = await webhook('evt_issue131_subscription_update', 'customer.subscription.updated', { ...subscriptionBase, status: 'past_due' });
   assert.equal(duplicateSubscription.json().duplicate, true);
-  assert.equal((await db.prepare("SELECT COUNT(*) n FROM stripe_subscriptions WHERE stripe_subscription_id='sub_issue131'").first()).n, 1);
+  assert.equal(Number((await orm.select({ n: count() }).from(schema.stripe_subscriptions).where(eq(schema.stripe_subscriptions.stripe_subscription_id, 'sub_issue131')))[0].n), 1);
 
   // Event completion UPDATE failure remains non-successful and retryable.
   await db.prepare("CREATE TRIGGER issue131_event_update_failure BEFORE UPDATE ON stripe_webhook_events BEGIN SELECT RAISE(ABORT, 'issue131 event update failure'); END").run();
