@@ -43,7 +43,7 @@ jobs:
       - name: Validate environment contract
         run: pnpm run typecheck:env
 
-      - name: Verify production D1 readiness
+      - name: Block production deploy on pending D1 migrations
         if: github.ref_name == 'main'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -51,7 +51,7 @@ jobs:
           CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
         run: pnpm run verify:prod:d1
 
-      - name: Verify preview D1 readiness
+      - name: Block staging deploy on pending D1 migrations
         if: github.ref_name != 'main'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
