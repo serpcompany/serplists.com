@@ -13,6 +13,9 @@ const LOCAL_SEED_NON_EXPIRING_INVITE = new Date('9999-12-31T23:59:59.000Z');
 const FIXTURE_CAPTURE_CLOCK = Date.parse('2026-09-10T07:02:22.000Z');
 const teamIds = ['team-seed-growth', 'team-seed-client'];
 const teamTemplateIds = ['team-template-growth-launch', 'team-template-client-reporting'];
+const seedUserIds = [...new Set([...testData.users, ...officialTemplates.users, ...officialLogin.users].map((row) => row.id))];
+const seedCategories = [...new Set([...testData.templates, ...officialTemplates.templates]
+  .map((row) => row.category).filter((category): category is string => Boolean(category?.trim())))];
 const optionalDate = (value: unknown) => typeof value === 'number' ? new Date(value) : null;
 const sqliteTimestamp = (date: Date) => date.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
 const users = (rows: readonly Record<string, unknown>[]) => rows.map((row) => ({
@@ -58,6 +61,19 @@ const shiftSeedRows = <Row extends Record<string, unknown>>(rows: readonly Row[]
   })) as Row);
 };
 
+async function normalizeLocalSeedSitemapRevisions(db: SeedDb, now: Date) {
+  const revised_at = sqliteTimestamp(now);
+  await db.update(schema.sitemap_revisions).set({ revised_at });
+  await db.update(schema.sitemap_profile_revisions).set({ revised_at })
+    .where(inArray(schema.sitemap_profile_revisions.user_id, seedUserIds));
+  await db.update(schema.sitemap_owner_revisions).set({ revised_at })
+    .where(inArray(schema.sitemap_owner_revisions.user_id, seedUserIds));
+  if (seedCategories.length) {
+    await db.update(schema.sitemap_category_revisions).set({ revised_at })
+      .where(inArray(schema.sitemap_category_revisions.category, seedCategories));
+  }
+}
+
 export async function cleanupTestDataSeed(db: SeedDb) {
   const testUsers = await db.select({ id: schema.users.id }).from(schema.users).where(like(schema.users.email, '%@test.com'));
   const userIds = testUsers.map(({ id }) => id);
@@ -102,12 +118,14 @@ export async function applyTestDataSeed(db: SeedDb, now = DEFAULT_SEED_CLOCK, in
   await db.insert(schema.audit_events).values(shiftSeedRows(testData.audit_events, now) as typeof schema.audit_events.$inferInsert[]);
   await db.insert(schema.template_likes).values(shiftSeedRows(testData.template_likes, now) as typeof schema.template_likes.$inferInsert[]);
   await db.insert(schema.usage_analytics).values(shiftSeedRows(testData.usage_analytics, now) as typeof schema.usage_analytics.$inferInsert[]);
+  await normalizeLocalSeedSitemapRevisions(db, now);
 }
 
 export async function applyOfficialTemplatesSeed(db: SeedDb, now = DEFAULT_SEED_CLOCK) {
   const timestamp = sqliteTimestamp(now);
   await db.insert(schema.users).values(users(officialTemplates.users).map((row) => ({ ...row, created_at: timestamp }))).onConflictDoNothing();
   await db.insert(schema.templates).values(templates(officialTemplates.templates).map((row) => ({ ...row, created_at: timestamp }))).onConflictDoNothing();
+  await normalizeLocalSeedSitemapRevisions(db, now);
 }
 
 export async function applyOfficialLocalLoginSeed(db: SeedDb, now = DEFAULT_SEED_CLOCK) {
@@ -127,6 +145,7 @@ export async function applyOfficialLocalLoginSeed(db: SeedDb, now = DEFAULT_SEED
     target: schema.entitlement_overrides.user_id,
     set: { plan: currentEntitlement.plan, expires_at: currentEntitlement.expires_at, note: currentEntitlement.note, updated_at: currentEntitlement.updated_at },
   });
+  await normalizeLocalSeedSitemapRevisions(db, now);
 }
 
 export async function applyAllLocalSeeds(db: SeedDb, now = DEFAULT_SEED_CLOCK, inviteExpiry = LOCAL_SEED_NON_EXPIRING_INVITE) {

@@ -121,10 +121,21 @@ describe('installed SQLite proxy Drizzle access', () => {
       audit: await db.select().from(schema.audit_events).orderBy(schema.audit_events.id),
       likes: await db.select().from(schema.template_likes).orderBy(schema.template_likes.user_id, schema.template_likes.template_id),
       analytics: await db.select().from(schema.usage_analytics).orderBy(schema.usage_analytics.id),
+      sitemapRevisions: await db.select().from(schema.sitemap_revisions).orderBy(schema.sitemap_revisions.kind),
+      sitemapProfiles: await db.select().from(schema.sitemap_profile_revisions).orderBy(schema.sitemap_profile_revisions.user_id),
+      sitemapOwners: await db.select().from(schema.sitemap_owner_revisions).orderBy(schema.sitemap_owner_revisions.user_id),
+      sitemapCategories: await db.select().from(schema.sitemap_category_revisions).orderBy(schema.sitemap_category_revisions.category),
+      sitemapShards: await db.select().from(schema.sitemap_shard_revisions).orderBy(schema.sitemap_shard_revisions.kind, schema.sitemap_shard_revisions.page),
     });
     await applyAllLocalSeeds(db);
     const first = await dump();
     expect(first.invites[0]?.expires_at).toBe('9999-12-31 23:59:59');
+    expect([
+      ...first.sitemapRevisions,
+      ...first.sitemapProfiles,
+      ...first.sitemapOwners,
+      ...first.sitemapCategories,
+    ].every((row) => row.revised_at === '2026-09-10 07:02:22')).toBe(true);
     await applyAllLocalSeeds(db);
     expect(await dump()).toEqual(first);
   });

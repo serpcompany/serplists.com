@@ -8,7 +8,9 @@ export default mergeConfig(base, defineConfig({
     exclude: [...d1BrowserRecoveryFiles, '**/node_modules/**', '**/tmp/**'],
     fileParallelism: true,
     minWorkers: 1,
-    maxWorkers: 4,
-    maxConcurrency: 4,
+    // These tests intentionally use synchronous child-process boundaries.
+    // Two workers keep Vitest's RPC event loop responsive under sustained load.
+    maxWorkers: 2,
+    maxConcurrency: 2,
   },
 }));
