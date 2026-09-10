@@ -61,17 +61,55 @@ const shiftSeedRows = <Row extends Record<string, unknown>>(rows: readonly Row[]
   })) as Row);
 };
 
-async function normalizeLocalSeedSitemapRevisions(db: SeedDb, now: Date) {
+type SitemapRevisionState = {
+  global: Map<string | null, string>;
+  profiles: Map<string | null, string>;
+  owners: Map<string | null, string>;
+  categories: Map<string | null, string>;
+};
+
+async function captureLocalSeedSitemapRevisions(db: SeedDb): Promise<SitemapRevisionState> {
+  const [global, profiles, owners, categories] = await Promise.all([
+    db.select().from(schema.sitemap_revisions),
+    db.select().from(schema.sitemap_profile_revisions).where(inArray(schema.sitemap_profile_revisions.user_id, seedUserIds)),
+    db.select().from(schema.sitemap_owner_revisions).where(inArray(schema.sitemap_owner_revisions.user_id, seedUserIds)),
+    db.select().from(schema.sitemap_category_revisions).where(inArray(schema.sitemap_category_revisions.category, seedCategories)),
+  ]);
+  return {
+    global: new Map(global.map((row) => [row.kind, row.revised_at])),
+    profiles: new Map(profiles.map((row) => [row.user_id, row.revised_at])),
+    owners: new Map(owners.map((row) => [row.user_id, row.revised_at])),
+    categories: new Map(categories.map((row) => [row.category, row.revised_at])),
+  };
+}
+
+const latestRevision = (prior: string | undefined, seedClock: string) => prior && prior > seedClock ? prior : seedClock;
+
+async function stabilizeLocalSeedSitemapRevisions(db: SeedDb, now: Date, before: SitemapRevisionState) {
   const revised_at = sqliteTimestamp(now);
-  await db.update(schema.sitemap_revisions).set({ revised_at });
-  await db.update(schema.sitemap_profile_revisions).set({ revised_at })
-    .where(inArray(schema.sitemap_profile_revisions.user_id, seedUserIds));
-  await db.update(schema.sitemap_owner_revisions).set({ revised_at })
-    .where(inArray(schema.sitemap_owner_revisions.user_id, seedUserIds));
-  if (seedCategories.length) {
-    await db.update(schema.sitemap_category_revisions).set({ revised_at })
-      .where(inArray(schema.sitemap_category_revisions.category, seedCategories));
+  for (const row of await db.select().from(schema.sitemap_revisions)) {
+    if (row.kind === null) continue;
+    await db.update(schema.sitemap_revisions).set({ revised_at: latestRevision(before.global.get(row.kind), revised_at) })
+      .where(eq(schema.sitemap_revisions.kind, row.kind));
   }
+  for (const row of await db.select().from(schema.sitemap_profile_revisions).where(inArray(schema.sitemap_profile_revisions.user_id, seedUserIds))) {
+    if (row.user_id === null) continue;
+    await db.update(schema.sitemap_profile_revisions).set({ revised_at: latestRevision(before.profiles.get(row.user_id), revised_at) })
+      .where(eq(schema.sitemap_profile_revisions.user_id, row.user_id));
+  }
+  for (const row of await db.select().from(schema.sitemap_owner_revisions).where(inArray(schema.sitemap_owner_revisions.user_id, seedUserIds))) {
+    if (row.user_id === null) continue;
+    await db.update(schema.sitemap_owner_revisions).set({ revised_at: latestRevision(before.owners.get(row.user_id), revised_at) })
+      .where(eq(schema.sitemap_owner_revisions.user_id, row.user_id));
+  }
+  for (const row of await db.select().from(schema.sitemap_category_revisions).where(inArray(schema.sitemap_category_revisions.category, seedCategories))) {
+    if (row.category === null) continue;
+    await db.update(schema.sitemap_category_revisions).set({ revised_at: latestRevision(before.categories.get(row.category), revised_at) })
+      .where(eq(schema.sitemap_category_revisions.category, row.category));
+  }
+  // Seeded public content invalidates every derived shard cache. The sitemap
+  // runtime rebuilds these rows from canonical content hashes on demand.
+  await db.delete(schema.sitemap_shard_revisions);
 }
 
 export async function cleanupTestDataSeed(db: SeedDb) {
@@ -99,6 +137,7 @@ export async function cleanupTestDataSeed(db: SeedDb) {
 }
 
 export async function applyTestDataSeed(db: SeedDb, now = DEFAULT_SEED_CLOCK, inviteExpiry = LOCAL_SEED_NON_EXPIRING_INVITE) {
+  const sitemapBefore = await captureLocalSeedSitemapRevisions(db);
   await cleanupTestDataSeed(db);
   await db.insert(schema.users).values(users(shiftSeedRows(testData.users, now)));
   await db.insert(schema.account).values(accounts(shiftSeedRows(testData.account, now)));
@@ -118,14 +157,15 @@ export async function applyTestDataSeed(db: SeedDb, now = DEFAULT_SEED_CLOCK, in
   await db.insert(schema.audit_events).values(shiftSeedRows(testData.audit_events, now) as typeof schema.audit_events.$inferInsert[]);
   await db.insert(schema.template_likes).values(shiftSeedRows(testData.template_likes, now) as typeof schema.template_likes.$inferInsert[]);
   await db.insert(schema.usage_analytics).values(shiftSeedRows(testData.usage_analytics, now) as typeof schema.usage_analytics.$inferInsert[]);
-  await normalizeLocalSeedSitemapRevisions(db, now);
+  await stabilizeLocalSeedSitemapRevisions(db, now, sitemapBefore);
 }
 
 export async function applyOfficialTemplatesSeed(db: SeedDb, now = DEFAULT_SEED_CLOCK) {
+  const sitemapBefore = await captureLocalSeedSitemapRevisions(db);
   const timestamp = sqliteTimestamp(now);
   await db.insert(schema.users).values(users(officialTemplates.users).map((row) => ({ ...row, created_at: timestamp }))).onConflictDoNothing();
   await db.insert(schema.templates).values(templates(officialTemplates.templates).map((row) => ({ ...row, created_at: timestamp }))).onConflictDoNothing();
-  await normalizeLocalSeedSitemapRevisions(db, now);
+  await stabilizeLocalSeedSitemapRevisions(db, now, sitemapBefore);
 }
 
 export async function applyOfficialLocalLoginSeed(db: SeedDb, now = DEFAULT_SEED_CLOCK) {
@@ -145,7 +185,6 @@ export async function applyOfficialLocalLoginSeed(db: SeedDb, now = DEFAULT_SEED
     target: schema.entitlement_overrides.user_id,
     set: { plan: currentEntitlement.plan, expires_at: currentEntitlement.expires_at, note: currentEntitlement.note, updated_at: currentEntitlement.updated_at },
   });
-  await normalizeLocalSeedSitemapRevisions(db, now);
 }
 
 export async function applyAllLocalSeeds(db: SeedDb, now = DEFAULT_SEED_CLOCK, inviteExpiry = LOCAL_SEED_NON_EXPIRING_INVITE) {

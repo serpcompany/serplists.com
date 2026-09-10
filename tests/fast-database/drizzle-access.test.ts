@@ -127,11 +127,18 @@ describe('installed SQLite proxy Drizzle access', () => {
       sitemapCategories: await db.select().from(schema.sitemap_category_revisions).orderBy(schema.sitemap_category_revisions.category),
       sitemapShards: await db.select().from(schema.sitemap_shard_revisions).orderBy(schema.sitemap_shard_revisions.kind, schema.sitemap_shard_revisions.page),
     });
+    await db.update(schema.sitemap_revisions).set({ revised_at: '2035-01-01 00:00:00' })
+      .where(eq(schema.sitemap_revisions.kind, 'templates'));
+    await db.insert(schema.sitemap_shard_revisions).values({
+      kind: 'templates', page: 1, content_hash: 'stale-before-seed', revised_at: '2040-01-01 00:00:00',
+    });
     await applyAllLocalSeeds(db);
     const first = await dump();
     expect(first.invites[0]?.expires_at).toBe('9999-12-31 23:59:59');
+    expect(first.sitemapRevisions.find((row) => row.kind === 'templates')?.revised_at).toBe('2035-01-01 00:00:00');
+    expect(first.sitemapShards).toEqual([]);
     expect([
-      ...first.sitemapRevisions,
+      ...first.sitemapRevisions.filter((row) => row.kind !== 'templates'),
       ...first.sitemapProfiles,
       ...first.sitemapOwners,
       ...first.sitemapCategories,
