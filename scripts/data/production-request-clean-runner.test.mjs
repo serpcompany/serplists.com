@@ -88,23 +88,30 @@ test('a clean production-request runner validates before installing and loads it
       manifest.scripts[hook] = `node -e "require('node:fs').writeFileSync('lifecycle-ran', '${hook}')"`;
     }
     json(fixture, 'package.json', manifest);
-    cpSync(path.join(fixture, 'package.json'), path.join(prefetchFixture, 'package.json'));
-    cpSync(path.join(fixture, 'pnpm-lock.yaml'), path.join(prefetchFixture, 'pnpm-lock.yaml'));
-    const storePath = path.join(prefetchFixture, '.pnpm-store');
-    const prefetchHome = path.join(prefetchFixture, 'home');
-    const prefetchConfig = path.join(prefetchFixture, 'empty.npmrc');
-    mkdirSync(prefetchHome);
-    writeFileSync(prefetchConfig, '');
-    // setup-node's restored cache can support the root install without keeping
-    // every registry tarball needed by a second isolated --offline install.
-    // Prefetch the exact frozen lockfile first; the fixture proof itself stays
-    // offline and cannot resolve or download anything from the network.
-    passes(run(prefetchFixture, 'pnpm', ['fetch', '--frozen-lockfile', '--ignore-scripts', '--store-dir', storePath], {
-      HOME: prefetchHome,
-      XDG_CONFIG_HOME: path.join(prefetchHome, '.config'),
-      NPM_CONFIG_USERCONFIG: prefetchConfig,
-      npm_config_userconfig: prefetchConfig,
-    }));
+    let storePath;
+    if (process.env.PNPM_TEST_STORE_PREPARED === '1') {
+      const preparedStore = run(root, 'pnpm', ['store', 'path', '--silent']);
+      passes(preparedStore);
+      storePath = preparedStore.stdout.trim();
+    } else {
+      cpSync(path.join(fixture, 'package.json'), path.join(prefetchFixture, 'package.json'));
+      cpSync(path.join(fixture, 'pnpm-lock.yaml'), path.join(prefetchFixture, 'pnpm-lock.yaml'));
+      storePath = path.join(prefetchFixture, '.pnpm-store');
+      const prefetchHome = path.join(prefetchFixture, 'home');
+      const prefetchConfig = path.join(prefetchFixture, 'empty.npmrc');
+      mkdirSync(prefetchHome);
+      writeFileSync(prefetchConfig, '');
+      // Local fallback only. CI prepares its store before Vitest starts so no
+      // process worker performs network or shared-store writes.
+      passes(run(prefetchFixture, 'pnpm', ['fetch', '--frozen-lockfile', '--ignore-scripts', '--store-dir', storePath], {
+        HOME: prefetchHome,
+        XDG_CONFIG_HOME: path.join(prefetchHome, '.config'),
+        NPM_CONFIG_USERCONFIG: prefetchConfig,
+        npm_config_userconfig: prefetchConfig,
+      }));
+    }
+    // The fixture proof itself stays offline and cannot resolve or download
+    // anything from the network.
     const bootstrap = [gate.run, ...installs.map((step) => `${step.run} --offline --store-dir ${JSON.stringify(storePath)}`)].join('\n');
     const shell = (source, extra = {}) => run(fixture, 'bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', source], extra);
     passes(shell(gate.run));

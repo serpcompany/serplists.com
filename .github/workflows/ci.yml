@@ -89,7 +89,11 @@ jobs:
         run: pnpm run db:schema:snapshot:check
       - name: Fast Drizzle database tests
         run: pnpm exec vitest run --config vitest.fast-database.config.ts --reporter=default --reporter=junit --outputFile.junit=tmp/data-reports/ci/fast-database.junit.xml
+      - name: Prepare frozen offline test store
+        run: pnpm fetch --frozen-lockfile --ignore-scripts
       - name: Process and driver integration tests
+        env:
+          PNPM_TEST_STORE_PREPARED: "1"
         run: pnpm exec vitest run --config vitest.process.config.ts --reporter=default --reporter=junit --outputFile.junit=tmp/data-reports/ci/process-driver.junit.xml
       - name: Upload database evidence
         if: always()
@@ -122,9 +126,12 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
+      - name: Prepare frozen offline test store
+        run: pnpm fetch --frozen-lockfile --ignore-scripts
       - name: Data regression gate
         env:
           DATA_REGRESSION_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'push' && github.event.before || format('{0}^', github.sha) }}
+          PNPM_TEST_STORE_PREPARED: "1"
         run: node scripts/data/run-reviewed-range-suites.mjs
       - name: Upload data regression evidence
         if: always()
