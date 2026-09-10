@@ -1,3 +1,13 @@
+import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import {
+  sitemap_category_revisions,
+  sitemap_owner_revisions,
+  sitemap_revisions,
+  sitemap_shard_revisions,
+  templates,
+  users,
+} from '../../db/schema/index';
+import { createDb } from '../api/db';
 import type { Env } from '../api/types';
 import bundledTemplateCatalog from './bundled-catalog.generated.json';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../src/data/publicCategories';
@@ -51,23 +61,28 @@ export function sitemapImplementationLastmod(): string | null {
   return validLastmod(inventoryMetadata?.implementationLastmod);
 }
 
-export const VALID_USERNAME_SQL = `
-  LENGTH(TRIM(u.username)) BETWEEN 3 AND 30
-  AND TRIM(u.username) NOT GLOB '*[^A-Za-z0-9_.]*'`;
+// Drizzle has no builders for SQLite's GLOB or string functions. Keep these
+// validation predicates small and typed so pagination excludes invalid rows in D1.
+export const validUsernameCondition = sql<boolean>`
+  length(trim(${users.username})) between 3 and 30
+  and trim(${users.username}) not glob ${'*[^A-Za-z0-9_.]*'}`;
 
-export const PUBLIC_TEMPLATE_SQL_WHERE = `
-  t.owner_type = 'user'
-  AND t.team_id IS NULL
-  AND t.is_public = 1
-  AND t.deleted_at IS NULL`;
+export const publicTemplateCondition = and(
+  eq(templates.owner_type, 'user'),
+  isNull(templates.team_id),
+  eq(templates.is_public, true),
+  isNull(templates.deleted_at),
+);
 
-export const VALID_TEMPLATE_SLUG_SQL = `
-  LENGTH(TRIM(t.slug)) BETWEEN 1 AND 160
-  AND TRIM(t.slug) = LOWER(TRIM(t.slug))
-  AND TRIM(t.slug) NOT GLOB '*[^a-z0-9-]*'
-  AND SUBSTR(TRIM(t.slug), 1, 1) GLOB '[a-z0-9]'
-  AND SUBSTR(TRIM(t.slug), -1, 1) GLOB '[a-z0-9]'
-  AND INSTR(TRIM(t.slug), '--') = 0`;
+export const validTemplateSlugCondition = sql<boolean>`
+  length(trim(${templates.slug})) between 1 and 160
+  and trim(${templates.slug}) = lower(trim(${templates.slug}))
+  and trim(${templates.slug}) not glob ${'*[^a-z0-9-]*'}
+  and substr(trim(${templates.slug}), 1, 1) glob ${'[a-z0-9]'}
+  and substr(trim(${templates.slug}), -1, 1) glob ${'[a-z0-9]'}
+  and instr(trim(${templates.slug}), ${'--'}) = 0`;
+
+const nonEmptyTemplateCategoryCondition = sql<boolean>`trim(${templates.category}) <> ${''}`;
 
 export function xmlEscape(value: string): string {
   return value
@@ -200,10 +215,10 @@ export function buildInMemoryShardIndex(
 }
 
 export async function loadSitemapRevisions(env: Env): Promise<Map<string, string>> {
-  const result = await env.DB.prepare(
-    `SELECT kind, revised_at FROM sitemap_revisions`,
-  ).all<{ kind: string; revised_at: string }>();
-  return new Map(result.results.map((row) => [row.kind, row.revised_at]));
+  const rows = await createDb(env)
+    .select({ kind: sitemap_revisions.kind, revised_at: sitemap_revisions.revised_at })
+    .from(sitemap_revisions);
+  return new Map(rows.map((row) => [row.kind, row.revised_at]));
 }
 
 async function contentHash(value: string): Promise<string> {
@@ -212,23 +227,34 @@ async function contentHash(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-export async function buildDurableShardIndex(
-  env: Env,
-  kind: 'pages' | 'categories' | 'profiles' | 'templates',
+type ExistingShardRevision = {
+  page: number;
+  content_hash: string;
+  revised_at: string;
+};
+
+type ShardRevisionUpsert = ExistingShardRevision & {
+  kind: 'pages' | 'categories' | 'profiles' | 'templates';
+};
+
+export async function planDurableShardIndex(
+  kind: ShardRevisionUpsert['kind'],
   entries: SitemapEntry[],
+  existing: ExistingShardRevision[],
   familyRevision?: string | null,
-): Promise<SitemapEntry[]> {
-  const existing = await env.DB.prepare(
-    `SELECT page, content_hash, revised_at FROM sitemap_shard_revisions WHERE kind = ?`,
-  ).bind(kind).all<{ page: number; content_hash: string; revised_at: string }>();
-  const byPage = new Map(existing.results.map((row) => [Number(row.page), row]));
+): Promise<{
+  shards: SitemapEntry[];
+  stalePages: number[];
+  upserts: ShardRevisionUpsert[];
+}> {
+  const byPage = new Map(existing.map((row) => [Number(row.page), row]));
   const pageCount = Math.ceil(entries.length / SITEMAP_PAGE_SIZE);
+  const stalePages = existing
+    .map((row) => Number(row.page))
+    .filter((page) => page > pageCount)
+    .sort((left, right) => left - right);
   const shards: SitemapEntry[] = [];
-  if (existing.results.some((row) => Number(row.page) > pageCount)) {
-    await env.DB.prepare(
-      `DELETE FROM sitemap_shard_revisions WHERE kind = ? AND page > ?`,
-    ).bind(kind, pageCount).run();
-  }
+  const upserts: ShardRevisionUpsert[] = [];
 
   for (let page = 1; page <= pageCount; page += 1) {
     const pageEntries = paginateEntries(entries, page);
@@ -239,17 +265,49 @@ export async function buildDurableShardIndex(
       : mostRecentLastmod(familyRevision, latestLastmod(pageEntries));
     if (!revisedAt) throw new Error(`Missing revision source for ${kind} sitemap shard ${page}`);
     if (!previous || previous.content_hash !== hash || previous.revised_at !== revisedAt) {
-      await env.DB.prepare(
-        `INSERT INTO sitemap_shard_revisions(kind, page, content_hash, revised_at)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(kind, page) DO UPDATE SET
-           content_hash = excluded.content_hash,
-           revised_at = excluded.revised_at`,
-      ).bind(kind, page, hash, revisedAt).run();
+      upserts.push({ kind, page, content_hash: hash, revised_at: revisedAt });
     }
     shards.push({ path: `/sitemaps/${kind}/${page}.xml`, lastmod: revisedAt });
   }
-  return shards;
+
+  return { shards, stalePages, upserts };
+}
+
+export async function buildDurableShardIndex(
+  env: Env,
+  kind: 'pages' | 'categories' | 'profiles' | 'templates',
+  entries: SitemapEntry[],
+  familyRevision?: string | null,
+): Promise<SitemapEntry[]> {
+  const db = createDb(env);
+  const existing = await db
+    .select({
+      page: sitemap_shard_revisions.page,
+      content_hash: sitemap_shard_revisions.content_hash,
+      revised_at: sitemap_shard_revisions.revised_at,
+    })
+    .from(sitemap_shard_revisions)
+    .where(eq(sitemap_shard_revisions.kind, kind));
+  const plan = await planDurableShardIndex(kind, entries, existing, familyRevision);
+  if (plan.stalePages.length > 0) {
+    await db
+      .delete(sitemap_shard_revisions)
+      .where(and(
+        eq(sitemap_shard_revisions.kind, kind),
+        inArray(sitemap_shard_revisions.page, plan.stalePages),
+      ));
+  }
+
+  for (const upsert of plan.upserts) {
+    await db
+      .insert(sitemap_shard_revisions)
+      .values(upsert)
+      .onConflictDoUpdate({
+        target: [sitemap_shard_revisions.kind, sitemap_shard_revisions.page],
+        set: { content_hash: upsert.content_hash, revised_at: upsert.revised_at },
+      });
+  }
+  return plan.shards;
 }
 
 export function categorySlug(category: string): string {
@@ -300,20 +358,22 @@ export async function loadCategoryEntries(
   env: Env,
   inventoryLastmod?: string | null,
 ): Promise<SitemapEntry[]> {
-  const result = await env.DB.prepare(
-    `SELECT t.category, t.created_at, t.updated_at,
-            r.revised_at AS owner_updated_at
-       FROM templates AS t
-       JOIN users AS u ON u.id = t.user_id
-       LEFT JOIN sitemap_owner_revisions AS r ON r.user_id = u.id
-      WHERE ${PUBLIC_TEMPLATE_SQL_WHERE}
-        AND t.category IS NOT NULL AND TRIM(t.category) <> ''`,
-  ).all<{
-    category: string | null;
-    created_at: string;
-    updated_at: string | null;
-    owner_updated_at: string | null;
-  }>();
+  const db = createDb(env);
+  const rows = await db
+    .select({
+      category: templates.category,
+      created_at: templates.created_at,
+      updated_at: templates.updated_at,
+      owner_updated_at: sitemap_owner_revisions.revised_at,
+    })
+    .from(templates)
+    .innerJoin(users, eq(users.id, templates.user_id))
+    .leftJoin(sitemap_owner_revisions, eq(sitemap_owner_revisions.user_id, users.id))
+    .where(and(
+      publicTemplateCondition,
+      isNotNull(templates.category),
+      nonEmptyTemplateCategoryCondition,
+    ));
   const lastmodBySlug = new Map<string, string | null>();
   const addCategory = (category: string, lastmod: string | null | undefined) => {
     const slug = categorySlug(category);
@@ -330,17 +390,20 @@ export async function loadCategoryEntries(
   PUBLIC_CATEGORY_REGISTRY.forEach((category) => {
     addCategory(category.slug, catalogPageEntry('/categories').lastmod);
   });
-  result.results.forEach((row) => {
+  rows.forEach((row) => {
     const lastmod = mostRecentLastmod(
       row.updated_at || row.created_at,
       row.owner_updated_at,
     );
     parseCategories(row.category).forEach((category) => addCategory(category, lastmod));
   });
-  const categoryRevisions = await env.DB.prepare(
-    `SELECT category, revised_at FROM sitemap_category_revisions`,
-  ).all<{ category: string; revised_at: string }>();
-  categoryRevisions.results.forEach((row) => {
+  const categoryRevisions = await db
+    .select({
+      category: sitemap_category_revisions.category,
+      revised_at: sitemap_category_revisions.revised_at,
+    })
+    .from(sitemap_category_revisions);
+  categoryRevisions.forEach((row) => {
     parseCategories(row.category).forEach((category) => {
       const slug = categorySlug(category);
       if (lastmodBySlug.has(slug)) addCategory(category, row.revised_at);
@@ -368,18 +431,16 @@ export async function loadCategoryEntries(
 
 type PagedSitemapOptions<Row> = {
   request: Request;
-  env: Env;
   params: Record<string, string | string[]>;
-  sql: string;
+  loadRows: (pagination: { limit: number; offset: number }) => Promise<Row[]>;
   toEntry: (row: Row) => SitemapEntry | null;
   prefixEntries?: SitemapEntry[];
 };
 
 export async function handlePagedDatabaseSitemap<Row>({
   request,
-  env,
   params,
-  sql,
+  loadRows,
   toEntry,
   prefixEntries = [],
 }: PagedSitemapOptions<Row>): Promise<Response> {
@@ -391,10 +452,10 @@ export async function handlePagedDatabaseSitemap<Row>({
   const prefixedPageEntries = prefixEntries.slice(offset, offset + SITEMAP_PAGE_SIZE);
   const databaseLimit = SITEMAP_PAGE_SIZE - prefixedPageEntries.length;
   const databaseOffset = Math.max(0, offset - prefixEntries.length);
-  const result = databaseLimit > 0
-    ? await env.DB.prepare(sql).bind(databaseLimit, databaseOffset).all<Row>()
-    : { results: [] as Row[] };
-  const databaseEntries = result.results
+  const rows = databaseLimit > 0
+    ? await loadRows({ limit: databaseLimit, offset: databaseOffset })
+    : [];
+  const databaseEntries = rows
     .map(toEntry)
     .filter((entry): entry is SitemapEntry => entry !== null);
   const entries = [...prefixedPageEntries, ...databaseEntries];
