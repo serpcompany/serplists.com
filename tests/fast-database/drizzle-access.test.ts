@@ -4,7 +4,7 @@ import * as schema from '../../db/schema/index';
 import { loadCategoryEntries, loadSitemapRevisions } from '../../functions/sitemap/shared';
 import { insertAuditEventWhenInviteAccepted, insertTeamMemberWhenInviteAccepted } from '../../functions/api/handlers/teams';
 import { createSqliteDrizzleFixture } from '../fixtures/sqlite-drizzle';
-import { applyAllLocalSeeds, cleanupTestDataSeed } from '../../db/seeds/index';
+import { applyAllLocalSeeds, applyTestDataSeed, cleanupTestDataSeed } from '../../db/seeds/index';
 
 const fixtures: ReturnType<typeof createSqliteDrizzleFixture>[] = [];
 afterEach(() => fixtures.splice(0).forEach((fixture) => fixture.close()));
@@ -127,23 +127,35 @@ describe('installed SQLite proxy Drizzle access', () => {
       sitemapCategories: await db.select().from(schema.sitemap_category_revisions).orderBy(schema.sitemap_category_revisions.category),
       sitemapShards: await db.select().from(schema.sitemap_shard_revisions).orderBy(schema.sitemap_shard_revisions.kind, schema.sitemap_shard_revisions.page),
     });
-    await db.update(schema.sitemap_revisions).set({ revised_at: '2035-01-01 00:00:00' })
+    await db.update(schema.sitemap_revisions).set({ revised_at: '2026-09-10T00:00:00.000Z' })
       .where(eq(schema.sitemap_revisions.kind, 'templates'));
+    await db.update(schema.sitemap_revisions).set({ revised_at: '2026-09-10T23:00:00-10:00' })
+      .where(eq(schema.sitemap_revisions.kind, 'profiles'));
+    await db.update(schema.sitemap_revisions).set({ revised_at: '2035-01-01 00:00:00' })
+      .where(eq(schema.sitemap_revisions.kind, 'categories'));
     await db.insert(schema.sitemap_shard_revisions).values({
       kind: 'templates', page: 1, content_hash: 'stale-before-seed', revised_at: '2040-01-01 00:00:00',
     });
     await applyAllLocalSeeds(db);
     const first = await dump();
     expect(first.invites[0]?.expires_at).toBe('9999-12-31 23:59:59');
-    expect(first.sitemapRevisions.find((row) => row.kind === 'templates')?.revised_at).toBe('2035-01-01 00:00:00');
+    expect(first.sitemapRevisions.find((row) => row.kind === 'templates')?.revised_at).toBe('2026-09-10 07:02:22');
+    expect(first.sitemapRevisions.find((row) => row.kind === 'profiles')?.revised_at).toBe('2026-09-10T23:00:00-10:00');
+    expect(first.sitemapRevisions.find((row) => row.kind === 'categories')?.revised_at).toBe('2035-01-01 00:00:00');
     expect(first.sitemapShards).toEqual([]);
     expect([
-      ...first.sitemapRevisions.filter((row) => row.kind !== 'templates'),
       ...first.sitemapProfiles,
       ...first.sitemapOwners,
       ...first.sitemapCategories,
     ].every((row) => row.revised_at === '2026-09-10 07:02:22')).toBe(true);
     await applyAllLocalSeeds(db);
     expect(await dump()).toEqual(first);
+  });
+
+  it('fails closed when pre-seed sitemap revision state is not a valid instant', async () => {
+    const { db } = fixture();
+    await db.update(schema.sitemap_revisions).set({ revised_at: 'not-a-timestamp' })
+      .where(eq(schema.sitemap_revisions.kind, 'templates'));
+    await expect(applyTestDataSeed(db)).rejects.toThrow('Invalid sitemap revision timestamp: not-a-timestamp');
   });
 });

@@ -83,7 +83,18 @@ async function captureLocalSeedSitemapRevisions(db: SeedDb): Promise<SitemapRevi
   };
 }
 
-const latestRevision = (prior: string | undefined, seedClock: string) => prior && prior > seedClock ? prior : seedClock;
+const revisionInstant = (value: string) => {
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value.trim())
+    ? `${value.trim().replace(' ', 'T')}Z`
+    : value;
+  const instant = Date.parse(normalized);
+  if (!Number.isFinite(instant)) throw new Error(`Invalid sitemap revision timestamp: ${value}`);
+  return instant;
+};
+
+const latestRevision = (prior: string | undefined, seedClock: string) => (
+  prior && revisionInstant(prior) > revisionInstant(seedClock) ? prior : seedClock
+);
 
 async function stabilizeLocalSeedSitemapRevisions(db: SeedDb, now: Date, before: SitemapRevisionState) {
   const revised_at = sqliteTimestamp(now);
