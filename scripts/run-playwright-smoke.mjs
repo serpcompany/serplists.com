@@ -41,14 +41,11 @@ const teardownReportPath = path.resolve(
 );
 const env = buildSmokeChildEnvironment(process.env);
 env.DATA_REGRESSION_START_COMMIT ??= execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).trim();
-const candidateBuildFingerprint = createHash('sha256')
-  .update(env.DATA_REGRESSION_START_COMMIT)
-  .update(execFileSync('git', ['diff', '--binary', 'HEAD'], { cwd: repoRoot }))
-  .digest('hex');
-const candidateBuildDirectory = path.join(repoRoot, 'tmp', 'data-build-cache', candidateBuildFingerprint);
-const candidateAssetsDirectory = path.join(candidateBuildDirectory, 'assets');
-const candidateWorkerPath = path.join(candidateBuildDirectory, '_worker.js');
-const candidateBuildMarker = path.join(candidateBuildDirectory, 'build.json');
+let candidateBuildFingerprint;
+let candidateBuildDirectory;
+let candidateAssetsDirectory;
+let candidateWorkerPath;
+let candidateBuildMarker;
 const migrationFiles = readdirSync(path.join(repoRoot, 'db/migrations')).filter(name => /^\d+.*\.sql$/.test(name)).sort();
 const selectedRange = normalizeMigrationRange({ from: env.DATA_REGRESSION_MIGRATION_FROM ?? null, to: env.DATA_REGRESSION_MIGRATION_TO ?? null });
 env.DATA_REGRESSION_MIGRATION_FROM = selectedRange.from ?? 'none';
@@ -168,6 +165,18 @@ if (shouldPickOpenPorts) {
   env.FRONTEND_URL ??= env.PLAYWRIGHT_BASE_URL;
 }
 
+const buildInputs = execFileSync('git', ['ls-files', '-co', '--exclude-standard', '-z'], { cwd: repoRoot })
+  .toString().split('\0').filter(Boolean).sort();
+const buildFingerprint = createHash('sha256')
+  .update(env.DATA_REGRESSION_START_COMMIT)
+  .update(`\0VITE_API_URL=${env.VITE_API_URL ?? ''}\0mode=development`);
+for (const file of buildInputs) buildFingerprint.update(`\0${file}\0`).update(readFileSync(path.join(repoRoot, file)));
+candidateBuildFingerprint = buildFingerprint.digest('hex');
+candidateBuildDirectory = path.join(repoRoot, 'tmp', 'data-build-cache', candidateBuildFingerprint);
+candidateAssetsDirectory = path.join(candidateBuildDirectory, 'assets');
+candidateWorkerPath = path.join(candidateBuildDirectory, '_worker.js');
+candidateBuildMarker = path.join(candidateBuildDirectory, 'build.json');
+
 const releaseSmokeLock = env.PLAYWRIGHT_SMOKE_LOCK_HELD === "1"
   ? () => {}
   : await acquireSmokeRunLock({ lockPath: smokeLockAbsolutePath });
@@ -228,7 +237,8 @@ try {
       && existsSync(candidateWorkerPath)
       && manifest.fingerprint === candidateBuildFingerprint
       && manifest.commit === env.DATA_REGRESSION_START_COMMIT
-      && manifest.workerSha256 === artifactDigest(candidateWorkerPath);
+      && manifest.workerSha256 === artifactDigest(candidateWorkerPath)
+      && manifest.assetsSha256 === artifactDigest(candidateAssetsDirectory);
   } catch {
     cachedBuild = false;
   }
@@ -245,6 +255,7 @@ try {
       commit: env.DATA_REGRESSION_START_COMMIT,
       fingerprint: candidateBuildFingerprint,
       workerSha256: artifactDigest(candidateWorkerPath),
+      assetsSha256: artifactDigest(candidateAssetsDirectory),
     }));
   }
   // Advanced-mode Pages finds _worker.js inside its served asset directory.

@@ -36,6 +36,7 @@
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:database:fast": "vitest run --config vitest.fast-database.config.ts",
     "test:process": "vitest run --config vitest.process.config.ts",
+    "check:test:suite-ownership": "node scripts/test/check-suite-ownership.mjs",
     "test:coverage": "vitest run --coverage",
     "test:hooks": "vitest run scripts/hooks/hook-enforcement.test.mjs",
     "test:smoke": "tsx scripts/run-playwright-smoke.mjs",
@@ -79,7 +80,7 @@
     "test:data:assertions": "vitest run --config vitest.data.config.ts",
     "test:data:integration": "tsx scripts/data/run-data-regression-suite.ts",
     "verify:quality": "pnpm run lint && pnpm run typecheck && pnpm run typecheck:env && pnpm run test:unit",
-    "verify:fast": "pnpm run test:unit && pnpm run test:database:fast",
+    "verify:fast": "pnpm run lint && pnpm run typecheck && pnpm run typecheck:env && pnpm run check:data:migration-provenance && pnpm run check:data:schema-contract && pnpm run db:schema:snapshot:check && pnpm run check:test:suite-ownership && pnpm run test:unit && pnpm run test:database:fast",
     "verify:database": "pnpm run check:data:migration-provenance && pnpm run test:data:migration-provenance && pnpm run check:data:schema-contract && pnpm run db:schema:snapshot:check && pnpm run test:database:fast"
   },
   "dependencies": {

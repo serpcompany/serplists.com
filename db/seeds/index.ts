@@ -9,8 +9,10 @@ type SeedDb = ReturnType<typeof createSQLiteProxy>;
 const teamIds = ['team-seed-growth', 'team-seed-client'];
 const teamTemplateIds = ['team-template-growth-launch', 'team-template-client-reporting'];
 const optionalDate = (value: unknown) => typeof value === 'number' ? new Date(value) : null;
+const sqliteTimestamp = (date: Date) => date.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
 const users = (rows: readonly Record<string, unknown>[]) => rows.map((row) => ({
   ...row,
+  displayUsername: row.display_username ?? null,
   email_verified: Boolean(row.email_verified),
   auth_created_at: optionalDate(row.auth_created_at),
   auth_updated_at: optionalDate(row.auth_updated_at),
@@ -63,14 +65,20 @@ export async function cleanupTestDataSeed(db: SeedDb) {
   }
 }
 
-export async function applyTestDataSeed(db: SeedDb) {
+export async function applyTestDataSeed(db: SeedDb, now = new Date()) {
   await cleanupTestDataSeed(db);
-  await db.insert(schema.users).values(users(testData.users));
-  await db.insert(schema.account).values(accounts(testData.account));
+  const timestamp = sqliteTimestamp(now);
+  await db.insert(schema.users).values(users(testData.users).map((row) => ({ ...row, created_at: timestamp })));
+  await db.insert(schema.account).values(accounts(testData.account).map((row) => ({ ...row, createdAt: now, updatedAt: now })));
   await db.insert(schema.entitlement_overrides).values(testData.entitlement_overrides as typeof schema.entitlement_overrides.$inferInsert[]);
   await db.insert(schema.teams).values(testData.teams as typeof schema.teams.$inferInsert[]);
   await db.insert(schema.team_members).values(testData.team_members as typeof schema.team_members.$inferInsert[]);
-  await db.insert(schema.team_invites).values(testData.team_invites as typeof schema.team_invites.$inferInsert[]);
+  await db.insert(schema.team_invites).values(testData.team_invites.map((invite) => ({
+    ...invite,
+    expires_at: sqliteTimestamp(new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)),
+    created_at: sqliteTimestamp(new Date(now.getTime() - 12 * 60 * 60 * 1000)),
+    updated_at: sqliteTimestamp(new Date(now.getTime() - 12 * 60 * 60 * 1000)),
+  })) as typeof schema.team_invites.$inferInsert[]);
   await db.insert(schema.team_entitlement_overrides).values(testData.team_entitlement_overrides as typeof schema.team_entitlement_overrides.$inferInsert[]);
   await db.insert(schema.templates).values(templates(testData.templates));
   await db.insert(schema.template_versions).values(testData.template_versions as typeof schema.template_versions.$inferInsert[]);
@@ -80,33 +88,35 @@ export async function applyTestDataSeed(db: SeedDb) {
   await db.insert(schema.usage_analytics).values(testData.usage_analytics as typeof schema.usage_analytics.$inferInsert[]);
 }
 
-export async function applyOfficialTemplatesSeed(db: SeedDb) {
-  await db.insert(schema.users).values(users(officialTemplates.users)).onConflictDoNothing();
-  await db.insert(schema.templates).values(templates(officialTemplates.templates)).onConflictDoNothing();
+export async function applyOfficialTemplatesSeed(db: SeedDb, now = new Date()) {
+  const timestamp = sqliteTimestamp(now);
+  await db.insert(schema.users).values(users(officialTemplates.users).map((row) => ({ ...row, created_at: timestamp }))).onConflictDoNothing();
+  await db.insert(schema.templates).values(templates(officialTemplates.templates).map((row) => ({ ...row, created_at: timestamp }))).onConflictDoNothing();
 }
 
-export async function applyOfficialLocalLoginSeed(db: SeedDb) {
+export async function applyOfficialLocalLoginSeed(db: SeedDb, now = new Date()) {
   const account = accounts(officialLogin.account)[0];
   const user = users(officialLogin.users)[0];
   const entitlement = officialLogin.entitlement_overrides[0] as typeof schema.entitlement_overrides.$inferInsert;
   await db.delete(schema.account).where(and(eq(schema.account.userId, 'serp-user'), eq(schema.account.providerId, 'credential')));
-  await db.insert(schema.account).values(account);
+  await db.insert(schema.account).values({ ...account, createdAt: now, updatedAt: now });
   await db.update(schema.users).set({
     password_hash: user.password_hash,
     email_verified: user.email_verified,
-    auth_updated_at: user.auth_updated_at,
-    updated_at: user.updated_at,
+    auth_updated_at: now,
+    updated_at: sqliteTimestamp(now),
   }).where(eq(schema.users.id, 'serp-user'));
-  await db.insert(schema.entitlement_overrides).values(entitlement).onConflictDoUpdate({
+  const currentEntitlement = { ...entitlement, created_at: sqliteTimestamp(now), updated_at: sqliteTimestamp(now) };
+  await db.insert(schema.entitlement_overrides).values(currentEntitlement).onConflictDoUpdate({
     target: schema.entitlement_overrides.user_id,
-    set: { plan: entitlement.plan, expires_at: entitlement.expires_at, note: entitlement.note, updated_at: entitlement.updated_at },
+    set: { plan: currentEntitlement.plan, expires_at: currentEntitlement.expires_at, note: currentEntitlement.note, updated_at: currentEntitlement.updated_at },
   });
 }
 
-export async function applyAllLocalSeeds(db: SeedDb) {
-  await applyTestDataSeed(db);
-  await applyOfficialTemplatesSeed(db);
-  await applyOfficialLocalLoginSeed(db);
+export async function applyAllLocalSeeds(db: SeedDb, now = new Date()) {
+  await applyTestDataSeed(db, now);
+  await applyOfficialTemplatesSeed(db, now);
+  await applyOfficialLocalLoginSeed(db, now);
 }
 
 export async function applyRouteCoverageSeed(db: SeedDb) {

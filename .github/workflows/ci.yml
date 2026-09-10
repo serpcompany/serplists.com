@@ -48,7 +48,15 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
       - name: Unit tests
-        run: pnpm run test:unit
+        run: pnpm exec vitest run --config vitest.unit.config.ts --reporter=default --reporter=junit --outputFile.junit=tmp/data-reports/ci/unit.junit.xml
+      - name: Upload quality test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: quality-tests-${{ github.run_id }}
+          path: tmp/data-reports/ci/unit.junit.xml
+          if-no-files-found: error
+          retention-days: 90
 
   database:
     name: Required / Database
@@ -80,9 +88,9 @@ jobs:
       - name: Verify generated schema snapshot
         run: pnpm run db:schema:snapshot:check
       - name: Fast Drizzle database tests
-        run: pnpm run test:database:fast
+        run: pnpm exec vitest run --config vitest.fast-database.config.ts --reporter=default --reporter=junit --outputFile.junit=tmp/data-reports/ci/fast-database.junit.xml
       - name: Process and driver integration tests
-        run: pnpm run test:process
+        run: pnpm exec vitest run --config vitest.process.config.ts --reporter=default --reporter=junit --outputFile.junit=tmp/data-reports/ci/process-driver.junit.xml
       - name: Upload database evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

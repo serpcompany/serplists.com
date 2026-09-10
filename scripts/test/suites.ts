@@ -20,11 +20,12 @@ export const d1BrowserRecoveryFiles = [
   'scripts/data/invariant-capture-wrangler.test.mjs',
   'scripts/data/post-schema-local-d1.test.ts',
   'scripts/data/source-schema-local-d1.test.ts',
+  'tests/unit/functions/sitemap.test.ts',
+  'tests/unit/functions/sitemap-migrations.test.ts',
 ] as const;
 
 export const fastDatabaseFiles = [
   'tests/fast-database/**/*.test.{ts,tsx,mjs}',
-  'tests/unit/functions/sitemap.test.ts',
 ] as const;
 
 export const unitFiles = [
@@ -35,5 +36,7 @@ export const unitFiles = [
 
 export const processDriverFiles = [
   'scripts/**/*.test.{ts,tsx,mjs}',
+  'tests/unit/scripts/data/**/*.test.{ts,tsx,mjs}',
+  'tests/integration/api.test.ts',
   'tests/typecheck-gate.test.mjs',
 ] as const;

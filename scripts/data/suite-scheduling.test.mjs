@@ -43,9 +43,9 @@ describe('suite scheduling', () => {
   });
   it('gives CI Quality the unit suite and range jobs only focused integration after database success', () => {
     const jobs = yaml.load(readFileSync('.github/workflows/ci.yml', 'utf8')).jobs;
-    expect(jobs.quality.steps.filter(step => step.run === 'pnpm run test:unit')).toHaveLength(1);
-    expect(jobs.database.steps.filter(step => step.run === 'pnpm run test:database:fast')).toHaveLength(1);
-    expect(jobs.database.steps.filter(step => step.run === 'pnpm run test:process')).toHaveLength(1);
+    expect(jobs.quality.steps.filter(step => step.run?.includes('vitest.unit.config.ts') && step.run.includes('reporter=junit'))).toHaveLength(1);
+    expect(jobs.database.steps.filter(step => step.run?.includes('vitest.fast-database.config.ts') && step.run.includes('reporter=junit'))).toHaveLength(1);
+    expect(jobs.database.steps.filter(step => step.run?.includes('vitest.process.config.ts') && step.run.includes('reporter=junit'))).toHaveLength(1);
     expect(jobs['data-regressions'].needs).toContain('quality');
     expect(jobs['data-regressions'].needs).toContain('database');
     const runner = readFileSync('scripts/data/run-reviewed-range-suites.mjs', 'utf8');

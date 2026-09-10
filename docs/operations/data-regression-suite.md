@@ -100,3 +100,5 @@ directory under `tmp/data-reports/`, `tests/test-results/`,
 such as `tmp/`, `.env*`, `*.log`, `*.tmp`, `out/`, `.next/`, `coverage/`, and
 `.codex/` are not trusted. The smoke wrapper removes Wrangler's separate
 `.wrangler/tmp/` scratch output and reports a leak if cleanup fails.
+
+Repeated CLI launches removed for performance and their retained in-process and representative transport coverage are mapped in [`retained-process-coverage.md`](retained-process-coverage.md).
