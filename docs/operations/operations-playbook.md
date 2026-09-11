@@ -127,14 +127,14 @@ pnpm run db:migrate:d1:staging
 pnpm run check:staging:d1-schema
 ```
 
-Drizzle Kit config lives at `db/drizzle.config.ts` and expects these env vars:
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_DATABASE_ID`
-- `CLOUDFLARE_D1_TOKEN`
+Drizzle Kit config lives at `db/drizzle.config.ts` and generates migrations
+without Cloudflare credentials. Wrangler is the only D1 migration executor.
+The historical migration set does not yet include Drizzle snapshot metadata, so
+`db:generate` currently proposes a fresh baseline migration; do not apply that
+generated baseline.
 
 ```bash
 pnpm run db:generate
-pnpm run db:migrate
 ```
 
 Production schema gate:
