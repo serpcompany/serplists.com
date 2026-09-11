@@ -19,7 +19,7 @@ export const createDb = (env: Env) => drizzle(env.DB, { schema });
 ## Drizzle Kit config
 - `db/drizzle.config.ts` uses the SQLite dialect to generate migrations without Cloudflare credentials.
 - Drizzle Kit generates migration files; the explicit Wrangler Local, Staging, and Production commands apply them to D1.
-- Drizzle generation metadata uses a schema-only root baseline at `0024_safe_template_evolution`. See [D1 database operations](../operations/operations-playbook.md#d1-database) for its limitations and migration-review requirements.
+- The historical migration set does not yet include Drizzle snapshot metadata, so `db:generate` currently proposes a fresh baseline migration that must not be applied.
 
 ## Notes
 - Keep API responses in snake_case to avoid breaking the current frontend mapping.
