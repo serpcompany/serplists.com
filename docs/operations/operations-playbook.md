@@ -129,16 +129,9 @@ pnpm run check:staging:d1-schema
 
 Drizzle Kit config lives at `db/drizzle.config.ts` and generates migrations
 without Cloudflare credentials. Wrangler is the only D1 migration executor.
-`db/migrations/meta/0024_snapshot.json` is a synthetic, Drizzle-schema-only
-root baseline used for future schema diffs and migration numbering. It is not a
-complete representation of the SQL migration history. The numbered SQL files
-in `db/migrations/` remain the source of truth. SQL-only triggers, indexes, and
-foreign keys are absent from the snapshot.
-
-Every generated migration requires review. If Drizzle generates a table
-rebuild, the migration must explicitly preserve or recreate affected SQL-only
-objects before it is applied. With the schema unchanged, `db:generate` is a
-no-op; the next schema change generates migration `0025`.
+The historical migration set does not yet include Drizzle snapshot metadata, so
+`db:generate` currently proposes a fresh baseline migration; do not apply that
+generated baseline.
 
 ```bash
 pnpm run db:generate
