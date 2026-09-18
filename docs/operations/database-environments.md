@@ -9,6 +9,11 @@ deployments share the production D1 database.
 - Staging: remote D1 database named `serp-checklists-staging-db`, used by Pages preview deployments.
 - Production: remote D1 database named `serp-checklists-db`, used only by production deployments.
 
+Authentication policy is explicit in `wrangler.toml`: local and preview/staging
+set `AUTH_EMAIL_VERIFICATION_REQUIRED=false`, while production sets it to
+`true`. Do not infer the deployment environment from the request hostname;
+preview aliases and custom staging domains must behave consistently.
+
 ## Source Of Truth
 
 - Runtime schema/types: `db/schema/*.ts`.
