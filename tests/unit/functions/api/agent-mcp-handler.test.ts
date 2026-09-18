@@ -171,9 +171,32 @@ describe("personal run MCP handler", () => {
   });
 
   it("counter-offers the supported protocol version during initialization", async () => {
-    const response = await handleAgentMcp(rpcRequest("initialize", { protocolVersion: "2024-11-05" }), env);
+    const response = await handleAgentMcp(rpcRequest("initialize", {
+      protocolVersion: "2024-11-05",
+      capabilities: {},
+      clientInfo: { name: "test-client", version: "1.0.0" },
+    }), env);
     const body = await response.json() as any;
     expect(body.result.protocolVersion).toBe("2025-06-18");
+  });
+
+  it("rejects invalid request ids and incomplete initialize parameters", async () => {
+    const invalidIdRequest = rpcRequest("ping");
+    const invalidId = await handleAgentMcp(new Request(invalidIdRequest.url, {
+      method: "POST",
+      headers: invalidIdRequest.headers,
+      body: JSON.stringify({ jsonrpc: "2.0", id: { invalid: true }, method: "ping" }),
+    }), env);
+    expect(await invalidId.json()).toEqual({
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32600, message: "Invalid Request" },
+    });
+
+    const incomplete = await handleAgentMcp(rpcRequest("initialize", {
+      protocolVersion: "2025-06-18",
+    }), env);
+    expect((await incomplete.json() as any).error.code).toBe(-32602);
   });
 
   it("requires the negotiated protocol header after initialization", async () => {
@@ -308,7 +331,23 @@ describe("personal run MCP handler", () => {
 
     expect(body.result.structuredContent.templates.map((template: any) => template.id)).toEqual(["owned"]);
     expect(body.result.structuredContent.templates[0]).not.toHaveProperty("sections");
+    expect(body.result.content[0].text).toContain('"id":"owned"');
     expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, identity);
+  });
+
+  it("returns protocol errors for unknown tools and invalid tool arguments", async () => {
+    const unknownResponse = await handleAgentMcp(callTool("not_a_tool"), env);
+    const unknown = await unknownResponse.json() as any;
+    expect(unknown.error).toEqual({
+      code: -32602,
+      message: "Unknown tool: not_a_tool",
+      data: { code: "tool_not_found" },
+    });
+
+    const invalidResponse = await handleAgentMcp(callTool("get_run", {}), env);
+    const invalid = await invalidResponse.json() as any;
+    expect(invalid.error.code).toBe(-32602);
+    expect(invalid.error.data.code).toBe("invalid_arguments");
   });
 
   it("starts a persistent personal run from an owned template snapshot", async () => {
