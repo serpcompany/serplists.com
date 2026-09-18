@@ -5,7 +5,7 @@ import { users } from "./users";
 export const personal_run_keys = sqliteTable(
   "personal_run_keys",
   {
-    id: text("id"),
+    id: text("id").notNull(),
     user_id: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     key_prefix: text("key_prefix").notNull(),

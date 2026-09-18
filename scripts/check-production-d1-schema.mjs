@@ -1,9 +1,13 @@
 import { execFileSync } from "node:child_process";
 import {
+  REQUIRED_D1_COLUMN_CONSTRAINTS,
+  REQUIRED_D1_FOREIGN_KEYS,
   REQUIRED_D1_INDEXES,
   REQUIRED_D1_SCHEMA,
   diffD1Schema,
   formatSchemaDrift,
+  mapColumnConstraintPragmaResults,
+  mapForeignKeyPragmaResults,
   mapIndexPragmaResults,
   mapPragmaResults,
 } from "./check-production-d1-schema-lib.mjs";
@@ -33,6 +37,9 @@ const pragmaCommand = tableNames
 const indexPragmaCommand = tableNames
   .map((tableName) => `pragma index_list('${tableName}');`)
   .join(" ");
+const foreignKeyPragmaCommand = tableNames
+  .map((tableName) => `pragma foreign_key_list('${tableName}');`)
+  .join(" ");
 
 function runWranglerPragmas() {
   const stdout = execFileSync(
@@ -47,7 +54,7 @@ function runWranglerPragmas() {
       ...(usePreviewDatabase ? ["--preview"] : []),
       "--json",
       "--command",
-      `${pragmaCommand} ${indexPragmaCommand}`,
+      `${pragmaCommand} ${indexPragmaCommand} ${foreignKeyPragmaCommand}`,
     ],
     {
       cwd: process.cwd(),
@@ -64,15 +71,30 @@ function runWranglerPragmas() {
 try {
   const wranglerResults = runWranglerPragmas();
   const tablePragmaResults = wranglerResults.slice(0, tableNames.length);
-  const indexPragmaResults = wranglerResults.slice(tableNames.length);
+  const indexPragmaResults = wranglerResults.slice(tableNames.length, tableNames.length * 2);
+  const foreignKeyPragmaResults = wranglerResults.slice(tableNames.length * 2);
   const actualSchemaByTable = mapPragmaResults(tableNames, tablePragmaResults);
+  const actualColumnConstraintsByTable = mapColumnConstraintPragmaResults(tableNames, tablePragmaResults);
   const actualIndexesByTable = mapIndexPragmaResults(tableNames, indexPragmaResults);
-  const diff = diffD1Schema(REQUIRED_D1_SCHEMA, actualSchemaByTable, REQUIRED_D1_INDEXES, actualIndexesByTable);
+  const actualForeignKeysByTable = mapForeignKeyPragmaResults(tableNames, foreignKeyPragmaResults);
+  const diff = diffD1Schema(
+    REQUIRED_D1_SCHEMA,
+    actualSchemaByTable,
+    REQUIRED_D1_INDEXES,
+    actualIndexesByTable,
+    REQUIRED_D1_COLUMN_CONSTRAINTS,
+    actualColumnConstraintsByTable,
+    REQUIRED_D1_FOREIGN_KEYS,
+    actualForeignKeysByTable,
+  );
   const hasDrift =
     diff.missingTables.length > 0 ||
     Object.keys(diff.missingColumns).length > 0 ||
     Object.keys(diff.missingIndexes).length > 0 ||
-    Object.keys(diff.invalidIndexes).length > 0;
+    Object.keys(diff.invalidIndexes).length > 0 ||
+    Object.keys(diff.invalidColumns).length > 0 ||
+    Object.keys(diff.missingForeignKeys).length > 0 ||
+    Object.keys(diff.invalidForeignKeys).length > 0;
 
   if (hasDrift) {
     console.error(formatSchemaDrift(diff, `${environmentLabel}:${databaseName}`));

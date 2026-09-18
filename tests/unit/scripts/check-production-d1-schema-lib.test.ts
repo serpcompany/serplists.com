@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   diffD1Schema,
   formatSchemaDrift,
+  mapColumnConstraintPragmaResults,
+  mapForeignKeyPragmaResults,
   mapIndexPragmaResults,
   mapPragmaResults,
 } from "../../../scripts/check-production-d1-schema-lib.mjs";
@@ -54,6 +56,29 @@ describe("mapIndexPragmaResults", () => {
   });
 });
 
+describe("constraint pragma mapping", () => {
+  it("maps column and foreign-key constraints", () => {
+    expect(mapColumnConstraintPragmaResults(
+      ["personal_run_keys"],
+      [{ results: [{ name: "id", notnull: 1, pk: 1 }, { name: "name", notnull: 1, pk: 0 }] }],
+    )).toEqual({
+      personal_run_keys: {
+        id: { notNull: true, primaryKey: true },
+        name: { notNull: true, primaryKey: false },
+      },
+    });
+
+    expect(mapForeignKeyPragmaResults(
+      ["personal_run_keys"],
+      [{ results: [{ table: "users", from: "user_id", to: "id", on_delete: "cascade" }] }],
+    )).toEqual({
+      personal_run_keys: [
+        { from: "user_id", table: "users", to: "id", onDelete: "CASCADE" },
+      ],
+    });
+  });
+});
+
 describe("diffD1Schema", () => {
   it("reports missing tables and missing columns", () => {
     const diff = diffD1Schema(
@@ -77,6 +102,9 @@ describe("diffD1Schema", () => {
       },
       missingIndexes: {},
       invalidIndexes: {},
+      invalidColumns: {},
+      missingForeignKeys: {},
+      invalidForeignKeys: {},
     });
   });
 
@@ -95,6 +123,9 @@ describe("diffD1Schema", () => {
       missingColumns: {},
       missingIndexes: {},
       invalidIndexes: {},
+      invalidColumns: {},
+      missingForeignKeys: {},
+      invalidForeignKeys: {},
     });
   });
 
@@ -133,6 +164,32 @@ describe("diffD1Schema", () => {
           },
         ],
       },
+      invalidColumns: {},
+      missingForeignKeys: {},
+      invalidForeignKeys: {},
+    });
+  });
+
+  it("reports invalid primary-key nullability and cascade behavior", () => {
+    const diff = diffD1Schema(
+      { personal_run_keys: ["id", "user_id"] },
+      { personal_run_keys: ["id", "user_id"] },
+      {},
+      {},
+      { personal_run_keys: { id: { notNull: true, primaryKey: true } } },
+      { personal_run_keys: { id: { notNull: false, primaryKey: true } } },
+      { personal_run_keys: [{ from: "user_id", table: "users", to: "id", onDelete: "CASCADE" }] },
+      { personal_run_keys: [{ from: "user_id", table: "users", to: "id", onDelete: "NO ACTION" }] },
+    );
+
+    expect(diff.invalidColumns).toEqual({
+      personal_run_keys: [{ name: "id", issues: ["expected NOT NULL"] }],
+    });
+    expect(diff.invalidForeignKeys).toEqual({
+      personal_run_keys: [{
+        name: "user_id->users.id",
+        issues: ["expected ON DELETE CASCADE"],
+      }],
     });
   });
 });
@@ -157,6 +214,13 @@ describe("formatSchemaDrift", () => {
             },
           ],
         },
+        invalidColumns: {
+          personal_run_keys: [{ name: "id", issues: ["expected NOT NULL"] }],
+        },
+        missingForeignKeys: {
+          personal_run_keys: ["user_id->users.id"],
+        },
+        invalidForeignKeys: {},
       },
       "serp-checklists-db",
     );
@@ -167,6 +231,8 @@ describe("formatSchemaDrift", () => {
     expect(message).toContain("- checklist_runs: missing columns share_token, share_used_at");
     expect(message).toContain("- team_members: missing indexes idx_team_members_active_owner_unique");
     expect(message).toContain("- team_invites: invalid index idx_team_invites_token_hash_unique (expected unique)");
+    expect(message).toContain("- personal_run_keys: invalid column id (expected NOT NULL)");
+    expect(message).toContain("- personal_run_keys: missing foreign keys user_id->users.id");
     expect(message).toContain("Apply the required checked-in D1 migrations before deploying.");
   });
 });
