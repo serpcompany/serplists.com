@@ -51,6 +51,15 @@ const getRunArgs = z.object({
   runId: z.string().trim().min(1),
 }).strict();
 
+const initializeArgs = z.object({
+  protocolVersion: z.string().trim().min(1),
+  capabilities: z.record(z.unknown()),
+  clientInfo: z.object({
+    name: z.string().trim().min(1),
+    version: z.string().trim().min(1),
+  }).passthrough(),
+}).passthrough();
+
 const updateRunArgs = z.discriminatedUnion("operation", [
   z.object({
     runId: z.string().trim().min(1),
@@ -207,8 +216,9 @@ function rpcError(id: JsonRpcId, code: number, message: string, data?: unknown, 
 }
 
 function toolResult(id: JsonRpcId, structuredContent: JsonRecord, text: string, isError = false): Response {
+  const textContent = `${text}\n\n${JSON.stringify(structuredContent)}`;
   return rpcResult(id, {
-    content: [{ type: "text", text }],
+    content: [{ type: "text", text: textContent }],
     structuredContent,
     ...(isError ? { isError: true } : {}),
   });
@@ -795,6 +805,13 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     return rpcError(isRecord(payload) && (typeof payload.id === "string" || typeof payload.id === "number") ? payload.id : null, -32600, "Invalid Request");
   }
 
+  if (Object.prototype.hasOwnProperty.call(payload, "id")
+    && payload.id !== null
+    && typeof payload.id !== "string"
+    && typeof payload.id !== "number") {
+    return rpcError(null, -32600, "Invalid Request");
+  }
+
   const id: JsonRpcId = typeof payload.id === "string" || typeof payload.id === "number" || payload.id === null
     ? payload.id
     : null;
@@ -811,6 +828,10 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
   }
 
   if (payload.method === "initialize") {
+    const initialize = initializeArgs.safeParse(payload.params);
+    if (!initialize.success) {
+      return rpcError(id, -32602, initialize.error.issues[0]?.message ?? "Invalid initialize parameters");
+    }
     return rpcResult(id, {
       protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: { tools: { listChanged: false } },
@@ -838,6 +859,12 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
       return toolResult(id, data, text);
     } catch (error) {
       if (error instanceof ToolError) {
+        if (error.code === "invalid_arguments" || error.code === "tool_not_found") {
+          return rpcError(id, -32602, error.message, {
+            code: error.code,
+            ...(error.details ? { details: error.details } : {}),
+          });
+        }
         return toolResult(id, {
           error: error.code,
           message: error.message,
