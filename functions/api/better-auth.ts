@@ -106,7 +106,10 @@ function isProductionAuthRequest(env: Env, request: Request): boolean {
 
 export function getAuthEmailPolicy(env: Env, request: Request) {
   const emailAuthAvailable = isAuthEmailConfigured(env);
-  const emailVerificationRequired = emailAuthAvailable || isProductionAuthRequest(env, request);
+  const configuredRequirement = env.AUTH_EMAIL_VERIFICATION_REQUIRED;
+  const emailVerificationRequired = configuredRequirement
+    ? configuredRequirement === "true"
+    : emailAuthAvailable || isProductionAuthRequest(env, request);
 
   return {
     accountRegistrationAvailable: emailAuthAvailable || !emailVerificationRequired,
