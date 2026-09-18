@@ -24,6 +24,7 @@ jobs:
       # Cloudflare Pages project names are not secrets. This must be the Pages
       # Project Name, not the pages.dev domain or the wrangler.toml `name`.
       CLOUDFLARE_PAGES_PROJECT: serplists-com
+      VITE_PERSONAL_RUN_MCP_ENABLED: ${{ github.ref_name == 'staging' && 'true' || 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5

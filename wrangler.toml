@@ -8,9 +8,11 @@ AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
 
 [env.preview.vars]
 AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
+PERSONAL_RUN_MCP_ENABLED = "true"
 
 [env.production.vars]
 AUTH_EMAIL_VERIFICATION_REQUIRED = "true"
+PERSONAL_RUN_MCP_ENABLED = "false"
 
 # Local development and production D1 binding. Preview deployments must not use
 # this database. After creating the staging D1 database, paste its UUID into
