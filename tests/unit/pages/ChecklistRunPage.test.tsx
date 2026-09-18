@@ -79,6 +79,10 @@ describe('ChecklistRunPage layout', () => {
               id: 'audit-1',
               action: 'checklist_run.created',
               actor: { name: 'Jane Runner' },
+              metadata: {
+                source: 'mcp',
+                personalRunKeyName: 'Codex SOP Runner',
+              },
               createdAt: '2026-07-03T12:00:00.000Z',
             },
           ],
@@ -123,7 +127,7 @@ describe('ChecklistRunPage layout', () => {
     expect(html).toContain('Overall Progress');
     expect(html).toContain('Changelog');
     expect(html).toContain('Created run');
-    expect(html).toContain('Jane Runner');
+    expect(html).toContain('Codex SOP Runner via MCP · authorized by Jane Runner');
     expect(html).toContain('Share');
     expect(html).toContain('Task 1 of 1');
     expect(html).toContain('Mark Complete');

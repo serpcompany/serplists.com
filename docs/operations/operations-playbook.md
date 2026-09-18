@@ -67,6 +67,8 @@ Set these in Cloudflare Pages (production) or `.dev.vars` (local):
 - `R2_PUBLIC_BASE_URL` (optional; used to generate public file URLs)
 - `FRONTEND_URL` (optional; when set, used as a CORS allowlist origin)
 - `CORS_ALLOWED_ORIGINS` (optional; comma-separated CORS allowlist origins)
+- `PERSONAL_RUN_MCP_ENABLED` (optional; set to `true` to enable Personal Run Key API/MCP routes on a remote environment; defaults on only for localhost)
+- `VITE_PERSONAL_RUN_MCP_ENABLED` (optional build-time UI flag; set to `true` together with the server flag for a remote trial)
 
 Local env policy:
 - Use `.dev.vars` as the single local env source.

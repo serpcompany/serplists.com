@@ -6,6 +6,8 @@ import { authClient } from '@/lib/auth-client';
 import { SecuritySection } from '@/components/account/SecuritySection';
 import { BillingSection } from '@/components/account/BillingSection';
 import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
+import { AgentAccessSection } from '@/components/account/AgentAccessSection';
+import { isPersonalRunMcpUiEnabled } from '@/env';
 import { useSearchParams } from 'react-router-dom';
 import { buildAccountUpdatePayload } from './accountProfileUpdates';
 import {
@@ -131,6 +133,8 @@ const Account = () => {
         />
 
         <BillingSection />
+
+        {isPersonalRunMcpUiEnabled() ? <AgentAccessSection /> : null}
 
         <TeamSettingsSection />
 

@@ -17,7 +17,10 @@ import { handleBilling } from './handlers/billing';
 import { handleAdmin } from './handlers/admin';
 import { handleTeams } from './handlers/teams';
 import { handleGenerateTemplateFromClipy } from './handlers/clipy';
+import { handleAgentKeys } from './handlers/agent-keys';
+import { handleAgentMcp } from './handlers/agentMcp';
 import { jsonError } from './utils/response';
+import { isPersonalRunMcpEnabled, isPersonalRunMcpPath } from './utils/personal-run-mcp-feature';
 
 const blockedTestEmailDomains = new Set(['serplists.dev', 'serp-checklists.dev']);
 
@@ -104,6 +107,11 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
   let response: Response;
   
   try {
+    if (isPersonalRunMcpPath(path) && !isPersonalRunMcpEnabled(env, url)) {
+      response = jsonError('Not found', 404);
+      return finalize(response);
+    }
+
     try {
       getApiEnv(env);
     } catch (error) {
@@ -142,7 +150,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       const isAuth = path.startsWith('auth/');
       const isSensitiveWrite =
         (request.method === 'POST' || request.method === 'PUT' || request.method === 'DELETE') &&
-        (path.startsWith('templates') || path.startsWith('checklists') || path.startsWith('uploads') || path.startsWith('teams'));
+        (path.startsWith('templates') || path.startsWith('checklists') || path.startsWith('uploads') || path.startsWith('teams') || path === 'agent-keys' || path.startsWith('agent-keys/') || path === 'mcp');
 
       if (isAuth) {
         const limit = isLocalRequest(url)
@@ -223,6 +231,10 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       response = await handleProfileById(request, env);
     } else if (path === 'templates/generate-from-clipy') {
       response = await handleGenerateTemplateFromClipy(request, env);
+    } else if (path === 'agent-keys' || path.startsWith('agent-keys/')) {
+      response = await handleAgentKeys(request, env);
+    } else if (path === 'mcp') {
+      response = await handleAgentMcp(request, env);
     } else if (path.startsWith('templates')) {
       response = await handleTemplates(request, env);
     } else if (path.startsWith('checklists')) {
