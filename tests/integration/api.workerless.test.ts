@@ -213,6 +213,43 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(data.accountRegistrationAvailable).toBe(false);
   });
 
+  it.each([
+    'https://staging.serp-checklists.pages.dev',
+    'https://staging.serplists.com',
+  ])('uses the explicit preview auth policy on %s', async (origin) => {
+    const response = await apiWorker.fetch(
+      new Request(`${origin}/api/auth/status`),
+      buildEnv({
+        AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
+        RESEND_API_KEY: undefined,
+        USESEND_API_KEY: undefined,
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.emailAuthAvailable).toBe(false);
+    expect(data.emailVerificationRequired).toBe(false);
+    expect(data.accountRegistrationAvailable).toBe(true);
+  });
+
+  it('uses the explicit production auth policy independently of hostname', async () => {
+    const response = await apiWorker.fetch(
+      new Request('https://serp-checklists.pages.dev/api/auth/status'),
+      buildEnv({
+        AUTH_EMAIL_VERIFICATION_REQUIRED: 'true',
+        RESEND_API_KEY: undefined,
+        USESEND_API_KEY: undefined,
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.emailAuthAvailable).toBe(false);
+    expect(data.emailVerificationRequired).toBe(true);
+    expect(data.accountRegistrationAvailable).toBe(false);
+  });
+
   it('enforces CORS allowlist when configured', async () => {
     const env = buildEnv({ FRONTEND_URL: 'https://app.example.com' });
 
