@@ -129,9 +129,28 @@ pnpm run check:staging:d1-schema
 
 Drizzle Kit config lives at `db/drizzle.config.ts` and generates migrations
 without Cloudflare credentials. Wrangler is the only D1 migration executor.
-The historical migration set does not yet include Drizzle snapshot metadata, so
-`db:generate` currently proposes a fresh baseline migration; do not apply that
-generated baseline.
+
+The database contract has two explicit owners:
+
+- `db/schema/` owns the tables, columns, defaults, constraints, foreign keys,
+  and indexes that Drizzle can represent.
+- `db/migrations/` owns the ordered D1 migration history. SQL-only objects that
+  Drizzle cannot represent, currently the sitemap triggers, are also recorded
+  in `db/sql-only-schema.json`.
+
+After changing either contract, run the isolated parity check. It replays every
+D1 migration into a temporary local database, generates the Drizzle baseline
+into a second temporary database, and compares their catalogs. It never reads
+or writes Staging or Production.
+
+```bash
+pnpm run check:db:drizzle-parity
+```
+
+The historical migration set does not yet include Drizzle snapshot metadata,
+so `db:generate` currently proposes a fresh baseline migration. Do not apply or
+commit that generated baseline. Snapshot initialization is a separate task that
+must first pass the parity check above.
 
 ```bash
 pnpm run db:generate
