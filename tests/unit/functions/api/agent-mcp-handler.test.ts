@@ -7,7 +7,7 @@ const dbMocks = vi.hoisted(() => {
     orderBy: vi.fn(),
     limit: vi.fn(),
   };
-  const insertChain = { values: vi.fn() };
+  const insertChain = { values: vi.fn(), select: vi.fn() };
   const updateChain = { set: vi.fn(), where: vi.fn() };
   const db = {
     select: vi.fn(() => selectChain),
@@ -22,6 +22,7 @@ vi.mock("drizzle-orm/d1", () => ({ drizzle: vi.fn(() => dbMocks.db) }));
 
 vi.mock("@functions/api/utils/personal-run-key", () => ({
   authenticatePersonalRunKey: vi.fn(),
+  markPersonalRunKeyUsed: vi.fn(),
 }));
 
 vi.mock("@functions/api/utils/entitlements", () => ({
@@ -31,6 +32,7 @@ vi.mock("@functions/api/utils/entitlements", () => ({
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
+import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 
 const identity = { keyId: "key-1", userId: "user-1", name: "Codex" };
 const env = { DB: {} } as any;
@@ -38,7 +40,12 @@ const env = { DB: {} } as any;
 function rpcRequest(method: string, params?: unknown, id: number | undefined = 1): Request {
   return new Request("http://localhost/api/mcp", {
     method: "POST",
-    headers: { Authorization: "Bearer test", "Content-Type": "application/json" },
+    headers: {
+      Authorization: "Bearer test",
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+      ...(method === "initialize" ? {} : { "MCP-Protocol-Version": "2025-06-18" }),
+    },
     body: JSON.stringify({ jsonrpc: "2.0", ...(id === undefined ? {} : { id }), method, ...(params ? { params } : {}) }),
   });
 }
@@ -92,10 +99,12 @@ describe("personal run MCP handler", () => {
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockReturnValue({ kind: "insert" });
+    dbMocks.insertChain.select.mockReturnValue({ kind: "conditional-insert" });
     dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockResolvedValue({ meta: { changes: 1 } });
+    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
     dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
     vi.mocked(authenticatePersonalRunKey).mockResolvedValue(identity);
+    vi.mocked(markPersonalRunKeyUsed).mockResolvedValue();
     vi.mocked(getEntitlementsForUser).mockResolvedValue({
       plan: "pro",
       limits: { maxTemplates: null, maxActiveRuns: null },
@@ -111,10 +120,103 @@ describe("personal run MCP handler", () => {
     expect(body.error.message).toBe("Unauthorized");
   });
 
+  it("rejects non-POST methods before authentication", async () => {
+    const response = await handleAgentMcp(new Request("http://localhost/api/mcp"), env);
+    expect(response.status).toBe(405);
+    expect(response.headers.get("Allow")).toBe("POST");
+    expect(authenticatePersonalRunKey).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ "Content-Type": "text/plain", Accept: "application/json, text/event-stream" }, 415],
+    [{ "Content-Type": "application/json", Accept: "application/json" }, 406],
+    [{ "Content-Type": "application/json", Accept: "application/json, text/event-stream", "Content-Length": "1048577" }, 413],
+  ])("rejects invalid transport headers", async (extraHeaders, expectedStatus) => {
+    const response = await handleAgentMcp(new Request("http://localhost/api/mcp", {
+      method: "POST",
+      headers: { Authorization: "Bearer test", ...extraHeaders },
+      body: "{}",
+    }), env);
+    expect(response.status).toBe(expectedStatus);
+    expect(authenticatePersonalRunKey).not.toHaveBeenCalled();
+  });
+
+  it("rejects cross-origin browser requests and mismatched hosts", async () => {
+    const disallowedOrigin = new Request("https://staging.serplists.com/api/mcp", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer test",
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+        Origin: "https://evil.example",
+      },
+      body: "{}",
+    });
+    expect((await handleAgentMcp(disallowedOrigin, {
+      ...env,
+      FRONTEND_URL: "https://staging.serplists.com",
+    })).status).toBe(403);
+
+    const mismatchedHost = new Request("https://staging.serplists.com/api/mcp", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer test",
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+        Host: "evil.example",
+      },
+      body: "{}",
+    });
+    expect((await handleAgentMcp(mismatchedHost, env)).status).toBe(403);
+  });
+
+  it("counter-offers the supported protocol version during initialization", async () => {
+    const response = await handleAgentMcp(rpcRequest("initialize", { protocolVersion: "2024-11-05" }), env);
+    const body = await response.json() as any;
+    expect(body.result.protocolVersion).toBe("2025-06-18");
+  });
+
+  it("requires the negotiated protocol header after initialization", async () => {
+    const response = await handleAgentMcp(new Request("http://localhost/api/mcp", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer test",
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    }), env);
+    const body = await response.json() as any;
+    expect(response.status).toBe(400);
+    expect(body.error.code).toBe(-32600);
+    expect(body.error.message).toContain("MCP-Protocol-Version");
+  });
+
+  it("returns safe JSON-RPC errors for malformed and unexpected requests", async () => {
+    const malformed = rpcRequest("ping");
+    const malformedResponse = await handleAgentMcp(new Request(malformed.url, {
+      method: "POST",
+      headers: malformed.headers,
+      body: "{broken",
+    }), env);
+    expect((await malformedResponse.json() as any).error.code).toBe(-32700);
+
+    dbMocks.selectChain.orderBy.mockRejectedValueOnce(new Error("sensitive database detail"));
+    const failed = await handleAgentMcp(callTool("list_templates"), env);
+    const body = await failed.json() as any;
+    expect(body.error).toEqual({ code: -32603, message: "Internal error" });
+    expect(JSON.stringify(body)).not.toContain("sensitive");
+  });
+
   it("accepts authenticated notifications with an empty 202 response", async () => {
     const request = new Request("http://localhost/api/mcp", {
       method: "POST",
-      headers: { Authorization: "Bearer test", "Content-Type": "application/json" },
+      headers: {
+        Authorization: "Bearer test",
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+        "MCP-Protocol-Version": "2025-06-18",
+      },
       body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
     });
     const response = await handleAgentMcp(request, env);
@@ -160,6 +262,14 @@ describe("personal run MCP handler", () => {
       },
     ]);
     expect(updateRun.inputSchema.oneOf.every((branch: any) => branch.additionalProperties === false)).toBe(true);
+    expect(body.result.tools.map((tool: any) => tool.annotations)).toEqual([
+      { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    ]);
+    expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
   });
 
   it("does not expose another user's or a team's templates", async () => {
@@ -197,6 +307,8 @@ describe("personal run MCP handler", () => {
     const body = await response.json() as any;
 
     expect(body.result.structuredContent.templates.map((template: any) => template.id)).toEqual(["owned"]);
+    expect(body.result.structuredContent.templates[0]).not.toHaveProperty("sections");
+    expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, identity);
   });
 
   it("starts a persistent personal run from an owned template snapshot", async () => {
@@ -283,11 +395,12 @@ describe("personal run MCP handler", () => {
       details: { expectedRevision: 4, currentRevision: 5 },
     }));
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+    expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
   });
 
   it("does not write an audit event when the conditional revision update loses a race", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 5 })]);
-    dbMocks.updateChain.where.mockResolvedValueOnce({ meta: { changes: 0 } });
+    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
 
     const response = await handleAgentMcp(callTool("update_run", {
       runId: "run-1",
@@ -301,7 +414,11 @@ describe("personal run MCP handler", () => {
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent.error).toBe("edit_conflict");
     expect(dbMocks.updateChain.set).toHaveBeenCalledOnce();
-    expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+    expect(dbMocks.db.batch).toHaveBeenCalledOnce();
+    expect(dbMocks.db.batch.mock.calls[0][0]).toEqual([
+      { kind: "conditional-insert" },
+      dbMocks.updateChain,
+    ]);
   });
 
   it("matches the checklist endpoint when reopening a completed run", async () => {
@@ -329,6 +446,69 @@ describe("personal run MCP handler", () => {
     const updates = dbMocks.updateChain.set.mock.calls[0][0];
     expect(updates).not.toHaveProperty("completed_at");
     expect(updates).not.toHaveProperty("completed_by_user_id");
+  });
+
+  it("rejects an impossible atomic batch result as an internal invariant", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
+    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 0 } }]);
+
+    const response = await handleAgentMcp(callTool("update_run", {
+      runId: "run-1",
+      expectedRevision: 2,
+      operation: "set_task_notes",
+      taskId: "task-1",
+      notes: "Evidence",
+    }), env);
+    const body = await response.json() as any;
+
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent).toEqual(expect.objectContaining({
+      error: "internal_invariant",
+      message: "Unable to update the run safely",
+    }));
+    expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
+  });
+
+  it("returns a generic internal error when an atomic batch throws", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
+    dbMocks.db.batch.mockRejectedValueOnce(new Error("audit constraint secret"));
+
+    const response = await handleAgentMcp(callTool("update_run", {
+      runId: "run-1",
+      expectedRevision: 2,
+      operation: "set_task_notes",
+      taskId: "task-1",
+      notes: "Evidence",
+    }), env);
+    expect(await response.json()).toEqual({
+      jsonrpc: "2.0",
+      id: 1,
+      error: { code: -32603, message: "Internal error" },
+    });
+    expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
+  });
+
+  it("bounds oversized structured tool results", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
+      items: JSON.stringify([{ id: "section-1", items: [{ id: "task-1", notes: "x".repeat(600_000) }] }]),
+    })]);
+
+    const response = await handleAgentMcp(callTool("get_run", { runId: "run-1" }), env);
+    const body = await response.json() as any;
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent.error).toBe("result_too_large");
+    expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
+  });
+
+  it("applies a process-local request limit per key", async () => {
+    vi.mocked(authenticatePersonalRunKey).mockResolvedValue({ ...identity, keyId: "rate-limited-key" });
+    for (let index = 0; index < 120; index += 1) {
+      const response = await handleAgentMcp(rpcRequest("ping", undefined, index + 1), env);
+      expect(response.status).toBe(200);
+    }
+    const limited = await handleAgentMcp(rpcRequest("ping", undefined, 999), env);
+    expect(limited.status).toBe(429);
+    expect(Number(limited.headers.get("Retry-After"))).toBeGreaterThan(0);
   });
 
   it("hides a personal run owned by another user", async () => {
