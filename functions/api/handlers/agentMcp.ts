@@ -278,13 +278,19 @@ function requestHostIsSafe(request: Request, env: Env): boolean {
   const requestUrl = new URL(request.url);
   if (host && host.toLowerCase() !== requestUrl.host.toLowerCase()) return false;
 
+  if (
+    requestUrl.hostname === "localhost"
+    || requestUrl.hostname === "127.0.0.1"
+    || requestUrl.hostname === "[::1]"
+  ) {
+    return true;
+  }
+
   const allowedHosts = new Set(
     Array.from(configuredOrigins(env), (origin) => new URL(origin).host.toLowerCase()),
   );
   if (allowedHosts.size > 0) return allowedHosts.has(requestUrl.host.toLowerCase());
-  return requestUrl.hostname === "localhost"
-    || requestUrl.hostname === "127.0.0.1"
-    || requestUrl.hostname === "[::1]";
+  return false;
 }
 
 function rateLimit(identity: PersonalRunKeyIdentity): { allowed: true } | { allowed: false; retryAfter: number } {
