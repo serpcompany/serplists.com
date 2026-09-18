@@ -68,9 +68,23 @@ const formatRunHistoryTime = (value?: string): string => {
   });
 };
 
-const getRunHistoryActorName = (
-  actor?: TemplateHistoryEvent['actor'],
-): string => actor?.name || actor?.username || actor?.email || 'Unknown user';
+const getRunHistoryActorName = (entry: TemplateHistoryEvent): string => {
+  const humanName = entry.actor?.name || entry.actor?.username || entry.actor?.email || 'Unknown user';
+  const metadata = entry.metadata;
+
+  if (
+    metadata
+    && typeof metadata === 'object'
+    && !Array.isArray(metadata)
+    && metadata.source === 'mcp'
+    && typeof metadata.personalRunKeyName === 'string'
+    && metadata.personalRunKeyName.trim()
+  ) {
+    return `${metadata.personalRunKeyName.trim()} via MCP · authorized by ${humanName}`;
+  }
+
+  return humanName;
+};
 
 const ChecklistRunPage = () => {
   const { id, shareToken } = useParams<{ id?: string; shareToken?: string }>();
@@ -678,7 +692,7 @@ const ChecklistRunPage = () => {
                               {formatRunHistoryAction(entry.action)}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {getRunHistoryActorName(entry.actor)}
+                              {getRunHistoryActorName(entry)}
                             </p>
                           </div>
                           <time className="text-xs text-muted-foreground">

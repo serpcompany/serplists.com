@@ -57,13 +57,17 @@ vi.mock('@/lib/auth-client', () => ({
 }));
 
 vi.mock('@/lib/api', () => ({
+  getAgentMcpEndpoint: () => 'http://localhost:8788/api/mcp',
   api: {
+    createAgentKey: vi.fn(),
     createBillingCheckout: vi.fn(),
     createBillingPortal: vi.fn(),
+    getAgentKeys: vi.fn().mockResolvedValue([]),
     getBillingStatus: vi.fn().mockResolvedValue({
       billingEnabled: false,
       plan: 'free',
     }),
+    revokeAgentKey: vi.fn(),
     uploadToR2: vi.fn(),
   },
 }));
