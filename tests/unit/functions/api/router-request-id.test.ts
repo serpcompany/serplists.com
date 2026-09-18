@@ -41,4 +41,37 @@ describe('API router request id propagation', () => {
     expect(data.requestId).toBe(responseRequestId);
     expect(data.requestId).not.toBe('client-provided-request-id');
   });
+
+  it('keeps personal run MCP routes off on remote hosts unless explicitly enabled', async () => {
+    const handleAgentMcp = vi.fn(() => Response.json({ ok: true }));
+    vi.doMock('../../../../functions/api/handlers/agentMcp', () => ({ handleAgentMcp }));
+
+    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const response = await apiWorker.fetch(
+      new Request('https://staging.serplists.com/api/mcp', { method: 'POST' }),
+      {} as any,
+    );
+
+    expect(response.status).toBe(404);
+    expect(handleAgentMcp).not.toHaveBeenCalled();
+  });
+
+  it('allows explicit remote enablement and explicit local disablement', async () => {
+    const handleAgentMcp = vi.fn(() => Response.json({ ok: true }));
+    vi.doMock('../../../../functions/api/handlers/agentMcp', () => ({ handleAgentMcp }));
+
+    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const enabledResponse = await apiWorker.fetch(
+      new Request('https://staging.serplists.com/api/mcp', { method: 'POST' }),
+      buildEnv({ PERSONAL_RUN_MCP_ENABLED: 'true' }),
+    );
+    const disabledResponse = await apiWorker.fetch(
+      new Request('http://localhost/api/mcp', { method: 'POST' }),
+      buildEnv({ PERSONAL_RUN_MCP_ENABLED: 'false' }),
+    );
+
+    expect(enabledResponse.status).toBe(200);
+    expect(disabledResponse.status).toBe(404);
+    expect(handleAgentMcp).toHaveBeenCalledOnce();
+  });
 });

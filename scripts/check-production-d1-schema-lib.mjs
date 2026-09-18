@@ -220,6 +220,28 @@ export const REQUIRED_D1_SCHEMA = Object.freeze({
     "change_summary",
     "created_at",
   ],
+  personal_run_keys: [
+    "id",
+    "user_id",
+    "name",
+    "key_prefix",
+    "key_hash",
+    "created_at",
+    "last_used_at",
+    "revoked_at",
+  ],
+});
+
+export const REQUIRED_D1_COLUMN_CONSTRAINTS = Object.freeze({
+  personal_run_keys: {
+    id: { notNull: true, primaryKey: true },
+  },
+});
+
+export const REQUIRED_D1_FOREIGN_KEYS = Object.freeze({
+  personal_run_keys: [
+    { from: "user_id", table: "users", to: "id", onDelete: "CASCADE" },
+  ],
 });
 
 export const REQUIRED_D1_INDEXES = Object.freeze({
@@ -256,6 +278,10 @@ export const REQUIRED_D1_INDEXES = Object.freeze({
     { name: "idx_template_versions_template_version_unique", unique: true },
     { name: "idx_template_versions_subject" },
   ],
+  personal_run_keys: [
+    { name: "idx_personal_run_keys_user_id" },
+    { name: "idx_personal_run_keys_key_hash_unique", unique: true },
+  ],
 });
 
 export function mapPragmaResults(tableNames, wranglerResults) {
@@ -268,6 +294,45 @@ export function mapPragmaResults(tableNames, wranglerResults) {
         .sort();
 
       return [tableName, columns];
+    }),
+  );
+}
+
+export function mapColumnConstraintPragmaResults(tableNames, wranglerResults) {
+  return Object.fromEntries(
+    tableNames.map((tableName, index) => {
+      const rows = Array.isArray(wranglerResults[index]?.results) ? wranglerResults[index].results : [];
+      const columns = Object.fromEntries(
+        rows
+          .filter((row) => typeof row?.name === "string")
+          .map((row) => [
+            row.name,
+            {
+              notNull: toBooleanPragmaValue(row.notnull),
+              primaryKey: Number(row.pk) > 0,
+            },
+          ]),
+      );
+
+      return [tableName, columns];
+    }),
+  );
+}
+
+export function mapForeignKeyPragmaResults(tableNames, wranglerResults) {
+  return Object.fromEntries(
+    tableNames.map((tableName, index) => {
+      const rows = Array.isArray(wranglerResults[index]?.results) ? wranglerResults[index].results : [];
+      const foreignKeys = rows
+        .filter((row) => typeof row?.from === "string" && typeof row?.table === "string")
+        .map((row) => ({
+          from: row.from,
+          table: row.table,
+          to: typeof row.to === "string" ? row.to : "",
+          onDelete: typeof row.on_delete === "string" ? row.on_delete.toUpperCase() : "",
+        }));
+
+      return [tableName, foreignKeys];
     }),
   );
 }
@@ -302,11 +367,18 @@ export function diffD1Schema(
   actualSchemaByTable,
   requiredIndexes = {},
   actualIndexesByTable = {},
+  requiredColumnConstraints = {},
+  actualColumnConstraintsByTable = {},
+  requiredForeignKeys = {},
+  actualForeignKeysByTable = {},
 ) {
   const missingTables = [];
   const missingColumns = {};
   const missingIndexes = {};
   const invalidIndexes = {};
+  const invalidColumns = {};
+  const missingForeignKeys = {};
+  const invalidForeignKeys = {};
 
   for (const [tableName, requiredColumns] of Object.entries(requiredSchema)) {
     const actualColumns = Array.isArray(actualSchemaByTable[tableName]) ? actualSchemaByTable[tableName] : [];
@@ -360,11 +432,66 @@ export function diffD1Schema(
     }
   }
 
+  for (const [tableName, requiredTableColumns] of Object.entries(requiredColumnConstraints)) {
+    if (missingTables.includes(tableName)) continue;
+
+    const actualTableColumns = actualColumnConstraintsByTable[tableName] ?? {};
+    const invalidForTable = [];
+    for (const [columnName, requiredConstraints] of Object.entries(requiredTableColumns)) {
+      const actualColumn = actualTableColumns[columnName];
+      if (!actualColumn) continue;
+
+      const issues = [];
+      if (requiredConstraints.notNull === true && actualColumn.notNull !== true) {
+        issues.push("expected NOT NULL");
+      }
+      if (requiredConstraints.primaryKey === true && actualColumn.primaryKey !== true) {
+        issues.push("expected primary key");
+      }
+      if (issues.length > 0) invalidForTable.push({ name: columnName, issues });
+    }
+    if (invalidForTable.length > 0) invalidColumns[tableName] = invalidForTable;
+  }
+
+  for (const [tableName, requiredTableForeignKeys] of Object.entries(requiredForeignKeys)) {
+    if (missingTables.includes(tableName)) continue;
+
+    const actualTableForeignKeys = actualForeignKeysByTable[tableName] ?? [];
+    const missingForTable = [];
+    const invalidForTable = [];
+    for (const requiredForeignKey of requiredTableForeignKeys) {
+      const actualForeignKey = actualTableForeignKeys.find((foreignKey) =>
+        foreignKey.from === requiredForeignKey.from &&
+        foreignKey.table === requiredForeignKey.table &&
+        foreignKey.to === requiredForeignKey.to
+      );
+      const label = `${requiredForeignKey.from}->${requiredForeignKey.table}.${requiredForeignKey.to}`;
+      if (!actualForeignKey) {
+        missingForTable.push(label);
+        continue;
+      }
+
+      const issues = [];
+      if (
+        typeof requiredForeignKey.onDelete === "string" &&
+        actualForeignKey.onDelete !== requiredForeignKey.onDelete.toUpperCase()
+      ) {
+        issues.push(`expected ON DELETE ${requiredForeignKey.onDelete.toUpperCase()}`);
+      }
+      if (issues.length > 0) invalidForTable.push({ name: label, issues });
+    }
+    if (missingForTable.length > 0) missingForeignKeys[tableName] = missingForTable;
+    if (invalidForTable.length > 0) invalidForeignKeys[tableName] = invalidForTable;
+  }
+
   return {
     missingTables,
     missingColumns,
     missingIndexes,
     invalidIndexes,
+    invalidColumns,
+    missingForeignKeys,
+    invalidForeignKeys,
   };
 }
 
@@ -386,6 +513,23 @@ export function formatSchemaDrift(diff, databaseName) {
   for (const [tableName, invalidIndexes] of Object.entries(diff.invalidIndexes ?? {})) {
     for (const invalidIndex of invalidIndexes) {
       lines.push(`- ${tableName}: invalid index ${invalidIndex.name} (${invalidIndex.issues.join("; ")})`);
+    }
+  }
+
+
+  for (const [tableName, invalidColumns] of Object.entries(diff.invalidColumns ?? {})) {
+    for (const invalidColumn of invalidColumns) {
+      lines.push(`- ${tableName}: invalid column ${invalidColumn.name} (${invalidColumn.issues.join("; ")})`);
+    }
+  }
+
+  for (const [tableName, missingForeignKeys] of Object.entries(diff.missingForeignKeys ?? {})) {
+    lines.push(`- ${tableName}: missing foreign keys ${missingForeignKeys.join(", ")}`);
+  }
+
+  for (const [tableName, invalidForeignKeys] of Object.entries(diff.invalidForeignKeys ?? {})) {
+    for (const invalidForeignKey of invalidForeignKeys) {
+      lines.push(`- ${tableName}: invalid foreign key ${invalidForeignKey.name} (${invalidForeignKey.issues.join("; ")})`);
     }
   }
 

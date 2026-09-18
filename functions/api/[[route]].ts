@@ -20,6 +20,7 @@ import { handleGenerateTemplateFromClipy } from './handlers/clipy';
 import { handleAgentKeys } from './handlers/agent-keys';
 import { handleAgentMcp } from './handlers/agentMcp';
 import { jsonError } from './utils/response';
+import { isPersonalRunMcpEnabled, isPersonalRunMcpPath } from './utils/personal-run-mcp-feature';
 
 const blockedTestEmailDomains = new Set(['serplists.dev', 'serp-checklists.dev']);
 
@@ -106,6 +107,11 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
   let response: Response;
   
   try {
+    if (isPersonalRunMcpPath(path) && !isPersonalRunMcpEnabled(env, url)) {
+      response = jsonError('Not found', 404);
+      return finalize(response);
+    }
+
     try {
       getApiEnv(env);
     } catch (error) {

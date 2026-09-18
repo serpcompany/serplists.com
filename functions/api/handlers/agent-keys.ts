@@ -78,7 +78,7 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
     };
 
     await db.insert(personal_run_keys).values(record);
-    return json({
+    const response = json({
       key: {
         id: record.id,
         name: record.name,
@@ -90,6 +90,9 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
       },
       secret: secret.key,
     }, 201);
+    response.headers.set("Cache-Control", "no-store");
+    response.headers.set("Pragma", "no-cache");
+    return response;
   }
 
   if (request.method === "DELETE" && keyId) {

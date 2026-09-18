@@ -36,6 +36,23 @@ describe("personal run key migration", () => {
       INSERT INTO personal_run_keys(id, user_id, name, key_prefix, key_hash)
       VALUES (?, ?, ?, ?, ?)
     `).run("key-2", "user-1", "Duplicate", "slrk_example2", "stored-hash")).toThrow();
+    expect(() => db.prepare(`
+      INSERT INTO personal_run_keys(id, user_id, name, key_prefix, key_hash)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(null, "user-1", "Missing ID", "slrk_example3", "another-hash")).toThrow();
+
+    const idColumn = db.prepare("PRAGMA table_info('personal_run_keys')")
+      .all()
+      .find((column) => column.name === "id");
+    expect(idColumn).toMatchObject({ name: "id", notnull: 1, pk: 1 });
+
+    const foreignKey = db.prepare("PRAGMA foreign_key_list('personal_run_keys')").get();
+    expect(foreignKey).toMatchObject({
+      table: "users",
+      from: "user_id",
+      to: "id",
+      on_delete: "CASCADE",
+    });
 
     db.prepare("DELETE FROM users WHERE id = ?").run("user-1");
     expect(db.prepare("SELECT count(*) AS count FROM personal_run_keys").get()).toEqual({ count: 0 });

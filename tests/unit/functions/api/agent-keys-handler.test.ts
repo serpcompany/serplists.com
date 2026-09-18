@@ -76,6 +76,8 @@ describe("Personal run key management handler", () => {
     const body = await response.json();
 
     expect(response.status).toBe(201);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Pragma")).toBe("no-cache");
     expect(body).toEqual({
       key: {
         id: expect.any(String),

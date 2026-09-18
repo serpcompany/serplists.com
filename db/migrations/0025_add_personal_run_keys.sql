@@ -1,5 +1,5 @@
 CREATE TABLE personal_run_keys (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY NOT NULL,
   user_id TEXT NOT NULL,
   name TEXT NOT NULL,
   key_prefix TEXT NOT NULL,
