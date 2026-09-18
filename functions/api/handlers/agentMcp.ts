@@ -4,11 +4,23 @@ import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { buildAuditEventValues } from "../utils/audit";
 import { getEntitlementsForUser } from "../utils/entitlements";
-import { authenticatePersonalRunKey, type PersonalRunKeyIdentity } from "../utils/personal-run-key";
+import {
+  authenticatePersonalRunKey,
+  markPersonalRunKeyUsed,
+  type PersonalRunKeyIdentity,
+} from "../utils/personal-run-key";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
 import { calculateRunProgress } from "../utils/template-reconciliation";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
+const MAX_REQUEST_BYTES = 1024 * 1024;
+const MAX_RESULT_BYTES = 512 * 1024;
+const MAX_LIST_RESULTS = 100;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_REQUESTS = 120;
+const MAX_RATE_LIMIT_KEYS = 1_000;
+
+const rateLimitWindows = new Map<string, { count: number; resetsAt: number }>();
 
 type JsonRecord = Record<string, unknown>;
 type JsonRpcId = string | number | null;
@@ -75,6 +87,7 @@ const toolDefinitions = [
     name: "list_templates",
     description: "List the authenticated user's active personal SOP templates. Templates are read-only.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
     name: "start_run",
@@ -88,6 +101,7 @@ const toolDefinitions = [
       required: ["templateId"],
       additionalProperties: false,
     },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   },
   {
     name: "list_runs",
@@ -97,6 +111,7 @@ const toolDefinitions = [
       properties: { status: { type: "string", enum: ["in_progress", "completed"] } },
       additionalProperties: false,
     },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
     name: "get_run",
@@ -107,6 +122,7 @@ const toolDefinitions = [
       required: ["runId"],
       additionalProperties: false,
     },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
     name: "update_run",
@@ -164,13 +180,17 @@ const toolDefinitions = [
         },
       ],
     },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   },
 ] as const;
 
 function jsonResponse(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8" },
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
   });
 }
 
@@ -194,6 +214,86 @@ function toolResult(id: JsonRpcId, structuredContent: JsonRecord, text: string, 
   });
 }
 
+function boundedText(value: unknown, maximum = 160): string {
+  const text = typeof value === "string" ? value : "Untitled";
+  return text.length <= maximum ? text : `${text.slice(0, maximum - 1)}…`;
+}
+
+function assertBoundedResult(value: JsonRecord): void {
+  if (new TextEncoder().encode(JSON.stringify(value)).byteLength > MAX_RESULT_BYTES) {
+    throw new ToolError("Result is too large; request a smaller resource", "result_too_large");
+  }
+}
+
+function contentTypeIsJson(request: Request): boolean {
+  return request.headers.get("Content-Type")?.split(";", 1)[0]?.trim().toLowerCase() === "application/json";
+}
+
+function acceptsMcpResponse(request: Request): boolean {
+  const accept = request.headers.get("Accept");
+  if (!accept) return false;
+  const values = accept.toLowerCase().split(",").map((value) => value.trim().split(";", 1)[0]);
+  return values.includes("application/json") && values.includes("text/event-stream");
+}
+
+function configuredOrigins(env: Env): Set<string> {
+  const origins = new Set<string>();
+  for (const value of [env.FRONTEND_URL, ...(env.CORS_ALLOWED_ORIGINS?.split(",") ?? [])]) {
+    if (!value?.trim()) continue;
+    try {
+      origins.add(new URL(value.trim()).origin);
+    } catch {
+      // Invalid configuration never broadens access.
+    }
+  }
+  return origins;
+}
+
+function requestOriginIsAllowed(request: Request, env: Env): boolean {
+  const origin = request.headers.get("Origin");
+  if (!origin) return true;
+  try {
+    const normalized = new URL(origin).origin;
+    return normalized === new URL(request.url).origin || configuredOrigins(env).has(normalized);
+  } catch {
+    return false;
+  }
+}
+
+function requestHostIsSafe(request: Request, env: Env): boolean {
+  const host = request.headers.get("Host");
+  const requestUrl = new URL(request.url);
+  if (host && host.toLowerCase() !== requestUrl.host.toLowerCase()) return false;
+
+  const allowedHosts = new Set(
+    Array.from(configuredOrigins(env), (origin) => new URL(origin).host.toLowerCase()),
+  );
+  if (allowedHosts.size > 0) return allowedHosts.has(requestUrl.host.toLowerCase());
+  return requestUrl.hostname === "localhost"
+    || requestUrl.hostname === "127.0.0.1"
+    || requestUrl.hostname === "[::1]";
+}
+
+function rateLimit(identity: PersonalRunKeyIdentity): { allowed: true } | { allowed: false; retryAfter: number } {
+  const now = Date.now();
+  let window = rateLimitWindows.get(identity.keyId);
+  if (!window || window.resetsAt <= now) {
+    window = { count: 0, resetsAt: now + RATE_LIMIT_WINDOW_MS };
+  }
+  window.count += 1;
+  rateLimitWindows.set(identity.keyId, window);
+
+  if (rateLimitWindows.size > MAX_RATE_LIMIT_KEYS) {
+    for (const [key, candidate] of rateLimitWindows) {
+      if (candidate.resetsAt <= now || rateLimitWindows.size > MAX_RATE_LIMIT_KEYS) rateLimitWindows.delete(key);
+      if (rateLimitWindows.size <= MAX_RATE_LIMIT_KEYS) break;
+    }
+  }
+
+  if (window.count <= RATE_LIMIT_REQUESTS) return { allowed: true };
+  return { allowed: false, retryAfter: Math.max(1, Math.ceil((window.resetsAt - now) / 1000)) };
+}
+
 function parseStoredSections(value: unknown): JsonRecord[] {
   const normalized = normalizeSectionsPayload(parseJsonArray(value) ?? []);
   return normalized.sections.filter(isRecord);
@@ -211,14 +311,15 @@ function resetCompletionState(value: unknown): unknown {
   return next;
 }
 
-function serializeTemplate(template: JsonRecord): JsonRecord {
+function summarizeTemplate(template: JsonRecord): JsonRecord {
   return {
     id: template.id,
     title: template.title,
-    description: template.description,
+    description: typeof template.description === "string"
+      ? boundedText(template.description, 500)
+      : template.description,
     type: template.type,
     contentVersion: template.content_version,
-    sections: parseStoredSections(template.items),
     createdAt: template.created_at,
     updatedAt: template.updated_at,
   };
@@ -239,6 +340,12 @@ function serializeRun(run: JsonRecord): JsonRecord {
     createdAt: run.created_at,
     updatedAt: run.updated_at,
   };
+}
+
+function summarizeRun(run: JsonRecord): JsonRecord {
+  const serialized = serializeRun(run);
+  delete serialized.sections;
+  return serialized;
 }
 
 function getSubtasks(task: JsonRecord): JsonRecord[] {
@@ -305,7 +412,9 @@ async function listTemplates(env: Env, identity: PersonalRunKeyIdentity): Promis
         && row.owner_type === "user"
         && row.team_id === null
         && row.deleted_at === null)
-      .map((row) => serializeTemplate(row as unknown as JsonRecord)),
+      .slice(0, MAX_LIST_RESULTS)
+      .map((row) => summarizeTemplate(row as unknown as JsonRecord)),
+    truncated: rows.length > MAX_LIST_RESULTS,
   };
 }
 
@@ -425,7 +534,9 @@ async function listRuns(
   return {
     runs: rows
       .filter((row) => row.user_id === identity.userId && row.team_id === null && row.deleted_at === null)
-      .map((row) => serializeRun(row as unknown as JsonRecord)),
+      .slice(0, MAX_LIST_RESULTS)
+      .map((row) => summarizeRun(row as unknown as JsonRecord)),
+    truncated: rows.length > MAX_LIST_RESULTS,
   };
 }
 
@@ -456,9 +567,50 @@ async function getRun(
   return { run: serializeRun(await getOwnedRun(env, identity.userId, parsed.data.runId)) };
 }
 
-function updateMissed(result: unknown): boolean {
-  if (!isRecord(result) || !isRecord(result.meta)) return false;
-  return typeof result.meta.changes === "number" && result.meta.changes === 0;
+function batchChanges(result: unknown): number | null {
+  if (!isRecord(result) || !isRecord(result.meta)) return null;
+  return typeof result.meta.changes === "number" ? result.meta.changes : null;
+}
+
+function runRevisionExistsSql(runId: string, userId: string, revision: number) {
+  const { checklist_runs } = schema;
+  return sql`exists (
+    select 1 from ${checklist_runs}
+    where ${checklist_runs.id} = ${runId}
+      and ${checklist_runs.user_id} = ${userId}
+      and ${checklist_runs.team_id} is null
+      and ${checklist_runs.revision} = ${revision}
+      and ${checklist_runs.deleted_at} is null
+  )`;
+}
+
+function insertAuditWhenRunRevisionMatches(
+  db: ReturnType<typeof createDb>,
+  auditEvent: typeof schema.audit_events.$inferInsert,
+  runId: string,
+  userId: string,
+  revision: number,
+) {
+  const { audit_events } = schema;
+  return db.insert(audit_events).select(sql`
+    select
+      ${auditEvent.id},
+      ${auditEvent.actor_user_id},
+      ${auditEvent.subject_type},
+      ${auditEvent.subject_id},
+      ${auditEvent.resource_type},
+      ${auditEvent.resource_id},
+      ${auditEvent.action},
+      ${auditEvent.before_json},
+      ${auditEvent.after_json},
+      ${auditEvent.diff_json},
+      ${auditEvent.metadata_json},
+      ${auditEvent.request_id},
+      ${auditEvent.ip_hash},
+      ${auditEvent.user_agent},
+      ${auditEvent.created_at}
+    where ${runRevisionExistsSql(runId, userId, revision)}
+  `);
 }
 
 async function updateRun(
@@ -519,19 +671,33 @@ async function updateRun(
     createdAt: now,
   });
   const db = createDb(env);
-  const updateResult = await db.update(schema.checklist_runs)
-    .set(updates)
-    .where(and(
-      eq(schema.checklist_runs.id, parsed.data.runId),
-      eq(schema.checklist_runs.user_id, identity.userId),
-      isNull(schema.checklist_runs.team_id),
-      eq(schema.checklist_runs.revision, currentRevision),
-      isNull(schema.checklist_runs.deleted_at),
-    ));
-  if (updateMissed(updateResult)) {
+  const batchResults = await db.batch([
+    insertAuditWhenRunRevisionMatches(
+      db,
+      auditEvent,
+      parsed.data.runId,
+      identity.userId,
+      currentRevision,
+    ),
+    db.update(schema.checklist_runs)
+      .set(updates)
+      .where(and(
+        eq(schema.checklist_runs.id, parsed.data.runId),
+        eq(schema.checklist_runs.user_id, identity.userId),
+        isNull(schema.checklist_runs.team_id),
+        eq(schema.checklist_runs.revision, currentRevision),
+        isNull(schema.checklist_runs.deleted_at),
+        sql`exists (select 1 from ${schema.audit_events} where ${schema.audit_events.id} = ${auditEvent.id})`,
+      )),
+  ]);
+  const auditChanges = batchChanges(batchResults[0]);
+  const updateChanges = batchChanges(batchResults[1]);
+  if (auditChanges === 0 && updateChanges === 0) {
     throw new ToolError("Run changed while it was being updated; fetch it again", "edit_conflict");
   }
-  await db.insert(schema.audit_events).values(auditEvent);
+  if (auditChanges !== 1 || updateChanges !== 1) {
+    throw new ToolError("Unable to update the run safely", "internal_invariant");
+  }
 
   return { run: serializeRun(nextRun) };
 }
@@ -550,7 +716,7 @@ async function callTool(
     }
     case "start_run": {
       const data = await startRun(request, env, identity, rawArguments);
-      return { data, text: `Started run "${(data.run as JsonRecord).title as string}".` };
+      return { data, text: `Started run "${boundedText((data.run as JsonRecord).title)}".` };
     }
     case "list_runs": {
       const data = await listRuns(env, identity, rawArguments);
@@ -558,11 +724,11 @@ async function callTool(
     }
     case "get_run": {
       const data = await getRun(env, identity, rawArguments);
-      return { data, text: `Loaded run "${(data.run as JsonRecord).title as string}".` };
+      return { data, text: `Loaded run "${boundedText((data.run as JsonRecord).title)}".` };
     }
     case "update_run": {
       const data = await updateRun(request, env, identity, rawArguments);
-      return { data, text: `Updated run "${(data.run as JsonRecord).title as string}".` };
+      return { data, text: `Updated run "${boundedText((data.run as JsonRecord).title)}".` };
     }
     default:
       throw new ToolError(`Unknown tool: ${name}`, "tool_not_found");
@@ -574,14 +740,54 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     return new Response("Method Not Allowed", { status: 405, headers: { Allow: "POST" } });
   }
 
-  const identity = await authenticatePersonalRunKey(request, env);
+  if (!contentTypeIsJson(request)) {
+    return rpcError(null, -32600, "Content-Type must be application/json", undefined, 415);
+  }
+  if (!acceptsMcpResponse(request)) {
+    return rpcError(null, -32600, "Accept must include application/json and text/event-stream", undefined, 406);
+  }
+  if (!requestHostIsSafe(request, env)) {
+    return rpcError(null, -32600, "Invalid Host", undefined, 403);
+  }
+  if (!requestOriginIsAllowed(request, env)) {
+    return rpcError(null, -32600, "Origin is not allowed", undefined, 403);
+  }
+
+  const declaredLength = request.headers.get("Content-Length");
+  if (declaredLength) {
+    const length = Number(declaredLength);
+    if (!Number.isFinite(length) || length < 0) {
+      return rpcError(null, -32600, "Invalid Content-Length", undefined, 400);
+    }
+    if (length > MAX_REQUEST_BYTES) {
+      return rpcError(null, -32600, "Request body is too large", undefined, 413);
+    }
+  }
+
+  let identity: PersonalRunKeyIdentity | null;
+  try {
+    identity = await authenticatePersonalRunKey(request, env);
+  } catch {
+    return rpcError(null, -32603, "Internal error", undefined, 500);
+  }
   if (!identity) {
     return rpcError(null, -32001, "Unauthorized", undefined, 401);
   }
 
+  const rateLimitResult = rateLimit(identity);
+  if (!rateLimitResult.allowed) {
+    const response = rpcError(null, -32000, "Rate limit exceeded", undefined, 429);
+    response.headers.set("Retry-After", String(rateLimitResult.retryAfter));
+    return response;
+  }
+
   let payload: unknown;
   try {
-    payload = await request.json();
+    const bytes = await request.arrayBuffer();
+    if (bytes.byteLength > MAX_REQUEST_BYTES) {
+      return rpcError(null, -32600, "Request body is too large", undefined, 413);
+    }
+    payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
     return rpcError(null, -32700, "Parse error");
   }
@@ -592,6 +798,14 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
   const id: JsonRpcId = typeof payload.id === "string" || typeof payload.id === "number" || payload.id === null
     ? payload.id
     : null;
+
+  const protocolVersion = request.headers.get("MCP-Protocol-Version");
+  if (payload.method !== "initialize" && protocolVersion !== MCP_PROTOCOL_VERSION) {
+    if (!Object.prototype.hasOwnProperty.call(payload, "id")) return new Response(null, { status: 202 });
+    return rpcError(id, -32600, "Unsupported or missing MCP-Protocol-Version", {
+      supported: [MCP_PROTOCOL_VERSION],
+    }, 400);
+  }
   if (!Object.prototype.hasOwnProperty.call(payload, "id")) {
     return new Response(null, { status: 202 });
   }
@@ -604,6 +818,8 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     });
   }
 
+  if (payload.method === "ping") return rpcResult(id, {});
+
   if (payload.method === "tools/list") {
     return rpcResult(id, { tools: toolDefinitions });
   }
@@ -613,6 +829,12 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     if (typeof params.name !== "string") return rpcError(id, -32602, "Tool name is required");
     try {
       const { data, text } = await callTool(request, env, identity, params.name, params.arguments);
+      assertBoundedResult(data);
+      try {
+        await markPersonalRunKeyUsed(env, identity);
+      } catch {
+        // Usage telemetry must not turn a committed tool mutation into a retryable failure.
+      }
       return toolResult(id, data, text);
     } catch (error) {
       if (error instanceof ToolError) {
@@ -622,7 +844,7 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
           ...(error.details ? { details: error.details } : {}),
         }, error.message, true);
       }
-      throw error;
+      return rpcError(id, -32603, "Internal error");
     }
   }
 
