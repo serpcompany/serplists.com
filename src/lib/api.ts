@@ -8,6 +8,12 @@ const API_BASE_URL = import.meta.env.DEV
   ? DEV_API_BASE_URL
   : env.VITE_API_URL ?? '/api';
 
+export const getAgentMcpEndpoint = (origin?: string): string => {
+  const endpoint = `${API_BASE_URL}/mcp`;
+  if (/^https?:\/\//i.test(endpoint) || !origin) return endpoint;
+  return new URL(endpoint, origin).toString();
+};
+
 export type TeamRole = 'owner' | 'admin' | 'editor' | 'runner' | 'viewer';
 export type TeamMemberStatus = 'active' | 'disabled';
 
@@ -156,6 +162,23 @@ export type ChecklistRunHistoryResponse = {
   checklistId: string;
   subject: { type: 'user' | 'team'; id: string };
   events: TemplateHistoryEvent[];
+};
+
+export type AgentKeyStatus = 'active' | 'revoked';
+
+export type AgentKey = {
+  id: string;
+  name: string;
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  status: AgentKeyStatus;
+};
+
+export type CreatedAgentKey = {
+  key: AgentKey;
+  secret: string;
 };
 
 class ApiClient {
@@ -427,6 +450,24 @@ class ApiClient {
     return this.request(`/checklists/${encodeURIComponent(id)}/restore`, {
       method: 'POST',
       body: JSON.stringify({}),
+    });
+  }
+
+  // Personal agent access
+  async getAgentKeys(): Promise<AgentKey[]> {
+    return this.request('/agent-keys');
+  }
+
+  async createAgentKey(name: string): Promise<CreatedAgentKey> {
+    return this.request('/agent-keys', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  async revokeAgentKey(id: string): Promise<{ id: string; revokedAt: string }> {
+    return this.request(`/agent-keys/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     });
   }
 
