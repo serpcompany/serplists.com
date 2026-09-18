@@ -805,14 +805,13 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     return rpcError(isRecord(payload) && (typeof payload.id === "string" || typeof payload.id === "number") ? payload.id : null, -32600, "Invalid Request");
   }
 
-  if (Object.prototype.hasOwnProperty.call(payload, "id")
-    && payload.id !== null
-    && typeof payload.id !== "string"
-    && typeof payload.id !== "number") {
-    return rpcError(null, -32600, "Invalid Request");
+  if (Object.prototype.hasOwnProperty.call(payload, "id")) {
+    const validId = typeof payload.id === "string"
+      || (typeof payload.id === "number" && Number.isSafeInteger(payload.id));
+    if (!validId) return rpcError(null, -32600, "Invalid Request");
   }
 
-  const id: JsonRpcId = typeof payload.id === "string" || typeof payload.id === "number" || payload.id === null
+  const id: JsonRpcId = typeof payload.id === "string" || typeof payload.id === "number"
     ? payload.id
     : null;
 

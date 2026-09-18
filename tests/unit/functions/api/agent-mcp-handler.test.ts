@@ -181,17 +181,19 @@ describe("personal run MCP handler", () => {
   });
 
   it("rejects invalid request ids and incomplete initialize parameters", async () => {
-    const invalidIdRequest = rpcRequest("ping");
-    const invalidId = await handleAgentMcp(new Request(invalidIdRequest.url, {
-      method: "POST",
-      headers: invalidIdRequest.headers,
-      body: JSON.stringify({ jsonrpc: "2.0", id: { invalid: true }, method: "ping" }),
-    }), env);
-    expect(await invalidId.json()).toEqual({
-      jsonrpc: "2.0",
-      id: null,
-      error: { code: -32600, message: "Invalid Request" },
-    });
+    const validRequest = rpcRequest("ping");
+    for (const invalidRequestId of [null, 1.5, { invalid: true }, false]) {
+      const invalidId = await handleAgentMcp(new Request(validRequest.url, {
+        method: "POST",
+        headers: validRequest.headers,
+        body: JSON.stringify({ jsonrpc: "2.0", id: invalidRequestId, method: "ping" }),
+      }), env);
+      expect(await invalidId.json()).toEqual({
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32600, message: "Invalid Request" },
+      });
+    }
 
     const incomplete = await handleAgentMcp(rpcRequest("initialize", {
       protocolVersion: "2025-06-18",
