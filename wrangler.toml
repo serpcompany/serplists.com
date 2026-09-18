@@ -3,6 +3,15 @@ compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "dist"
 
+[vars]
+AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
+
+[env.preview.vars]
+AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
+
+[env.production.vars]
+AUTH_EMAIL_VERIFICATION_REQUIRED = "true"
+
 # Local development and production D1 binding. Preview deployments must not use
 # this database. After creating the staging D1 database, paste its UUID into
 # `preview_database_id` below before enabling preview deployments.

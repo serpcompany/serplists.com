@@ -1,12 +1,16 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { users } from "./users";
+
+const epochMilliseconds = sql`(CAST(strftime('%s','now') AS INTEGER) * 1000)`;
 
 export const account = sqliteTable(
   "account",
   {
-    id: text("id").primaryKey(),
+    id: text("id"),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
-    userId: text("user_id").notNull(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     idToken: text("id_token"),
@@ -14,37 +18,45 @@ export const account = sqliteTable(
     refreshTokenExpiresAt: integer("refresh_token_expires_at", { mode: "timestamp_ms" }),
     scope: text("scope"),
     password: text("password"),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(epochMilliseconds),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(epochMilliseconds),
   },
-  (table) => [index("account_user_id_idx").on(table.userId)],
+  (table) => [
+    primaryKey({ columns: [table.id] }),
+    index("account_user_id_idx").on(table.userId),
+  ],
 );
 
 export const session = sqliteTable(
   "session",
   {
-    id: text("id").primaryKey(),
+    id: text("id"),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
     token: text("token").notNull().unique(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(epochMilliseconds),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(epochMilliseconds),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
-    userId: text("user_id").notNull(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   },
-  (table) => [index("session_user_id_idx").on(table.userId)],
+  (table) => [
+    primaryKey({ columns: [table.id] }),
+    index("session_user_id_idx").on(table.userId),
+  ],
 );
 
 export const verification = sqliteTable(
   "verification",
   {
-    id: text("id").primaryKey(),
+    id: text("id"),
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(epochMilliseconds),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(epochMilliseconds),
   },
-  (table) => [index("verification_identifier_idx").on(table.identifier)],
+  (table) => [
+    primaryKey({ columns: [table.id] }),
+    index("verification_identifier_idx").on(table.identifier),
+  ],
 );
-
