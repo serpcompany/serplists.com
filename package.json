@@ -54,6 +54,7 @@
     "db:migrate:d1:prod": "npx wrangler d1 migrations apply serp-checklists-db --remote",
     "db:reset:test-user-passwords": "pnpm exec tsx scripts/data/local-d1-data.ts reset-passwords",
     "db:generate": "drizzle-kit generate --config db/drizzle.config.ts",
+    "check:db:drizzle-parity": "node scripts/data/check-drizzle-schema-parity.mjs",
     "db:cleanup:local": "pnpm exec tsx scripts/data/local-d1-data.ts cleanup",
     "db:cleanup:remote": "npx wrangler d1 execute serp-checklists-db --remote --file=./db/maintenance/cleanup-seed-data.sql",
     "db:seed:official:local": "npx wrangler d1 execute serp-checklists-db --local --file=./db/seeds/official-templates.sql && pnpm exec tsx scripts/data/local-d1-data.ts seed-official-login",

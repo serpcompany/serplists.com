@@ -4,10 +4,11 @@ import { check, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlit
 export const sitemap_revisions = sqliteTable(
   "sitemap_revisions",
   {
-    kind: text("kind", { enum: ["profiles", "templates", "categories"] }).primaryKey(),
+    kind: text("kind", { enum: ["profiles", "templates", "categories"] }),
     revised_at: text("revised_at").notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.kind] }),
     check(
       "sitemap_revisions_kind_check",
       sql`${table.kind} in ('profiles', 'templates', 'categories')`,
@@ -15,20 +16,32 @@ export const sitemap_revisions = sqliteTable(
   ],
 );
 
-export const sitemap_profile_revisions = sqliteTable("sitemap_profile_revisions", {
-  user_id: text("user_id").primaryKey(),
-  revised_at: text("revised_at").notNull(),
-});
+export const sitemap_profile_revisions = sqliteTable(
+  "sitemap_profile_revisions",
+  {
+    user_id: text("user_id"),
+    revised_at: text("revised_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.user_id] })],
+);
 
-export const sitemap_owner_revisions = sqliteTable("sitemap_owner_revisions", {
-  user_id: text("user_id").primaryKey(),
-  revised_at: text("revised_at").notNull(),
-});
+export const sitemap_owner_revisions = sqliteTable(
+  "sitemap_owner_revisions",
+  {
+    user_id: text("user_id"),
+    revised_at: text("revised_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.user_id] })],
+);
 
-export const sitemap_category_revisions = sqliteTable("sitemap_category_revisions", {
-  category: text("category").primaryKey(),
-  revised_at: text("revised_at").notNull(),
-});
+export const sitemap_category_revisions = sqliteTable(
+  "sitemap_category_revisions",
+  {
+    category: text("category"),
+    revised_at: text("revised_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.category] })],
+);
 
 export const sitemap_shard_revisions = sqliteTable(
   "sitemap_shard_revisions",

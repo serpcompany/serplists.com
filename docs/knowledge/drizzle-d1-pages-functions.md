@@ -14,12 +14,27 @@ export const createDb = (env: Env) => drizzle(env.DB, { schema });
 
 ## Schema location
 - Drizzle schema lives in `db/schema/index.ts`.
-- SQL migrations remain in `db/migrations/` (current source of truth).
+- Drizzle owns every database object it can represent: tables, columns,
+  defaults, constraints, foreign keys, and indexes.
+- SQL migrations in `db/migrations/` remain the ordered D1 migration history.
+- SQL-only objects that Drizzle cannot represent, currently sitemap triggers,
+  are recorded in `db/sql-only-schema.json`.
+
+Verify those contracts against fresh isolated databases after changing either
+one:
+
+```bash
+pnpm run check:db:drizzle-parity
+```
+
+The check does not access Staging or Production.
 
 ## Drizzle Kit config
 - `db/drizzle.config.ts` uses the SQLite dialect to generate migrations without Cloudflare credentials.
 - Drizzle Kit generates migration files; the explicit Wrangler Local, Staging, and Production commands apply them to D1.
-- The historical migration set does not yet include Drizzle snapshot metadata, so `db:generate` currently proposes a fresh baseline migration that must not be applied.
+- The historical migration set does not yet include Drizzle snapshot metadata,
+  so `db:generate` currently proposes a fresh baseline migration that must not
+  be applied or committed.
 
 ## Notes
 - Keep API responses in snake_case to avoid breaking the current frontend mapping.
