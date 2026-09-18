@@ -195,6 +195,17 @@ describe("personal run MCP handler", () => {
       });
     }
 
+    const malformedEnvelope = await handleAgentMcp(new Request(validRequest.url, {
+      method: "POST",
+      headers: validRequest.headers,
+      body: JSON.stringify({ jsonrpc: "1.0", id: 1.5, method: "ping" }),
+    }), env);
+    expect(await malformedEnvelope.json()).toEqual({
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32600, message: "Invalid Request" },
+    });
+
     const incomplete = await handleAgentMcp(rpcRequest("initialize", {
       protocolVersion: "2025-06-18",
     }), env);

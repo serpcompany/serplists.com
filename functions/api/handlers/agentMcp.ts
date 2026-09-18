@@ -38,6 +38,9 @@ class ToolError extends Error {
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isValidRequestId = (value: unknown): value is string | number =>
+  typeof value === "string" || (typeof value === "number" && Number.isSafeInteger(value));
+
 const listRunsArgs = z.object({
   status: z.enum(["in_progress", "completed"]).optional(),
 }).strict();
@@ -802,18 +805,14 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     return rpcError(null, -32700, "Parse error");
   }
   if (!isRecord(payload) || payload.jsonrpc !== "2.0" || typeof payload.method !== "string") {
-    return rpcError(isRecord(payload) && (typeof payload.id === "string" || typeof payload.id === "number") ? payload.id : null, -32600, "Invalid Request");
+    return rpcError(isRecord(payload) && isValidRequestId(payload.id) ? payload.id : null, -32600, "Invalid Request");
   }
 
   if (Object.prototype.hasOwnProperty.call(payload, "id")) {
-    const validId = typeof payload.id === "string"
-      || (typeof payload.id === "number" && Number.isSafeInteger(payload.id));
-    if (!validId) return rpcError(null, -32600, "Invalid Request");
+    if (!isValidRequestId(payload.id)) return rpcError(null, -32600, "Invalid Request");
   }
 
-  const id: JsonRpcId = typeof payload.id === "string" || typeof payload.id === "number"
-    ? payload.id
-    : null;
+  const id: JsonRpcId = isValidRequestId(payload.id) ? payload.id : null;
 
   const protocolVersion = request.headers.get("MCP-Protocol-Version");
   if (payload.method !== "initialize" && protocolVersion !== MCP_PROTOCOL_VERSION) {
