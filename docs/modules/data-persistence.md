@@ -6,10 +6,10 @@ The persistence layer uses Cloudflare D1 for transactional data, Cloudflare Page
 
 - `functions/api/[[route]].ts` - API router.
 - `functions/api/db.ts` - Drizzle D1 client.
-- `functions/api/handlers/` - Auth, billing, Stripe, templates, checklists, teams, admin, and uploads handlers.
+- `functions/api/handlers/` - Auth, billing, Stripe, Templates, Runs, Organizations, admin, and uploads handlers; Organization handler filenames retain legacy `team` names.
 - `functions/api/utils/session.ts` - Better Auth session lookup.
-- `functions/api/utils/entitlements.ts` - User and team entitlement resolution.
-- `functions/api/utils/team-access.ts` - Team membership and role authorization helpers.
+- `functions/api/utils/entitlements.ts` - Personal and Organization entitlement resolution.
+- `functions/api/utils/team-access.ts` - Organization Membership and role authorization helpers; filename is legacy.
 - `functions/api/utils/audit.ts` - Audit event value builder.
 - `db/schema/` - Drizzle schema used by runtime queries.
 - `db/schema.sql` - maintained reference snapshot for local inspection.
@@ -18,7 +18,7 @@ The persistence layer uses Cloudflare D1 for transactional data, Cloudflare Page
 - `db/seeds/` - local and official seed data.
 - `db/maintenance/` - one-off maintenance SQL that is not schema history.
 - `src/lib/api.ts` - Client API wrapper.
-- `src/contexts/WorkspaceContext.tsx` - Personal/team workspace state.
+- `src/contexts/WorkspaceContext.tsx` - Personal/Organization context state; filename is legacy.
 - `src/contexts/TemplatesContext.tsx` - Templates and runs with React Query.
 - `src/lib/utils/templateBackup.ts` - Import/export helpers.
 - `src/lib/repoTemplateCatalog.ts` - Repo-backed portable template catalog.
@@ -37,16 +37,16 @@ Do not add seed data to migrations. Use `db/seeds/` for repeatable local/staging
 
 - `users`: auth identity and profile data.
 - `account`, `session`, `verification`: Better Auth persistence.
-- `templates`: template metadata, JSON content, visibility, public profile routing, owner scope, team scope, attribution, and soft-delete state.
-- `checklist_runs`: run state, progress, share fields, team scope, assignment/actor attribution, and soft-delete state.
+- `templates`: Template metadata, JSON content, visibility, Public Profile routing, Resource Owner scope, attribution, and soft-delete state.
+- `checklist_runs`: Run state, progress, share fields, Resource Owner scope, assignment/actor attribution, and soft-delete state.
 - `template_likes`: favorites.
 - `usage_analytics`: product event log.
 - `stripe_customers`, `stripe_subscriptions`, `stripe_webhook_events`: billing records and webhook idempotency.
 - `entitlement_overrides`: user-level plan overrides.
-- `teams`: team identity and billing/creator metadata.
-- `team_members`: membership, role, and status.
-- `team_invites`: hashed link invites and acceptance/revocation state.
-- `team_entitlement_overrides`: team-level plan overrides.
+- `teams`: legacy implementation table for Organization identity and billing/creator metadata.
+- `team_members`: legacy implementation table for Organization Membership, role, and status.
+- `team_invites`: legacy implementation table for hashed Organization invites and their lifecycle.
+- `team_entitlement_overrides`: legacy implementation table for Organization-level plan overrides.
 - `audit_events`: DB-backed actor/resource/action history.
 - `template_versions`: point-in-time template snapshots.
 
@@ -60,16 +60,16 @@ Do not add seed data to migrations. Use `db/seeds/` for repeatable local/staging
 - `audit_events.before_json`, `after_json`, `diff_json`, `metadata_json`: structured audit payloads.
 - `template_versions.snapshot_json`: full template snapshot.
 
-## Workspace Ownership
+## Resource Ownership
 
-Personal data uses user ownership. Team data uses team ownership.
+Personal data uses User ownership. Organization data uses Organization ownership.
 
 - Personal templates: `templates.owner_type = 'user'`, `templates.user_id = current user`, `templates.team_id IS NULL`.
-- Team templates: `templates.owner_type = 'team'`, `templates.team_id = active team`, with creator/updater attribution on user columns.
+- Organization Templates: `templates.owner_type = 'team'`, `templates.team_id = active Organization`, with creator/updater attribution on User columns. The stored `team` values are legacy identifiers.
 - Personal runs: `checklist_runs.user_id = current user`, `checklist_runs.team_id IS NULL`.
-- Team runs: `checklist_runs.team_id = active team`, with creator/started/completed user attribution.
+- Organization Runs: `checklist_runs.team_id = active Organization`, with creator/started/completed User attribution.
 
-Handlers must authorize team access before returning or mutating team-scoped rows. Do not trust a client-supplied `teamId` without checking membership and role.
+Handlers must authorize Organization access before returning or mutating Organization-scoped rows. Do not trust the legacy client-supplied `teamId` without checking Organization Membership and role.
 
 ## API Access
 
@@ -92,9 +92,9 @@ Main server handlers:
 
 ## Caching And Invalidations
 
-`src/contexts/TemplatesContext.tsx` uses TanStack React Query for templates and runs. Query keys include workspace scope so personal and team data do not bleed together. Workspace switching invalidates template and run queries.
+`src/contexts/TemplatesContext.tsx` uses TanStack React Query for Templates and Runs. Query keys include ownership context so Personal and Organization data do not bleed together. Context switching invalidates Template and Run queries.
 
-Team lists are fetched by `WorkspaceContext` and keyed by current user id.
+Organization lists are fetched by the legacy-named `WorkspaceContext` and keyed by current User ID.
 
 Billing query keys are also user-scoped. A session change must not reuse another
 user's cached entitlement response, and the UI should show a neutral loading
@@ -102,7 +102,7 @@ state until the current user's plan is known.
 
 ## Import/Export
 
-Template backup and portable import/export are implemented through `src/lib/utils/templateBackup.ts` and the template backup API routes. Team imports/exports pass `teamId` so imported templates land in the selected team workspace when authorized.
+Template backup and portable import/export are implemented through `src/lib/utils/templateBackup.ts` and the Template backup API routes. Organization imports/exports pass the legacy `teamId` parameter so imported Templates land in the selected Organization when authorized.
 
 The portable contract is shared by uploaded files and repo-backed public packs.
 Repo packs live in `src/data/public-template-packs/*.json` and are normalized by
@@ -129,6 +129,6 @@ changing sharing logic.
 
 ## Seeds
 
-`pnpm run db:seed` seeds local D1 with dev users, sample personal data, team data, team memberships, pending invites, entitlement overrides, and official public templates.
+`pnpm run db:seed` seeds local D1 with dev Users, sample Personal data, Organization data and memberships, pending invites, entitlement overrides, and official public Templates. Seed identifiers retain legacy `team` names.
 
 Use `pnpm run db:seed:official:staging` for staging official templates only. Do not seed test users into production.

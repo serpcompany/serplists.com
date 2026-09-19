@@ -83,7 +83,7 @@ pnpm templates:check
 
 This has now been verified end-to-end against the real site for the official `serp` publisher account.
 
-Recommended local file shape:
+Suggested untracked local file shape (the directory name is illustrative and must not be linked from tracked documentation):
 
 ```text
 tmp/local-templates/{template-slug}/
@@ -121,11 +121,10 @@ Example live-tested payload:
 
 - [camping-checklist.json](camping-checklist.json)
 
-Current live import note:
-
-- The portable import backend works for public templates.
-- The current Templates UI can still block the file picker if `billingEnabled` is false, even when the signed-in user is already `pro`.
-- If that happens, import can still be performed by posting the same portable JSON pack to `POST /api/templates/backup` with an authenticated Pro session.
+The current import UI derives access from the authenticated entitlement response.
+`billingEnabled` controls whether checkout can start; it does not disable the
+file picker for a User who already has import access. No direct API-post
+workaround is required for an entitled User.
 
 ## Backup/export format
 

@@ -6,16 +6,16 @@ Keep the matrix intentionally small. Add new gates only when they are needed by 
 
 ## Plans
 
-Personal account plans:
+Personal plans:
 
 - `Free`
 - `Pro`
 
-Team workspace entitlement:
+Organization entitlement (legacy stored value):
 
 - `team`
 
-`team` is not a personal account upgrade. It applies only while a user is operating inside a paid team workspace.
+`team` is a legacy implementation value, not a Personal upgrade. It applies only while a User is operating in a paid Organization context.
 
 ## Core Rule
 
@@ -23,65 +23,65 @@ Features default to Free unless this document explicitly marks them as paid.
 
 The API is the source of truth for plan enforcement. UI gating must match API behavior, but backend enforcement is authoritative.
 
-## Personal Workspace Matrix
+## Personal Matrix
 
 | Capability | Free | Pro |
 | --- | --- | --- |
 | Use the core product | Yes | Yes |
 | Create personal templates | Limited | Yes |
 | Keep active personal runs | Limited | Yes |
-| Copy public templates into personal workspace | No | Yes |
-| Import templates into personal workspace | Limited | Yes |
+| Copy public templates into Personal | No | Yes |
+| Import templates into Personal | Limited | Yes |
 
 Current Free limits:
 
 - 1 personal template.
 - 3 active personal runs.
 
-## Team Workspace Matrix
+## Organization Matrix
 
-| Capability | Free team | Paid team |
+| Capability | Free Organization | Paid Organization |
 | --- | --- | --- |
-| Use shared team workspace | Yes | Yes |
-| Create team templates | Limited by team context and role | Yes, if role allows |
-| Keep active team runs | Limited by team context and role | Yes, if role allows |
-| Copy/import templates into team workspace | Limited by team context and role | Yes, if role allows |
+| Use the shared Organization context | Yes | Yes |
+| Create Organization templates | Limited by Organization context and role | Yes, if role allows |
+| Keep active Organization runs | Limited by Organization context and role | Yes, if role allows |
+| Copy/import templates into an Organization | Limited by Organization context and role | Yes, if role allows |
 
-Team roles still apply after entitlements pass. A paid team does not let a `viewer` edit templates or start runs.
+Organization Roles still apply after entitlements pass. A paid Organization does not let a `viewer` edit Templates or start Runs.
 
-## Personal vs Team Entitlements
+## Personal vs Organization Entitlements
 
-A user's personal plan and a team's plan are evaluated independently.
+A User's Personal plan and an Organization's plan are evaluated independently.
 
 Examples:
 
-- Free user in personal workspace: Free limits apply.
-- Free user in paid team workspace: paid team limits apply to that team's templates/runs.
-- Pro user in personal workspace: Pro personal limits apply.
-- Pro user in Free team workspace: Free team limits apply to that team unless the team has a paid override.
+- Free User in Personal: Free limits apply.
+- Free User in a paid Organization: paid limits apply to that Organization's Templates and Runs.
+- Pro User in Personal: Pro Personal limits apply.
+- Pro User in a Free Organization: Free Organization limits apply unless the Organization has a paid override.
 
-Team access must not upgrade or expose a user's personal templates, runs, or billing status.
+Organization access must not upgrade or expose a User's Personal Templates, Runs, or billing status.
 
 ## Upgrade Triggers
 
 Personal upgrade triggers:
 
-- Copying public templates into a Free personal workspace after hitting the paid gate.
+- Copying public Templates into Free Personal after hitting the paid gate.
 - Creating/importing more personal templates than Free allows.
 - Keeping more active personal runs than Free allows.
 
-Team upgrade triggers:
+Organization upgrade triggers:
 
-- Team workspace hits team-context template or active-run limits.
-- Team member has a role that allows the action, but the active team entitlement does not.
+- The Organization hits its Template or active-Run limits.
+- An Organization member has a role that allows the action, but the Organization entitlement does not.
 
 ## Implementation Notes
 
 - User entitlements are resolved in `functions/api/utils/entitlements.ts`.
-- Team entitlements use `team_entitlement_overrides` and are resolved only for team contexts.
+- Organization entitlements use the legacy `team_entitlement_overrides` table and are resolved only for Organization contexts.
 - Personal manual overrides use `entitlement_overrides`.
 - Stripe currently backs personal Pro subscription state.
-- Team entitlement overrides are D1-backed to avoid new services or new recurring cost.
+- Organization entitlement overrides are D1-backed to avoid new services or recurring cost.
 - If a new paid feature is added later, update this document before spreading the rule across API handlers and UI components.
 
 ### Enforcement contract
