@@ -4,10 +4,10 @@
 
 - Made the template update path awaitable end to end instead of fire-and-forget.
 - Changed `useTemplates().updateTemplate` to use the async React Query mutation path.
-- Moved the core save decision tree into a testable helper in [useTemplateSave.ts](/Users/devin/dev/repos/serplists.com/src/hooks/useTemplateSave.ts).
+- Moved the core save decision tree into a testable helper in [useTemplateSave.ts](../../src/hooks/useTemplateSave.ts).
 - Kept create navigation gated on confirmed persistence instead of optimistic navigation.
 - Preserved existing `rules` data during update saves when the cached template already has rules.
-- Added focused unit coverage in [useTemplateSave.test.ts](/Users/devin/dev/repos/serplists.com/tests/unit/hooks/useTemplateSave.test.ts).
+- Added focused unit coverage in [useTemplateSave.test.ts](../../tests/unit/hooks/useTemplateSave.test.ts).
 - Excluded `tmp/**` from Vitest discovery so scratch repo mirrors do not contaminate local test runs.
 
 ## Why this was necessary

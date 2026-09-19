@@ -2,7 +2,7 @@
 
 This document describes the portable template contract used for template export/import and the content structures stored in D1. Structural validation source of truth: `src/lib/schemas/checklistSchema.ts`.
 
-User-facing examples live in [examples/README.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/README.md).
+User-facing examples live in [examples/README.md](examples/README.md).
 
 ## Storage strategy (D1)
 - `templates.items` stores the full sections JSON today's UI uses (array of sections with nested items/contents).
@@ -87,25 +87,20 @@ Generated artifacts should not be edited by hand; regenerate them from `template
 
 Copy-pasteable example assets:
 
-- [minimal/template.json](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/template.json)
-- [minimal/README.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/README.md)
-- [minimal/preview.html](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/preview.html)
-- [minimal/template.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/template.md)
-- [minimal/template.yaml](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/template.yaml)
-- [full/template.json](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/template.json)
-- [full/README.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/README.md)
-- [full/preview.html](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/preview.html)
-- [full/template.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/template.md)
-- [full/template.yaml](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/template.yaml)
+- [minimal/template.json](examples/minimal/template.json)
+- [minimal/README.md](examples/minimal/README.md)
+- [minimal/preview.html](examples/minimal/preview.html)
+- [minimal/template.md](examples/minimal/template.md)
+- [minimal/template.yaml](examples/minimal/template.yaml)
+- [full/template.json](examples/full/template.json)
+- [full/README.md](examples/full/README.md)
+- [full/preview.html](examples/full/preview.html)
+- [full/template.md](examples/full/template.md)
+- [full/template.yaml](examples/full/template.yaml)
 
 Example live-tested payload:
 
-- [camping-checklist.json](/Users/devin/dev/repos/serplists.com/docs/schema/camping-checklist.json)
-
-Live-tested authoring examples created in this repo:
-
-- [template.json](/Users/devin/dev/repos/serplists.com/tmp/local-templates/campsite-breakdown-checklist/template.json)
-- [README.md](/Users/devin/dev/repos/serplists.com/tmp/local-templates/campsite-breakdown-checklist/README.md)
+- [camping-checklist.json](camping-checklist.json)
 
 Current live import note:
 
