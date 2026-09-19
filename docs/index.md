@@ -1,6 +1,12 @@
 # SERP Lists Documentation
 
-This docs hub is the source of truth for setup, architecture, operations, implementation patterns, and runbooks.
+This docs hub is the source of truth for product language, architectural decisions, setup, operations, implementation patterns, and runbooks.
+
+## Domain and decisions
+
+- [Domain glossary](../CONTEXT.md) — canonical Personal, Organization, ownership, profile, Template, and Run language
+- [Architecture decision records](adr/)
+- [ADR 0001: Personal and Organization ownership contexts](adr/0001-use-personal-and-organization-contexts.md)
 
 ## Start here
 - [Getting started index](getting-started/index.md)
@@ -9,6 +15,8 @@ This docs hub is the source of truth for setup, architecture, operations, implem
 
 ## System docs
 - [Architecture](architecture/system-overview.md)
+- [UI-service decoupling audit](architecture/ui-service-decoupling-audit.md)
+- [UI decoupling execution checklist](architecture/ui-decoupling-execution-checklist.md)
 - [Reference index](reference/index.md)
 - [Tech stack](reference/tech-stack.md)
 - [File inventory](reference/file-inventory.md)
@@ -31,4 +39,13 @@ This docs hub is the source of truth for setup, architecture, operations, implem
 - [Template schema reference](schema/README.md)
 
 ## Product docs
+- [Current features](FEATURES.md)
 - [Plans](product/plans.md)
+
+## Research
+
+- [XML sitemap standards](research/xml-sitemap-standards.md)
+
+## Agent operations
+
+- [Issue triage labels](agents/triage-labels.md)

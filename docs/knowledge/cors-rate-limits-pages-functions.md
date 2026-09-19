@@ -20,9 +20,20 @@ Configuration:
 
 ## Rate limiting
 Basic, best-effort rate limiting is applied in `functions/api/[[route]].ts`:
-- `POST /api/auth/register` and `POST /api/auth/login`: 30 requests per 5 minutes per IP.
-- Write endpoints (`POST|PUT|DELETE` under `templates|checklists|uploads`): 120 requests per minute per IP.
+- Every `/api/auth/*` request, including the custom auth-status endpoint and
+  current Better Auth routes such as `/api/auth/sign-up/email` and
+  `/api/auth/sign-in/email`: 30 requests per 5 minutes per IP on deployed hosts.
+- Local `/api/auth/*` requests: 300 requests per hour per IP, which supports
+  intensive browser and integration testing while retaining a guardrail.
+- Sensitive writes (`POST|PUT|DELETE` under `templates`, `checklists`,
+  `uploads`, or the legacy Organization route family `teams`, plus Personal
+  Run Key and MCP write endpoints): 120 requests per minute per IP.
 
 Notes:
 - The limiter uses an in-memory map (`functions/api/utils/rate-limit.ts`), so it is not globally consistent across all Cloudflare edges.
 - If the request IP cannot be determined (missing `CF-Connecting-IP`), the limiter is skipped.
+- Rate limiting happens before Better Auth dispatch, so password-reset,
+  verification, session, and other `/api/auth/*` calls share the same per-IP
+  auth bucket rather than only sign-up and sign-in being covered.
+- The MCP handler also applies its own 120-requests-per-minute bucket per
+  authenticated Personal Run Key after the router's per-IP check.

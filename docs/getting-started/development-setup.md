@@ -67,7 +67,7 @@ pnpm run db:reset:test-user-passwords
 pnpm run db:query "SELECT * FROM templates LIMIT 5"
 ```
 
-Local D1 state lives under `.wrangler/state/...`. The `db:seed` script seeds local test users, sample team data, pending team invites, team entitlement overrides, audit rows, and the official `serp` publisher/templates. The `db:reset` script clears local state, applies tracked D1 migrations through Wrangler, and then runs those same local seeds.
+Local D1 state lives under `.wrangler/state/...`. The `db:seed` script seeds local test Users, sample Organization data, pending invites, Organization entitlement overrides, audit rows, and the official `serp` publisher/Templates. The fixtures retain legacy `team` implementation names. The `db:reset` script clears local state, applies tracked D1 migrations through Wrangler, and then runs those same local seeds.
 
 Drizzle schema lives in `db/schema/` (entry: `db/schema/index.ts`); Drizzle Kit config in `db/drizzle.config.ts`.
 
@@ -76,13 +76,13 @@ The official local publisher seed creates:
 - display name `SERP`
 - a small set of official public templates owned by that account
 
-The local team seed creates data for verifying:
-- workspace switching
-- team membership display
+The local Organization seed creates data for verifying:
+- ownership-context switching
+- Organization Membership display
 - pending incoming invites
 - invite acceptance
-- team entitlement behavior
-- team audit/activity history
+- Organization entitlement behavior
+- Organization audit/activity history
 
 ## Remote database commands
 Use the staging/preview database before production. Preview deployments must not point to production D1.
@@ -137,17 +137,17 @@ login unexpectedly fails during intensive QA, check the API response and logs
 for `429` before resetting credentials or debugging session state. Production
 keeps the stricter auth limit.
 
-## Team flow verification
-Use `/dashboard/settings` for team creation, team management, and incoming invites.
+## Organization flow verification
+Use `/dashboard/settings` for Organization creation, management, and incoming invites.
 
 Useful local flow:
 
-1. Log in with `admin@test.com` and create a team from `/dashboard/settings`.
+1. Log in with `admin@test.com` and create an Organization from `/dashboard/settings`.
 2. Create a link invite for another seeded or newly registered email.
 3. Log out or use a separate browser context.
 4. Register or log in as the invitee.
-5. Accept from `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
-6. Confirm the workspace switcher shows the accepted team and that personal workspace data remains separate.
+5. Accept from the legacy compatibility route `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
+6. Confirm the context switcher shows the accepted Organization and that Personal data remains separate.
 
 ## Testing and checks
 Install Playwright browsers once before running e2e/smoke tests:
@@ -188,7 +188,7 @@ can cause `SameSite=Lax` session cookies to be dropped.
 See [Testing reference](../reference/testing.md) for Vitest configuration,
 mocking, and environment-safety conventions.
 
-The smoke suite includes route/auth/team coverage. Team-specific Playwright specs live in:
+The smoke suite includes route, auth, and Organization coverage. The relevant specs retain legacy `team` filenames:
 
 ```bash
 pnpm run test:e2e -- tests/e2e/team-workspace.spec.ts

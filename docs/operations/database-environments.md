@@ -81,9 +81,9 @@ migrations.
 
 Seed policy:
 
-- Local: `pnpm run db:seed` includes test users, team fixtures, team invites, team entitlement overrides, audit fixtures, and official templates.
+- Local: `pnpm run db:seed` includes test Users, Organization fixtures, invites, Organization entitlement overrides, audit fixtures, and official Templates. Fixture identifiers retain legacy `team` names.
 - Staging: use `pnpm run db:seed:official:staging` for official templates only unless there is a deliberate test-data plan.
-- Production: do not seed test users or team fixtures.
+- Production: do not seed test Users or Organization fixtures.
 
 ## Non-Destructive Release Checks
 
@@ -119,7 +119,7 @@ pnpm run db:migrate:d1:prod
 pnpm run check:prod:d1-schema
 ```
 
-Use `--through 0021` only if the teams/audit migration has already been applied
+Use `--through 0021` only if the legacy-named `teams`/audit migration has already been applied
 outside Wrangler migrations. Fresh staging databases do not need a baseline.
 
 ## Preview Deployment Checklist
@@ -129,7 +129,7 @@ outside Wrangler migrations. Fresh staging databases do not need a baseline.
 3. Run `pnpm run db:migrate:d1:staging` only when pending migrations are expected.
 4. Run `pnpm run check:staging:d1-schema`.
 5. Deploy a preview branch and verify new data lands in staging, not production.
-6. Exercise a team create/invite/accept flow in preview before promoting team-related changes.
+6. Exercise an Organization create/invite/accept flow in preview before promoting Organization-related changes.
 
 ## Production Safety
 
@@ -143,4 +143,4 @@ npx wrangler d1 export serp-checklists-db --remote --output ./tmp/backups/serp-c
   for schema changes. Use `pnpm run db:migrate:d1:prod` so D1 records the migration.
 - Keep preview and production Pages secrets separate in Cloudflare.
 - Run `pnpm run verify:prod:d1` before promoting staging to production.
-- Confirm team audit/history tables exist before deploying code that writes team or template history.
+- Confirm the legacy-named Organization audit/history tables exist before deploying code that writes Organization or Template history.

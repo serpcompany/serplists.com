@@ -2,7 +2,7 @@
 
 ## System Overview
 
-SERP Lists is a React single-page app backed by Cloudflare Pages Functions. D1 is the transactional source of truth for auth, templates, runs, teams, entitlements, and audit history. R2 stores uploaded files.
+SERP Lists is a React single-page app backed by Cloudflare Pages Functions. D1 is the transactional source of truth for auth, Templates, Runs, Organizations, entitlements, and audit history. R2 stores uploaded files.
 
 ## High-Level Components
 
@@ -11,7 +11,7 @@ SERP Lists is a React single-page app backed by Cloudflare Pages Functions. D1 i
 - Database: Cloudflare D1 through the `DB` binding, queried with Drizzle in `functions/api/db.ts`.
 - Object storage: Cloudflare R2 bucket bound as `R2_UPLOADS`.
 - Auth: Better Auth mounted under `/api/auth/*` with D1-backed users, accounts, sessions, and verification records.
-- Client state: TanStack React Query plus app contexts for auth, workspaces, templates, and runs.
+- Client state: TanStack React Query plus app contexts for auth, ownership context, Templates, and Runs.
 
 ## Request Flow
 
@@ -21,19 +21,19 @@ SERP Lists is a React single-page app backed by Cloudflare Pages Functions. D1 i
 4. Responses use shared JSON helpers from `functions/api/utils/response.ts`.
 5. Authenticated browser requests rely on Better Auth httpOnly cookies. The client does not store auth tokens.
 
-## Workspace Model
+## Ownership Context Model
 
-Every signed-in user has a personal workspace. Users can also belong to team workspaces.
+Every signed-in User has a Personal context. Users can also belong to Organizations.
 
-- Personal templates/runs are scoped to the user.
-- Team templates/runs are scoped to `team_id`.
-- `src/contexts/WorkspaceContext.tsx` owns the active workspace, role capabilities, and workspace switching.
-- The active workspace id is persisted in local storage under `serplists.activeWorkspaceId`.
-- Team entitlements apply only in the selected team workspace. Personal limits remain personal unless the user's own account is upgraded.
+- Personal Templates and Runs are scoped to the User.
+- Organization Templates and Runs are scoped through the legacy `team_id` implementation column.
+- The legacy-named `src/contexts/WorkspaceContext.tsx` owns the active context, Organization Role capabilities, and context switching.
+- Remembered context is persisted under the legacy local-storage key `serplists.activeWorkspaceId`; it is convenience state, not authorization.
+- Organization entitlements apply only in the selected Organization context. Personal limits remain Personal unless the User's plan is upgraded.
 
 Role capabilities:
 
-- `owner` and `admin`: manage team, members, invites, and team settings.
+- `owner` and `admin`: manage the Organization, members, invites, and settings.
 - `editor`: edit templates and start runs.
 - `runner`: start and execute runs.
 - `viewer`: read-only access.
@@ -58,7 +58,7 @@ Public routes include:
 - `/profile/:username`
 - `/profile/:username/:templateSlug`
 - `/share/:shareToken`
-- `/team-invites/:token`
+- `/team-invites/:token` (legacy compatibility route for Organization invites)
 
 ## Data Model
 
@@ -73,16 +73,16 @@ Core D1 tables:
 
 - `users`: auth identity, profile fields, and timestamps.
 - `account`, `session`, `verification`: Better Auth persistence.
-- `templates`: template metadata, content JSON, public/private state, ownership, team scope, soft-delete state, attribution, and a content-specific version used for run reconciliation.
-- `checklist_runs`: run state, progress, share token fields, team scope, soft-delete state, attribution, the reconciled template version, an optimistic-concurrency revision, and retired run history.
+- `templates`: Template metadata, content JSON, public/private state, Resource Owner scope, soft-delete state, attribution, and a content-specific version used for Run reconciliation.
+- `checklist_runs`: Run state, progress, share token fields, Resource Owner scope, soft-delete state, attribution, reconciled Template version, optimistic-concurrency revision, and retired Run history.
 - `template_likes`: user/template favorites.
 - `usage_analytics`: event log for template/run actions.
 - `stripe_customers`, `stripe_subscriptions`, `stripe_webhook_events`: billing state and webhook idempotency.
 - `entitlement_overrides`: user-level manual entitlement overrides.
-- `teams`: team identity, slug, creator, billing owner, and archive state.
-- `team_members`: team membership, role, status, inviter, and join timestamps.
-- `team_invites`: invite records with hashed tokens, requested role, expiration, acceptance, and revocation.
-- `team_entitlement_overrides`: team-level plan overrides.
+- `teams`: legacy implementation table for Organization identity, slug, creator, billing owner, and archive state.
+- `team_members`: legacy implementation table for Organization Membership, role, status, inviter, and join timestamps.
+- `team_invites`: legacy implementation table for Organization invite records.
+- `team_entitlement_overrides`: legacy implementation table for Organization-level plan overrides.
 - `audit_events`: append-only actor/resource/action history.
 - `template_versions`: template snapshot history.
 
@@ -102,18 +102,18 @@ JSON fields:
 - Better Auth session lookup is the only supported login state for normal user flows.
 - API handlers enforce authorization; UI gating is secondary.
 - User entitlements come from user overrides, dev test personas, Stripe subscriptions, or Free fallback.
-- Team entitlements come from `team_entitlement_overrides`.
-- Free limits are currently 1 template and 3 active runs. Paid user/team contexts have unlimited templates and active runs.
+- Organization entitlements come from the legacy `team_entitlement_overrides` table.
+- Free limits are currently 1 Template and 3 active Runs. Paid Personal and Organization contexts have unlimited Templates and active Runs.
 
 ## Audit And History
 
 Production history is DB-backed:
 
-- Team create/update/invite/member/owner actions write `audit_events`.
+- Organization create/update/invite/member/owner actions write `audit_events`.
 - Template changes write `template_versions` and `audit_events`.
 - Audit events include actor id, subject, resource, action, optional before/after/diff JSON, request id, hashed IP, user agent, and timestamp.
 
-Do not use git history for user-generated template or team history. Git only tracks code and migration history.
+Do not use git history for user-generated Template or Organization history. Git only tracks code and migration history.
 
 ## File Uploads
 
@@ -123,7 +123,7 @@ Do not use git history for user-generated template or team history. Git only tra
 
 ## Public And Private Data
 
-- `GET /api/templates` returns public templates plus the authenticated user's personal templates, or team templates when `teamId` is supplied and authorized.
+- `GET /api/templates` returns public Templates plus the authenticated User's Personal Templates, or Organization Templates when the legacy `teamId` parameter is supplied and authorized.
 - Public template detail routes are available through `/profile/:username/:templateSlug`.
 - Public profiles are available through `/api/profiles/by-username` and `/api/profiles/by-id`.
 - Shared run links use `/share/:shareToken` and do not expose template editing.
