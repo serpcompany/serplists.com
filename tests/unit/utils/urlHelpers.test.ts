@@ -43,8 +43,8 @@ describe('getVideoEmbedSource', () => {
   it('turns a Clipy watch URL into its iframe player URL', () => {
     expect(getVideoEmbedSource('https://clipy.online/video/tizg5pl1gkul')).toEqual({
       kind: 'iframe',
-      url: 'https://clipy.online/embed/tizg5pl1gkul?ref=serplists.com',
-      outboundUrl: 'https://clipy.online/video/tizg5pl1gkul?ref=serplists.com',
+      url: 'https://clipy.online/embed/tizg5pl1gkul?ref=m4d8e9p&utm_source=serplists.com',
+      outboundUrl: 'https://clipy.online/video/tizg5pl1gkul?ref=m4d8e9p&utm_source=serplists.com',
     });
   });
 
@@ -55,8 +55,8 @@ describe('getVideoEmbedSource', () => {
       ),
     ).toEqual({
       kind: 'iframe',
-      url: 'https://clipy.online/embed/tizg5pl1gkul?autoplay=1&ref=serplists.com',
-      outboundUrl: 'https://clipy.online/video/tizg5pl1gkul?ref=serplists.com',
+      url: 'https://clipy.online/embed/tizg5pl1gkul?autoplay=1&ref=m4d8e9p&utm_source=serplists.com',
+      outboundUrl: 'https://clipy.online/video/tizg5pl1gkul?ref=m4d8e9p&utm_source=serplists.com',
     });
   });
 
@@ -69,18 +69,31 @@ describe('getVideoEmbedSource', () => {
 });
 
 describe('Clipy outbound links', () => {
-  it('adds or replaces the Serplists referral without dropping other query values', () => {
-    expect(withSerpListsClipyRef('https://www.clipy.online/video/demo?autoplay=1')).toBe(
-      'https://clipy.online/video/demo?autoplay=1&ref=serplists.com',
+  it('canonicalizes Clipy referral parameters without dropping unrelated values or fragments', () => {
+    const result = new URL(withSerpListsClipyRef(
+      'https://www.clipy.online/video/demo?autoplay=1&ref=serplists.com&ref=old&utm_source=old&utm_source=older&utm_medium=email#step-2',
+    ));
+
+    expect(result.hostname).toBe('clipy.online');
+    expect(result.searchParams.getAll('ref')).toEqual(['m4d8e9p']);
+    expect(result.searchParams.getAll('utm_source')).toEqual(['serplists.com']);
+    expect(result.searchParams.get('autoplay')).toBe('1');
+    expect(result.searchParams.get('utm_medium')).toBe('email');
+    expect(result.hash).toBe('#step-2');
+  });
+
+  it('does not change Clipy CDN or non-Clipy URLs', () => {
+    expect(withSerpListsClipyRef('https://cdn.clipy.online/key-moments/demo/image.jpg')).toBe(
+      'https://cdn.clipy.online/key-moments/demo/image.jpg',
     );
-    expect(withSerpListsClipyRef('https://clipy.online/video/demo?ref=old')).toBe(
-      'https://clipy.online/video/demo?ref=serplists.com',
+    expect(withSerpListsClipyRef('https://example.com/video/demo?ref=old')).toBe(
+      'https://example.com/video/demo?ref=old',
     );
   });
 
   it('marks Clipy anchors as new-tab nofollow links', () => {
     expect(getOutboundLinkProps('https://clipy.online/video/demo')).toEqual({
-      href: 'https://clipy.online/video/demo?ref=serplists.com',
+      href: 'https://clipy.online/video/demo?ref=m4d8e9p&utm_source=serplists.com',
       target: '_blank',
       rel: 'nofollow noopener noreferrer',
     });

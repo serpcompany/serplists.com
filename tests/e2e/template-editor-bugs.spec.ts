@@ -201,7 +201,7 @@ test.describe("template editor regressions", () => {
                         id: 'clipy_8fptqlnappr6_video',
                         type: 'video',
                         uploadType: 'url',
-                        value: 'https://clipy.online/video/8fptqlnappr6?ref=serplists.com',
+                        value: 'https://clipy.online/video/8fptqlnappr6?ref=m4d8e9p&utm_source=serplists.com',
                       },
                       {
                         id: 'clipy_8fptqlnappr6_text',
