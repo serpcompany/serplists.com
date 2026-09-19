@@ -5,8 +5,6 @@ Operational notes, debugging lessons, and implementation decisions.
 - [API 1101 auth env fallback](auth-api-1101-env-fallback.md)
 - [Auth email verification MVP lock](auth-email-verification-mvp.md)
 - [Live auth registration/reset fix (2026-02-17)](auth-live-registration-reset-fix-2026-02-17.md)
-- [Official `serp` live password reset script (2026-04-02)](official-serp-live-password-reset-script-2026-04-02.md)
-- [Official `serp` Pro override script (2026-04-02)](official-serp-pro-override-script-2026-04-02.md)
 - [Better Auth on Cloudflare Pages](better-auth-cloudflare-pages.md)
 - [Billing and entitlements decision](billing-entitlements.md)
 - [Billing query cache must be scoped by user (2026-03-21)](billing-query-cache-by-user-2026-03-21.md)
