@@ -2,7 +2,7 @@
 
 This document describes the portable template contract used for template export/import and the content structures stored in D1. Structural validation source of truth: `src/lib/schemas/checklistSchema.ts`.
 
-User-facing examples live in [examples/README.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/README.md).
+User-facing examples live in [examples/README.md](examples/README.md).
 
 ## Storage strategy (D1)
 - `templates.items` stores the full sections JSON today's UI uses (array of sections with nested items/contents).
@@ -43,6 +43,25 @@ Portable template fields are intentionally cleaner than app row exports:
 - optional portable rules are represented as `rules`
 - sections/items/content IDs may be present, but import should not depend on them
 
+Portable round-trips must preserve `seoTitle`, `seoDescription`, and `rules`.
+Rules are structurally stored and exported but are not executed or surfaced as
+validation failures by the current runtime.
+
+## Versioning and compatibility
+
+Three versions serve different contracts:
+
+- `templates.version` is the storage schema version for `templates.items`;
+  its current value is `1`.
+- Backup exports use root format version `1.0.0` and retain each template's
+  storage version.
+- Portable packs use `schemaVersion`; the current portable version is `2.0.0`.
+
+When evolving a format, accept and migrate supported older versions during
+import, keep portable exports on the latest version, and add a D1 migration if
+stored template content also changes. Do not treat the portable pack version as
+the D1 storage version.
+
 ## Practical authoring workflow
 
 For human authoring, the recommended workflow is now YAML-first.
@@ -64,7 +83,7 @@ pnpm templates:check
 
 This has now been verified end-to-end against the real site for the official `serp` publisher account.
 
-Recommended local file shape:
+Suggested untracked local file shape (the directory name is illustrative and must not be linked from tracked documentation):
 
 ```text
 tmp/local-templates/{template-slug}/
@@ -87,31 +106,25 @@ Generated artifacts should not be edited by hand; regenerate them from `template
 
 Copy-pasteable example assets:
 
-- [minimal/template.json](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/template.json)
-- [minimal/README.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/README.md)
-- [minimal/preview.html](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/preview.html)
-- [minimal/template.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/template.md)
-- [minimal/template.yaml](/Users/devin/dev/repos/serplists.com/docs/schema/examples/minimal/template.yaml)
-- [full/template.json](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/template.json)
-- [full/README.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/README.md)
-- [full/preview.html](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/preview.html)
-- [full/template.md](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/template.md)
-- [full/template.yaml](/Users/devin/dev/repos/serplists.com/docs/schema/examples/full/template.yaml)
+- [minimal/template.json](examples/minimal/template.json)
+- [minimal/README.md](examples/minimal/README.md)
+- [minimal/preview.html](examples/minimal/preview.html)
+- [minimal/template.md](examples/minimal/template.md)
+- [minimal/template.yaml](examples/minimal/template.yaml)
+- [full/template.json](examples/full/template.json)
+- [full/README.md](examples/full/README.md)
+- [full/preview.html](examples/full/preview.html)
+- [full/template.md](examples/full/template.md)
+- [full/template.yaml](examples/full/template.yaml)
 
 Example live-tested payload:
 
-- [camping-checklist.json](/Users/devin/dev/repos/serplists.com/docs/schema/camping-checklist.json)
+- [camping-checklist.json](camping-checklist.json)
 
-Live-tested authoring examples created in this repo:
-
-- [template.json](/Users/devin/dev/repos/serplists.com/tmp/local-templates/campsite-breakdown-checklist/template.json)
-- [README.md](/Users/devin/dev/repos/serplists.com/tmp/local-templates/campsite-breakdown-checklist/README.md)
-
-Current live import note:
-
-- The portable import backend works for public templates.
-- The current Templates UI can still block the file picker if `billingEnabled` is false, even when the signed-in user is already `pro`.
-- If that happens, import can still be performed by posting the same portable JSON pack to `POST /api/templates/backup` with an authenticated Pro session.
+The current import UI derives access from the authenticated entitlement response.
+`billingEnabled` controls whether checkout can start; it does not disable the
+file picker for a User who already has import access. No direct API-post
+workaround is required for an entitled User.
 
 ## Backup/export format
 
@@ -130,6 +143,18 @@ export const templateBackupSchema = z.object({
   }).optional(),
 });
 ```
+
+## Import response contract
+
+Backup and portable imports return a structured summary with `total`,
+`imported`, `successes[]`, and `failed[]`. Successful entries identify their
+input index, title, stored id, slug, and visibility. Failures identify their
+index, title, human-readable reason, and stable code. Current failure codes are
+`invalid_sections`, `oversized_asset`, and `insert_failed`.
+
+Mixed-result imports retain both lists. When every template fails, the API
+returns `400` with `code: "template_import_failed"` and the full summary in
+`details`, so clients must not discard all but the first failure.
 
 ## Template structure
 ```ts

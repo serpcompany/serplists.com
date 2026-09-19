@@ -31,10 +31,13 @@ serplists.com/
 ## API
 
 - `functions/api/handlers/admin.ts`
+- `functions/api/handlers/agent-keys.ts`
+- `functions/api/handlers/agentMcp.ts`
 - `functions/api/handlers/auth.ts`
 - `functions/api/handlers/billing.ts`
 - `functions/api/handlers/stripe.ts`
 - `functions/api/handlers/teams.ts`
+- `functions/api/handlers/clipy.ts`
 - `functions/api/handlers/templates.ts`
 - `functions/api/handlers/checklists.ts`
 - `functions/api/handlers/uploads.ts`
@@ -49,6 +52,8 @@ serplists.com/
 - `functions/api/utils/jwt.ts`
 - `functions/api/utils/logger.ts`
 - `functions/api/utils/payloads.ts`
+- `functions/api/utils/personal-run-key.ts`
+- `functions/api/utils/personal-run-mcp-feature.ts`
 - `functions/api/utils/rate-limit.ts`
 - `functions/api/utils/response.ts`
 - `functions/api/utils/session.ts`
@@ -56,6 +61,9 @@ serplists.com/
 - `functions/api/utils/stripe.ts`
 - `functions/api/utils/team-access.ts`
 - `functions/api/utils/team-invite-delivery.ts`
+- `functions/api/utils/template-reconciliation.ts`
+
+`teams.ts`, `team-access.ts`, and related `team` names are legacy implementation identifiers for Organization behavior.
 
 ## Data And Migrations
 
@@ -92,23 +100,35 @@ Current migrations:
 - `0020_add_template_rules.sql`
 - `0021_add_teams_audit_history.sql`
 - `0022_enforce_single_active_team_owner.sql`
+- `0023_add_sitemap_revision_state.sql`
+- `0024_safe_template_evolution.sql`
+- `0025_add_personal_run_keys.sql`
 
 ## App State And Services
 
 - `src/contexts/CloudflareAuthContext.tsx` - Auth state and profile refresh.
-- `src/contexts/WorkspaceContext.tsx` - Personal/team workspace selection and role capabilities.
+- `src/contexts/WorkspaceContext.tsx` - Personal/Organization context selection and Organization Role capabilities; filename and stored key are legacy.
 - `src/contexts/TemplatesContext.tsx` - Templates and runs with React Query.
 - `src/lib/api.ts` - Main API client.
 - `src/lib/routes.ts` - Canonical route builders and legacy route aliases.
 - `src/lib/analytics.ts` - In-memory analytics helper.
 - `src/lib/utils/fileUpload.ts` - Client upload helpers for R2.
 - `src/lib/utils/templateBackup.ts` - Import/export helpers.
+- `src/lib/repoTemplateCatalog.ts` - Repo-backed public Template catalog.
+- `src/lib/schemas/portableTemplateJsonSchema.ts` - Portable Template pack JSON Schema projection.
+- `src/lib/templates/templateMarkdown.ts` - Strict Markdown Template parsing and serialization.
 
 ## Feature Areas
 
 - `src/pages/` - Route-level pages.
-- `src/pages/DashboardSettings.tsx` - Account settings, billing, teams, members, invites, and incoming invites.
-- `src/pages/TeamInviteAccept.tsx` - Link-based team invite acceptance.
+- `src/pages/DashboardSettings.tsx` - Account settings plus current Personal/Organization billing and Organization controls.
+- `src/pages/TeamInviteAccept.tsx` - Link-based Organization invite acceptance; filename is legacy.
+- `src/features/dashboard-runs/` - Dashboard Run actions.
+- `src/features/dashboard-templates/` - Dashboard Template view model.
+- `src/features/run-execution/` - Run execution mapping and headless model.
+- `src/features/template-detail/` - Template detail mapping and headless model.
+- `src/features/template-editor/` - Template editor navigation and headless model.
+- `src/features/teams/` - Organization invite workflow under a legacy directory name.
 - `src/components/template-editor/` - Template editor UI.
 - `src/components/checklist/` - Checklist run UI.
 - `src/components/shared/` - Reusable UI helpers.
@@ -119,8 +139,9 @@ Current migrations:
 - `tests/unit/` - Unit tests for schemas, utils, contexts, pages, components, scripts, and API handlers.
 - `tests/integration/` - API integration tests.
 - `tests/e2e/` - Playwright smoke/e2e tests.
-- `tests/e2e/team-workspace.spec.ts` - Workspace switching and team behavior.
-- `tests/e2e/team-invite-flow.spec.ts` - Link invite and settings invite acceptance flow.
+- `tests/e2e/personal-run-mcp.spec.ts` - Personal Run Key and MCP Run flow.
+- `tests/e2e/team-workspace.spec.ts` - Personal/Organization switching and Organization behavior; filename is legacy.
+- `tests/e2e/team-invite-flow.spec.ts` - Organization invite acceptance flow; filename is legacy.
 
 ## CI And Deploy
 
@@ -135,5 +156,5 @@ Current migrations:
 
 ## Legacy Or Compatibility Code
 
-- `/console/*`, `/account`, and `/dashboard/profile` are legacy route aliases or redirects. New docs and UI should use `/dashboard/*`.
+- `/console/*` routes exist only as compatibility aliases. `/account` and `/dashboard/profile` redirect to `/dashboard/settings`. New docs and UI must use `/dashboard/*`.
 - `src/pages/Account.tsx` is legacy account page code; `/dashboard/settings` is canonical.
