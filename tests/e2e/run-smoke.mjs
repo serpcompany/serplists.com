@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { findOpenPortPair } from "./dev-auto-lib.mjs";
+import { findOpenPortPair } from "../../scripts/dev-auto-lib.mjs";
 
 const DEFAULT_SMOKE_FRONTEND_PORT = 4173;
 const DEFAULT_SMOKE_API_PORT = 8788;
@@ -11,7 +11,7 @@ const DATABASE_NAME = "serp-checklists-db";
 const NPX_COMMAND = process.platform === "win32" ? "cmd.exe" : "npx";
 const NPX_ARGS_PREFIX = process.platform === "win32" ? ["/d", "/s", "/c", "npx"] : [];
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..");
+const repoRoot = path.resolve(scriptDir, "../..");
 const smokePersistPath = path.join(".wrangler", "smoke-state");
 const smokePersistAbsolutePath = path.resolve(repoRoot, smokePersistPath);
 

@@ -16,8 +16,6 @@
     "check:preview:d1-binding": "node scripts/check-preview-d1-binding.mjs",
     "check:prod:d1-schema": "node scripts/check-production-d1-schema.mjs --database serp-checklists-db --label production",
     "check:staging:d1-schema": "node scripts/check-production-d1-schema.mjs --database DB --label staging --preview",
-    "auth:reset:official:serp": "node scripts/reset-official-serp-password.mjs",
-    "billing:set:official:serp": "node scripts/set-official-serp-plan.mjs",
     "schema:portable:generate": "tsx scripts/generate-portable-template-json-schema.ts",
     "schema:portable:check": "tsx scripts/generate-portable-template-json-schema.ts --check",
     "sitemap:generate": "tsx scripts/generate-sitemap-catalog.ts",
@@ -31,7 +29,7 @@
     "test:unit": "pnpm run test:run",
     "test:local-d1": "vitest run tests/integration/local-d1-fixtures.test.ts tests/integration/personal-run-mcp-local-d1.test.ts",
     "test:coverage": "vitest run --coverage",
-    "test:smoke": "node scripts/run-playwright-smoke.mjs",
+    "test:smoke": "node tests/e2e/run-smoke.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "verify:release": "pnpm run lint && pnpm run typecheck && pnpm run test:run && pnpm run test:local-d1 && pnpm run test:smoke",
@@ -60,8 +58,7 @@
     "db:seed:official:local": "npx wrangler d1 execute serp-checklists-db --local --file=./db/seeds/official-templates.sql && pnpm exec tsx scripts/data/local-d1-data.ts seed-official-login",
     "db:seed:official:staging": "npx wrangler d1 execute DB --remote --preview --file=./db/seeds/official-templates.sql",
     "db:seed:official:remote": "npx wrangler d1 execute serp-checklists-db --remote --file=./db/seeds/official-templates.sql",
-    "db:query": "npx wrangler d1 execute serp-checklists-db --local --command",
-    "prepare": "node scripts/install-lefthook.mjs"
+    "db:query": "npx wrangler d1 execute serp-checklists-db --local --command"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
