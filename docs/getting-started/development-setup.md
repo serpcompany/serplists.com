@@ -43,17 +43,31 @@ pnpm run dev:all    # Runs both in parallel
 
 `pnpm run dev:api` serves from `dist/`. If `dist/` does not exist, run `pnpm run build` first.
 
+### Adaptive local ports
+
+The normal development commands coordinate the frontend and API as a port
+pair. They prefer `8080` and `8788`; if either is occupied, both move together
+to the next available pair. The selected URLs are printed at startup and saved
+in `tmp/dev-session.json` so separately started frontend and API commands reuse
+the same pair. `pnpm run dev:auto` is an alias for `pnpm run dev:all`.
+
+The launcher updates `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, `PORT`, and
+`VITE_API_URL` together. Do not hand-adjust only one side after a fallback,
+because Better Auth trusted origins and API CORS must match the frontend origin.
+The session file is local coordination state, not an automation interface.
+
 ## Local database (D1)
 ```bash
 pnpm run db:migrate:d1:local
 pnpm run db:seed
+pnpm run db:seed:official:local
 pnpm run db:reset
 pnpm run db:migrations:list:local
 pnpm run db:reset:test-user-passwords
 pnpm run db:query "SELECT * FROM templates LIMIT 5"
 ```
 
-Local D1 state lives under `.wrangler/state/...`. The `db:seed` script seeds local test users, sample team data, pending team invites, team entitlement overrides, audit rows, and the official `serp` publisher/templates. The `db:reset` script clears local state, applies tracked D1 migrations through Wrangler, and then runs those same local seeds.
+Local D1 state lives under `.wrangler/state/...`. The `db:seed` script seeds local test Users, sample Organization data, pending invites, Organization entitlement overrides, audit rows, and the official `serp` publisher/Templates. The fixtures retain legacy `team` implementation names. The `db:reset` script clears local state, applies tracked D1 migrations through Wrangler, and then runs those same local seeds.
 
 Drizzle schema lives in `db/schema/` (entry: `db/schema/index.ts`); Drizzle Kit config in `db/drizzle.config.ts`.
 
@@ -62,13 +76,13 @@ The official local publisher seed creates:
 - display name `SERP`
 - a small set of official public templates owned by that account
 
-The local team seed creates data for verifying:
-- workspace switching
-- team membership display
+The local Organization seed creates data for verifying:
+- ownership-context switching
+- Organization Membership display
 - pending incoming invites
 - invite acceptance
-- team entitlement behavior
-- team audit/activity history
+- Organization entitlement behavior
+- Organization audit/activity history
 
 ## Remote database commands
 Use the staging/preview database before production. Preview deployments must not point to production D1.
@@ -117,17 +131,23 @@ If login fails, verify:
 2. `pnpm run db:seed` or `pnpm run db:reset` has been executed
 3. the browser is talking to `http://localhost:8788/api` or the intended `VITE_API_URL`
 
-## Team flow verification
-Use `/dashboard/settings` for team creation, team management, and incoming invites.
+Repeated auth POST/PUT requests can also reach the local per-IP allowance of
+300 requests per hour and return `429 Too Many Requests`. If a seeded-persona
+login unexpectedly fails during intensive QA, check the API response and logs
+for `429` before resetting credentials or debugging session state. Production
+keeps the stricter auth limit.
+
+## Organization flow verification
+Use `/dashboard/settings` for Organization creation, management, and incoming invites.
 
 Useful local flow:
 
-1. Log in with `admin@test.com` and create a team from `/dashboard/settings`.
+1. Log in with `admin@test.com` and create an Organization from `/dashboard/settings`.
 2. Create a link invite for another seeded or newly registered email.
 3. Log out or use a separate browser context.
 4. Register or log in as the invitee.
-5. Accept from `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
-6. Confirm the workspace switcher shows the accepted team and that personal workspace data remains separate.
+5. Accept from the legacy compatibility route `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
+6. Confirm the context switcher shows the accepted Organization and that Personal data remains separate.
 
 ## Testing and checks
 Install Playwright browsers once before running e2e/smoke tests:
@@ -150,7 +170,25 @@ pnpm run secret:scan
 pnpm run verify:release
 ```
 
-The smoke suite includes route/auth/team coverage. Team-specific Playwright specs live in:
+Playwright uses an isolated local origin contract instead of the adaptive human
+development session:
+
+- frontend: `http://localhost:4173`
+- API: `http://localhost:8788`
+- local runs may reuse servers on those ports; CI starts fresh unless
+  `PLAYWRIGHT_REUSE_EXISTING_SERVER=1` is set
+- the Playwright API process receives matching `FRONTEND_URL` and
+  `CORS_ALLOWED_ORIGINS` bindings
+
+Include both `http://localhost:8080` and `http://localhost:4173` in the local
+origin allowlist when manual development and Playwright run side by side. Keep
+both services on the `localhost` host name; mixing `127.0.0.1` with `localhost`
+can cause `SameSite=Lax` session cookies to be dropped.
+
+See [Testing reference](../reference/testing.md) for Vitest configuration,
+mocking, and environment-safety conventions.
+
+The smoke suite includes route, auth, and Organization coverage. The relevant specs retain legacy `team` filenames:
 
 ```bash
 pnpm run test:e2e -- tests/e2e/team-workspace.spec.ts

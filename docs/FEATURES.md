@@ -28,9 +28,9 @@ Canonical private routes:
 
 - Users can create, edit, archive, restore, import, and export templates.
 - Template detail pages render a read-only preview first. Editing happens on `/dashboard/templates/:id/edit`.
-- Template content updates reconcile into matching active, private runs for the same owner/workspace. Stable section, item, and sub-item IDs preserve run completion and notes across renames and reordering; new work arrives incomplete, and retired work leaves readiness calculations while remaining in run history.
+- Template content updates reconcile into matching active, private runs for the same Resource Owner. Stable section, item, and sub-item IDs preserve run completion and notes across renames and reordering; new work arrives incomplete, and retired work leaves readiness calculations while remaining in run history.
 - Public templates can be shared at `/profile/{username}/{templateSlug}`.
-- Other users can copy public templates into their account or an authorized team workspace when their active entitlement context allows it.
+- Other Users can copy public templates into Personal or an authorized Organization when that ownership context's entitlement allows it.
 - Template history is stored in `template_versions`; related actor/action history is stored in `audit_events`.
 
 ## Runs And Sharing
@@ -46,27 +46,27 @@ Canonical private routes:
 - Shared runs do not expose owner-only title editing or destructive actions.
 - Current run gating is plan-limit based through active-run limits.
 
-## Team Workspaces
+## Personal And Organization Contexts
 
-- Users always have a personal workspace and can belong to team workspaces.
-- Team workspace templates and runs are shared with active team members.
-- Workspace switching is available from the dashboard shell and persists locally.
-- Team roles:
-  - `owner`: full team management and ownership transfer.
-  - `admin`: manage team settings, members, and invites.
-  - `editor`: edit team templates and start runs.
+- Users always have a Personal context and can belong to Organizations.
+- Organization-owned templates and runs are shared with active Organization members.
+- Context switching is available from the dashboard shell and persists locally. This remembered selection is transitional convenience state; canonical Organization routes are tracked in issue #212.
+- Organization roles:
+  - `owner`: full Organization management and ownership transfer.
+  - `admin`: manage Organization settings, members, and invites.
+  - `editor`: edit Organization templates and start runs.
   - `runner`: start and execute runs.
   - `viewer`: read-only access.
-- Team management lives on `/dashboard/settings`.
-- Team invites are link-based today. Invitees can accept from `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
-- Team changes and template changes are recorded in DB-backed audit/history tables.
+- Organization management currently lives on `/dashboard/settings`.
+- Organization invites are link-based today. The legacy compatibility route `/team-invites/:token` and incoming invites on `/dashboard/settings` support acceptance.
+- Organization and Template changes are recorded in D1-backed audit/history tables.
 
 ## Entitlements
 
 - Free users have limited personal templates and active runs.
-- Pro users have paid personal-workspace limits.
-- Team entitlements apply only inside the selected team workspace.
-- A Free user on a paid team can use paid team capabilities through that team. Their personal workspace remains Free.
+- Pro Users have paid Personal limits.
+- Organization entitlements apply only inside the selected Organization context.
+- A Free User in a paid Organization can use paid capabilities for that Organization. Their Personal context remains Free.
 - The API is the source of truth for entitlements. UI gating mirrors API behavior.
 
 ## Dev Personas
@@ -81,13 +81,13 @@ Local seeds create these users:
 
 Password for all seeded users: `password123`.
 
-`admin@test.com` and `jane@test.com` are treated as Pro dev personas. `john@test.com` and `bob@test.com` remain Free. Local seeds also include team memberships, pending invites, team entitlement overrides, and audit rows for team verification.
+`admin@test.com` and `jane@test.com` are treated as Pro dev personas. `john@test.com` and `bob@test.com` remain Free. Local seeds also include Organization Memberships, pending invites, Organization entitlement overrides, and audit rows. The underlying fixtures retain legacy `team` implementation names.
 
 ## Error Contract
 
 - `401 Unauthorized`: the user must sign in.
-- `403 upgrade_required`: the active user/workspace needs a paid entitlement.
-- `403 limit_reached`: the active user/workspace hit a plan limit.
+- `403 upgrade_required`: the active Personal or Organization context needs a paid entitlement.
+- `403 limit_reached`: the active Personal or Organization context hit a plan limit.
 - `403 Forbidden`: the user is signed in but lacks the required role or permission.
 - `503 billing_unavailable`: paid action cannot be started because billing config is unavailable.
 - `503 auth_email_unavailable`: auth email delivery is unavailable for flows that require outbound email.

@@ -61,19 +61,19 @@ pnpm run check:prod:d1-schema
 - API (Pages Functions dev): http://localhost:8788
 - API base: `http://localhost:8788/api` in dev, `/api` in production
 - Settings/account: `/dashboard/settings`
-- Team invite links: `/team-invites/:token`
+- Organization invite links: `/team-invites/:token` (legacy compatibility route)
 
 ## Core API routes
 - Auth (Better Auth): `POST /api/auth/sign-up/email`, `POST /api/auth/sign-in/email`, `POST /api/auth/sign-out`, `GET /api/auth/get-session`
 - Public profiles: `GET /api/profiles/by-username`, `GET /api/profiles/by-id`
 - Templates: `GET /api/templates`, `GET /api/templates/:id`, `GET /api/templates/slug/:slug`, `GET /api/templates/public?userId=...`, `POST /api/templates`, `PUT|DELETE /api/templates/:id`
 - Runs: `GET /api/checklists`, `GET /api/checklists/:id`, `POST /api/checklists`, `PUT|DELETE /api/checklists/:id`
-- Teams: `GET|POST /api/teams`, `GET|PUT /api/teams/:teamId`, `GET /api/teams/:teamId/members`, `PUT /api/teams/:teamId/members/:memberId`, `PUT /api/teams/:teamId/owner`
-- Team invites: `GET|POST /api/teams/:teamId/invites`, `DELETE /api/teams/:teamId/invites/:inviteId`, `GET /api/teams/invites/pending`, `POST /api/teams/invites/pending/:inviteId/accept`, `POST /api/teams/invites/:token/accept`
-- Team activity: `GET /api/teams/:teamId/activity`
+- Organizations (legacy `/api/teams` identifiers): `GET|POST /api/teams`, `GET|PUT /api/teams/:teamId`, `GET /api/teams/:teamId/members`, `PUT /api/teams/:teamId/members/:memberId`, `PUT /api/teams/:teamId/owner`
+- Organization invites (legacy identifiers): `GET|POST /api/teams/:teamId/invites`, `DELETE /api/teams/:teamId/invites/:inviteId`, `GET /api/teams/invites/pending`, `POST /api/teams/invites/pending/:inviteId/accept`, `POST /api/teams/invites/:token/accept`
+- Organization activity (legacy identifier): `GET /api/teams/:teamId/activity`
 - Uploads: `POST /api/uploads`, `GET|HEAD|DELETE /api/uploads/file?key=...`
 
-Template and run APIs accept `teamId` where workspace scoping is supported.
+Template and Run APIs accept the legacy `teamId` parameter where Organization scoping is supported.
 
 Run responses include `template_version`, `current_template_version`, `revision`, and derived `is_stale`. Send `expected_revision` when updating a run and `expected_version` when updating a template. Reconcile and reopen a completed private run with `POST /api/checklists/:id/revalidate`.
 
@@ -84,7 +84,9 @@ Run responses include `template_version`, `current_template_version`, `revision`
 - Default password: `password123`
 - Restore changed local test-user passwords: `pnpm run db:reset:test-user-passwords`
 
-## Team-focused tests
+## Organization-focused tests
+
+These test filenames retain legacy `team` identifiers.
 ```bash
 pnpm run test:run tests/unit/functions/api/teams-handler.test.ts
 pnpm run test:run tests/unit/components/TeamSettingsSection.test.tsx

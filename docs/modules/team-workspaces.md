@@ -1,18 +1,22 @@
-# Team Workspaces Module
+# Organization Context Module
 
-Team workspaces let multiple authenticated users share templates, start and view runs, and manage membership without adding new paid infrastructure. All ownership, role, invite, entitlement, and history data lives in D1.
+Organizations let multiple authenticated Users share Templates, start and view Runs, and manage membership without adding paid infrastructure. All ownership, role, invite, entitlement, and history data lives in D1.
+
+The filename and implementation identifiers in this document retain legacy
+`team` naming. User-facing language follows [the domain glossary](../../CONTEXT.md)
+and [ADR 0001](../adr/0001-use-personal-and-organization-contexts.md).
 
 ## Product Contract
 
-- Every signed-in user always has a personal workspace.
-- A user can also belong to one or more team workspaces.
-- Templates and runs are scoped to the selected workspace.
-- Personal data stays personal. A team membership does not upgrade or expose a user's personal templates, runs, or limits.
-- Team entitlements apply only while the team workspace is active. A Free user on a paid team can use the paid team capabilities in that team, but their personal workspace remains Free unless they upgrade their own account.
+- Every signed-in User always has a Personal ownership context.
+- A User can also belong to one or more Organizations.
+- Templates and Runs are scoped to the selected Personal or Organization context.
+- Personal data stays Personal. Organization Membership does not upgrade or expose a User's Personal Templates, Runs, or limits.
+- Organization entitlements apply only while that Organization context is active. A Free User in a paid Organization can use its paid capabilities, but their Personal context remains Free unless they upgrade their own plan.
 
 ## Roles
 
-| Role | Team management | Template editing | Run execution | Read access |
+| Role | Organization management | Template editing | Run execution | Read access |
 | --- | --- | --- | --- | --- |
 | `owner` | Yes | Yes | Yes | Yes |
 | `admin` | Yes | Yes | Yes | Yes |
@@ -20,46 +24,46 @@ Team workspaces let multiple authenticated users share templates, start and view
 | `runner` | No | No | Yes | Yes |
 | `viewer` | No | No | No | Yes |
 
-There must be exactly one active owner per team. Ownership transfers demote the current owner to `admin` and promote the selected active member to `owner`.
+There must be exactly one active `owner` role per Organization. Role transfers demote the current `owner` to `admin` and promote the selected active member to `owner`.
 
 ## Data Model
 
 Source of truth: `db/migrations/0021_add_teams_audit_history.sql` and `db/migrations/0022_enforce_single_active_team_owner.sql`.
 
-- `teams`: team identity, slug, creator, billing owner, and archive status.
-- `team_members`: user memberships, role, status, inviter, and join timestamps.
-- `team_invites`: hashed link tokens, invitee email, requested role, expiration, acceptance, and revocation state.
-- `team_entitlement_overrides`: D1-backed team plan overrides. This is the no-new-cost path for team plan access until billing is expanded.
-- `audit_events`: append-only actor/resource/action history for team and template changes.
+- `teams`: legacy implementation table for Organization identity, slug, creator, billing owner, and archive status.
+- `team_members`: legacy implementation table for Organization Membership, role, status, inviter, and join timestamps.
+- `team_invites`: legacy implementation table for hashed Organization invite tokens and their lifecycle.
+- `team_entitlement_overrides`: legacy implementation table for D1-backed Organization plan overrides.
+- `audit_events`: append-only actor/resource/action history for Organization and Template changes.
 - `template_versions`: snapshot history for template changes with changed-by user and subject scope.
-- `templates.owner_type`, `templates.team_id`, `templates.created_by_user_id`, `templates.updated_by_user_id`, `templates.deleted_at`: workspace ownership and soft-delete support.
-- `checklist_runs.team_id`, `checklist_runs.created_by_user_id`, `checklist_runs.assigned_to_user_id`, `checklist_runs.started_by_user_id`, `checklist_runs.completed_by_user_id`, `checklist_runs.deleted_at`: team run ownership and attribution.
+- `templates.owner_type`, `templates.team_id`, `templates.created_by_user_id`, `templates.updated_by_user_id`, `templates.deleted_at`: Resource Owner scope and soft-delete support; `team_id` is the legacy Organization foreign key.
+- `checklist_runs.team_id`, `checklist_runs.created_by_user_id`, `checklist_runs.assigned_to_user_id`, `checklist_runs.started_by_user_id`, `checklist_runs.completed_by_user_id`, `checklist_runs.deleted_at`: Organization Run ownership and attribution; `team_id` is the legacy Organization foreign key.
 
 ## API Routes
 
-Team routes require a Better Auth session cookie.
+Organization operations use legacy `/api/teams` route identifiers and require a Better Auth session cookie.
 
-- `GET /api/teams`: list active teams for the current user.
-- `POST /api/teams`: create a team and owner membership.
-- `GET /api/teams/:teamId`: read team details for a member.
-- `PUT /api/teams/:teamId`: update team name or slug. Requires `owner` or `admin`.
+- `GET /api/teams`: list active Organizations for the current User.
+- `POST /api/teams`: create an Organization and its `owner` membership.
+- `GET /api/teams/:teamId`: read Organization details for a member.
+- `PUT /api/teams/:teamId`: update an Organization name or slug. Requires `owner` or `admin`.
 - `GET /api/teams/:teamId/members`: list members. Managers can see inactive rows; non-managers see active members.
 - `PUT /api/teams/:teamId/members/:memberId`: update role or status. Requires `owner` or `admin`; owners cannot be changed through this route.
-- `PUT /api/teams/:teamId/owner`: transfer team ownership. Requires current `owner`.
+- `PUT /api/teams/:teamId/owner`: transfer the Organization's `owner` role. Requires current `owner`.
 - `GET /api/teams/:teamId/invites`: list pending invites. Requires `owner` or `admin`.
 - `POST /api/teams/:teamId/invites`: create a link invite. Requires `owner` or `admin`.
 - `DELETE /api/teams/:teamId/invites/:inviteId`: revoke a pending invite. Requires `owner` or `admin`.
-- `GET /api/teams/:teamId/activity`: read team audit history. Requires `owner` or `admin`.
+- `GET /api/teams/:teamId/activity`: read Organization audit history. Requires `owner` or `admin`.
 - `GET /api/teams/invites/pending`: list pending invites for the current user's email.
 - `POST /api/teams/invites/pending/:inviteId/accept`: accept from the settings page.
 - `POST /api/teams/invites/:token/accept`: accept from a link.
 
-Template and run routes accept `teamId` where workspace scoping is supported:
+Template and Run routes accept the legacy `teamId` parameter where Organization scoping is supported:
 
 - `GET /api/templates?teamId=...`
 - `GET /api/templates/archived?teamId=...`
 - `POST /api/templates` with `teamId`
-- `PUT /api/templates/:id` in the active workspace
+- `PUT /api/templates/:id` in the active ownership context
 - `POST /api/templates/:id/clone` with `teamId`
 - `GET /api/checklists?teamId=...`
 - `GET /api/checklists/archived?teamId=...`
@@ -73,21 +77,21 @@ Invites are link-based today:
 1. A manager creates an invite from `/dashboard/settings`.
 2. The API stores only `token_hash`, never the raw invite token.
 3. The response includes `delivery.mode = "link"`, `invitePath`, and `inviteUrl`.
-4. Invitees can accept through `/team-invites/:token` or from the incoming invites area on `/dashboard/settings`.
+4. Invitees can accept through the legacy compatibility route `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
 
 The API response already uses a `delivery` object so email can be added later without changing the UI contract. A future email implementation should keep the link accept route and switch delivery from `link` to a queued/sent email mode.
 
 ## UI Flow
 
-- Workspace state is managed by `src/contexts/WorkspaceContext.tsx`.
-- Active workspace is persisted in local storage with `serplists.activeWorkspaceId`.
-- Templates and runs invalidate React Query caches when the workspace changes.
-- `/dashboard/settings` is the canonical account, team, member, invite, billing, and incoming-invite page.
+- Context state is managed by the legacy-named `src/contexts/WorkspaceContext.tsx`.
+- The remembered context is persisted under the legacy local-storage key `serplists.activeWorkspaceId`.
+- Templates and Runs invalidate React Query caches when the context changes.
+- `/dashboard/settings` currently combines Account, Organization, member, invite, and billing controls; issue #206 tracks their explicit separation.
 - `/account` and `/dashboard/profile` are legacy redirects to `/dashboard/settings`.
 
 ## Audit And History
 
-Team changes write to `audit_events` with actor, subject, resource, action, before/after/diff JSON, request id, hashed IP, user agent, and timestamp.
+Organization changes write to `audit_events` with actor, subject, resource, action, before/after/diff JSON, request id, hashed IP, user agent, and timestamp.
 
 Template changes write both:
 
@@ -112,7 +116,7 @@ Seeded dev users:
 
 Password for all seeded users: `password123`.
 
-The local seed includes team data, memberships, invites, team entitlement overrides, and audit rows so the team settings UI can be verified without creating all data manually.
+The local seed includes Organization data, memberships, invites, entitlement overrides, and audit rows. Fixture and test filenames retain legacy `team` identifiers.
 
 Targeted checks:
 
