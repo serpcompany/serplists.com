@@ -43,6 +43,25 @@ Portable template fields are intentionally cleaner than app row exports:
 - optional portable rules are represented as `rules`
 - sections/items/content IDs may be present, but import should not depend on them
 
+Portable round-trips must preserve `seoTitle`, `seoDescription`, and `rules`.
+Rules are structurally stored and exported but are not executed or surfaced as
+validation failures by the current runtime.
+
+## Versioning and compatibility
+
+Three versions serve different contracts:
+
+- `templates.version` is the storage schema version for `templates.items`;
+  its current value is `1`.
+- Backup exports use root format version `1.0.0` and retain each template's
+  storage version.
+- Portable packs use `schemaVersion`; the current portable version is `2.0.0`.
+
+When evolving a format, accept and migrate supported older versions during
+import, keep portable exports on the latest version, and add a D1 migration if
+stored template content also changes. Do not treat the portable pack version as
+the D1 storage version.
+
 ## Practical authoring workflow
 
 For human authoring, the recommended workflow is now YAML-first.
@@ -125,6 +144,18 @@ export const templateBackupSchema = z.object({
   }).optional(),
 });
 ```
+
+## Import response contract
+
+Backup and portable imports return a structured summary with `total`,
+`imported`, `successes[]`, and `failed[]`. Successful entries identify their
+input index, title, stored id, slug, and visibility. Failures identify their
+index, title, human-readable reason, and stable code. Current failure codes are
+`invalid_sections`, `oversized_asset`, and `insert_failed`.
+
+Mixed-result imports retain both lists. When every template fails, the API
+returns `400` with `code: "template_import_failed"` and the full summary in
+`details`, so clients must not discard all but the first failure.
 
 ## Template structure
 ```ts

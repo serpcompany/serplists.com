@@ -12,6 +12,7 @@ The persistence layer uses Cloudflare D1 for transactional data, Cloudflare Page
 - `functions/api/utils/team-access.ts` - Team membership and role authorization helpers.
 - `functions/api/utils/audit.ts` - Audit event value builder.
 - `db/schema/` - Drizzle schema used by runtime queries.
+- `db/schema.sql` - maintained reference snapshot for local inspection.
 - `db/types/` - Drizzle model types.
 - `db/migrations/*.sql` - D1 schema history.
 - `db/seeds/` - local and official seed data.
@@ -20,6 +21,8 @@ The persistence layer uses Cloudflare D1 for transactional data, Cloudflare Page
 - `src/contexts/WorkspaceContext.tsx` - Personal/team workspace state.
 - `src/contexts/TemplatesContext.tsx` - Templates and runs with React Query.
 - `src/lib/utils/templateBackup.ts` - Import/export helpers.
+- `src/lib/repoTemplateCatalog.ts` - Repo-backed portable template catalog.
+- `src/data/public-template-packs/*.json` - Repo-backed public template packs.
 
 ## Source Of Truth
 
@@ -93,9 +96,36 @@ Main server handlers:
 
 Team lists are fetched by `WorkspaceContext` and keyed by current user id.
 
+Billing query keys are also user-scoped. A session change must not reuse another
+user's cached entitlement response, and the UI should show a neutral loading
+state until the current user's plan is known.
+
 ## Import/Export
 
 Template backup and portable import/export are implemented through `src/lib/utils/templateBackup.ts` and the template backup API routes. Team imports/exports pass `teamId` so imported templates land in the selected team workspace when authorized.
+
+The portable contract is shared by uploaded files and repo-backed public packs.
+Repo packs live in `src/data/public-template-packs/*.json` and are normalized by
+the same validation path as uploaded packs. If a repo pack and D1 template have
+the same public slug, the repo entry wins in the public catalog. Saving a repo
+template creates a private D1 template; starting a run uses its normalized
+sections and does not require a source D1 row.
+
+Create and update saves are awaitable end to end. UI success and navigation
+must wait for confirmed persistence, and update flows must preserve existing
+portable metadata such as `rules` when it is not being edited.
+
+See [the template schema](../schema/README.md) for versioning, metadata
+round-trip, and structured import-result contracts.
+
+## Shared-run links
+
+Sharing is run-scoped. Each share action mints a fresh token for the current
+run and deactivates any previously active shared run for the same user/template
+so older guest links do not remain active or count toward active-run limits.
+The public guest URL is `/share/:token`. When sharing fails, distinguish an
+entitlement `limit_reached` response from schema/migration failures before
+changing sharing logic.
 
 ## Seeds
 

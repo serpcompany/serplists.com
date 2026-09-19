@@ -9,6 +9,12 @@
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRO_PRICE_ID`
 
+Checkout capability requires `STRIPE_SECRET_KEY` and `STRIPE_PRO_PRICE_ID`.
+Webhook verification separately requires `STRIPE_WEBHOOK_SECRET`. Billing
+status, checkout, portal, and subscription lookup must not be disabled solely
+because the webhook secret is absent; only the webhook endpoint depends on
+webhook configuration.
+
 ## Bootstrap (create Product + Prices)
 If you want to create Stripe resources programmatically, use:
 
@@ -47,3 +53,10 @@ Webhook:
 
 ## Implementation note
 This project calls Stripe via `fetch` (form-encoded) and verifies webhook signatures using HMAC-SHA256 against the raw request body (no `stripe-node` dependency).
+
+Webhook event rows provide idempotency and retry state. A successfully handled
+event is a duplicate on replay. An event with a recorded processing error must
+be retried, and processing failures return `500` so Stripe will deliver the
+event again. Subscription events upsert their customer mapping before writing
+subscription state; checkout completion may use `metadata.userId` when
+`client_reference_id` is absent.

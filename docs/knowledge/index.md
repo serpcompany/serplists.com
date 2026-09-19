@@ -1,34 +1,14 @@
 # Knowledge Base
 
-Operational notes, debugging lessons, and implementation decisions.
+Reusable implementation contracts, troubleshooting procedures, and operational
+runbooks. Closed-issue timelines belong in Git history rather than this index.
 
-- [API 1101 auth env fallback](auth-api-1101-env-fallback.md)
-- [Auth email verification MVP lock](auth-email-verification-mvp.md)
-- [Live auth registration/reset fix (2026-02-17)](auth-live-registration-reset-fix-2026-02-17.md)
 - [Better Auth on Cloudflare Pages](better-auth-cloudflare-pages.md)
-- [Billing and entitlements decision](billing-entitlements.md)
-- [Billing query cache must be scoped by user (2026-03-21)](billing-query-cache-by-user-2026-03-21.md)
 - [Cloudflare Pages GitHub Actions](cloudflare-pages-github-actions.md)
-- [Checklist share run: fresh token + deactivation](checklist-share-run-fresh-token-2026-03-21.md)
 - [CORS and rate limits](cors-rate-limits-pages-functions.md)
 - [D1 backup/restore and R2 lifecycle](d1-backup-restore-r2-lifecycle.md)
-- [Dev persona password reset (2026-03-21)](dev-persona-password-reset-2026-03-21.md)
 - [Drizzle with D1 on Pages Functions](drizzle-d1-pages-functions.md)
 - [Entitlements admin override](entitlements-admin-override.md)
-- [Entitlements admin override in production (2026-03-21)](entitlements-admin-override-production-2026-03-21.md)
-- [Entitlements enforcement](entitlements-enforcement.md)
 - [Environment validation](env-validation-vite-cloudflare.md)
 - [Incident response runbook](incident-response-runbook.md)
-- [Production schema drift broke save/copy flows (2026-03-21)](production-schema-drift-save-copy-fix-2026-03-21.md)
-- [Template import summary and schema snapshot policy (2026-03-24)](template-import-summary-and-schema-snapshot-2026-03-24.md)
-- [Template editor RHF foundation (2026-03-24)](template-editor-rhf-foundation-2026-03-24.md)
-- [Repo-backed template catalog (2026-03-22)](repo-template-catalog-2026-03-22.md)
-- [Release verification handler-test drift (2026-03-21)](release-verification-handler-test-drift-2026-03-21.md)
 - [Stripe billing setup](stripe-billing-setup.md)
-- [Template editor SEO and taxonomy fixes (2026-03-21)](template-editor-seo-and-taxonomy-fixes-2026-03-21.md)
-- [Portable template metadata persistence (2026-03-24)](template-portable-metadata-persistence-2026-03-24.md)
-- [Template JSON versioning](template-json-versioning.md)
-- [Test users and production safety](test-users-production-safety.md)
-- [Vitest coverage](vitest-coverage.md)
-- [Vitest Drizzle mocking](vitest-drizzle-mocking.md)
-- [Vitest exclude defaults](vitest-exclude-node-modules.md)
