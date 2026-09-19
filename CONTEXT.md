@@ -1,39 +1,35 @@
 # SERP Lists Domain
 
-SERP Lists lets people and teams own reusable templates and execute them as runs. This glossary defines the product language used across public profiles and authenticated workspaces.
+SERP Lists lets people and organizations own reusable templates and execute them as runs. This glossary defines the product language used across public profiles and the authenticated console.
 
 ## Identity and ownership
 
 **User**:
-An authenticated human identity that can act in a Personal Workspace and belong to Teams.
+An authenticated human identity that can own personal resources and belong to Organizations.
 _Avoid_: Profile, account, member
 
 **Account**:
 The private login, security, and personal billing record associated with a User.
-_Avoid_: Workspace, profile, Team
+_Avoid_: Organization, profile
 
-**Workspace**:
-The ownership context in which a User is currently operating. A Workspace is either Personal or a Team.
-_Avoid_: Account, organization
+**Personal**:
+The default ownership context in which a User directly owns templates and runs.
+_Avoid_: Personal Workspace, personal Organization, personal Team
 
-**Personal Workspace**:
-The Workspace in which a User owns and operates their personal templates and runs.
-_Avoid_: Personal account, personal team
+**Organization**:
+A shared resource owner with members and roles that can own templates and runs independently of any one User.
+_Avoid_: Team, Workspace, org, Team account
 
-**Team**:
-A shared Workspace with members and roles that can own templates and runs independently of any one member.
-_Avoid_: Organization, org, organization account, team account
+**Organization Membership**:
+The relationship that gives a User a role in an Organization.
+_Avoid_: Team membership, ownership, profile
 
-**Membership**:
-The relationship that gives a User a role in a Team.
-_Avoid_: Ownership, profile
-
-**Team Role**:
-The permission level a Membership grants inside one Team.
+**Organization Role**:
+The permission level an Organization Membership grants inside one Organization.
 _Avoid_: Plan, entitlement
 
 **Resource Owner**:
-The Personal Workspace or Team that controls a template or run.
+The User acting Personally or the Organization that controls a template or run.
 _Avoid_: Creator, editor, member
 
 **Creator**:
@@ -43,12 +39,12 @@ _Avoid_: Owner
 ## Public identity
 
 **Profile Owner**:
-A User or Team that has a public identity and may publish templates.
-_Avoid_: Organization, publisher account
+A User or Organization that has a public identity and may publish templates.
+_Avoid_: Publisher account
 
 **Public Handle**:
 The globally unique public name claimed by one Profile Owner.
-_Avoid_: Username or team slug when referring to both owner types
+_Avoid_: Username or Organization slug when referring to both owner types
 
 **Public Profile**:
 The public representation of a Profile Owner and that owner's public templates.
@@ -73,7 +69,7 @@ A code agent that acts through explicitly delegated access without becoming a Us
 _Avoid_: Agent user, machine profile
 
 **Run Key**:
-A revocable credential that authorizes an Agent to operate runs within its permitted Workspace scope.
+A revocable credential that authorizes an Agent to operate runs within its permitted Personal or Organization scope.
 _Avoid_: User session, agent account
 
 ## Visibility
@@ -83,5 +79,5 @@ A Template intentionally visible through its owner's Public Profile and public d
 _Avoid_: Shared run
 
 **Private Template**:
-A Template visible only to authorized people and agents in its owning Workspace.
+A Template visible only to authorized people and agents acting for its Resource Owner.
 _Avoid_: Unpublished draft
