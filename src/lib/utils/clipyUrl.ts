@@ -1,6 +1,7 @@
 const CLIPY_HOSTS = new Set(['clipy.online', 'www.clipy.online']);
 
-export const CLIPY_REFERRER = 'serplists.com';
+export const CLIPY_REFERRER = 'm4d8e9p';
+export const CLIPY_UTM_SOURCE = 'serplists.com';
 
 export function isClipyUrl(value: string): boolean {
   try {
@@ -20,6 +21,7 @@ export function withSerpListsClipyRef(value: string): string {
 
     parsed.hostname = 'clipy.online';
     parsed.searchParams.set('ref', CLIPY_REFERRER);
+    parsed.searchParams.set('utm_source', CLIPY_UTM_SOURCE);
     return parsed.toString();
   } catch {
     return value;

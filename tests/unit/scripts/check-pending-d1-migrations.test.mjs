@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { evaluateMigrationListResult } from "./check-pending-d1-migrations.mjs";
+import { evaluateMigrationListResult } from "../../../scripts/check-pending-d1-migrations.mjs";
 
 describe("pending D1 migration gate", () => {
   it("passes only Wrangler's explicit no-pending result", () => {

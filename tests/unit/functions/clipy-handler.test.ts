@@ -142,7 +142,8 @@ describe('Clipy template generation', () => {
       expect.objectContaining({ headers: { Accept: 'application/json' } }),
     );
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
+    const payload = await response.json();
+    expect(payload).toMatchObject({
       draft: {
         title: 'Creating Issues In GitHub Repositories',
         description: 'Create a clear GitHub issue that a developer can act on.',
@@ -154,6 +155,10 @@ describe('Clipy template generation', () => {
         seoDescription: 'Create a clear GitHub issue that a developer can act on. Includes 5 actionable steps from the recorded walkthrough.',
         sections: [{ id: 'clipy_8fptqlnappr6_steps', title: 'Steps' }],
       },
+    });
+    expect(payload.draft.sections[0].items[0].contents[0]).toMatchObject({
+      type: 'video',
+      value: 'https://clipy.online/video/8fptqlnappr6?ref=m4d8e9p&utm_source=serplists.com',
     });
   });
 

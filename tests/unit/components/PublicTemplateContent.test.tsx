@@ -54,8 +54,8 @@ describe('PublicTemplateContent', () => {
       />,
     );
 
-    expect(html).toContain('src="https://clipy.online/embed/8fptqlnappr6?ref=serplists.com"');
-    expect(html).toContain('href="https://clipy.online/video/8fptqlnappr6?ref=serplists.com"');
+    expect(html).toContain('src="https://clipy.online/embed/8fptqlnappr6?ref=m4d8e9p&amp;utm_source=serplists.com"');
+    expect(html).toContain('href="https://clipy.online/video/8fptqlnappr6?ref=m4d8e9p&amp;utm_source=serplists.com"');
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="nofollow noopener noreferrer"');
   });
