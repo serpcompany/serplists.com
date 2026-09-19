@@ -158,7 +158,7 @@ pnpm run test:e2e -- tests/e2e/team-invite-flow.spec.ts
 ```
 
 ## Git hooks
-Hooks are installed via `pnpm install` (prepare). If needed:
+Install the optional local Git hooks explicitly:
 ```bash
 pnpm exec lefthook install
 ```

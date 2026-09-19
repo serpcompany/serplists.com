@@ -95,7 +95,6 @@ This brief is based on the live canonical routed product surface and the checkli
 - `src/types/checklist.ts`
 - `src/lib/schemas/checklistSchema.ts`
 - `docs/FEATURES.md`
-- `docs/knowledge/ui-feature-audit-2026-04-09.md`
 
 ## User Goals and Core Stories
 

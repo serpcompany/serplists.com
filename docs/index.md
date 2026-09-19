@@ -16,7 +16,7 @@ This docs hub is the source of truth for setup, architecture, operations, implem
 
 ## Implementation guides
 - [Modules index](modules/index.md)
-- [Team workspaces](modules/team-workspaces.md)
+- [Organization foundations](modules/team-workspaces.md)
 - [Patterns index](patterns/index.md)
 - [Recipes index](recipes/index.md)
 
@@ -32,12 +32,3 @@ This docs hub is the source of truth for setup, architecture, operations, implem
 
 ## Product docs
 - [Plans](product/plans.md)
-
-## QA
-- [QA index](qa/index.md)
-- [MVP launch sign-off checklist](qa/mvp-launch-signoff.md)
-
-## Backlog and improvements
-- [Roadmap index](roadmap/index.md)
-- [Enhancements backlog](roadmap/enhancements-backlog.md)
-- [Free/Pro launch TODO](roadmap/free-basic-pro-implementation-todo.md)
