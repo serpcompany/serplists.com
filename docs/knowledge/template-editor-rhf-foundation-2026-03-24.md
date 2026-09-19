@@ -2,8 +2,8 @@
 
 ## What changed
 
-- Added a centralized top-level template editor form contract in [templateEditorDetailsForm.ts](/Users/devin/dev/repos/serplists.com/src/lib/forms/templateEditorDetailsForm.ts)
-- Added the combined editor contract and nested field factories in [templateEditorForm.ts](/Users/devin/dev/repos/serplists.com/src/lib/forms/templateEditorForm.ts)
+- Added a centralized top-level template editor form contract in [templateEditorDetailsForm.ts](../../src/lib/forms/templateEditorDetailsForm.ts)
+- Added the combined editor contract and nested field factories in [templateEditorForm.ts](../../src/lib/forms/templateEditorForm.ts)
 - Moved template metadata + SEO screens onto `react-hook-form`
 - Moved section, task, content block, and sub-item editing to RHF-backed field arrays
 - Updated the template editor e2e spec to the current `/dashboard/templates/...` route family

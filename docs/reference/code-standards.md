@@ -18,6 +18,9 @@ Path aliases:
 - Function components with typed props.
 - Shared UI primitives live in `src/components/ui/`.
 - Prefer `cn` from `src/lib/utils.ts` for class merging.
+- Use `sonner` for toast feedback.
+- Render Markdown with `react-markdown`, disable raw HTML, and transform links and
+  media URLs with `safeUrl` from `src/lib/utils/safeUrl.ts`.
 
 ## State and data
 - Use `src/lib/api.ts` for API calls.
