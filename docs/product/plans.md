@@ -83,3 +83,23 @@ Team upgrade triggers:
 - Stripe currently backs personal Pro subscription state.
 - Team entitlement overrides are D1-backed to avoid new services or new recurring cost.
 - If a new paid feature is added later, update this document before spreading the rule across API handlers and UI components.
+
+### Enforcement contract
+
+Server-side checks are authoritative. Clients preserve structured API failures
+instead of inferring access state from message text:
+
+- `401` means the user must sign in; preserve the requested return path.
+- `403 upgrade_required` means the active context needs a paid entitlement.
+- `403 limit_reached` means the active plan limit has been reached.
+- `503 billing_unavailable` means checkout cannot currently be started.
+
+Billing status query keys must include the current user id (or an explicit
+guest marker). Never reuse a cached plan between accounts, and do not render a
+Free or Pro label as known while billing status is still loading.
+
+### Manual personal-plan overrides
+
+Personal manual overrides take precedence over Stripe-derived state until they
+are removed. Use the [admin override runbook](../knowledge/entitlements-admin-override.md)
+for prerequisites, commands, verification, and temporary-secret cleanup.

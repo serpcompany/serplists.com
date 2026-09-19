@@ -43,10 +43,24 @@ pnpm run dev:all    # Runs both in parallel
 
 `pnpm run dev:api` serves from `dist/`. If `dist/` does not exist, run `pnpm run build` first.
 
+### Adaptive local ports
+
+The normal development commands coordinate the frontend and API as a port
+pair. They prefer `8080` and `8788`; if either is occupied, both move together
+to the next available pair. The selected URLs are printed at startup and saved
+in `tmp/dev-session.json` so separately started frontend and API commands reuse
+the same pair. `pnpm run dev:auto` is an alias for `pnpm run dev:all`.
+
+The launcher updates `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, `PORT`, and
+`VITE_API_URL` together. Do not hand-adjust only one side after a fallback,
+because Better Auth trusted origins and API CORS must match the frontend origin.
+The session file is local coordination state, not an automation interface.
+
 ## Local database (D1)
 ```bash
 pnpm run db:migrate:d1:local
 pnpm run db:seed
+pnpm run db:seed:official:local
 pnpm run db:reset
 pnpm run db:migrations:list:local
 pnpm run db:reset:test-user-passwords
@@ -117,6 +131,12 @@ If login fails, verify:
 2. `pnpm run db:seed` or `pnpm run db:reset` has been executed
 3. the browser is talking to `http://localhost:8788/api` or the intended `VITE_API_URL`
 
+Repeated auth POST/PUT requests can also reach the local per-IP allowance of
+300 requests per hour and return `429 Too Many Requests`. If a seeded-persona
+login unexpectedly fails during intensive QA, check the API response and logs
+for `429` before resetting credentials or debugging session state. Production
+keeps the stricter auth limit.
+
 ## Team flow verification
 Use `/dashboard/settings` for team creation, team management, and incoming invites.
 
@@ -149,6 +169,24 @@ pnpm run lint
 pnpm run secret:scan
 pnpm run verify:release
 ```
+
+Playwright uses an isolated local origin contract instead of the adaptive human
+development session:
+
+- frontend: `http://localhost:4173`
+- API: `http://localhost:8788`
+- local runs may reuse servers on those ports; CI starts fresh unless
+  `PLAYWRIGHT_REUSE_EXISTING_SERVER=1` is set
+- the Playwright API process receives matching `FRONTEND_URL` and
+  `CORS_ALLOWED_ORIGINS` bindings
+
+Include both `http://localhost:8080` and `http://localhost:4173` in the local
+origin allowlist when manual development and Playwright run side by side. Keep
+both services on the `localhost` host name; mixing `127.0.0.1` with `localhost`
+can cause `SameSite=Lax` session cookies to be dropped.
+
+See [Testing reference](../reference/testing.md) for Vitest configuration,
+mocking, and environment-safety conventions.
 
 The smoke suite includes route/auth/team coverage. Team-specific Playwright specs live in:
 
