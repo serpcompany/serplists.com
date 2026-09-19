@@ -54,8 +54,8 @@ describe('ContentRenderer accessibility', () => {
     expect(markup).toContain('aria-label="Download launch-plan.pdf"');
     expect(markup).toContain('aria-label="Open embedded content"');
     expect(markup).toContain('title="Task video content"');
-    expect(markup).toContain('src="https://clipy.online/embed/tizg5pl1gkul?ref=serplists.com"');
-    expect(markup).toContain('href="https://clipy.online/video/tizg5pl1gkul?ref=serplists.com"');
+    expect(markup).toContain('src="https://clipy.online/embed/tizg5pl1gkul?ref=m4d8e9p&amp;utm_source=serplists.com"');
+    expect(markup).toContain('href="https://clipy.online/video/tizg5pl1gkul?ref=m4d8e9p&amp;utm_source=serplists.com"');
     expect(markup).toContain('rel="nofollow noopener noreferrer"');
     expect(markup).toContain('href="/api/uploads/file?key=template-files/launch-plan.pdf"');
   });
