@@ -121,7 +121,6 @@ be retried, and processing failures return `500` so Stripe will deliver the
 event again. Subscription events upsert their customer mapping before writing
 subscription state; checkout completion may use `metadata.userId` when
 `client_reference_id` is absent.
-
 ## Production verification
 
 1. Run `pnpm exec wrangler pages secret list --project-name serplists-com` and
