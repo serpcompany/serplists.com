@@ -25,7 +25,7 @@ USESEND_API_KEY=us_xxx
 # Optional sender override (defaults to noreply@mail.auth.serp.co)
 EMAIL_FROM=SERP Lists <support@example.com>
 
-# Optional Stripe/billing config
+# Optional local Stripe/billing config (test mode only; never use sk_live_ here)
 STRIPE_SECRET_KEY=sk_test_xxx
 STRIPE_WEBHOOK_SECRET=whsec_xxx
 STRIPE_PRO_PRICE_ID=price_xxx

@@ -38,7 +38,19 @@ for (const deprecatedFile of deprecatedEnvFiles) {
 }
 
 const fileEnv = parseEnvFile(".dev.vars");
-const runtimeEnv = { ...process.env, ...fileEnv };
+const runtimeEnv = { ...fileEnv, ...process.env };
+
+const forbiddenLiveKeys = Object.keys(fileEnv).filter((key) => key.endsWith("_LIVE"));
+const liveStripeValues = Object.entries(fileEnv)
+  .filter(([, value]) => value.startsWith("sk_live_"))
+  .map(([key]) => key);
+if (forbiddenLiveKeys.length > 0 || liveStripeValues.length > 0) {
+  throw new Error(
+    `.dev.vars must contain local/test values only; remove: ${[
+      ...new Set([...forbiddenLiveKeys, ...liveStripeValues]),
+    ].join(", ")}`,
+  );
+}
 
 createEnv({
   server: {
