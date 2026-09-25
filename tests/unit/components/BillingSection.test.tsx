@@ -1,6 +1,7 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 import { BillingSection } from '@/components/account/BillingSection';
@@ -54,9 +55,11 @@ const renderBillingSection = (billingData: {
   );
 
   return renderToStaticMarkup(
-    <QueryClientProvider client={queryClient}>
-      <BillingSection />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <BillingSection />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 };
 
@@ -68,7 +71,7 @@ describe('BillingSection', () => {
     });
 
     expect(html).toContain('Current personal plan');
-    expect(html).toContain('Upgrade to Pro');
+    expect(html).toContain('Upgrade to Pro — $9/month');
   });
 
   it('does not show personal checkout actions in a free team workspace', () => {

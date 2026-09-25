@@ -1,16 +1,36 @@
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import { PageHero, PageSection, Surface } from '@/components/layout/page-shell';
 import { Button } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { api } from '@/lib/api';
+import { getBillingStatusQueryKey, PRO_MONTHLY_PRICE_LABEL } from '@/lib/billing';
 
 const Pricing = () => {
   const { user } = useAuth();
-  const primaryCta = user
-    ? { label: 'Manage Plan', href: '/account' }
-    : { label: 'Get Started', href: '/register' };
+  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+  const billing = useQuery({
+    queryKey: getBillingStatusQueryKey(user?.id),
+    queryFn: () => api.getBillingStatus(),
+    enabled: Boolean(user),
+    retry: false,
+  });
+
+  const handleUpgrade = async () => {
+    setIsStartingCheckout(true);
+    try {
+      const { url } = await api.createBillingCheckout();
+      window.location.href = url;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to start checkout');
+      setIsStartingCheckout(false);
+    }
+  };
 
   return (
     <>
@@ -59,7 +79,7 @@ const Pricing = () => {
             <CardHeader className="space-y-2">
               <CardTitle>Pro</CardTitle>
               <CardDescription>
-                Advanced template portability and account tools.
+                {PRO_MONTHLY_PRICE_LABEL}. Cancel anytime.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -78,16 +98,35 @@ const Pricing = () => {
                 </li>
               </ul>
               <div className="mt-6">
-                <Button asChild>
-                  <Link to={primaryCta.href}>{primaryCta.label}</Link>
-                </Button>
+                {!user ? (
+                  <Button asChild>
+                    <Link to="/register">Get Started</Link>
+                  </Button>
+                ) : billing.data?.plan === 'pro' ? (
+                  <Button asChild>
+                    <Link to="/account">Manage Pro</Link>
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleUpgrade}
+                    disabled={billing.isLoading || billing.data?.billingEnabled === false || isStartingCheckout}
+                  >
+                    {billing.isLoading
+                      ? 'Checking plan...'
+                      : isStartingCheckout
+                        ? 'Opening checkout...'
+                        : billing.data?.billingEnabled === false
+                          ? 'Upgrade unavailable'
+                          : `Upgrade — ${PRO_MONTHLY_PRICE_LABEL}`}
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Surface>
         </div>
 
         <p className="mt-10 text-center text-sm text-muted-foreground">
-          Billing details and current pricing are shown during checkout.
+          Payments and subscription management are securely handled by Stripe.
         </p>
       </PageSection>
     </>

@@ -29,6 +29,7 @@ EMAIL_FROM=SERP Lists <support@example.com>
 STRIPE_SECRET_KEY=sk_test_xxx
 STRIPE_WEBHOOK_SECRET=whsec_xxx
 STRIPE_PRO_PRICE_ID=price_xxx
+STRIPE_PORTAL_CONFIGURATION_ID=bpc_xxx
 
 # Optional admin/ops
 ENTITLEMENTS_ADMIN_SECRET=replace-with-admin-secret

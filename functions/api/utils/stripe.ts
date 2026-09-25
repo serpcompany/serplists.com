@@ -73,13 +73,15 @@ function encodeForm(body: Record<string, string | number | boolean | undefined |
 export async function stripePostForm<T>(
   secretKey: string,
   path: string,
-  body: Record<string, string | number | boolean | undefined | null>
+  body: Record<string, string | number | boolean | undefined | null>,
+  options?: { idempotencyKey?: string },
 ): Promise<T> {
   const resp = await fetch(`https://api.stripe.com${path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${secretKey}`,
       "Content-Type": "application/x-www-form-urlencoded",
+      ...(options?.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {}),
     },
     body: encodeForm(body),
   });
