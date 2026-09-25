@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, writeFileSync } from "node:fs";
 
 export function parseEnvFile(path) {
   if (!existsSync(path)) return {};
@@ -26,3 +26,18 @@ export function loadLocalEnv() {
   return { ...process.env, ...fileEnv };
 }
 
+export function updateEnvFile(path, updates) {
+  const contents = existsSync(path) ? readFileSync(path, "utf8") : "";
+  const remaining = new Map(Object.entries(updates));
+  const lines = contents.split("\n").map((line) => {
+    const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=/);
+    if (!match || !remaining.has(match[1])) return line;
+    const value = remaining.get(match[1]);
+    remaining.delete(match[1]);
+    return `${match[1]}=${value}`;
+  });
+
+  if (lines.at(-1) === "") lines.pop();
+  for (const [key, value] of remaining) lines.push(`${key}=${value}`);
+  writeFileSync(path, `${lines.join("\n")}\n`, { mode: 0o600 });
+}

@@ -39,6 +39,8 @@
     "sre:deps": "depcruise --no-config --exclude \"node_modules|dist|coverage|playwright-report|test-results|\\\\.wrangler|\\\\.turbo|db/migrations\" src functions || true",
     "secret:scan": "node scripts/secret-scan.mjs",
     "stripe:portal:configure": "node scripts/stripe/configure-portal.mjs",
+    "stripe:local:setup": "node scripts/stripe/setup-local-test.mjs",
+    "stripe:local:listen": "node scripts/stripe/listen-local.mjs",
     "db:seed": "pnpm exec tsx scripts/data/local-d1-data.ts seed-test && npx wrangler d1 execute serp-checklists-db --local --file=./db/seeds/official-templates.sql && pnpm exec tsx scripts/data/local-d1-data.ts seed-official-login",
     "db:reset": "node scripts/d1-reset-local.mjs",
     "db:migrations:list:local": "npx wrangler d1 migrations list serp-checklists-db --local",

@@ -47,6 +47,41 @@ Set the returned `bpc_...` id as `STRIPE_PORTAL_CONFIGURATION_ID` in the
 production Pages environment. Use `pnpm run stripe:portal:configure -- --test`
 for a separate test-mode configuration.
 
+## Local end-to-end test
+
+The local setup helper preserves active live values under `*_LIVE` names and
+switches only `.dev.vars` to the test product, price, and Portal configuration.
+
+```bash
+# Idempotently create/confirm test resources.
+node scripts/stripe/bootstrap.mjs --mode test --currency usd --monthly 900
+pnpm run stripe:portal:configure -- --test
+pnpm run stripe:local:setup
+
+# Apply and seed local D1.
+pnpm run db:migrate:d1:local
+pnpm run db:seed
+```
+
+Start the webhook listener first. It saves the temporary test signing secret
+to `.dev.vars` without printing it:
+
+```bash
+pnpm run stripe:local:listen
+```
+
+After the listener reports that the secret was saved, start the app in another
+terminal so the API reads that secret at startup:
+
+```bash
+pnpm dev:auto
+```
+
+Sign in as a Free local persona, choose **Upgrade — $9/month**, and use Stripe's
+test Visa `4242 4242 4242 4242`, any future expiry, and any three-digit CVC.
+Verify the Personal plan changes to Pro, a paid-only API action succeeds, the
+Customer Portal opens, and cancellation remains active through period end.
+
 ## Webhook configuration
 Webhook “Events from”: **Your account**
 
