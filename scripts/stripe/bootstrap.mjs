@@ -41,30 +41,33 @@ function requireNumber(name, value) {
   return n;
 }
 
-function getKeys(env, mode) {
+function getKeys(env, liveEnv, mode) {
   const fromSingle = env.STRIPE_SECRET_KEY;
   const testKey =
     env.STRIPE_TEST_SECRET_KEY ??
     env.STRIPE_SECRET_KEY_TEST ??
     (fromSingle?.startsWith("sk_test_") ? fromSingle : undefined);
-  const liveKey =
-    env.STRIPE_LIVE_SECRET_KEY ??
-    env.STRIPE_SECRET_KEY_LIVE ??
-    (fromSingle?.startsWith("sk_live_") ? fromSingle : undefined);
+  const injectedLiveKey = liveEnv.STRIPE_LIVE_SECRET_KEY ??
+    liveEnv.STRIPE_SECRET_KEY_LIVE ??
+    (liveEnv.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? liveEnv.STRIPE_SECRET_KEY : undefined);
 
   if (mode === "test") {
     if (!testKey) throw new Error("Missing STRIPE_TEST_SECRET_KEY (or STRIPE_SECRET_KEY starting with sk_test_)");
     return { testKey, liveKey: null };
   }
   if (mode === "live") {
-    if (!liveKey) throw new Error("Missing STRIPE_LIVE_SECRET_KEY (or STRIPE_SECRET_KEY starting with sk_live_)");
-    return { testKey: null, liveKey };
+    if (!injectedLiveKey) {
+      throw new Error("Live mode requires STRIPE_LIVE_SECRET_KEY injected through the process environment.");
+    }
+    return { testKey: null, liveKey: injectedLiveKey };
   }
   // both
-  if (!testKey || !liveKey) {
-    throw new Error("For --mode both, set both STRIPE_TEST_SECRET_KEY and STRIPE_LIVE_SECRET_KEY");
+  if (!testKey || !injectedLiveKey) {
+    throw new Error(
+      "For --mode both, set a local test key and inject STRIPE_LIVE_SECRET_KEY through the process environment.",
+    );
   }
-  return { testKey, liveKey };
+  return { testKey, liveKey: injectedLiveKey };
 }
 
 async function stripeRequest({ secretKey, method, path, form, dryRun }) {
@@ -206,14 +209,12 @@ async function main() {
 
   const keys = (() => {
     if (dryRun) {
-      // Allow dry-run without real keys.
-      const guessed = getKeys(env, mode);
       return {
-        testKey: guessed.testKey ?? "sk_test_DRY_RUN",
-        liveKey: guessed.liveKey ?? "sk_live_DRY_RUN",
+        testKey: mode === "live" ? null : "sk_test_DRY_RUN",
+        liveKey: mode === "test" ? null : "sk_live_DRY_RUN",
       };
     }
-    return getKeys(env, mode);
+    return getKeys(env, process.env, mode);
   })();
 
   if (keys.testKey && mode !== "live") {

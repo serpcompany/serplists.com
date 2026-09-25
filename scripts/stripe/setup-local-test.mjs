@@ -1,6 +1,17 @@
-import { loadLocalEnv, updateEnvFile } from "./_env.mjs";
+import { loadLocalEnv, parseEnvFile, updateEnvFile } from "./_env.mjs";
 
+const localEnv = parseEnvFile(".dev.vars");
 const env = loadLocalEnv();
+const forbiddenLocalKeys = Object.keys(localEnv).filter((key) => key.endsWith("_LIVE"));
+const containsLiveStripeKey = Object.values(localEnv).some(
+  (value) => typeof value === "string" && value.startsWith("sk_live_"),
+);
+if (forbiddenLocalKeys.length > 0 || containsLiveStripeKey) {
+  throw new Error(
+    ".dev.vars must contain local/test values only. Run pnpm run stripe:local:scrub-live first.",
+  );
+}
+
 const testKey = env.STRIPE_TEST_SECRET_KEY ?? env.STRIPE_SECRET_KEY_TEST;
 if (!testKey?.startsWith("sk_test_")) {
   throw new Error("Missing STRIPE_TEST_SECRET_KEY or STRIPE_SECRET_KEY_TEST in .dev.vars.");
@@ -39,16 +50,5 @@ const updates = {
   STRIPE_PORTAL_CONFIGURATION_ID: portal.id,
 };
 
-if (env.STRIPE_SECRET_KEY?.startsWith("sk_live_") && !env.STRIPE_SECRET_KEY_LIVE) {
-  updates.STRIPE_SECRET_KEY_LIVE = env.STRIPE_SECRET_KEY;
-}
-if (env.STRIPE_SECRET_KEY?.startsWith("sk_live_") && env.STRIPE_PRO_PRICE_ID && !env.STRIPE_PRO_PRICE_ID_LIVE) {
-  updates.STRIPE_PRO_PRICE_ID_LIVE = env.STRIPE_PRO_PRICE_ID;
-}
-if (env.STRIPE_SECRET_KEY?.startsWith("sk_live_") && env.STRIPE_WEBHOOK_SECRET && !env.STRIPE_WEBHOOK_SECRET_LIVE) {
-  updates.STRIPE_WEBHOOK_SECRET_LIVE = env.STRIPE_WEBHOOK_SECRET;
-}
-
 updateEnvFile(".dev.vars", updates);
 console.log("Local Stripe runtime is configured for the $9/month test plan.");
-console.log("Existing live values were preserved under *_LIVE names when needed.");

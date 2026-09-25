@@ -23,11 +23,12 @@ If you want to create Stripe resources programmatically, use:
 # Dry-run (no network calls)
 node scripts/stripe/bootstrap.mjs --mode both --currency usd --monthly 900 --dry-run
 
-# Create in BOTH test + live (configure keys in `.dev.vars` locally and Cloudflare Pages env in production)
-node scripts/stripe/bootstrap.mjs --mode both --currency usd --monthly 900
+# Create test resources using the test key from `.dev.vars`.
+node scripts/stripe/bootstrap.mjs --mode test --currency usd --monthly 900
 
-# Optional yearly price (example)
-node scripts/stripe/bootstrap.mjs --mode both --currency usd --monthly 900 --yearly 9000
+# Live administration requires a live key injected into the process environment
+# by an approved secret manager or secure shell session. Never put it in `.dev.vars`.
+node scripts/stripe/bootstrap.mjs --mode live --currency usd --monthly 900
 ```
 
 After creating prices, set `STRIPE_PRO_PRICE_ID` in Cloudflare Pages to the **live** monthly `price_...` id.
@@ -37,20 +38,29 @@ Stripe Price and `PRO_MONTHLY_PRICE_LABEL` in `src/lib/billing.ts` together.
 
 ## Customer Portal
 
-Create or reuse the app-owned live Customer Portal configuration:
+Create or reuse the app-owned test Customer Portal configuration using local
+test credentials:
 
 ```bash
-pnpm run stripe:portal:configure
+pnpm run stripe:portal:configure -- --test
 ```
 
-Set the returned `bpc_...` id as `STRIPE_PORTAL_CONFIGURATION_ID` in the
-production Pages environment. Use `pnpm run stripe:portal:configure -- --test`
-for a separate test-mode configuration.
+For live Portal administration, inject `STRIPE_LIVE_SECRET_KEY` through the
+process environment and run `pnpm run stripe:portal:configure`. Set the returned
+`bpc_...` id only in the Cloudflare Production environment.
 
 ## Local end-to-end test
 
-The local setup helper preserves active live values under `*_LIVE` names and
-switches only `.dev.vars` to the test product, price, and Portal configuration.
+`.dev.vars` is local-only and must never contain a live Stripe key or a `*_LIVE`
+alias. The local setup helper fails closed when it detects either. For a checkout
+that previously mixed environments, scrub production-only Stripe entries first:
+
+```bash
+pnpm run stripe:local:scrub-live
+```
+
+The helper then configures `.dev.vars` with only the test product, price, and
+Portal configuration.
 
 ```bash
 # Idempotently create/confirm test resources.

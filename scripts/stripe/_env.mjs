@@ -23,7 +23,10 @@ export function loadLocalEnv() {
     ...parseEnvFile(".env.local"),
     ...parseEnvFile(".dev.vars"),
   };
-  return { ...process.env, ...fileEnv };
+  // Explicit process injection must win over local defaults. This is required
+  // for one-off administrative commands that receive credentials from a
+  // secret manager rather than from a repository-adjacent file.
+  return { ...fileEnv, ...process.env };
 }
 
 export function updateEnvFile(path, updates) {
@@ -39,5 +42,18 @@ export function updateEnvFile(path, updates) {
 
   if (lines.at(-1) === "") lines.pop();
   for (const [key, value] of remaining) lines.push(`${key}=${value}`);
+  writeFileSync(path, `${lines.join("\n")}\n`, { mode: 0o600 });
+}
+
+export function removeEnvKeys(path, keys) {
+  if (!existsSync(path)) return;
+  const blocked = new Set(keys);
+  const lines = readFileSync(path, "utf8")
+    .split("\n")
+    .filter((line) => {
+      const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=/);
+      return !match || !blocked.has(match[1]);
+    });
+  if (lines.at(-1) === "") lines.pop();
   writeFileSync(path, `${lines.join("\n")}\n`, { mode: 0o600 });
 }
