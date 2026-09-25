@@ -23,14 +23,26 @@ function getEventUserIdFallback(obj: Record<string, unknown> | null): string | n
   return null;
 }
 
-function getSubscriptionPriceId(obj: Record<string, unknown> | null): string | null {
+function getFirstSubscriptionItem(obj: Record<string, unknown> | null): Record<string, unknown> | null {
   if (!obj) return null;
   const items = isRecord(obj.items) ? obj.items : null;
   const data = items && Array.isArray(items.data) ? items.data : null;
-  const first = data && data.length > 0 && isRecord(data[0]) ? data[0] : null;
+  return data && data.length > 0 && isRecord(data[0]) ? data[0] : null;
+}
+
+function getSubscriptionPriceId(obj: Record<string, unknown> | null): string | null {
+  const first = getFirstSubscriptionItem(obj);
   const price = first && isRecord(first.price) ? first.price : null;
   const priceId = price?.id;
   return typeof priceId === "string" ? priceId : null;
+}
+
+function getSubscriptionCurrentPeriodEnd(obj: Record<string, unknown> | null): number | null {
+  const legacyPeriodEnd = obj?.current_period_end;
+  if (typeof legacyPeriodEnd === "number") return legacyPeriodEnd;
+
+  const itemPeriodEnd = getFirstSubscriptionItem(obj)?.current_period_end;
+  return typeof itemPeriodEnd === "number" ? itemPeriodEnd : null;
 }
 
 export async function handleStripe(request: Request, env: Env): Promise<Response> {
@@ -127,7 +139,7 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
         const stripeCustomerId = typeof object?.customer === "string" ? object.customer : null;
         const status = typeof object?.status === "string" ? object.status : null;
         const priceId = getSubscriptionPriceId(object);
-        const currentPeriodEnd = typeof object?.current_period_end === "number" ? object.current_period_end : null;
+        const currentPeriodEnd = getSubscriptionCurrentPeriodEnd(object);
         const cancelAtPeriodEnd = Boolean(object?.cancel_at_period_end);
         const canceledAt = typeof object?.canceled_at === "number" ? object.canceled_at : null;
         const trialEnd = typeof object?.trial_end === "number" ? object.trial_end : null;

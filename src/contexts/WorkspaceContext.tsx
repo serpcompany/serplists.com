@@ -139,12 +139,16 @@ export function WorkspaceProvider({
   }, [optimisticTeams, queriedTeams]);
 
   useEffect(() => {
-    setOptimisticTeams([]);
+    setOptimisticTeams((currentTeams) =>
+      currentTeams.length === 0 ? currentTeams : [],
+    );
   }, [user?.id]);
 
   useEffect(() => {
     if (teamsQuery.isSuccess) {
-      setOptimisticTeams([]);
+      setOptimisticTeams((currentTeams) =>
+        currentTeams.length === 0 ? currentTeams : [],
+      );
     }
   }, [teamsQuery.dataUpdatedAt, teamsQuery.isSuccess]);
 
@@ -171,7 +175,9 @@ export function WorkspaceProvider({
 
     if (!user) {
       explicitWorkspaceSelectionRef.current = null;
-      setOptimisticTeams([]);
+      setOptimisticTeams((currentTeams) =>
+        currentTeams.length === 0 ? currentTeams : [],
+      );
       setActiveWorkspaceId(PERSONAL_WORKSPACE_ID);
       writeStoredWorkspaceId(PERSONAL_WORKSPACE_ID);
       return;

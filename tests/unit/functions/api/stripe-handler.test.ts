@@ -114,6 +114,7 @@ describe("Stripe webhook handler", () => {
             items: {
               data: [
                 {
+                  current_period_end: 1_800_000_000,
                   price: { id: "price_live_example" },
                 },
               ],
@@ -136,6 +137,7 @@ describe("Stripe webhook handler", () => {
       stripe_customer_id: "cus_123",
       price_id: "price_live_example",
       status: "active",
+      current_period_end: 1_800_000_000,
     }));
   });
 
