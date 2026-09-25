@@ -61,6 +61,7 @@ Set these in Cloudflare Pages (production) or `.dev.vars` (local):
 - `STRIPE_SECRET_KEY` (required for paid/Pro)
 - `STRIPE_WEBHOOK_SECRET` (required for paid/Pro)
 - `STRIPE_PRO_PRICE_ID` (required for paid/Pro)
+- `STRIPE_PORTAL_CONFIGURATION_ID` (required for self-serve subscription management)
 - `ENTITLEMENTS_ADMIN_SECRET` (optional; enables `/api/admin/entitlements/override`)
 - `RESEND_API_KEY` or `USESEND_API_KEY` (at least one required for password reset + email verification emails)
 - `EMAIL_FROM` (optional sender override for auth emails; defaults to `noreply@mail.auth.serp.co`)

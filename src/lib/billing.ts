@@ -1,5 +1,7 @@
 export type BillingPlan = "free" | "pro" | "team";
 
+export const PRO_MONTHLY_PRICE_LABEL = "$9/month";
+
 export const getBillingStatusQueryKey = (
   userId?: string | null,
   teamId?: string | null,

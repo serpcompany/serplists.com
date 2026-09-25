@@ -1,5 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { verifyStripeWebhookSignature } from "@functions/api/utils/stripe";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { stripePostForm, verifyStripeWebhookSignature } from "@functions/api/utils/stripe";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 async function hmacSha256Hex(secret: string, message: string): Promise<string> {
   const key = await crypto.subtle.importKey(
@@ -68,3 +72,22 @@ describe("verifyStripeWebhookSignature", () => {
   });
 });
 
+describe("stripePostForm", () => {
+  it("forwards an idempotency key without putting it in the request body", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "cs_test" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await stripePostForm("sk_test_example", "/v1/checkout/sessions", { mode: "subscription" }, {
+      idempotencyKey: "checkout-user-1-window",
+    });
+
+    const [, options] = fetchMock.mock.calls[0];
+    expect(options.headers["Idempotency-Key"]).toBe("checkout-user-1-window");
+    expect(options.body).toBe("mode=subscription");
+  });
+});

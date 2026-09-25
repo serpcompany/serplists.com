@@ -8,7 +8,6 @@ import { BillingSection } from '@/components/account/BillingSection';
 import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
 import { AgentAccessSection } from '@/components/account/AgentAccessSection';
 import { isPersonalRunMcpUiEnabled } from '@/env';
-import { useSearchParams } from 'react-router-dom';
 import { buildAccountUpdatePayload } from './accountProfileUpdates';
 import {
   DashboardContentShell,
@@ -25,7 +24,6 @@ interface ProfileData {
 
 const Account = () => {
   const { user, refreshProfile } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [profileData, setProfileData] = useState<ProfileData>({
     email: user?.email || '',
@@ -39,17 +37,6 @@ const Account = () => {
       loadProfile();
     }
   }, [user]);
-
-  useEffect(() => {
-    const billing = searchParams.get('billing');
-    if (billing === 'success') {
-      toast.success('Upgrade complete.');
-      setSearchParams({});
-    } else if (billing === 'cancel') {
-      toast.message('Upgrade canceled.');
-      setSearchParams({});
-    }
-  }, [searchParams, setSearchParams]);
 
   const loadProfile = async () => {
     try {
