@@ -125,6 +125,28 @@ describe("Billing handler", () => {
     expect(data.code).toBe("billing_unavailable");
   });
 
+  it("POST /api/billing/checkout rejects users who already have Pro", async () => {
+    entitlementsMocks.getEntitlementsForUser.mockResolvedValueOnce({
+      plan: "pro",
+      source: "user_subscription",
+      limits: { maxTemplates: null, maxActiveRuns: null },
+    });
+    const request = new Request("http://localhost/api/billing/checkout", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const response = await handleBilling(request, {
+      ...mockEnv,
+      STRIPE_SECRET_KEY: "sk_live_example",
+      STRIPE_PRO_PRICE_ID: "price_live_example",
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.code).toBe("already_subscribed");
+  });
+
   it("POST /api/billing/portal returns 503 when Stripe is not configured", async () => {
     const request = new Request("http://localhost/api/billing/portal", {
       method: "POST",

@@ -106,11 +106,20 @@ async function mockApiBackedPublicTemplate(page: Page) {
 }
 
 test("@smoke login page renders", async ({ page }) => {
+  const maximumDepthErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("Maximum update depth exceeded")) {
+      maximumDepthErrors.push(message.text());
+    }
+  });
+
   await page.goto("/login");
   await expect(
     page.getByRole("heading", { name: /welcome back/i })
   ).toBeVisible();
   await expect(page.getByText("Sign in to your account to continue")).toBeVisible();
+  await page.waitForTimeout(100);
+  expect(maximumDepthErrors).toEqual([]);
 });
 
 test("@smoke removed docs prototype renders the public not-found page", async ({ page }) => {
