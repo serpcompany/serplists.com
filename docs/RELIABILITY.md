@@ -22,6 +22,7 @@ migrations, backups, and R2 storage are in
 | `pnpm run verify` | Env contract, lint, `tsc -b`, `check:repo` (secrets, docs, architecture, generated artifacts), unit tests |
 | CI Quality Gate | `verify` steps plus local D1 fixture tests, build, and browser tests: smoke on every PR, the full suite on PRs into `main` |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
+| Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
 | Before a release | `pnpm run verify:release` locally; `pnpm run verify:staging` or `pnpm run verify:prod:d1` for remote D1 readiness (needs Cloudflare credentials) |
 
 Lefthook hooks install with `pnpm install` (the `prepare` script); run

@@ -11,6 +11,7 @@ screenshot before and after. For bugs, show the reproduction failing first. -->
 
 - [ ] `pnpm run verify` passes locally
 - [ ] Tests added or updated for the behavior change
+- [ ] Every review comment (Claude's and humans') is fixed or answered
 - [ ] Docs updated where behavior changed (`docs/`, `ARCHITECTURE.md`)
 - [ ] Exec plan progress and decision log updated (multi-step work only)
 - [ ] Shortcuts recorded in `docs/exec-plans/tech-debt-tracker.md`

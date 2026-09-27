@@ -33,7 +33,10 @@
   new dead code out.
 - [x] Product vocabulary: all user-visible Team/Workspace copy (UI and API error
   messages) replaced with glossary terms; the ESLint rule has no suppressions left.
-- [ ] Admin settings: required status checks, auto-merge, and agent code review
+- [x] Agent code review: `.github/workflows/claude-code-review.yml` runs the Claude Code
+  GitHub Action with the `code-review` plugin on every non-draft PR.
+- [ ] Admin settings: required status checks, auto-merge, the Claude GitHub App, and the
+  `CLAUDE_CODE_OAUTH_TOKEN` secret
   (see [agent workflow](../../design-docs/agent-workflow.md#repository-settings-admin-only)).
 - [ ] Burn down the tracked debt: TD-1 (tests `strict`) and TD-2 (parse client
   responses) first.
@@ -93,3 +96,9 @@
   `docs/generated/db-schema.md`, checked in CI. Third-party docs are vendored in
   `docs/references/` (refresh with `pnpm run docs:references`); Zod's site is not,
   because it documents v4 and we pin v3.
+- 2026-09-27: Agent code review uses the Claude Code GitHub Action with the
+  `code-review` plugin, authenticated with a Claude subscription token. The managed
+  Code Review product requires a Team or Enterprise plan. The review is advisory, not
+  a required check, to keep merge gates light. Because the plugin reads guidelines only
+  from `CLAUDE.md`, the workflow generates one on the runner from `AGENTS.md` and the
+  core beliefs instead of committing a second copy of the rules.

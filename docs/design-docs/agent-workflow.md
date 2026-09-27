@@ -13,9 +13,10 @@ How work moves from an issue to production, and how the repo is kept clean.
    ([development environment](development-environment.md)).
 4. Make the change with tests. Run `pnpm run verify` before opening the PR.
 5. Open a PR into `staging` and fill in the template, including evidence for UI changes.
-6. Review loop: review your own diff, request an agent review, address every comment
-   (fix it or explain why not), and repeat until reviewers are satisfied. Humans may
-   review but are not required to for routine changes.
+6. Review loop: review your own diff first. Claude then reviews the PR automatically
+   (see [Claude code review](#claude-code-review)). Address every comment: fix it, or
+   reply explaining why not. Humans may review but are not required to for routine
+   changes.
 7. Merge when CI is green ([quality gates](../RELIABILITY.md#quality-gates)).
 
 Promotion to production is a PR from `staging` to `main`; CI runs the full browser
@@ -68,12 +69,36 @@ Work it in small PRs, one item each:
    [core beliefs](core-beliefs.md) and, where possible, a lint rule or check whose
    message explains the fix.
 
+## Claude code review
+
+`.github/workflows/claude-code-review.yml` runs the Claude Code GitHub Action with the
+`code-review` plugin on every non-draft PR (opened, updated, reopened, or marked
+ready). Claude posts an inline comment for each high-confidence issue, or one summary
+comment when it finds none. The review is advisory and never blocks merging.
+
+- Guidelines: the plugin reads `CLAUDE.md`, so the workflow builds one on the runner
+  from `AGENTS.md` and [core beliefs](core-beliefs.md). Keep review rules in those
+  files; do not commit a `CLAUDE.md`.
+- Once per PR: the plugin skips closed and draft PRs, trivial ones, and PRs Claude
+  has already commented on, so pushes after the first review are not re-reviewed.
+  For another pass after large changes, run `/code-review` in Claude Code locally.
+- Cost: runs use the Claude subscription of whoever generated the token (counting
+  against its usage limits) plus GitHub Actions minutes.
+- Until the setup below is done, the job logs a notice and skips.
+
 ## Repository settings (admin only)
 
 A GitHub admin applies these once:
 
 - Branch protection or a ruleset on `main` and `staging`: require a pull request and
-  the `Quality Gate` and `Drizzle schema parity` checks.
+  the `Quality Gate` and `Drizzle schema parity` checks. Leave `Code Review` optional.
 - Allow auto-merge, so green PRs merge without waiting on a person.
-- Automatic agent code review for this repository in the team's agent platform (for
-  example, Codex code review), so every PR gets an agent reviewer.
+- Claude code review:
+  1. Install the [Claude GitHub App](https://github.com/apps/claude) on this repository.
+     The action authenticates as the app to post comments.
+  2. On a machine with Claude Code signed in to a Pro, Max, Team, or Enterprise plan,
+     run `claude setup-token` and save the printed token as the repository secret
+     `CLAUDE_CODE_OAUTH_TOKEN` (`gh secret set CLAUDE_CODE_OAUTH_TOKEN`).
+
+  The token belongs to the person who generated it. If their plan changes, or reviews
+  start failing authentication, regenerate it and update the secret.

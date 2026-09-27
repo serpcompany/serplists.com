@@ -47,7 +47,8 @@ Details: [development environment](docs/design-docs/development-environment.md).
    links and paths honest, not content).
 4. Multi-step work has an exec plan in `docs/exec-plans/active/` with progress and a
    decision log ([PLANS.md](docs/PLANS.md)); shortcuts go in the tech debt tracker.
-5. The PR template is filled in, and the PR is small enough to review quickly.
+5. The PR template is filled in, the PR is small enough to review quickly, and every
+   review comment (Claude's and humans') is fixed or answered.
 
 ## Working rules
 

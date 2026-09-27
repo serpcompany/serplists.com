@@ -52,6 +52,10 @@ Rules:
   stripe:local:scrub-live` removes production-only Stripe entries from a checkout.
 - `pnpm run secret:scan` (secretlint) runs in CI and on staged files at commit.
 - Keep preview and production Pages secrets separate.
+- GitHub Actions secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL`, and
+  `CLOUDFLARE_API_KEY` for deploys; `CLAUDE_CODE_OAUTH_TOKEN` for Claude code review.
+  The review token is a personal subscription credential, and the review job has
+  read-only repository permissions.
 
 ## CORS
 
