@@ -11,7 +11,7 @@
     "build": "pnpm run sitemap:generate && dotenv -e .dev.vars -- vite build",
     "build:dev": "pnpm run sitemap:generate && dotenv -e .dev.vars -- vite build --mode development",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -b",
     "typecheck:env": "node scripts/check-env.mjs",
     "check:preview:d1-binding": "node scripts/check-preview-d1-binding.mjs",
     "check:prod:d1-schema": "node scripts/check-production-d1-schema.mjs --database serp-checklists-db --label production",

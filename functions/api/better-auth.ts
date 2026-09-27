@@ -146,16 +146,17 @@ export function createBetterAuth(env: Env, request: Request) {
   const isSecure = origin.startsWith("https://");
 
   const db = createDb(env);
-  const plugins = [username()];
-
-  if (shouldCheckBreachedPassword(env, request)) {
-    plugins.push(
-      haveIBeenPwned({
-        customPasswordCompromisedMessage:
-          "Please choose a less common password.",
-      }),
-    );
-  }
+  const plugins = [
+    username(),
+    ...(shouldCheckBreachedPassword(env, request)
+      ? [
+          haveIBeenPwned({
+            customPasswordCompromisedMessage:
+              "Please choose a less common password.",
+          }),
+        ]
+      : []),
+  ];
 
   return betterAuth({
     secret: authSecret,

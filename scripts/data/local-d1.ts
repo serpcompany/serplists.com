@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/d1";
 import { getPlatformProxy } from "wrangler";
+import type { D1Database } from "@cloudflare/workers-types";
 import * as schema from "../../db/schema/index";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");

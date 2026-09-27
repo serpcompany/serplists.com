@@ -64,6 +64,9 @@ const teamActivityActionLabels: Record<string, string> = {
 const formatRole = (role: TeamRole): string =>
   role.charAt(0).toUpperCase() + role.slice(1);
 
+const formatMemberStatus = (status: TeamMemberStatus): string =>
+  status.charAt(0).toUpperCase() + status.slice(1);
+
 const formatTeamActivityAction = (action: string): string =>
   teamActivityActionLabels[action] ?? action;
 
@@ -717,14 +720,14 @@ export function TeamSettingsSection() {
                             <SelectContent>
                               {memberStatuses.map((status) => (
                                 <SelectItem key={status} value={status}>
-                                  {formatRole(status)}
+                                  {formatMemberStatus(status)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         ) : (
                           <div className="text-sm text-muted-foreground">
-                            {formatRole(member.status)}
+                            {formatMemberStatus(member.status)}
                           </div>
                         )}
                         <div className="flex items-center justify-end">

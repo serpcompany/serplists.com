@@ -127,7 +127,7 @@ async function updateTemplateWithHistoryFallback(
     whereClause: SQL | undefined;
     updatedAt: string;
   }> = [],
-): Promise<unknown[]> {
+): Promise<readonly unknown[]> {
   const { audit_events, checklist_runs, template_versions, templates } = schema;
 
   const runBatch = (templateValues: TemplateUpdateValues) => {
@@ -197,7 +197,7 @@ async function generateUniqueSlug(env: Env, title: string, templateId: string): 
   return `${base}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-function parseTemplateRow(template: Record<string, unknown>) {
+function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
   let sections: unknown[] = [];
   if (typeof template.items !== 'undefined') {
     const normalized = normalizeSectionsPayload(template.items);
@@ -1144,12 +1144,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         user_id: userId,
         title: source.title || '',
         description: source.description || '',
-        type: typeof (source as Record<string, unknown>).type === 'string' ? (source as Record<string, unknown>).type : 'checklist',
-        seo_title: typeof (source as Record<string, unknown>).seo_title === 'string' ? (source as Record<string, unknown>).seo_title : '',
-        seo_description: typeof (source as Record<string, unknown>).seo_description === 'string' ? (source as Record<string, unknown>).seo_description : '',
-        rules: typeof (source as Record<string, unknown>).rules === 'string' ? (source as Record<string, unknown>).rules : null,
+        type: typeof source.type === 'string' ? source.type : 'checklist',
+        seo_title: typeof source.seo_title === 'string' ? source.seo_title : '',
+        seo_description: typeof source.seo_description === 'string' ? source.seo_description : '',
+        rules: typeof source.rules === 'string' ? source.rules : null,
         items: source.items,
-        version: typeof (source as Record<string, unknown>).version === 'number' ? (source as Record<string, unknown>).version : 1,
+        version: typeof source.version === 'number' ? source.version : 1,
         is_public: isPublic,
         category: source.category,
         tags: source.tags,
@@ -1500,8 +1500,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
                 ),
           )
           .orderBy(checklist_runs.created_at);
-    const activeRuns = matchingRuns.filter((run) =>
-      run.status === 'in_progress'
+    const activeRuns = matchingRuns.filter((run): run is typeof run & { id: string } =>
+      typeof run.id === 'string'
+      && run.status === 'in_progress'
       && !run.is_public
       && !run.deleted_at
     );

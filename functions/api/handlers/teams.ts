@@ -173,7 +173,7 @@ async function acceptTeamInviteRecord({
 }): Promise<Response> {
   const { team_invites, team_members, teams } = schema;
 
-  if (invite.revoked_at) {
+  if (invite.revoked_at || !invite.id) {
     return jsonError("Invite not found", 404);
   }
 
@@ -265,7 +265,7 @@ async function acceptTeamInviteRecord({
           status: "active",
           joined_at: existingMembership.joined_at ?? now,
           updated_at: now,
-        }).where(and(eq(team_members.id, existingMembership.id), acceptedInviteExistsSql(invite.id, userId, now))),
+        }).where(and(eq(team_members.id, memberId), acceptedInviteExistsSql(invite.id, userId, now))),
         insertAuditEventWhenInviteAccepted(db, auditEvent, invite.id, userId, now),
       ]);
     }
@@ -521,7 +521,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
   }
 
   const membership = await getActiveTeamMembership(env, teamId, userId);
-  if (!membership) {
+  if (!membership || !membership.id) {
     return jsonError("Team not found", 404);
   }
 
@@ -668,7 +668,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       )
       .limit(1);
 
-    if (!targetMember) {
+    if (!targetMember || !targetMember.id) {
       return jsonError("Member not found", 404);
     }
     if (normalizeTeamRole(targetMember.role) === "owner") {

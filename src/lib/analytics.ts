@@ -119,10 +119,10 @@ class Analytics {
 export const analytics = new Analytics();
 
 // Error tracking setup
-window.addEventListener('error', (event: Event) => {
+window.addEventListener('error', (event) => {
   analytics.trackError(new Error(event.message), 'window_error');
 });
 
-window.addEventListener('unhandledrejection', (event: Event) => {
+window.addEventListener('unhandledrejection', (event) => {
   analytics.trackError(new Error(event.reason), 'unhandled_promise_rejection');
 });

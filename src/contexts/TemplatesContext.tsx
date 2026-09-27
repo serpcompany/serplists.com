@@ -150,7 +150,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Fetch catalog templates for public-facing pages. The merge step keeps only public templates.
   const { data: catalogApiTemplates = [], isLoading: catalogTemplatesLoading } = useQuery({
     queryKey: ['catalog-templates', user?.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<ChecklistTemplate[]> => {
       try {
         const templatesData = await api.getTemplates();
         return templatesData.map((template: Record<string, unknown>) => mapApiTemplate(template));
@@ -165,7 +165,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Fetch the templates owned by the active console workspace.
   const { data: workspaceTemplates = [], isLoading: workspaceTemplatesLoading } = useQuery({
     queryKey: ['templates', user?.id ?? 'visitor', workspaceScopeId],
-    queryFn: async () => {
+    queryFn: async (): Promise<ChecklistTemplate[]> => {
       try {
         const templatesData = await api.getTemplates(
           activeTeamId ? { teamId: activeTeamId } : undefined,
@@ -201,7 +201,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Fetch user's runs (only if logged in)
   const { data: runs = [], isLoading: runsLoading } = useQuery({
     queryKey: ['runs', user?.id, workspaceScopeId],
-    queryFn: async () => {
+    queryFn: async (): Promise<ChecklistRun[]> => {
       if (!user) return [];
       
       try {

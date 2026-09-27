@@ -288,7 +288,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         .where(and(eq(checklist_runs.share_token, shareToken), eq(checklist_runs.is_public, true), isNull(checklist_runs.deleted_at)))
         .limit(1);
 
-      if (!existingSharedRun) {
+      if (!existingSharedRun || !existingSharedRun.id) {
         return jsonError('Shared run not found', 404);
       }
 

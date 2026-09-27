@@ -1,4 +1,6 @@
 // Centralized type definitions for checklist functionality
+import type { PortableTemplateRule } from "@/lib/schemas/checklistSchema";
+
 export type ChecklistSubItem = {
   id: string;
   title: string;
@@ -6,6 +8,7 @@ export type ChecklistSubItem = {
 };
 
 export type ChecklistItemContent = {
+  id?: string; // Assigned by the template editor; imported, repo, and legacy content may not have one
   type: "text" | "image" | "video" | "file" | "embed" | "subItems";
   value: string; // URL for image/video/file, embed code, markdown for text, or empty for subItems
   uploadType?: "url" | "upload"; // For image/video/file: whether it's a URL or uploaded file
@@ -29,13 +32,9 @@ export type ChecklistSection = {
   items: ChecklistItem[];
 };
 
-export type TemplateRule = {
-  id: string;
-  type: string;
-  path: string;
-  value?: unknown;
-  severity?: "error" | "warning";
-};
+// Rules are always parsed with portableTemplateRuleSchema (API responses, imports, repo packs),
+// so `severity` has its default applied.
+export type TemplateRule = PortableTemplateRule;
 
 export type ChecklistTemplate = {
   id: string;
