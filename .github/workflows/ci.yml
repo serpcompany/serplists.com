@@ -1,5 +1,7 @@
 name: CI
 
+# One pipeline: every check must pass before anything deploys.
+# Pushes to staging/main deploy through cloudflare-pages-deploy.yml after the checks.
 on:
   pull_request:
     branches:
@@ -10,6 +12,11 @@ on:
       - main
       - staging
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy this ref to Cloudflare Pages after the checks pass
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -29,6 +36,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # Full history: sitemap lastmod dates are derived from git log.
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -51,6 +61,9 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
+      - name: Repository checks (secrets, docs, architecture, generated artifacts)
+        run: pnpm run check:repo
+
       - name: Unit tests
         run: pnpm run test:run
 
@@ -64,4 +77,47 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Smoke tests
+        if: github.base_ref != 'main'
         run: pnpm run test:smoke
+
+      - name: Full end-to-end tests (promotions to main)
+        if: github.base_ref == 'main'
+        run: pnpm run test:e2e:full
+
+      - name: Upload Playwright evidence (traces, videos, screenshots)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-evidence
+          path: tests/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  db-parity:
+    name: Drizzle schema parity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compare migrations with the Drizzle schema
+        run: pnpm run check:db:drizzle-parity
+
+  deploy:
+    name: Deploy
+    needs: [quality, db-parity]
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy)
+    uses: ./.github/workflows/cloudflare-pages-deploy.yml
+    secrets: inherit
