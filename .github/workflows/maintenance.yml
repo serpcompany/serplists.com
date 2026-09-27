@@ -1,0 +1,51 @@
+name: Weekly maintenance
+
+# Posts the deterministic maintenance report as a `ready-for-agent` issue so an
+# agent can pick it up through the normal triage flow. Reuses one open issue.
+on:
+  schedule:
+    - cron: "0 14 * * 1" # Mondays 14:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    env:
+      COREPACK_ENABLE_AUTO_PIN: "0"
+      GH_TOKEN: ${{ github.token }}
+      TITLE: Weekly repository maintenance
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: staging
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build report
+        run: pnpm run --silent maintenance:report > report.md
+
+      - name: Open or update the maintenance issue
+        run: |
+          number=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --body-file report.md
+            gh issue comment "$number" --body "Report refreshed on $(date -u +%F)."
+          else
+            gh issue create --title "$TITLE" --body-file report.md --label chore --label ready-for-agent
+          fi

@@ -21,6 +21,7 @@
     "docs:references": "node scripts/update-references.mjs",
     "deps:check": "depcruise --config .dependency-cruiser.cjs --ignore-known .dependency-cruiser-known-violations.json src functions db",
     "deps:baseline": "depcruise --config .dependency-cruiser.cjs --output-type baseline src functions db > .dependency-cruiser-known-violations.json",
+    "maintenance:report": "node scripts/maintenance-report.mjs",
     "check:preview:d1-binding": "node scripts/check-preview-d1-binding.mjs",
     "check:prod:d1-schema": "node scripts/check-production-d1-schema.mjs --database serp-checklists-db --label production",
     "check:staging:d1-schema": "node scripts/check-production-d1-schema.mjs --database DB --label staging --preview",
