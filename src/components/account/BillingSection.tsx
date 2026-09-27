@@ -28,8 +28,8 @@ export function BillingSection() {
   const planLabel = getBillingPlanLabel(plan);
   const billingEnabled = billing.data?.billingEnabled ?? true;
   const teamBillingMessage = plan === "team"
-    ? "Team entitlements apply while this workspace is selected."
-    : "Personal subscriptions are managed from your Personal workspace.";
+    ? "Paid Organization entitlements apply while this Organization is selected."
+    : "Personal subscriptions are managed from Personal.";
 
   useEffect(() => {
     if (billingReturn === "cancel") {
@@ -86,7 +86,7 @@ export function BillingSection() {
 
   const handleUpgrade = async () => {
     if (isTeamWorkspace) {
-      toast.error("Switch to your Personal workspace to manage a personal subscription.");
+      toast.error("Switch to Personal to manage a personal subscription.");
       return;
     }
 
@@ -106,7 +106,7 @@ export function BillingSection() {
 
   const handleManage = async () => {
     if (isTeamWorkspace) {
-      toast.error("Switch to your Personal workspace to manage a personal subscription.");
+      toast.error("Switch to Personal to manage a personal subscription.");
       return;
     }
 
@@ -131,7 +131,7 @@ export function BillingSection() {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="text-sm text-muted-foreground">
-          Current {isTeamWorkspace ? "workspace" : "personal"} plan: <span className="font-medium text-foreground">{planLabel ?? "Checking..."}</span>
+          Current {isTeamWorkspace ? "Organization" : "Personal"} plan: <span className="font-medium text-foreground">{planLabel ?? "Checking..."}</span>
         </div>
 
         {billing.isError ? (

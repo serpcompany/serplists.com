@@ -70,7 +70,7 @@ describe('BillingSection', () => {
       plan: 'free',
     });
 
-    expect(html).toContain('Current personal plan');
+    expect(html).toContain('Current Personal plan');
     expect(html).toContain('Upgrade to Pro — $9/month');
   });
 
@@ -83,8 +83,8 @@ describe('BillingSection', () => {
       'team-1',
     );
 
-    expect(html).toContain('Current workspace plan');
-    expect(html).toContain('Personal subscriptions are managed from your Personal workspace.');
+    expect(html).toContain('Current Organization plan');
+    expect(html).toContain('Personal subscriptions are managed from Personal.');
     expect(html).not.toContain('Upgrade to Pro');
     expect(html).not.toContain('Manage subscription');
   });
@@ -98,7 +98,7 @@ describe('BillingSection', () => {
       'team-1',
     );
 
-    expect(html).toContain('Team entitlements apply while this workspace is selected.');
+    expect(html).toContain('Paid Organization entitlements apply while this Organization is selected.');
     expect(html).not.toContain('Upgrade to Pro');
     expect(html).not.toContain('Manage subscription');
   });

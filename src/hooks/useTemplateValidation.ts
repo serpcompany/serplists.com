@@ -7,8 +7,8 @@ export interface ValidationError {
 
 export const useTemplateValidation = () => {
   const validate = (
-    title: string,
-    sections: ChecklistSection[]
+    _title: string,
+    _sections: ChecklistSection[]
   ): ValidationError[] => {
     // No longer return validation errors - instead we'll provide defaults
     return [];

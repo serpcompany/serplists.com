@@ -49,7 +49,11 @@ export const templateEditorFormSchema = templateEditorDetailsSchema.extend({
 });
 
 export type TemplateEditorFormValues = z.infer<typeof templateEditorFormSchema>;
-export type TemplateEditorContentType = ChecklistItemContent["type"];
+export type TemplateEditorSection = z.infer<typeof templateEditorSectionSchema>;
+export type TemplateEditorItem = z.infer<typeof templateEditorItemSchema>;
+export type TemplateEditorContent = z.infer<typeof templateEditorContentSchema>;
+export type TemplateEditorSubItem = z.infer<typeof templateEditorSubItemSchema>;
+export type TemplateEditorContentType = TemplateEditorContent["type"];
 
 function createTemplateEditorId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -59,7 +63,7 @@ function createTemplateEditorId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 }
 
-export function createTemplateEditorSubItem(): ChecklistSubItem {
+export function createTemplateEditorSubItem(): TemplateEditorSubItem {
   return {
     id: createTemplateEditorId("subitem"),
     title: "",
@@ -68,7 +72,7 @@ export function createTemplateEditorSubItem(): ChecklistSubItem {
 
 export function createTemplateEditorContent(
   type: TemplateEditorContentType,
-): ChecklistItemContent {
+): TemplateEditorContent {
   if (type === "subItems") {
     return {
       id: createTemplateEditorId("content"),
@@ -85,7 +89,7 @@ export function createTemplateEditorContent(
   };
 }
 
-export function createTemplateEditorItem(): ChecklistItem {
+export function createTemplateEditorItem(): TemplateEditorItem {
   return {
     contents: [],
     description: "",
@@ -94,7 +98,7 @@ export function createTemplateEditorItem(): ChecklistItem {
   };
 }
 
-export function createTemplateEditorSection(): ChecklistSection {
+export function createTemplateEditorSection(): TemplateEditorSection {
   return {
     id: createTemplateEditorId("section"),
     items: [],
@@ -104,7 +108,7 @@ export function createTemplateEditorSection(): ChecklistSection {
 
 function normalizeTemplateEditorSubItem(
   subItem: Partial<ChecklistSubItem>,
-): ChecklistSubItem {
+): TemplateEditorSubItem {
   return {
     id: subItem.id ?? createTemplateEditorId("subitem"),
     isCompleted: subItem.isCompleted,
@@ -114,7 +118,7 @@ function normalizeTemplateEditorSubItem(
 
 function normalizeTemplateEditorContent(
   content: Partial<ChecklistItemContent>,
-): ChecklistItemContent {
+): TemplateEditorContent {
   const type: TemplateEditorContentType = content.type ?? "text";
   const subItems =
     type === "subItems"
@@ -134,7 +138,7 @@ function normalizeTemplateEditorContent(
   };
 }
 
-function normalizeTemplateEditorItem(item: Partial<ChecklistItem>): ChecklistItem {
+function normalizeTemplateEditorItem(item: Partial<ChecklistItem>): TemplateEditorItem {
   return {
     contents: (item.contents ?? []).map(normalizeTemplateEditorContent),
     description: item.description ?? "",
@@ -146,7 +150,7 @@ function normalizeTemplateEditorItem(item: Partial<ChecklistItem>): ChecklistIte
 
 function normalizeTemplateEditorSection(
   section: Partial<ChecklistSection>,
-): ChecklistSection {
+): TemplateEditorSection {
   return {
     id: section.id ?? createTemplateEditorId("section"),
     items: (section.items ?? []).map(normalizeTemplateEditorItem),
@@ -156,7 +160,7 @@ function normalizeTemplateEditorSection(
 
 function buildTemplateEditorSections(
   sections?: ChecklistSection[],
-): ChecklistSection[] {
+): TemplateEditorSection[] {
   if (sections?.length) {
     return sections.map(normalizeTemplateEditorSection);
   }

@@ -160,7 +160,7 @@ describe('App public route parity', () => {
 
     expect(html).toContain('Build the checklist once. Run it every time.');
     expect(html).toContain('Template library');
-    expect(html).toContain('Live run workspace');
+    expect(html).toContain('Live run tracking');
     expect(html).toContain('Shareable proof');
     expect(html).toContain('data-app-shell="public"');
     expect(html).toContain('href="/templates"');

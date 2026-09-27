@@ -7,7 +7,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 
 describe('template example assets', () => {
   it('keeps the minimal example assets valid and synced', async () => {
-    const baseDir = path.join(repoRoot, 'docs/schema/examples/minimal');
+    const baseDir = path.join(repoRoot, 'docs/product-specs/portable-templates/examples/minimal');
     const issues = [
       ...(await lintYamlTemplateBundle(path.join(baseDir, 'template.yaml'), {
         jsonPath: path.join(baseDir, 'template.json'),
@@ -21,7 +21,7 @@ describe('template example assets', () => {
   });
 
   it('keeps the full example assets valid and synced', async () => {
-    const baseDir = path.join(repoRoot, 'docs/schema/examples/full');
+    const baseDir = path.join(repoRoot, 'docs/product-specs/portable-templates/examples/full');
     const issues = [
       ...(await lintYamlTemplateBundle(path.join(baseDir, 'template.yaml'), {
         jsonPath: path.join(baseDir, 'template.json'),
@@ -35,7 +35,7 @@ describe('template example assets', () => {
   });
 
   it('keeps standalone yaml example source valid', async () => {
-    const issues = await lintSingleTemplateSource(path.join(repoRoot, 'docs/schema/examples/full/template.yaml'));
+    const issues = await lintSingleTemplateSource(path.join(repoRoot, 'docs/product-specs/portable-templates/examples/full/template.yaml'));
     expect(issues).toEqual([]);
   });
 });

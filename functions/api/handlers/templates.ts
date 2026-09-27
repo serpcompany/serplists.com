@@ -4,6 +4,7 @@ import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle
 import { createDb, schema } from '../db';
 import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
+import { log } from '../utils/logger';
 import { getSessionUserId } from '../utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
 import {
@@ -127,7 +128,7 @@ async function updateTemplateWithHistoryFallback(
     whereClause: SQL | undefined;
     updatedAt: string;
   }> = [],
-): Promise<unknown[]> {
+): Promise<readonly unknown[]> {
   const { audit_events, checklist_runs, template_versions, templates } = schema;
 
   const runBatch = (templateValues: TemplateUpdateValues) => {
@@ -197,12 +198,12 @@ async function generateUniqueSlug(env: Env, title: string, templateId: string): 
   return `${base}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-function parseTemplateRow(template: Record<string, unknown>) {
+function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
   let sections: unknown[] = [];
   if (typeof template.items !== 'undefined') {
     const normalized = normalizeSectionsPayload(template.items);
     if (normalized.error) {
-      console.warn('Failed to parse template items JSON', { templateId: template.id });
+      log('warn', 'template_items_parse_failed', { templateId: template.id });
     } else {
       sections = normalized.sections;
     }
@@ -217,7 +218,7 @@ function parseTemplateRow(template: Record<string, unknown>) {
         rules = validatedRules.data;
       }
     } catch {
-      console.warn('Failed to parse template rules JSON', { templateId: template.id });
+      log('warn', 'template_rules_parse_failed', { templateId: template.id });
     }
   }
 
@@ -340,7 +341,7 @@ async function canEditTemplate(env: Env, template: Record<string, unknown>, user
 
 async function assertTeamTemplateCreateAccess(env: Env, teamId: string, userId: string): Promise<Response | null> {
   const membership = await getActiveTeamMembership(env, teamId, userId);
-  if (!membership) return jsonError('Team not found', 404);
+  if (!membership) return jsonError('Organization not found', 404);
   if (!canEditTeamTemplates(normalizeTeamRole(membership.role))) return jsonError('Forbidden', 403);
   return null;
 }
@@ -476,7 +477,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       ? await getEntitlementsForContext(env, { type: 'team', teamId: backupTeamId, userId })
       : await getEntitlementsForUser(env, userId);
     if (entitlements.plan !== 'pro' && entitlements.plan !== 'team') {
-      return jsonError('Upgrade this workspace to use template import/export.', 403, { code: 'upgrade_required' });
+      return jsonError('Upgrade this Organization to use template import/export.', 403, { code: 'upgrade_required' });
     }
 
     if (request.method === 'GET') {
@@ -796,7 +797,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       if (teamId) {
         const membership = await getActiveTeamMembership(env, teamId, userId);
         if (!membership || !canViewTeam(normalizeTeamRole(membership.role))) {
-          return jsonError('Team not found', 404);
+          return jsonError('Organization not found', 404);
         }
 
         const rows = await withRulesColumnFallback((includeRules) =>
@@ -951,7 +952,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       if (!userId) return jsonError('Unauthorized', 401);
       const membership = await getActiveTeamMembership(env, teamId, userId);
       if (!membership || !canViewTeam(normalizeTeamRole(membership.role))) {
-        return jsonError('Team not found', 404);
+        return jsonError('Organization not found', 404);
       }
 
       const rows = await withRulesColumnFallback((includeRules) =>
@@ -1144,12 +1145,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         user_id: userId,
         title: source.title || '',
         description: source.description || '',
-        type: typeof (source as Record<string, unknown>).type === 'string' ? (source as Record<string, unknown>).type : 'checklist',
-        seo_title: typeof (source as Record<string, unknown>).seo_title === 'string' ? (source as Record<string, unknown>).seo_title : '',
-        seo_description: typeof (source as Record<string, unknown>).seo_description === 'string' ? (source as Record<string, unknown>).seo_description : '',
-        rules: typeof (source as Record<string, unknown>).rules === 'string' ? (source as Record<string, unknown>).rules : null,
+        type: typeof source.type === 'string' ? source.type : 'checklist',
+        seo_title: typeof source.seo_title === 'string' ? source.seo_title : '',
+        seo_description: typeof source.seo_description === 'string' ? source.seo_description : '',
+        rules: typeof source.rules === 'string' ? source.rules : null,
         items: source.items,
-        version: typeof (source as Record<string, unknown>).version === 'number' ? (source as Record<string, unknown>).version : 1,
+        version: typeof source.version === 'number' ? source.version : 1,
         is_public: isPublic,
         category: source.category,
         tags: source.tags,
@@ -1248,7 +1249,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     const isPublic = typeof is_public === 'boolean' ? is_public : false;
 
     if (title && junkTemplateTitles.has(title)) {
-      console.warn('Junk template title created', { userId, title });
+      log('warn', 'junk_template_title_created', { userId, title });
     }
 
     const now = new Date().toISOString();
@@ -1440,7 +1441,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     }
 
     if (typeof title === 'string' && junkTemplateTitles.has(title)) {
-      console.warn('Junk template title updated', { userId, templateId, title });
+      log('warn', 'junk_template_title_updated', { userId, templateId, title });
     }
 
     const templateUpdateWhere = existingTemplate.owner_type === 'team' && existingTemplate.team_id
@@ -1500,8 +1501,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
                 ),
           )
           .orderBy(checklist_runs.created_at);
-    const activeRuns = matchingRuns.filter((run) =>
-      run.status === 'in_progress'
+    const activeRuns = matchingRuns.filter((run): run is typeof run & { id: string } =>
+      typeof run.id === 'string'
+      && run.status === 'in_progress'
       && !run.is_public
       && !run.deleted_at
     );

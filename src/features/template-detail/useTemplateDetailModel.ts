@@ -399,9 +399,6 @@ export const useTemplateDetailModel = (
     await queryClient.invalidateQueries({
       queryKey: ['templates', options.userId],
     });
-    await queryClient.invalidateQueries({
-      queryKey: ['user-templates', options.userId],
-    });
   };
 
   const startRun = async (runName?: string): Promise<TemplateDetailActionResult> =>

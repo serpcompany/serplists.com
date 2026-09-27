@@ -214,7 +214,9 @@ export function buildInMemoryShardIndex(
   });
 }
 
-export async function loadSitemapRevisions(env: Env): Promise<Map<string, string>> {
+export async function loadSitemapRevisions(
+  env: Env,
+): Promise<Map<(typeof sitemap_revisions.$inferSelect)['kind'], string>> {
   const rows = await createDb(env)
     .select({ kind: sitemap_revisions.kind, revised_at: sitemap_revisions.revised_at })
     .from(sitemap_revisions);

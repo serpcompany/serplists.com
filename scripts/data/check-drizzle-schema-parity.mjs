@@ -39,7 +39,20 @@ function wranglerJson(persistPath, statement) {
   return JSON.parse(output)[0]?.results ?? [];
 }
 
+// Wrangler only returns the first result set of a multi-statement command, so
+// batch same-shaped SELECTs into UNION ALL queries. D1 allows at most 5 terms
+// per compound SELECT.
+const D1_MAX_COMPOUND_SELECT = 5;
+
 function wranglerBatch(persistPath, statements) {
+  const rows = [];
+  for (let start = 0; start < statements.length; start += D1_MAX_COMPOUND_SELECT) {
+    rows.push(...wranglerUnion(persistPath, statements.slice(start, start + D1_MAX_COMPOUND_SELECT)));
+  }
+  return rows;
+}
+
+function wranglerUnion(persistPath, statements) {
   const output = run(
     "pnpm",
     [
@@ -53,7 +66,7 @@ function wranglerBatch(persistPath, statements) {
       persistPath,
       "--json",
       "--command",
-      statements.join("\n"),
+      statements.map((statement) => statement.trim().replace(/;$/, "")).join(" UNION ALL "),
     ],
     { capture: true },
   );
@@ -176,6 +189,7 @@ async function loadCatalog(persistPath) {
         where: indexWhere(indexSql.get(indexName)),
       });
     }
+    assert.ok(columns.length > 0, `${table}: no columns loaded; the schema query returned nothing`);
     catalog.tables[table] = {
       columns,
       foreignKeys,
@@ -183,6 +197,7 @@ async function loadCatalog(persistPath) {
       checks: extractChecks(tableSql.get(table)),
     };
   }
+  assert.ok(tables.length > 0, "no tables loaded; the schema query returned nothing");
 
   catalog.triggers = objects
     .filter(({ type }) => type === "trigger")

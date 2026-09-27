@@ -37,7 +37,11 @@ export default defineConfig({
   reporter: "list",
   use: {
     baseURL: frontendBaseUrl,
-    trace: "on-first-retry",
+    // Keep evidence for every failure (retries are off, so "on-first-retry" never fired).
+    // CI uploads tests/test-results/ as an artifact when a run fails.
+    trace: "retain-on-failure",
+    video: "retain-on-failure",
+    screenshot: "only-on-failure",
   },
   webServer: [
     {

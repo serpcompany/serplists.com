@@ -73,7 +73,7 @@ export default function TeamInviteAccept() {
         }
 
         setStatus('accepted');
-        toast.success('Team invite accepted');
+        toast.success('Organization invite accepted');
       } catch (inviteError) {
         if (cancelled) {
           return;
@@ -108,7 +108,7 @@ export default function TeamInviteAccept() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            Team Invite
+            Organization Invite
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -124,7 +124,7 @@ export default function TeamInviteAccept() {
           ) : !isAuthenticated ? (
             <>
               <p className="text-sm text-muted-foreground">
-                Log in with the invited email address to join this team.
+                Log in with the invited email address to join this Organization.
               </p>
               <Button asChild>
                 <Link
@@ -155,7 +155,7 @@ export default function TeamInviteAccept() {
                   variant="outline"
                   onClick={() => navigate(buildConsoleSettingsPath())}
                 >
-                  Team settings
+                  Organization settings
                 </Button>
               </div>
             </>

@@ -14,7 +14,7 @@ export type PublicSiteLink = {
   placements: PublicSiteLinkPlacement[];
 };
 
-export const publicSiteLinks = [
+export const publicSiteLinks: readonly PublicSiteLink[] = [
   {
     href: buildPublicTemplatesPath(),
     label: 'Templates',
@@ -49,7 +49,7 @@ export const publicSiteLinks = [
     label: 'SERP DR',
     placements: ['footer'],
   },
-] as const satisfies readonly PublicSiteLink[];
+];
 
 const publicFooterGroupOrder: readonly PublicSiteLinkFooterGroup[] = [
   'Company',

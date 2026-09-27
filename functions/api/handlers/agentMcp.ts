@@ -806,7 +806,8 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     if (bytes.byteLength > MAX_REQUEST_BYTES) {
       return rpcError(null, -32600, "Request body is too large", undefined, 413);
     }
-    payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    // Workers types require both options; ignoreBOM: false is the spec default.
+    payload = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes));
   } catch {
     return rpcError(null, -32700, "Parse error");
   }

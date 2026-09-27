@@ -17,7 +17,7 @@ export type VideoEmbedSource = {
 
 const extractIframeSource = (value: string): string | null => {
   const match = value.match(/<iframe\b[^>]*\bsrc\s*=\s*(["'])(.*?)\1/i);
-  return match?.[2]?.replaceAll('&amp;', '&').trim() ?? null;
+  return match?.[2]?.replace(/&amp;/g, '&').trim() ?? null;
 };
 
 export const getVideoEmbedSource = (value: string): VideoEmbedSource | null => {
