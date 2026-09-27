@@ -49,16 +49,26 @@ Other labels may coexist with the state label:
 
 Agents copy whatever patterns exist, including bad ones, so the repo is cleaned in
 small steps every week instead of in occasional big cleanups.
-`.github/workflows/maintenance.yml` runs every Monday (or on demand) and opens or
-refreshes the issue "Weekly repository maintenance" (`chore`, `ready-for-agent`)
-with the output of `pnpm run maintenance:report`: docs-check results, docs whose
-referenced code changed since they were edited, recorded debt in the baselines,
-oversized files, stale active plans, open tech debt, and the quality-score date.
+`.github/workflows/maintenance.yml` runs every Monday at 14:00 UTC (or on demand from
+the Actions tab; scheduled workflows run from the default branch). Both of its jobs
+start from `pnpm run maintenance:report`, which lists docs-check results, docs whose
+referenced code changed since they were edited, stale design docs and plans, recorded
+debt in the baselines, oversized files, and open tech debt.
 
-Work it in small PRs, one item each:
+- **Doc gardening (automatic):** Claude re-checks up to 8 flagged docs against the
+  code, fixes what is no longer true, updates "Last verified" dates, runs
+  `pnpm run docs:check`, and opens one PR into `staging` titled "docs: weekly doc
+  gardening". It edits only `AGENTS.md`, `ARCHITECTURE.md`, and `docs/`, skips the
+  week if a gardening PR is still open, and opens nothing when there is no drift.
+  These PRs are small; skim and merge them. Claude code review skips them because
+  a bot opens them.
+- **Report issue:** the full report is posted to the issue "Weekly repository
+  maintenance" (`chore`, `ready-for-agent`) for the items below that need judgment.
 
-1. **Docs:** re-read each listed doc against the code, fix what is no longer true,
-   and update its "Last verified" date in [the design-docs index](index.md).
+Work the issue in small PRs, one item each:
+
+1. **Docs:** anything the gardening PR left unresolved; update its "Last verified"
+   date in [the design-docs index](index.md).
 2. **Debt:** fix a few baseline entries, then shrink the baseline
    (`pnpm run deps:baseline`, `pnpm exec eslint . --prune-suppressions`) and confirm
    the diff only removes entries.
@@ -72,8 +82,8 @@ Work it in small PRs, one item each:
 ## Claude code review
 
 `.github/workflows/claude-code-review.yml` runs the Claude Code GitHub Action with the
-`code-review` plugin on every non-draft PR (opened, updated, reopened, or marked
-ready). Claude posts an inline comment for each high-confidence issue, or one summary
+`code-review` plugin on every non-draft PR opened by a person (opened, updated,
+reopened, or marked ready). Bot-opened PRs, such as doc gardening, are skipped. Claude posts an inline comment for each high-confidence issue, or one summary
 comment when it finds none. The review is advisory and never blocks merging.
 
 - Guidelines: the plugin reads `CLAUDE.md`, so the workflow builds one on the runner

@@ -76,8 +76,9 @@ To deploy by hand (rarely needed): `pnpm run build`, then
   `"level":"error"` or a request id.
 - Frontend: `ErrorBoundary` and analytics (`src/lib/analytics.ts`, in-memory)
   write to the browser console only.
-- Weekly maintenance posts a report of docs drift and recorded debt as an issue
-  (`.github/workflows/maintenance.yml`, `pnpm run maintenance:report`).
+- Weekly maintenance (`.github/workflows/maintenance.yml`): a Claude doc-gardening
+  agent opens a PR fixing docs that drifted from the code, and a report of recorded
+  debt is posted as an issue (`pnpm run maintenance:report`).
 
 ## Incident response
 

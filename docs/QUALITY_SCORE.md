@@ -31,4 +31,4 @@ changes are risky or slow. D = needs attention before building on it.
 | Architecture enforcement | B | `deps:check` rules with 10 known violations (TD-6, TD-13); no dead modules |
 | Observability | C | Structured JSON logs with request IDs in the API and in `tmp/logs/` locally; no metrics, traces, or production log sink; frontend errors go to the console only |
 | Delivery | B | CI gates deploys and probes each new deployment; Claude reviews every PR once the app and token are set up; required status checks and that setup need a repository admin (see [agent workflow](design-docs/agent-workflow.md#repository-settings-admin-only)) |
-| Documentation | B | Fixed layout, links, paths, and catalogs are checked in CI; the database schema doc is generated; content freshness depends on weekly gardening |
+| Documentation | B | Fixed layout, links, paths, and catalogs are checked in CI; the database schema doc is generated; a weekly Claude doc-gardening agent re-verifies drifted docs and opens fix-up PRs |

@@ -13,7 +13,9 @@ concurrency:
 
 jobs:
   review:
-    if: ${{ !github.event.pull_request.draft }}
+    # Skip drafts, and bot-opened PRs such as the weekly doc-gardening PR: the action
+    # rejects bot actors, and those PRs are small docs-only changes.
+    if: ${{ !github.event.pull_request.draft && github.event.pull_request.user.type != 'Bot' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

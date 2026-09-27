@@ -26,7 +26,9 @@
   enforces the layout in CI.
 - [x] App legibility: `pnpm run setup` for any worktree, dev logs in `tmp/logs/`,
   `pnpm run ui:snap`, Playwright failure evidence uploaded from CI.
-- [x] Continuous cleanup: weekly maintenance report posted as a `ready-for-agent` issue.
+- [x] Continuous cleanup: every week, a Claude doc-gardening agent opens a PR fixing
+  docs that drifted from the code, and the full maintenance report is posted as a
+  `ready-for-agent` issue.
 - [x] Full e2e suite runnable through the isolated stack and required on promotions;
   stale specs fixed. All 38 specs pass serially (TD-11 covers parallel isolation).
 - [x] Dead code removed: 18 unreachable modules deleted; the reachability rule keeps
@@ -102,3 +104,11 @@
   a required check, to keep merge gates light. Because the plugin reads guidelines only
   from `CLAUDE.md`, the workflow generates one on the runner from `AGENTS.md` and the
   core beliefs instead of committing a second copy of the rules.
+- 2026-09-27: Doc gardening runs as a scheduled Claude Code GitHub Action that opens
+  its own fix-up PR, as the article's doc-gardening agent does, instead of only
+  posting an issue for someone to pick up. It works from the deterministic
+  maintenance report, may edit only `AGENTS.md`, `ARCHITECTURE.md`, and `docs/`, and
+  must pass `pnpm run docs:check`. Branch, commit, and PR happen inside the Claude run
+  because the action revokes its app token when the step ends; the app token (rather
+  than `GITHUB_TOKEN`) means CI runs on the gardening PR. Debt paydown stays in the
+  report issue for now, since refactoring PRs need more judgment and more usage.
