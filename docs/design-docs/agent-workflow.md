@@ -95,6 +95,11 @@ comment when it finds none. The review is advisory and never blocks merging.
 - Cost: runs use the Claude subscription of whoever generated the token (counting
   against its usage limits) plus GitHub Actions minutes.
 - Until the setup below is done, the job logs a notice and skips.
+- Workflow validation: the action runs only when the workflow file on the PR is
+  identical to the one on the default branch (`main`), so a PR cannot edit the
+  workflow to reach the secret. A new or edited review or maintenance workflow
+  therefore skips (the log says "Skipping action due to workflow validation") until
+  it is promoted to `main`. The weekly schedule also runs only from `main`.
 
 ## Repository settings (admin only)
 
