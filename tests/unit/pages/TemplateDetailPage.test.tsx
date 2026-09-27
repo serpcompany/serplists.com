@@ -5,7 +5,7 @@ import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import TemplateDetail from '@/pages/TemplateDetail';
-import { buildV0DemoPrivateTemplate } from '@/features/parity/v0DemoFixtures';
+import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
 
 const mockUseTemplateDetailModel = vi.fn();
 
