@@ -183,7 +183,7 @@ test('@smoke team workspace settings create link invites and expose owner contro
 
   await page.goto('/dashboard/settings');
 
-  await page.getByRole('button', { name: 'Switch workspace' }).click();
+  await page.getByRole('button', { name: 'Switch context' }).click();
   await page.getByRole('menuitem', { name: /Acme Team/i }).click();
 
   await expect(
@@ -194,7 +194,7 @@ test('@smoke team workspace settings create link invites and expose owner contro
     page.getByText('Owns billing, members, settings, templates, and runs.'),
   ).toBeVisible();
   await expect(
-    page.getByText('Team entitlements apply while this workspace is selected.'),
+    page.getByText('Paid Organization entitlements apply while this Organization is selected.'),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: /make owner/i })).toBeVisible();
 

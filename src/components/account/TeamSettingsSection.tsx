@@ -46,9 +46,9 @@ const teamActivityActionLabels: Record<string, string> = {
   'checklist_run.share_created': 'Run share created',
   'checklist_run.shared_updated': 'Shared run updated',
   'checklist_run.updated': 'Run updated',
-  'team.created': 'Team created',
+  'team.created': 'Organization created',
   'team.owner_transferred': 'Owner transferred',
-  'team.updated': 'Team updated',
+  'team.updated': 'Organization updated',
   'team_invite.accepted': 'Invite accepted',
   'team_invite.created': 'Invite created',
   'team_invite.revoked': 'Invite revoked',
@@ -205,7 +205,7 @@ export function TeamSettingsSection() {
 
     const name = teamName.trim();
     if (!name) {
-      toast.error('Team name is required');
+      toast.error('Organization name is required');
       return;
     }
 
@@ -217,9 +217,9 @@ export function TeamSettingsSection() {
       });
       setTeamName('');
       setTeamSlug('');
-      toast.success('Team created');
+      toast.success('Organization created');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create team');
+      toast.error(error instanceof Error ? error.message : 'Failed to create Organization');
     } finally {
       setIsCreatingTeam(false);
     }
@@ -229,14 +229,14 @@ export function TeamSettingsSection() {
     event.preventDefault();
 
     if (!activeTeamId) {
-      toast.error('Select a team before updating team settings');
+      toast.error('Select an Organization before updating its settings');
       return;
     }
 
     const name = editTeamName.trim();
     const slug = editTeamSlug.trim();
     if (!name) {
-      toast.error('Team name is required');
+      toast.error('Organization name is required');
       return;
     }
 
@@ -248,9 +248,9 @@ export function TeamSettingsSection() {
       });
       await refreshTeams();
       await activityQuery.refetch();
-      toast.success('Team updated');
+      toast.success('Organization updated');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update team');
+      toast.error(error instanceof Error ? error.message : 'Failed to update Organization');
     } finally {
       setIsUpdatingTeam(false);
     }
@@ -260,7 +260,7 @@ export function TeamSettingsSection() {
     event.preventDefault();
 
     if (!activeTeamId) {
-      toast.error('Select a team before inviting members');
+      toast.error('Select an Organization before inviting members');
       return;
     }
 
@@ -319,7 +319,7 @@ export function TeamSettingsSection() {
       selectWorkspace(acceptedInvite.teamId);
       await incomingInvitesQuery.refetch();
       void refreshTeams().catch(() => undefined);
-      toast.success('Team invite accepted');
+      toast.success('Organization invite accepted');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to accept invite');
     } finally {
@@ -370,7 +370,7 @@ export function TeamSettingsSection() {
     const memberName = member.name || member.email || member.user_id;
     if (
       typeof window !== 'undefined' &&
-      !window.confirm(`Transfer team ownership to ${memberName}? You will become a team admin.`)
+      !window.confirm(`Transfer Organization ownership to ${memberName}? You will become an admin.`)
     ) {
       return;
     }
@@ -381,7 +381,7 @@ export function TeamSettingsSection() {
       await membersQuery.refetch();
       await refreshTeams();
       await activityQuery.refetch();
-      toast.success('Team ownership transferred');
+      toast.success('Organization ownership transferred');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to transfer ownership');
     } finally {
@@ -394,7 +394,7 @@ export function TeamSettingsSection() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Users className="h-5 w-5" />
-          Teams
+          Organizations
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -412,7 +412,7 @@ export function TeamSettingsSection() {
                       {invite.teamName}
                     </div>
                     <div className="truncate text-xs text-muted-foreground">
-                      Invited by {invite.inviterName || invite.inviterEmail || 'team admin'}
+                      Invited by {invite.inviterName || invite.inviterEmail || 'an Organization admin'}
                     </div>
                   </div>
                   <div className="text-sm capitalize text-muted-foreground">
@@ -438,7 +438,7 @@ export function TeamSettingsSection() {
 
         <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto]" onSubmit={handleCreateTeam}>
           <div className="space-y-2">
-            <Label htmlFor="team-name">Team name</Label>
+            <Label htmlFor="team-name">Organization name</Label>
             <Input
               id="team-name"
               value={teamName}
@@ -457,14 +457,14 @@ export function TeamSettingsSection() {
           </div>
           <div className="flex items-end">
             <Button type="submit" disabled={isCreatingTeam} className="w-full">
-              {isCreatingTeam ? 'Creating...' : 'Create team'}
+              {isCreatingTeam ? 'Creating...' : 'Create Organization'}
             </Button>
           </div>
         </form>
 
         {teams.length > 0 ? (
           <div className="space-y-3">
-            <div className="text-sm font-medium text-foreground">Your teams</div>
+            <div className="text-sm font-medium text-foreground">Your Organizations</div>
             <div className="divide-y rounded-md border border-border">
               {teams.map((team) => {
                 const selected = activeWorkspace.type === 'team' && activeWorkspace.teamId === team.id;
@@ -513,7 +513,7 @@ export function TeamSettingsSection() {
             {canManageTeam ? (
               <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto]" onSubmit={handleUpdateTeam}>
                 <div className="space-y-2">
-                  <Label htmlFor="team-settings-name">Team name</Label>
+                  <Label htmlFor="team-settings-name">Organization name</Label>
                   <Input
                     id="team-settings-name"
                     value={editTeamName}
@@ -532,7 +532,7 @@ export function TeamSettingsSection() {
                 </div>
                 <div className="flex items-end">
                   <Button type="submit" disabled={isUpdatingTeam} className="w-full">
-                    {isUpdatingTeam ? 'Saving...' : 'Save team'}
+                    {isUpdatingTeam ? 'Saving...' : 'Save Organization'}
                   </Button>
                 </div>
               </form>
@@ -594,7 +594,7 @@ export function TeamSettingsSection() {
 
             {!canManageTeam ? (
               <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-                Owners and admins manage team settings, invites, and activity.
+                Owners and admins manage Organization settings, invites, and activity.
               </div>
             ) : null}
 
@@ -617,7 +617,7 @@ export function TeamSettingsSection() {
                             {invite.email}
                           </div>
                           <div className="truncate text-xs text-muted-foreground">
-                            Invited by {invite.inviterName || invite.inviterEmail || 'team admin'}
+                            Invited by {invite.inviterName || invite.inviterEmail || 'an Organization admin'}
                           </div>
                         </div>
                         <div className="text-sm capitalize text-muted-foreground">
@@ -757,7 +757,7 @@ export function TeamSettingsSection() {
                 {activityQuery.isLoading ? (
                   <div className="text-sm text-muted-foreground">Loading activity...</div>
                 ) : activity.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No team activity recorded yet.</div>
+                  <div className="text-sm text-muted-foreground">No Organization activity recorded yet.</div>
                 ) : (
                   <div className="divide-y rounded-md border border-border">
                     {activity.slice(0, 10).map((event) => (
@@ -785,7 +785,7 @@ export function TeamSettingsSection() {
           </div>
         ) : (
           <div className="text-sm text-muted-foreground">
-            Create or select a team workspace to share templates and runs.
+            Create or select an Organization to share templates and runs.
           </div>
         )}
       </CardContent>

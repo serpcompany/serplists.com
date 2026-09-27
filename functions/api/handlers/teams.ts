@@ -183,7 +183,7 @@ async function acceptTeamInviteRecord({
     .where(and(eq(teams.id, invite.team_id), isNull(teams.archived_at)))
     .limit(1);
   if (!team) {
-    return jsonError("Team not found", 404);
+    return jsonError("Organization not found", 404);
   }
 
   const userEmail = await getCurrentUserEmail(env, userId);
@@ -390,7 +390,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     const body = await readJson(request);
     const parsed = createTeamBodySchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message || "Invalid team payload", 400);
+      return jsonError(parsed.error.issues[0]?.message || "Invalid Organization payload", 400);
     }
 
     const now = new Date().toISOString();
@@ -522,7 +522,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
 
   const membership = await getActiveTeamMembership(env, teamId, userId);
   if (!membership || !membership.id) {
-    return jsonError("Team not found", 404);
+    return jsonError("Organization not found", 404);
   }
 
   const role = normalizeTeamRole(membership.role);
@@ -530,7 +530,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
   if (request.method === "GET" && teamsSubpath.length === 1) {
     const [team] = await db.select().from(teams).where(and(eq(teams.id, teamId), isNull(teams.archived_at))).limit(1);
     if (!team) {
-      return jsonError("Team not found", 404);
+      return jsonError("Organization not found", 404);
     }
 
     return json({ ...team, membership: { id: membership.id, role, status: membership.status } });
@@ -544,12 +544,12 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     const body = await readJson(request);
     const parsed = updateTeamBodySchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message || "Invalid team payload", 400);
+      return jsonError(parsed.error.issues[0]?.message || "Invalid Organization payload", 400);
     }
 
     const [team] = await db.select().from(teams).where(and(eq(teams.id, teamId), isNull(teams.archived_at))).limit(1);
     if (!team) {
-      return jsonError("Team not found", 404);
+      return jsonError("Organization not found", 404);
     }
 
     const updates: {
@@ -572,7 +572,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
         .limit(1);
 
       if (existingSlug && existingSlug.id !== teamId) {
-        return jsonError("Team slug is already in use", 409, {
+        return jsonError("Organization slug is already in use", 409, {
           code: "team_slug_exists",
         });
       }
@@ -639,7 +639,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
 
   if (request.method === "PUT" && teamsSubpath[1] === "owner") {
     if (role !== "owner") {
-      return jsonError("Only the team owner can transfer ownership", 403, {
+      return jsonError("Only the Organization owner can transfer ownership", 403, {
         code: "owner_required",
       });
     }
@@ -651,7 +651,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     }
 
     if (parsed.data.memberId === membership.id) {
-      return jsonError("Team owner is already assigned to this member", 400, {
+      return jsonError("This member is already the Organization owner", 400, {
         code: "owner_transfer_noop",
       });
     }
@@ -672,7 +672,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       return jsonError("Member not found", 404);
     }
     if (normalizeTeamRole(targetMember.role) === "owner") {
-      return jsonError("Member is already the team owner", 400, {
+      return jsonError("Member is already the Organization owner", 400, {
         code: "owner_transfer_noop",
       });
     }
@@ -842,7 +842,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       )
       .limit(1);
     if (existingActiveMember) {
-      return jsonError("User is already an active team member", 409, {
+      return jsonError("User is already an active Organization member", 409, {
         code: "team_member_exists",
       });
     }
@@ -1011,7 +1011,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       return jsonError("Member not found", 404);
     }
     if (targetMember.user_id === userId) {
-      return jsonError("Team members cannot change their own membership from this endpoint", 400, {
+      return jsonError("Organization members cannot change their own membership from this endpoint", 400, {
         code: "self_membership_update_forbidden",
       });
     }

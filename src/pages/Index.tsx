@@ -57,7 +57,7 @@ const productSurfaces = [
     icon: Library,
   },
   {
-    title: 'Live run workspace',
+    title: 'Live run tracking',
     description:
       'Every execution gets its own progress, task focus, completion states, and continuation link.',
     icon: ListChecks,

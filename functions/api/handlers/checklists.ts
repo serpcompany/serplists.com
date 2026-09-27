@@ -143,7 +143,7 @@ async function canRestoreRun(env: Env, run: Record<string, unknown>, userId: str
 
 async function assertTeamRunAccess(env: Env, teamId: string, userId: string): Promise<Response | null> {
   const membership = await getActiveTeamMembership(env, teamId, userId);
-  if (!membership) return jsonError('Team not found', 404);
+  if (!membership) return jsonError('Organization not found', 404);
   if (!canRunTeamTemplates(normalizeTeamRole(membership.role))) return jsonError('Forbidden', 403);
   return null;
 }
@@ -421,7 +421,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       if (teamId) {
         const membership = await getActiveTeamMembership(env, teamId, userId);
         if (!membership || !canViewTeam(normalizeTeamRole(membership.role))) {
-          return jsonError('Team not found', 404);
+          return jsonError('Organization not found', 404);
         }
 
         const checklists = await db
@@ -462,7 +462,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     if (teamId) {
       const membership = await getActiveTeamMembership(env, teamId, userId);
       if (!membership || !canViewTeam(normalizeTeamRole(membership.role))) {
-        return jsonError('Team not found', 404);
+        return jsonError('Organization not found', 404);
       }
 
       const checklists = await db

@@ -340,7 +340,7 @@ async function canEditTemplate(env: Env, template: Record<string, unknown>, user
 
 async function assertTeamTemplateCreateAccess(env: Env, teamId: string, userId: string): Promise<Response | null> {
   const membership = await getActiveTeamMembership(env, teamId, userId);
-  if (!membership) return jsonError('Team not found', 404);
+  if (!membership) return jsonError('Organization not found', 404);
   if (!canEditTeamTemplates(normalizeTeamRole(membership.role))) return jsonError('Forbidden', 403);
   return null;
 }
@@ -476,7 +476,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       ? await getEntitlementsForContext(env, { type: 'team', teamId: backupTeamId, userId })
       : await getEntitlementsForUser(env, userId);
     if (entitlements.plan !== 'pro' && entitlements.plan !== 'team') {
-      return jsonError('Upgrade this workspace to use template import/export.', 403, { code: 'upgrade_required' });
+      return jsonError('Upgrade this Organization to use template import/export.', 403, { code: 'upgrade_required' });
     }
 
     if (request.method === 'GET') {
@@ -796,7 +796,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       if (teamId) {
         const membership = await getActiveTeamMembership(env, teamId, userId);
         if (!membership || !canViewTeam(normalizeTeamRole(membership.role))) {
-          return jsonError('Team not found', 404);
+          return jsonError('Organization not found', 404);
         }
 
         const rows = await withRulesColumnFallback((includeRules) =>
@@ -951,7 +951,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       if (!userId) return jsonError('Unauthorized', 401);
       const membership = await getActiveTeamMembership(env, teamId, userId);
       if (!membership || !canViewTeam(normalizeTeamRole(membership.role))) {
-        return jsonError('Team not found', 404);
+        return jsonError('Organization not found', 404);
       }
 
       const rows = await withRulesColumnFallback((includeRules) =>
