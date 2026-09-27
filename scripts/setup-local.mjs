@@ -60,7 +60,7 @@ if (!existsSync(path.join(repoRoot, "dist/index.html"))) {
 console.log(`
 Setup complete.
   Start:        pnpm run dev:all   (ports and URLs are printed; logs go to tmp/logs/)
-  Sign in:      john@test.com / password123 (see docs/getting-started/quick-reference.md)
+  Sign in:      john@test.com / password123 (see docs/design-docs/development-environment.md)
   Screenshot:   pnpm run ui:snap -- dashboard --login john@test.com
   Verify:       pnpm run verify
 `);

@@ -49,7 +49,7 @@ module.exports = {
       comment:
         "Pages and components must not call src/lib/api.ts directly (type-only imports are fine). Put the call in a " +
         "feature hook or context (src/features/*, src/contexts/*) and pass data/actions down. " +
-        "See docs/architecture/ui-decoupling-execution-checklist.md.",
+        "See docs/exec-plans/active/ui-decoupling.md.",
       from: { path: "^src/(pages|components)/" },
       to: { path: "^src/lib/api\\.ts$", dependencyTypesNot: ["type-only"] },
     },

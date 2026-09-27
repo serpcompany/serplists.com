@@ -5,6 +5,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 // Rule messages are written as instructions: they are read by coding agents.
+// See docs/design-docs/core-beliefs.md for the reasoning behind each rule.
 
 const MAX_LINES = 500;
 // Legacy files already over MAX_LINES, capped at roughly their current size.
@@ -28,7 +29,7 @@ const LEGACY_MAX_LINES = {
 };
 
 const VOCABULARY_MESSAGE =
-  "User-visible text must use CONTEXT.md terms: 'Organization' (not Team/Workspace) and 'Personal' " +
+  "User-visible text must use docs/PRODUCT_SENSE.md terms: 'Organization' (not Team/Workspace) and 'Personal' " +
   "(not 'Personal workspace'). Legacy code identifiers are fine; this rule only checks visible copy.";
 // Capitalized "Team"/"Workspace" are product names; lowercase "team" is ordinary English
 // ("helps teams ship"), but lowercase "workspace" in prose is the retired product term.

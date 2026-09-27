@@ -7,7 +7,7 @@ export const getBillingStatusQueryKey = (
   teamId?: string | null,
 ) => ["billing", "status", userId ?? "guest", teamId ?? "personal"] as const;
 
-// "team" is the legacy stored value for a paid Organization (see docs/product/plans.md).
+// "team" is the legacy stored value for a paid Organization (see docs/product-specs/pricing-and-entitlements.md).
 export const getBillingPlanLabel = (plan?: BillingPlan | null): "Free" | "Pro" | "Paid" | null => {
   if (plan === "team") return "Paid";
   if (plan === "pro") return "Pro";
