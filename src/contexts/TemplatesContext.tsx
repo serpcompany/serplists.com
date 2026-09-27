@@ -179,25 +179,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch user's own templates (both public and private) if logged in
-  const { data: userTemplates = [] } = useQuery({
-    queryKey: ['user-templates', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      
-      try {
-        // For now, just return empty array - we'll use the public templates
-        // In the future, we can add a user-specific endpoint
-        return [];
-      } catch (error) {
-        console.error('Error fetching user templates:', error);
-        return [];
-      }
-    },
-    enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
-
   // Fetch user's runs (only if logged in)
   const { data: runs = [], isLoading: runsLoading } = useQuery({
     queryKey: ['runs', user?.id, workspaceScopeId],
@@ -307,7 +288,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
-      queryClient.invalidateQueries({ queryKey: ['user-templates'] });
       toast.success("Template created successfully");
     },
     onError: (error: Error) => {
@@ -339,7 +319,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['templates'] });
-      await queryClient.invalidateQueries({ queryKey: ['user-templates'] });
       await queryClient.invalidateQueries({ queryKey: ['runs'] });
       toast.success("Template updated. Checklist changes were reconciled into active private runs.");
     },
@@ -357,7 +336,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
-      queryClient.invalidateQueries({ queryKey: ['user-templates'] });
       queryClient.invalidateQueries({ queryKey: ['runs'] });
     }
   });
@@ -523,7 +501,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
-      queryClient.invalidateQueries({ queryKey: ['user-templates'] });
     }
   });
 

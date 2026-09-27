@@ -4,6 +4,7 @@ import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle
 import { createDb, schema } from '../db';
 import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
+import { log } from '../utils/logger';
 import { getSessionUserId } from '../utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
 import {
@@ -202,7 +203,7 @@ function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
   if (typeof template.items !== 'undefined') {
     const normalized = normalizeSectionsPayload(template.items);
     if (normalized.error) {
-      console.warn('Failed to parse template items JSON', { templateId: template.id });
+      log('warn', 'template_items_parse_failed', { templateId: template.id });
     } else {
       sections = normalized.sections;
     }
@@ -217,7 +218,7 @@ function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
         rules = validatedRules.data;
       }
     } catch {
-      console.warn('Failed to parse template rules JSON', { templateId: template.id });
+      log('warn', 'template_rules_parse_failed', { templateId: template.id });
     }
   }
 
@@ -1248,7 +1249,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     const isPublic = typeof is_public === 'boolean' ? is_public : false;
 
     if (title && junkTemplateTitles.has(title)) {
-      console.warn('Junk template title created', { userId, title });
+      log('warn', 'junk_template_title_created', { userId, title });
     }
 
     const now = new Date().toISOString();
@@ -1440,7 +1441,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     }
 
     if (typeof title === 'string' && junkTemplateTitles.has(title)) {
-      console.warn('Junk template title updated', { userId, templateId, title });
+      log('warn', 'junk_template_title_updated', { userId, templateId, title });
     }
 
     const templateUpdateWhere = existingTemplate.owner_type === 'team' && existingTemplate.team_id

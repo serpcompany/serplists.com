@@ -79,7 +79,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<TemplateImportResult | null>(null);
   const [lastImportSummary, setLastImportSummary] = useState<TemplateImportSummary | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [includePublicTemplates, setIncludePublicTemplates] = useState(false);
   const [importVisibility, setImportVisibility] = useState<ImportVisibility>("preserve");
 
@@ -169,7 +168,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       toast.error("Import file too large (max 2MB)");
       return;
     }
-    setSelectedFile(file);
     setLastImportSummary(null);
     setIsImporting(true);
     try {
@@ -225,7 +223,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
         toast.success(`Successfully imported ${result.imported}/${result.total} templates`);
       }
       setImportPreview(null);
-      setSelectedFile(null);
       // Reset file input
       const fileInput = document.getElementById('template-file-input') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
@@ -237,7 +234,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   };
   const handleCancelImport = () => {
     setImportPreview(null);
-    setSelectedFile(null);
     const fileInput = document.getElementById('template-file-input') as HTMLInputElement;
     if (fileInput) fileInput.value = '';
   };
