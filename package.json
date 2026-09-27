@@ -69,7 +69,8 @@
     "db:seed:official:local": "npx wrangler d1 execute serp-checklists-db --local --file=./db/seeds/official-templates.sql && pnpm exec tsx scripts/data/local-d1-data.ts seed-official-login",
     "db:seed:official:staging": "npx wrangler d1 execute DB --remote --preview --file=./db/seeds/official-templates.sql",
     "db:seed:official:remote": "npx wrangler d1 execute serp-checklists-db --remote --file=./db/seeds/official-templates.sql",
-    "db:query": "npx wrangler d1 execute serp-checklists-db --local --command"
+    "db:query": "npx wrangler d1 execute serp-checklists-db --local --command",
+    "prepare": "lefthook install || echo git hooks not installed"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
