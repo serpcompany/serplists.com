@@ -30,11 +30,13 @@ dist-ssr
 .vscode
 .env
 .venv
-.codex
 out
 *.vsix
-.claude
+# Agent tooling: shared config, skills, and hooks are committed; personal files stay local.
+# AGENTS.md is the canonical agent guide, so tool-specific copies stay out.
+.claude/settings.local.json
 CLAUDE.md
+CLAUDE.local.md
 
 .wrangler
 .page-audit
