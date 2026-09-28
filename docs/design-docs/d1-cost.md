@@ -30,8 +30,11 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
 
 ## Rules for D1 queries
 
-1. **Bound every list.** Use `LIMIT` with a cursor. An unbounded list reads the whole
-   matching set, and its cost grows with the table.
+1. **Bound every list.** Use `LIMIT` with a cursor (`WHERE created_at < ?` on an index
+   that matches the sort), never `OFFSET`: `OFFSET` reads every row it skips. On the
+   catalog, page 200 read 10,400 rows with `OFFSET` and 88 with a cursor. A cursor only
+   bounds the page when every filter has an index: `LIKE '%term%'` search, category
+   matches inside JSON, and `COUNT(*)` totals still read every matching row.
 2. **Match one index to the filter and the sort.** Use composite or partial indexes that
    cover `WHERE` and `ORDER BY` together. Avoid `OR` across different columns, and
    avoid single-column indexes on low-cardinality columns (`is_public`, `status`); the
@@ -43,13 +46,23 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
 4. **Every index costs a write.** Each insert writes one row per index, and updates do
    the same for indexed columns they change. Drop unused indexes, and keep
    write-amplified tables (audit, history) lean.
-5. **Cache public, anonymous responses** at the edge. A cache hit reads nothing.
-   Sitemaps use `cachedSitemap()` (`functions/sitemap/shared.ts`): the Cache API key
-   includes the trigger-maintained `sitemap_revisions` and the bundled catalog, so a hit
-   reads 3 rows and any content change or deploy misses. Locally the cache persists in
-   `.wrangler/state/v3/cache`; delete it to see uncommitted sitemap code changes.
+5. **Cache public, anonymous responses** at the edge (the Cache API, per data center).
+   Choose the invalidation by how often the content changes:
+   - **Rarely, relative to reads:** key by a revision. Sitemaps use `cachedSitemap()`
+     (`functions/sitemap/shared.ts`), keyed by the trigger-maintained
+     `sitemap_revisions` and the bundled catalog, so a hit reads 3 rows and any content
+     change or deploy misses.
+   - **Often:** use a short TTL, so cost is bounded by the TTL rather than the edit
+     rate. The anonymous catalog uses `withEdgeCache()`
+     (`functions/api/utils/edge-cache.ts`) for 5 minutes: a hit reads nothing.
+
+   Locally the cache persists in `.wrangler/state/v3/cache`; delete it to see
+   uncommitted changes to cached responses.
 6. **Check the plan after changing indexes.** Planner statistics (`PRAGMA optimize`) fix
    some plans and worsen others, so profile before and after.
+7. **Request data only where it is shown.** Rows are billed per request, so a provider
+   that loads a list on every route multiplies its cost by page views. Template lists
+   load on demand ([FRONTEND.md](../FRONTEND.md)).
 
 ## Hotspots (2026-09-27)
 
@@ -62,9 +75,9 @@ Open, all unbounded lists:
 
 | Request | Rows read | Cause |
 | --- | --- | --- |
-| Signed-in dashboard templates | 19,219 | One query returns all public templates *or* the user's own, unbounded |
-| Public catalog (`GET /api/templates`) | 13,009 | Unbounded list of every public template |
-| Organization runs | 12,007 | Unbounded, plus a correlated template subquery per run |
+| Signed-in template lists (library, dashboard, runs) | 19,219 | One query returns all public templates *or* the user's own, unbounded, and it is not cached |
+| Public catalog cache miss (`GET /api/templates`) | 13,009 | Unbounded list of every public template; at most once per data center every 5 minutes, and 0 on a hit |
+| Organization runs | 12,007 | Unbounded, plus a correlated template subquery per run; `TemplatesProvider` still loads the run list on every page for signed-in users |
 | Organization templates | 3,007 | Unbounded |
 | Personal and archived runs | about 1,000 each | Unbounded; archived filters `deleted_at IS NOT NULL` after reading every run |
 | Sitemap cache miss | 41,449 (index), 19,419 (templates shard) | Builds every entry; now only after a content change or deploy, once per data center |
@@ -72,7 +85,7 @@ Open, all unbounded lists:
 Everything else (session, detail pages, history, members, billing, run starts, template
 updates, cached sitemaps) reads under 25 rows.
 
-Fixed in step 1 of the plan (rows read before, after):
+Fixed (rows read before, after; see the plan's progress):
 
 | Request | Before | After | Fix |
 | --- | --- | --- | --- |
@@ -82,6 +95,8 @@ Fixed in step 1 of the plan (rows read before, after):
 | Public profile templates | 7,005 | 12 | Unary `+` on `is_public`, so `idx_templates_owner` wins |
 | Public catalog | 19,012 | 13,009 | `idx_templates_public_created_at (is_public, created_at)` also covers the sort |
 | Repeat sitemap index / shard | 41,456 / 19,417 | 3 / 3 | Cache API keyed by sitemap revisions |
+| Any page view (pricing, home, profiles, a run) | 26,018 anonymous, 38,438 signed in | 0 | The app fetched the catalog twice on every route; lists now load only on pages that show them, once |
+| Repeat anonymous catalog | 13,009 | 0 | 5-minute edge cache |
 
 Writes per request after step 1 (dropped `idx_templates_slug`, `idx_templates_user_id`,
 `idx_templates_category`, `idx_checklist_runs_assigned_to_user_id`,

@@ -36,15 +36,31 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   public template 23 to 18, start a run 13 to 10, each progress update 6 to 5.
   `usage_analytics` stays until a human decides whether to delete its data.
 
+### 1b. Stop requesting the catalog (no visible UI changes)
+
+- [x] **Load template lists on demand.** `TemplatesProvider` fetched `GET /api/templates`
+  twice on every route (26,018 rows read per anonymous page view, 38,438 signed in, at
+  20k templates). Lists now load only on pages that call `useTemplateLists()`, the
+  Personal list shares the catalog request, and nothing loads until the session and
+  workspace are known. Pricing, home, profiles, and runs pages: 0 rows.
+- [x] **Edge-cache the anonymous catalog** for 5 minutes with `withEdgeCache()`: a
+  repeat request reads 0 rows (from 13,009).
+- [ ] **Load the run list on demand** the same way; it still loads on every page for
+  signed-in users (Organization runs: 12,007 rows).
+
 ### 2. Bounded lists (API and UI changes)
 
-- [ ] **Split the dashboard from the public catalog.** Signed-in dashboards query only
-  the active owner (`idx_templates_owner`) instead of "public OR mine". Target: 19k to
-  the user's own template count.
-- [ ] **Paginate the public catalog.** Cursor pagination on `created_at` using
-  `idx_templates_public_created_at`, server-side category and search filters, and an
-  edge cache for anonymous responses. Requires library UI changes. Target: 13k to about
-  the page size.
+- [ ] **Split the dashboard from the public catalog.** Signed-in pages request the
+  cached public catalog and, separately, only the active owner's templates
+  (`idx_templates_owner`) instead of "public OR mine"; the UI already merges the two.
+  Target: 19k to the user's own template count, and signed-in catalog views hit the
+  edge cache.
+- [ ] **Paginate the public catalog** once it is large enough that cache misses or the
+  response size matter. Cursor pagination on `created_at` using
+  `idx_templates_public_created_at` (never `OFFSET`), FTS5 for search, an indexed
+  category table, a stored popularity score for the popular and trending sorts, and
+  maintained category counts. Requires library UI changes. Target: 13k to about the page
+  size.
 - [ ] **Paginate run and template lists** (Personal, Organization, archived) with
   composite indexes that cover the filter and sort, for example
   `(team_id, deleted_at, created_at)` and a partial index for archived rows. Replace
@@ -96,3 +112,15 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   for these indexes.
 - 2026-09-27: Keep `usage_analytics`. It is unused, but dropping it deletes data, which
   needs a human decision; it receives no writes, so its indexes cost nothing.
+- 2026-09-27: Cache the anonymous catalog with a 5-minute TTL, not a revision key.
+  Public templates may be edited often, and a revision key would turn every save into a
+  catalog-wide miss; a TTL bounds misses to one per data center per 5 minutes whatever
+  the edit rate. Five minutes matches the client's existing `staleTime` for the catalog.
+  Signed-in requests skip the cache because they return "public OR mine".
+- 2026-09-27: Defer catalog pagination. Measured on 6k public templates: a cursor page
+  reads 88 rows at any depth, but `OFFSET` page 200 reads 10,400, a rare search term
+  reads 7,006 without FTS, and a total count reads 7,005. Pagination needs those pieces
+  to pay off; the edge cache already makes most catalog views free.
+- 2026-09-27: Wait for `isWorkspaceLoading` before loading any template list. Without
+  it, signed-in pages fetched the list once as a visitor and again as the user, and
+  Organization pages fetched the Personal list before the active Organization resolved.

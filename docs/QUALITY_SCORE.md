@@ -28,7 +28,7 @@ changes are risky or slow. D = needs attention before building on it.
 | --- | --- | --- |
 | Type safety | B | `strict` across app, API, and scripts; `tests/` not type-checked (TD-1) |
 | Client boundary parsing | D | API responses are trusted, not parsed (TD-2) |
-| D1 cost efficiency | C | Unbounded lists still read rows in proportion to table size (catalog 13k, signed-in dashboard 19k, Organization runs 12k at 20k templates); sitemaps are cached and other hot paths are indexed. See the [D1 cost plan](exec-plans/active/d1-cost.md) |
+| D1 cost efficiency | C | Signed-in template lists (19k at 20k templates) and Organization runs (12k, loaded on every signed-in page) still read in proportion to table size; the anonymous catalog and sitemaps are cached and other hot paths are indexed. See the [D1 cost plan](exec-plans/active/d1-cost.md) |
 | Architecture enforcement | B | `deps:check` rules with 10 known violations (TD-6, TD-13); no dead modules |
 | Observability | C | Structured JSON logs with request IDs in the API and in `tmp/logs/` locally; no metrics, traces, or production log sink; frontend errors go to the console only |
 | Delivery | B | CI gates deploys and probes each new deployment; Claude reviews every PR once the app and token are set up; required status checks and that setup need a repository admin (see [agent workflow](design-docs/agent-workflow.md#repository-settings-admin-only)) |
