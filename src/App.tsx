@@ -13,6 +13,7 @@ import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { Layout } from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
+import { ScrollToTop } from './components/routing/ScrollToTop';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DevLoginBar } from './components/DevLoginBar';
@@ -89,6 +90,7 @@ const App = () => {
                       v7_relativeSplatPath: true,
                     }}
                   >
+                  <ScrollToTop />
                   <Routes>
                     {/* Public Routes */}
 

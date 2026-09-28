@@ -35,6 +35,14 @@ another path clears it (the boundary resets on a pathname change, so healthy pag
 never remounted). The `ErrorBoundary` around the providers in `App.tsx` is the last
 resort: its fallback uses plain links, and browser Back clears it.
 
+`BrowserRouter` never resets the window's scroll, so `ScrollToTop`
+(`src/components/routing/`) is mounted once inside the Router. When a navigation
+changes the pathname, it scrolls to the URL's `#anchor` if that element exists and
+otherwise to the top. Back and Forward (POP) keep the browser's own restoration, and
+search-only changes, such as the library search rewriting `?search=`, never scroll.
+Pages scroll the window, not an inner container; a shell that adds its own scroll
+container must reset that element too.
+
 ## Data and state
 
 - `src/lib/api.ts` handles the base URL, JSON, and structured errors, and sends the
