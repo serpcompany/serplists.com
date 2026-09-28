@@ -4,6 +4,7 @@ import { getPublicTemplateSaveLabels } from '@/components/template/publicTemplat
 
 const signedInPersonal = {
   isAuthenticated: true,
+  isBillingError: false,
   isBillingLoading: false,
   isProUser: true,
   isSaving: false,
@@ -30,6 +31,12 @@ describe('getPublicTemplateSaveLabels', () => {
       getPublicTemplateSaveLabels({ ...signedInPersonal, isBillingLoading: true, isProUser: false })
         .footer,
     ).toBe('Checking plan...');
+  });
+
+  it('never asks for an upgrade when the plan check failed, since no plan is known', () => {
+    expect(
+      getPublicTemplateSaveLabels({ ...signedInPersonal, isBillingError: true, isProUser: false }),
+    ).toEqual({ footer: 'Copy to Library', header: 'Save' });
   });
 
   it('never asks an Organization or a signed-out visitor to upgrade', () => {

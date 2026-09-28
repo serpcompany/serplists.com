@@ -34,6 +34,8 @@ interface PublicTemplateViewProps {
   // Organization they follow the viewer's Organization Role (always true in Personal).
   canSaveTemplate: boolean;
   canStartRun: boolean;
+  // The plan check failed: no plan is known, so nothing reads as an upgrade.
+  isBillingError: boolean;
   isBillingLoading: boolean;
   isProUser: boolean;
   isCreatingRun: boolean;
@@ -73,6 +75,7 @@ export function PublicTemplateView({
   isAuthenticated,
   canSaveTemplate,
   canStartRun,
+  isBillingError,
   isBillingLoading,
   isProUser,
   isCreatingRun,
@@ -120,6 +123,7 @@ export function PublicTemplateView({
   const isSaveDisabled = isSaving || isBillingLoading || isWorkspaceLoading;
   const saveLabels = getPublicTemplateSaveLabels({
     isAuthenticated,
+    isBillingError,
     isBillingLoading,
     isProUser,
     isSaving,

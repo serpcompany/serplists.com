@@ -451,6 +451,17 @@ describe('PublicTemplate ownership context', () => {
     expect(organization).toContain('Copy to Library');
   });
 
+  it('never labels Save as an upgrade when the plan check failed', () => {
+    workspaceState.activeTeamId = undefined;
+    workspaceState.isTeamWorkspace = false;
+    const { html } = renderPublishedRoute(publishedClipyTemplate, {
+      billingState: { billingEnabled: true, isError: true, isLoading: false, isPro: false },
+    });
+
+    expect(html).not.toContain('Upgrade to');
+    expect(html).toContain('Copy to Library');
+  });
+
   it('says the copy went to the Organization, as the template detail page does', async () => {
     const saveTemplate = vi.fn().mockResolvedValue({ kind: 'ok', templateId: 'clone-1' });
     renderPublishedRoute(publishedClipyTemplate, { saveTemplate });

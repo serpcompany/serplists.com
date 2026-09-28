@@ -19,6 +19,7 @@ const renderView = (overrides: Partial<ViewProps> = {}) =>
         isAuthenticated
         canSaveTemplate
         canStartRun
+        isBillingError={false}
         isBillingLoading={false}
         isProUser={false}
         isCreatingRun={false}
@@ -80,6 +81,7 @@ describe('PublicTemplateView', () => {
           isAuthenticated={false}
           canSaveTemplate
           canStartRun
+          isBillingError={false}
           isBillingLoading={false}
           isProUser={false}
           isCreatingRun={false}
@@ -135,6 +137,7 @@ describe('PublicTemplateView', () => {
           isAuthenticated={false}
           canSaveTemplate
           canStartRun
+          isBillingError={false}
           isBillingLoading={false}
           isProUser={false}
           isCreatingRun={false}

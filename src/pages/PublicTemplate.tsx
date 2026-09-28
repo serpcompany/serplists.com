@@ -270,6 +270,7 @@ const PublicTemplate = () => {
         isAuthenticated={isAuthenticated}
         canSaveTemplate={canEditTemplates}
         canStartRun={canRunTemplates}
+        isBillingError={billingState.isError}
         isBillingLoading={billingState.isLoading}
         isProUser={billingState.isPro}
         isCreatingRun={isCreatingRun}
