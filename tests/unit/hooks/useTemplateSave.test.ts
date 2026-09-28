@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { persistTemplateSave } from "@/hooks/useTemplateSave";
+import { applyTemplateSaveDefaults } from "@/hooks/useTemplateValidation";
 import { createApiError } from "@/lib/api-errors";
 import type { ChecklistSection, TemplateSavePayload } from "@/types/checklist";
 
@@ -58,7 +59,11 @@ describe("persistTemplateSave", () => {
 
     const result = await persistTemplateSave(dependencies, buildInput());
 
-    expect(result).toEqual({ success: true, errors: [] });
+    expect(result).toEqual({
+      success: true,
+      errors: [],
+      saved: { title: "Template title", sections: baseSections },
+    });
     expect(dependencies.createTemplate).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "Template title",
@@ -111,7 +116,53 @@ describe("persistTemplateSave", () => {
       buildInput({ id: "template-1", expectedVersion: 5 }),
     );
 
-    expect(result).toEqual({ success: true, errors: [], version: 6 });
+    expect(result).toEqual({
+      success: true,
+      errors: [],
+      version: 6,
+      saved: { title: "Template title", sections: baseSections },
+    });
+  });
+
+  // The editor rebuilds its form from this, so it must match what was stored: an empty
+  // section's placeholder task, "Task N" titles, and "Untitled Template".
+  it("returns the title and sections it sent, after defaults", async () => {
+    const dependencies = buildDependencies({
+      applyDefaults: applyTemplateSaveDefaults,
+      updateTemplate: vi.fn().mockResolvedValue({ version: 4 }),
+    });
+
+    const result = await persistTemplateSave(
+      dependencies,
+      buildInput({
+        id: "template-1",
+        expectedVersion: 3,
+        title: "  ",
+        sections: [
+          ...baseSections,
+          { id: "section-2", title: "Phase 2", items: [] },
+          { id: "section-3", title: "Phase 3", items: [{ id: "item-9", title: "" }] },
+        ],
+      }),
+    );
+
+    const sent = dependencies.updateTemplate.mock.calls[0][0];
+    expect(result.saved).toEqual({ title: sent.title, sections: sent.sections });
+    expect(result.saved?.title).toBe("Untitled Template");
+    expect(result.saved?.sections[1].items.map((item) => item.title)).toEqual(["New task"]);
+    expect(result.saved?.sections[2].items.map((item) => item.title)).toEqual(["Task 1"]);
+  });
+
+  it("returns the created title and sections, after defaults", async () => {
+    const dependencies = buildDependencies({ applyDefaults: applyTemplateSaveDefaults });
+
+    const result = await persistTemplateSave(
+      dependencies,
+      buildInput({ title: "", sections: [{ id: "section-1", title: "Prep", items: [] }] }),
+    );
+
+    const sent = dependencies.createTemplate.mock.calls[0][0];
+    expect(result.saved).toEqual({ title: sent.title, sections: sent.sections });
   });
 
   it("refuses to update without a loaded version instead of skipping the conflict check", async () => {

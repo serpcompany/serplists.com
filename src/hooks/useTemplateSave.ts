@@ -12,6 +12,10 @@ export type SaveTemplateResult = {
   version?: number;
   // The slug the API stored, when a slug was sent (it may carry a suffix).
   slug?: string;
+  // On success: the title and sections as sent, after defaults were applied (a title,
+  // a placeholder task in an empty section, "Task N" titles). That is what was stored,
+  // so the editor rebuilds its form from it.
+  saved?: { title: string; sections: ChecklistSection[] };
   // Why the API refused the save, kept by kind (sign in, plan gate, billing down) so the
   // editor can offer the way forward instead of only showing the message.
   failure?: AccessFailure;
@@ -79,6 +83,7 @@ export const persistTemplateSave = async (
   } = input;
 
   const { title: finalTitle, sections: finalSections } = applyDefaults(title, sections);
+  const saved = { title: finalTitle, sections: finalSections };
 
   try {
     if (id) {
@@ -105,8 +110,8 @@ export const persistTemplateSave = async (
         version: expectedVersion,
       };
 
-      const saved = await updateTemplate(updatePayload);
-      return { success: true, errors: [], version: saved?.version, slug: saved?.slug };
+      const updated = await updateTemplate(updatePayload);
+      return { success: true, errors: [], version: updated?.version, slug: updated?.slug, saved };
     }
 
     await createTemplate({
@@ -122,7 +127,7 @@ export const persistTemplateSave = async (
       isPublic,
     });
 
-    return { success: true, errors: [] };
+    return { success: true, errors: [], saved };
   } catch (error) {
     console.error("Error saving template:", error);
     const failure = getAccessFailure(error, "Failed to save template");

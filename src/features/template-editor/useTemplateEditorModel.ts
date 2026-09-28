@@ -64,15 +64,18 @@ export const buildTemplateEditorSavedState = (
   values: TemplateEditorFormValues,
   // savedSlug: the slug the API stored, which may carry a suffix the form lacks.
   slugs: { storedSlug?: string; savedSlug?: string } = {},
+  // The title and sections as sent after defaults (SaveTemplateResult.saved): what was
+  // stored, which can differ from the form (an empty section gains a placeholder task).
+  stored?: SaveTemplateResult["saved"],
 ): TemplateEditorLoadResult => {
   const normalizedForm = normalizeTemplateEditorFormForSave(values, slugs);
   const slug = slugs.savedSlug ?? normalizedForm.seoUrl;
 
   return {
     initialValues: buildTemplateEditorFormValues({
-      title: normalizedForm.title,
+      title: stored?.title ?? normalizedForm.title,
       description: normalizedForm.description,
-      sections: normalizedForm.sections,
+      sections: stored?.sections ?? normalizedForm.sections,
       seoTitle: normalizedForm.seoTitle,
       seoDescription: normalizedForm.seoDescription,
       seoUrl: slug,
@@ -281,10 +284,11 @@ export const useTemplateEditorModel = (
     }
 
     expectedVersionRef.current = result.version;
-    const savedState = buildTemplateEditorSavedState(submitted, {
-      storedSlug: templateSlug,
-      savedSlug: result.slug,
-    });
+    const savedState = buildTemplateEditorSavedState(
+      submitted,
+      { storedSlug: templateSlug, savedSlug: result.slug },
+      result.saved,
+    );
     setLoadError(null);
     setTemplateSlug(savedState.templateSlug || templateSlug);
 
