@@ -20,7 +20,9 @@ import { api } from "@/lib/api";
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
 import { getAccessFailure } from "@/lib/api-errors";
 import { getBillingStatusQueryKey } from "@/lib/billing";
-import { formatImportFailure, formatImportSummaryMessage, getImportSummaryFromError } from "@/lib/templates/templateImportSummary";
+import {
+  formatExportSummaryMessage, formatImportFailure, formatImportSummaryMessage, getExportSummary, getImportSummaryFromError,
+} from "@/lib/templates/templateImportSummary";
 import { addPublicTemplatesToPack, selectPublicTemplatesForExport } from "@/lib/templates/portableExport";
 import { isPersonalTemplateOf } from "@/lib/templates/templateOwnership";
 import { cn } from "@/lib/utils";
@@ -150,11 +152,11 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       // The API exports owned templates; public ones come from the catalog loaded here.
       const ownedPack = await api.exportTemplateBackup({ teamId: activeTeamId });
       const backup = includePublicTemplates ? addPublicTemplatesToPack(ownedPack, communityTemplates) : ownedPack;
-      downloadBackupFile(backup);
-      const count = Array.isArray((backup as { templates?: unknown }).templates) ? (backup as {
-        templates: unknown[];
-      }).templates.length : 0;
-      toast.success(`Exported ${count} templates successfully`);
+      // Templates that cannot be made valid are left out (manifest.skippedTemplates): name them.
+      const summary = getExportSummary(backup);
+      if (summary.exported > 0) downloadBackupFile(backup);
+      const { kind, message } = formatExportSummaryMessage(summary);
+      toast[kind](message, summary.skipped.length > 0 ? { duration: 15000 } : undefined);
     } catch (error) {
       console.error("Export error:", error);
       await handleBackupFailure(error, "Failed to export templates");

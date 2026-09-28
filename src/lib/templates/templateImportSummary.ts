@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { isApiError } from "@/lib/api-errors";
+import type { PortableSkippedTemplate } from "@/lib/schemas/portableTemplatePack";
 import type { TemplateImportFailure, TemplateImportSummary } from "@/types/checklist";
 
 // POST /api/templates/backup answers with a TemplateImportSummary. When every template
@@ -46,4 +47,38 @@ export function formatImportSummaryMessage(summary: TemplateImportSummary): { ki
   const named = summary.failed.slice(0, 2).map(failureTitle).join(", ");
   const overflow = summary.failed.length > 2 ? ` +${summary.failed.length - 2} more` : "";
   return { kind: "error", message: `Imported ${summary.imported}/${summary.total}. Failed: ${named}${overflow}` };
+}
+
+// An export leaves out a template it cannot make valid and lists it only in the file's
+// manifest.skippedTemplates, so the page names those in its toast instead.
+
+const exportedPackSchema = z.object({
+  templates: z.array(z.unknown()),
+  manifest: z.object({
+    skippedTemplates: z.array(z.object({ title: z.string(), reason: z.string() })).optional(),
+  }).optional(),
+});
+
+export type PortableExportSummary = { exported: number; skipped: PortableSkippedTemplate[] };
+
+/** How many templates an export pack holds and which it left out. Throws when it is not a pack. */
+export function getExportSummary(pack: unknown): PortableExportSummary {
+  const { templates, manifest } = exportedPackSchema.parse(pack);
+  return { exported: templates.length, skipped: manifest?.skippedTemplates ?? [] };
+}
+
+const templateCount = (count: number): string => `${count} ${count === 1 ? "template" : "templates"}`;
+
+/** The toast for an export: a warning naming each left-out template and its reason, an error when none was written. */
+export function formatExportSummaryMessage(summary: PortableExportSummary): { kind: "success" | "warning" | "error"; message: string } {
+  const { exported, skipped } = summary;
+  if (skipped.length === 0) {
+    return exported > 0
+      ? { kind: "success", message: `Exported ${templateCount(exported)} successfully` }
+      : { kind: "error", message: "No templates exported" };
+  }
+  const named = skipped.slice(0, 2).map(({ title, reason }) => `${title || "Untitled template"} (${reason})`).join(", ");
+  const overflow = skipped.length > 2 ? ` +${skipped.length - 2} more` : "";
+  const lead = exported > 0 ? `Exported ${templateCount(exported)}.` : "No templates exported.";
+  return { kind: exported > 0 ? "warning" : "error", message: `${lead} Not exported: ${named}${overflow}` };
 }

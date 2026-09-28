@@ -53,8 +53,10 @@ fixes what the editor can save but the strict schema rejects:
 
 A template that still fails (for example one with no tasks) is left out of an export
 and listed in `manifest.skippedTemplates`; `manifest.totalTemplates` counts only the
-templates written. On import, it becomes a per-template failure instead of rejecting
-the whole file.
+templates written. The export page then shows a warning that names each left-out
+template and its reason instead of the success message, or an error with no download
+when nothing could be exported. On import, it becomes a per-template failure instead
+of rejecting the whole file.
 
 `GET /api/templates/backup` exports the active context's own templates (Personal or
 the Organization). "Include public community templates" adds, in the browser, the

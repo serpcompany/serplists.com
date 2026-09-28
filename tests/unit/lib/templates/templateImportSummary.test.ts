@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import { createApiError } from '@/lib/api-errors';
+import { addPublicTemplatesToPack } from '@/lib/templates/portableExport';
 import {
+  formatExportSummaryMessage,
   formatImportFailure,
   formatImportSummaryMessage,
+  getExportSummary,
   getImportSummaryFromError,
 } from '@/lib/templates/templateImportSummary';
+import { buildPortableTemplatePack } from '@functions/api/utils/template-portable';
 import type { TemplateImportSummary } from '@/types/checklist';
 
 const allFailed: TemplateImportSummary = {
@@ -65,5 +69,69 @@ describe('formatImportFailure', () => {
   it('shows the title and reason, naming an untitled template by its position', () => {
     expect(formatImportFailure(allFailed.failed[0])).toBe('A: Duplicate item id: x');
     expect(formatImportFailure({ index: 2, title: '', reason: 'Bad', code: 'invalid_fields' })).toBe('Template 3: Bad');
+  });
+});
+
+describe('export summary', () => {
+  const source = (id: string, title: string, sections: unknown[]) => ({
+    id, title, description: '', type: 'checklist', seoTitle: '', seoDescription: '',
+    sections, categories: [], tags: [], isPublic: false, slug: id,
+  });
+  const valid = [{ id: 's1', title: 'Launch', items: [{ id: 'i1', title: 'Check DNS' }] }];
+  const noTasks = 'Template has no sections with tasks';
+  // The pack exactly as the API sends it, including a template the export had to leave out.
+  const serverPack = (templates: ReturnType<typeof source>[]) =>
+    JSON.parse(JSON.stringify(buildPortableTemplatePack(templates, 'me@example.com')));
+
+  it('reads the templates written and those left out from the pack manifest', () => {
+    const pack = serverPack([source('a', 'Owned', valid), source('b', 'Launch plan', []), source('c', 'Other', valid)]);
+
+    expect(getExportSummary(pack)).toEqual({ exported: 2, skipped: [{ title: 'Launch plan', reason: noTasks }] });
+  });
+
+  it('warns and names each left-out template with its reason, so the backup is not silently incomplete', () => {
+    const summary = getExportSummary(serverPack([source('a', 'Owned', valid), source('b', 'Launch plan', [])]));
+
+    expect(formatExportSummaryMessage(summary)).toEqual({
+      kind: 'warning',
+      message: `Exported 1 template. Not exported: Launch plan (${noTasks})`,
+    });
+  });
+
+  it('also reports public templates the page added that could not be exported', () => {
+    const pack = addPublicTemplatesToPack(serverPack([source('a', 'Owned', valid)]), [{
+      id: 'pub', title: 'Community', description: '', sections: [], userId: 'other', isPublic: true, slug: 'pub',
+      createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', categories: [], tags: [],
+    }]);
+
+    expect(formatExportSummaryMessage(getExportSummary(pack))).toEqual({
+      kind: 'warning',
+      message: `Exported 1 template. Not exported: Community (${noTasks})`,
+    });
+  });
+
+  it('names at most two, counts the rest, and names an untitled template', () => {
+    const skipped = ['', 'B', 'C', 'D'].map((title) => ({ title, reason: 'Bad' }));
+
+    expect(formatExportSummaryMessage({ exported: 3, skipped })).toEqual({
+      kind: 'warning',
+      message: 'Exported 3 templates. Not exported: Untitled template (Bad), B (Bad) +2 more',
+    });
+  });
+
+  it('is an error when nothing could be exported', () => {
+    expect(formatExportSummaryMessage({ exported: 0, skipped: [{ title: 'A', reason: 'Bad' }] }))
+      .toEqual({ kind: 'error', message: 'No templates exported. Not exported: A (Bad)' });
+    expect(formatExportSummaryMessage({ exported: 0, skipped: [] }))
+      .toEqual({ kind: 'error', message: 'No templates exported' });
+  });
+
+  it('keeps the success message only when nothing was left out', () => {
+    expect(formatExportSummaryMessage(getExportSummary(serverPack([source('a', 'A', valid), source('b', 'B', valid)]))))
+      .toEqual({ kind: 'success', message: 'Exported 2 templates successfully' });
+  });
+
+  it('rejects a response that is not a pack', () => {
+    expect(() => getExportSummary({ templates: 'nope' })).toThrow();
   });
 });
