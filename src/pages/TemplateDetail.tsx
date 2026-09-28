@@ -70,6 +70,7 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplateLists } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
+import { buildTemplateCopyPayload } from '@/features/template-detail/templateDetailMappers';
 import {
   navigateToLoginWithReturnPath,
   startBillingCheckout,
@@ -318,19 +319,7 @@ const TemplateDetail = () => {
     if (canEditTemplate) {
       setIsCloningTemplate(true);
       try {
-        const duplicatedTemplate = await createTemplate({
-          categories: displayTemplate.categories ?? [],
-          description: displayTemplate.description,
-          isPublic: displayTemplate.isPublic,
-          rules: displayTemplate.rules,
-          sections: displayTemplate.sections,
-          seoDescription: displayTemplate.seoDescription,
-          seoTitle: displayTemplate.seoTitle,
-          seoUrl: '',
-          tags: displayTemplate.tags ?? [],
-          title: `${displayTemplate.title} Copy`,
-          type: displayTemplate.type ?? 'checklist',
-        });
+        const duplicatedTemplate = await createTemplate(buildTemplateCopyPayload(displayTemplate, activeTeamId));
 
         navigate(buildConsoleTemplatePath(duplicatedTemplate.id));
       } catch (error) {

@@ -11,6 +11,12 @@ User-facing language follows the [product glossary](../PRODUCT_SENSE.md) and the
 - Every signed-in User always has a Personal ownership context.
 - A User can also belong to one or more Organizations.
 - Templates and Runs are scoped to the selected Personal or Organization context.
+- A private Organization Template's content stays in its Organization. Members can open it
+  from any context, and its Runs and copies go to its Organization, not the active context
+  (`src/lib/templateDestination.ts`). The API never snapshots it into another context: a
+  request naming another Organization gets `409 organization_mismatch` with the owning
+  Organization's id for its members, and `404` for everyone else. Public Templates and a
+  User's own Personal Templates run and copy into the active context.
 - Personal data stays Personal. Organization Membership does not upgrade or expose a User's Personal Templates, Runs, or limits.
 - Organization entitlements apply only while that Organization context is active. A Free User in a paid Organization can use its paid capabilities, but their Personal context remains Free unless they upgrade their own plan.
 

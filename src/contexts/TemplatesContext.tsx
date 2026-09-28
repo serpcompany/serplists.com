@@ -27,6 +27,7 @@ export type {
 
 import { generateSlug } from "@/utils/urlHelpers";
 import { resetSectionsCompletion } from "@/lib/utils/checklistSections";
+import { resolveTemplateDestinationTeamId } from "@/lib/templateDestination";
 import {
   isRepoTemplate,
   mergeAccountTemplateCollections,
@@ -98,11 +99,12 @@ export function buildCreateRunRequest(params: {
 }): CreateRunRequest {
   const runSections = resetSectionsCompletion(params.template.sections);
   const title = params.runName || params.template.title;
+  const teamId = resolveTemplateDestinationTeamId(params.template, params.activeTeamId);
 
   if (isRepoTemplate(params.template)) {
     return {
       apiPayload: {
-        teamId: params.activeTeamId,
+        teamId,
         title,
         sections: runSections,
         status: "in_progress",
@@ -115,7 +117,7 @@ export function buildCreateRunRequest(params: {
   return {
     apiPayload: {
       template_id: params.templateId,
-      teamId: params.activeTeamId,
+      teamId,
       title,
       status: "in_progress",
     },
@@ -324,7 +326,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         startedAt: new Date().toISOString(),
         completedAt: undefined,
         userId: user.id,
-        teamId: activeTeamId,
+        teamId: apiPayload.teamId,
         templateVersion: template.version || 1,
         revision: 1,
         isPublic: false,

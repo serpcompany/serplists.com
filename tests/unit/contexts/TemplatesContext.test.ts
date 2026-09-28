@@ -70,6 +70,35 @@ describe('buildCreateRunRequest', () => {
     expect(request.apiPayload).not.toHaveProperty('template_id');
     expect(request.runSections[0]?.items[0]?.isCompleted).toBe(false);
   });
+
+  // A private Organization Template can only be run in its own Organization. The detail page
+  // opens it from any context, so the active one must not decide where its Run goes.
+  it.each([
+    ['another Organization', 'team-a'],
+    ['Personal', undefined],
+  ])('runs a private Organization Template in its Organization while %s is active', (_name, activeTeamId) => {
+    const request = buildCreateRunRequest({
+      activeTeamId,
+      template: buildRunTemplate({ isPublic: false, teamId: 'team-b' }),
+      templateId: 'template-1',
+    });
+
+    expect(request.apiPayload.teamId).toBe('team-b');
+  });
+
+  it.each([
+    ['a public Organization Template', { isPublic: true, teamId: 'team-b' }],
+    ["the user's own private Personal Template", { isPublic: false, teamId: undefined }],
+    ["another user's public Template", { isPublic: true, userId: 'user-2' }],
+  ])('runs %s in the active context', (_name, overrides) => {
+    const request = buildCreateRunRequest({
+      activeTeamId: 'team-a',
+      template: buildRunTemplate(overrides),
+      templateId: 'template-1',
+    });
+
+    expect(request.apiPayload.teamId).toBe('team-a');
+  });
 });
 
 describe('Template Import Functionality', () => {

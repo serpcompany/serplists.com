@@ -189,8 +189,17 @@ async function resolveTemplateRunSource(
   const sourceIsPublic = Boolean(sourceTemplate.is_public);
   const isPrivateTeamTemplate = sourceTemplate.owner_type === 'team' && sourceTeamId && !sourceIsPublic;
 
+  // A private Organization template's content never goes into another context's Run. Its own
+  // members learn where it belongs; to anyone else it does not exist.
   if (isPrivateTeamTemplate && requestedTeamId && requestedTeamId !== sourceTeamId) {
-    return { error: jsonError('Template not found', 404) };
+    return {
+      error: await getActiveTeamMembership(env, sourceTeamId, userId)
+        ? jsonError('This Template belongs to another Organization. Switch to it to start a Run.', 409, {
+            code: 'organization_mismatch',
+            details: { teamId: sourceTeamId },
+          })
+        : jsonError('Template not found', 404),
+    };
   }
   if (!isPrivateTeamTemplate && !sourceIsPublic && sourceTemplate.user_id !== userId) {
     return { error: jsonError('Template not found', 404) };
@@ -698,51 +707,13 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         return jsonError(shareBody.error.issues[0]?.message || 'Invalid share payload', 400);
       }
 
-      const [sourceTemplate] = await db
-        .select({
-          id: templates.id,
-          user_id: templates.user_id,
-          owner_type: templates.owner_type,
-          team_id: templates.team_id,
-          title: templates.title,
-          items: templates.items,
-          is_public: templates.is_public,
-          version: templates.content_version,
-        })
-        .from(templates)
-        .where(and(eq(templates.id, templateId), isNull(templates.deleted_at)))
-        .limit(1);
-
-      if (!sourceTemplate) {
-        return jsonError('Template not found', 404);
-      }
-
       const requestedTeamId = getRequestedTeamId(shareBody.data, url);
-      const sourceTeamId = typeof sourceTemplate.team_id === 'string' && sourceTemplate.team_id
-        ? sourceTemplate.team_id
-        : null;
-      const sourceIsPublic = Boolean(sourceTemplate.is_public);
-      const sourceIsPrivateTeamTemplate = sourceTemplate.owner_type === 'team' && sourceTeamId && !sourceIsPublic;
-      let effectiveTeamId: string | null = null;
-
-      if (sourceIsPrivateTeamTemplate) {
-        if (requestedTeamId && requestedTeamId !== sourceTeamId) {
-          return jsonError('Template not found', 404);
-        }
-
-        const accessError = await assertTeamRunAccess(env, sourceTeamId, userId);
+      const { error: sourceError, source: sourceTemplate } = await resolveTemplateRunSource(env, templateId, userId, requestedTeamId);
+      if (!sourceTemplate) return sourceError ?? jsonError('Template not found', 404);
+      const effectiveTeamId = sourceTemplate.effectiveTeamId;
+      if (effectiveTeamId) {
+        const accessError = await assertTeamRunAccess(env, effectiveTeamId, userId);
         if (accessError) return accessError;
-        effectiveTeamId = sourceTeamId;
-      } else {
-        if (!sourceIsPublic && sourceTemplate.user_id !== userId) {
-          return jsonError('Template not found', 404);
-        }
-
-        if (requestedTeamId) {
-          const accessError = await assertTeamRunAccess(env, requestedTeamId, userId);
-          if (accessError) return accessError;
-          effectiveTeamId = requestedTeamId;
-        }
       }
 
       const now = new Date().toISOString();
@@ -781,12 +752,6 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         }
       }
 
-      const sourceItems = parseJsonArray(sourceTemplate.items) ?? [];
-      const normalizedSections = normalizeSectionsPayload(sourceItems);
-      if (normalizedSections.error) {
-        return jsonError(normalizedSections.error, 400);
-      }
-
       const shareToken = crypto.randomUUID();
       const checklistId = crypto.randomUUID();
       const runName = shareBody.data.runName?.trim() || sourceTemplate.title;
@@ -797,7 +762,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         team_id: effectiveTeamId,
         template_id: templateId,
         title: runName,
-        items: JSON.stringify(normalizedSections.sections),
+        items: JSON.stringify(sourceTemplate.sections),
         status: 'in_progress',
         started_at: now,
         created_by_user_id: userId,
@@ -805,7 +770,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         created_at: now,
         is_public: true,
         share_token: shareToken,
-        template_version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
+        template_version: sourceTemplate.version,
         revision: 1,
         retired_items: '[]',
       };
