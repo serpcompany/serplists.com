@@ -17,6 +17,7 @@ import {
   mapChecklistToRun,
   setSubItemsCompletion,
 } from './runExecutionMappers';
+import { applyNoteDrafts, pruneNoteDrafts, updateNoteDraft, type NoteDrafts } from './noteDrafts';
 import { createSaveQueue } from './saveQueue';
 
 type RunExecutionApiClient = Pick<
@@ -48,6 +49,8 @@ type RunExecutionMutationParams = {
 
 type ToggleRunItemParams = RunExecutionMutationParams & {
   itemId: string;
+  // Unsaved notes; the toggled task's draft is saved with the toggle (one PUT).
+  noteDrafts?: NoteDrafts;
 };
 
 type ToggleRunSubItemParams = RunExecutionMutationParams & {
@@ -67,6 +70,8 @@ type SaveRunTitleParams = RunExecutionMutationParams & {
 
 type CompleteRunExecutionParams = RunExecutionMutationParams & {
   completedAt?: string;
+  // Unsaved notes for any task, saved with the completion before the page leaves.
+  noteDrafts?: NoteDrafts;
 };
 
 export type RunExecutionMode = 'private' | 'shared';
@@ -260,7 +265,9 @@ export const toggleRunItem = async (
     return { kind: 'not_found' };
   }
 
-  const nextRun = withClonedRun(params.run);
+  const nextRun = withClonedRun(
+    applyNoteDrafts(params.run, params.noteDrafts ?? {}, [params.itemId]),
+  );
 
   for (const section of nextRun.sections) {
     for (const item of section.items) {
@@ -467,7 +474,7 @@ export const completeRunExecution = async (
   }
 
   const completedRun: ChecklistRun = {
-    ...params.run,
+    ...applyNoteDrafts(params.run, params.noteDrafts ?? {}),
     completedAt: params.completedAt ?? new Date().toISOString(),
     progress: 100,
     status: 'completed',
@@ -505,6 +512,13 @@ export const useRunExecutionModel = (
   // The latest run, updated as soon as a save returns so the next queued save builds on it.
   const latestRun = useRef<ChecklistRun | null>(null);
   const [saveQueue] = useState(createSaveQueue);
+  // Drafts are read inside queued saves, so the ref always holds the latest value.
+  const [noteDrafts, setNoteDrafts] = useState<NoteDrafts>({});
+  const latestNoteDrafts = useRef<NoteDrafts>({});
+  const commitNoteDrafts = (next: NoteDrafts) => {
+    latestNoteDrafts.current = next;
+    setNoteDrafts(next);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -513,6 +527,8 @@ export const useRunExecutionModel = (
       setLoading(true);
       setNotFound(false);
       setLoadError(null);
+      latestNoteDrafts.current = {};
+      setNoteDrafts({});
 
       const result = await loadRunExecutionData(
         {
@@ -571,6 +587,7 @@ export const useRunExecutionModel = (
     if (result.kind === 'ok' && result.run) {
       latestRun.current = result.run;
       setRun(result.run);
+      commitNoteDrafts(pruneNoteDrafts(latestNoteDrafts.current, result.run));
       setSelectedItemId((currentSelectedItemId) => {
         if (!currentSelectedItemId) {
           return getInitialSelectedItemId(result.run ?? null);
@@ -598,6 +615,12 @@ export const useRunExecutionModel = (
 
   return {
     counts,
+    hasUnsavedNotes: Object.keys(noteDrafts).length > 0,
+    noteDrafts,
+    setNoteDraft: (itemId: string, value: string) =>
+      commitNoteDrafts(
+        updateNoteDraft(latestNoteDrafts.current, itemId, value, getSelectedRunItem(latestRun.current, itemId)?.item.notes),
+      ),
     createShare: () =>
       enqueueSave('share', (current) => createRunExecutionShare({ run: current, shareToken }, dependencies)),
     history: {
@@ -622,10 +645,12 @@ export const useRunExecutionModel = (
     selectedItemId,
     setSelectedItemId,
     completeRun: () =>
-      enqueueSave('complete', (current) => completeRunExecution({ run: current, shareToken }, dependencies)),
+      enqueueSave('complete', (current) =>
+        completeRunExecution({ noteDrafts: latestNoteDrafts.current, run: current, shareToken }, dependencies),
+      ),
     toggleItem: async (itemId: string) => {
       const result = await enqueueSave(`toggle:${itemId}`, (current) =>
-        toggleRunItem({ itemId, run: current, shareToken }, dependencies),
+        toggleRunItem({ itemId, noteDrafts: latestNoteDrafts.current, run: current, shareToken }, dependencies),
       );
       // Completing the selected task moves on to the next unfinished one.
       if (

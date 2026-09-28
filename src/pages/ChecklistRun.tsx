@@ -38,6 +38,7 @@ import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar'
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { canFinishRun, getPrimaryTaskAction } from '@/features/run-execution/primaryTaskAction';
+import { confirmLeaveWithUnsavedNotes, useUnsavedNotesWarning } from '@/features/run-execution/noteDrafts';
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
 import { cn } from '@/lib/utils';
 import {
@@ -60,14 +61,17 @@ const ChecklistRunPage = () => {
   const {
     counts,
     createShare,
+    hasUnsavedNotes,
     history,
     isSharedRun,
     loadError,
     loading,
     notFound,
+    noteDrafts,
     progress,
     run,
     saveItemNotes,
+    setNoteDraft,
     saveTitle,
     selectedData,
     selectedItemId,
@@ -84,6 +88,7 @@ const ChecklistRunPage = () => {
   });
   const displayRun = run;
   const displayProgress = displayRun?.progress ?? progress;
+  useUnsavedNotesWarning(hasUnsavedNotes);
 
   useEffect(() => {
     if (!notFound || loading) {
@@ -105,8 +110,11 @@ const ChecklistRunPage = () => {
     toast.error(loadError);
   }, [loadError]);
 
-  const handleBack = () =>
+  const leaveRun = () =>
     navigate(isSharedRun ? buildPublicTemplatesPath() : buildConsoleRunsPath());
+  const handleBack = () => {
+    if (confirmLeaveWithUnsavedNotes(hasUnsavedNotes)) leaveRun();
+  };
 
   const handleItemToggle = async (itemId: string) => {
     const result = await toggleItem(itemId);
@@ -228,7 +236,7 @@ const ChecklistRunPage = () => {
     if (result.kind === 'ok') {
       setIsCompleteDialogOpen(false);
       toast.success('Checklist completed! 🎉');
-      handleBack();
+      leaveRun(); // Completion saved every note draft.
       return;
     }
 
@@ -534,9 +542,11 @@ const ChecklistRunPage = () => {
                         ) : null}
                         <div className="border-t border-border px-4 py-4">
                           <RunNotesEditor
-                            initialValue={item.notes}
+                            draft={noteDrafts[item.id]}
                             label="Task notes"
+                            onDraftChange={(notes) => setNoteDraft(item.id, notes)}
                             onSave={(notes) => handleItemNotesSave(item.id, notes)}
+                            savedValue={item.notes}
                           />
                         </div>
                       </div>
@@ -623,6 +633,8 @@ const ChecklistRunPage = () => {
                     )
                   }
                   onToggleTask={() => void handleItemToggle(selectedEntry.item.id)}
+                  notesDraft={noteDrafts[selectedEntry.item.id]}
+                  onNotesDraftChange={(notes) => setNoteDraft(selectedEntry.item.id, notes)}
                   onSaveNotes={(notes) =>
                     handleItemNotesSave(selectedEntry.item.id, notes)
                   }

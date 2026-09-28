@@ -22,6 +22,8 @@ interface TaskExecutionPanelProps {
   onSelectTask: (itemId: string) => void;
   onToggleSubItem: (contentIndex: number, subItemIndex: number) => void;
   onToggleTask: () => void;
+  notesDraft?: string;
+  onNotesDraftChange: (notes: string) => void;
   onSaveNotes: (notes: string) => Promise<boolean>;
   hasNext: boolean;
   hasPrev: boolean;
@@ -39,6 +41,8 @@ export function TaskExecutionPanel({
   onSelectTask,
   onToggleSubItem,
   onToggleTask,
+  notesDraft,
+  onNotesDraftChange,
   onSaveNotes,
   hasNext,
   hasPrev,
@@ -109,10 +113,12 @@ export function TaskExecutionPanel({
             </div>
           )}
           <RunNotesEditor
-            initialValue={task.notes}
+            draft={notesDraft}
             key={task.id}
             label="Task notes"
+            onDraftChange={onNotesDraftChange}
             onSave={onSaveNotes}
+            savedValue={task.notes}
           />
         </div>
       </div>

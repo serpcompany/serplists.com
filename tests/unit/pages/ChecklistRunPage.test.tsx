@@ -107,6 +107,9 @@ describe('ChecklistRunPage layout', () => {
       completeRun: vi.fn(),
       toggleItem: vi.fn(),
       saveItemNotes: vi.fn(),
+      noteDrafts: {},
+      setNoteDraft: vi.fn(),
+      hasUnsavedNotes: false,
       toggleSubItem: vi.fn(),
     });
 
@@ -174,6 +177,9 @@ describe('ChecklistRunPage layout', () => {
       completeRun: vi.fn(),
       toggleItem: vi.fn(),
       saveItemNotes: vi.fn(),
+      noteDrafts: {},
+      setNoteDraft: vi.fn(),
+      hasUnsavedNotes: false,
       toggleSubItem: vi.fn(),
     });
 
@@ -218,7 +224,10 @@ const twoTaskRun = (completed: [boolean, boolean], status: ChecklistRun['status'
   ],
 });
 
-const renderRunPage = (run: ChecklistRun, options: { selectedItemId: string; shared?: boolean }) => {
+const renderRunPage = (
+  run: ChecklistRun,
+  options: { noteDrafts?: Record<string, string>; selectedItemId: string; shared?: boolean },
+) => {
   const done = run.sections[0].items.filter((item) => item.isCompleted).length;
   mockUseRunExecutionModel.mockReturnValue({
     counts: { completed: done, total: 2 },
@@ -237,6 +246,9 @@ const renderRunPage = (run: ChecklistRun, options: { selectedItemId: string; sha
     completeRun: vi.fn(),
     toggleItem: vi.fn(),
     saveItemNotes: vi.fn(),
+    noteDrafts: options.noteDrafts ?? {},
+    setNoteDraft: vi.fn(),
+    hasUnsavedNotes: Object.keys(options.noteDrafts ?? {}).length > 0,
     toggleSubItem: vi.fn(),
   });
 
@@ -281,6 +293,29 @@ describe('ChecklistRunPage completion', () => {
     expect(html).not.toContain('Complete run');
     expect(html).toContain('Run completed');
     expect(sharedHtml).not.toContain('Complete run');
+  });
+});
+
+describe('ChecklistRunPage task notes', () => {
+  it('shows the unsaved draft for the selected task after moving between tasks', () => {
+    const run = twoTaskRun([true, false]);
+    run.sections[0].items[0].notes = 'saved note';
+    const html = renderRunPage(run, {
+      noteDrafts: { 'item-1': 'Deployed build 42, see link' },
+      selectedItemId: 'item-1',
+    });
+
+    expect(html).toContain('>Deployed build 42, see link</textarea>');
+  });
+
+  it('shows the drafts in the shared run view too', () => {
+    const html = renderRunPage(twoTaskRun([false, false]), {
+      noteDrafts: { 'item-2': 'Guest note in progress' },
+      selectedItemId: 'item-1',
+      shared: true,
+    });
+
+    expect(html).toContain('>Guest note in progress</textarea>');
   });
 });
 

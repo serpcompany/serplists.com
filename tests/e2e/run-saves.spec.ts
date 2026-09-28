@@ -140,3 +140,60 @@ test('a fully ticked run that is still in progress can be completed after a relo
 
   await deleteRun(page, runId);
 });
+
+test('unsaved task notes are saved with Mark Complete and survive moving between tasks', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createRun(page, `Notes draft QA ${Date.now()}`);
+  const notes = page.getByRole('textbox', { name: 'Task notes' });
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await notes.fill('Deployed build 42, see link');
+  await page.getByRole('button', { name: 'Mark Complete' }).click();
+  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+
+  await notes.fill('Draft on B');
+  await page.getByRole('button', { name: 'Previous' }).click();
+  await expect(notes).toHaveValue('Deployed build 42, see link');
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(notes).toHaveValue('Draft on B');
+
+  await page.getByRole('button', { name: 'Save notes' }).click();
+  await expect(page.getByText('Saved to this run')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  await expect(notes).toHaveValue('Draft on B');
+  await page.getByRole('button', { name: 'Previous' }).click();
+  await expect(notes).toHaveValue('Deployed build 42, see link');
+
+  await deleteRun(page, runId);
+});
+
+test('text typed while a notes save is in flight is kept', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createRun(page, `Notes in flight QA ${Date.now()}`);
+  const notes = page.getByRole('textbox', { name: 'Task notes' });
+  let releaseSave: () => void = () => undefined;
+  const saveHeld = new Promise<void>((resolve) => { releaseSave = resolve; });
+  await page.route(`**/api/checklists/${runId}`, async (route) => {
+    if (route.request().method() === 'PUT') await saveHeld;
+    await route.continue();
+  });
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await notes.fill('abc');
+  await page.getByRole('button', { name: 'Save notes' }).click();
+  await notes.pressSequentially('def');
+  releaseSave();
+  await expect(page.getByRole('button', { name: 'Save notes' })).toBeEnabled();
+  await expect(notes).toHaveValue('abcdef');
+
+  await page.getByRole('button', { name: 'Save notes' }).click();
+  await expect(page.getByText('Saved to this run')).toBeVisible();
+  await page.unroute(`**/api/checklists/${runId}`);
+  await page.reload();
+  await expect(notes).toHaveValue('abcdef');
+
+  await deleteRun(page, runId);
+});
+

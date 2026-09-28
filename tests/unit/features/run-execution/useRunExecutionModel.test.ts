@@ -401,3 +401,54 @@ describe('completing a run', () => {
     expect(updateRun).not.toHaveBeenCalled();
   });
 });
+
+describe('unsaved task notes ride along with the save that would lose them', () => {
+  const apiClient = () => ({
+    createChecklistRunShare: vi.fn(),
+    getChecklistById: vi.fn(),
+    getSharedChecklist: vi.fn(),
+    updateSharedChecklist: vi.fn(),
+  });
+
+  it('Mark Complete saves the draft notes of that task in the same PUT', async () => {
+    const updateRun = vi.fn(async (run: ChecklistRun) => ({ ...run, revision: 2 }));
+
+    const result = await toggleRunItem(
+      {
+        itemId: 'item-1',
+        noteDrafts: { 'item-1': 'Deployed build 42, see link', 'item-2': 'not this one' },
+        run: buildRun(),
+      },
+      { apiClient: apiClient(), updateRun },
+    );
+
+    expect(result.kind).toBe('ok');
+    expect(updateRun).toHaveBeenCalledOnce();
+    const sent = updateRun.mock.calls[0][0];
+    expect(sent.revision).toBe(1);
+    expect(sent.sections[0].items[0]).toMatchObject({ isCompleted: true, notes: 'Deployed build 42, see link' });
+    expect(sent.sections[0].items[1].notes).toBeUndefined();
+  });
+
+  it('completing the run saves every draft before the page leaves', async () => {
+    const updateRun = vi.fn(async (run: ChecklistRun) => run);
+    const run = buildRun();
+    const doneRun: ChecklistRun = {
+      ...run,
+      sections: run.sections.map((section) => ({
+        ...section,
+        items: section.items.map((item) => ({ ...item, isCompleted: true })),
+      })),
+    };
+
+    const result = await completeRunExecution(
+      { noteDrafts: { 'item-1': 'first', 'item-2': 'second' }, run: doneRun },
+      { apiClient: apiClient(), updateRun },
+    );
+
+    expect(result.kind).toBe('ok');
+    expect(updateRun).toHaveBeenCalledOnce();
+    expect(updateRun.mock.calls[0][0].sections[0].items.map((item) => item.notes)).toEqual(['first', 'second']);
+  });
+});
+
