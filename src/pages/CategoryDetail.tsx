@@ -1,23 +1,10 @@
-import { useMemo, useState, type ElementType } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import {
-  ArrowLeft,
-  Briefcase,
-  Code,
-  FileText,
-  Grid3X3,
-  Heart,
-  Layers,
-  List,
-  Paintbrush,
-  Search,
-  TrendingUp,
-  Users,
-  Zap,
-} from 'lucide-react';
+import { ArrowLeft, Grid3X3, List, Search } from 'lucide-react';
 
 import { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
 import { CategoryNavigation } from '@/components/checklist-library/CategoryNavigation';
+import { resolveCategoryPresentation } from '@/components/checklist-library/categoryPresentation';
 import { SearchAndFilters } from '@/components/checklist-library/SearchAndFilters';
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import {
@@ -40,88 +27,7 @@ import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
-import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 import { buildSiteUrl } from '@/lib/routes';
-
-const categoryData: Record<
-  string,
-  {
-    name: string;
-    description: string;
-    icon: ElementType;
-    color: string;
-    bgColor: string;
-  }
-> = {
-  business: {
-    name: 'Business & Operations',
-    description: 'Templates for business processes, operations, and management',
-    icon: Briefcase,
-    color: 'text-blue-400',
-    bgColor: 'bg-blue-500/10',
-  },
-  engineering: {
-    name: 'Engineering & Development',
-    description:
-      'Checklists for code reviews, deployments, and development workflows',
-    icon: Code,
-    color: 'text-emerald-400',
-    bgColor: 'bg-emerald-500/10',
-  },
-  design: {
-    name: 'Design & Creative',
-    description:
-      'Templates for design processes, brand guidelines, and creative projects',
-    icon: Paintbrush,
-    color: 'text-pink-400',
-    bgColor: 'bg-pink-500/10',
-  },
-  marketing: {
-    name: 'Marketing & Growth',
-    description: 'Launch checklists, campaign templates, and growth strategies',
-    icon: TrendingUp,
-    color: 'text-orange-400',
-    bgColor: 'bg-orange-500/10',
-  },
-  hr: {
-    name: 'HR & People',
-    description: 'Onboarding, offboarding, and people management templates',
-    icon: Users,
-    color: 'text-cyan-400',
-    bgColor: 'bg-cyan-500/10',
-  },
-  personal: {
-    name: 'Personal & Lifestyle',
-    description:
-      'Personal productivity, wellness, and life management checklists',
-    icon: Heart,
-    color: 'text-rose-400',
-    bgColor: 'bg-rose-500/10',
-  },
-  productivity: {
-    name: 'Productivity',
-    description: 'Task management, time tracking, and workflow optimization',
-    icon: Zap,
-    color: 'text-yellow-400',
-    bgColor: 'bg-yellow-500/10',
-  },
-  'project-management': {
-    name: 'Project Management',
-    description:
-      'Project planning, milestones, and team coordination templates',
-    icon: Layers,
-    color: 'text-indigo-400',
-    bgColor: 'bg-indigo-500/10',
-  },
-  compliance: {
-    name: 'Compliance & Legal',
-    description:
-      'Regulatory compliance, audits, and legal process checklists',
-    icon: FileText,
-    color: 'text-slate-400',
-    bgColor: 'bg-slate-500/10',
-  },
-};
 
 type CategorySort = DiscoverySort | 'name';
 
@@ -175,21 +81,7 @@ const CategoryDetail = () => {
     [allCategories, templates],
   );
   const categoryStats = categories.find((item) => item.slug === slug);
-  const canonicalCategory = PUBLIC_CATEGORY_REGISTRY.find((item) => item.slug === slug);
-  const isKnownCategory = Boolean(canonicalCategory || categoryStats || categoryData[slug]);
-  const category = canonicalCategory ? {
-    ...categoryData[slug],
-    ...canonicalCategory,
-  } : categoryData[slug] ?? {
-    name: categoryStats?.name ?? 'Category',
-    description: categoryStats
-      ? `Templates filed under ${categoryStats.name}.`
-      : 'Templates for this workflow area.',
-    icon: FileText,
-    color: 'text-slate-400',
-    bgColor: 'bg-slate-500/10',
-  };
-  const Icon = category.icon;
+  const category = resolveCategoryPresentation(slug, categoryStats);
   const categoryTemplateCount = categoryStats?.count ?? 0;
 
   const filteredTemplates = useMemo(() => {
@@ -213,7 +105,7 @@ const CategoryDetail = () => {
 
   // Categories that exist only in database templates are unknown until the catalog loads,
   // so the 404 page waits for a successful load.
-  if (!isKnownCategory) {
+  if (!category) {
     if (loading || catalogError) {
       return (
         <div className="bg-background">
@@ -239,6 +131,8 @@ const CategoryDetail = () => {
     }
     return <NotFound />;
   }
+
+  const Icon = category.icon;
 
   return (
     <div className="bg-background">
