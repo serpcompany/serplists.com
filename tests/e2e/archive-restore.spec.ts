@@ -24,6 +24,12 @@ async function apiRequest(page: Page, path: string, method: string, body?: unkno
   }, { apiBaseUrl: DEV_API_BASE_URL, requestPath: path, requestMethod: method, requestBody: body });
 }
 
+// One archive row. The two archive lists sit in a grid of their own, so only the innermost
+// grid holding the title is a row.
+function archiveRow(page: Page, title: string) {
+  return page.locator('div.grid').filter({ hasText: title }).filter({ hasNot: page.locator('div.grid') });
+}
+
 test('an archived template and run can be restored from the archive page', async ({ page }) => {
   await loginAsAdmin(page);
   const stamp = Date.now();
@@ -43,13 +49,13 @@ test('an archived template and run can be restored from the archive page', async
   await expect(page).toHaveURL(/\/dashboard\/archive$/);
   await expect(page.getByRole('heading', { name: 'Archive', exact: true })).toBeVisible();
 
-  const templateRow = page.locator('div.grid').filter({ hasText: templateTitle });
+  const templateRow = archiveRow(page, templateTitle);
   await expect(templateRow).toHaveCount(1, { timeout: 15_000 });
   await templateRow.getByRole('button', { name: 'Restore' }).click();
   await expect(page.getByText('Template restored')).toBeVisible();
   await expect(page.getByText(templateTitle)).toHaveCount(0);
 
-  const runRow = page.locator('div.grid').filter({ hasText: runTitle });
+  const runRow = archiveRow(page, runTitle);
   await expect(runRow).toHaveCount(1);
   await runRow.getByRole('button', { name: 'Restore' }).dblclick();
   await expect(page.getByText('Run restored')).toBeVisible();
@@ -73,7 +79,9 @@ test('a deleted run appears in the archive without a reload', async ({ page }) =
 
   // Load the archive first so its lists are cached, then delete from the runs page.
   await page.goto('/dashboard/archive');
-  await expect(page.getByText('Archived runs')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Archived runs' })).toBeVisible();
+  // The count replaces "Loading" once both archive lists have loaded.
+  await expect(page.getByText(/^\d+ archived$/)).toBeVisible();
   await page.getByRole('link', { name: 'Runs', exact: true }).first().click();
   const runRow = page.locator('div').filter({ hasText: runTitle }).filter({ has: page.getByRole('button', { name: 'Run options' }) }).last();
   await expect(runRow).toBeVisible({ timeout: 15_000 });
@@ -86,5 +94,5 @@ test('a deleted run appears in the archive without a reload', async ({ page }) =
   expect((await deleted).status()).toBe(200);
 
   await page.getByRole('link', { name: 'Archive', exact: true }).first().click();
-  await expect(page.locator('div.grid').filter({ hasText: runTitle })).toHaveCount(1, { timeout: 15_000 });
+  await expect(archiveRow(page, runTitle)).toHaveCount(1, { timeout: 15_000 });
 });
