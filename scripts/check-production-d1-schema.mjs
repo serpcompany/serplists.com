@@ -4,12 +4,18 @@ import {
   REQUIRED_D1_FOREIGN_KEYS,
   REQUIRED_D1_INDEXES,
   REQUIRED_D1_SCHEMA,
+  REQUIRED_D1_TRIGGERS,
+  buildSchemaQuery,
   diffD1Schema,
+  diffD1Triggers,
   formatSchemaDrift,
+  hasSchemaDrift,
   mapColumnConstraintPragmaResults,
   mapForeignKeyPragmaResults,
   mapIndexPragmaResults,
   mapPragmaResults,
+  mapTriggerResults,
+  splitSchemaQueryResults,
 } from "./check-production-d1-schema-lib.mjs";
 
 function readArg(name) {
@@ -31,17 +37,8 @@ const usePreviewDatabase = process.argv.includes("--preview");
 const npxCommand = process.platform === "win32" ? "cmd.exe" : "npx";
 const npxArgsPrefix = process.platform === "win32" ? ["/d", "/s", "/c", "npx"] : [];
 const tableNames = Object.keys(REQUIRED_D1_SCHEMA);
-const pragmaCommand = tableNames
-  .map((tableName) => `pragma table_info('${tableName}');`)
-  .join(" ");
-const indexPragmaCommand = tableNames
-  .map((tableName) => `pragma index_list('${tableName}');`)
-  .join(" ");
-const foreignKeyPragmaCommand = tableNames
-  .map((tableName) => `pragma foreign_key_list('${tableName}');`)
-  .join(" ");
 
-function runWranglerPragmas() {
+function runWranglerSchemaQuery() {
   const stdout = execFileSync(
     npxCommand,
     [
@@ -54,7 +51,7 @@ function runWranglerPragmas() {
       ...(usePreviewDatabase ? ["--preview"] : []),
       "--json",
       "--command",
-      `${pragmaCommand} ${indexPragmaCommand} ${foreignKeyPragmaCommand}`,
+      buildSchemaQuery(tableNames),
     ],
     {
       cwd: process.cwd(),
@@ -69,15 +66,15 @@ function runWranglerPragmas() {
 }
 
 try {
-  const wranglerResults = runWranglerPragmas();
-  const tablePragmaResults = wranglerResults.slice(0, tableNames.length);
-  const indexPragmaResults = wranglerResults.slice(tableNames.length, tableNames.length * 2);
-  const foreignKeyPragmaResults = wranglerResults.slice(tableNames.length * 2);
-  const actualSchemaByTable = mapPragmaResults(tableNames, tablePragmaResults);
-  const actualColumnConstraintsByTable = mapColumnConstraintPragmaResults(tableNames, tablePragmaResults);
-  const actualIndexesByTable = mapIndexPragmaResults(tableNames, indexPragmaResults);
-  const actualForeignKeysByTable = mapForeignKeyPragmaResults(tableNames, foreignKeyPragmaResults);
-  const diff = diffD1Schema(
+  const { tableResults, indexResults, foreignKeyResults, triggerResult } = splitSchemaQueryResults(
+    tableNames,
+    runWranglerSchemaQuery(),
+  );
+  const actualSchemaByTable = mapPragmaResults(tableNames, tableResults);
+  const actualColumnConstraintsByTable = mapColumnConstraintPragmaResults(tableNames, tableResults);
+  const actualIndexesByTable = mapIndexPragmaResults(tableNames, indexResults);
+  const actualForeignKeysByTable = mapForeignKeyPragmaResults(tableNames, foreignKeyResults);
+  const schemaDiff = diffD1Schema(
     REQUIRED_D1_SCHEMA,
     actualSchemaByTable,
     REQUIRED_D1_INDEXES,
@@ -87,16 +84,9 @@ try {
     REQUIRED_D1_FOREIGN_KEYS,
     actualForeignKeysByTable,
   );
-  const hasDrift =
-    diff.missingTables.length > 0 ||
-    Object.keys(diff.missingColumns).length > 0 ||
-    Object.keys(diff.missingIndexes).length > 0 ||
-    Object.keys(diff.invalidIndexes).length > 0 ||
-    Object.keys(diff.invalidColumns).length > 0 ||
-    Object.keys(diff.missingForeignKeys).length > 0 ||
-    Object.keys(diff.invalidForeignKeys).length > 0;
+  const diff = { ...schemaDiff, ...diffD1Triggers(REQUIRED_D1_TRIGGERS, mapTriggerResults(triggerResult)) };
 
-  if (hasDrift) {
+  if (hasSchemaDrift(diff)) {
     console.error(formatSchemaDrift(diff, `${environmentLabel}:${databaseName}`));
     process.exit(1);
   }

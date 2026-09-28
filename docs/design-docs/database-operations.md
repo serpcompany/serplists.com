@@ -69,8 +69,13 @@ pnpm run check:prod:d1-schema
 
 `verify:staging` and `verify:prod:d1` are non-destructive: they check bindings,
 list migration state, and detect schema drift without applying anything. If
-`check:prod:d1-schema` fails, production is missing tables or columns the deployed
-API needs; apply pending migrations before shipping the frontend.
+`check:prod:d1-schema` fails, production is missing tables, columns, named indexes
+or SQL-only triggers the deployed API needs; apply pending migrations before
+shipping the frontend. The check requires every Drizzle table, column and named
+index (`REQUIRED_D1_*` in `scripts/check-production-d1-schema-lib.mjs`, which a
+unit test keeps equal to `db/schema/`) and every trigger in
+`db/sql-only-schema.json`, on its table and with the recorded definition. Extra
+columns, indexes and tables are allowed.
 
 Never run `wrangler d1 execute ... --remote --file=...` for schema changes; use
 `db:migrate:d1:*` so D1 records the migration.
@@ -89,7 +94,10 @@ pnpm run check:prod:d1-schema
 ```
 
 Use `--through 0021` only if the legacy-named `teams`/audit migration was already
-applied outside Wrangler. Fresh staging databases need no baseline.
+applied outside Wrangler. Never baseline past a migration whose objects are not
+already in the database: baselining only records ledger rows, and
+`check:prod:d1-schema` is what catches a gap. Fresh staging databases need no
+baseline.
 
 ## Seeds
 
