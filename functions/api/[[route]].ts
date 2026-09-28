@@ -4,7 +4,7 @@ import { applyCorsHeaders, buildCorsPreflightResponse } from './utils/cors';
 import { getClientIp, log } from './utils/logger';
 import { sanitizeLogPath } from './utils/log-path';
 import { checkAuthRateLimit } from './utils/auth-rate-limit';
-import { ROUTE_RATE_LIMIT_MESSAGES, checkRouteRateLimit } from './utils/route-rate-limit';
+import { checkRouteRateLimit, routeRateLimitResponse } from './utils/route-rate-limit';
 import { createBetterAuth } from './better-auth';
 import { getAuthEmailPolicy, isProductionAuthPolicy } from './utils/auth-policy';
 import { findOversizedBody } from './utils/body-limit';
@@ -127,8 +127,12 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       const routeLimit = authLimit ? null : checkRouteRateLimit(limitParams);
       const limit = authLimit ?? routeLimit?.result;
       if (limit && !limit.allowed) {
-        response = jsonError(routeLimit ? ROUTE_RATE_LIMIT_MESSAGES[routeLimit.bucket] : 'Too many requests', 429);
-        response.headers.set('Retry-After', String(limit.retryAfterSeconds));
+        if (routeLimit) {
+          response = routeRateLimitResponse(routeLimit.bucket, limit.retryAfterSeconds);
+        } else {
+          response = jsonError('Too many requests', 429);
+          response.headers.set('Retry-After', String(limit.retryAfterSeconds));
+        }
         return finalize(response);
       }
     }

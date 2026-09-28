@@ -141,8 +141,13 @@ Best-effort, per IP, in `functions/api/[[route]].ts`, before Better Auth dispatc
   testing. This is deny-by-default: `functions/api/utils/auth-rate-limit.ts` matches
   the session-check allowlist on method and exact path.
 - Sensitive writes (`POST`/`PUT`/`PATCH`/`DELETE` under templates, checklists,
-  uploads, the legacy Organization routes `teams`, Run Key/MCP writes, and admin):
-  120 per minute.
+  uploads, the legacy Organization routes `teams`, Run Key management under
+  `agent-keys`, and admin): 120 per minute.
+- MCP (`POST /api/mcp`): 240 per minute per IP, in its own bucket. MCP is JSON-RPC
+  over POST, so every call counts, reads included; the separate bucket keeps a local
+  agent from using up its owner's web saves on the same IP. It is also the only
+  limit on calls with an unknown Run Key, each of which costs a D1 lookup. The
+  `429` is a JSON-RPC error (`code: -32000`, `Rate limit exceeded`) with `Retry-After`.
 - Billing checkout and portal (`POST /api/billing/*`), which each call Stripe, whose
   rate limit the whole Stripe account shares: 10 per minute per IP on deployed hosts
   (120 locally), in their own bucket, and 10 per minute per account in the billing
@@ -151,7 +156,8 @@ Best-effort, per IP, in `functions/api/[[route]].ts`, before Better Auth dispatc
 - `functions/api/utils/route-rate-limit.ts` holds the non-auth buckets. Every route
   family the router dispatches is either limited there or listed in
   `RATE_LIMIT_EXEMPT_ROUTES` with a reason; a unit test reads the router to check.
-- MCP also limits each authenticated Run Key to 120 requests per minute.
+- MCP also limits each authenticated Run Key to 120 requests per minute, so one
+  key's full budget always fits under the per-IP MCP limit.
 - Password-reset and verification emails are also limited per account, whatever
   the IP: at most one of each kind a minute and five an hour
   (`functions/api/utils/auth-email-throttle.ts`, called from the Better Auth send
