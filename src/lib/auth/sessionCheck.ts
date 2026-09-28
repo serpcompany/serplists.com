@@ -75,6 +75,58 @@ export async function checkSessionWithRetry(
   return outcome;
 }
 
+/**
+ * How often an open, signed-in tab calls get-session. Only that route extends a
+ * session (Better Auth refreshes it once a day and resends the 7-day cookie), so
+ * a tab left open for days must call it well inside that day.
+ */
+export const SESSION_RECHECK_MIN_INTERVAL_MS = 60 * 60 * 1000;
+
+/**
+ * Returns a throttled re-check: at most one get-session call per interval and
+ * never two at once. The interval starts now, right after the check that
+ * signed the user in.
+ */
+export function createSessionRechecker(options: {
+  getSession: () => Promise<SessionFetchResult>;
+  onResult: (outcome: SessionCheck) => void;
+  minIntervalMs?: number;
+  now?: () => number;
+}): () => Promise<boolean> {
+  const now = options.now ?? Date.now;
+  const minIntervalMs = options.minIntervalMs ?? SESSION_RECHECK_MIN_INTERVAL_MS;
+  let lastCheckedAt = now();
+  let inFlight = false;
+
+  return async () => {
+    if (inFlight || now() - lastCheckedAt < minIntervalMs) return false;
+    inFlight = true;
+    lastCheckedAt = now();
+    try {
+      const outcome = await options.getSession().then(
+        classifySessionResult,
+        (): SessionCheck => ({ kind: 'unknown', status: null }),
+      );
+      options.onResult(outcome);
+    } finally {
+      inFlight = false;
+    }
+    return true;
+  };
+}
+
+/** True when a refreshed user has the same visible fields, so state can keep the old object. */
+export function isSameSessionUser(current: SessionUser | null, next: SessionUser): boolean {
+  return (
+    current !== null &&
+    current.id === next.id &&
+    current.email === next.email &&
+    current.name === next.name &&
+    current.image === next.image &&
+    current.username === next.username
+  );
+}
+
 export type RequireAuthState = 'loading' | 'allowed' | 'unavailable' | 'redirect';
 
 /** What a protected route shows. Only a definite signed-out answer sends the visitor to /login. */

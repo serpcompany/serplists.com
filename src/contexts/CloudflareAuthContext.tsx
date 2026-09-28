@@ -3,9 +3,14 @@ import { authClient } from '@/lib/auth-client';
 import {
   checkSessionWithRetry,
   classifySessionResult,
+  createSessionRechecker,
+  isSameSessionUser,
   type SessionCheck,
   type SessionUser,
 } from '@/lib/auth/sessionCheck';
+
+/** How often a visible tab asks the throttled re-check whether it is due. */
+const SESSION_RECHECK_TICK_MS = 15 * 60 * 1000;
 
 type User = SessionUser;
 
@@ -53,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    */
   const applySessionCheck = useCallback((outcome: SessionCheck) => {
     if (outcome.kind === 'authenticated') {
-      setUser(outcome.user);
+      setUser((current) => (isSameSessionUser(current, outcome.user) ? current : outcome.user));
       setSession(outcome.session);
     } else if (outcome.kind === 'anonymous') {
       setUser(null);
@@ -73,6 +78,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, [applySessionCheck, sessionCheckAttempt]);
+
+  // Only GET /api/auth/get-session extends a session and resends its cookie, so
+  // a signed-in tab re-checks it (throttled) when it regains focus and while it
+  // stays visible. A definite "no session" signs the user out; errors do not.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let active = true;
+    const recheck = createSessionRechecker({
+      getSession: () => authClient.getSession(),
+      onResult: (outcome) => {
+        if (active) applySessionCheck(outcome);
+      },
+    });
+    const recheckIfVisible = () => {
+      if (document.visibilityState === 'visible') void recheck();
+    };
+    document.addEventListener('visibilitychange', recheckIfVisible);
+    window.addEventListener('focus', recheckIfVisible);
+    const tick = window.setInterval(recheckIfVisible, SESSION_RECHECK_TICK_MS);
+    return () => {
+      active = false;
+      document.removeEventListener('visibilitychange', recheckIfVisible);
+      window.removeEventListener('focus', recheckIfVisible);
+      window.clearInterval(tick);
+    };
+  }, [isAuthenticated, applySessionCheck]);
 
   const retrySessionCheck = useCallback(() => {
     setSessionUnavailable(false);

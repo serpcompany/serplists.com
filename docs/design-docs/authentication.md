@@ -7,7 +7,7 @@ Security rules and required secrets are in [SECURITY.md](../SECURITY.md).
 
 - `functions/api/better-auth.ts`: Better Auth configuration
 - `functions/api/[[route]].ts`: forwards `/api/auth/*` to `auth.handler(request)`
-- `functions/api/utils/session.ts`: session lookup for API handlers
+- `functions/api/utils/session.ts`: read-only session lookup for API handlers
 - `functions/api/handlers/auth.ts`: profile endpoints
 - `src/lib/auth-client.ts`: client (`credentials: "include"` plus the username plugin)
 - `src/contexts/CloudflareAuthContext.tsx`: auth state, login, and registration
@@ -32,6 +32,13 @@ and user-facing failure states when a supporting service is unavailable.
   Callbacks await delivery so provider failures surface in the request.
   `GET /api/auth/status` reports whether email delivery is available.
 - Protected routes preserve the requested destination through login.
+- Sessions last 7 days and slide: Better Auth extends a session, and resends its
+  cookie, at most once a day. Only `GET /api/auth/get-session` may do that, because
+  its `Set-Cookie` reaches the browser. API handlers look sessions up read-only
+  (`query: { disableRefresh: true }`); a refresh there would extend the database row
+  while the new cookie is dropped, so the browser cookie would expire first. The app
+  calls get-session on page load and, while signed in, at most once an hour when the
+  tab regains focus or stays visible (`createSessionRechecker`).
 - Only a definite answer changes the signed-in state: `get-session` returning no
   session (or a `401`) signs the user out. A `429`, `5xx`, or network failure is
   treated as unknown (`src/lib/auth/sessionCheck.ts`): the current user is kept,
