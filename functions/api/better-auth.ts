@@ -6,85 +6,15 @@ import type { Env } from "./types";
 import { createDb, schema } from "./db";
 import { resolveAuthSecret } from "./utils/auth-secret";
 import { resolveConfiguredCorsOrigins } from "./utils/cors";
-import { discardUnsentPasswordResetToken, shouldSendAuthEmail } from "./utils/auth-email-throttle";
+import {
+  AuthEmailDeliveryError,
+  isAuthEmailConfigured,
+  sendEmailVerificationEmail,
+  sendPasswordResetEmail,
+} from "./utils/auth-email";
+import { deliverAuthEmail, discardUnsentPasswordResetToken } from "./utils/auth-email-throttle";
 import { log } from "./utils/logger";
 import { buildUserProfileWritePolicy, validateUserProfileWrite } from "./utils/user-profile-validation";
-
-const sendEmail = async (
-  env: Env,
-  params: { to: string; subject: string; text: string; tag: "password-reset" | "email-verification" }
-) => {
-  const from = env.EMAIL_FROM?.trim() || "noreply@mail.auth.serp.co";
-
-  const payload = {
-    from,
-    to: params.to,
-    subject: params.subject,
-    text: params.text,
-  };
-
-  if (env.RESEND_API_KEY) {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(
-        `Resend auth email send failed (${response.status}) for ${params.tag}: ${body || "unknown error"}`
-      );
-    }
-    return;
-  }
-
-  if (env.USESEND_API_KEY) {
-    const response = await fetch("https://app.usesend.com/api/v1/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.USESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(
-        `UseSend auth email send failed (${response.status}) for ${params.tag}: ${body || "unknown error"}`
-      );
-    }
-    return;
-  }
-
-  throw new Error("Auth email provider is not configured. Set RESEND_API_KEY or USESEND_API_KEY.");
-};
-
-const sendPasswordResetEmail = async (env: Env, params: { to: string; url: string }) => {
-  await sendEmail(env, {
-    to: params.to,
-    subject: "Reset your password",
-    text: `Reset your password: ${params.url}`,
-    tag: "password-reset",
-  });
-};
-
-const sendEmailVerificationEmail = async (env: Env, params: { to: string; url: string }) => {
-  await sendEmail(env, {
-    to: params.to,
-    subject: "Verify your email",
-    text: `Verify your email: ${params.url}`,
-    tag: "email-verification",
-  });
-};
-
-function isAuthEmailConfigured(env: Env): boolean {
-  return Boolean(env.RESEND_API_KEY || env.USESEND_API_KEY);
-}
 
 function isProductionHost(hostname: string): boolean {
   return hostname === "serplists.com" || hostname.endsWith(".serplists.com");
@@ -119,6 +49,10 @@ export function getAuthEmailPolicy(env: Env, request: Request) {
     emailAuthAvailable,
     emailVerificationRequired,
   };
+}
+
+function isSignUpRequest(request: Request | undefined): boolean {
+  return request !== undefined && new URL(request.url).pathname.endsWith("/auth/sign-up/email");
 }
 
 function shouldCheckBreachedPassword(env: Env, request: Request): boolean {
@@ -174,11 +108,10 @@ export function createBetterAuth(env: Env, request: Request) {
       // Throttled per account (utils/auth-email-throttle.ts). A skipped send
       // returns normally, so the response is the same as for a sent email.
       sendResetPassword: async ({ user, url, token }) => {
-        if (!(await shouldSendAuthEmail(env, "password-reset", user.id))) {
-          await discardUnsentPasswordResetToken(env, token);
-          return;
-        }
-        await sendPasswordResetEmail(env, { to: user.email, url });
+        const sent = await deliverAuthEmail(env, "password-reset", user.id, () =>
+          sendPasswordResetEmail(env, { to: user.email, url })
+        );
+        if (!sent) await discardUnsentPasswordResetToken(env, token);
       },
       // A reset is how users recover a compromised account, so it must sign out
       // every existing session (Better Auth deletes the user's session rows).
@@ -199,13 +132,31 @@ export function createBetterAuth(env: Env, request: Request) {
     },
     emailVerification: {
       sendOnSignUp: authEmailPolicy.emailVerificationRequired,
-      sendVerificationEmail: async ({ user, url }) => {
+      sendVerificationEmail: async ({ user, url }, callbackRequest) => {
         // Unauthenticated /send-verification-email accepts any registered
         // address, verified or not. Change-email (not enabled) would pass the
         // user with emailVerified false, so this skip would not affect it.
         if (user.emailVerified) return;
-        if (!(await shouldSendAuthEmail(env, "email-verification", user.id))) return;
-        await sendEmailVerificationEmail(env, { to: user.email, url });
+        try {
+          await deliverAuthEmail(env, "email-verification", user.id, () =>
+            sendEmailVerificationEmail(env, { to: user.email, url })
+          );
+        } catch (error) {
+          // Sign-up has already created the account when this runs, so failing
+          // it would report "Registration failed" for an account that exists.
+          // Let sign-up succeed: the app sends the person to sign in, where they
+          // can resend the email. Resends and configuration errors still fail.
+          if (error instanceof AuthEmailDeliveryError && isSignUpRequest(callbackRequest)) {
+            log("warn", "auth_email_send_failed", {
+              userId: user.id,
+              tag: error.tag,
+              provider: error.provider,
+              status: error.status,
+            });
+            return;
+          }
+          throw error;
+        }
       },
     },
     plugins,

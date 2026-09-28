@@ -29,10 +29,17 @@ and user-facing failure states when a supporting service is unavailable.
   `AUTH_EMAIL_VERIFICATION_REQUIRED=true` (production). Login offers to resend the
   verification email when sign-in is blocked.
 - Verification and reset emails use `RESEND_API_KEY`, then `USESEND_API_KEY`.
-  Callbacks await delivery so provider failures surface in the request. Each
-  account gets at most one email of each kind a minute and five an hour; extra
-  requests succeed without sending ([rate limits](../SECURITY.md#rate-limits)).
-  `GET /api/auth/status` reports whether email delivery is available.
+  Callbacks await delivery so provider failures surface in the request, with one
+  exception: sign-up creates the account before it sends the verification email,
+  so a provider failure there is logged (`auth_email_send_failed`, user id only)
+  and sign-up still succeeds. Register then sends the person to
+  `/login?verify_email=1`, where they can resend it. Sign-up is refused with
+  `503 auth_email_unavailable` before any account is created when verification is
+  required and no provider is configured. `GET /api/auth/status` reports whether
+  email delivery is available.
+- Each account gets at most one email of each kind a minute and five an hour;
+  extra requests succeed without sending, and a send that fails does not count
+  ([rate limits](../SECURITY.md#rate-limits)).
 - Protected routes preserve the requested destination through login.
 - A password reset revokes every session for the account, including the one in
   the browser doing the reset; `ResetPassword.tsx` clears that browser's local

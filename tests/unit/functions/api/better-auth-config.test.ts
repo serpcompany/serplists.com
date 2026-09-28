@@ -4,7 +4,7 @@ import { createBetterAuth, getAuthEmailPolicy } from "@functions/api/better-auth
 const { betterAuthMock, drizzleAdapterMock, emailThrottle } = vi.hoisted(() => ({
   betterAuthMock: vi.fn(() => ({ handler: vi.fn() })),
   drizzleAdapterMock: vi.fn(() => ({})),
-  emailThrottle: { shouldSend: vi.fn(), discardToken: vi.fn() },
+  emailThrottle: { shouldSend: vi.fn(), deliver: vi.fn(), discardToken: vi.fn() },
 }));
 
 vi.mock("better-auth", () => ({
@@ -27,7 +27,7 @@ vi.mock("@functions/api/db", () => ({
 
 // The throttle itself runs against SQLite in auth-email-throttle.test.ts.
 vi.mock("@functions/api/utils/auth-email-throttle", () => ({
-  shouldSendAuthEmail: emailThrottle.shouldSend,
+  deliverAuthEmail: emailThrottle.deliver,
   discardUnsentPasswordResetToken: emailThrottle.discardToken,
 }));
 
@@ -47,6 +47,11 @@ describe("createBetterAuth config", () => {
     drizzleAdapterMock.mockClear();
     vi.restoreAllMocks();
     emailThrottle.shouldSend.mockReset().mockResolvedValue(true);
+    emailThrottle.deliver.mockReset().mockImplementation(async (env, kind, userId, send) => {
+      if (!(await emailThrottle.shouldSend(env, kind, userId))) return false;
+      await send();
+      return true;
+    });
     emailThrottle.discardToken.mockReset().mockResolvedValue(undefined);
   });
 
@@ -272,6 +277,32 @@ describe("createBetterAuth config", () => {
     await send({ id: "u2", email: "new@example.com", emailVerified: false });
     expect(emailThrottle.shouldSend).toHaveBeenCalledWith(expect.anything(), "email-verification", "u2");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("lets sign-up succeed when the verification email fails, but not other senders", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("rate limited", { status: 429 })));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/sign-up/email"));
+    const options = betterAuthMock.mock.calls[0]?.[0];
+    const user = { id: "u1", email: "new-user@example.com", emailVerified: false };
+    const verify = (request?: Request) =>
+      options.emailVerification.sendVerificationEmail(
+        { user, url: "https://serplists.com/api/auth/verify-email?token=abc", token: "abc" },
+        request
+      );
+
+    await expect(verify(new Request("https://serplists.com/api/auth/sign-up/email"))).resolves.toBeUndefined();
+    await expect(verify(new Request("https://serplists.com/api/auth/send-verification-email"))).rejects.toMatchObject({
+      name: "AuthEmailDeliveryError",
+      status: 429,
+    });
+    await expect(verify(undefined)).rejects.toMatchObject({ name: "AuthEmailDeliveryError" });
+    await expect(
+      options.emailAndPassword.sendResetPassword(
+        { user, url: "https://serplists.com/reset-password?token=abc", token: "abc" },
+        new Request("https://serplists.com/api/auth/request-password-reset")
+      )
+    ).rejects.toMatchObject({ name: "AuthEmailDeliveryError" });
   });
 
   it("falls back to UseSend when RESEND_API_KEY is not configured", async () => {

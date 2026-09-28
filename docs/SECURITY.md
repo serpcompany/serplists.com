@@ -107,7 +107,7 @@ Best-effort, per IP, in `functions/api/[[route]].ts`, before Better Auth dispatc
   callbacks). The count is one primary-key upsert in D1 (a `verification` row with
   id `auth-email-throttle:<kind>:<userId>`), so it holds across edges and concurrent
   requests. A skipped send returns the same response as a sent one, and the unused
-  reset token is deleted. Verification emails are never sent to an address that is
+  reset token is deleted. A send the provider rejects does not count. Verification emails are never sent to an address that is
   already verified. If D1 fails, the email is sent (fail open).
 
 The limiter is an in-memory map (`functions/api/utils/rate-limit.ts`), so it is not

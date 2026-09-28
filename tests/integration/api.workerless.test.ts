@@ -144,6 +144,30 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(data.code).toBe("auth_email_unavailable");
   });
 
+  it('refuses sign-up before creating an account when verification is required but email cannot be sent', async () => {
+    // No DB binding: reaching Better Auth would throw instead of answering 503.
+    const response = await apiWorker.fetch(
+      new Request("http://localhost/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "new-user@example.com",
+          password: "password123456",
+          name: "New User",
+        }),
+      }),
+      buildEnv({
+        AUTH_EMAIL_VERIFICATION_REQUIRED: "true",
+        RESEND_API_KEY: undefined,
+        USESEND_API_KEY: undefined,
+      })
+    );
+
+    expect(response.status).toBe(503);
+    const data = await response.json();
+    expect(data.code).toBe("auth_email_unavailable");
+  });
+
   it('fails password reset flow explicitly when auth email provider is not configured', async () => {
     const response = await apiWorker.fetch(
       new Request("http://localhost/api/auth/request-password-reset", {

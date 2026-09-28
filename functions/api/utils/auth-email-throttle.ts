@@ -10,6 +10,10 @@ export const AUTH_EMAIL_MIN_INTERVAL_MS = 60 * 1000;
 export const AUTH_EMAIL_WINDOW_MS = 60 * 60 * 1000;
 export const AUTH_EMAIL_MAX_PER_WINDOW = 5;
 
+function throttleId(kind: AuthEmailKind, userId: string): string {
+  return `auth-email-throttle:${kind}:${userId}`;
+}
+
 /**
  * Claims one password-reset or verification email for an account. Returns false
  * when the account was sent that kind of email in the last minute, or five in
@@ -28,7 +32,7 @@ export async function claimAuthEmailSend(
 ): Promise<boolean> {
   const { verification } = schema;
   const now = params.now ?? Date.now();
-  const id = `auth-email-throttle:${params.kind}:${params.userId}`;
+  const id = throttleId(params.kind, params.userId);
   const windowOver = sql`${verification.expiresAt} <= ${now}`;
   const sendsInWindow = sql`CAST(${verification.value} AS INTEGER)`;
 
@@ -74,6 +78,49 @@ export async function shouldSendAuthEmail(env: Env, kind: AuthEmailKind, userId:
       error: error instanceof Error ? error.message : String(error),
     });
     return true;
+  }
+}
+
+/**
+ * Gives back a claimed send whose email did not go out, so the person can retry
+ * at once instead of having the retry silently skipped for a minute.
+ */
+export async function releaseAuthEmailSend(env: Env, kind: AuthEmailKind, userId: string): Promise<void> {
+  const { verification } = schema;
+  try {
+    await createDb(env)
+      .update(verification)
+      .set({
+        value: sql`CAST(MAX(CAST(${verification.value} AS INTEGER) - 1, 0) AS TEXT)`,
+        updatedAt: new Date(0),
+      })
+      .where(eq(verification.id, throttleId(kind, userId)));
+  } catch (error) {
+    log('warn', 'auth_email_throttle_release_failed', {
+      kind,
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * Sends an auth email when the account's throttle allows it. Returns false when
+ * the send was skipped. A failed send is given back and rethrown.
+ */
+export async function deliverAuthEmail(
+  env: Env,
+  kind: AuthEmailKind,
+  userId: string,
+  send: () => Promise<void>,
+): Promise<boolean> {
+  if (!(await shouldSendAuthEmail(env, kind, userId))) return false;
+  try {
+    await send();
+    return true;
+  } catch (error) {
+    await releaseAuthEmailSend(env, kind, userId);
+    throw error;
   }
 }
 

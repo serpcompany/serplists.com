@@ -45,13 +45,11 @@ function isBlockedTestEmail(email: string): boolean {
   return blockedTestEmailDomains.has(domain);
 }
 
-function isAuthEmailConfigured(env: Env): boolean {
-  return Boolean(env.RESEND_API_KEY || env.USESEND_API_KEY);
-}
-
-function requiresConfiguredAuthEmail(path: string, isProdRequest: boolean): boolean {
+function requiresConfiguredAuthEmail(path: string, isProdRequest: boolean, emailVerificationRequired: boolean): boolean {
   if (path === 'auth/sign-up/email') {
-    return isProdRequest;
+    // Sign-up creates the account before it sends the verification email, so
+    // refuse it up front when that email cannot be sent.
+    return isProdRequest || emailVerificationRequired;
   }
 
   return (
@@ -203,7 +201,11 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         }
       }
 
-      if (requiresConfiguredAuthEmail(path, isProdRequest) && !isAuthEmailConfigured(env)) {
+      const emailPolicy = getAuthEmailPolicy(env, request);
+      if (
+        requiresConfiguredAuthEmail(path, isProdRequest, emailPolicy.emailVerificationRequired) &&
+        !emailPolicy.emailAuthAvailable
+      ) {
         response = jsonError('Auth email is temporarily unavailable. Please contact support.', 503, {
           code: 'auth_email_unavailable',
         });
