@@ -38,6 +38,7 @@ import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar'
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
+import { selectRunHistoryPreview } from '@/features/run-execution/runHistory';
 import { cn } from '@/lib/utils';
 import {
   buildConsoleHomePath,
@@ -428,7 +429,7 @@ const ChecklistRunPage = () => {
     displayRun.title
   );
   const privateRunDescription = `${counts.completed} of ${counts.total} tasks finished`;
-  const runHistoryEntries = (history?.data?.events ?? []).slice(0, 8);
+  const runHistoryEntries = selectRunHistoryPreview(history?.data);
 
   return (
     <div className="min-h-screen bg-background">

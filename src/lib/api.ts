@@ -363,8 +363,13 @@ class ApiClient {
     return this.request(`/checklists/${encodeURIComponent(id)}`);
   }
 
-  async getChecklistHistory(id: string): Promise<ChecklistRunHistoryResponse> {
-    return this.request(`/checklists/${encodeURIComponent(id)}/history`);
+  // Without a limit the API returns its default of 50 events; pass what the page shows.
+  async getChecklistHistory(id: string, params?: { limit?: number }): Promise<ChecklistRunHistoryResponse> {
+    const search = new URLSearchParams();
+    const limit = params?.limit;
+    if (typeof limit === 'number' && Number.isInteger(limit) && limit > 0) search.set('limit', String(limit));
+    const query = search.toString();
+    return this.request(`/checklists/${encodeURIComponent(id)}/history${query ? `?${query}` : ''}`);
   }
 
   async createChecklist(checklist: {

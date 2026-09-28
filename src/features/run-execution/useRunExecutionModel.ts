@@ -17,6 +17,7 @@ import {
   mapChecklistToRun,
   setSubItemsCompletion,
 } from './runExecutionMappers';
+import { buildRunHistoryQuery } from './runHistory';
 import { createSaveQueue } from './saveQueue';
 
 type RunExecutionApiClient = Pick<
@@ -558,13 +559,9 @@ export const useRunExecutionModel = (
 
   const counts = countRunExecutionItems(run);
   const selectedData = getSelectedRunItem(run, selectedItemId);
-  const canLoadHistory = Boolean(run?.id && mode !== 'shared');
-  const history = useQuery({
-    queryKey: ['checklist-run-history', run?.id ?? 'none'],
-    queryFn: () => api.getChecklistHistory(run?.id ?? ''),
-    enabled: canLoadHistory,
-    retry: false,
-  });
+  const historyQuery = buildRunHistoryQuery({ runId: run?.id, mode, client: api });
+  const canLoadHistory = historyQuery.enabled;
+  const history = useQuery(historyQuery);
 
   const applyResult = (result: RunExecutionActionResult): RunExecutionActionResult => {
     if (result.kind === 'ok' && result.run) {

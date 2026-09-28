@@ -177,7 +177,7 @@ function scenarios(): Scenario[] {
     { name: "template detail", actor: "admin", path: `/api/templates/${personalTemplate}` },
     { name: "template history", actor: "admin", path: `/api/templates/${personalTemplate}/history` },
     { name: "run detail", actor: "admin", path: `/api/checklists/${adminRun}` },
-    { name: "run history", actor: "admin", path: `/api/checklists/${adminRun}/history` },
+    { name: "run history (run page preview)", actor: "admin", path: `/api/checklists/${adminRun}/history?limit=8` },
     { name: "Organization detail", actor: "admin", path: "/api/teams/team-seed-growth" },
     { name: "Organization members", actor: "admin", path: "/api/teams/team-seed-growth/members" },
     { name: "Organization activity", actor: "admin", path: "/api/teams/team-seed-growth/activity" },

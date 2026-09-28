@@ -392,6 +392,38 @@ describe('Checklists Handlers', () => {
     );
   });
 
+  // The run page asks for ?limit=8; the server keeps its 50 default and 1..100 clamp.
+  it.each([
+    ['?limit=8', 8],
+    ['', 50],
+    ['?limit=0', 1],
+    ['?limit=1000', 100],
+    ['?limit=abc', 50],
+  ])('reads at most the requested number of run history events (%s)', async (query, expected) => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.orderBy.mockReturnValueOnce(dbMocks.selectChain);
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        {
+          id: 'run-1',
+          user_id: 'user-123',
+          team_id: null,
+          title: 'My Run',
+          items: '[]',
+          status: 'in_progress',
+          started_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const request = new Request(`http://localhost/api/checklists/run-1/history${query}`, { method: 'GET' });
+    const response = await handleChecklists(request, mockEnv);
+
+    expect(response.status).toBe(200);
+    expect(dbMocks.selectChain.limit).toHaveBeenLastCalledWith(expected);
+  });
+
   it('should not expose personal checklist run history to other users', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([

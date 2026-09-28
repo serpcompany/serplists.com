@@ -83,7 +83,11 @@ Open, all unbounded lists:
 | Sitemap cache miss | 41,449 (index), 19,419 (templates shard) | Builds every entry; now only after a content change or deploy, once per data center |
 
 Everything else (session, detail pages, history, members, billing, run starts, template
-updates, cached sitemaps) reads under 25 rows.
+updates, cached sitemaps) reads under 25 rows. The seed has about one audit event per
+run, so the profile understates history: every progress save writes an event, and an
+unlimited `/history` read returns the API's default of 50 events and their users. The
+run page shows 8 and asks for `?limit=8` (`RUN_HISTORY_PREVIEW_LIMIT`), so it reads at
+most 8 events and 8 users.
 
 Fixed (rows read before, after; see the plan's progress):
 
