@@ -147,7 +147,27 @@ baseline.
   (one backslash), never `\\n`, which stores a literal backslash and `n`.
   `tests/unit/db/seeds/official-templates.test.ts` checks this. Because existing
   rows are skipped, fixing the file does not repair a database that was already
-  seeded; that needs a data migration.
+  seeded. Staging and production still hold the old text and need this data
+  migration, which does not exist yet. Add it as the next free migration number
+  after `0026`. A human approves applying it remotely:
+
+  ```sql
+  UPDATE templates SET items = replace(items, '\\n', '\n')
+  WHERE user_id = 'serp-user'
+    AND id IN ('serp-template-technical-seo-audit', 'serp-template-keyword-research-mapping',
+               'serp-template-content-refresh', 'serp-template-local-seo-gbp',
+               'serp-template-serp-features')
+    AND instr(items, '\\n') > 0;
+  ```
+
+  SQLite reads `'\\n'` as three characters and `'\n'` as two, so the statement
+  turns each double-escaped break into the JSON escape. The `instr` guard makes a
+  second run change nothing. Run against the old seed, it updates 4 rows (one
+  Template has no line breaks) and leaves them byte-identical to the fixed seed.
+  Leave `content_version` alone, so Runs are not offered an update. The Drizzle
+  schema does not change. Copies of these Templates and Runs started from them
+  keep the old text, so the display normalizer for legacy backslash-n text stays
+  until a human decides about that user data.
 
 ## Release checklists
 
