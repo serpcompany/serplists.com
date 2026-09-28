@@ -143,7 +143,7 @@ const CategoryDetail = () => {
     surface: 'category-templates',
     userId: user?.id,
   });
-  const { allCategories, templates } = useTemplateLibrary();
+  const { allCategories, templates, loading } = useTemplateLibrary();
 
   const slug = categorySlug ?? 'business';
   const categories = useMemo(
@@ -167,6 +167,14 @@ const CategoryDetail = () => {
   };
   const Icon = category.icon;
   const categoryTemplateCount = categoryStats?.count ?? 0;
+  // Registry categories render before any public Template uses them; keep those empty
+  // pages out of search results, but only once the catalog has loaded.
+  const isEmptyCategory = !loading && categoryTemplateCount === 0;
+  const emptyMessage = searchQuery.trim()
+    ? 'No templates found matching your search.'
+    : loading
+      ? 'Loading templates…'
+      : 'No public templates in this category yet.';
 
   const filteredTemplates = useMemo(() => {
     const base =
@@ -199,6 +207,7 @@ const CategoryDetail = () => {
         keywords={[category.name, 'checklist templates', 'workflow templates']}
         image={SEO_IMAGE_URL}
         url={`${CATEGORY_BASE_URL}/${encodeURIComponent(slug)}`}
+        robots={isEmptyCategory ? 'noindex, follow' : undefined}
       />
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6 flex items-center gap-2 text-sm">
@@ -306,9 +315,7 @@ const CategoryDetail = () => {
           </div>
         ) : (
           <div className="mt-6 rounded-xl border border-border bg-card p-12 text-center">
-            <p className="text-muted-foreground">
-              No templates found matching your search.
-            </p>
+            <p className="text-muted-foreground">{emptyMessage}</p>
           </div>
         )}
 

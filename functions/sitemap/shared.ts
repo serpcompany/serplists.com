@@ -386,15 +386,17 @@ export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
   bundledTemplates.forEach((template) => {
     template.categories?.forEach((category) => addCategory(category, template.lastmod));
   });
-  PUBLIC_CATEGORY_REGISTRY.forEach((category) => {
-    addCategory(category.slug, catalogPageEntry('/categories').lastmod);
-  });
   rows.forEach((row) => {
     const lastmod = mostRecentLastmod(
       row.updated_at || row.created_at,
       row.owner_updated_at,
     );
     parseCategories(row.category).forEach((category) => addCategory(category, lastmod));
+  });
+  // A registry category's page shows its registry name and description, but it is only
+  // worth listing once a public Template uses it; otherwise it is an empty page.
+  PUBLIC_CATEGORY_REGISTRY.forEach((category) => {
+    if (lastmodBySlug.has(category.slug)) addCategory(category.slug, catalogPageEntry('/categories').lastmod);
   });
   const categoryRevisions = await db
     .select({

@@ -4,7 +4,10 @@ import { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { onRequest as sitemapIndex } from '../../../functions/sitemap.xml';
+import bundledCatalog from '../../../functions/sitemap/bundled-catalog.generated.json';
+import { categorySlug } from '../../../functions/sitemap/shared';
 import { onRequest as categoriesShard } from '../../../functions/sitemaps/categories/[page].xml';
+import { PUBLIC_CATEGORY_REGISTRY } from '../../../src/data/publicCategories';
 
 // The sitemap index hashes each shard's rendering to decide when that shard's <lastmod>
 // moves. These tests run the real index and categories shard handlers against SQLite
@@ -122,5 +125,29 @@ describe('categories sitemap index and shard', () => {
     expect(after.landingLastmod! > before.landingLastmod!).toBe(true);
     expect(after.indexLastmod! > before.indexLastmod!).toBe(true);
     expectIndexMatchesShard(after);
+  });
+
+  it('lists a category page only when a public Template uses it', async () => {
+    db.exec(`
+      INSERT INTO templates VALUES ('t3', 'u1', 'user', NULL, 1, NULL,
+        '2020-01-05 00:00:00', NULL, '["Engineering"]', 'engineering-list');
+      INSERT INTO templates VALUES ('t4', 'u1', 'user', NULL, 0, NULL,
+        '2020-01-05 00:00:00', NULL, '["Compliance"]', 'private-list');
+    `);
+    const { shard } = await buildBoth();
+    const listed = Array.from(
+      shard.matchAll(/<loc>https:\/\/serplists\.com\/categories\/([^<]+)<\/loc>/g),
+      (match) => match[1],
+    );
+    const used = new Set(
+      [...bundledCatalog.templates.flatMap((template) => template.categories), 'Outdoor Gear', 'Engineering']
+        .map(categorySlug),
+    );
+
+    expect(listed.filter((slug) => slug === 'engineering')).toHaveLength(1);
+    expect(listed.filter((slug) => !used.has(slug))).toEqual([]);
+    for (const registered of PUBLIC_CATEGORY_REGISTRY.filter((category) => category.slug !== 'engineering')) {
+      expect(listed).not.toContain(registered.slug);
+    }
   });
 });

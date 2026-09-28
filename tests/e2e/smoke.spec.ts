@@ -268,6 +268,9 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     "https://serplists.com/profile/admin/technical-seo-audit-checklist",
   );
   expect(allPageLocations).toContain("https://serplists.com/categories/seo");
+  // Registry categories no public Template uses are empty pages, so they stay unlisted.
+  expect(allPageLocations).not.toContain("https://serplists.com/categories/engineering");
+  expect(allPageLocations).not.toContain("https://serplists.com/categories/compliance");
   expect(allPageLocations).not.toContain(
     "https://serplists.com/profile/admin/internal-publishing-checklist",
   );
