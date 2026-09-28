@@ -156,3 +156,18 @@ shell fails with `ENOENT` (or `EINVAL` for `npx.cmd`), and passing arguments thr
 a shell lets `cmd.exe` reinterpret characters such as `&`, `^` and `%` in values like
 the auth secret. `tests/unit/scripts/tool-spawns.test.ts` fails when a script names
 `npx` or `pnpm` as a command.
+
+## Line endings
+
+`.gitattributes` checks every text file out with LF (`* text=auto eol=lf`) and marks
+fonts and images as binary, so a Windows clone gets LF even with Git for Windows'
+default `core.autocrlf=true`. Generators always write LF. The `--check` scripts
+(`db:schema:check`, `schema:portable:check`, `sitemap:check`) and `templates:check`
+compare through `scripts/lib/line-endings.mjs`, which ignores CRLF versus LF but
+still fails on any other difference, including a missing final newline.
+`tests/unit/scripts/line-endings.test.ts` fails if a binary file is not marked
+binary or a CRLF file reaches the index.
+
+A clone made before `.gitattributes` existed keeps its CRLF files until they are
+checked out again. Commit or stash your work first, because this discards
+uncommitted changes: `git rm -rq --cached . && git reset --hard`.

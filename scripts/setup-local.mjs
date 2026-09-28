@@ -11,11 +11,11 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildPnpmInvocation, buildToolInvocation } from "./lib/run-tool.mjs";
+import { renderDevVars } from "./setup-local-lib.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const devVarsPath = path.join(repoRoot, ".dev.vars");
 const localD1Path = path.join(repoRoot, ".wrangler/state/v3/d1/miniflare-D1DatabaseObject");
-const PLACEHOLDER = /xxx|replace-with|example\.com/;
 
 // No shell: tools run as `node <bin script>` (see scripts/lib/run-tool.mjs).
 function run(label, { command, args, options = {} }) {
@@ -30,15 +30,8 @@ function createDevVars() {
     console.log(".dev.vars exists; leaving it unchanged.");
     return;
   }
-  const lines = readFileSync(path.join(repoRoot, ".dev.vars.example"), "utf8").split("\n").map((line) => {
-    const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
-    if (!match) return line;
-    const [, key, value] = match;
-    if (key === "BETTER_AUTH_SECRET") return `${key}=${randomBytes(24).toString("hex")}`;
-    // Optional integrations stay disabled until someone fills in real test values.
-    return PLACEHOLDER.test(value) ? `# ${line}` : line;
-  });
-  writeFileSync(devVarsPath, lines.join("\n"));
+  const example = readFileSync(path.join(repoRoot, ".dev.vars.example"), "utf8");
+  writeFileSync(devVarsPath, renderDevVars(example, randomBytes(24).toString("hex")));
   console.log("Created .dev.vars with a generated BETTER_AUTH_SECRET. Optional integrations are commented out.");
 }
 

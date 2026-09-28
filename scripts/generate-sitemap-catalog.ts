@@ -12,6 +12,7 @@ import {
   type SourceSnapshot,
   type TemplatePack,
 } from './lib/sitemapLastmod';
+import { matchesGeneratedText } from './lib/line-endings.mjs';
 
 type StaticPage = {
   path: string;
@@ -184,8 +185,8 @@ const output = `${JSON.stringify({
   inventory: { templatesHash, templatesLastmod, categoriesHash, categoriesLastmod, implementationLastmod },
 }, null, 2)}\n`;
 if (process.argv.includes('--check')) {
-  const existing = await readFile(outputPath, 'utf8').catch(() => '');
-  if (existing !== output) {
+  const existing = await readFile(outputPath, 'utf8').catch(() => null);
+  if (!matchesGeneratedText(existing, output)) {
     throw new Error(
       'Generated sitemap catalog is stale. Run `pnpm run sitemap:generate` and commit functions/sitemap/bundled-catalog.generated.json.',
     );

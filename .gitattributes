@@ -1,0 +1,20 @@
+# Check out text files with LF on every platform, whatever core.autocrlf says.
+# Generated artifacts (docs/generated/, template examples, the sitemap catalog)
+# are compared with freshly generated LF output, so a CRLF checkout would read
+# as stale. See docs/design-docs/development-environment.md#line-endings.
+* text=auto eol=lf
+
+# Binary files: never convert line endings or diff them as text.
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.zip binary
