@@ -19,7 +19,8 @@ legacy call sites are listed in `.dependency-cruiser-known-violations.json`.
 - [ ] Remove the remaining direct `api` calls from 8 components and pages (see the
   known-violations file). `UserInfo.tsx` was dead code and was deleted on 2026-09-27.
   `TemplateBackup.tsx` stopped calling `api` on 2026-09-28 (billing status through
-  `useBillingStatus`, export through `features/template-backup/exportTemplatePack.ts`).
+  `useBillingStatus`, export through `features/template-backup/exportTemplatePack.ts`),
+  and so did `UserProfile.tsx` (profile loading through `features/profile/loadUserProfile.ts`).
 - [ ] Tasks 2, 3, 4, 6, 7: status not re-verified since 2026-04-10. Check the code
   before starting; mapper modules already exist under `src/features/*`.
 
