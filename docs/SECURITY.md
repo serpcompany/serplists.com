@@ -114,8 +114,17 @@ Best-effort, per IP, in `functions/api/[[route]].ts`, before Better Auth dispatc
   endpoint): 30 requests per 5 minutes on deployed hosts; 300 per hour locally for
   testing. This is deny-by-default: `functions/api/utils/auth-rate-limit.ts` matches
   the session-check allowlist on method and exact path.
-- Sensitive writes (`POST`/`PUT`/`DELETE` under templates, checklists, uploads, the
-  legacy Organization routes `teams`, and Run Key/MCP writes): 120 per minute.
+- Sensitive writes (`POST`/`PUT`/`PATCH`/`DELETE` under templates, checklists,
+  uploads, the legacy Organization routes `teams`, Run Key/MCP writes, and admin):
+  120 per minute.
+- Billing checkout and portal (`POST /api/billing/*`), which each call Stripe, whose
+  rate limit the whole Stripe account shares: 10 per minute per IP on deployed hosts
+  (120 locally), in their own bucket, and 10 per minute per account in the billing
+  handler whatever the IP. `GET /api/billing/status` and Stripe webhooks are never
+  limited.
+- `functions/api/utils/route-rate-limit.ts` holds the non-auth buckets. Every route
+  family the router dispatches is either limited there or listed in
+  `RATE_LIMIT_EXEMPT_ROUTES` with a reason; a unit test reads the router to check.
 - MCP also limits each authenticated Run Key to 120 requests per minute.
 - Password-reset and verification emails are also limited per account, whatever
   the IP: at most one of each kind a minute and five an hour

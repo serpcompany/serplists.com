@@ -2,8 +2,8 @@ import { Env } from './types';
 import { getApiEnv } from './env';
 import { applyCorsHeaders, buildCorsPreflightResponse } from './utils/cors';
 import { getClientIp, log } from './utils/logger';
-import { checkRateLimit } from './utils/rate-limit';
 import { checkAuthRateLimit } from './utils/auth-rate-limit';
+import { ROUTE_RATE_LIMIT_MESSAGES, checkRouteRateLimit } from './utils/route-rate-limit';
 import { createBetterAuth, getAuthEmailPolicy } from './better-auth';
 import { findOversizedBody } from './utils/body-limit';
 import { rejectUnsafeAuthRequest } from './utils/auth-request-guard';
@@ -122,29 +122,14 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
     }
 
     if (ip) {
-      const authLimit = checkAuthRateLimit({
-        method: request.method,
-        path,
-        ip,
-        isLocal: isLocalRequest(url),
-      });
-      const isSensitiveWrite =
-        (request.method === 'POST' || request.method === 'PUT' || request.method === 'DELETE') &&
-        (path.startsWith('templates') || path.startsWith('checklists') || path.startsWith('uploads') || path.startsWith('teams') || path === 'agent-keys' || path.startsWith('agent-keys/') || path === 'mcp');
-
-      if (authLimit) {
-        if (!authLimit.allowed) {
-          response = jsonError('Too many requests', 429);
-          response.headers.set('Retry-After', String(authLimit.retryAfterSeconds));
-          return finalize(response);
-        }
-      } else if (isSensitiveWrite) {
-        const limit = checkRateLimit(`write:${ip}`, { windowMs: 60 * 1000, max: 120 });
-        if (!limit.allowed) {
-          response = jsonError('Too many requests', 429);
-          response.headers.set('Retry-After', String(limit.retryAfterSeconds));
-          return finalize(response);
-        }
+      const limitParams = { method: request.method, path, ip, isLocal: isLocalRequest(url) };
+      const authLimit = checkAuthRateLimit(limitParams);
+      const routeLimit = authLimit ? null : checkRouteRateLimit(limitParams);
+      const limit = authLimit ?? routeLimit?.result;
+      if (limit && !limit.allowed) {
+        response = jsonError(routeLimit ? ROUTE_RATE_LIMIT_MESSAGES[routeLimit.bucket] : 'Too many requests', 429);
+        response.headers.set('Retry-After', String(limit.retryAfterSeconds));
+        return finalize(response);
       }
     }
 
