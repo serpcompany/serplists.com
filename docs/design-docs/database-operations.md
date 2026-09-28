@@ -120,6 +120,12 @@ baseline.
   User with the `serp` email or username) fails with a UNIQUE constraint error
   instead of silently dropping the row. Test-seed Templates use `sample-` slugs so
   they never collide with official ones.
+- The `items` JSON in that file sits inside SQL string literals, and SQLite does
+  not process backslash escapes there. Write a line break as the JSON escape `\n`
+  (one backslash), never `\\n`, which stores a literal backslash and `n`.
+  `tests/unit/db/seeds/official-templates.test.ts` checks this. Because existing
+  rows are skipped, fixing the file does not repair a database that was already
+  seeded; that needs a data migration.
 
 ## Release checklists
 
