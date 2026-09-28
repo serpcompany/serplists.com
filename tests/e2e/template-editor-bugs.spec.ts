@@ -733,8 +733,12 @@ test.describe("template editor regressions", () => {
 
     await page.goto(`/dashboard/runs/${runId}`);
     await expect(page.getByText("Section 1", { exact: true }).first()).toBeVisible();
-    const checkboxes = page.getByRole("checkbox");
-    await expect(checkboxes).toHaveCount(1);
+    // The task has its own checkbox; the only other one is its single Sub-task's.
+    await expect(
+      page.getByRole("checkbox", { name: `Mark "Task with sub-tasks ${stamp}" complete` }),
+    ).toBeVisible();
+    await expect(page.getByRole("checkbox")).toHaveCount(2);
+    await expect(page.getByRole("checkbox", { name: "Check title", exact: true })).toBeVisible();
     await expect(page.getByText("Check title", { exact: true })).toBeVisible();
 
     await page.evaluate(async ({ id, apiBaseUrl }) => {
