@@ -28,6 +28,14 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
 - Every icon-only button has an `aria-label`, toggles expose `aria-pressed`, and
   inputs have a `Label`. The template grid/list toggle in `src/pages/Templates.tsx`
   is the reference.
+- A control revealed on hover (`opacity-0 group-hover:opacity-100`) must also show on
+  keyboard focus and on touch screens: in the template editor use
+  `ROW_ACTIONS_REVEAL_CLASS` (`src/components/template-editor/reorder.ts`), and a unit
+  test fails on any hover-only class string there.
+- Anything that reorders by drag also reorders from the keyboard. The template
+  editor's drag handles (`ReorderHandle`) move their section or task one place with
+  the Up and Down arrow keys, keep focus on the moved handle, and announce the new
+  position.
 - Show a neutral loading state rather than a guessed value (for example, never
   render a plan label before billing status loads).
 - Check layouts at desktop and mobile widths with `pnpm run ui:snap` (`--mobile`).

@@ -76,3 +76,19 @@ describe('ContentEditor accessible names', () => {
     expect(getByAccessibleName(html, 'Remove sub-task 2')?.tag).toBe('button');
   });
 });
+
+describe('ContentEditor block delete button', () => {
+  // It sat at opacity 0 until hovered, so a keyboard user focused an invisible button.
+  it('shows on keyboard focus and on touch screens', () => {
+    const html = renderToStaticMarkup(<ContentHarness />);
+    const remove = getByAccessibleName(html, 'Remove Text block');
+
+    for (const className of [
+      'group-focus-within:opacity-100',
+      'focus-visible:opacity-100',
+      '[@media(hover:none)]:opacity-100',
+    ]) {
+      expect(remove?.attrs.class).toContain(className);
+    }
+  });
+});

@@ -175,6 +175,45 @@ test.describe("template editor regressions", () => {
     await expect(taskButtons.first()).toHaveText('Second task');
   });
 
+  // Keyboard users: the section actions after the title were focusable at opacity 0, and
+  // sections and tasks could only be reordered by mouse drag.
+  test('shows outline actions on keyboard focus and reorders with the arrow keys', async ({ page }) => {
+    await loginAsSeedUser(page);
+    await page.goto('/dashboard/templates/new');
+
+    await page.getByRole('button', { name: /add task to section 1/i }).click();
+    await page.getByLabel('Task Title').fill('First task');
+    await page.getByRole('button', { name: /^Add task$/ }).click();
+    await page.getByLabel('Task Title').fill('Second task');
+    await page.getByRole('button', { name: 'Add section' }).click();
+    await page.getByLabel('Section Title').fill('Second section');
+
+    await page.getByRole('button', { name: 'Section 1', exact: true }).focus();
+    await page.keyboard.press('Tab');
+    const addTask = page.getByRole('button', { name: 'Add task to Section 1' });
+    await expect(addTask).toBeFocused();
+    await expect(addTask.locator('..')).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: 'Remove Section 1' })).toBeFocused();
+
+    const sectionHandle = page.getByRole('button', { name: 'Drag Second section' });
+    await sectionHandle.focus();
+    await page.keyboard.press('ArrowUp');
+    await expect(page.getByRole('button', { name: /^Drag / }).first()).toHaveAccessibleName('Drag Second section');
+    await expect(sectionHandle).toBeFocused();
+    await expect(page.getByRole('status').filter({ hasText: 'Moved Second section' })).toHaveText(
+      'Moved Second section to position 1 of 2',
+    );
+
+    // Moving down re-inserts the row, so focus has to be put back on its handle.
+    const taskHandle = page.getByRole('button', { name: 'Drag First task' });
+    await taskHandle.focus();
+    await page.keyboard.press('ArrowDown');
+    const taskButtons = page.getByRole('button', { name: /^(First|Second) task$/ });
+    await expect(taskButtons.first()).toHaveText('Second task');
+    await expect(taskHandle).toBeFocused();
+  });
+
   test('previews the current unsaved template draft', async ({ page }) => {
     await loginAsSeedUser(page);
     await page.goto('/dashboard/templates/new');

@@ -3,6 +3,7 @@ import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { Trash2 } from "lucide-react";
 
 import { ContentAddPanel } from "@/components/template-editor/ContentAddPanel";
+import { ROW_ACTIONS_REVEAL_CLASS } from "@/components/template-editor/reorder";
 import { EmbedContentEditor } from "@/components/template-editor/content-types/EmbedContentEditor";
 import { MediaContentEditor } from "@/components/template-editor/content-types/MediaContentEditor";
 import { SubItemsEditor } from "@/components/template-editor/content-types/SubItemsEditor";
@@ -16,6 +17,7 @@ import {
   type TemplateEditorContentType,
   type TemplateEditorFormValues,
 } from "@/lib/forms/templateEditorForm";
+import { cn } from "@/lib/utils";
 import { withMediaValue } from "@/lib/utils/mediaSource";
 
 type ActiveAddPanel = "empty" | "header" | null;
@@ -192,7 +194,10 @@ export function ContentEditor({
                 </span>
                 <Button
                   aria-label={`Remove ${contentTypeLabels[contents[contentIndex]?.type ?? "text"]} block`}
-                  className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
+                  className={cn(
+                    "h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive",
+                    ROW_ACTIONS_REVEAL_CLASS,
+                  )}
                   onClick={() => contentsFieldArray.remove(contentIndex)}
                   size="icon"
                   type="button"

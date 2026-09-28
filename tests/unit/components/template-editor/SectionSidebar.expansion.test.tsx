@@ -34,7 +34,8 @@ vi.mock('react', async (importOriginal) => {
     };
     return [harness.slots[index] as T, setState] as const;
   };
-  return { ...actual, useState, default: { ...actual, useState } };
+  const stubs = { useState, useId: () => 'outline' };
+  return { ...actual, ...stubs, default: { ...actual, ...stubs } };
 });
 
 vi.mock('react-hook-form', async (importOriginal) => {
