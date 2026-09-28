@@ -11,6 +11,12 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
 - **Styling:** Tailwind CSS 3 with `tailwindcss-animate` and
   `@tailwindcss/typography`. Theme tokens are CSS variables in `src/index.css`,
   mapped in `tailwind.config.ts`. Merge classes with `cn` from `src/lib/utils.ts`.
+- **Markdown text:** `MarkdownBlock` (`src/components/shared/MarkdownBlock.tsx`) renders
+  every Markdown block with `prose prose-sm`. `tailwind.config.ts` points the prose colors
+  at the theme tokens, so no `dark:prose-invert` is needed, and turns off the backticks
+  around inline code and the bullets on task lists. Single newlines stay line breaks
+  (`whitespace-pre-line`); `src/lib/utils/markdownWhitespace.ts` removes the newlines
+  between blocks that would otherwise show as blank lines.
 - **Themes:** light (default) and dark, stored under `serplists-theme` and applied
   as the `dark` class on `<html>` (`src/lib/theme.ts`).
 - **Icons:** `lucide-react`.

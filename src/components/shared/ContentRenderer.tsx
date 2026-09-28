@@ -1,11 +1,9 @@
 import React from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { Checkbox } from '@/components/ui/checkbox';
+import { MarkdownBlock } from './MarkdownBlock';
 import { VideoEmbed } from './VideoEmbed';
 import { File, Code, ListCheck } from 'lucide-react';
 import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
-import { normalizeMarkdownDisplayText } from '@/lib/utils/markdownDisplay';
 import { safeUrl } from '@/lib/utils/safeUrl';
 
 interface ContentRendererProps {
@@ -33,11 +31,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       {contents.map((content, contentIndex: number) => (
         <div key={contentIndex} className="space-y-3">
           {content.type === "text" && content.value && (
-            <div className="prose prose-sm max-w-none whitespace-pre-line">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeUrl}>
-                {normalizeMarkdownDisplayText(content.value)}
-              </ReactMarkdown>
-            </div>
+            <MarkdownBlock value={content.value} />
           )}
           
           {content.type === "image" && content.value && (

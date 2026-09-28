@@ -80,8 +80,9 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
 
 ## Rendering user content
 
-Render Markdown with `react-markdown` with raw HTML disabled, and pass links and
-media URLs through `safeUrl` (`src/lib/utils/safeUrl.ts`).
+Render Markdown with `MarkdownBlock` (`src/components/shared/MarkdownBlock.tsx`), the
+only module that imports `react-markdown`. It disables raw HTML and passes links through
+`safeUrl` (`src/lib/utils/safeUrl.ts`); pass other media URLs through `safeUrl` too.
 
 ## Verifying UI changes
 
