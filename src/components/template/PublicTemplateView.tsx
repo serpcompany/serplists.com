@@ -30,6 +30,10 @@ interface PublicTemplateViewProps {
   ownerSlug: string | null;
   ownerPath: string | null;
   isAuthenticated: boolean;
+  // Save adds a Template and Start Run adds a Run to the active context, so in an
+  // Organization they follow the viewer's Organization Role (always true in Personal).
+  canSaveTemplate: boolean;
+  canStartRun: boolean;
   isBillingLoading: boolean;
   isProUser: boolean;
   isCreatingRun: boolean;
@@ -45,11 +49,30 @@ interface PublicTemplateViewProps {
 
 const getInitials = (value: string) => value.match(/[A-Za-z0-9]/)?.[0]?.toUpperCase() ?? 'U';
 
+// The call to action says why an action is missing instead of leaving a silent gap.
+const getCallToActionText = (canSaveTemplate: boolean, canStartRun: boolean): string => {
+  if (canSaveTemplate && canStartRun) {
+    return 'Start a run to work through this checklist, or save it to your library for later.';
+  }
+
+  if (canStartRun) {
+    return 'Start a run to work through this checklist. Your role in this Organization cannot add Templates.';
+  }
+
+  if (canSaveTemplate) {
+    return 'Save it to your library for later. Your role in this Organization cannot start runs.';
+  }
+
+  return 'Your role in this Organization can view Templates only, so it cannot copy this one or start a run.';
+};
+
 export function PublicTemplateView({
   template,
   totalItems,
   ownerPath,
   isAuthenticated,
+  canSaveTemplate,
+  canStartRun,
   isBillingLoading,
   isProUser,
   isCreatingRun,
@@ -125,36 +148,40 @@ export function PublicTemplateView({
               <Share2 className="h-3.5 w-3.5" />
               Share
             </Button>
-            <Button
-              variant={isSaved ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => void handleSave()}
-              className="gap-2"
-              type="button"
-              disabled={isSaveDisabled}
-            >
-              {isSaved ? (
-                <>
-                  <Check className="h-3.5 w-3.5" />
-                  Saved
-                </>
-              ) : (
-                <>
-                  <Bookmark className="h-3.5 w-3.5" />
-                  {saveLabels.header}
-                </>
-              )}
-            </Button>
-            <Button
-              size="sm"
-              onClick={onStartRun}
-              className="gap-2"
-              type="button"
-              disabled={isCreatingRun || isWorkspaceLoading}
-            >
-              <Play className="h-3.5 w-3.5" />
-              {isCreatingRun ? 'Starting...' : 'Start Run'}
-            </Button>
+            {canSaveTemplate ? (
+              <Button
+                variant={isSaved ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => void handleSave()}
+                className="gap-2"
+                type="button"
+                disabled={isSaveDisabled}
+              >
+                {isSaved ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <Bookmark className="h-3.5 w-3.5" />
+                    {saveLabels.header}
+                  </>
+                )}
+              </Button>
+            ) : null}
+            {canStartRun ? (
+              <Button
+                size="sm"
+                onClick={onStartRun}
+                className="gap-2"
+                type="button"
+                disabled={isCreatingRun || isWorkspaceLoading}
+              >
+                <Play className="h-3.5 w-3.5" />
+                {isCreatingRun ? 'Starting...' : 'Start Run'}
+              </Button>
+            ) : null}
           </div>
         </div>
       </header>
@@ -282,28 +309,32 @@ export function PublicTemplateView({
             Ready to use this template?
           </h3>
           <p className="mb-4 text-sm text-muted-foreground">
-            Start a run to work through this checklist, or save it to your library for later.
+            {getCallToActionText(canSaveTemplate, canStartRun)}
           </p>
           <div className="flex flex-wrap justify-center gap-3">
-            <Button
-              variant="outline"
-              onClick={() => void handleSave()}
-              disabled={isSaveDisabled}
-              type="button"
-              className="gap-2"
-            >
-              <Copy className="h-4 w-4" />
-              {saveLabels.footer}
-            </Button>
-            <Button
-              onClick={onStartRun}
-              disabled={isCreatingRun || isWorkspaceLoading}
-              type="button"
-              className="gap-2"
-            >
-              <Play className="h-4 w-4" />
-              {isCreatingRun ? 'Starting...' : 'Start Run'}
-            </Button>
+            {canSaveTemplate ? (
+              <Button
+                variant="outline"
+                onClick={() => void handleSave()}
+                disabled={isSaveDisabled}
+                type="button"
+                className="gap-2"
+              >
+                <Copy className="h-4 w-4" />
+                {saveLabels.footer}
+              </Button>
+            ) : null}
+            {canStartRun ? (
+              <Button
+                onClick={onStartRun}
+                disabled={isCreatingRun || isWorkspaceLoading}
+                type="button"
+                className="gap-2"
+              >
+                <Play className="h-4 w-4" />
+                {isCreatingRun ? 'Starting...' : 'Start Run'}
+              </Button>
+            ) : null}
           </div>
         </div>
       </main>

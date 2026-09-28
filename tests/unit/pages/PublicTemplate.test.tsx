@@ -22,6 +22,7 @@ const {
   mockCreateBillingCheckout,
   mockNavigate,
   mockToastError,
+  mockToastSuccess,
   mockUseTemplateDetailModel,
   mockViewProps,
   workspaceState,
@@ -33,10 +34,13 @@ const {
   mockCreateBillingCheckout: vi.fn(),
   mockNavigate: vi.fn(),
   mockToastError: vi.fn(),
+  mockToastSuccess: vi.fn(),
   mockUseTemplateDetailModel: vi.fn(),
   mockViewProps: vi.fn(),
   workspaceState: {
     activeTeamId: undefined as string | undefined,
+    canEditTemplates: true,
+    canRunTemplates: true,
     isTeamWorkspace: false,
     isWorkspaceLoading: false,
   },
@@ -84,7 +88,7 @@ vi.mock('@/lib/api', () => ({
 }));
 
 vi.mock('sonner', () => ({
-  toast: { error: mockToastError, success: vi.fn() },
+  toast: { error: mockToastError, success: mockToastSuccess },
 }));
 
 vi.mock('react-router-dom', async (importOriginal) => ({
@@ -325,6 +329,8 @@ describe('PublicTemplate rendered route', () => {
 });
 
 type CapturedViewProps = {
+  canSaveTemplate: boolean;
+  canStartRun: boolean;
   isCreatingRun: boolean;
   isSaving: boolean;
   onSaveTemplate: () => unknown;
@@ -343,11 +349,14 @@ describe('PublicTemplate ownership context', () => {
     mockCreateBillingCheckout.mockResolvedValue({ url: 'https://checkout.stripe.com/c/pay/test' });
     mockNavigate.mockReset();
     mockToastError.mockReset();
+    mockToastSuccess.mockReset();
     mockUseTemplateDetailModel.mockReset();
     mockViewProps.mockReset();
     authState.isAuthenticated = true;
     authState.user = { id: 'user-1' };
     workspaceState.activeTeamId = 'team-1';
+    workspaceState.canEditTemplates = true;
+    workspaceState.canRunTemplates = true;
     workspaceState.isTeamWorkspace = true;
     workspaceState.isWorkspaceLoading = false;
   });
@@ -441,6 +450,60 @@ describe('PublicTemplate ownership context', () => {
     expect(organization).toContain('Copy to Library');
   });
 
+  it('says the copy went to the Organization, as the template detail page does', async () => {
+    const saveTemplate = vi.fn().mockResolvedValue({ kind: 'ok', templateId: 'clone-1' });
+    renderPublishedRoute(publishedClipyTemplate, { saveTemplate });
+
+    await lastViewProps().onSaveTemplate();
+
+    expect(mockToastSuccess).toHaveBeenCalledWith('Template copied to this Organization');
+  });
+
+  it('still says the copy was saved to the account in Personal', async () => {
+    workspaceState.activeTeamId = undefined;
+    workspaceState.isTeamWorkspace = false;
+    const saveTemplate = vi.fn().mockResolvedValue({ kind: 'ok', templateId: 'clone-1' });
+    renderPublishedRoute(publishedClipyTemplate, { saveTemplate });
+
+    await lastViewProps().onSaveTemplate();
+
+    expect(mockToastSuccess).toHaveBeenCalledWith('Template saved to your account');
+  });
+
+  it('never offers Save to an Organization role that cannot add Templates', async () => {
+    workspaceState.canEditTemplates = false;
+    const saveTemplate = vi.fn().mockResolvedValue({ kind: 'error', message: 'Forbidden' });
+    const { html } = renderPublishedRoute(publishedClipyTemplate, { saveTemplate });
+
+    expect(lastViewProps().canSaveTemplate).toBe(false);
+    expect(html).not.toMatch(/>(Save|Copy to Library)</);
+    await expect(lastViewProps().onSaveTemplate()).resolves.toBe(false);
+    expect(saveTemplate).not.toHaveBeenCalled();
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('keeps Start Run for a runner, who may start runs but not add Templates', () => {
+    workspaceState.canEditTemplates = false;
+    workspaceState.canRunTemplates = true;
+    const { html } = renderPublishedRoute(publishedClipyTemplate);
+
+    expect(lastViewProps().canStartRun).toBe(true);
+    expect(html).toContain('Start Run');
+  });
+
+  it('never offers Start Run to an Organization role that cannot start runs', async () => {
+    workspaceState.canEditTemplates = false;
+    workspaceState.canRunTemplates = false;
+    const startRun = vi.fn().mockResolvedValue({ kind: 'error', message: 'Forbidden' });
+    const { html } = renderPublishedRoute(publishedClipyTemplate, { startRun });
+
+    expect(lastViewProps().canStartRun).toBe(false);
+    expect(html).not.toContain('Start Run');
+    await lastViewProps().onStartRun();
+    expect(startRun).not.toHaveBeenCalled();
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
   it('ignores Start Run and Save until the active Organization is known', async () => {
     workspaceState.activeTeamId = undefined;
     workspaceState.isTeamWorkspace = false;
@@ -481,6 +544,8 @@ describe('PublicTemplate Start Run', () => {
     authState.isAuthenticated = true;
     authState.user = { id: 'user-1' };
     workspaceState.activeTeamId = undefined;
+    workspaceState.canEditTemplates = true;
+    workspaceState.canRunTemplates = true;
     workspaceState.isTeamWorkspace = false;
     workspaceState.isWorkspaceLoading = false;
   });
@@ -533,6 +598,8 @@ describe('PublicTemplate Save', () => {
     authState.isAuthenticated = true;
     authState.user = { id: 'user-1' };
     workspaceState.activeTeamId = undefined;
+    workspaceState.canEditTemplates = true;
+    workspaceState.canRunTemplates = true;
     workspaceState.isTeamWorkspace = false;
     workspaceState.isWorkspaceLoading = false;
   });

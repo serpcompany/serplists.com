@@ -37,8 +37,16 @@ const PublicTemplate = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
-  // Billing, Save and Start Run all use the active ownership context.
-  const { activeTeamId, isTeamWorkspace, isWorkspaceLoading } = useWorkspace();
+  // Billing, Save and Start Run all use the active ownership context. In an
+  // Organization, Save needs a role that adds Templates and Start Run one that starts
+  // runs (the API refuses the rest); both are always true in Personal.
+  const {
+    activeTeamId,
+    canEditTemplates,
+    canRunTemplates,
+    isTeamWorkspace,
+    isWorkspaceLoading,
+  } = useWorkspace();
   const { createRun, createTemplate } = useTemplates();
   const [isCreatingRun, setIsCreatingRun] = useState(false);
   // Set synchronously, so a second click before the re-render cannot create a second run.
@@ -90,7 +98,7 @@ const PublicTemplate = () => {
 
   const handleStartRun = async () => {
     // Until the stored Organization is restored, a click would land in Personal.
-    if (!template || isWorkspaceLoading || startRunInFlight.current) return;
+    if (!template || isWorkspaceLoading || !canRunTemplates || startRunInFlight.current) return;
 
     startRunInFlight.current = true;
     setIsCreatingRun(true);
@@ -127,7 +135,9 @@ const PublicTemplate = () => {
 
   // Resolves true only when the template was saved; every other outcome is false.
   const handleSaveTemplate = async (): Promise<boolean> => {
-    if (!template || isWorkspaceLoading || saveInFlight.current) return false;
+    if (!template || isWorkspaceLoading || !canEditTemplates || saveInFlight.current) {
+      return false;
+    }
 
     saveInFlight.current = true;
     setIsSaving(true);
@@ -149,7 +159,11 @@ const PublicTemplate = () => {
         return false;
       }
 
-      toast.success('Template saved to your account');
+      toast.success(
+        isTeamWorkspace
+          ? 'Template copied to this Organization'
+          : 'Template saved to your account',
+      );
       // Open the copy itself: it lives in the context it was saved to.
       navigate(
         result.templateId
@@ -253,6 +267,8 @@ const PublicTemplate = () => {
         ownerSlug={ownerSlug}
         ownerPath={ownerPath}
         isAuthenticated={isAuthenticated}
+        canSaveTemplate={canEditTemplates}
+        canStartRun={canRunTemplates}
         isBillingLoading={billingState.isLoading}
         isProUser={billingState.isPro}
         isCreatingRun={isCreatingRun}

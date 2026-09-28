@@ -17,6 +17,8 @@ const renderView = (overrides: Partial<ViewProps> = {}) =>
         ownerSlug="devinschumacher"
         ownerPath="/profile/devinschumacher"
         isAuthenticated
+        canSaveTemplate
+        canStartRun
         isBillingLoading={false}
         isProUser={false}
         isCreatingRun={false}
@@ -76,6 +78,8 @@ describe('PublicTemplateView', () => {
           ownerSlug="devinschumacher"
           ownerPath="/profile/devinschumacher"
           isAuthenticated={false}
+          canSaveTemplate
+          canStartRun
           isBillingLoading={false}
           isProUser={false}
           isCreatingRun={false}
@@ -129,6 +133,8 @@ describe('PublicTemplateView', () => {
           ownerSlug="devinschumacher"
           ownerPath="/profile/devinschumacher"
           isAuthenticated={false}
+          canSaveTemplate
+          canStartRun
           isBillingLoading={false}
           isProUser={false}
           isCreatingRun={false}
@@ -241,5 +247,23 @@ describe('PublicTemplateView', () => {
       const [button] = findButtons(html, label);
       expect(button).toMatch(/<button[^>]*disabled=""/);
     }
+  });
+
+  // In an Organization the viewer's role decides: the API refuses the rest with a 403.
+  it('offers no Save or Copy to Library to a role that cannot add Templates', () => {
+    const html = renderView({ canSaveTemplate: false, isTeamWorkspace: true });
+
+    expect(findButtons(html, /^(Save|Saved|Copy to Library|Saving\.\.\.|Copying\.\.\.)$/)).toHaveLength(0);
+    expect(findButtons(html, /^Start Run$/)).toHaveLength(2);
+    expect(html).toContain('Your role in this Organization cannot add Templates.');
+  });
+
+  it('offers no Start Run to a role that cannot start runs', () => {
+    const html = renderView({ canSaveTemplate: false, canStartRun: false, isTeamWorkspace: true });
+
+    expect(findButtons(html, /^(Start Run|Starting\.\.\.)$/)).toHaveLength(0);
+    expect(findButtons(html, /^(Save|Copy to Library)$/)).toHaveLength(0);
+    expect(html).toContain('Your role in this Organization can view Templates only');
+    expect(html).not.toContain('save it to your library');
   });
 });
