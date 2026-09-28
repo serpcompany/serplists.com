@@ -40,6 +40,7 @@ import { buildRunUpdatePayload, type RunUpdateOptions } from "./runUpdatePayload
 import { assertWorkspaceReady } from "./workspaceSelection";
 import {
   getTemplateListReadiness,
+  listLoadError,
   resolveTemplateListObservers,
   type TemplateListOptions,
   type TemplateListReadiness,
@@ -155,14 +156,14 @@ export const useTemplateLists = (options: TemplateListOptions = {}) => {
   const workspace = useQuery({ ...queries.workspace, enabled: workspaceEnabled });
   const runs = useQuery({ ...queries.runs, enabled: runsEnabled });
   // Use this page's queries for loading and errors: the provider's observers hear of fetches a
-  // tick late. A failed refetch keeps the last good list, so show an error only without data.
+  // tick late. An error is reported only for a list with no data (see listLoadError).
   const context = useTemplates();
   return {
     ...context,
     templatesLoading: templatesWaiting || catalog.isLoading || workspace.isLoading,
     runsLoading: runsWaiting || runs.isLoading,
-    templatesError: (workspaceEnabled ? workspace.error : null) ?? (catalogEnabled ? catalog.error : null),
-    runsError: runsEnabled ? runs.error : null,
+    templatesError: listLoadError(workspaceEnabled, workspace) ?? listLoadError(catalogEnabled, catalog),
+    runsError: listLoadError(runsEnabled, runs),
     refetchTemplates: () => Promise.all([workspaceEnabled && workspace.refetch(), catalogEnabled && catalog.refetch()]),
     refetchRuns: () => (runsEnabled ? runs.refetch() : Promise.resolve()),
   };

@@ -229,7 +229,7 @@ const Templates = () => {
         <div className="space-y-8">
           {model.loading ? (
             <div className="text-sm text-muted-foreground">Loading templates...</div>
-          ) : model.loadError && model.templates.length === 0 ? (
+          ) : model.loadError ? (
             <ListLoadErrorState error={model.loadError} listName="templates" onRetry={model.retryLoad} />
           ) : filteredTemplates.length === 0 ? (
             <DashboardEmptyState

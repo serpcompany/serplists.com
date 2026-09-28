@@ -38,3 +38,11 @@ export const resolveTemplateListObservers = (
     runsWaiting: !queries.ready,
   };
 };
+
+// A failed refetch keeps the last good list, so a list reports an error only while it has no
+// data. Decide on the list's own data, never on the length of a merged list: in Personal the
+// cached catalog can hold some of the user's templates while the Personal list itself failed.
+export const listLoadError = <TError>(
+  enabled: boolean,
+  query: { data: unknown; error: TError | null },
+): TError | null => (enabled && query.data === undefined ? query.error : null);

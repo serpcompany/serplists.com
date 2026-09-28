@@ -103,9 +103,11 @@ container must reset that element too.
 - Query functions reject when a request fails; never catch and return `[]`, which
   caches an empty list as fresh data and hides the error. Template and run list
   fetchers (`src/contexts/templateListFetchers.ts`) parse rows one at a time and skip a
-  malformed row. `useTemplateLists()` returns `templatesError` and `runsError`; a page
-  shows `ListLoadErrorState` (Retry, or Sign in on a `401`) instead of its empty state
-  when a list failed and has no data.
+  malformed row. `useTemplateLists()` returns `templatesError` and `runsError`, set only
+  while the failed list has no data (a failed refetch keeps the last good list). A page
+  shows `ListLoadErrorState` (Retry, or Sign in on a `401`) whenever one is set. Never
+  decide by the length of a merged list: in Personal the cached catalog can still hold
+  the user's public templates while the Personal list itself failed.
 
 ## Template editor forms
 
