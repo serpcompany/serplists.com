@@ -153,6 +153,13 @@ Common failures:
   `PLAYWRIGHT_API_URL` uses another port than `PLAYWRIGHT_API_PORT`, and seeds
   nothing for a remote API or with `PLAYWRIGHT_REUSE_EXISTING_SERVER=1`.
 - e2e specs share one database, so `test:e2e:full` runs with one worker (TD-11).
+- The local API runs behind wrangler's dev proxy, which now and then drops a request
+  that arrives while the page has several of its own in flight: a non-GET gets
+  `503 Your worker restarted mid-request` without CORS headers (the browser reports
+  `Failed to fetch`), and a GET is held unanswered. Signing in lands on Account
+  Settings, which loads several sections at once, so a spec that calls the API from
+  the page right after signing in first waits for the page's requests with
+  `trackApiRequests()` from `tests/e2e/support/api-requests.ts`.
 - Reuse stable test identities instead of registering a new account on every run.
   Production auth blocks known test-email domains; keep that coverage when auth
   routes change.

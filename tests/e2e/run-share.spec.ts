@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { trackApiRequests } from './support/api-requests';
+
 // Creating a run share link and copying it are separate steps: the link is always shown
 // in a dialog, and a refused clipboard write (Safari after an awaited request, denied
 // permission) is not reported as a failed share (src/lib/shareLink.ts).
@@ -8,10 +10,15 @@ const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:878
 const SHARE_URL = /\/share\/[0-9a-f-]{36}$/;
 
 async function loginAsAdmin(page: Page) {
+  const apiRequests = trackApiRequests(page, DEV_API_BASE_URL);
   await page.goto('/login');
   await page.getByRole('button', { name: 'Fill Admin' }).click();
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+  // Signing in lands on Account Settings: let its requests finish before the test calls
+  // the API, which the local dev proxy can drop in a burst (see support/api-requests.ts).
+  await expect(page.getByRole('heading', { name: 'Account Settings' })).toBeVisible();
+  await apiRequests.settled();
 }
 
 async function refuseClipboardWrites(page: Page) {
