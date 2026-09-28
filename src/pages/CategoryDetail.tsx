@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
@@ -143,7 +144,7 @@ const CategoryDetail = () => {
     surface: 'category-templates',
     userId: user?.id,
   });
-  const { allCategories, templates, loading } = useTemplateLibrary();
+  const { allCategories, templates, catalogLoading } = useTemplateLibrary();
 
   const slug = categorySlug ?? 'business';
   const categories = useMemo(
@@ -168,11 +169,12 @@ const CategoryDetail = () => {
   const Icon = category.icon;
   const categoryTemplateCount = categoryStats?.count ?? 0;
   // Registry categories render before any public Template uses them; keep those empty
-  // pages out of search results, but only once the catalog has loaded.
-  const isEmptyCategory = !loading && categoryTemplateCount === 0;
+  // pages out of search results, but only once the catalog API has answered. Bundled
+  // Templates arrive first, so a count of 0 means nothing until then.
+  const isEmptyCategory = !catalogLoading && categoryTemplateCount === 0;
   const emptyMessage = searchQuery.trim()
     ? 'No templates found matching your search.'
-    : loading
+    : catalogLoading
       ? 'Loading templates…'
       : 'No public templates in this category yet.';
 
@@ -196,14 +198,23 @@ const CategoryDetail = () => {
   }, [searchQuery, slug, sortBy, templates]);
 
   if (!isKnownCategory) {
-    return <NotFound />;
+    // A category only D1 Templates use is unknown until the catalog loads.
+    return catalogLoading ? (
+      <LoadingSpinner message="Loading templates…" />
+    ) : (
+      <NotFound />
+    );
   }
 
   return (
     <div className="bg-background">
       <SEOHead
         title={`${category.name} Templates`}
-        description={`${categoryTemplateCount} templates for ${category.name}. ${category.description}`}
+        description={
+          catalogLoading
+            ? `Templates for ${category.name}. ${category.description}`
+            : `${categoryTemplateCount} templates for ${category.name}. ${category.description}`
+        }
         keywords={[category.name, 'checklist templates', 'workflow templates']}
         image={SEO_IMAGE_URL}
         url={`${CATEGORY_BASE_URL}/${encodeURIComponent(slug)}`}
@@ -231,9 +242,11 @@ const CategoryDetail = () => {
               {category.name}
             </h1>
             <p className="mt-1 text-muted-foreground">{category.description}</p>
-            <Badge className="mt-3" variant="secondary">
-              {categoryTemplateCount} templates
-            </Badge>
+            {catalogLoading ? null : (
+              <Badge className="mt-3" variant="secondary">
+                {categoryTemplateCount} templates
+              </Badge>
+            )}
           </div>
         </div>
 

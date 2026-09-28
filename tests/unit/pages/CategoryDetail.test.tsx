@@ -61,7 +61,7 @@ describe('CategoryDetail empty categories', () => {
   });
 
   it('keeps a loaded category with no public Templates out of search results', () => {
-    mockUseTemplateLibrary.mockReturnValue({ templates: [campingTemplate], loading: false, allCategories: ['outdoor'] });
+    mockUseTemplateLibrary.mockReturnValue({ templates: [campingTemplate], loading: false, catalogLoading: false, allCategories: ['outdoor'] });
     const markup = renderCategory('engineering');
 
     expect(markup).toContain('Engineering &amp; Development');
@@ -71,16 +71,47 @@ describe('CategoryDetail empty categories', () => {
   });
 
   it('does not mark a category empty or noindex while the catalog is loading', () => {
-    mockUseTemplateLibrary.mockReturnValue({ templates: [], loading: true, allCategories: [] });
+    // Bundled Templates are always present, so the hook's `loading` is already false;
+    // only `catalogLoading` says the catalog API request is still in flight.
+    mockUseTemplateLibrary.mockReturnValue({
+      templates: [campingTemplate],
+      loading: false,
+      catalogLoading: true,
+      allCategories: ['outdoor'],
+    });
     const markup = renderCategory('engineering');
 
+    expect(markup).toContain('Engineering &amp; Development');
+    expect(markup).toContain('Loading templates…');
     expect(markup).not.toContain('No public templates in this category yet.');
     expect(markup).not.toContain('matching your search');
+    expect(markup).not.toContain('0 templates');
     expect(robots()).not.toBe('noindex, follow');
   });
 
+  it('waits for the catalog before treating an unregistered category as missing', () => {
+    mockUseTemplateLibrary.mockReturnValue({
+      templates: [campingTemplate],
+      loading: false,
+      catalogLoading: true,
+      allCategories: ['outdoor'],
+    });
+    const loadingMarkup = renderCategory('seo');
+
+    expect(loadingMarkup).toContain('Loading templates…');
+    expect(loadingMarkup).not.toContain('That page does not exist');
+
+    mockUseTemplateLibrary.mockReturnValue({
+      templates: [campingTemplate],
+      loading: false,
+      catalogLoading: false,
+      allCategories: ['outdoor'],
+    });
+    expect(renderCategory('seo')).toContain('That page does not exist');
+  });
+
   it('indexes a category that has public Templates', () => {
-    mockUseTemplateLibrary.mockReturnValue({ templates: [engineeringTemplate], loading: false, allCategories: ['Engineering'] });
+    mockUseTemplateLibrary.mockReturnValue({ templates: [engineeringTemplate], loading: false, catalogLoading: false, allCategories: ['Engineering'] });
     const markup = renderCategory('engineering');
 
     expect(markup).toContain('Code Review Checklist');
