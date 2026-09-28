@@ -136,16 +136,26 @@ export function execPnpm(args, options = {}) {
 }
 
 /**
- * Stop a child and everything it started. On Windows, killing the direct child
- * leaves its children (Vite, workerd) running and holding their ports, so the
- * whole tree is ended with taskkill.
+ * Stop a process by pid and everything it started. On Windows, killing only the
+ * process leaves its children (Vite, workerd) running and holding their ports,
+ * so the whole tree is ended with taskkill. Elsewhere the process gets `signal`
+ * (the dev launcher and Wrangler pass it on). Throws when the kill fails.
  */
+export function killPidTree(pid, signal = "SIGTERM", { platform = process.platform } = {}) {
+  if (platform === "win32") {
+    execFileSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+    return;
+  }
+  process.kill(pid, signal);
+}
+
+/** Stop a child and everything it started (see killPidTree); a no-op once it has exited. */
 export function killProcessTree(child, signal = "SIGTERM", { platform = process.platform } = {}) {
   if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
 
   if (platform === "win32") {
     try {
-      execFileSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+      killPidTree(child.pid, signal, { platform });
     } catch {
       // The process already exited.
     }

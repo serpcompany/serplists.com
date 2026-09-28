@@ -41,6 +41,13 @@ updates `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, `PORT`, and `VITE_API_URL` toget
 `pnpm run dev:stop` to stop: killing only the parent process leaves Vite and
 Wrangler running on Windows and holding the ports.
 
+The session records each launcher's pid with its process start time. A launch or
+`dev:stop` trusts a recorded pid only while that pid still runs
+`scripts/dev-auto.mjs` and started at the recorded time, because the OS reuses the
+pid of a launcher that was killed. So a stale session file never makes `dev:all`
+skip starting, and `dev:stop` never kills an unrelated process: it skips (and
+reports) such pids and always clears the file.
+
 Output is mirrored to `tmp/logs/dev-<mode>.log`. API logs are JSON lines with a
 `requestId` (also the `X-Request-Id` response header):
 

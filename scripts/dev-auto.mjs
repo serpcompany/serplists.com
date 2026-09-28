@@ -13,6 +13,7 @@ import {
   resolvePortPairForMode,
   storeDevSession,
 } from "./dev-auto-lib.mjs";
+import { currentProcessStartedAt } from "./lib/process-info.mjs";
 import { describeSpawnError, killProcessTree } from "./lib/run-tool.mjs";
 
 const DIST_INDEX_PATH = "dist/index.html";
@@ -114,9 +115,12 @@ async function main() {
     process.exit(0);
   }
 
+  // The start time lets dev:stop and later launches tell this process from an
+  // unrelated one that reuses its pid after it exits.
   storeDevSession({
     role: mode,
     pid: process.pid,
+    startedAt: currentProcessStartedAt(),
     config,
   });
 
@@ -146,6 +150,8 @@ async function main() {
 
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
+  // Closing the terminal window arrives as SIGHUP on Windows.
+  process.on("SIGHUP", () => shutdown("SIGHUP"));
 
   child.on("error", (error) => {
     cleanupSession();

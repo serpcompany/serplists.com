@@ -28,6 +28,7 @@ export function buildShellCommandLine(
 export function spawnTool(tool: ToolName, args: string[], options?: SpawnOptions): ChildProcess;
 export function execTool(tool: ToolName, args: string[], options?: ExecFileSyncOptions): string | Buffer;
 export function execPnpm(args: string[], options?: ExecFileSyncOptions): string | Buffer;
+export function killPidTree(pid: number, signal?: NodeJS.Signals, options?: { platform?: NodeJS.Platform }): void;
 export function killProcessTree(
   child: ChildProcess,
   signal?: NodeJS.Signals,

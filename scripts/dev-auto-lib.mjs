@@ -7,15 +7,25 @@ import {
 } from "node:fs";
 import path from "node:path";
 import net from "node:net";
-import { buildShellCommandLine, buildToolInvocation } from "./lib/run-tool.mjs";
+import { readProcessInfo } from "./lib/process-info.mjs";
+import { buildShellCommandLine, buildToolInvocation, killPidTree } from "./lib/run-tool.mjs";
 
 export const DEFAULT_FRONTEND_PORT = 8080;
 export const DEFAULT_API_PORT = 8788;
 export const PORT_SEARCH_LIMIT = 25;
 export const DEV_SESSION_PATH = "tmp/dev-session.json";
+// The recorded start time and the one the OS reports differ by clock granularity
+// (ps prints whole seconds) and Node's startup time.
+export const START_TIME_TOLERANCE_MS = 5_000;
+const DEV_LAUNCHER_SCRIPT = /dev-auto\.mjs/;
+const ROLES = ["all", "frontend", "api"];
 
 function normalizePid(value) {
   return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function normalizeStartedAt(value) {
+  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 function normalizeDevSession(value) {
@@ -27,12 +37,17 @@ function normalizeDevSession(value) {
     return null;
   }
 
+  // Each launcher pid is stored with its process start time, so a pid the OS has
+  // since given to another process is never mistaken for the launcher.
   return {
     frontendPort: value.frontendPort,
     apiPort: value.apiPort,
     frontendPid: normalizePid(value.frontendPid),
+    frontendStartedAt: normalizeStartedAt(value.frontendStartedAt),
     apiPid: normalizePid(value.apiPid),
+    apiStartedAt: normalizeStartedAt(value.apiStartedAt),
     allPid: normalizePid(value.allPid),
+    allStartedAt: normalizeStartedAt(value.allStartedAt),
   };
 }
 
@@ -187,17 +202,38 @@ export async function isPortAvailable(port) {
   });
 }
 
-export function isProcessAlive(pid) {
+// EPERM means the pid belongs to another user or an elevated process. The dev
+// launcher always runs as the current user, so that process is not ours.
+export function isProcessAlive(pid, kill = (target, signal) => process.kill(target, signal)) {
   if (!Number.isInteger(pid) || pid <= 0) {
     return false;
   }
 
   try {
-    process.kill(pid, 0);
+    kill(pid, 0);
     return true;
-  } catch (error) {
-    return error?.code === "EPERM";
+  } catch {
+    return false;
   }
+}
+
+/**
+ * True only when `pid` is still the dev launcher that recorded it: the process
+ * runs scripts/dev-auto.mjs and started at `startedAt`. A session written
+ * without a start time is never trusted. Never throws.
+ */
+export async function isOwnedDevProcess(pid, startedAt, { isAlive = isProcessAlive, readInfo = readProcessInfo } = {}) {
+  if (normalizePid(pid) == null || normalizeStartedAt(startedAt) == null || !isAlive(pid)) {
+    return false;
+  }
+
+  const info = await readInfo(pid);
+  return (
+    info != null &&
+    typeof info.commandLine === "string" &&
+    DEV_LAUNCHER_SCRIPT.test(info.commandLine) &&
+    Math.abs(info.startedAt - startedAt) <= START_TIME_TOLERANCE_MS
+  );
 }
 
 export async function findOpenPortPair({
@@ -261,12 +297,12 @@ export async function resolvePortPairForMode({
   preferredApiPort = DEFAULT_API_PORT,
   searchLimit = PORT_SEARCH_LIMIT,
   portAvailabilityChecker = isPortAvailable,
-  processLivenessChecker = isProcessAlive,
+  processLivenessChecker = isOwnedDevProcess,
 } = {}) {
   const session = normalizeDevSession(existingSession);
 
   if (session && mode === "all") {
-    const allActive = await processLivenessChecker(session.allPid);
+    const allActive = await processLivenessChecker(session.allPid, session.allStartedAt);
 
     if (allActive) {
       return {
@@ -280,9 +316,9 @@ export async function resolvePortPairForMode({
 
   if (session && mode !== "all") {
     const [apiActive, allActive, frontendActive] = await Promise.all([
-      processLivenessChecker(session.apiPid),
-      processLivenessChecker(session.allPid),
-      processLivenessChecker(session.frontendPid),
+      processLivenessChecker(session.apiPid, session.apiStartedAt),
+      processLivenessChecker(session.allPid, session.allStartedAt),
+      processLivenessChecker(session.frontendPid, session.frontendStartedAt),
     ]);
 
     const shouldReuse =
@@ -321,6 +357,7 @@ export function buildDevSession({
   existingSession = null,
   role,
   pid,
+  startedAt = null,
   config,
 }) {
   const previousSession = normalizeDevSession(existingSession);
@@ -331,27 +368,22 @@ export function buildDevSession({
   const nextSession = {
     frontendPort: config.frontendPort,
     apiPort: config.apiPort,
-    frontendPid: reusingExistingPair ? previousSession.frontendPid : null,
-    apiPid: reusingExistingPair ? previousSession.apiPid : null,
-    allPid: reusingExistingPair ? previousSession.allPid : null,
   };
 
-  if (role === "all") {
-    nextSession.frontendPid = null;
-    nextSession.apiPid = null;
-    nextSession.allPid = pid;
-    return nextSession;
+  // Companion launchers on the same pair keep their pid and start time; dev:all
+  // replaces the single-role launchers.
+  for (const sessionRole of ROLES) {
+    const keep = reusingExistingPair && (role !== "all" || sessionRole === "all");
+    nextSession[`${sessionRole}Pid`] = keep ? previousSession[`${sessionRole}Pid`] : null;
+    nextSession[`${sessionRole}StartedAt`] = keep ? previousSession[`${sessionRole}StartedAt`] : null;
   }
 
-  if (role === "frontend") {
-    nextSession.frontendPid = pid;
+  if (ROLES.includes(role)) {
+    nextSession[`${role}Pid`] = pid;
+    nextSession[`${role}StartedAt`] = normalizeStartedAt(startedAt);
   }
 
-  if (role === "api") {
-    nextSession.apiPid = pid;
-  }
-
-  return nextSession;
+  return normalizeDevSession(nextSession);
 }
 
 export function clearDevSessionRole({
@@ -366,22 +398,9 @@ export function clearDevSessionRole({
 
   const nextSession = { ...session };
 
-  if (role === "all") {
-    if (pid == null || nextSession.allPid === pid) {
-      nextSession.allPid = null;
-    }
-  }
-
-  if (role === "frontend") {
-    if (pid == null || nextSession.frontendPid === pid) {
-      nextSession.frontendPid = null;
-    }
-  }
-
-  if (role === "api") {
-    if (pid == null || nextSession.apiPid === pid) {
-      nextSession.apiPid = null;
-    }
+  if (ROLES.includes(role) && (pid == null || nextSession[`${role}Pid`] === pid)) {
+    nextSession[`${role}Pid`] = null;
+    nextSession[`${role}StartedAt`] = null;
   }
 
   if (
@@ -398,6 +417,7 @@ export function clearDevSessionRole({
 export function storeDevSession({
   role,
   pid,
+  startedAt,
   config,
   sessionPath = DEV_SESSION_PATH,
 }) {
@@ -405,6 +425,7 @@ export function storeDevSession({
     existingSession: readDevSession(sessionPath),
     role,
     pid,
+    startedAt,
     config,
   });
   writeDevSession(nextSession, sessionPath);
@@ -429,4 +450,41 @@ export function releaseDevSession({
 
   removeDevSession(sessionPath);
   return null;
+}
+
+/**
+ * Stops the launchers a session recorded (dev:stop). Only a pid that still
+ * belongs to its dev launcher is killed; a stale or reused pid is skipped. A
+ * failed kill does not stop the others, and the session file is always removed.
+ */
+export async function stopDevSession({
+  session,
+  isOwned = isOwnedDevProcess,
+  killTree = killPidTree,
+  removeSession = () => removeDevSession(),
+}) {
+  const result = { stopped: [], skipped: [], failed: [] };
+
+  try {
+    for (const role of ROLES) {
+      const pid = session[`${role}Pid`];
+      if (pid == null) continue;
+
+      if (!(await isOwned(pid, session[`${role}StartedAt`]))) {
+        result.skipped.push(pid);
+        continue;
+      }
+
+      try {
+        killTree(pid);
+        result.stopped.push(pid);
+      } catch (error) {
+        result.failed.push({ pid, message: error instanceof Error ? error.message : String(error) });
+      }
+    }
+  } finally {
+    removeSession();
+  }
+
+  return result;
 }
