@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { useTemplateValidation } from "@/hooks/useTemplateValidation";
+import { type AccessFailure, getAccessFailure } from "@/lib/api-errors";
 import { ChecklistSection, TemplateSavePayload, TemplateUpdateResult } from "@/types/checklist";
 import { ValidationError } from "@/hooks/useTemplateValidation";
 
@@ -11,6 +12,9 @@ export type SaveTemplateResult = {
   version?: number;
   // The slug the API stored, when a slug was sent (it may carry a suffix).
   slug?: string;
+  // Why the API refused the save, kept by kind (sign in, plan gate, billing down) so the
+  // editor can offer the way forward instead of only showing the message.
+  failure?: AccessFailure;
 };
 
 // Never read the version from the template lists: they refetch in the background and
@@ -118,15 +122,11 @@ export const persistTemplateSave = async (
     return { success: true, errors: [] };
   } catch (error) {
     console.error("Error saving template:", error);
+    const failure = getAccessFailure(error, "Failed to save template");
     return {
       success: false,
-      errors: [
-        {
-          type: "save",
-          message:
-            error instanceof Error ? error.message : "Failed to save template",
-        },
-      ],
+      errors: [{ type: "save", message: failure.message }],
+      failure,
     };
   }
 };

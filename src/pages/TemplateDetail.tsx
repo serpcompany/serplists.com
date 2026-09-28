@@ -184,6 +184,7 @@ const TemplateDetail = () => {
   );
   const {
     billingState,
+    duplicateTemplate,
     loading,
     notFound,
     saveTemplate,
@@ -310,43 +311,16 @@ const TemplateDetail = () => {
     toast.success('Public link copied');
   };
 
+  // Duplicate (a template the user can edit) and copy (someone else's) both create a
+  // template, so both can hit the plan's template limit and must offer the upgrade.
   const handleCloneTemplate = async () => {
     if (!displayTemplate) {
       return;
     }
 
-    if (canEditTemplate) {
-      setIsCloningTemplate(true);
-      try {
-        const duplicatedTemplate = await createTemplate({
-          categories: displayTemplate.categories ?? [],
-          description: displayTemplate.description,
-          isPublic: displayTemplate.isPublic,
-          rules: displayTemplate.rules,
-          sections: displayTemplate.sections,
-          seoDescription: displayTemplate.seoDescription,
-          seoTitle: displayTemplate.seoTitle,
-          seoUrl: '',
-          tags: displayTemplate.tags ?? [],
-          title: `${displayTemplate.title} Copy`,
-          type: displayTemplate.type ?? 'checklist',
-        });
-
-        navigate(buildConsoleTemplatePath(duplicatedTemplate.id));
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : 'Failed to duplicate template',
-        );
-      } finally {
-        setIsCloningTemplate(false);
-      }
-
-      return;
-    }
-
     setIsCloningTemplate(true);
     try {
-      const result = await saveTemplate();
+      const result = canEditTemplate ? await duplicateTemplate() : await saveTemplate();
 
       if (result.kind === 'login_required') {
         navigateToLoginWithReturnPath(navigate, location);
@@ -363,13 +337,14 @@ const TemplateDetail = () => {
         return;
       }
 
-      toast.success('Template copied to your account');
-      if (result.templateId) {
-        navigate(buildConsoleTemplatePath(result.templateId));
-        return;
+      if (!canEditTemplate) {
+        toast.success('Template copied to your account');
       }
-
-      navigate(buildConsoleTemplatesPath());
+      navigate(
+        result.templateId
+          ? buildConsoleTemplatePath(result.templateId)
+          : buildConsoleTemplatesPath(),
+      );
     } finally {
       setIsCloningTemplate(false);
     }
@@ -551,6 +526,7 @@ const TemplateDetail = () => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
+              aria-label="Template actions"
               variant="ghost"
               size="icon"
               className="h-8 w-8 text-muted-foreground hover:text-foreground"

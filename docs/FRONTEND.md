@@ -43,7 +43,8 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   `src/lib/navigation/leaveGuard.ts`; the page registers with `registerLeaveGuard`.
 - `beforeunload` covers reloads, tab closes, and external links.
 - A navigation the page starts after it has nothing left to lose (a create that
-  saved) is allowed without asking.
+  saved, or a checkout or sign-in redirect after the draft was kept) is allowed
+  without asking.
 
 ## Data and state
 
@@ -68,7 +69,11 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   you are not editing (for example, `rules`) on update.
 - Surface API failures by their structured code, not message text: `401` means sign
   in (keep the return path), `403 upgrade_required` and `403 limit_reached` mean a
-  plan gate, `503 billing_unavailable` means checkout is down.
+  plan gate, `503 billing_unavailable` means checkout is down. Keep the kind with
+  `getAccessFailure` and offer the way forward: Personal checkout
+  (`startBillingCheckout`) in Personal, the paid-Organization message in an
+  Organization (a Personal checkout cannot lift its limits). A mutation that callers
+  handle this way must not also toast its error.
 - `authClient` (Better Auth) calls resolve with `{ data, error }` on HTTP failures
   instead of throwing. Check `result.error` before reporting success or doing any
   follow-up that assumes the change was saved, such as deleting the old avatar file.
@@ -96,6 +101,14 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   form's baseline and keeps any field edited while the save was in flight, so the
   form stays dirty and the unsaved-changes guards still warn. A create leaves the
   page when it finishes, so the editor is locked (a disabled `fieldset`) until then.
+- Plan limits (`useTemplateEditorAccess`): the new-template editor warns up front
+  when billing status shows the context's template limit is reached, and a save
+  refused as a plan gate or for an ended session shows a notice with its action
+  (Upgrade to Pro, or Sign in) instead of plain error text. The new template's draft
+  is kept in `sessionStorage` (`templateDraftStore.ts`, keyed by user and context)
+  before any checkout or sign-in redirect, offered back on the new-template editor
+  and from the billing section, and cleared only when a save succeeds or the user
+  discards it.
 - Adding a content type or editor tab: [template content types](design-docs/template-content-types.md).
 
 ## Rendering user content

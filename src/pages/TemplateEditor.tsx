@@ -32,6 +32,8 @@ import {
 } from "@/features/template-editor/postSaveFormState";
 import { shouldBlockTemplateEditorNavigation } from "@/features/template-editor/navigationGuards";
 import { useTemplateEditorLeaveGuard } from "@/features/template-editor/useTemplateEditorLeaveGuard";
+import { useTemplateEditorAccess } from "@/features/template-editor/useTemplateEditorAccess";
+import { TemplateEditorAccessNotices } from "@/components/template-editor/TemplateEditorAccessNotices";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const shouldNavigateToTemplatesAfterSave = (params: {
@@ -77,14 +79,22 @@ const TemplateEditor = () => {
     templateForm.reset(model.initialValues);
   }, [model.initialValues, templateForm]);
 
-  const { allowLeave } = useTemplateEditorLeaveGuard(shouldBlockNavigation);
+  const { allowLeave, guardLeave } = useTemplateEditorLeaveGuard(shouldBlockNavigation);
+  // Plan limits and an ended session: the upgrade or sign-in action, and the kept draft.
+  const access = useTemplateEditorAccess({
+    isCreate: !id,
+    getValues: templateForm.getValues,
+    allowLeave,
+    guardLeave,
+  });
 
   const handleSave = async () => {
     // model.save validates first and returns errors that name the field; the alert
     // below shows them. The copy is what gets sent; the form stays editable meanwhile.
     const submitted = cloneTemplateEditorFormValues(templateForm.getValues());
     const result = await model.save(submitted);
-    setErrors(result.errors);
+    // A plan gate or an ended session shows as a notice with its action, not as an error.
+    setErrors(access.handleSaveResult(result) ? [] : result.errors);
     if (!result.success || !result.savedValues) {
       return;
     }
@@ -156,6 +166,23 @@ const TemplateEditor = () => {
           </Alert>
         </div>
       )}
+
+      <TemplateEditorAccessNotices
+        draft={access.draft}
+        isStartingCheckout={access.isStartingCheckout}
+        notice={access.notice}
+        onDiscardDraft={access.discardDraft}
+        onRestoreDraft={() => {
+          const draftValues = access.restoreDraft();
+          if (draftValues) {
+            // Against the blank defaults, so the restored draft counts as unsaved.
+            templateForm.reset(draftValues, { keepDefaultValues: true });
+            handleSelectTemplateInfo();
+          }
+        }}
+        onSignIn={access.signIn}
+        onUpgrade={() => void access.startUpgrade()}
+      />
 
       {/* A create leaves the page when it finishes, so edits made meanwhile could not
           be kept: lock the editor until then. An update keeps them (see handleSave). */}

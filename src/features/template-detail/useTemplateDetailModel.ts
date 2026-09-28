@@ -302,6 +302,35 @@ export const saveTemplateToAccount = async (params: {
   }
 };
 
+// Duplicate on a template the user can edit. The copy counts against the active
+// context's template limit, so a plan gate comes back as upgrade_required.
+export const duplicateOwnedTemplate = async (params: {
+  createTemplate: CreateTemplate;
+  template: ChecklistTemplate;
+}): Promise<TemplateDetailActionResult> => {
+  const { template } = params;
+
+  try {
+    const duplicatedTemplate = await params.createTemplate({
+      categories: template.categories ?? [],
+      description: template.description,
+      isPublic: template.isPublic,
+      rules: template.rules,
+      sections: template.sections,
+      seoDescription: template.seoDescription,
+      seoTitle: template.seoTitle,
+      seoUrl: '',
+      tags: template.tags ?? [],
+      title: `${template.title} Copy`,
+      type: template.type ?? 'checklist',
+    });
+
+    return { kind: 'ok', templateId: duplicatedTemplate.id };
+  } catch (error) {
+    return mapActionFailure(error, 'Failed to duplicate template');
+  }
+};
+
 export const useTemplateDetailModel = (
   options: UseTemplateDetailModelOptions,
 ) => {
@@ -422,6 +451,11 @@ export const useTemplateDetailModel = (
       userId: options.userId,
     });
 
+  const duplicateTemplate = async (): Promise<TemplateDetailActionResult> =>
+    template
+      ? duplicateOwnedTemplate({ createTemplate: options.createTemplate, template })
+      : { kind: 'error', message: 'Template not found.' };
+
   const shareTemplate = async (): Promise<TemplateDetailActionResult> => {
     if (!template) {
       return { kind: 'error', message: 'Template not found.' };
@@ -491,6 +525,7 @@ export const useTemplateDetailModel = (
 
   return {
     billingState,
+    duplicateTemplate,
     history: {
       data: history.data ?? null,
       isError: history.isError,

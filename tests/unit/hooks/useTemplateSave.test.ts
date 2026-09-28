@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { persistTemplateSave } from "@/hooks/useTemplateSave";
+import { createApiError } from "@/lib/api-errors";
 import type { ChecklistSection, TemplateSavePayload } from "@/types/checklist";
 
 const baseSections: ChecklistSection[] = [
@@ -164,6 +165,7 @@ describe("persistTemplateSave", () => {
     expect(result).toEqual({
       success: false,
       errors: [{ type: "save", message: "create failed" }],
+      failure: { kind: "error", message: "create failed" },
     });
   });
 
@@ -180,6 +182,36 @@ describe("persistTemplateSave", () => {
     expect(result).toEqual({
       success: false,
       errors: [{ type: "save", message: "update failed" }],
+      failure: { kind: "error", message: "update failed" },
     });
+  });
+
+  // The editor offers an upgrade only if it can tell a plan gate from any other error.
+  it("keeps a plan-limit failure as upgrade_required", async () => {
+    const message = "Template limit reached. Upgrade to create more templates.";
+    const dependencies = buildDependencies({
+      createTemplate: vi
+        .fn()
+        .mockRejectedValue(createApiError(403, { error: message, code: "limit_reached" })),
+    });
+
+    const result = await persistTemplateSave(dependencies, buildInput());
+
+    expect(result.success).toBe(false);
+    expect(result.failure).toEqual({ kind: "upgrade_required", message });
+    expect(result.errors).toEqual([{ type: "save", message }]);
+  });
+
+  it("keeps an expired session as auth_required", async () => {
+    const dependencies = buildDependencies({
+      updateTemplate: vi.fn().mockRejectedValue(createApiError(401, { error: "Unauthorized" })),
+    });
+
+    const result = await persistTemplateSave(
+      dependencies,
+      buildInput({ id: "template-1", expectedVersion: 2 }),
+    );
+
+    expect(result.failure?.kind).toBe("auth_required");
   });
 });

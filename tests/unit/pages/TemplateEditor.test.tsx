@@ -1,13 +1,26 @@
 import React from 'react';
 
 import { renderDataRoutes } from '../../fixtures/renderDataRoutes';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TemplateEditor from '@/pages/TemplateEditor';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 
 const mockUseTemplateEditorModel = vi.fn();
 const mockUseTemplateEditorState = vi.fn();
+const mockUseTemplateEditorAccess = vi.fn();
+
+const buildAccess = (overrides: Record<string, unknown> = {}) => ({
+  draft: null,
+  discardDraft: vi.fn(),
+  handleSaveResult: vi.fn(() => false),
+  isStartingCheckout: false,
+  notice: null,
+  restoreDraft: vi.fn(),
+  signIn: vi.fn(),
+  startUpgrade: vi.fn(),
+  ...overrides,
+});
 
 vi.mock('@/features/template-editor/useTemplateEditorModel', () => ({
   useTemplateEditorModel: (...args: unknown[]) =>
@@ -18,6 +31,15 @@ vi.mock('@/hooks/useTemplateEditorState', () => ({
   useTemplateEditorState: (...args: unknown[]) =>
     mockUseTemplateEditorState(...args),
 }));
+
+vi.mock('@/features/template-editor/useTemplateEditorAccess', () => ({
+  useTemplateEditorAccess: (...args: unknown[]) =>
+    mockUseTemplateEditorAccess(...args),
+}));
+
+beforeEach(() => {
+  mockUseTemplateEditorAccess.mockReturnValue(buildAccess());
+});
 
 // The editor's leave guard (useBlocker) needs a data router, as in the app.
 const renderEditorAt = (location: string, path: string): Promise<string> =>
@@ -145,5 +167,40 @@ describe('TemplateEditor page', () => {
     );
 
     expect(html).not.toMatch(/<fieldset[^>]*disabled=""/);
+  });
+
+  // Free Personal allows one template: the editor must offer the upgrade, not only text.
+  it('offers Upgrade to Pro when the plan cannot save the template', async () => {
+    mockUseTemplateEditorAccess.mockReturnValue(
+      buildAccess({
+        notice: {
+          action: 'checkout',
+          message: 'Template limit reached. Upgrade to create more templates.',
+          title: 'Upgrade to Pro to save this template',
+        },
+      }),
+    );
+
+    const html = await renderSavingEditor('/dashboard/templates/new', '/dashboard/templates/new');
+
+    expect(html).toContain('Template limit reached. Upgrade to create more templates.');
+    expect(html).toMatch(/<button[^>]*>Upgrade to Pro<\/button>/);
+  });
+
+  it('offers to restore a draft kept while the user upgraded', async () => {
+    mockUseTemplateEditorAccess.mockReturnValue(
+      buildAccess({
+        draft: {
+          savedAt: '2026-09-28T10:00:00.000Z',
+          values: buildTemplateEditorFormValues({ title: 'Launch checklist' }),
+        },
+      }),
+    );
+
+    const html = await renderSavingEditor('/dashboard/templates/new', '/dashboard/templates/new');
+
+    expect(html).toContain('Launch checklist');
+    expect(html).toMatch(/<button[^>]*>Restore draft<\/button>/);
+    expect(html).toMatch(/<button[^>]*>Discard<\/button>/);
   });
 });

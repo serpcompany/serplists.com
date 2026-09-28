@@ -322,9 +322,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       queryClient.invalidateQueries({ queryKey: ['templates'] });
       toast.success("Template created successfully");
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    }
+    // No onError toast: every caller shows the failure itself, by its kind (a plan gate
+    // offers the upgrade), so a toast here would repeat it.
   });
 
   const updateTemplateMutation = useMutation({
@@ -352,9 +351,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await queryClient.invalidateQueries({ queryKey: ['runs'] });
       toast.success("Template updated. Checklist changes were reconciled into active private runs.");
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    }
+    // No onError toast: the editor and the visibility toggle show the failure themselves.
   });
 
   const deleteTemplateMutation = useMutation({

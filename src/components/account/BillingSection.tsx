@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { getBillingPlanLabel, getBillingStatusQueryKey, PRO_MONTHLY_PRICE_LABEL } from "@/lib/billing";
+import { buildConsoleTemplateCreatePath } from "@/lib/routes";
+import { readTemplateDraft } from "@/features/template-editor/templateDraftStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -23,6 +25,13 @@ export function BillingSection() {
     retry: false,
   });
   const { refetch: refetchBilling } = billing;
+  // Checkout returns here, not to the editor, so point back to a template draft the
+  // editor kept when the plan limit stopped it.
+  const userId = user?.id;
+  const hasTemplateDraft = useMemo(
+    () => Boolean(userId && readTemplateDraft({ userId, teamId: activeTeamId })),
+    [userId, activeTeamId],
+  );
 
   const plan = billing.data?.plan;
   const planLabel = getBillingPlanLabel(plan);
@@ -133,6 +142,18 @@ export function BillingSection() {
         <div className="text-sm text-muted-foreground">
           Current {isTeamWorkspace ? "Organization" : "Personal"} plan: <span className="font-medium text-foreground">{planLabel ?? "Checking..."}</span>
         </div>
+
+        {hasTemplateDraft ? (
+          <div className="text-sm text-muted-foreground">
+            A template you could not save is kept on this tab.{" "}
+            <Link
+              className="font-medium text-primary underline-offset-4 hover:underline"
+              to={buildConsoleTemplateCreatePath()}
+            >
+              Resume template draft
+            </Link>
+          </div>
+        ) : null}
 
         {billing.isError ? (
           <div className="text-sm text-muted-foreground">Billing status unavailable.</div>

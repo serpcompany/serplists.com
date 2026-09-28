@@ -67,7 +67,7 @@ export const useTemplateEditorLeaveGuard = (shouldBlock: boolean) => {
     }
 
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      applyTemplateBeforeUnloadWarning(event, shouldBlock);
+      applyTemplateBeforeUnloadWarning(event, shouldBlock && !leaveAllowedRef.current);
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -76,9 +76,14 @@ export const useTemplateEditorLeaveGuard = (shouldBlock: boolean) => {
     };
   }, [shouldBlock]);
 
+  // allowLeave also covers a full-page redirect (checkout) once the edits are kept
+  // elsewhere; guardLeave undoes it when that redirect did not happen.
   const allowLeave = useCallback(() => {
     leaveAllowedRef.current = true;
   }, []);
+  const guardLeave = useCallback(() => {
+    leaveAllowedRef.current = false;
+  }, []);
 
-  return { allowLeave };
+  return { allowLeave, guardLeave };
 };
