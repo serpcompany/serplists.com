@@ -277,9 +277,11 @@ describe('theme changes from another tab', () => {
         const path = join(dir, name);
         return statSync(path).isDirectory() ? listFiles(path) : [path];
       });
+    // sessionSync.ts listens only for its own session key, never the theme's.
+    const allowed = new Set(['src/lib/theme.ts', 'src/contexts/sessionSync.ts']);
     const offenders = listFiles('src')
       .filter((path) => /\.(ts|tsx)$/.test(path))
-      .filter((path) => path.split('\\').join('/') !== 'src/lib/theme.ts')
+      .filter((path) => !allowed.has(path.split('\\').join('/')))
       .filter((path) => /addEventListener\(\s*['"]storage['"]/.test(readFileSync(path, 'utf8')));
 
     expect(offenders).toEqual([]);

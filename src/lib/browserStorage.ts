@@ -1,4 +1,5 @@
-// The only module that touches window.localStorage (ESLint enforces this). When a browser
+// The only module that touches window.localStorage and window.sessionStorage (ESLint
+// enforces this). When a browser
 // blocks site data, reading the property itself throws a SecurityError, and setItem can
 // throw QuotaExceededError, so every access is guarded. Values that cannot be persisted
 // are kept in memory, so a choice such as the theme still holds for the session.
@@ -12,6 +13,17 @@ export const getLocalStorage = (): Storage | undefined => {
   if (typeof window === 'undefined') return undefined;
   try {
     return window.localStorage ?? undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+// Session storage fails the same way. Undefined when it cannot be read; its methods can
+// still throw (a full quota), so callers guard them.
+export const getSessionStorage = (): Storage | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  try {
+    return window.sessionStorage ?? undefined;
   } catch {
     return undefined;
   }

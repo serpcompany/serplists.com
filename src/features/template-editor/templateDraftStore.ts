@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { getSessionStorage } from "@/lib/browserStorage";
 import { TEMPLATE_EDITOR_TYPES } from "@/lib/forms/templateEditorDetailsForm";
 import {
   templateEditorFormSchema,
@@ -41,13 +42,7 @@ const storedDraftSchema = z.object({
 export const getTemplateDraftKey = ({ userId, teamId }: TemplateDraftOwner): string =>
   `${DRAFT_KEY_PREFIX}:${userId}:${teamId || "personal"}`;
 
-export const getSessionDraftStorage = (): TemplateDraftStorage | null => {
-  try {
-    return typeof window === "undefined" ? null : window.sessionStorage;
-  } catch {
-    return null;
-  }
-};
+export const getSessionDraftStorage = (): TemplateDraftStorage | null => getSessionStorage() ?? null;
 
 // True when the draft was stored.
 export const saveTemplateDraft = (

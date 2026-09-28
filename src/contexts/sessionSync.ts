@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { getLocalStorage } from '@/lib/browserStorage';
 import { onUnauthorizedResponse } from '@/lib/unauthorizedResponses';
 
 import { applySessionCheck, type SessionCheck, type SessionState } from './authSession';
@@ -228,7 +229,7 @@ export function browserSessionSyncEnvironment(): SessionSyncEnvironment {
     },
     writeStorage: (key, value) => {
       try {
-        window.localStorage.setItem(key, value);
+        getLocalStorage()?.setItem(key, value);
       } catch {
         // Storage is unavailable: other tabs fall back to their visibility re-check.
       }

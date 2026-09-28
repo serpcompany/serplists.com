@@ -143,11 +143,11 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   404 or "no templates" message only after the catalog loaded. A failed catalog request
   stays an error; it is never cached as an empty catalog.
 - Browser storage goes through `src/lib/browserStorage.ts` (`safeLocalStorage`,
-  `getLocalStorage()`). When a browser blocks site data, even reading
-  `window.localStorage` throws, and one unguarded read in a component mounted on every
-  route replaces the whole app with the error screen. The helper never throws and keeps
-  values it cannot persist in memory for the session. ESLint rejects direct access
-  anywhere else in `src/`.
+  `getLocalStorage()`, and `getSessionStorage()` for session storage). When a browser
+  blocks site data, even reading `window.localStorage` throws, and one unguarded read in
+  a component mounted on every route replaces the whole app with the error screen. The
+  helper never throws and keeps values it cannot persist in memory for the session.
+  ESLint rejects direct access anywhere else in `src/`.
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.
