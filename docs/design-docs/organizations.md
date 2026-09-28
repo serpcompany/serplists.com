@@ -101,6 +101,8 @@ The API response already uses a `delivery` object so email can be added later wi
 
 Organization changes write to `audit_events` with actor, subject, resource, action, before/after/diff JSON, request id, hashed IP, user agent, and timestamp.
 
+Every action string is listed in `src/lib/schemas/auditActions.ts`, shared by the API and the app. `buildAuditEventValues` accepts only those, and the Activity list on `/dashboard/settings` has a label for each; an action it does not know (for example from an older deploy) is shown as words, never as a dotted id. Stored action strings are never renamed.
+
 Template changes write both:
 
 - `template_versions` for snapshot history.

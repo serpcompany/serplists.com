@@ -66,13 +66,13 @@ vi.mock('sonner', () => ({
   },
 }));
 
-function renderSectionWithMembers(members: unknown[], invites: unknown[] = []) {
+function renderSectionWithMembers(members: unknown[], invites: unknown[] = [], activity: unknown[] = []) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   queryClient.setQueryData(['team-members', 'team-1'], members);
   queryClient.setQueryData(['team-invites', 'team-1'], invites);
-  queryClient.setQueryData(['team-activity', 'team-1'], []);
+  queryClient.setQueryData(['team-activity', 'team-1'], activity);
 
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
@@ -191,6 +191,25 @@ describe('TeamSettingsSection', () => {
 
     expect(html).toContain('aria-label="New link for newhire@example.com"');
     expect(html).toContain('aria-label="Revoke invite for newhire@example.com"');
+  });
+
+  it('labels a revalidated Organization Run in Activity instead of showing its raw id', () => {
+    const html = renderSectionWithMembers(
+      [],
+      [],
+      [
+        {
+          id: 'event-1',
+          action: 'checklist_run.revalidated',
+          resource: { type: 'checklist_run', id: 'run-1' },
+          createdAt: '2026-09-28T10:00:00.000Z',
+          actor: { name: 'Admin User' },
+        },
+      ],
+    );
+
+    expect(html).toContain('Run revalidated');
+    expect(html).not.toContain('checklist_run.revalidated');
   });
 
   it('renders team members as read-only for roles that cannot manage the team', () => {

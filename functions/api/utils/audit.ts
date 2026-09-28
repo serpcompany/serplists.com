@@ -1,3 +1,4 @@
+import type { AuditAction } from "../../../src/lib/schemas/auditActions";
 import { schema } from "../db";
 import { sha256Hex } from "./crypto";
 
@@ -17,7 +18,7 @@ export type AuditEventInput = {
   actorUserId: string | null;
   subject: AuditSubject;
   resource: AuditResource;
-  action: string;
+  action: AuditAction;
   before?: JsonValue;
   after?: JsonValue;
   diff?: JsonValue;
