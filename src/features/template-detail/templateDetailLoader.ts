@@ -1,4 +1,5 @@
 import { findPublicTemplateByIdentifier } from '@/lib/repoTemplateCatalog';
+import type { TemplateUpdateResult } from '@/lib/templateUpdateResult';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 // What a template detail page asks for. The cache fields hold the page's current list data
@@ -52,6 +53,20 @@ export const resolveTemplateDetailRefresh = (
   current && cached && cached.id === current.id && (cached.version ?? 1) > (current.version ?? 1)
     ? cached
     : current;
+
+// The shown template after a save the page made itself (the visibility switch). A save only
+// marks the lists stale, so the page takes the version and slug from the PUT answer; the
+// next save then sends a current expected_version.
+export const applyTemplateSaveResult = (
+  template: ChecklistTemplate,
+  change: Partial<ChecklistTemplate>,
+  saved: TemplateUpdateResult,
+): ChecklistTemplate => ({
+  ...template,
+  ...change,
+  version: saved.version,
+  slug: saved.slug ?? template.slug,
+});
 
 // Loads the template a detail page shows and keeps it current. Call sync() after every render
 // with the latest source. It loads only when the page shows a different template or the viewer

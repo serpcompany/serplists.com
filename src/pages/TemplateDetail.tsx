@@ -187,6 +187,7 @@ const TemplateDetail = () => {
     billingState,
     loading,
     notFound,
+    recordTemplateSave,
     saveTemplate,
     shareTemplate,
     startRun,
@@ -389,7 +390,8 @@ const TemplateDetail = () => {
 
     setIsUpdatingVisibility(true);
     try {
-      await updateTemplate(buildTemplateSavePayload(displayTemplate, nextIsPublic));
+      const saved = await updateTemplate(buildTemplateSavePayload(displayTemplate, nextIsPublic));
+      recordTemplateSave({ isPublic: nextIsPublic }, saved);
       setVisibilityOverride(nextIsPublic);
       toast.success(
         nextIsPublic ? 'Template is now public' : 'Template is now private',

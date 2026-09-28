@@ -33,7 +33,7 @@ import {
   mergePublicTemplateCollections,
   repoTemplates,
 } from "@/lib/repoTemplateCatalog";
-import { refreshAfterRunDelete, refreshAfterTemplateDelete, refreshRunLists } from "./templateListCache";
+import { refreshAfterRunDelete, refreshAfterTemplateDelete, refreshAfterTemplateSave, refreshRunLists } from "./templateListCache";
 import { createTemplateListFetcher, fetchRunList, shouldRetryListFetch, type TemplateListRequest } from "./templateListFetchers";
 import { buildRunUpdatePayload, type RunUpdateOptions } from "./runUpdatePayload";
 import { assertWorkspaceReady } from "./workspaceSelection";
@@ -256,7 +256,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     mutationFn: async (template: TemplateSavePayload) => {
       if (!user) throw new Error("User must be logged in to update a template");
 
-      const result = await api.updateTemplate(template.id, {
+      // Resolves with the stored version, which the caller keeps for its next save.
+      return api.updateTemplate(template.id, {
         title: template.title,
         description: template.description,
         type: template.type,
@@ -270,14 +271,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         slug: template.seoUrl?.trim() || template.slug?.trim() || undefined,
         expected_version: template.version,
       });
-      
-      if (!result) throw new Error('Failed to update template');
-      return undefined;
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['templates'] });
-      await queryClient.invalidateQueries({ queryKey: ['runs'] });
-    }
+    onSuccess: () => refreshAfterTemplateSave(queryClient),
   });
 
   const deleteTemplateMutation = useMutation({

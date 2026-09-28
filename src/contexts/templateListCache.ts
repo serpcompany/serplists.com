@@ -46,6 +46,15 @@ export const refreshAfterTemplateDelete = (queryClient: QueryClient, templateId:
   void queryClient.invalidateQueries({ queryKey: queryKindPrefix('archivedTemplates') });
 };
 
+// The PUT answer carries the version the next save needs, so a template save never waits for
+// (or causes) a reload of the whole list: the Template lists are only marked stale and load
+// when a page that shows them mounts. Run lists refresh because in-progress Runs of the
+// template were reconciled.
+export const refreshAfterTemplateSave = (queryClient: QueryClient): void => {
+  void queryClient.invalidateQueries({ queryKey: ['templates'], refetchType: 'none' });
+  void refreshRunLists(queryClient);
+};
+
 export const refreshAfterRunDelete = (queryClient: QueryClient): void => {
   void refreshRunLists(queryClient);
   void queryClient.invalidateQueries({ queryKey: queryKindPrefix('archivedRuns') });

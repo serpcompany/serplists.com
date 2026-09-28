@@ -1,6 +1,7 @@
 import { env } from "@/env";
 import { createApiError } from "@/lib/api-errors";
 import { reportUnauthorizedResponse } from "@/lib/unauthorizedResponses";
+import { parseTemplateUpdateResponse, type TemplateUpdateResult } from "@/lib/templateUpdateResult";
 import type { TemplateImportSummary } from "@/types/checklist";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
@@ -296,11 +297,12 @@ class ApiClient {
     is_public?: boolean;
     slug?: string;
     expected_version?: number;
-  }) {
-    return this.request(`/templates/${id}`, {
+  }): Promise<TemplateUpdateResult> {
+    const body: unknown = await this.request(`/templates/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
+    return parseTemplateUpdateResponse(body);
   }
 
   async deleteTemplate(id: string) {

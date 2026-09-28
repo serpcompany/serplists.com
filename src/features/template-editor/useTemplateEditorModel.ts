@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 
-import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { mapApiTemplateToChecklistTemplate } from "@/features/template-detail/templateDetailMappers";
 import {
   type SaveTemplateInput,
@@ -13,13 +12,13 @@ import {
   type TemplateEditorFormValues,
 } from "@/lib/forms/templateEditorForm";
 import { api } from "@/lib/api";
-import type { ChecklistTemplate } from "@/types/checklist";
+import type { TemplateUpdateResult } from "@/lib/templateUpdateResult";
+import type { ChecklistTemplate, TemplateRule } from "@/types/checklist";
 
 type TemplateEditorApiClient = Pick<typeof api, "getTemplateById">;
 
 type TemplateEditorModelDependencies = {
   apiClient?: TemplateEditorApiClient;
-  getCachedTemplate?: (id: string) => ChecklistTemplate | undefined;
   saveTemplate?: (input: SaveTemplateInput) => Promise<SaveTemplateResult>;
 };
 
@@ -29,12 +28,19 @@ type TemplateEditorModelOptions = {
 
 type LoadTemplateEditorDataOptions = {
   id?: string;
-  getCachedTemplate: (id: string) => ChecklistTemplate | undefined;
+};
+
+// What the next save needs from the stored template: its version (sent as expected_version)
+// and its rules, which the editor does not edit.
+export type TemplateEditorBaseline = {
+  version?: number;
+  rules?: TemplateRule[];
 };
 
 type SaveTemplateEditorDataOptions = {
   id?: string;
   values: TemplateEditorFormValues;
+  baseline?: TemplateEditorBaseline;
 };
 
 type SaveTemplateEditorDependencies = {
@@ -45,15 +51,20 @@ export type TemplateEditorLoadResult = {
   initialValues: TemplateEditorFormValues;
   loadError: string | null;
   templateSlug?: string;
+  baseline: TemplateEditorBaseline;
 };
 
 export const buildDefaultTemplateEditorTemplate =
   (): Partial<ChecklistTemplate> => ({});
 
+// After a save, the form shows what was stored. `saved` is the PUT answer of an update: its
+// slug may carry a -<id8> suffix when the requested one was taken.
 export const buildTemplateEditorSavedState = (
   values: TemplateEditorFormValues,
-): TemplateEditorLoadResult => {
+  saved?: TemplateUpdateResult,
+): Omit<TemplateEditorLoadResult, "baseline"> => {
   const normalizedForm = normalizeTemplateEditorFormForSave(values);
+  const storedSlug = saved?.slug || normalizedForm.seoUrl;
 
   return {
     initialValues: buildTemplateEditorFormValues({
@@ -62,17 +73,25 @@ export const buildTemplateEditorSavedState = (
       sections: normalizedForm.sections,
       seoTitle: normalizedForm.seoTitle,
       seoDescription: normalizedForm.seoDescription,
-      seoUrl: normalizedForm.seoUrl,
-      slug: normalizedForm.seoUrl,
+      seoUrl: storedSlug,
+      slug: storedSlug,
       categories: normalizedForm.categories,
       tags: normalizedForm.tags,
       type: normalizedForm.templateType,
       isPublic: normalizedForm.isPublic,
     }),
     loadError: null,
-    templateSlug: normalizedForm.seoUrl || undefined,
+    templateSlug: storedSlug || undefined,
   };
 };
+
+// The baseline for the next save: the version the server stored, never a local +1. A failed
+// save (such as a 409 edit conflict) keeps the loaded version.
+export const applyTemplateEditorSave = (
+  baseline: TemplateEditorBaseline,
+  result: SaveTemplateResult,
+): TemplateEditorBaseline =>
+  result.success && result.saved ? { ...baseline, version: result.saved.version } : baseline;
 
 export const shouldNavigateToTemplatesAfterSave = (params: {
   id?: string;
@@ -97,6 +116,7 @@ const buildLoadResult = (
   initialValues: buildTemplateEditorFormValues(template),
   loadError: null,
   templateSlug: template?.slug ?? template?.seoUrl,
+  baseline: { version: template?.version, rules: template?.rules },
 });
 
 const getApiClient = (
@@ -114,17 +134,14 @@ export const shouldLoadTemplateEditorRecord = (
   return requestedId !== loadedId;
 };
 
+// Always loads by id: a cached list copy can be minutes old, and its version would make the
+// first save fail with an edit conflict (or, if missing, skip the conflict check).
 export const loadTemplateEditorData = async (
   options: LoadTemplateEditorDataOptions,
   dependencies?: Pick<TemplateEditorModelDependencies, "apiClient">,
 ): Promise<TemplateEditorLoadResult> => {
   if (!options.id) {
     return buildLoadResult(buildDefaultTemplateEditorTemplate());
-  }
-
-  const cachedTemplate = options.getCachedTemplate(options.id);
-  if (cachedTemplate) {
-    return buildLoadResult(cachedTemplate);
   }
 
   try {
@@ -144,6 +161,7 @@ export const loadTemplateEditorData = async (
       loadError:
         error instanceof Error ? error.message : "Failed to load template",
       templateSlug: undefined,
+      baseline: {},
     };
   }
 };
@@ -165,6 +183,7 @@ export const saveTemplateEditorData = async (
     categories: normalizedForm.categories,
     tags: normalizedForm.tags,
     isPublic: normalizedForm.isPublic,
+    ...(options.id ? { version: options.baseline?.version, rules: options.baseline?.rules } : {}),
   });
 };
 
@@ -172,19 +191,15 @@ export const useTemplateEditorModel = (
   options: TemplateEditorModelOptions,
   dependencies?: TemplateEditorModelDependencies,
 ) => {
-  const { getTemplate } = useTemplateLists();
   const {
     saveTemplate: persistTemplateSave,
     isSaving,
   } = useTemplateSave();
   const loadedTemplateIdRef = useRef<string | null>(null);
-  const baseGetTemplateRef = useRef(getTemplate);
+  const baselineRef = useRef<TemplateEditorBaseline>({});
   const apiClientRef = useRef<TemplateEditorApiClient | undefined>(
     dependencies?.apiClient,
   );
-  const getCachedTemplateRef = useRef<
-    ((id: string) => ChecklistTemplate | undefined) | undefined
-  >(dependencies?.getCachedTemplate);
   const [initialValues, setInitialValues] = useState<TemplateEditorFormValues>(
     () => buildTemplateEditorFormValues(buildDefaultTemplateEditorTemplate()),
   );
@@ -193,8 +208,6 @@ export const useTemplateEditorModel = (
   const [templateSlug, setTemplateSlug] = useState<string | undefined>();
 
   apiClientRef.current = dependencies?.apiClient;
-  baseGetTemplateRef.current = getTemplate;
-  getCachedTemplateRef.current = dependencies?.getCachedTemplate;
 
   useEffect(() => {
     let cancelled = false;
@@ -202,6 +215,7 @@ export const useTemplateEditorModel = (
     const load = async () => {
       if (!options.id) {
         loadedTemplateIdRef.current = null;
+        baselineRef.current = {};
         setInitialValues(
           buildTemplateEditorFormValues(buildDefaultTemplateEditorTemplate()),
         );
@@ -221,8 +235,6 @@ export const useTemplateEditorModel = (
       const result = await loadTemplateEditorData(
         {
           id: options.id,
-          getCachedTemplate:
-            getCachedTemplateRef.current ?? baseGetTemplateRef.current,
         },
         {
           apiClient: apiClientRef.current,
@@ -234,6 +246,7 @@ export const useTemplateEditorModel = (
       }
 
       loadedTemplateIdRef.current = options.id;
+      baselineRef.current = result.baseline;
       setInitialValues(result.initialValues);
       setLoadError(result.loadError);
       setTemplateSlug(result.templateSlug);
@@ -254,6 +267,7 @@ export const useTemplateEditorModel = (
       {
         id: options.id,
         values,
+        baseline: baselineRef.current,
       },
       {
         saveTemplate: dependencies?.saveTemplate ?? persistTemplateSave,
@@ -261,7 +275,9 @@ export const useTemplateEditorModel = (
     );
 
     if (result.success) {
-      const savedState = buildTemplateEditorSavedState(values);
+      // Kept before isSaving clears, so a quick second save sends the stored version.
+      baselineRef.current = applyTemplateEditorSave(baselineRef.current, result);
+      const savedState = buildTemplateEditorSavedState(values, result.saved);
       setInitialValues(savedState.initialValues);
       setLoadError(null);
       setTemplateSlug(savedState.templateSlug || templateSlug);

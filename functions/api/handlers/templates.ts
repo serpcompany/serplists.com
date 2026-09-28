@@ -1568,7 +1568,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       throw error;
     }
 
-    return json({ success: true, slug: typeof updates.slug === 'string' ? updates.slug : undefined });
+    // The next save sends this version as expected_version; the slug may carry a -<id8> suffix.
+    return json({ success: true, id: templateId, version: nextVersion, slug: nextSlug ?? existingTemplate.slug ?? undefined });
   }
 
   if (request.method === 'DELETE') {

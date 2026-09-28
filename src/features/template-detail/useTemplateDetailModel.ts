@@ -13,6 +13,7 @@ import {
   buildCanonicalPublicTemplatePath,
   resolvePublicTemplateOwnerSlug,
 } from '@/lib/routes';
+import type { TemplateUpdateResult } from '@/lib/templateUpdateResult';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
 import {
@@ -21,6 +22,7 @@ import {
   resolveTemplateOwnerProfile,
 } from './templateDetailMappers';
 import {
+  applyTemplateSaveResult,
   createTemplateDetailLoader,
   initialTemplateDetailViewState,
   type TemplateDetailViewState,
@@ -463,6 +465,11 @@ export const useTemplateDetailModel = (
     }
   };
 
+  // A save made on this page (the visibility switch): show the version the server stored.
+  const recordTemplateSave = (change: Partial<ChecklistTemplate>, saved: TemplateUpdateResult) => {
+    if (template) loader.setTemplate(applyTemplateSaveResult(template, change, saved));
+  };
+
   return {
     billingState,
     history: {
@@ -472,6 +479,7 @@ export const useTemplateDetailModel = (
     } satisfies TemplateDetailHistoryState,
     loading,
     notFound,
+    recordTemplateSave,
     saveTemplate,
     shareTemplate,
     startRun,

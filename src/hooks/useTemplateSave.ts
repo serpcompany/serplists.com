@@ -1,18 +1,20 @@
 import { useState } from "react";
-import { useTemplateLists } from "@/contexts/TemplatesContext";
+import { useTemplates } from "@/contexts/TemplatesContext";
 import { useTemplateValidation } from "@/hooks/useTemplateValidation";
-import { ChecklistSection, TemplateSavePayload } from "@/types/checklist";
+import type { TemplateUpdateResult } from "@/lib/templateUpdateResult";
+import { ChecklistSection, TemplateRule, TemplateSavePayload } from "@/types/checklist";
 import { ValidationError } from "@/hooks/useTemplateValidation";
 
 export type SaveTemplateResult = {
   success: boolean;
   errors: ValidationError[];
+  // An update's stored version and slug, which the editor keeps for its next save.
+  saved?: TemplateUpdateResult;
 };
 
 type SaveTemplateDependencies = {
-  getTemplate: (id: string) => TemplateSavePayload | undefined;
   createTemplate: (template: Omit<TemplateSavePayload, "id">) => Promise<unknown>;
-  updateTemplate: (template: TemplateSavePayload) => Promise<void>;
+  updateTemplate: (template: TemplateSavePayload) => Promise<TemplateUpdateResult>;
   applyDefaults: (
     title: string,
     sections: ChecklistSection[],
@@ -31,6 +33,10 @@ export type SaveTemplateInput = {
   categories: string[];
   tags: string[];
   isPublic: boolean;
+  // From the template the editor loaded by id (or its last save): sent as expected_version,
+  // and rules are kept as they are. Undefined rules leave the key out, so nothing is cleared.
+  version?: number;
+  rules?: TemplateRule[];
 };
 
 export const persistTemplateSave = async (
@@ -38,7 +44,6 @@ export const persistTemplateSave = async (
   input: SaveTemplateInput,
 ): Promise<SaveTemplateResult> => {
   const {
-    getTemplate,
     createTemplate,
     updateTemplate,
     applyDefaults,
@@ -55,13 +60,14 @@ export const persistTemplateSave = async (
     categories,
     tags,
     isPublic,
+    version,
+    rules,
   } = input;
 
   const { title: finalTitle, sections: finalSections } = applyDefaults(title, sections);
 
   try {
     if (id) {
-      const existingTemplate = getTemplate(id);
       const updatePayload: TemplateSavePayload = {
         id,
         title: finalTitle,
@@ -75,12 +81,12 @@ export const persistTemplateSave = async (
         categories,
         tags,
         isPublic,
-        rules: existingTemplate?.rules,
-        version: existingTemplate?.version,
+        rules,
+        version,
       };
 
-      await updateTemplate(updatePayload);
-      return { success: true, errors: [] };
+      const saved = await updateTemplate(updatePayload);
+      return { success: true, errors: [], saved };
     }
 
     await createTemplate({
@@ -112,8 +118,9 @@ export const persistTemplateSave = async (
   }
 };
 
+// Only the mutations: the editor loads its template by id and never subscribes to a list.
 export const useTemplateSave = () => {
-  const { getTemplate, createTemplate, updateTemplate } = useTemplateLists();
+  const { createTemplate, updateTemplate } = useTemplates();
   const { applyDefaults } = useTemplateValidation();
   const [isSaving, setIsSaving] = useState(false);
 
@@ -125,7 +132,6 @@ export const useTemplateSave = () => {
     try {
       return await persistTemplateSave(
         {
-          getTemplate,
           createTemplate,
           updateTemplate,
           applyDefaults,

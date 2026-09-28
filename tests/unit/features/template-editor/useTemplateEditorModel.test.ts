@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { ChecklistTemplate } from "@/types/checklist";
-
 import {
   loadTemplateEditorData,
   saveTemplateEditorData,
@@ -9,75 +7,8 @@ import {
 } from "@/features/template-editor/useTemplateEditorModel";
 import { shouldNavigateToTemplatesAfterSave } from "@/pages/TemplateEditor";
 
-const buildTemplate = (
-  overrides: Partial<ChecklistTemplate> = {},
-): ChecklistTemplate => ({
-  id: "template-1",
-  title: "Camping Checklist",
-  description: "Pack the essentials.",
-  type: "checklist",
-  sections: [
-    {
-      id: "section-1",
-      title: "Prep",
-      items: [
-        {
-          id: "item-1",
-          title: "Bring tent",
-          description: "",
-        },
-      ],
-    },
-  ],
-  userId: "user-1",
-  createdAt: "2026-04-18T00:00:00.000Z",
-  updatedAt: "2026-04-18T00:00:00.000Z",
-  isPublic: true,
-  slug: "camping-checklist",
-  categories: ["Travel"],
-  tags: ["camping"],
-  seoTitle: "Camping Checklist",
-  seoDescription: "Pack for your trip",
-  seoUrl: "camping-checklist",
-  ...overrides,
-});
-
 describe("loadTemplateEditorData", () => {
-  it("loads an existing template from cached data first", async () => {
-    const template = buildTemplate();
-    const getCachedTemplate = vi.fn(() => template);
-    const apiClient = {
-      getTemplateById: vi.fn(),
-    };
-
-    const result = await loadTemplateEditorData(
-      {
-        id: "template-1",
-        getCachedTemplate,
-      },
-      { apiClient },
-    );
-
-    expect(getCachedTemplate).toHaveBeenCalledWith("template-1");
-    expect(apiClient.getTemplateById).not.toHaveBeenCalled();
-    expect(result).toEqual(
-      expect.objectContaining({
-        loadError: null,
-        templateSlug: "camping-checklist",
-      }),
-    );
-    expect(result.initialValues).toEqual(
-      expect.objectContaining({
-        title: "Camping Checklist",
-        description: "Pack the essentials.",
-        categories: ["Travel"],
-        tags: ["camping"],
-        seoUrl: "camping-checklist",
-      }),
-    );
-  });
-
-  it("falls back to the API when the template is not cached", async () => {
+  it("loads an existing template by id", async () => {
     const apiClient = {
       getTemplateById: vi.fn().mockResolvedValue({
         id: "template-2",
@@ -106,7 +37,6 @@ describe("loadTemplateEditorData", () => {
     const result = await loadTemplateEditorData(
       {
         id: "template-2",
-        getCachedTemplate: vi.fn(() => undefined),
       },
       { apiClient },
     );

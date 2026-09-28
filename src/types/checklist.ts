@@ -1,5 +1,6 @@
 // Centralized type definitions for checklist functionality
 import type { PortableTemplateRule } from "@/lib/schemas/checklistSchema";
+import type { TemplateUpdateResult } from "@/lib/templateUpdateResult";
 
 export type ChecklistSubItem = {
   id: string;
@@ -135,7 +136,8 @@ export interface TemplatesContextProps {
   getRunsForTemplate: (templateId: string) => ChecklistRun[];
   getAllPublicTemplates: () => ChecklistTemplate[];
   createTemplate: (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => Promise<ChecklistTemplate>;
-  updateTemplate: (template: TemplateSavePayload) => Promise<void>;
+  // Resolves with the version and slug the server stored; the next save sends that version.
+  updateTemplate: (template: TemplateSavePayload) => Promise<TemplateUpdateResult>;
   deleteTemplate: (id: string) => Promise<void>;
   createRun: (params: { templateId: string; runName?: string; template?: ChecklistTemplate }) => Promise<ChecklistRun | null>;
   // State saves (ticks, notes, completion) leave the title out; only a rename passes

@@ -117,6 +117,13 @@ container must reset that element too.
   tag entry.
 - Preserve `seoTitle`, `seoDescription`, `slug`/`seoUrl`, and `rules` across save
   and reload.
+- The editor never subscribes to a Template list. It loads its template by id and
+  keeps the stored `version` and `rules`. `PUT /api/templates/:id` answers with the
+  `version` and `slug` it stored (the slug may carry a `-<id8>` suffix). The next save
+  sends that version as `expected_version`, and a failed save keeps the old one. A
+  template save only marks the Template lists stale (`refreshAfterTemplateSave`), so
+  Save never waits for a list download; the detail page's visibility switch applies
+  the returned version itself.
 - Adding a content type or editor tab: [template content types](design-docs/template-content-types.md).
 
 ## Rendering user content
