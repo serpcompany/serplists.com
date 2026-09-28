@@ -77,6 +77,15 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.
+- After an await, move the user (navigate, sign-in or checkout redirect, a dialog)
+  only if they are still on the page that started the action: React Router still runs
+  a `navigate()` from a page the user has left. Call `beginVisit()` from
+  `usePageVisit` (`src/hooks/usePageVisit.ts`) when the action starts and check
+  `visit.isCurrent()` after the request; it is false once the page unmounts or its
+  location changes (Back, a link, another id on the same page). The request's own
+  result stands: cache updates and success or failure toasts still happen. The
+  template pages route Start Run, Copy/Save and Share results through
+  `followTemplateActionResult`.
 - Surface API failures by their structured code, not message text: `401` means sign
   in (keep the return path), `403 upgrade_required` and `403 limit_reached` mean a
   plan gate, `503 billing_unavailable` means checkout is down. Keep the kind with

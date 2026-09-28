@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,6 +14,7 @@ import { GenerateFromClipy } from "@/components/template-editor/GenerateFromClip
 import { buildConsoleTemplatesPath } from "@/lib/routes";
 import { resolveTemplateEditorOwnerSlug } from "@/lib/templates/templateSeoPreview";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
+import { usePageVisit } from "@/hooks/usePageVisit";
 import {
   templateEditorFormSchema,
   type TemplateEditorFormValues,
@@ -72,9 +73,9 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   // The last save was refused because someone saved the template after it loaded.
   const [editConflict, setEditConflict] = useState(false);
-  // False once the user has left: a save that finishes later must not act on the page
-  // (a create's redirect would pull them off the page they went to).
-  const mountedRef = useRef(true);
+  // A save that finishes after the user left must not act on the page (a create's
+  // redirect would pull them off the page they went to).
+  const beginVisit = usePageVisit();
   
   const {
     selectedSectionIndex,
@@ -108,13 +109,6 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
     templateForm.reset(model.initialValues);
   }, [model.initialValues, templateForm]);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
   // Leaving during a save still asks: the save can fail, and the edits are only here.
   const { allowLeave, guardLeave } = useTemplateEditorLeaveGuard(
     shouldBlockNavigation,
@@ -137,8 +131,9 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
     // model.save validates first and returns errors that name the field; the alert
     // below shows them. The copy is what gets sent; the form stays editable meanwhile.
     const submitted = cloneTemplateEditorFormValues(templateForm.getValues());
+    const visit = beginVisit();
     const result = await model.save(submitted);
-    if (!mountedRef.current) {
+    if (!visit.isCurrent()) {
       // The user chose to leave while it saved.
       return;
     }

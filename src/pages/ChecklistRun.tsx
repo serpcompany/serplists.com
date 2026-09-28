@@ -38,6 +38,7 @@ import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar'
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
+import { usePageVisit } from '@/hooks/usePageVisit';
 import {
   formatRunHistoryAction,
   formatRunHistoryTime,
@@ -56,6 +57,8 @@ import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
 const ChecklistRunPage = () => {
   const { id, shareToken } = useParams<{ id?: string; shareToken?: string }>();
   const navigate = useNavigate();
+  // Completing awaits the save; it leaves for the list only if the user is still here.
+  const beginVisit = usePageVisit();
   const { updateRun } = useTemplates();
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -228,12 +231,16 @@ const ChecklistRunPage = () => {
   };
 
   const handleCompleteRun = async () => {
+    const visit = beginVisit();
     const result = await completeRun();
 
     if (result.kind === 'ok') {
       setIsCompleteDialogOpen(false);
       toast.success('Checklist completed! 🎉');
-      handleBack();
+      // Only from this run: after Back or another run, it must not pull the user away.
+      if (visit.isCurrent()) {
+        handleBack();
+      }
       return;
     }
 

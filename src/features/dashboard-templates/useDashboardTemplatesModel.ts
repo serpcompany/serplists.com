@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplateLists } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { usePageVisit } from '@/hooks/usePageVisit';
+import type { PageVisit } from '@/lib/navigation/pageVisit';
 import {
   buildConsoleRunPath,
   buildConsoleTemplateCreatePath,
@@ -163,10 +165,29 @@ export const deleteDashboardTemplate = async (
   );
 };
 
+// Closes the launcher and opens the new run, but only if the user is still on the page
+// that started it: after Back or a link, a run that finishes late must not pull them
+// to it.
+export const finishDashboardTemplateRun = (
+  result: DashboardTemplateRunResult,
+  visit: PageVisit,
+  actions: { closeLauncher: () => void; navigate: Navigate },
+): void => {
+  if (result.kind !== 'ok') {
+    return;
+  }
+
+  actions.closeLauncher();
+  if (visit.isCurrent()) {
+    actions.navigate(buildConsoleRunPath(result.runId));
+  }
+};
+
 export const useDashboardTemplatesModel = (
   dependencies?: DashboardTemplatesModelDependencies,
 ) => {
   const navigate = useNavigate();
+  const beginVisit = usePageVisit();
   const { user } = useAuth();
   const { activeTeamId } = useWorkspace();
   const templateContext = useTemplateLists();
@@ -232,6 +253,7 @@ export const useDashboardTemplatesModel = (
       };
     }
 
+    const visit = beginVisit();
     setIsCreatingRun(true);
     try {
       const result = await createDashboardTemplateRun(
@@ -242,10 +264,10 @@ export const useDashboardTemplatesModel = (
         { createRun },
       );
 
-      if (result.kind === 'ok') {
-        setRunLauncherOpen(false);
-        navigateTo(buildConsoleRunPath(result.runId));
-      }
+      finishDashboardTemplateRun(result, visit, {
+        closeLauncher: () => setRunLauncherOpen(false),
+        navigate: navigateTo,
+      });
 
       return result;
     } finally {
