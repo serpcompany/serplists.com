@@ -68,10 +68,25 @@ export const updateRunArgs = z.discriminatedUnion("operation", [
 
 export type UpdateRunArgs = z.infer<typeof updateRunArgs>;
 
+const MAX_REPORTED_ISSUES = 5;
+
+// Models often send fields a call does not use as null (OpenAI strict mode does so for
+// every optional field). Treat a null field as absent; every other value is validated.
+function dropNullFields(rawArguments: unknown): unknown {
+  if (!isRecord(rawArguments)) return rawArguments ?? {};
+  return Object.fromEntries(Object.entries(rawArguments).filter(([, value]) => value !== null));
+}
+
 export function parseToolArguments<Schema extends z.ZodTypeAny>(schema: Schema, rawArguments: unknown): z.infer<Schema> {
-  const parsed = schema.safeParse(rawArguments ?? {});
-  if (!parsed.success) throw new ToolError(parsed.error.issues[0]?.message ?? "Invalid arguments", "invalid_arguments");
-  return parsed.data;
+  const parsed = schema.safeParse(dropNullFields(rawArguments));
+  if (parsed.success) return parsed.data;
+  // Name the field in every message ("notes: Required") so an agent can correct its call.
+  const issues = parsed.error.issues.slice(0, MAX_REPORTED_ISSUES).map((issue) => ({
+    path: issue.path.join("."),
+    message: issue.message,
+  }));
+  const message = issues.map(({ path, message: text }) => (path ? `${path}: ${text}` : text)).join("; ");
+  throw new ToolError(message || "Invalid arguments", "invalid_arguments", { issues });
 }
 
 export const toolDefinitions = [
@@ -127,59 +142,41 @@ export const toolDefinitions = [
   {
     name: "update_run",
     description: "Update one explicit part of a personal run. Pass the latest expectedRevision to prevent lost updates. "
+      + "Each operation takes its own fields: set_task_completed needs taskId and completed; "
+      + "set_subtask_completed needs taskId, subtaskId, and completed; set_task_notes needs taskId and notes; "
+      + "set_run_status needs status. Leave out fields the operation does not use. "
       + "Returns the run summary with its new revision and the changed task; call get_run for the full run.",
+    // One flat object: model APIs reject a oneOf/anyOf/allOf at the root of a tool schema,
+    // and many clients read only top-level properties. updateRunArgs enforces which
+    // fields each operation needs.
     inputSchema: {
       type: "object",
-      oneOf: [
-        {
-          type: "object",
-          properties: {
-            runId: { type: "string" },
-            expectedRevision: { type: "integer", minimum: 1 },
-            operation: { const: "set_task_completed" },
-            taskId: { type: "string" },
-            completed: { type: "boolean" },
-          },
-          required: ["runId", "expectedRevision", "operation", "taskId", "completed"],
-          additionalProperties: false,
+      properties: {
+        runId: { type: "string" },
+        expectedRevision: {
+          type: "integer",
+          minimum: 1,
+          description: "The run's current revision, from get_run, list_runs, start_run, or the previous update_run.",
         },
-        {
-          type: "object",
-          properties: {
-            runId: { type: "string" },
-            expectedRevision: { type: "integer", minimum: 1 },
-            operation: { const: "set_subtask_completed" },
-            taskId: { type: "string" },
-            subtaskId: { type: "string" },
-            completed: { type: "boolean" },
-          },
-          required: ["runId", "expectedRevision", "operation", "taskId", "subtaskId", "completed"],
-          additionalProperties: false,
+        operation: {
+          type: "string",
+          enum: ["set_task_completed", "set_subtask_completed", "set_task_notes", "set_run_status"],
         },
-        {
-          type: "object",
-          properties: {
-            runId: { type: "string" },
-            expectedRevision: { type: "integer", minimum: 1 },
-            operation: { const: "set_task_notes" },
-            taskId: { type: "string" },
-            notes: { type: "string", maxLength: MAX_TASK_NOTES_LENGTH },
-          },
-          required: ["runId", "expectedRevision", "operation", "taskId", "notes"],
-          additionalProperties: false,
+        taskId: {
+          type: "string",
+          description: "Required for set_task_completed, set_subtask_completed, and set_task_notes.",
         },
-        {
-          type: "object",
-          properties: {
-            runId: { type: "string" },
-            expectedRevision: { type: "integer", minimum: 1 },
-            operation: { const: "set_run_status" },
-            status: { type: "string", enum: ["in_progress", "completed"] },
-          },
-          required: ["runId", "expectedRevision", "operation", "status"],
-          additionalProperties: false,
+        subtaskId: { type: "string", description: "Required for set_subtask_completed." },
+        completed: { type: "boolean", description: "Required for set_task_completed and set_subtask_completed." },
+        notes: {
+          type: "string",
+          maxLength: MAX_TASK_NOTES_LENGTH,
+          description: "Required for set_task_notes. Replaces the task's notes.",
         },
-      ],
+        status: { type: "string", enum: ["in_progress", "completed"], description: "Required for set_run_status." },
+      },
+      required: ["runId", "expectedRevision", "operation"],
+      additionalProperties: false,
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   },

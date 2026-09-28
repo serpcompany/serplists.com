@@ -63,6 +63,18 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   expect(initialized.response.status).toBe(200);
   expect((initialized.body.result as JsonRecord).protocolVersion).toBe(protocolVersion);
 
+  // Model APIs reject a tool list whose schemas have a combinator at the root, so every
+  // tool must advertise a plain object schema with top-level properties.
+  const listed = await mcpRequest(secret, 'tools/list', undefined, 10);
+  for (const tool of (listed.body.result as JsonRecord).tools as JsonRecord[]) {
+    const inputSchema = tool.inputSchema as JsonRecord;
+    expect(inputSchema.type).toBe('object');
+    expect(typeof inputSchema.properties).toBe('object');
+    for (const keyword of ['oneOf', 'anyOf', 'allOf', 'not', '$ref']) {
+      expect(inputSchema).not.toHaveProperty(keyword);
+    }
+  }
+
   const templateResult = await mcpRequest(secret, 'tools/call', {
     name: 'list_templates',
     arguments: {},
