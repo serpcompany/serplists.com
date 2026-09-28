@@ -415,11 +415,13 @@ test('the second click of a double click after a fast save does not complete the
 
   await page.goto(`/dashboard/runs/${runId}`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
-  const point = await pointAt(page, 'Mark Complete');
+  await pointAt(page, 'Mark Complete');
   await clickHere(page, 1);
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
-  // The rest of the double click lands on Task B's Mark Complete, in the same spot.
-  expect(isInside(await page.getByRole('button', { name: 'Mark Complete' }).boundingBox(), point)).toBe(true);
+  // The rest of the double click lands on Task B's Mark Complete. It is in the same spot
+  // unless the Changelog below the task has already grown with the save and pushed it down,
+  // so point at it again.
+  await pointAt(page, 'Mark Complete');
   await clickHere(page, 2);
 
   // Saves run one at a time in order, so once a later save has landed, a save the second
