@@ -142,7 +142,9 @@ Do not use git history for user-generated Template or Organization history. Git 
   single byte ranges (`206`, `416`), and `If-None-Match` revalidation (`304`) through
   `functions/api/utils/r2-file-response.ts`. Uploaded videos need ranges: Safari will not play one without them,
   and no browser can seek past what it has buffered.
-- `DELETE /api/uploads/file?key=...` is restricted to the current user prefix.
+- `DELETE /api/uploads/file?key=...` deletes only the signed-in user's own avatar
+  (`avatars/<userId>/<file>`). Template media answers `403`: Templates, versions,
+  Runs and clones may still reference it, so the editor only unlinks it (TD-17).
 
 ## Public And Private Data
 

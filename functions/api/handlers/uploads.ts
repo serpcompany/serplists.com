@@ -77,6 +77,19 @@ function sanitizeFilename(filename: string): string {
   return filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
 }
 
+/**
+ * Only an account's own avatar (`avatars/<userId>/<file>`) can be deleted.
+ * Template media is referenced by Templates, template versions, Runs and
+ * public-template clones, and uploads record neither their Personal or
+ * Organization owner nor their references, so no one can know a delete is
+ * safe, and the uploader may have been disabled in or removed from the
+ * Organization. Clearing template media only unlinks it (TD-17).
+ */
+function isOwnAvatarKey(key: string, userId: string): boolean {
+  const [bucket, owner, file, ...rest] = key.split('/');
+  return bucket === 'avatars' && owner === userId && Boolean(file) && rest.length === 0;
+}
+
 function buildApiUrl(base: string, key: string): string {
   return `${base}/api/uploads/file?key=${encodeURIComponent(key)}`;
 }
@@ -103,8 +116,7 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
     const key = url.searchParams.get('key');
     if (!key) return json({ error: 'key required' }, 400);
 
-    // Lightweight safety: only allow deleting keys under the user's prefix.
-    if (!key.includes(`/${userId}/`) && !key.startsWith(`avatars/${userId}/`)) {
+    if (!isOwnAvatarKey(key, userId)) {
       return json({ error: 'Forbidden' }, 403);
     }
 

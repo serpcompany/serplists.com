@@ -296,3 +296,66 @@ describe('Uploads Handler file downloads', () => {
     expect((await handleUploads(missing, { R2_UPLOADS: bucket } as any)).status).toBe(404);
   });
 });
+
+describe('Uploads Handler delete authorization', () => {
+  const SELF = 'user-123';
+  const OTHER = 'user-456';
+
+  function deleteRequest(key: string) {
+    return new Request(`http://localhost/api/uploads/file?key=${encodeURIComponent(key)}`, { method: 'DELETE' });
+  }
+
+  it('lets an account delete its own avatar', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue(SELF);
+    const env = uploadEnv();
+
+    const response = await handleUploads(deleteRequest(`avatars/${SELF}/a.png`), env);
+
+    expect(response.status).toBe(200);
+    expect(env.R2_UPLOADS.delete).toHaveBeenCalledWith(`avatars/${SELF}/a.png`);
+  });
+
+  // Template media is referenced by Templates (Personal and Organization),
+  // versions, Runs and public-template clones, and uploads record no owner, so
+  // the uploader, including a disabled or removed Organization member, must not
+  // be able to delete it.
+  it.each(['template-files', 'template-images', 'template-videos'])(
+    'refuses to delete %s, even for the account that uploaded it',
+    async (bucket) => {
+      vi.mocked(getSessionUserId).mockResolvedValue(SELF);
+      const env = uploadEnv();
+
+      const response = await handleUploads(deleteRequest(`${bucket}/${SELF}/doc.pdf`), env);
+
+      expect(response.status).toBe(403);
+      expect(env.R2_UPLOADS.delete).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['another account avatar', `avatars/${OTHER}/a.png`],
+    ['a key with the caller id smuggled in', `template-files/${OTHER}/a.pdf/${SELF}/x`],
+    ['an extra path segment', `avatars/${SELF}/nested/a.png`],
+    ['an unknown bucket', `x/${SELF}/y`],
+    ['a key with no file name', `avatars/${SELF}/`],
+    ['a key with no bucket', `${SELF}/a.png`],
+  ])('refuses to delete %s', async (_label, key) => {
+    vi.mocked(getSessionUserId).mockResolvedValue(SELF);
+    const env = uploadEnv();
+
+    const response = await handleUploads(deleteRequest(key), env);
+
+    expect(response.status).toBe(403);
+    expect(env.R2_UPLOADS.delete).not.toHaveBeenCalled();
+  });
+
+  it('requires a session', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue(null);
+    const env = uploadEnv();
+
+    const response = await handleUploads(deleteRequest(`avatars/${SELF}/a.png`), env);
+
+    expect(response.status).toBe(401);
+    expect(env.R2_UPLOADS.delete).not.toHaveBeenCalled();
+  });
+});

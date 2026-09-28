@@ -156,8 +156,10 @@ limits in `src/lib/schemas/uploadLimits.ts`) and writes keys under per-user pref
 - `template-videos/<userId>/<uuid>.<ext>`
 - `template-files/<userId>/<uuid>.<ext>`
 
-Uploads are not reference-counted, so do not add expiration rules yet; they would
-break templates and avatars. The safe baseline aborts incomplete multipart uploads:
+Uploads are not reference-counted and record no Personal or Organization owner,
+so `DELETE /api/uploads/file` deletes only an account's own avatar; template media
+is never deleted through the API, and clearing it in the editor only unlinks it
+(TD-17). Do not add expiration rules yet; they would break templates and avatars. The safe baseline aborts incomplete multipart uploads:
 
 ```bash
 npx wrangler r2 bucket lifecycle list serp-checklists-uploads

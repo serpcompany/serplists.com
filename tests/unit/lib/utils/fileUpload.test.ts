@@ -44,12 +44,24 @@ describe('uploaded asset deletion helpers', () => {
     expect(getUploadedAssetKey('not a url')).toBeNull();
   });
 
-  it('deletes app-owned uploaded assets through the shared API delete path', async () => {
+  it('deletes an uploaded avatar through the shared API delete path', async () => {
     await expect(
-      deleteUploadedAsset('/api/uploads/file?key=template-files/user/doc.pdf'),
+      deleteUploadedAsset('/api/uploads/file?key=avatars/user/avatar.png'),
     ).resolves.toBe(true);
 
-    expect(api.deleteFromR2).toHaveBeenCalledWith('template-files/user/doc.pdf');
+    expect(api.deleteFromR2).toHaveBeenCalledWith('avatars/user/avatar.png');
+  });
+
+  // Templates, versions, Runs and clones may still reference template media, so
+  // clearing or replacing it only unlinks it; the API refuses the delete anyway.
+  it.each([
+    'template-files/user/doc.pdf',
+    'template-images/user/image.png',
+    'template-videos/user/video.mp4',
+  ])('never deletes template media (%s)', async (key) => {
+    await expect(deleteUploadedAsset(`/api/uploads/file?key=${key}`)).resolves.toBe(false);
+
+    expect(api.deleteFromR2).not.toHaveBeenCalled();
   });
 
   it('skips deletion for non-owned URLs', async () => {

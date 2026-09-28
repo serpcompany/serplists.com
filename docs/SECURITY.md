@@ -43,8 +43,13 @@
   Personal templates and listing, starting, reading, and updating Personal runs.
   Keys are stored hashed. The MCP routes are off on remote hosts unless
   `PERSONAL_RUN_MCP_ENABLED=true`.
-- **Uploads** are written under the uploader's key prefix, and deletes are
-  restricted to that prefix. Each bucket has a size limit (avatars 5MB, Template
+- **Uploads** are written under the uploader's key prefix. Only an account's own
+  avatar (`avatars/<userId>/<file>`, matched segment by segment) can be deleted.
+  Template media cannot be deleted by anyone: Templates, versions, Runs and
+  public-template clones may reference it, and uploads record no Personal or
+  Organization owner, so the uploader (who may since have been disabled in or
+  removed from the Organization) must not be able to break Organization content.
+  Clearing or replacing template media only unlinks it (TD-17). Each bucket has a size limit (avatars 5MB, Template
   images, videos and files 50MB; `src/lib/schemas/uploadLimits.ts`, shared with the
   upload forms) and a MIME allowlist. A file with no type, or the generic
   `application/octet-stream`, is typed from its extension and rejected if that
