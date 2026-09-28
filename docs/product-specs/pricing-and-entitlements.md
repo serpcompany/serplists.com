@@ -104,6 +104,12 @@ Billing status query keys must include the current user id (or an explicit
 guest marker). Never reuse a cached plan between accounts, and do not render a
 Free or Pro label as known while billing status is still loading.
 
+Feature gates read the plan through `useBillingStatus` (`src/hooks/useBillingStatus.ts`),
+which reports `loading`, `error` or `known`. Only a `known` Free plan shows an
+upgrade prompt or starts checkout. When the status check fails, offer a retry
+and no upgrade prompt: import/export lets the action through for the server to
+decide, and copying a public Template asks the user to try again.
+
 ### Manual personal-plan overrides
 
 Personal manual overrides take precedence over Stripe-derived state until they

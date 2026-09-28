@@ -36,6 +36,7 @@ const buildBillingState = (
   overrides: Partial<TemplateDetailBillingState> = {},
 ): TemplateDetailBillingState => ({
   billingEnabled: true,
+  isError: false,
   isLoading: false,
   isPro: true,
   ...overrides,
@@ -319,6 +320,35 @@ describe('template detail actions', () => {
 
     expect(result).toEqual({ kind: 'upgrade_required' });
     expect(apiClient.clonePublicTemplate).not.toHaveBeenCalled();
+  });
+
+  it('does not send a user to checkout when the plan could not be checked', async () => {
+    const apiClient = {
+      getBillingStatus: vi.fn(),
+      getTemplateById: vi.fn(),
+      getTemplateBySlug: vi.fn(),
+      getProfileById: vi.fn(),
+      clonePublicTemplate: vi.fn(),
+      updateTemplate: vi.fn(),
+    };
+    const createTemplate = vi.fn();
+
+    const result = await saveTemplateToAccount({
+      apiClient,
+      billingState: buildBillingState({ isError: true, isPro: false }),
+      createTemplate,
+      invalidateTemplates: vi.fn(),
+      isAuthenticated: true,
+      template: buildTemplate(),
+      userId: 'user-1',
+    });
+
+    expect(result).toEqual({
+      kind: 'error',
+      message: "Couldn't check your plan. Try again.",
+    });
+    expect(apiClient.clonePublicTemplate).not.toHaveBeenCalled();
+    expect(createTemplate).not.toHaveBeenCalled();
   });
 
   it('maps access failures into typed action results', async () => {

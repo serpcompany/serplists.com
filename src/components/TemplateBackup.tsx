@@ -15,12 +15,12 @@ import { toast } from "sonner";
 import { downloadBackupFile, exportPortableTemplatesToJSON, parseTemplatesFromFile } from "@/lib/utils/templateBackup";
 import type { TemplateImportResult } from "@/lib/utils/templateBackup";
 import type { ChecklistTemplate, TemplateImportOptions, TemplateImportSummary } from "@/types/checklist";
-import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
 import { getAccessFailure } from "@/lib/api-errors";
-import { getBillingStatusQueryKey } from "@/lib/billing";
+import { useBillingStatus } from "@/hooks/useBillingStatus";
 import { cn } from "@/lib/utils";
+import { ORGANIZATION_BACKUP_UPGRADE_MESSAGE, TemplateBackupPlanNotice } from "@/components/TemplateBackupPlanNotice";
 
 interface TemplateBackupProps {
   className?: string;
@@ -66,15 +66,12 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     canEditTemplates,
     isTeamWorkspace,
   } = useWorkspace();
-  const billing = useQuery({
-    queryKey: getBillingStatusQueryKey(user?.id, activeTeamId),
-    queryFn: () => api.getBillingStatus(activeTeamId ? { teamId: activeTeamId } : undefined),
-    enabled: !!user,
-    retry: false
-  });
-  const plan = billing.data?.plan ?? "free";
-  const billingEnabled = billing.data?.billingEnabled ?? true;
-  const hasBackupAccess = plan === "pro" || plan === "team";
+  const billing = useBillingStatus({ enabled: !!user, teamId: activeTeamId, userId: user?.id });
+  const billingEnabled = billing.status === "known" ? billing.billingEnabled : true;
+  // Only a plan the server reported as Free is gated here. When the status check
+  // failed, actions go through and the server's 403 upgrade_required decides.
+  const isKnownFreePlan = billing.status === "known" && !billing.isPaid;
+  const hasBackupAccess = billing.status === "error" || (billing.status === "known" && billing.isPaid);
   const workspaceTemplateLabel = isTeamWorkspace ? "Organization Templates" : "My Templates";
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<TemplateImportResult | null>(null);
@@ -96,7 +93,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 
   const handleUpgrade = async () => {
     if (isTeamWorkspace) {
-      toast.error("Template import/export requires a paid Organization plan.");
+      toast.error(ORGANIZATION_BACKUP_UPGRADE_MESSAGE);
       return;
     }
     await startBillingCheckout(billingEnabled);
@@ -107,7 +104,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       const failure = getAccessFailure(error, fallbackMessage);
       toast.error(
         failure.kind === "upgrade_required"
-          ? "Template import/export requires a paid Organization plan."
+          ? ORGANIZATION_BACKUP_UPGRADE_MESSAGE
           : failure.message,
       );
       return;
@@ -130,7 +127,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       return;
     }
 
-    if (!hasBackupAccess) {
+    if (isKnownFreePlan) {
       await handleUpgrade();
       return;
     }
@@ -189,7 +186,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       return;
     }
 
-    if (!hasBackupAccess) {
+    if (isKnownFreePlan) {
       await handleUpgrade();
       return;
     }
@@ -378,27 +375,13 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     </div>
 
     <div className="mt-6 space-y-6">
-          {user && !billing.isLoading && !hasBackupAccess ? (
-            <div className="rounded-lg border p-4 bg-muted/50">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div className="space-y-1">
-                  <div className="font-medium">{isTeamWorkspace ? "Paid Organization feature" : "Pro feature"}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {isTeamWorkspace
-                      ? "Template import/export requires a paid Organization plan."
-                      : billingEnabled
-                        ? "Template import/export is available on Pro."
-                        : "Billing is temporarily unavailable. Please contact support."}
-                  </div>
-                  {!isTeamWorkspace ? (
-                    <Button className="mt-2" onClick={handleUpgrade} disabled={!billingEnabled}>
-                      {billingEnabled ? "Upgrade to Pro" : "Upgrade unavailable"}
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            </div>
+          {user ? (
+            <TemplateBackupPlanNotice
+              billing={billing}
+              isTeamWorkspace={isTeamWorkspace}
+              onRetry={billing.refetch}
+              onUpgrade={() => void handleUpgrade()}
+            />
           ) : null}
 
           {user && isTeamWorkspace && !canEditTemplates ? (
@@ -449,10 +432,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                   id="include-public-templates"
                   checked={includePublicTemplates}
                   onCheckedChange={setIncludePublicTemplates}
-                  disabled={!user || billing.isLoading || !hasBackupAccess || !canEditTemplates}
+                  disabled={!user || !hasBackupAccess || !canEditTemplates}
                 />
               </div>
-	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={!user || billing.isLoading || !hasBackupAccess || !canEditTemplates}>
+	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={!user || !hasBackupAccess || !canEditTemplates}>
 	              <Download className="h-4 w-4" />
 	              Export Portable Pack
 	            </Button>
@@ -481,7 +464,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
               </div>
 	            <div className="space-y-2">
 	              <Label htmlFor="template-file-input">Select a YAML, JSON, or Markdown template file</Label>
-	              <Input id="template-file-input" type="file" accept=".json,.md,.markdown,.yaml,.yml" onChange={handleFileSelect} disabled={isImporting || !user || billing.isLoading || !hasBackupAccess || !canEditTemplates} />
+	              <Input id="template-file-input" type="file" accept=".json,.md,.markdown,.yaml,.yml" onChange={handleFileSelect} disabled={isImporting || !user || !hasBackupAccess || !canEditTemplates} />
 	              <p className="text-sm text-muted-foreground">
 	                Need an example?{" "}
 	                <Button variant="link" className="p-0 h-auto text-primary" onClick={downloadSampleTemplate}>

@@ -524,7 +524,7 @@ const TemplateDetail = () => {
             ? 'Copying...'
             : billingState.isLoading
               ? 'Checking plan...'
-              : !billingState.isPro
+              : !billingState.isPro && !billingState.isError
                 ? 'Upgrade to copy template'
                 : 'Copy to My Templates'}
         </Button>

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { useBillingStatus } from '@/hooks/useBillingStatus';
 import { getAccessFailure } from '@/lib/api-errors';
 import { api, type TemplateHistoryResponse } from '@/lib/api';
-import { getBillingStatusQueryKey } from '@/lib/billing';
 import {
   buildRepoTemplateCreatePayload,
   findPublicTemplateByIdentifier,
@@ -77,6 +77,8 @@ export type TemplateDetailActionResult =
 
 export type TemplateDetailBillingState = {
   billingEnabled: boolean;
+  /** The plan check failed and no plan is known; never treat this as Free. */
+  isError: boolean;
   isLoading: boolean;
   isPro: boolean;
 };
@@ -275,6 +277,10 @@ export const saveTemplateToAccount = async (params: {
     return { kind: 'error', message: 'Checking your plan. Try again in a moment.' };
   }
 
+  if (params.billingState.isError) {
+    return { kind: 'error', message: "Couldn't check your plan. Try again." };
+  }
+
   if (!params.billingState.isPro) {
     return { kind: 'upgrade_required' };
   }
@@ -316,18 +322,17 @@ export const useTemplateDetailModel = (
   const publicOwnerUsername =
     options.mode === 'public' ? options.ownerUsername : undefined;
 
-  const billing = useQuery({
-    queryKey: getBillingStatusQueryKey(options.userId, options.teamId),
-    queryFn: () =>
-      api.getBillingStatus(options.teamId ? { teamId: options.teamId } : undefined),
+  const billing = useBillingStatus({
     enabled: options.isAuthenticated,
-    retry: false,
+    teamId: options.teamId,
+    userId: options.userId,
   });
 
   const billingState: TemplateDetailBillingState = {
-    billingEnabled: billing.data?.billingEnabled ?? true,
-    isLoading: options.isAuthenticated && billing.isLoading,
-    isPro: billing.data?.plan === 'pro' || billing.data?.plan === 'team',
+    billingEnabled: billing.status === 'known' ? billing.billingEnabled : true,
+    isError: billing.status === 'error',
+    isLoading: billing.status === 'loading',
+    isPro: billing.status === 'known' && billing.isPaid,
   };
   const canLoadTemplateHistory =
     options.mode === 'private' &&
@@ -411,8 +416,13 @@ export const useTemplateDetailModel = (
       template,
     });
 
-  const saveTemplate = async (): Promise<TemplateDetailActionResult> =>
-    saveTemplateToAccount({
+  const saveTemplate = async (): Promise<TemplateDetailActionResult> => {
+    if (billing.status === 'error') {
+      // Check again so the next attempt can go through.
+      billing.refetch();
+    }
+
+    return saveTemplateToAccount({
       billingState,
       createTemplate: options.createTemplate,
       invalidateTemplates,
@@ -421,6 +431,7 @@ export const useTemplateDetailModel = (
       template,
       userId: options.userId,
     });
+  };
 
   const shareTemplate = async (): Promise<TemplateDetailActionResult> => {
     if (!template) {
