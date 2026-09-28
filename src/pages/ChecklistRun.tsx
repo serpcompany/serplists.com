@@ -184,6 +184,7 @@ const ChecklistRunPage = () => {
   const handleItemNotesSave = async (itemId: string, notes: string) => {
     const result = await saveItemNotes(itemId, notes);
     if (result.kind === 'ok') return true;
+    if (result.kind === 'ignored') return false;
     toast.error(result.kind === 'error' ? result.message : 'Unable to save task notes.');
     return false;
   };
