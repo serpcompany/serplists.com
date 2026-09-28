@@ -5,13 +5,16 @@ import {
   type PortableChecklistTemplate,
   type PortableTemplatePack,
 } from "@/lib/schemas/checklistSchema";
+import {
+  escapeTemplateMarkdownDescription,
+  parseTemplateMarkdownBody,
+  renderTemplateMarkdownBlock,
+} from "@/lib/templates/templateMarkdownBody";
 
 const FRONTMATTER_DELIMITER = "---";
 const TEMPLATE_TITLE_PREFIX = "# ";
 const SECTION_PREFIX = "## ";
 const ITEM_PREFIX = "### ";
-const BLOCK_PREFIX = "```serplists:";
-const BLOCK_SUFFIX = "```";
 
 type SupportedMarkdownExtension = ".md" | ".markdown";
 type SupportedYamlExtension = ".yaml" | ".yml";
@@ -173,18 +176,14 @@ const buildFrontmatter = (template: PortableChecklistTemplate) => {
 };
 
 const renderYamlContentBlock = (blockType: string, value: unknown) =>
-  `${BLOCK_PREFIX}${blockType}\n${dumpYaml(value)}\n${BLOCK_SUFFIX}`;
+  renderTemplateMarkdownBlock(blockType, dumpYaml(value));
 
 const renderContentBlocks = (contents?: PortableChecklistTemplate["sections"][number]["items"][number]["contents"]) => {
   if (!Array.isArray(contents) || contents.length === 0) return [];
 
   return contents.map((content) => {
-    if (content.type === "text") {
-      return `${BLOCK_PREFIX}text\n${(content.value ?? "").trim()}\n${BLOCK_SUFFIX}`;
-    }
-
-    if (content.type === "embed") {
-      return `${BLOCK_PREFIX}embed\n${(content.value ?? "").trim()}\n${BLOCK_SUFFIX}`;
+    if (content.type === "text" || content.type === "embed") {
+      return renderTemplateMarkdownBlock(content.type, (content.value ?? "").trim());
     }
 
     if (content.type === "subItems") {
@@ -209,7 +208,7 @@ export const renderTemplateMarkdown = (template: PortableChecklistTemplate) => {
   ];
 
   if (normalized.description) {
-    parts.push(normalized.description);
+    parts.push(escapeTemplateMarkdownDescription(normalized.description));
   }
 
   normalized.sections.forEach((section) => {
@@ -219,7 +218,7 @@ export const renderTemplateMarkdown = (template: PortableChecklistTemplate) => {
       parts.push(`${ITEM_PREFIX}${item.title}`);
 
       if (item.description) {
-        parts.push(item.description);
+        parts.push(escapeTemplateMarkdownDescription(item.description));
       }
 
       const blocks = renderContentBlocks(item.contents);
@@ -300,7 +299,7 @@ export const renderTemplateReadme = (template: PortableChecklistTemplate) => {
   const parts: string[] = [`# ${normalized.title}`];
 
   if (normalized.description) {
-    parts.push(normalized.description);
+    parts.push(escapeTemplateMarkdownDescription(normalized.description));
   }
 
   if (normalized.categories?.length || normalized.tags?.length) {
@@ -315,7 +314,7 @@ export const renderTemplateReadme = (template: PortableChecklistTemplate) => {
     section.items.forEach((item) => {
       parts.push(`- [ ] **${item.title}**`);
       if (item.description) {
-        parts.push(item.description);
+        parts.push(escapeTemplateMarkdownDescription(item.description));
       }
 
       item.contents?.forEach((content) => {
@@ -600,60 +599,6 @@ const parseSubItemsBlock = (rawBlock: string) => {
   });
 };
 
-const splitBlocks = (itemBody: string) => {
-  const normalized = normalizeLineEndings(itemBody).trim();
-  if (!normalized) return { description: "", blocks: [] as { type: string; body: string }[] };
-
-  const lines = normalized.split("\n");
-  const descriptionLines: string[] = [];
-  const blocks: { type: string; body: string }[] = [];
-  let cursor = 0;
-
-  while (cursor < lines.length) {
-    const line = lines[cursor];
-    if (line.startsWith(BLOCK_PREFIX)) {
-      const blockType = line.slice(BLOCK_PREFIX.length).trim();
-      cursor += 1;
-      const blockLines: string[] = [];
-      while (cursor < lines.length && lines[cursor] !== BLOCK_SUFFIX) {
-        blockLines.push(lines[cursor]);
-        cursor += 1;
-      }
-      if (cursor >= lines.length) {
-        throw new Error(`Content block "${blockType}" is missing a closing fence`);
-      }
-      blocks.push({
-        type: blockType,
-        body: blockLines.join("\n").trim(),
-      });
-    } else {
-      descriptionLines.push(line);
-    }
-    cursor += 1;
-  }
-
-  return {
-    description: descriptionLines.join("\n").trim(),
-    blocks,
-  };
-};
-
-const collectHeadingBlocks = (body: string, prefix: string) => {
-  const source = normalizeLineEndings(body).trim();
-  if (!source) return [] as { title: string; body: string }[];
-
-  const headings = [...source.matchAll(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(.+)$`, "gm"))];
-  return headings.map((match, index) => {
-    const start = match.index ?? 0;
-    const contentStart = start + match[0].length;
-    const end = headings[index + 1]?.index ?? source.length;
-    return {
-      title: match[1].trim(),
-      body: source.slice(contentStart, end).trim(),
-    };
-  });
-};
-
 export const parseTemplateMarkdown = (markdown: string): PortableChecklistTemplate => {
   const { frontmatter, body } = extractFrontmatter(markdown);
   const normalizedBody = normalizeLineEndings(body).trim();
@@ -670,22 +615,18 @@ export const parseTemplateMarkdown = (markdown: string): PortableChecklistTempla
     remainingBody = endOfTitle === -1 ? "" : remainingBody.slice(endOfTitle + 1).trim();
   }
 
-  const sectionBlocks = collectHeadingBlocks(remainingBody, SECTION_PREFIX);
-  const firstSectionIndex = remainingBody.search(/^## /m);
-  const templateDescription = firstSectionIndex === -1
-    ? remainingBody.trim()
-    : remainingBody.slice(0, firstSectionIndex).trim();
+  const { description: templateDescription, sections: sectionBlocks } =
+    parseTemplateMarkdownBody(remainingBody);
 
   const sections = sectionBlocks.map((sectionBlock) => {
-    const itemBlocks = collectHeadingBlocks(sectionBlock.body, ITEM_PREFIX);
-    if (itemBlocks.length === 0) {
+    if (sectionBlock.items.length === 0) {
       throw new Error(`Section "${sectionBlock.title}" must include at least one item`);
     }
 
     return {
       title: sectionBlock.title,
-      items: itemBlocks.map((itemBlock) => {
-        const { description, blocks } = splitBlocks(itemBlock.body);
+      items: sectionBlock.items.map((itemBlock) => {
+        const { description, blocks } = itemBlock;
         const contents = blocks.map((block) => {
           if (block.type === "text") {
             return {

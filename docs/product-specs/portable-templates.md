@@ -216,7 +216,16 @@ Rules:
   - ```` ```serplists:embed ````
   - ```` ```serplists:subItems ````
 - `subItems` blocks must contain a YAML array
+- `text` and `embed` values may themselves contain headings and code fences. A
+  block's fence is longer than any run of backticks that starts a line of its value
+  (four backticks around a value with a 3-backtick code fence), and a block closes
+  only on a line with exactly its opening number of backticks. Plain values keep
+  3-backtick fences. Headings are recognized only outside blocks.
+- a description line that would read as a `##`/`###` heading or a `serplists:` fence
+  is written with one extra leading backslash (`\## Notes`); import removes it
 - JSON and Markdown siblings named `template.json` and `template.md` can be checked for drift with `pnpm templates:check`
+- `pnpm templates:check` also parses each template's generated Markdown back and
+  reports `markdown-roundtrip` when it would not import as the same template
 
 The example assets in `docs/product-specs/portable-templates/examples/` are the intended copy/paste starting point.
 

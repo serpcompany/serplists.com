@@ -8,6 +8,7 @@ import {
   prepareTemplatesForImport
 } from '@/lib/utils/templateBackup';
 import { ChecklistTemplate, TemplateBackup } from '@/lib/schemas/checklistSchema';
+import { renderTemplateMarkdown } from '@/lib/templates/templateMarkdown';
 
 // Mock DOM methods
 const mockCreateElement = vi.fn();
@@ -330,6 +331,27 @@ describe('Template Backup Utilities', () => {
       expect(result.templates[0].title).toBe('Markdown Template');
       expect(result.templates[0].isPublic).toBe(true);
       expect(result.templates[0].sections[0].items[0].contents).toHaveLength(2);
+    });
+
+    it('imports a Markdown file whose text block holds a heading and a code fence', async () => {
+      const value = ['### Tips', 'Run:', '```bash', 'npm i', '```'].join('\n');
+      const markdown = renderTemplateMarkdown({
+        title: 'Setup Guide',
+        sections: [
+          {
+            title: 'Install',
+            items: [{ title: 'Run the installer', description: 'Do X', contents: [{ type: 'text', value }] }],
+          },
+        ],
+      });
+
+      const result = await parseTemplatesFromFile(
+        new File([markdown], 'template.md', { type: 'text/markdown' }),
+      );
+
+      const item = result.templates[0].sections[0].items[0];
+      expect(item.description).toBe('Do X');
+      expect(item.contents?.map((content) => content.value)).toEqual([value]);
     });
 
     it('should parse single-template YAML files', async () => {
