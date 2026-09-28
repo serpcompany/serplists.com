@@ -1,6 +1,9 @@
 export const EDITOR_UNSAVED_CHANGES_MESSAGE =
   'You have unsaved template changes. Leave without saving?';
 
+export const EDITOR_LOAD_LATEST_MESSAGE =
+  'Load the latest saved version of this template? Your unsaved changes will be lost.';
+
 export const shouldBlockTemplateEditorNavigation = ({
   isDirty,
   isSaving,

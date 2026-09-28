@@ -60,7 +60,8 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   never fetches them. A page that reads `templates` (the public catalog) calls
   `useTemplateLists({ catalog: true, workspace: false })`, one that reads `allTemplates`
   calls `useTemplateLists()`, and one that reads `runs` adds `runs: true`. The run page
-  fetches its own run by id. A catalog miss reads every public Template from D1
+  fetches its own run by id, and the template editor its own template: an editor
+  must never start from a list copy, which can be minutes old. A catalog miss reads every public Template from D1
   ([D1 cost](design-docs/d1-cost.md)), so pages that only need official templates use
   the bundled `repoTemplates`. The catalog's query key has no user id because the
   catalog is the same for everyone.

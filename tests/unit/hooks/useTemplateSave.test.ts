@@ -214,4 +214,23 @@ describe("persistTemplateSave", () => {
 
     expect(result.failure?.kind).toBe("auth_required");
   });
+
+  it("marks a save refused because the template changed since it was loaded", async () => {
+    const dependencies = buildDependencies({
+      updateTemplate: vi.fn().mockRejectedValue(
+        createApiError(409, {
+          error: "Template changed since it was loaded. Refresh before saving again.",
+          code: "edit_conflict",
+        }),
+      ),
+    });
+
+    const result = await persistTemplateSave(
+      dependencies,
+      buildInput({ id: "template-1", expectedVersion: 5 }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.editConflict).toBe(true);
+  });
 });

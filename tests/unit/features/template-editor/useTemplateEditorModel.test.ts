@@ -43,41 +43,57 @@ const buildTemplate = (
 });
 
 describe("loadTemplateEditorData", () => {
-  it("loads an existing template from cached data first", async () => {
-    const template = buildTemplate();
-    const getCachedTemplate = vi.fn(() => template);
+  // The lists can hold a copy minutes old; a teammate's newer save must not be missing.
+  it("always loads the template by id, even when the lists hold an older copy", async () => {
+    const getCachedTemplate = vi.fn(() => buildTemplate({ title: "Old title", version: 5 }));
     const apiClient = {
-      getTemplateById: vi.fn(),
+      getTemplateById: vi.fn().mockResolvedValue({
+        id: "template-1",
+        title: "New title",
+        sections: [
+          {
+            id: "section-1",
+            title: "Prep",
+            items: [
+              { id: "item-1", title: "Bring tent" },
+              { id: "item-2", title: "Added by a teammate" },
+            ],
+          },
+        ],
+        slug: "camping-checklist",
+        version: 6,
+      }),
     };
 
     const result = await loadTemplateEditorData(
-      {
-        id: "template-1",
-        getCachedTemplate,
-      },
+      { id: "template-1", getCachedTemplate } as Parameters<typeof loadTemplateEditorData>[0],
       { apiClient },
     );
 
-    expect(getCachedTemplate).toHaveBeenCalledWith("template-1");
-    expect(apiClient.getTemplateById).not.toHaveBeenCalled();
-    expect(result).toEqual(
-      expect.objectContaining({
-        loadError: null,
-        templateSlug: "camping-checklist",
-      }),
-    );
-    expect(result.initialValues).toEqual(
-      expect.objectContaining({
-        title: "Camping Checklist",
-        description: "Pack the essentials.",
-        categories: ["Travel"],
-        tags: ["camping"],
-        seoUrl: "camping-checklist",
-      }),
-    );
+    expect(apiClient.getTemplateById).toHaveBeenCalledWith("template-1");
+    expect(getCachedTemplate).not.toHaveBeenCalled();
+    expect(result.version).toBe(6);
+    expect(result.initialValues.title).toBe("New title");
+    expect(result.initialValues.sections[0].items.map((item) => item.title)).toEqual([
+      "Bring tent",
+      "Added by a teammate",
+    ]);
   });
 
-  it("falls back to the API when the template is not cached", async () => {
+  it("reports a failed load instead of editing a cached copy", async () => {
+    const result = await loadTemplateEditorData(
+      {
+        id: "template-1",
+        getCachedTemplate: vi.fn(() => buildTemplate({ version: 5 })),
+      } as Parameters<typeof loadTemplateEditorData>[0],
+      { apiClient: { getTemplateById: vi.fn().mockRejectedValue(new Error("Template not found")) } },
+    );
+
+    expect(result.loadError).toBe("Template not found");
+    expect(result.version).toBeUndefined();
+  });
+
+  it("maps the API record into the editor form", async () => {
     const apiClient = {
       getTemplateById: vi.fn().mockResolvedValue({
         id: "template-2",
@@ -104,10 +120,7 @@ describe("loadTemplateEditorData", () => {
     };
 
     const result = await loadTemplateEditorData(
-      {
-        id: "template-2",
-        getCachedTemplate: vi.fn(() => undefined),
-      },
+      { id: "template-2" },
       { apiClient },
     );
 
@@ -135,24 +148,9 @@ describe("loadTemplateEditorData", () => {
 });
 
 describe("loadTemplateEditorData versions", () => {
-  it("keeps the version of the cached snapshot the form was built from", async () => {
+  it("keeps the version of the API record the form was built from", async () => {
     const result = await loadTemplateEditorData(
-      {
-        id: "template-1",
-        getCachedTemplate: vi.fn(() => buildTemplate({ version: 5 })),
-      },
-      { apiClient: { getTemplateById: vi.fn() } },
-    );
-
-    expect(result.version).toBe(5);
-  });
-
-  it("keeps the version of the API record when the template is not cached", async () => {
-    const result = await loadTemplateEditorData(
-      {
-        id: "template-2",
-        getCachedTemplate: vi.fn(() => undefined),
-      },
+      { id: "template-2" },
       {
         apiClient: {
           getTemplateById: vi.fn().mockResolvedValue({
@@ -170,10 +168,7 @@ describe("loadTemplateEditorData versions", () => {
 
   it("has no version when the load fails", async () => {
     const result = await loadTemplateEditorData(
-      {
-        id: "template-3",
-        getCachedTemplate: vi.fn(() => undefined),
-      },
+      { id: "template-3" },
       {
         apiClient: {
           getTemplateById: vi.fn().mockRejectedValue(new Error("Not found")),

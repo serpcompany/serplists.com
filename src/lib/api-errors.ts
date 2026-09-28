@@ -54,6 +54,11 @@ export const isUpgradeRequiredError = (error: unknown): error is ApiError => {
     && (error.code === "upgrade_required" || error.code === "limit_reached");
 };
 
+// A template or run changed after the editor loaded it.
+export const isEditConflictError = (error: unknown): error is ApiError => {
+  return isApiError(error) && error.status === 409 && error.code === "edit_conflict";
+};
+
 export const isBillingUnavailableError = (error: unknown): error is ApiError => {
   return isApiError(error) && error.code === "billing_unavailable";
 };

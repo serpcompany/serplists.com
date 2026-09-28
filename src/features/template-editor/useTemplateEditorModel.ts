@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 
-import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { mapApiTemplateToChecklistTemplate } from "@/features/template-detail/templateDetailMappers";
 import { cloneTemplateEditorFormValues } from "@/features/template-editor/postSaveFormState";
 import {
@@ -21,7 +20,6 @@ type TemplateEditorApiClient = Pick<typeof api, "getTemplateById">;
 
 type TemplateEditorModelDependencies = {
   apiClient?: TemplateEditorApiClient;
-  getCachedTemplate?: (id: string) => ChecklistTemplate | undefined;
   saveTemplate?: (input: SaveTemplateInput) => Promise<SaveTemplateResult>;
 };
 
@@ -31,7 +29,6 @@ type TemplateEditorModelOptions = {
 
 type LoadTemplateEditorDataOptions = {
   id?: string;
-  getCachedTemplate: (id: string) => ChecklistTemplate | undefined;
 };
 
 type SaveTemplateEditorDataOptions = {
@@ -119,17 +116,16 @@ export const shouldLoadTemplateEditorRecord = (
   return requestedId !== loadedId;
 };
 
+// Always loads the template by id. The template lists are not a source: they can be
+// minutes old, so a teammate's (or another tab's) newer save would be missing from the
+// form, and the save would end in a conflict. A failed load is reported, never
+// replaced by a cached copy.
 export const loadTemplateEditorData = async (
   options: LoadTemplateEditorDataOptions,
   dependencies?: Pick<TemplateEditorModelDependencies, "apiClient">,
 ): Promise<TemplateEditorLoadResult> => {
   if (!options.id) {
     return buildLoadResult(buildDefaultTemplateEditorTemplate());
-  }
-
-  const cachedTemplate = options.getCachedTemplate(options.id);
-  if (cachedTemplate) {
-    return buildLoadResult(cachedTemplate);
   }
 
   try {
@@ -186,7 +182,6 @@ export const useTemplateEditorModel = (
   options: TemplateEditorModelOptions,
   dependencies?: TemplateEditorModelDependencies,
 ) => {
-  const { getTemplate } = useTemplateLists();
   const {
     saveTemplate: persistTemplateSave,
     isSaving,
@@ -194,13 +189,11 @@ export const useTemplateEditorModel = (
   const loadedTemplateIdRef = useRef<string | null>(null);
   // Set only from the loaded record and from save responses, never from the lists.
   const expectedVersionRef = useRef<number | undefined>(undefined);
-  const baseGetTemplateRef = useRef(getTemplate);
   const apiClientRef = useRef<TemplateEditorApiClient | undefined>(
     dependencies?.apiClient,
   );
-  const getCachedTemplateRef = useRef<
-    ((id: string) => ChecklistTemplate | undefined) | undefined
-  >(dependencies?.getCachedTemplate);
+  // Bumped by reload(), which loads the same template again (after a save conflict).
+  const [reloadCount, setReloadCount] = useState(0);
   const [initialValues, setInitialValues] = useState<TemplateEditorFormValues>(
     () => buildTemplateEditorFormValues(buildDefaultTemplateEditorTemplate()),
   );
@@ -209,8 +202,6 @@ export const useTemplateEditorModel = (
   const [templateSlug, setTemplateSlug] = useState<string | undefined>();
 
   apiClientRef.current = dependencies?.apiClient;
-  baseGetTemplateRef.current = getTemplate;
-  getCachedTemplateRef.current = dependencies?.getCachedTemplate;
 
   useEffect(() => {
     let cancelled = false;
@@ -237,14 +228,8 @@ export const useTemplateEditorModel = (
       expectedVersionRef.current = undefined;
 
       const result = await loadTemplateEditorData(
-        {
-          id: options.id,
-          getCachedTemplate:
-            getCachedTemplateRef.current ?? baseGetTemplateRef.current,
-        },
-        {
-          apiClient: apiClientRef.current,
-        },
+        { id: options.id },
+        { apiClient: apiClientRef.current },
       );
 
       if (cancelled) {
@@ -264,7 +249,13 @@ export const useTemplateEditorModel = (
     return () => {
       cancelled = true;
     };
-  }, [options.id]);
+  }, [options.id, reloadCount]);
+
+  // Loads the saved template again, replacing the form (the caller confirms first).
+  const reload = () => {
+    loadedTemplateIdRef.current = null;
+    setReloadCount((count) => count + 1);
+  };
 
   // Returns the saved values instead of replacing initialValues: the page rebases the
   // form onto them, keeping any edits typed while the save was in flight.
@@ -304,6 +295,7 @@ export const useTemplateEditorModel = (
     initialValues,
     loading,
     loadError,
+    reload,
     save,
     isSaving,
     templateSlug,

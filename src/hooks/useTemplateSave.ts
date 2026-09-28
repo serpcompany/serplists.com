@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { useTemplateValidation } from "@/hooks/useTemplateValidation";
-import { type AccessFailure, getAccessFailure } from "@/lib/api-errors";
+import { type AccessFailure, getAccessFailure, isEditConflictError } from "@/lib/api-errors";
 import { ChecklistSection, TemplateSavePayload, TemplateUpdateResult } from "@/types/checklist";
 import { ValidationError } from "@/hooks/useTemplateValidation";
 
@@ -15,6 +15,9 @@ export type SaveTemplateResult = {
   // Why the API refused the save, kept by kind (sign in, plan gate, billing down) so the
   // editor can offer the way forward instead of only showing the message.
   failure?: AccessFailure;
+  // Someone saved the template after this editor loaded it; the editor offers to load
+  // the latest version.
+  editConflict?: boolean;
 };
 
 // Never read the version from the template lists: they refetch in the background and
@@ -127,6 +130,7 @@ export const persistTemplateSave = async (
       success: false,
       errors: [{ type: "save", message: failure.message }],
       failure,
+      ...(isEditConflictError(error) ? { editConflict: true } : {}),
     };
   }
 };

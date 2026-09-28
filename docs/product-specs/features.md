@@ -40,7 +40,7 @@ Canonical private routes:
 - Runs record both the template content version last reconciled and a run revision. API responses expose `is_stale` when the source checklist structure is newer; metadata-only template edits do not stale runs.
 - Completed, archived, and publicly shared runs are frozen when a template changes. A completed private run can be explicitly reconciled and reopened with `POST /api/checklists/:id/revalidate`.
 - Runs that predate stable identities are conservatively marked stale during migration. Their legacy IDs are backfilled deterministically, and their completion/notes remain intact until explicit reconciliation.
-- Run and template saves use optimistic revision/version markers. A stale editor receives `409 edit_conflict` instead of overwriting newer work. The template editor checks against the version it loaded (then the version its last save returned), so a background list refresh cannot hide another editor's save.
+- Run and template saves use optimistic revision/version markers. A stale editor receives `409 edit_conflict` instead of overwriting newer work. The template editor loads the template by id when it opens, never from the cached template lists, and checks against the version it loaded (then the version its last save returned), so a background list refresh cannot hide another editor's save. After a conflict it offers to load the latest version, replacing its unsaved changes once the user confirms.
 - Run-level sharing creates public `/share/:token` links.
 - Guests can open shared runs without logging in and update checklist completion state.
 - Shared runs do not expose owner-only title editing or destructive actions.
@@ -91,7 +91,7 @@ Password for all seeded users: `password123`.
 - `403 Forbidden`: the user is signed in but lacks the required role or permission.
 - `503 billing_unavailable`: paid action cannot be started because billing config is unavailable.
 - `503 auth_email_unavailable`: auth email delivery is unavailable for flows that require outbound email.
-- `409 edit_conflict`: a template or run changed after the editor loaded it; refresh before retrying.
+- `409 edit_conflict`: a template or run changed after the editor loaded it; load the latest version before retrying.
 - `400` on a template create or update payload: the message starts with the failing field (for example `seoDescription: ...`) and `details.field` names it.
 
 The client preserves API `status`, `code`, and `details` so UI behavior does not depend on string matching generic error messages.

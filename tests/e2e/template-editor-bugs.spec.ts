@@ -856,4 +856,46 @@ test.describe("template editor regressions", () => {
 
     await deleteTemplate(page, createdTemplateId);
   });
+
+  test("opens the latest saved template, not the cached list copy", async ({ page }) => {
+    await loginAsSeedUser(page);
+    const title = `Concurrent edit ${uniqueSuffix()}`;
+    const templateId = await createTemplateViaApi(page, title);
+
+    try {
+      // The template list is now cached in the app.
+      await page.goto("/dashboard/templates");
+      await page.getByRole("link", { name: title }).first().click();
+      await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}$`));
+
+      // Another tab (or an Organization teammate) saves a new task meanwhile.
+      await page.evaluate(async ({ id, apiBaseUrl }) => {
+        const current = await fetch(`${apiBaseUrl}/templates/${id}`, { credentials: "include" });
+        const template = (await current.json()) as { items: unknown; version: number };
+        const sections = (
+          typeof template.items === "string" ? JSON.parse(template.items) : template.items
+        ) as Array<{ items: unknown[] }>;
+        sections[0].items.push({ id: "added-elsewhere", title: "Added elsewhere", description: "" });
+        const response = await fetch(`${apiBaseUrl}/templates/${id}`, {
+          method: "PUT",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sections, expected_version: template.version }),
+        });
+        if (!response.ok) throw new Error(`Failed to update template: ${response.status}`);
+      }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
+
+      await page.getByRole("link", { name: "Edit" }).click();
+      await expect(page.getByText("Added elsewhere").first()).toBeVisible();
+
+      await page.getByPlaceholder("Enter template name...").fill(`${title} edited`);
+      await page.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(page.getByText(/Template updated/)).toBeVisible();
+
+      const saved = await findTemplateByTitle(page, `${title} edited`);
+      expect(JSON.stringify(saved?.items)).toContain("Added elsewhere");
+    } finally {
+      await deleteTemplate(page, templateId);
+    }
+  });
 });

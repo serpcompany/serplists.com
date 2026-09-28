@@ -30,7 +30,10 @@ import {
   cloneTemplateEditorFormValues,
   rebaseTemplateEditorFormAfterSave,
 } from "@/features/template-editor/postSaveFormState";
-import { shouldBlockTemplateEditorNavigation } from "@/features/template-editor/navigationGuards";
+import {
+  EDITOR_LOAD_LATEST_MESSAGE,
+  shouldBlockTemplateEditorNavigation,
+} from "@/features/template-editor/navigationGuards";
 import { useTemplateEditorLeaveGuard } from "@/features/template-editor/useTemplateEditorLeaveGuard";
 import { useTemplateEditorAccess } from "@/features/template-editor/useTemplateEditorAccess";
 import { TemplateEditorAccessNotices } from "@/components/template-editor/TemplateEditorAccessNotices";
@@ -52,6 +55,8 @@ const TemplateEditor = () => {
   const navigate = useNavigate();
   const model = useTemplateEditorModel({ id });
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  // The last save was refused because someone saved the template after it loaded.
+  const [editConflict, setEditConflict] = useState(false);
   
   const {
     selectedSectionIndex,
@@ -95,6 +100,7 @@ const TemplateEditor = () => {
     const result = await model.save(submitted);
     // A plan gate or an ended session shows as a notice with its action, not as an error.
     setErrors(access.handleSaveResult(result) ? [] : result.errors);
+    setEditConflict(Boolean(result.editConflict));
     if (!result.success || !result.savedValues) {
       return;
     }
@@ -111,6 +117,16 @@ const TemplateEditor = () => {
       submitted,
       saved: result.savedValues,
     });
+  };
+
+  const handleLoadLatest = () => {
+    if (templateForm.formState.isDirty && !window.confirm(EDITOR_LOAD_LATEST_MESSAGE)) {
+      return;
+    }
+
+    setErrors([]);
+    setEditConflict(false);
+    model.reload();
   };
 
   if (model.loading) {
@@ -162,6 +178,11 @@ const TemplateEditor = () => {
                   <li key={index}>{error.message}</li>
                 ))}
               </ul>
+              {editConflict ? (
+                <Button className="mt-3" onClick={handleLoadLatest} size="sm" type="button" variant="outline">
+                  Load latest version
+                </Button>
+              ) : null}
             </AlertDescription>
           </Alert>
         </div>
