@@ -540,14 +540,13 @@ describe('TemplateDetail Changelog', () => {
               action: 'template.restored',
               actor: { name: 'Bob Editor' },
               createdAt: '2026-07-05T12:00:00.000Z',
-              diff: { deleted_at: null, is_public: false },
               id: 'event-3',
             },
             {
               action: 'template.updated',
               actor: { name: 'John Example' },
               createdAt: '2026-07-04T12:00:00.000Z',
-              diff: { is_public: true },
+              metadata: { visibility: 'public' },
               id: 'event-2',
             },
             {

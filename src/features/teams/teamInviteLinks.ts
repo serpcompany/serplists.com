@@ -132,3 +132,7 @@ export const withoutRevokedLink = (link: InviteLink | null, inviteId: string): I
 
 /** Revoking answered 404: the invite was already revoked, accepted, or expired, so its link is dead. */
 export const isInviteGoneError = (error: unknown): boolean => isApiError(error) && error.status === 404;
+
+// The invitee accepted the invite before the revoke reached the server: they are a member now.
+export const isInviteAlreadyAcceptedError = (error: unknown): boolean =>
+  isApiError(error) && error.status === 409 && error.code === 'invite_already_accepted';

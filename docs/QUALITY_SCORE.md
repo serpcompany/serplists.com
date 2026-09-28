@@ -15,7 +15,7 @@ changes are risky or slow. D = needs attention before building on it.
 | --- | --- | --- | --- | --- | --- |
 | Identity and sessions | B | B | B | A | Session checks read D1 (no Better Auth cookie cache), so re-checks must stay throttled |
 | Personal and Organization ownership | B | B | C | B | Legacy team/workspace naming in code identifiers (TD-5); `teams.ts` is about 1,050 lines |
-| Templates | A | C | D | A | `templates.ts` handler is about 1,600 lines; hand-normalized `sections` (TD-3, TD-8) |
+| Templates | A | B | D | A | `templates.ts` handler is about 1,600 lines (TD-8) |
 | Runs | B | C | C | B | `checklists.ts` is about 1,200 lines; `ChecklistRun.tsx` is near its cap |
 | Billing and entitlements | B | B | B | A | Only 3 e2e specs exercise paid flows |
 | Agent access (Run Keys, MCP) | B | B | C | D | No module doc for Run Keys and MCP; `agentMcp.ts` is about 900 lines |

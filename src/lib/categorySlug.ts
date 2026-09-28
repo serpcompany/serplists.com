@@ -5,21 +5,24 @@
 //
 // - Letters and digits of every script are kept, so 'Русский' and '日本語' get their own
 //   pages instead of all collapsing to ''.
-// - Accents on Latin letters are dropped ('Café' becomes 'cafe'), which keeps every plain
-//   ASCII name's slug exactly as it was. Marks in other scripts are kept, because they
-//   are part of the letter there (Japanese dakuten, Devanagari vowel signs, Cyrillic й).
+// - Accents on Latin letters are dropped ('Café' becomes 'cafe'), and Latin letters that
+//   do not decompose fold the way template slugs do ('Straße' becomes 'strasse'; see
+//   foldLatinLetters in src/lib/utils/slug.ts), so a Latin-script name gets the same slug as
+//   generateSlug gives it. Marks in other scripts are kept, because they are part of the
+//   letter there (Japanese dakuten, Devanagari vowel signs, Cyrillic й).
 // - Compatibility forms fold (full-width 'ＳＥＯ' becomes 'seo'), and any normal form of
 //   the same name gives the same slug, so a decomposed (NFD) URL still matches.
 // - A name with no letters or digits ('!!!', emoji only) has no slug: ''.
+import { foldLatinLetters } from './utils/slug';
+
 const LATIN_LETTER_WITH_MARKS = /(\p{Script=Latin})\p{M}+/gu;
 const NOT_SLUG_CHARACTER = /[^\p{L}\p{M}\p{N}\s-]+/gu;
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 
 export const categorySlug = (name: string): string => {
-  const slug = name
-    .normalize('NFKD')
-    .toLowerCase()
-    .replace(LATIN_LETTER_WITH_MARKS, '$1')
+  const slug = foldLatinLetters(
+    name.normalize('NFKD').toLowerCase().replace(LATIN_LETTER_WITH_MARKS, '$1'),
+  )
     .replace(NOT_SLUG_CHARACTER, '')
     .trim()
     .replace(/\s+/g, '-')

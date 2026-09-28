@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { needsFullPageLoad } from "@/lib/analyticsUrl";
 import { authClient, getAuthStatus } from "@/lib/auth-client";
 import { readLoginPrefill } from "@/lib/auth/loginPrefill";
+import { getAuthErrorMessage } from "@/lib/auth/authErrors";
 import {
   DEV_TEST_USER_DEFAULT_PASSWORD,
   DEV_TEST_USER_PASSWORD_RESET_COMMAND,
@@ -153,13 +154,13 @@ const Login = () => {
       });
 
       if (result?.error) {
-        toast.error(result.error.message || "Unable to resend verification email");
+        toast.error(getAuthErrorMessage(result.error, "Unable to resend verification email"));
         return;
       }
 
       toast.success("Verification email sent.");
     } catch (error) {
-      toast.error("Unable to resend verification email");
+      toast.error(getAuthErrorMessage(error, "Unable to resend verification email"));
       console.error("Resend verification error:", error);
     } finally {
       setIsResendingVerification(false);

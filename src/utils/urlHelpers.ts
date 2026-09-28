@@ -1,4 +1,5 @@
-import { withSerpListsClipyRef } from '@/lib/utils/clipyUrl';
+import { clipyVideoId, isClipyHost, withSerpListsClipyRef } from '@/lib/utils/clipyUrl';
+import { isEmbedFrameOrigin } from '@/lib/utils/embedOrigins';
 
 const YOUTUBE_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 // Path prefixes followed by the video id: /embed/ID, /shorts/ID, /live/ID and the legacy /v/ID, /e/ID.
@@ -47,8 +48,24 @@ export const getYoutubeVideoId = (url: string | URL): string | null => {
   return candidate && candidate !== 'videoseries' && YOUTUBE_VIDEO_ID.test(candidate) ? candidate : null;
 };
 
+/** Reads a YouTube start time (`t=90`, `t=1m30s`, `start=90`) as whole seconds. */
+const getYoutubeStartSeconds = (parsed: URL): number | null => {
+  const value = parsed.searchParams.get('start') ?? parsed.searchParams.get('t');
+  if (!value) return null;
+  const match = value.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/);
+  if (!match) return null;
+  const [, hours = '0', minutes = '0', seconds = '0'] = match;
+  const total = Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
+  return total > 0 ? total : null;
+};
+
 export type VideoEmbedSource = {
-  kind: 'iframe' | 'video';
+  /**
+   * `iframe`: a player on an origin the Content-Security-Policy frame-src allows.
+   * `video`: a media file for the native player.
+   * `link`: a page that cannot be framed, shown as an outbound link instead.
+   */
+  kind: 'iframe' | 'video' | 'link';
   url: string;
   outboundUrl?: string;
 };
@@ -56,6 +73,12 @@ export type VideoEmbedSource = {
 const extractIframeSource = (value: string): string | null => {
   const match = value.match(/<iframe\b[^>]*\bsrc\s*=\s*(["'])(.*?)\1/i);
   return match?.[2]?.replace(/&amp;/g, '&').trim() ?? null;
+};
+
+/** Frames the URL only when its origin is allowlisted; anything else becomes a link. */
+const frameOrLink = (url: string, outboundUrl?: string): VideoEmbedSource => {
+  if (!isEmbedFrameOrigin(url)) return { kind: 'link', url };
+  return outboundUrl ? { kind: 'iframe', url, outboundUrl } : { kind: 'iframe', url };
 };
 
 export const getVideoEmbedSource = (value: string): VideoEmbedSource | null => {
@@ -74,43 +97,48 @@ export const getVideoEmbedSource = (value: string): VideoEmbedSource | null => {
     return null;
   }
 
-  if (isYoutubeHostname(parsed.hostname)) {
-    // A YouTube page is never a playable file: embed the video or report the link as invalid.
+  // A YouTube page is never a playable file: embed the video, or link to a page that has none.
+  const isYoutube = isYoutubeHostname(parsed.hostname);
+  if (isYoutube) {
     const youtubeId = getYoutubeVideoId(parsed);
-    return youtubeId ? { kind: 'iframe', url: `https://www.youtube.com/embed/${youtubeId}` } : null;
-  }
-
-  const isClipyHost =
-    parsed.hostname === 'clipy.online' || parsed.hostname === 'www.clipy.online';
-  if (isClipyHost) {
-    const clipyMatch = parsed.pathname.match(/^\/(?:video|embed)\/([a-zA-Z0-9_-]+)\/?$/);
-    if (clipyMatch?.[1]) {
-      return {
-        kind: 'iframe',
-        url: withSerpListsClipyRef(
-          `https://clipy.online/embed/${clipyMatch[1]}${parsed.search}`,
-        ),
-        outboundUrl: withSerpListsClipyRef(
-          `https://clipy.online/video/${clipyMatch[1]}`,
-        ),
-      };
+    if (youtubeId) {
+      const playerOrigin = isHostOrSubdomain(normalizeHostname(parsed.hostname), 'youtube-nocookie.com')
+        ? 'https://www.youtube-nocookie.com'
+        : 'https://www.youtube.com';
+      const embedUrl = new URL(`/embed/${youtubeId}`, playerOrigin);
+      const startSeconds = getYoutubeStartSeconds(parsed);
+      if (startSeconds) embedUrl.searchParams.set('start', String(startSeconds));
+      return frameOrLink(embedUrl.toString());
     }
   }
 
-  return { kind: iframeSource ? 'iframe' : 'video', url: parsed.toString() };
+  const isClipy = isClipyHost(parsed.hostname);
+  const clipyId = clipyVideoId(parsed);
+  if (clipyId) {
+    return frameOrLink(
+      withSerpListsClipyRef(`https://clipy.online/embed/${clipyId}${parsed.search}`),
+      withSerpListsClipyRef(`https://clipy.online/video/${clipyId}`),
+    );
+  }
+
+  if (iframeSource) {
+    // upgrade-insecure-requests loads http frames over https, so check the https origin.
+    const frameUrl = new URL(parsed);
+    frameUrl.protocol = 'https:';
+    const source = frameOrLink(frameUrl.toString());
+    return source.kind === 'iframe' ? source : { kind: 'link', url: parsed.toString() };
+  }
+
+  // A YouTube or Clipy page that is not a playable video is a web page, not a media file.
+  if (isYoutube || isClipy) {
+    return { kind: 'link', url: parsed.toString() };
+  }
+
+  return { kind: 'video', url: parsed.toString() };
 };
 
-/**
- * Generates a URL-friendly slug from a title
- */
-export const generateSlug = (title: string): string => {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
-    .replace(/\s+/g, '-') // Replace spaces with hyphens
-    .replace(/-+/g, '-') // Replace multiple hyphens with single
-    .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
-};
+// Generates a URL-friendly slug from a title, with the same rule as the API and sitemap.
+export { generateSlug } from '@/lib/utils/slug';
 
 /**
  * Validates if a URL is a valid HTTP/HTTPS URL

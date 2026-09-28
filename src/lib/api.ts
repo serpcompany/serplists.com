@@ -3,6 +3,9 @@ import { createApiError } from "@/lib/api-errors";
 import { reportUnauthorizedResponse } from "@/lib/unauthorizedResponses";
 import { parseTemplateUpdateResponse, type TemplateUpdateResult } from "@/lib/templateUpdateResult";
 import type { BillingStatus } from "@/lib/billing";
+import { HISTORY_DISPLAY_LIMIT } from "@/lib/history";
+import { agentMcpConnectionSchema, type AgentMcpConnection } from "@/lib/schemas/agentMcpConnection";
+import { resolveApiBaseUrl } from "@/lib/apiBaseUrl";
 import type { TemplateImportSummary } from "@/types/checklist";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 import {
@@ -13,10 +16,11 @@ import {
   type TeamInviteDelivery,
 } from "@/lib/schemas/teamInvite";
 
-const DEV_API_BASE_URL = env.VITE_API_URL ?? 'http://localhost:8788/api';
-const API_BASE_URL = import.meta.env.DEV
-  ? DEV_API_BASE_URL
-  : env.VITE_API_URL ?? '/api';
+const API_BASE_URL = resolveApiBaseUrl({
+  isDev: import.meta.env.DEV,
+  configuredUrl: env.VITE_API_URL,
+  pageHostname: typeof window === 'undefined' ? undefined : window.location.hostname,
+});
 
 export const getAgentMcpEndpoint = (origin?: string): string => {
   const endpoint = `${API_BASE_URL}/mcp`;
@@ -133,9 +137,19 @@ export type TemplateHistoryEvent = {
   action: string;
   createdAt: string;
   requestId?: string | null;
-  diff?: unknown;
   metadata?: unknown;
   actor: TemplateHistoryActor;
+};
+
+// PUT /api/templates/:id. Only a checklist-structure change bumps content_version and
+// reconciles active private runs; version advances for any stored change, visibility included.
+export type TemplateUpdateResponse = {
+  success: boolean;
+  slug?: string;
+  version?: number;
+  content_version?: number;
+  structureChanged?: boolean;
+  reconciledRuns?: number;
 };
 
 export type TemplateHistoryResponse = {
@@ -237,7 +251,7 @@ class ApiClient {
   }
 
   async getTemplateHistory(id: string): Promise<TemplateHistoryResponse> {
-    return this.request(`/templates/${encodeURIComponent(id)}/history`);
+    return this.request(`/templates/${encodeURIComponent(id)}/history?limit=${HISTORY_DISPLAY_LIMIT}`);
   }
 
   async getTemplateBySlug(slug: string) {
@@ -303,9 +317,10 @@ class ApiClient {
     });
   }
 
-  async exportTemplateBackup(params?: { includePublic?: boolean; format?: 'backup' | 'portable'; teamId?: string | null }) {
+  // Exports the active context's own templates. The page adds public templates from the
+  // catalog it already loaded (src/lib/templates/portableExport.ts).
+  async exportTemplateBackup(params?: { format?: 'backup' | 'portable'; teamId?: string | null }) {
     const search = new URLSearchParams();
-    if (params?.includePublic) search.set('includePublic', '1');
     if (params?.teamId) search.set('teamId', params.teamId);
     search.set('format', params?.format ?? 'portable');
     const query = search.toString();
@@ -350,13 +365,12 @@ class ApiClient {
     return this.request(`/checklists/${encodeURIComponent(id)}`);
   }
 
-  // Without a limit the API returns its default of 50 events; pass what the page shows.
+  // Asks for the events the Changelog shows (HISTORY_DISPLAY_LIMIT) unless a caller passes
+  // another positive whole number; the API's own default is 50.
   async getChecklistHistory(id: string, params?: { limit?: number }): Promise<ChecklistRunHistoryResponse> {
-    const search = new URLSearchParams();
     const limit = params?.limit;
-    if (typeof limit === 'number' && Number.isInteger(limit) && limit > 0) search.set('limit', String(limit));
-    const query = search.toString();
-    return this.request(`/checklists/${encodeURIComponent(id)}/history${query ? `?${query}` : ''}`);
+    const count = typeof limit === 'number' && Number.isInteger(limit) && limit > 0 ? limit : HISTORY_DISPLAY_LIMIT;
+    return this.request(`/checklists/${encodeURIComponent(id)}/history?limit=${count}`);
   }
 
   async createChecklist(checklist: {
@@ -373,20 +387,17 @@ class ApiClient {
     });
   }
 
-  async createChecklistShare(templateId: string, runName?: string, params?: { teamId?: string }) {
-    return this.request(`/checklists/${encodeURIComponent(templateId)}/share`, {
-      method: 'POST',
-      body: JSON.stringify({
-        ...(runName ? { runName } : {}),
-        ...(params?.teamId ? { teamId: params.teamId } : {}),
-      }),
-    });
-  }
-
   async createChecklistRunShare(runId: string) {
     return this.request(`/checklists/run/${encodeURIComponent(runId)}/share`, {
       method: 'POST',
       body: JSON.stringify({}),
+    });
+  }
+
+  /** Stops sharing a run: its share link stops working and the run becomes private. */
+  async revokeChecklistRunShare(runId: string): Promise<{ id: string; isPublic: false }> {
+    return this.request(`/checklists/run/${encodeURIComponent(runId)}/share`, {
+      method: 'DELETE',
     });
   }
 
@@ -454,6 +465,12 @@ class ApiClient {
     return this.request('/agent-keys');
   }
 
+  // The MCP endpoint the server accepts for this deployment, which can differ from the
+  // page's own origin (see getAgentMcpEndpoint, the fallback until this loads).
+  async getAgentMcpConnection(): Promise<AgentMcpConnection> {
+    return agentMcpConnectionSchema.parse(await this.request('/agent-keys/connection'));
+  }
+
   async createAgentKey(name: string): Promise<CreatedAgentKey> {
     return this.request('/agent-keys', {
       method: 'POST',
@@ -498,8 +515,10 @@ class ApiClient {
     return this.request(`/teams/${encodeURIComponent(teamId)}/invites`);
   }
 
-  async getTeamActivity(teamId: string): Promise<TeamActivityEvent[]> {
-    return this.request(`/teams/${encodeURIComponent(teamId)}/activity`);
+  // Organization settings shows this many recent events; request no more than that.
+  async getTeamActivity(teamId: string, limit = 10): Promise<TeamActivityEvent[]> {
+    const search = new URLSearchParams({ limit: String(limit) });
+    return this.request(`/teams/${encodeURIComponent(teamId)}/activity?${search.toString()}`);
   }
 
   async getIncomingTeamInvites(): Promise<IncomingTeamInvite[]> {

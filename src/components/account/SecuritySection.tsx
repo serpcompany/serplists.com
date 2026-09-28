@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Shield } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { getAuthErrorMessage } from "@/lib/auth/authErrors";
 import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
 
 export const SecuritySection: React.FC = () => {
@@ -44,7 +45,7 @@ export const SecuritySection: React.FC = () => {
       });
 
       if (result?.error) {
-        toast.error(result.error.message || "Failed to change password");
+        toast.error(getAuthErrorMessage(result.error, "Failed to change password"));
         return;
       }
 
@@ -64,7 +65,7 @@ export const SecuritySection: React.FC = () => {
     try {
       const result = await authClient.revokeOtherSessions();
       if (result?.error) {
-        toast.error(result.error.message || "Failed to sign out other sessions");
+        toast.error(getAuthErrorMessage(result.error, "Failed to sign out other sessions"));
         return;
       }
       toast.success("Signed out other sessions");

@@ -14,7 +14,9 @@ export const RUN_HISTORY_LABELS: Record<RunAuditAction, string> = {
   'checklist_run.deleted': 'Archived run',
   'checklist_run.restored': 'Restored run',
   'checklist_run.revalidated': 'Revalidated run',
+  'checklist_run.reconciled': 'Updated from Template',
   'checklist_run.share_created': 'Created share link',
+  'checklist_run.share_revoked': 'Stopped sharing',
   'checklist_run.shared_updated': 'Updated via shared link',
 };
 
@@ -34,7 +36,9 @@ export const ORGANIZATION_ACTIVITY_LABELS: Record<AuditAction, string> = {
   'checklist_run.deleted': 'Run archived',
   'checklist_run.restored': 'Run restored',
   'checklist_run.revalidated': 'Run revalidated',
+  'checklist_run.reconciled': 'Run updated from Template',
   'checklist_run.share_created': 'Run share created',
+  'checklist_run.share_revoked': 'Run sharing stopped',
   'checklist_run.shared_updated': 'Shared run updated',
   'checklist_run.updated': 'Run updated',
   'team.created': 'Organization created',

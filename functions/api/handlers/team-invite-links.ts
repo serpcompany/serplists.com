@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
-import { batchWriteMissed, insertAuditEventWhen } from "../utils/conditional-audit";
+import { batchWriteMissed, insertAuditEventWhere } from "../utils/guarded-writes";
 import { createInviteToken, sha256Hex } from "../utils/crypto";
 import { json, jsonError } from "../utils/response";
 import { buildTeamInviteDelivery } from "../utils/team-invite-delivery";
@@ -108,7 +108,7 @@ export async function reissueTeamInviteLink({
       .update(team_invites)
       .set({ token_hash: tokenHash, role, expires_at: expiresAt, updated_at: now })
       .where(pendingTeamInviteWhere(teamId, inviteId, now)),
-    insertAuditEventWhen(
+    insertAuditEventWhere(
       db,
       auditEvent,
       sql`exists (select 1 from ${team_invites} where ${team_invites.id} = ${inviteId} and ${team_invites.token_hash} = ${tokenHash})`,

@@ -2,15 +2,26 @@
 // (src/lib/forms/templateEditorDetailsForm.ts) and the API payload schema
 // (functions/api/utils/payloads.ts), so the editor never accepts what the API rejects.
 
+import {
+  TEMPLATE_DESCRIPTION_MAX,
+  TEMPLATE_LIST_ITEM_MAX,
+  TEMPLATE_LIST_MAX_ITEMS,
+  TEMPLATE_SEO_DESCRIPTION_MAX,
+  TEMPLATE_SEO_TITLE_MAX,
+  TEMPLATE_SLUG_MAX,
+  TEMPLATE_TITLE_MAX,
+} from "./templateLimits";
+
+// The numbers live in ./templateLimits.ts with the other limits every write path enforces.
 export const TEMPLATE_FIELD_LIMITS = {
-  title: 160,
-  description: 5000,
-  seoTitle: 160,
-  seoDescription: 320,
+  title: TEMPLATE_TITLE_MAX,
+  description: TEMPLATE_DESCRIPTION_MAX,
+  seoTitle: TEMPLATE_SEO_TITLE_MAX,
+  seoDescription: TEMPLATE_SEO_DESCRIPTION_MAX,
   // Tags and categories: how many, and how long each one may be.
-  listItems: 20,
-  listItemLength: 80,
-  slug: 160,
+  listItems: TEMPLATE_LIST_MAX_ITEMS,
+  listItemLength: TEMPLATE_LIST_ITEM_MAX,
+  slug: TEMPLATE_SLUG_MAX,
 } as const;
 
 // The longest title the API accepts. Titles the app builds itself (such as a duplicate's

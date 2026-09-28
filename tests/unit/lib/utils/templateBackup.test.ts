@@ -388,17 +388,18 @@ describe('Template Backup Utilities', () => {
         await expectReadableRejection(new File([markdown], 'template.md', { type: 'text/markdown' }), /title: String must contain/);
       });
 
-      it('names the item for a portable JSON pack with a blank item title', async () => {
+      // A blank task title is not an error in a pack: it imports as "Task N", as the editor shows it.
+      it('names the template and item for a portable JSON pack with an invalid item', async () => {
         const pack = {
           kind: 'serplists-template-pack',
           schemaVersion: '2.0.0',
           exportedAt: '2026-03-22T00:00:00.000Z',
-          templates: [{ title: 'Pack Template', sections: [{ title: 'Prep', items: [{ title: '' }] }] }],
+          templates: [{ title: 'Pack Template', sections: [{ title: 'Prep', items: [{ id: 42, title: 'Weigh' }] }] }],
         };
 
         await expectReadableRejection(
           new File([JSON.stringify(pack)], 'pack.json', { type: 'application/json' }),
-          /Template 1 > Section 1 > Item 1 > title: String must contain at least 1 character/,
+          /Pack Template: Skipped: Section 1 > Item 1 > id: Expected string, received number/,
         );
       });
 

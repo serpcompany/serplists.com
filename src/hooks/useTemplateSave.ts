@@ -29,7 +29,7 @@ export type SaveTemplateResult = {
 // Never read the version from the template lists: they refetch in the background and
 // would report another editor's newer save as the version this form was built from.
 type SaveTemplateDependencies = {
-  createTemplate: (template: Omit<TemplateSavePayload, "id">) => Promise<unknown>;
+  createTemplate: (template: Omit<TemplateSavePayload, "id" | "isPublic"> & { isPublic: boolean }) => Promise<unknown>;
   updateTemplate: (template: TemplateSavePayload) => Promise<TemplateUpdateResult | void>;
   applyDefaults: (
     title: string,
@@ -48,7 +48,9 @@ export type SaveTemplateInput = {
   templateType: "checklist" | "recipe";
   categories: string[];
   tags: string[];
-  isPublic: boolean;
+  // Left out of an update when the editor did not change it, so a save never resends a
+  // stale value (a Share made in another tab stays public).
+  isPublic?: boolean;
   // The version the editor loaded (or last saved). Required for updates.
   expectedVersion?: number;
   // The slug the template has now. An unchanged slug is not resent, so a stored slug
@@ -126,7 +128,7 @@ export const persistTemplateSave = async (
       type: templateType,
       categories,
       tags,
-      isPublic,
+      isPublic: isPublic ?? false,
     });
 
     return { success: true, errors: [], saved };

@@ -1,11 +1,15 @@
 import { z } from 'zod';
 
+import { mapChecklistRuns } from '@/features/run-execution/runExecutionMappers';
 import { isApiError } from '@/lib/api-errors';
 import { readApiTemplateTeamId } from '@/lib/templates/apiTemplateOwner';
-import { calculateSectionsProgress, isSectionsShape, normalizeSections } from '@/lib/utils/checklistSections';
-import type { ChecklistRun, ChecklistSection, ChecklistTemplate } from '@/types/checklist';
+import { normalizeSections } from '@/lib/utils/checklistSections';
+import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
 export type TemplateListRequest = { teamId?: string; scope?: 'public' | 'personal' };
+
+// The public catalog (?scope=public) is the same for everyone, so its key has no user.
+export const CATALOG_QUERY_KEY = ['templates', 'catalog'] as const;
 
 type ApiRow = Record<string, unknown>;
 const apiRows = z.array(z.record(z.unknown()));
@@ -54,37 +58,13 @@ export const mapApiTemplate = (template: ApiRow): ChecklistTemplate => ({
   slug: optionalString(template.slug) ?? '',
   version: typeof template.version === 'number' ? template.version : 1,
   teamId: readApiTemplateTeamId(template),
+  // Public catalog rows carry no team_id, so owner_type is what marks an Organization template.
+  ownerType: template.owner_type === 'team' || template.owner_type === 'user' ? template.owner_type : undefined,
   ownerProfile:
     typeof template.owner_username === 'string' || typeof template.owner_full_name === 'string'
       ? { username: optionalString(template.owner_username), full_name: optionalString(template.owner_full_name) }
       : undefined,
 });
-
-const runSections = (checklist: ApiRow): ChecklistSection[] => {
-  const raw = parseJsonField(checklist.items) || [];
-  if (isSectionsShape(raw)) return raw;
-  return [{ id: '1', title: 'Checklist', items: raw as ChecklistSection['items'] }];
-};
-
-export const mapApiRun = (checklist: ApiRow): ChecklistRun => {
-  const sections = normalizeSections(runSections(checklist));
-  return {
-    id: String(checklist.id),
-    templateId: optionalString(checklist.template_id) ?? '',
-    title: String(checklist.title ?? ''),
-    status: checklist.status === 'completed' ? 'completed' : 'in_progress',
-    progress: calculateSectionsProgress(sections),
-    sections,
-    startedAt: optionalString(checklist.started_at) || optionalString(checklist.created_at) || '',
-    completedAt: optionalString(checklist.completed_at) || undefined,
-    userId: optionalString(checklist.user_id) ?? '',
-    teamId: optionalString(checklist.team_id),
-    templateVersion: typeof checklist.template_version === 'number' ? checklist.template_version : 1,
-    revision: typeof checklist.revision === 'number' ? checklist.revision : 1,
-    isStale: checklist.is_stale === true,
-    isPublic: checklist.is_public === true || checklist.is_public === 1,
-  };
-};
 
 // Maps each row on its own, so one malformed row (for example corrupt JSON in `items`) is
 // skipped and logged instead of failing or emptying the whole list.
@@ -106,8 +86,10 @@ export const createTemplateListFetcher =
   async (): Promise<ChecklistTemplate[]> =>
     mapRows(await client.getTemplates(request), mapApiTemplate, 'template');
 
+// A run whose content cannot be read is still listed, with no tasks, so it can be deleted
+// (mapChecklistRuns).
 export const fetchRunList = async (client: TemplateListClient, teamId?: string): Promise<ChecklistRun[]> =>
-  mapRows(await client.getChecklists(teamId ? { teamId } : undefined), mapApiRun, 'run');
+  mapChecklistRuns(apiRows.parse(await client.getChecklists(teamId ? { teamId } : undefined)));
 
 // Retry a failed list load once, like the app default, unless the server refused the request
 // (signed out, no access, not found, rate limited): repeating it right away cannot help.

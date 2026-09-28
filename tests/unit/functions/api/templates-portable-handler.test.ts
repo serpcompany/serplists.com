@@ -36,7 +36,10 @@ vi.mock('@functions/api/utils/entitlements', () => ({
 import Ajv from 'ajv';
 
 import { buildPortableTemplatePackJsonSchema } from '@/lib/schemas/portableTemplateJsonSchema';
+import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
+import type { SQL } from 'drizzle-orm';
 import { handleTemplates } from '@functions/api/handlers/templates';
+import { portableTemplatePackSchema } from '@/lib/schemas/checklistSchema';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 
@@ -197,6 +200,48 @@ describe('portable template import/export API', () => {
     );
     expect(data.kind).toBe('serplists-template-pack');
     expect(data.templates[0].title).toBe('Team Template');
+  });
+
+  describe('an export asked to include public templates', () => {
+    // The page adds public templates from the edge-cached catalog; the export reads only
+    // the active context's own templates, never an OR across every public template.
+    it.each([
+      ['Personal', '/api/templates/backup?includePublic=1'],
+      ['Organization', '/api/templates/backup?includePublic=1&teamId=team-1'],
+    ])('reads only the %s templates from D1', async (_label, path) => {
+      dbMocks.selectChain.limit.mockResolvedValueOnce([
+        { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'editor', status: 'active' },
+      ]);
+      dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+        {
+          id: 'template-1',
+          title: 'Owned',
+          description: '',
+          items: JSON.stringify([{ id: 's-1', title: 'Checklist', items: [{ id: 'i-1', title: 'Item' }] }]),
+          category: '[]',
+          tags: '[]',
+          user_id: 'user-123',
+          is_public: 0,
+          slug: 'owned',
+          created_at: new Date().toISOString(),
+          version: 1,
+        },
+      ]);
+
+      const response = await handleTemplates(new Request(`http://localhost${path}`), mockEnv as never);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.templates.map((template: { title: string }) => template.title)).toEqual(['Owned']);
+      const dialect = new SQLiteSyncDialect();
+      const templateQueries = dbMocks.selectChain.where.mock.calls
+        .map(([where]) => dialect.sqlToQuery(where as SQL).sql)
+        .filter((whereSql) => whereSql.includes('"templates".'));
+      expect(templateQueries).toHaveLength(1);
+      expect(templateQueries[0]).toContain('"templates"."owner_type" = ?');
+      expect(templateQueries[0]).not.toContain('is_public');
+      expect(templateQueries[0]).not.toMatch(/\bor\b/i);
+    });
   });
 
   it('imports portable template packs into paid team workspaces', async () => {
@@ -376,5 +421,118 @@ describe('portable template import/export API', () => {
 
     const reimport = await importPack(data.templates);
     expect((await reimport.json()).imported).toBe(1);
+  });
+
+  describe('templates saved the way the editor saves them', () => {
+    const editorRows = () => [
+      {
+        id: 'template-1',
+        title: 'Launch plan',
+        description: null,
+        type: 'foo',
+        items: JSON.stringify([
+          {
+            id: 's-1',
+            title: '',
+            items: [
+              {
+                id: 'i-1',
+                title: 'Write copy',
+                contents: [
+                  { id: 'c-1', type: 'text', value: '' },
+                  { id: 'c-2', type: 'image', value: '' },
+                  { id: 'c-3', type: 'embed', value: '   ' },
+                  { id: 'c-4', type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Short' }, { id: 'sub-2', title: '' }] },
+                  { id: 'c-5', type: 'subItems', value: '', subItems: [{ id: 'sub-3', title: ' ' }] },
+                ],
+              },
+              { id: 'i-2', title: '' },
+            ],
+          },
+          { id: 's-2', title: '   ', items: [{ id: 'i-3', title: 'Publish' }] },
+          { id: 's-3', title: 'Empty', items: [] },
+        ]),
+        category: '[]',
+        tags: '[]',
+        user_id: 'user-123',
+        is_public: 0,
+        slug: 'launch-plan',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: null,
+        version: 1,
+      },
+      {
+        id: 'template-2',
+        title: 'Corrupt',
+        description: '',
+        items: 'not json',
+        category: '[]',
+        tags: '[]',
+        user_id: 'user-123',
+        is_public: 0,
+        slug: 'corrupt',
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: null,
+        version: 1,
+      },
+    ];
+
+    it('exports a pack that passes the portable schema and re-imports', async () => {
+      dbMocks.selectChain.orderBy.mockResolvedValueOnce(editorRows());
+
+      const response = await handleTemplates(new Request('http://localhost/api/templates/backup', { method: 'GET' }), mockEnv as never);
+      const pack = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(portableTemplatePackSchema.safeParse(pack).success).toBe(true);
+      expect(pack.templates).toHaveLength(1);
+      expect(pack.manifest.totalTemplates).toBe(1);
+      expect(pack.manifest.skippedTemplates).toEqual([expect.objectContaining({ title: 'Corrupt' })]);
+      const [template] = pack.templates;
+      expect(template.type).toBe('checklist');
+      expect(template.sections.map((section: { id: string; title: string }) => [section.id, section.title]))
+        .toEqual([['s-1', 'Section 1'], ['s-2', 'Section 2']]);
+      expect(template.sections[0].items[1].title).toBe('Task 2');
+      expect(template.sections[0].items[0].contents).toEqual([
+        { id: 'c-1', type: 'text', value: '' },
+        { id: 'c-4', type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Short' }] },
+      ]);
+
+      const importResponse = await handleTemplates(new Request('http://localhost/api/templates/backup', {
+        method: 'POST',
+        body: JSON.stringify(pack),
+      }), mockEnv as never);
+      const summary = await importResponse.json();
+
+      expect(importResponse.status).toBe(200);
+      expect(summary.imported).toBe(1);
+    });
+
+    it('imports older packs with blank fields and fails only the invalid template', async () => {
+      const response = await handleTemplates(new Request('http://localhost/api/templates/backup', {
+        method: 'POST',
+        body: JSON.stringify({
+          kind: 'serplists-template-pack',
+          schemaVersion: '2.0.0',
+          exportedAt: '2026-03-21T00:00:00.000Z',
+          templates: [
+            { title: 'No tasks', sections: [] },
+            {
+              title: 'Old export',
+              sections: [{ title: '', items: [{ title: 'Pack', contents: [{ type: 'video', value: '' }] }] }],
+            },
+          ],
+        }),
+      }), mockEnv as never);
+      const summary = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(summary.total).toBe(2);
+      expect(summary.imported).toBe(1);
+      expect(summary.successes).toEqual([expect.objectContaining({ index: 1, title: 'Old export' })]);
+      expect(summary.failed).toEqual([expect.objectContaining({ index: 0, title: 'No tasks', code: 'invalid_sections' })]);
+      const inserted = dbMocks.insertChain.values.mock.calls[0][0];
+      expect(JSON.parse(inserted.items)[0]).toEqual(expect.objectContaining({ title: 'Section 1' }));
+    });
   });
 });

@@ -1,0 +1,55 @@
+import { useState } from 'react';
+import { Link2Off, Share2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import type { RunExecutionActionResult } from '@/features/run-execution/useRunExecutionModel';
+
+type RunShareActionsProps = {
+  isCreatingShare: boolean;
+  isPublic: boolean;
+  // Creates the link and shows it in the page's share dialog.
+  onShare: () => void;
+  onStopSharing: () => Promise<RunExecutionActionResult>;
+};
+
+const STOP_FAILED = 'Unable to stop sharing this run.';
+
+/** Share and Stop sharing on the run page. A shared run shows its state and a way to revoke the link. */
+export function RunShareActions({ isCreatingShare, isPublic, onShare, onStopSharing }: RunShareActionsProps) {
+  const [isStopping, setIsStopping] = useState(false);
+  const busy = isCreatingShare || isStopping;
+
+  const stopSharing = async () => {
+    setIsStopping(true);
+    try {
+      const result = await onStopSharing();
+      if (result.kind === 'error') {
+        toast.error(result.message || STOP_FAILED);
+      } else if (result.kind === 'ok') {
+        toast.success('Sharing stopped. The old link no longer works.');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : STOP_FAILED);
+    } finally {
+      setIsStopping(false);
+    }
+  };
+
+  return (
+    <>
+      {isPublic ? <Badge variant="secondary">Shared</Badge> : null}
+      <Button variant="outline" size="sm" disabled={busy} onClick={onShare}>
+        <Share2 className="mr-2 h-4 w-4" />
+        {isCreatingShare ? 'Creating link...' : 'Share'}
+      </Button>
+      {isPublic ? (
+        <Button variant="outline" size="sm" disabled={busy} onClick={() => void stopSharing()}>
+          <Link2Off className="mr-2 h-4 w-4" />
+          {isStopping ? 'Stopping...' : 'Stop sharing'}
+        </Button>
+      ) : null}
+    </>
+  );
+}

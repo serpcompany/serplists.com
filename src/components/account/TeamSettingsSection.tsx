@@ -15,15 +15,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { api, type TeamActivityEvent, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/lib/api';
-import { getAuditActorName } from '@/lib/auditLabels';
+import { api, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/lib/api';
 import { getOrganizationNameError, ORGANIZATION_NAME_MAX } from '@/lib/schemas/nameLimits';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
 import { runTeamWrite } from '@/features/teams/runTeamWrite';
+import { getTeamSettingsUpdate } from '@/features/teams/teamSettingsUpdate';
 import { useTeamSettingsQueries } from '@/features/teams/useTeamSettingsQueries';
-import { formatTeamActivityAction } from '@/components/account/teamActivityLabels';
 import { TeamInvitesPanel } from '@/components/account/TeamInvitesPanel';
+import { TeamActivityList } from '@/components/account/TeamActivityList';
+import { QueryListState } from '@/components/shared/QueryListState';
 import {
   assignableRoles,
   describeMemberForControls,
@@ -45,23 +46,10 @@ const roleDescriptions: Record<TeamRole, string> = {
 const formatMemberStatus = (status: TeamMemberStatus): string =>
   status.charAt(0).toUpperCase() + status.slice(1);
 
-const formatActivityTime = (value: string): string => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-
-  return date.toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
-};
 
 const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
 
-const getActivityActorName = (event: TeamActivityEvent): string =>
-  getAuditActorName(event.actor, event.metadata, event.actor.userId || undefined);
 
 export function TeamSettingsSection() {
   const {
@@ -78,8 +66,8 @@ export function TeamSettingsSection() {
   } = useWorkspace();
   const [teamName, setTeamName] = useState('');
   const [teamSlug, setTeamSlug] = useState('');
-  const [editTeamName, setEditTeamName] = useState('');
-  const [editTeamSlug, setEditTeamSlug] = useState('');
+  const [editTeamName, setEditTeamName] = useState(isTeamWorkspace ? activeWorkspace.name : '');
+  const [editTeamSlug, setEditTeamSlug] = useState(('slug' in activeWorkspace && activeWorkspace.slug) || '');
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
   const [isUpdatingTeam, setIsUpdatingTeam] = useState(false);
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
@@ -91,7 +79,6 @@ export function TeamSettingsSection() {
     canManageTeam,
   });
   const members = membersQuery.data ?? [];
-  const activity = activityQuery.data ?? [];
   const incomingInvites = incomingInvitesQuery.data ?? [];
   const queryClient = useQueryClient();
   const memberChangeRefreshes = [reload.members, refreshTeams, reload.activity];
@@ -106,6 +93,10 @@ export function TeamSettingsSection() {
       ? activeWorkspace.memberId
       : null;
   const canTransferOwnership = isTeamWorkspace && activeWorkspace.role === 'owner';
+  // The fields that differ from the saved settings, or null when saving would change nothing.
+  const teamSettingsUpdate = isTeamWorkspace
+    ? getTeamSettingsUpdate({ name: editTeamName, slug: editTeamSlug }, activeWorkspace)
+    : null;
 
   useEffect(() => {
     if (!isTeamWorkspace) {
@@ -152,9 +143,12 @@ export function TeamSettingsSection() {
       return;
     }
 
-    const name = editTeamName.trim();
-    const slug = editTeamSlug.trim();
-    const nameError = getOrganizationNameError(name);
+    // Save is disabled until a field changes; submitting unchanged values (Enter) sends nothing.
+    const update = teamSettingsUpdate;
+    if (!update) {
+      return;
+    }
+    const nameError = update.name === undefined ? null : getOrganizationNameError(update.name);
     if (nameError) {
       toast.error(nameError);
       return;
@@ -164,7 +158,7 @@ export function TeamSettingsSection() {
     setIsUpdatingTeam(true);
     try {
       await runTeamWrite({
-        write: () => api.updateTeam(teamId, { name, slug: slug || undefined }),
+        write: () => api.updateTeam(teamId, update),
         onSaved: (result) => {
           // The response has the saved name and slug (the server may adjust the slug).
           const team = result?.team;
@@ -196,6 +190,8 @@ export function TeamSettingsSection() {
       toast.success('Organization invite accepted');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to accept invite');
+      // A refused invite (already a member, revoked, expired) is no longer listed.
+      await reload.incomingInvites().catch(() => undefined);
     } finally {
       setAcceptingIncomingInviteId(null);
     }
@@ -215,9 +211,14 @@ export function TeamSettingsSection() {
       await runTeamWrite({
         write: () => api.updateTeamMember(teamId, member.id, updates),
         onSaved: () => toast.success('Member updated'),
-        refreshes: memberChangeRefreshes,
+        // A status change revokes the member's pending invites.
+        refreshes: [...memberChangeRefreshes, reload.invites],
         onRefreshFailed: warnRefreshFailed,
-        onWriteFailed: (error) => toast.error(errorMessage(error, 'Failed to update member')),
+        onWriteFailed: (error) => {
+          toast.error(errorMessage(error, 'Failed to update member'));
+          // A 409 means the member changed elsewhere (for example, became the owner).
+          void reload.members().catch(() => undefined);
+        },
       });
     } finally {
       setUpdatingMemberId(null);
@@ -250,7 +251,12 @@ export function TeamSettingsSection() {
         },
         refreshes: memberChangeRefreshes,
         onRefreshFailed: warnRefreshFailed,
-        onWriteFailed: (error) => toast.error(errorMessage(error, 'Failed to transfer ownership')),
+        onWriteFailed: (error) => {
+          toast.error(errorMessage(error, 'Failed to transfer ownership'));
+          // Another owner change may have landed first: show the current owner and roles.
+          void refreshTeams().catch(() => undefined);
+          void reload.members().catch(() => undefined);
+        },
       });
     } finally {
       setTransferringOwnerMemberId(null);
@@ -401,7 +407,7 @@ export function TeamSettingsSection() {
                   />
                 </div>
                 <div className="flex items-end">
-                  <Button type="submit" disabled={isUpdatingTeam} className="w-full">
+                  <Button type="submit" disabled={isUpdatingTeam || !teamSettingsUpdate} className="w-full">
                     {isUpdatingTeam ? 'Saving...' : 'Save Organization'}
                   </Button>
                 </div>
@@ -418,11 +424,14 @@ export function TeamSettingsSection() {
 
             <div className="space-y-3">
               <div className="text-sm font-medium text-foreground">Members</div>
-              {membersQuery.isLoading ? (
-                <div className="text-sm text-muted-foreground">Loading members...</div>
-              ) : members.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No members found.</div>
-              ) : (
+              <QueryListState
+                query={membersQuery}
+                loadingLabel="Loading members..."
+                loadErrorLabel="Couldn't load members."
+                refreshErrorLabel="Couldn't refresh members. Showing the last loaded list."
+                onRetry={() => void reload.members()}
+                empty={<div className="text-sm text-muted-foreground">No members found.</div>}
+              >
                 <div className="divide-y rounded-md border border-border">
                   {members.map((member) => {
                     const isOwner = member.role === 'owner';
@@ -523,39 +532,11 @@ export function TeamSettingsSection() {
                     );
                   })}
                 </div>
-              )}
+              </QueryListState>
             </div>
 
             {canManageTeam ? (
-              <div className="space-y-3">
-                <div className="text-sm font-medium text-foreground">Activity</div>
-                {activityQuery.isLoading ? (
-                  <div className="text-sm text-muted-foreground">Loading activity...</div>
-                ) : activity.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No Organization activity recorded yet.</div>
-                ) : (
-                  <div className="divide-y rounded-md border border-border">
-                    {activity.slice(0, 10).map((event) => (
-                      <div
-                        key={event.id}
-                        className="grid gap-1 p-3 md:grid-cols-[minmax(0,1fr)_180px]"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-foreground">
-                            {formatTeamActivityAction(event.action)}
-                          </div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {getActivityActorName(event)}
-                          </div>
-                        </div>
-                        <div className="text-sm text-muted-foreground md:text-right">
-                          {formatActivityTime(event.createdAt)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <TeamActivityList query={activityQuery} onRetry={() => void reload.activity()} />
             ) : null}
           </div>
         ) : (

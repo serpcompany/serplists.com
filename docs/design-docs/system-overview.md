@@ -74,7 +74,14 @@ Organization scoping applies.
 - Organizations: `GET|POST /api/teams`, `GET|PUT /api/teams/:teamId`, `GET /api/teams/:teamId/members`, `PUT /api/teams/:teamId/members/:memberId`, `PUT /api/teams/:teamId/owner`, invites, and activity (see [organizations](organizations.md))
 - Billing: `POST /api/billing/checkout`, `POST /api/billing/portal`, `GET /api/billing/status`; Stripe webhook `POST /api/stripe/webhook`
 - Uploads: `POST /api/uploads`, `GET|HEAD|DELETE /api/uploads/file?key=...`
-- Health: `GET /api/health`
+- Health: `GET|HEAD /api/health`
+
+`functions/api/[[route]].ts` exports one catch-all `onRequest`, so every method,
+`HEAD` and `PATCH` included, reaches the API. Pages matches a verb export such as
+`onRequestGet` only on its exact method and sends any other method to the static
+assets, which would answer `200` with the SPA's `index.html`. A `HEAD` answer keeps
+the status and headers the route builds and drops the body; routes that only check
+for `GET` answer `HEAD` with their own `404` or `405`.
 
 Run responses include `template_version`, `current_template_version`, `revision`,
 and derived `is_stale`. Send `expected_revision` when updating a run and
@@ -120,9 +127,10 @@ JSON fields:
 - `templates.category` stores a JSON array of category strings.
 - `templates.tags` stores a JSON array of tag strings.
 - `templates.rules` stores template rule metadata.
-- `checklist_runs.items` stores the current sectioned run content plus completion state. `retired_items` stores removed sections/items/sub-items for history without counting them toward readiness.
+- `checklist_runs.items` stores the current sectioned run content plus completion state. Every write of `templates.items` or `checklist_runs.items` from a request is checked against `src/lib/schemas/storedSections.ts` (lists are arrays, text is text, content blocks have a known type) and rejected with a 400 naming the path (a share-link save keeps the stored task structure and takes only completion and notes); content copied from a stored Template into a run, and content the app renders, is made safe first by the same module. `retired_items` stores removed sections/items/sub-items for history without counting them toward readiness. It is server-owned (only reconciliation and Revalidate write it), shown read-only on the private run page and in MCP `get_run`, and stripped from shared-run responses.
+- A run started from a template (web or MCP `start_run`) begins with every task and Sub-task unticked and no notes, whatever run state the stored template carries (`resetRunCompletionState` in `functions/api/utils/template-reconciliation.ts`).
 - Template changes reconcile only active private runs by stable section/item/sub-item ID. Completed, archived, and shared runs keep their snapshot and become stale when their `template_version` trails the source template.
-- `audit_events.before_json`, `after_json`, `diff_json`, and `metadata_json` store structured audit payloads.
+- `audit_events.before_json`, `after_json`, `diff_json`, and `metadata_json` store compact, size-capped audit payloads (see [data persistence](data-persistence.md)).
 - `template_versions.snapshot_json` stores a point-in-time template snapshot.
 
 ## Authorization And Entitlements
@@ -132,6 +140,7 @@ JSON fields:
 - User entitlements come from user overrides, dev test personas, Stripe subscriptions, or Free fallback.
 - Organization entitlements come from the legacy `team_entitlement_overrides` table.
 - Free limits are currently 1 Template and 3 active Runs. Paid Personal and Organization contexts have unlimited Templates and active Runs.
+- A count followed by a separate insert lets concurrent requests all pass a limit, so enforce the active Run limit inside the insert itself with the guarded statements in `functions/api/utils/active-run-limit.ts` (web run create and restore and MCP `start_run` do); a pre-check count only gives an early, friendly error.
 
 ## Audit And History
 
@@ -139,7 +148,7 @@ Production history is DB-backed:
 
 - Organization create/update/invite/member/owner actions write `audit_events`.
 - Template changes write `template_versions` and `audit_events`.
-- Audit events include actor id, subject, resource, action, optional before/after/diff JSON, request id, hashed IP, user agent, and timestamp.
+- Audit events include actor id, subject, resource, action, optional before/after/diff JSON (compacted: no run or template content, no share tokens), request id, hashed IP, user agent, and timestamp.
 - The actions are listed once in `src/lib/schemas/auditActions.ts`. The audit builder accepts only those, and each history view (run and Template Changelogs, Organization activity) labels them from typed maps in `src/lib/auditLabels.ts`, so a new action needs a label before it type-checks. A guest's edit through a run's share link has no actor and shows as "Guest via shared link".
 
 Do not use git history for user-generated Template or Organization history. Git only tracks code and migration history.
@@ -147,14 +156,23 @@ Do not use git history for user-generated Template or Organization history. Git 
 ## File Uploads
 
 - `POST /api/uploads` writes to R2 with a per-user key prefix.
-- `GET /api/uploads/file?key=...` and `HEAD /api/uploads/file?key=...` serve objects with long-lived cache headers.
-- `DELETE /api/uploads/file?key=...` deletes only the current user's avatars. Template uploads (`template-images/`, `template-videos/`, `template-files/`) are refused with 409 because templates, runs, versions, and copies share them; see [database operations](database-operations.md#r2-uploads).
+- `GET /api/uploads/file?key=...` and `HEAD /api/uploads/file?key=...` serve objects with long-lived cache headers,
+  single byte ranges (`206`, `416`), and `If-None-Match` revalidation (`304`) through
+  `functions/api/utils/r2-file-response.ts`, always with `X-Content-Type-Options: nosniff`.
+  Uploaded videos need ranges: Safari will not play one without them, and no browser can
+  seek past what it has buffered.
+- `DELETE /api/uploads/file?key=...` deletes only the signed-in user's own avatar
+  (`avatars/<userId>/<file>`). Template uploads (`template-images/`, `template-videos/`,
+  `template-files/`) answer `403 asset_referenced`: Templates, versions, Runs and clones
+  may still reference them, so the editor only unlinks them (TD-19); see
+  [database operations](database-operations.md#r2-uploads).
 
 ## Public And Private Data
 
-- `GET /api/templates?scope=public` returns the public catalog, identical for every visitor and edge-cached for 5 minutes. `?scope=personal` returns the signed-in User's Personal Templates, and `?teamId=...` the authorized Organization's. With no parameter it returns public Templates plus the User's Personal Templates, for clients loaded before scopes existed (TD-15).
+- `GET /api/templates?scope=public` returns the public catalog, identical for every visitor and edge-cached for 5 minutes. `?scope=personal` returns the signed-in User's Personal Templates, and `?teamId=...` the authorized Organization's. With no parameter it returns public Templates plus the User's Personal Templates, for clients loaded before scopes existed (TD-15). Template list and detail responses carry the checklist as parsed `sections` only; the raw `items` column is not sent.
+- Public template responses carry only the allowlisted fields in `functions/api/utils/template-public.ts`. That covers the catalog, Public Profile lists, the public rows of the unscoped list, and slug or id reads by anyone other than the owner or a member of the owning Organization. They leave out `team_id`, `created_by_user_id`, `updated_by_user_id`, `deleted_at` and `content_version`, so they never reveal which Organization owns a Template or which members edited it. The creator stays attributed through `user_id` and the owner fields, and `owner_type` marks an Organization Template. Owners and Organization members still get the whole row.
 - Public template detail routes are available through `/profile/:username/:templateSlug`.
-- Public profiles are available through `/api/profiles/by-username` and `/api/profiles/by-id`.
+- Public profiles are available through `/api/profiles/by-username` and `/api/profiles/by-id`, for Users who have a username only.
 - Shared run links use `/share/:shareToken` and do not expose template editing.
 
 ## Deployment Environments

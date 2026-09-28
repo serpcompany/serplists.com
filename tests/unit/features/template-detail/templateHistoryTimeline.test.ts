@@ -29,13 +29,13 @@ const event = (
   id: string,
   action: string,
   minute: number,
-  diff?: unknown,
+  metadata?: unknown,
   actorName = 'Alice',
 ): TemplateHistoryEvent => ({
   action,
   actor: { name: actorName },
   createdAt: at(minute),
-  diff,
+  metadata,
   id,
 });
 
@@ -55,11 +55,11 @@ describe('buildTemplateHistoryTimeline', () => {
       history(
         [version('v2', 2, 'template.updated', 3), version('v1', 1, 'template.created', 1)],
         [
-          event('e5', 'template.restored', 5, { deleted_at: null, is_public: false }, 'Bob'),
-          event('e4', 'template.deleted', 4, { deleted_at: at(4), is_public: false }),
-          event('e3', 'template.updated', 3, { title: 'Renamed' }),
-          event('e2', 'template.updated', 2, { is_public: true }),
-          event('e1', 'template.created', 1, { title: 'Launch' }),
+          event('e5', 'template.restored', 5, undefined, 'Bob'),
+          event('e4', 'template.deleted', 4),
+          event('e3', 'template.updated', 3),
+          event('e2', 'template.updated', 2, { visibility: 'public' }),
+          event('e1', 'template.created', 1),
         ],
       ),
     );
@@ -83,7 +83,7 @@ describe('buildTemplateHistoryTimeline', () => {
 
   it('labels a switch to private', () => {
     const timeline = buildTemplateHistoryTimeline(
-      history([], [event('e1', 'template.updated', 1, { is_public: false })]),
+      history([], [event('e1', 'template.updated', 1, { visibility: 'private' })]),
     );
 
     expect(timeline.map((entry) => entry.label)).toEqual(['Made template private']);
@@ -91,10 +91,22 @@ describe('buildTemplateHistoryTimeline', () => {
 
   it('keeps an update without a version that changed more than visibility as an update', () => {
     const timeline = buildTemplateHistoryTimeline(
-      history([], [event('e1', 'template.updated', 1, { is_public: true, title: 'New' })]),
+      history([], [event('e1', 'template.updated', 1, { source: 'editor' })]),
     );
 
     expect(timeline.map((entry) => entry.label)).toEqual(['Updated template']);
+  });
+
+  // The API versions a visibility change too; its version reads as the change it made.
+  it('labels the version a visibility change wrote by that change', () => {
+    const timeline = buildTemplateHistoryTimeline(
+      history(
+        [version('v3', 3, 'template.updated', 3), version('v2', 2, 'template.updated', 2)],
+        [event('e3', 'template.updated', 3, { visibility: 'public' }), event('e2', 'template.updated', 2)],
+      ),
+    );
+
+    expect(timeline.map((entry) => entry.label)).toEqual(['Made template public', 'Updated template v2']);
   });
 
   it('keeps an event that only shares its time with a version of another action', () => {
@@ -107,7 +119,7 @@ describe('buildTemplateHistoryTimeline', () => {
 
   it('shows at most the display limit, from the newest', () => {
     const events = Array.from({ length: 12 }, (_, index) =>
-      event(`e${index}`, 'template.updated', index, { is_public: index % 2 === 0 }),
+      event(`e${index}`, 'template.updated', index, { visibility: index % 2 === 0 ? 'public' : 'private' }),
     );
 
     const timeline = buildTemplateHistoryTimeline(history([], events));
@@ -126,7 +138,7 @@ describe('buildTemplateHistoryTimeline', () => {
   });
 
   // An action this app version has no label for reads as words, never a dotted id.
-  it('is empty for no history and tolerates unreadable diffs and unknown actions', () => {
+  it('is empty for no history and tolerates unreadable metadata and unknown actions', () => {
     expect(buildTemplateHistoryTimeline(null)).toEqual([]);
     expect(
       buildTemplateHistoryTimeline(

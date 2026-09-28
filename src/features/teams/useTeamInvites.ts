@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { createSingleFlight } from '@/features/teams/singleFlight';
 import {
   createInviteLink,
+  isInviteAlreadyAcceptedError,
   isInviteGoneError,
   reissueInviteLink,
   visibleInviteLink,
@@ -108,7 +109,11 @@ export function useTeamInvites(activeTeamId: string | null | undefined, canManag
       try {
         await api.revokeTeamInvite(teamId, inviteId);
       } catch (error) {
-        if (isInviteGoneError(error)) {
+        if (isInviteAlreadyAcceptedError(error)) {
+          forgetInvite(inviteId);
+          // The invitee joined before the revoke landed: the member list changed too.
+          void reloadInvitesAndActivity(teamId).then(() => reload(queryKeys.teamMembers(userId, teamId)));
+        } else if (isInviteGoneError(error)) {
           forgetInvite(inviteId);
           void reloadInvitesAndActivity(teamId);
         }
@@ -130,6 +135,8 @@ export function useTeamInvites(activeTeamId: string | null | undefined, canManag
 
   return {
     invites,
+    invitesQuery,
+    reloadInvites: () => reload(queryKeys.teamInvites(userId, activeTeamId ?? undefined)),
     isLoadingInvites: invitesQuery.isLoading,
     link: visibleInviteLink(link, activeTeamId, pendingSnapshot),
     conflict: conflict && conflict.teamId === activeTeamId ? conflict : null,

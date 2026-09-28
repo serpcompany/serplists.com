@@ -38,6 +38,8 @@ type SaveTemplateEditorDataOptions = {
   // The slug the template has now; an unedited one is kept and not resent.
   storedSlug?: string;
   values: TemplateEditorFormValues;
+  // The visibility the form was loaded or last saved with; unchanged, it is not resent.
+  loadedIsPublic?: boolean;
 };
 
 type SaveTemplateEditorDependencies = {
@@ -231,6 +233,9 @@ export const saveTemplateEditorData = async (
   if (validationErrors.length > 0) {
     return { success: false, errors: validationErrors };
   }
+  // An update resends visibility only when the editor's switch changed it, so a Share made
+  // in another tab after this editor loaded is never undone.
+  const visibilityUnchanged = Boolean(options.id) && options.loadedIsPublic === normalizedForm.isPublic;
 
   return dependencies.saveTemplate({
     id: options.id,
@@ -245,7 +250,7 @@ export const saveTemplateEditorData = async (
     templateType: normalizedForm.templateType,
     categories: normalizedForm.categories,
     tags: normalizedForm.tags,
-    isPublic: normalizedForm.isPublic,
+    isPublic: visibilityUnchanged ? undefined : normalizedForm.isPublic,
   });
 };
 
@@ -263,6 +268,8 @@ export const useTemplateEditorModel = (
   const currentIdRef = useRef(options.id);
   // True until unmount (the effect sets it again on StrictMode's remount).
   const mountedRef = useRef(true);
+  // The visibility the form was loaded or last saved with (see saveTemplateEditorData).
+  const loadedIsPublicRef = useRef<boolean | undefined>(undefined);
   const apiClientRef = useRef<TemplateEditorApiClient | undefined>(
     dependencies?.apiClient,
   );
@@ -322,6 +329,7 @@ export const useTemplateEditorModel = (
 
       loadedTemplateIdRef.current = options.id;
       expectedVersionRef.current = result.version;
+      loadedIsPublicRef.current = result.loadError ? undefined : result.initialValues.isPublic;
       setInitialValues(result.initialValues);
       setLoadError(result.loadError);
       setTemplateSlug(result.templateSlug);
@@ -354,6 +362,7 @@ export const useTemplateEditorModel = (
       {
         id: requestedId,
         expectedVersion: expectedVersionRef.current,
+        loadedIsPublic: loadedIsPublicRef.current,
         storedSlug: templateSlug,
         values: submitted,
       },
@@ -383,6 +392,7 @@ export const useTemplateEditorModel = (
       { storedSlug: templateSlug, savedSlug: result.slug },
       result.saved,
     );
+    loadedIsPublicRef.current = savedState.initialValues.isPublic;
     setLoadError(null);
     setTemplateSlug(savedState.templateSlug || templateSlug);
 

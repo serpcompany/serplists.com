@@ -1,9 +1,19 @@
 import { Env } from '../types';
-import { generateSlug } from '../utils/slug';
+import { decodeSlugPath, resolveRequestedSlug } from '../utils/slug';
 import { isReservedTemplateSlug } from '../utils/reserved-template-slugs';
 import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
-import { describePayloadError, normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema } from '../utils/payloads';
+import {
+  describePayloadError,
+  formatPayloadIssue,
+  normalizeSectionsPayload,
+  normalizeStringArray,
+  parseJsonArray,
+  parseSectionsPayload,
+  templateImportFieldsSchema,
+  templatePayloadSchema,
+  templateUpdatePayloadSchema,
+} from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
 import { withEdgeCache } from '../utils/edge-cache';
 import { log } from '../utils/logger';
@@ -12,41 +22,65 @@ import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/enti
 import {
   buildAuditEventValues,
   buildTemplateVersionValues,
+  insertAuditEventWhen,
   type AuditSubject,
 } from '../utils/audit';
+import {
+  parseHistoryLimit,
+  selectAuditEventHistory,
+  selectTemplateVersionHistory,
+  serializeHistoryEvent,
+} from '../utils/history-queries';
+import { insertRowWhere, rowExistsSql } from '../utils/guarded-insert';
+import { personalProRequiredResponse } from '../utils/limit-reached';
+import {
+  countTemplates,
+  isMissingRulesColumnError,
+  omitRulesColumn,
+  templateCapacityAvailableSql,
+  templateLimitResponse,
+  type AuditEventValues,
+  type TemplateInsertValues,
+  type TemplateVersionValues,
+} from '../utils/template-writes';
 import { canEditTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { z } from 'zod';
-import {
-  PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
-  portableTemplatePackEnvelopeSchema,
-  portableTemplateRuleSchema,
-} from '../../../src/lib/schemas/checklistSchema';
-import { appendTemplateSlugSuffix, capTemplateSlug } from '../../../src/lib/schemas/templateFields';
+import { portableTemplateRuleSchema } from '../../../src/lib/schemas/checklistSchema';
+import { findStoredSectionsIssue } from '../../../src/lib/schemas/storedSections';
 import {
   countOversizedTemplateAssets,
   oversizedTemplateAssetMessage,
 } from '../../../src/lib/schemas/templateAssetLimits';
-import { toPortableSections } from '../../../src/lib/schemas/portableSections';
+import { buildPortableTemplatePack, parsePortableTemplatePackImport } from '../utils/template-portable';
 import {
   assignMissingStableTemplateIdentities,
   calculateRunProgress,
   findNonObjectTemplateEntry,
   reconcileRunSections,
+  summarizeRetiredEntries,
   validateStableTemplateIdentities,
 } from '../utils/template-reconciliation';
+import {
+  omitUnchangedTemplateColumns,
+  requestsContentChange,
+  visibilityChangeMetadata,
+  templateStructureChanged,
+  validateChangedTemplateFields,
+} from '../utils/template-changes';
+import {
+  findFreeSuffixedSlug,
+  generateUniqueSlug,
+  isTemplateSlugUniqueViolation,
+  insertTemplateWithUniqueSlug,
+  newTemplateResponse,
+  type NewTemplateRows,
+} from '../utils/template-insert';
+import { isOwnPersonalTemplateRow, toPublicTemplate } from '../utils/template-public';
 
 const junkTemplateTitles = new Set(['Test Template', 'Updated Template Title']);
 
 type QueryResult<T> = PromiseLike<T> | T;
-type TemplateInsertValues = typeof schema.templates.$inferInsert;
 type TemplateUpdateValues = Partial<TemplateInsertValues>;
-type AuditEventValues = typeof schema.audit_events.$inferInsert;
-type TemplateVersionValues = typeof schema.template_versions.$inferInsert;
-
-function isMissingRulesColumnError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /templates[".]?\.?"?rules|no such column:.*rules/i.test(message);
-}
 
 function getTemplateSelectColumns(includeRules: boolean) {
   const { templates } = schema;
@@ -91,61 +125,51 @@ async function withRulesColumnFallback<T>(
   }
 }
 
-function omitRulesColumn<T extends Record<string, unknown>>(values: T): Omit<T, 'rules'> {
-  const { rules: _rules, ...rest } = values;
-  return rest;
-}
-
-async function insertTemplateWithHistoryFallback(
-  db: ReturnType<typeof createDb>,
-  values: TemplateInsertValues,
-  versionValues: TemplateVersionValues,
-  auditEventValues: AuditEventValues,
-): Promise<void> {
-  const { audit_events, template_versions, templates } = schema;
-
-  const runBatch = (templateValues: TemplateInsertValues) =>
-    db.batch([
-      db.insert(templates).values(templateValues),
-      db.insert(template_versions).values(versionValues),
-      db.insert(audit_events).values(auditEventValues),
-    ]);
-
-  try {
-    await runBatch(values);
-  } catch (error) {
-    if (!isMissingRulesColumnError(error)) {
-      throw error;
-    }
-
-    await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateInsertValues);
-  }
-}
+type ReconciledRunUpdate = {
+  items: string;
+  retiredItems: string;
+  progress: number;
+  templateVersion: number;
+  revision: number;
+  whereClause: SQL | undefined;
+  updatedAt: string;
+  // Written only when the reconcile changed the run, guarded by the run update's WHERE clause
+  // and by the template's own audit row, so a save that misses records nothing.
+  auditEvent?: AuditEventValues;
+};
 
 async function updateTemplateWithHistoryFallback(
   db: ReturnType<typeof createDb>,
   values: TemplateUpdateValues,
   whereClause: SQL | undefined,
   auditEventValues: AuditEventValues,
-  versionValues?: TemplateVersionValues,
-  reconciledRunUpdates: Array<{
-    items: string;
-    retiredItems: string;
-    progress: number;
-    templateVersion: number;
-    revision: number;
-    whereClause: SQL | undefined;
-    updatedAt: string;
-  }> = [],
-): Promise<readonly unknown[]> {
+  versionValues: TemplateVersionValues,
+  reconciledRunUpdates: ReconciledRunUpdate[] = [],
+): Promise<{ updated: boolean; runResults: unknown[] }> {
   const { audit_events, checklist_runs, template_versions, templates } = schema;
+  // The audit row goes first, only while the template still matches whereClause, and every
+  // other statement requires that audit row. A plain INSERT would commit even when the
+  // UPDATE lost a race, leaving history (and reconciled runs) for a change that never happened.
+  const auditWritten = rowExistsSql(audit_events.id, String(auditEventValues.id));
+  const templateUpdateIndex = 2;
+  const runResultIndexes: number[] = [];
+  // Run statements follow the audit insert, version insert, and template update.
+  let nextIndex = 3;
+  for (const runUpdate of reconciledRunUpdates) {
+    if (runUpdate.auditEvent) nextIndex += 1;
+    runResultIndexes.push(nextIndex);
+    nextIndex += 1;
+  }
 
   const runBatch = (templateValues: TemplateUpdateValues) => {
     const statements = [
-      db.update(templates).set(templateValues).where(whereClause),
-      ...(versionValues ? [db.insert(template_versions).values(versionValues)] : []),
-      db.insert(audit_events).values(auditEventValues),
-      ...reconciledRunUpdates.map((runUpdate) =>
+      insertRowWhere(db, audit_events, auditEventValues, sql`exists (select 1 from ${templates} where ${whereClause})`),
+      insertRowWhere(db, template_versions, versionValues, auditWritten),
+      db.update(templates).set(templateValues).where(and(whereClause, auditWritten)),
+      ...reconciledRunUpdates.flatMap((runUpdate) => [
+        ...(runUpdate.auditEvent
+          ? [insertAuditEventWhen(db, runUpdate.auditEvent, sql`exists (select 1 from ${checklist_runs} where ${runUpdate.whereClause}) and ${auditWritten}`)]
+          : []),
         db
           .update(checklist_runs)
           .set({
@@ -156,54 +180,37 @@ async function updateTemplateWithHistoryFallback(
             revision: runUpdate.revision + 1,
             updated_at: runUpdate.updatedAt,
           })
-          .where(runUpdate.whereClause),
-      ),
+          .where(and(runUpdate.whereClause, auditWritten)),
+      ]),
     ] as const;
 
     return db.batch(statements);
   };
 
+  let results: readonly unknown[];
   try {
-    return await runBatch(values);
+    results = await runBatch(values);
   } catch (error) {
     if (!isMissingRulesColumnError(error)) {
       throw error;
     }
 
-    return await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateUpdateValues);
+    results = await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateUpdateValues);
   }
+  return {
+    updated: !batchUpdateMissed(results[templateUpdateIndex]),
+    runResults: runResultIndexes.map((index) => results[index]),
+  };
+}
+
+function slugInUseResponse(slug: string): Response {
+  return jsonError('Another template uses this URL slug. Choose a different slug.', 409, { code: 'slug_taken', details: { slug } });
 }
 
 function batchUpdateMissed(result: unknown): boolean {
   if (!isRecord(result)) return false;
   const meta = result.meta;
   return isRecord(meta) && typeof meta.changes === 'number' && meta.changes === 0;
-}
-
-async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
-  // Titles from imports are not length-limited, so cap the slug like any other.
-  const base = capTemplateSlug(generateSlug(title || 'template')) || 'template';
-  const db = createDb(env);
-  const { templates } = schema;
-
-  // Prefer the clean slug if available; otherwise fall back to a deterministic suffix.
-  const [exists] = isReservedTemplateSlug(base)
-    ? [{ id: 'bundled-starter' }]
-    : await db.select({ id: templates.id }).from(templates).where(eq(templates.slug, base)).limit(1);
-
-  if (!exists) return base;
-
-  const suffixed = appendTemplateSlugSuffix(base, templateId.slice(0, 8));
-  const [existsSuffixed] = await db
-    .select({ id: templates.id })
-    .from(templates)
-    .where(eq(templates.slug, suffixed))
-    .limit(1);
-
-  if (!existsSuffixed) return suffixed;
-
-  // Extremely unlikely collision; use random suffix.
-  return appendTemplateSlugSuffix(base, crypto.randomUUID().slice(0, 8));
 }
 
 function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
@@ -230,8 +237,11 @@ function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
     }
   }
 
+  // The raw items column is sent only as parsed `sections`; resending it would double every
+  // template list and detail response (clients read `sections`).
+  const { items: _items, ...columns } = template;
   return {
-    ...template,
+    ...columns,
     sections,
     rules,
     categories: normalizeStringArray(template.category),
@@ -272,16 +282,6 @@ function isMissingHistoryReadTableError(error: unknown): boolean {
   return /no such table: (audit_events|template_versions)/i.test(message);
 }
 
-function parseOptionalJson(value: unknown): unknown {
-  if (typeof value !== 'string' || value.length === 0) return null;
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
 function getTemplateSubject(template: Record<string, unknown>, fallbackUserId: string): AuditSubject {
   if (template.owner_type === 'team' && typeof template.team_id === 'string' && template.team_id) {
     return { type: 'team', id: template.team_id };
@@ -291,26 +291,6 @@ function getTemplateSubject(template: Record<string, unknown>, fallbackUserId: s
     type: 'user',
     id: typeof template.user_id === 'string' && template.user_id ? template.user_id : fallbackUserId,
   };
-}
-
-function shouldCreateTemplateVersion(rawBody: Record<string, unknown>, nextSlug: string | null): boolean {
-  return Boolean(nextSlug)
-    || Object.prototype.hasOwnProperty.call(rawBody, 'title')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'description')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'type')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'seoTitle')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'seoDescription')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'rules')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'sections')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'items')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'categories')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'category')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'tags');
-}
-
-function changedTemplateFields(updates: Record<string, unknown>): Record<string, unknown> {
-  const { updated_at: _updatedAt, updated_by_user_id: _updatedByUserId, version: _version, content_version: _contentVersion, ...diff } = updates;
-  return diff;
 }
 
 function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: URL): string | null {
@@ -329,13 +309,22 @@ async function canViewTemplate(env: Env, template: Record<string, unknown>, user
   return template.user_id === userId;
 }
 
-async function canViewTemplateHistory(env: Env, template: Record<string, unknown>, userId: string): Promise<boolean> {
+// The owner of a Personal template, or a member of the Organization that owns it.
+async function canViewPrivateTemplate(env: Env, template: Record<string, unknown>, userId: string): Promise<boolean> {
   if (template.owner_type === 'team' && typeof template.team_id === 'string' && template.team_id) {
     const membership = await getActiveTeamMembership(env, template.team_id, userId);
     return membership ? canViewTeam(normalizeTeamRole(membership.role)) : false;
   }
 
   return template.user_id === userId;
+}
+
+// The whole row for its owner or an Organization member. Anyone else who may view it (a
+// public template) gets only PUBLIC_TEMPLATE_FIELDS; null means not found for this viewer.
+async function serializeTemplateForViewer(env: Env, row: Record<string, unknown>, userId: string | null) {
+  if (typeof row.deleted_at === 'string' && row.deleted_at) return null;
+  if (userId && (await canViewPrivateTemplate(env, row, userId))) return parseTemplateRow(row);
+  return row.is_public === true || row.is_public === 1 ? toPublicTemplate(parseTemplateRow(row)) : null;
 }
 
 async function canEditTemplate(env: Env, template: Record<string, unknown>, userId: string): Promise<boolean> {
@@ -388,7 +377,7 @@ const templateBackupImportBodySchema = z.object({
     .optional(),
 });
 
-type TemplateImportFailureCode = 'invalid_sections' | 'oversized_asset' | 'insert_failed';
+type TemplateImportFailureCode = 'invalid_fields' | 'invalid_sections' | 'oversized_asset' | 'insert_failed';
 
 type TemplateImportFailure = {
   index: number;
@@ -412,42 +401,16 @@ type TemplateImportSummary = {
   successes: TemplateImportSuccess[];
 };
 
-function countReferencedUploads(sections: unknown[]): number {
-  let count = 0;
-
-  for (const section of sections) {
-    if (!isRecord(section)) continue;
-    const items = section.items;
-    if (!Array.isArray(items)) continue;
-    for (const item of items) {
-      if (!isRecord(item)) continue;
-      const contents = item.contents;
-      if (!Array.isArray(contents)) continue;
-      for (const content of contents) {
-        if (!isRecord(content)) continue;
-        const type = content.type;
-        const value = typeof content.value === 'string' ? content.value : '';
-        const isUpload = content.uploadType === 'upload' || value.includes('/api/uploads/file') || value.includes('uploads/file?key=');
-        if ((type === 'image' || type === 'video' || type === 'file') && isUpload) {
-          count += 1;
-        }
-      }
-    }
-  }
-
-  return count;
-}
-
 export async function handleTemplates(request: Request, env: Env): Promise<Response> {
   const userId = await getSessionUserId(request, env);
   const url = new URL(request.url);
   const pathParts = url.pathname.split('/').filter(Boolean); // ["api", "templates", ...]
   const templatesSubpath = pathParts.slice(2); // after /api/templates
   const db = createDb(env);
-  const { templates, users, checklist_runs, audit_events, template_versions } = schema;
+  const { templates, users, checklist_runs, audit_events } = schema;
 
   // Pro-only: export/import templates as JSON backup
-  // GET  /api/templates/backup?includePublic=1&teamId=...
+  // GET  /api/templates/backup?teamId=...&format=portable|backup (owned templates only)
   // POST /api/templates/backup?teamId=...  { templates: [...], options?: { visibility } }
   if (templatesSubpath[0] === 'backup') {
     if (!userId) {
@@ -469,13 +432,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     if (request.method === 'GET') {
       const exportFormat = url.searchParams.get('format') === 'backup' ? 'backup' : 'portable';
-      const includePublic = url.searchParams.get('includePublic') === '1';
-      const ownedTemplateClause = backupTeamId
+      // Only the active context's own templates. The page adds public templates from the
+      // edge-cached catalog, so an export never reads every public template from D1; an
+      // old tab's includePublic=1 is ignored (see the D1 cost doc).
+      const whereClause = backupTeamId
         ? and(eq(templates.owner_type, 'team'), eq(templates.team_id, backupTeamId), isNull(templates.deleted_at))
         : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at));
-      const whereClause = includePublic
-        ? or(ownedTemplateClause, and(eq(templates.is_public, true), isNull(templates.deleted_at)))
-        : ownedTemplateClause;
 
       const rows = await withRulesColumnFallback((includeRules) =>
         db
@@ -513,32 +475,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       const privateTemplates = exportedTemplates.filter((t) => !t.isPublic);
 
       if (exportFormat === 'portable') {
-        return json({
-          kind: 'serplists-template-pack',
-          schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
-          exportedAt: new Date().toISOString(),
-          exportedBy: userRow?.email,
-          templates: exportedTemplates.map((template) => ({
-            title: template.title,
-            description: template.description || '',
-            type: typeof template.type === 'string' ? template.type : 'checklist',
-            seoTitle: template.seoTitle || '',
-            seoDescription: template.seoDescription || '',
-            rules: template.rules,
-            sections: toPortableSections(template.sections),
-            categories: template.categories || [],
-            tags: template.tags || [],
-            visibility: template.isPublic ? 'public' : 'private',
-            slug: template.slug || undefined,
-          })),
-          manifest: {
-            totalTemplates: exportedTemplates.length,
-            format: 'portable',
-            includesVisibility: exportedTemplates.length > 0,
-            includesRules: exportedTemplates.some((template) => Array.isArray(template.rules) && template.rules.length > 0),
-            assetWarnings: exportedTemplates.reduce((total, template) => total + countReferencedUploads(template.sections || []), 0),
-          },
-        });
+        return json(buildPortableTemplatePack(exportedTemplates, userRow?.email));
       }
 
       return json({
@@ -564,18 +501,15 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         return jsonError('Invalid JSON payload', 400);
       }
 
+      // Portable templates that fail validation stay in the summary under their file index.
+      let sourceIndexes: number[] | null = null;
+      let portableFailures: TemplateImportFailure[] = [];
       if (isRecord(body) && body.kind === 'serplists-template-pack') {
-        const portableBody = portableTemplatePackEnvelopeSchema.safeParse(body);
-        if (!portableBody.success) {
-          return jsonError(portableBody.error.issues[0]?.message || 'Invalid portable template pack payload', 400);
-        }
-        if (portableBody.data.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
-          return jsonError(`Unsupported portable template schema version: ${portableBody.data.schemaVersion}`, 400, {
-            code: 'unsupported_portable_schema_version',
-          });
-        }
-
-        body = { templates: portableBody.data.templates };
+        const portable = parsePortableTemplatePackImport(body);
+        if ('response' in portable) return portable.response;
+        body = { templates: portable.templates };
+        sourceIndexes = portable.sourceIndexes;
+        portableFailures = portable.failures;
       }
 
       const parsedBody = Array.isArray(body)
@@ -587,26 +521,44 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       }
 
       const { templates: incomingTemplates, options } = parsedBody.data;
+      const fileTemplateCount = incomingTemplates.length + portableFailures.length;
 
-      if (incomingTemplates.length > MAX_TEMPLATES_PER_IMPORT) {
+      if (fileTemplateCount > MAX_TEMPLATES_PER_IMPORT) {
         return jsonError(`Import limited to ${MAX_TEMPLATES_PER_IMPORT} templates per file for now`, 400, {
           code: 'import_limit',
-          details: { limit: MAX_TEMPLATES_PER_IMPORT, current: incomingTemplates.length },
+          details: { limit: MAX_TEMPLATES_PER_IMPORT, current: fileTemplateCount },
         });
       }
 
       const visibility = options?.visibility ?? 'preserve';
 
       const summary: TemplateImportSummary = {
-        total: incomingTemplates.length,
+        total: fileTemplateCount,
         imported: 0,
-        failed: [],
+        failed: [...portableFailures],
         successes: [],
       };
 
-      for (const [index, template] of incomingTemplates.entries()) {
+      for (const [position, template] of incomingTemplates.entries()) {
+        const index = sourceIndexes?.[position] ?? position;
+        const finalCategories = normalizeStringArray(template.categories ?? template.category);
+        const finalTags = normalizeStringArray(template.tags);
+        const fields = templateImportFieldsSchema.safeParse({ ...template, categories: finalCategories, tags: finalTags });
+        if (!fields.success) {
+          summary.failed.push({
+            index,
+            title: template.title,
+            reason: formatPayloadIssue(fields.error, 'Invalid template fields'),
+            code: 'invalid_fields',
+          });
+          continue;
+        }
+        // A text or null entry is named the way a person reads the file ("Task 2 in section 1")
+        // before the stored-content check, whose message is a JSON path.
         const normalizedSections = normalizeSectionsPayload(template.sections ?? template.items);
-        const sectionsError = normalizedSections.error ?? findNonObjectTemplateEntry(normalizedSections.sections);
+        const sectionsError = normalizedSections.error
+          ?? findNonObjectTemplateEntry(normalizedSections.sections)
+          ?? findStoredSectionsIssue(normalizedSections.sections);
         if (sectionsError) {
           summary.failed.push({
             index,
@@ -639,8 +591,6 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           continue;
         }
 
-        const finalCategories = normalizeStringArray(template.categories ?? template.category);
-        const finalTags = normalizeStringArray(template.tags);
         const finalType = template.type ?? 'checklist';
         const sourceVisibility =
           template.visibility === 'public'
@@ -657,53 +607,61 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           visibility === 'public' ? true : visibility === 'private' ? false : sourceVisibility;
 
         const templateId = crypto.randomUUID();
-        const slug = await generateUniqueSlug(env, template.title || '', templateId);
+        const now = new Date().toISOString();
+        const subject: AuditSubject = backupTeamId ? { type: 'team', id: backupTeamId } : { type: 'user', id: userId };
 
         try {
-          const now = new Date().toISOString();
-          const insertedTemplate: TemplateInsertValues = {
-            id: templateId,
-            user_id: userId,
-            title: template.title || '',
-            description: template.description || '',
-            type: finalType,
-            seo_title: template.seoTitle || '',
-            seo_description: template.seoDescription || '',
-            rules: Array.isArray(template.rules) && template.rules.length > 0 ? JSON.stringify(template.rules) : null,
-            items: JSON.stringify(normalizedSections.sections),
-            version: 1,
-            is_public: isPublic,
-            category: JSON.stringify(finalCategories),
-            tags: JSON.stringify(finalTags),
-            slug,
-            owner_type: backupTeamId ? 'team' : 'user',
-            team_id: backupTeamId,
-            created_by_user_id: userId,
-            created_at: now,
-            updated_at: now,
-          };
-          const subject: AuditSubject = backupTeamId ? { type: 'team', id: backupTeamId } : { type: 'user', id: userId };
-
-          const versionValues = await buildTemplateVersionValues({
-            templateId,
-            version: 1,
-            changedByUserId: userId,
-            subject,
-            snapshot: insertedTemplate as Record<string, unknown>,
-            changeSummary: 'template.imported',
-            createdAt: now,
+          const inserted = await insertTemplateWithUniqueSlug(db, {
+            title: fields.data.title,
+            slug: await generateUniqueSlug(env, fields.data.title, templateId),
+            buildRows: async (candidateSlug) => {
+              const insertedTemplate: TemplateInsertValues = {
+                id: templateId,
+                user_id: userId,
+                title: fields.data.title,
+                description: fields.data.description || '',
+                type: finalType,
+                seo_title: fields.data.seoTitle || '',
+                seo_description: fields.data.seoDescription || '',
+                rules: fields.data.rules && fields.data.rules.length > 0 ? JSON.stringify(fields.data.rules) : null,
+                items: JSON.stringify(normalizedSections.sections),
+                version: 1,
+                is_public: isPublic,
+                category: JSON.stringify(finalCategories),
+                tags: JSON.stringify(finalTags),
+                slug: candidateSlug,
+                owner_type: backupTeamId ? 'team' : 'user',
+                team_id: backupTeamId,
+                created_by_user_id: userId,
+                created_at: now,
+                updated_at: now,
+              };
+              return {
+                template: insertedTemplate,
+                version: await buildTemplateVersionValues({
+                  templateId,
+                  version: 1,
+                  changedByUserId: userId,
+                  subject,
+                  snapshot: insertedTemplate as Record<string, unknown>,
+                  changeSummary: 'template.imported',
+                  createdAt: now,
+                }),
+                audit: await buildAuditEventValues({
+                  actorUserId: userId,
+                  subject,
+                  resource: { type: 'template', id: templateId },
+                  action: 'template.imported',
+                  after: insertedTemplate as Record<string, unknown>,
+                  metadata: { source: 'backup_import', importIndex: index, teamId: backupTeamId },
+                  request,
+                  createdAt: now,
+                }),
+              };
+            },
           });
-          const auditEvent = await buildAuditEventValues({
-            actorUserId: userId,
-            subject,
-            resource: { type: 'template', id: templateId },
-            action: 'template.imported',
-            after: insertedTemplate as Record<string, unknown>,
-            metadata: { source: 'backup_import', importIndex: index, teamId: backupTeamId },
-            request,
-            createdAt: now,
-          });
-          await insertTemplateWithHistoryFallback(db, insertedTemplate, versionValues, auditEvent);
+          if (!('slug' in inserted)) throw new Error('templates.slug was taken on every attempt');
+          const { slug } = inserted;
           summary.imported += 1;
           summary.successes.push({
             index,
@@ -713,15 +671,22 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             visibility: isPublic ? 'public' : 'private',
           });
         } catch (err) {
+          // The reason is shown to the user; the database error stays in the logs.
+          log('error', 'template_import_insert_failed', {
+            userId,
+            index,
+            error: err instanceof Error ? err.message : String(err),
+          });
           summary.failed.push({
             index,
             title: template.title,
-            reason: err instanceof Error ? err.message : 'Unknown error',
+            reason: 'Could not save this template. Try importing it again.',
             code: 'insert_failed',
           });
         }
       }
 
+      summary.failed.sort((a, b) => a.index - b.index);
       if (summary.imported === 0 && summary.failed.length > 0) {
         return jsonError('Template import failed', 400, {
           code: 'template_import_failed',
@@ -759,23 +724,21 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           .orderBy(desc(templates.created_at)),
       );
 
-      return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
+      return json(rows.map((t) => toPublicTemplate(parseTemplateRow(t as unknown as Record<string, unknown>))));
     }
 
     // GET /api/templates/slug/:slug
     if (templatesSubpath[0] === 'slug' && templatesSubpath[1]) {
-      const slug = templatesSubpath.slice(1).join('/');
+      const slug = decodeSlugPath(templatesSubpath.slice(1));
+      if (!slug) return jsonError('Template not found', 404);
       const [template] = await withRulesColumnFallback((includeRules) =>
         selectTemplatesWithOwner(env, includeRules)
           .where(and(eq(templates.slug, slug), isNull(templates.deleted_at)))
           .limit(1),
       );
 
-      if (!template || !(await canViewTemplate(env, template as unknown as Record<string, unknown>, userId))) {
-        return jsonError('Template not found', 404);
-      }
-
-      return json(parseTemplateRow(template as unknown as Record<string, unknown>));
+      const body = template ? await serializeTemplateForViewer(env, template as unknown as Record<string, unknown>, userId) : null;
+      return body ? json(body) : jsonError('Template not found', 404);
     }
 
     // GET /api/templates/archived?teamId=...
@@ -816,10 +779,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       }
 
       const templateId = templatesSubpath[0];
-      const requestedLimit = Number(url.searchParams.get('limit') ?? '50');
-      const historyLimit = Number.isFinite(requestedLimit)
-        ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
-        : 50;
+      const historyLimit = parseHistoryLimit(url.searchParams.get('limit'));
       const [template] = await withRulesColumnFallback((includeRules) =>
         db
           .select(getTemplateSelectColumns(includeRules))
@@ -828,53 +788,16 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           .limit(1),
       );
 
-      if (!template || !(await canViewTemplateHistory(env, template as unknown as Record<string, unknown>, userId))) {
+      if (!template || !(await canViewPrivateTemplate(env, template as unknown as Record<string, unknown>, userId))) {
         return jsonError('Template not found', 404);
       }
 
       try {
-        const versionRows = await db
-          .select({
-            id: template_versions.id,
-            version: template_versions.version,
-            changed_by_user_id: template_versions.changed_by_user_id,
-            subject_type: template_versions.subject_type,
-            subject_id: template_versions.subject_id,
-            content_hash: template_versions.content_hash,
-            change_summary: template_versions.change_summary,
-            created_at: template_versions.created_at,
-            actor_email: users.email,
-            actor_name: users.name,
-            actor_username: users.username,
-          })
-          .from(template_versions)
-          .leftJoin(users, eq(users.id, template_versions.changed_by_user_id))
-          .where(eq(template_versions.template_id, templateId))
-          .orderBy(desc(template_versions.created_at))
-          .limit(historyLimit);
-
-        const eventRows = await db
-          .select({
-            id: audit_events.id,
-            actor_user_id: audit_events.actor_user_id,
-            subject_type: audit_events.subject_type,
-            subject_id: audit_events.subject_id,
-            resource_type: audit_events.resource_type,
-            resource_id: audit_events.resource_id,
-            action: audit_events.action,
-            diff_json: audit_events.diff_json,
-            metadata_json: audit_events.metadata_json,
-            request_id: audit_events.request_id,
-            created_at: audit_events.created_at,
-            actor_email: users.email,
-            actor_name: users.name,
-            actor_username: users.username,
-          })
-          .from(audit_events)
-          .leftJoin(users, eq(users.id, audit_events.actor_user_id))
-          .where(and(eq(audit_events.resource_type, 'template'), eq(audit_events.resource_id, templateId)))
-          .orderBy(desc(audit_events.created_at))
-          .limit(historyLimit);
+        const versionRows = await selectTemplateVersionHistory(db, templateId, historyLimit);
+        // Audit events are only a fallback for templates created before versioning.
+        const eventRows = versionRows.length > 0
+          ? []
+          : await selectAuditEventHistory(db, 'template', templateId, historyLimit);
 
         return json({
           templateId,
@@ -892,20 +815,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
               username: row.actor_username,
             },
           })),
-          events: eventRows.map((row) => ({
-            id: row.id,
-            action: row.action,
-            createdAt: row.created_at,
-            requestId: row.request_id,
-            diff: parseOptionalJson(row.diff_json),
-            metadata: parseOptionalJson(row.metadata_json),
-            actor: {
-              userId: row.actor_user_id,
-              email: row.actor_email,
-              name: row.actor_name,
-              username: row.actor_username,
-            },
-          })),
+          events: eventRows.map(serializeHistoryEvent),
         });
       } catch (error) {
         if (isMissingHistoryReadTableError(error)) {
@@ -930,11 +840,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           .limit(1),
       );
 
-      if (!template || !(await canViewTemplate(env, template as unknown as Record<string, unknown>, userId))) {
-        return jsonError('Template not found', 404);
-      }
-
-      return json(parseTemplateRow(template as unknown as Record<string, unknown>));
+      const body = template ? await serializeTemplateForViewer(env, template as unknown as Record<string, unknown>, userId) : null;
+      return body ? json(body) : jsonError('Template not found', 404);
     }
 
     // GET /api/templates (list)
@@ -975,12 +882,18 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           .where(whereClause)
           .orderBy(desc(templates.created_at)),
       );
-      return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
+      // Only the user's own Personal rows are sent whole. The catalog is one body for every
+      // visitor, so it always carries public fields only, even the user's own templates.
+      return json(rows.map((t) => {
+        const row = t as unknown as Record<string, unknown>;
+        return !publicCatalog && isOwnPersonalTemplateRow(row, userId) ? parseTemplateRow(row) : toPublicTemplate(parseTemplateRow(row));
+      }));
     };
 
     // The public catalog reads every public Template, so serve it from the edge for up to
-    // 5 minutes (the app's client staleTime).
-    return publicCatalog ? withEdgeCache(request, '/api/templates?scope=public', 5 * 60, listTemplates) : listTemplates();
+    // 5 minutes (the app's client staleTime). The key names the response shape, so a deploy
+    // that changes the shape never serves the previous one from the edge.
+    return publicCatalog ? withEdgeCache(request, '/api/templates?scope=public&fields=public', 5 * 60, listTemplates) : listTemplates();
   }
 
   if (request.method === 'POST') {
@@ -1004,7 +917,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       );
       const templateRecord = existingTemplate as unknown as Record<string, unknown>;
 
-      if (!existingTemplate || !(await canViewTemplateHistory(env, templateRecord, userId))) {
+      if (!existingTemplate || !(await canViewPrivateTemplate(env, templateRecord, userId))) {
         return jsonError('Template not found', 404);
       }
       if (!(await canEditTemplate(env, templateRecord, userId))) {
@@ -1020,24 +933,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       const entitlements = teamId
         ? await getEntitlementsForContext(env, { type: 'team', teamId, userId })
         : await getEntitlementsForUser(env, userId);
-      if (entitlements.plan === 'free' && entitlements.limits.maxTemplates) {
-        const [row] = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(templates)
-          .where(
-            teamId
-              ? and(eq(templates.owner_type, 'team'), eq(templates.team_id, teamId), isNull(templates.deleted_at))
-              : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at)),
-          )
-          .limit(1);
-
-        const currentCount = row?.count ?? 0;
-        if (currentCount >= entitlements.limits.maxTemplates) {
-          return jsonError('Template limit reached. Upgrade to Pro to restore more templates.', 403, {
-            code: 'limit_reached',
-            details: { limit: entitlements.limits.maxTemplates, current: currentCount, resource: 'templates' },
-          });
-        }
+      const owner = { userId, teamId };
+      const limit = entitlements.plan === 'free' && entitlements.limits.maxTemplates ? entitlements.limits.maxTemplates : null;
+      if (limit !== null) {
+        const currentCount = await countTemplates(env, owner);
+        if (currentCount >= limit) return templateLimitResponse(owner, 'restore', limit, currentCount);
       }
 
       const now = new Date().toISOString();
@@ -1059,21 +959,30 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         request,
         createdAt: now,
       });
-      await db.batch([
-        db.update(templates)
-          .set(restoreUpdates)
-          .where(
-            teamId
-              ? and(eq(templates.id, templateId), eq(templates.team_id, teamId), isNotNull(templates.deleted_at))
-              : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNotNull(templates.deleted_at)),
-          ),
-        db.insert(audit_events).values(auditEvent),
+      const archivedTemplate = teamId
+        ? and(eq(templates.team_id, teamId), isNotNull(templates.deleted_at))
+        : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNotNull(templates.deleted_at));
+      // With a limit, the restore re-checks it in the same statement. The audit row is written
+      // first and only while the restore will apply, so a lost race records nothing.
+      const restoreGuard = limit === null ? archivedTemplate : and(archivedTemplate, templateCapacityAvailableSql({ owner, limit }));
+      const restoreResults = await db.batch([
+        insertRowWhere(db, audit_events, auditEvent, rowExistsSql(templates.id, templateId, restoreGuard)),
+        db.update(templates).set(restoreUpdates).where(and(eq(templates.id, templateId), restoreGuard)),
       ]);
+      if (batchUpdateMissed(restoreResults[1])) {
+        if (limit !== null) {
+          const currentCount = await countTemplates(env, owner);
+          if (currentCount >= limit) return templateLimitResponse(owner, 'restore', limit, currentCount);
+        }
+        // A concurrent request restored it first.
+        return jsonError('Template is not archived', 400);
+      }
 
       return json({ success: true });
     }
 
-    // POST /api/templates/:id/clone (within the target context's Template limit)
+    // POST /api/templates/:id/clone: Pro only into Personal; Organization copies follow the
+    // Organization's role and template limit (see pricing-and-entitlements.md).
     if (templatesSubpath[0] && templatesSubpath[1] === 'clone') {
       const sourceId = templatesSubpath[0];
       let visibility: 'preserve' | 'public' | 'private' = 'private';
@@ -1102,24 +1011,15 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       const entitlements = cloneTeamId
         ? await getEntitlementsForContext(env, { type: 'team', teamId: cloneTeamId, userId })
         : await getEntitlementsForUser(env, userId);
-      if (entitlements.limits.maxTemplates !== null) {
-        const [existingCount] = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(templates)
-          .where(
-            cloneTeamId
-              ? and(eq(templates.owner_type, 'team'), eq(templates.team_id, cloneTeamId), isNull(templates.deleted_at))
-              : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at)),
-          )
-          .limit(1);
-
-        const currentCount = existingCount?.count ?? 0;
-        if (currentCount >= entitlements.limits.maxTemplates) {
-          return jsonError("Template limit reached. Upgrade to Pro to save more templates.", 403, {
-            code: 'limit_reached',
-            details: { limit: entitlements.limits.maxTemplates, current: currentCount, resource: 'templates' },
-          });
-        }
+      if (!cloneTeamId && entitlements.plan !== 'pro') {
+        return personalProRequiredResponse('copy public templates into Personal');
+      }
+      const cloneCapacity = entitlements.limits.maxTemplates !== null
+        ? { owner: { userId, teamId: cloneTeamId }, limit: entitlements.limits.maxTemplates }
+        : undefined;
+      if (cloneCapacity) {
+        const currentCount = await countTemplates(env, cloneCapacity.owner);
+        if (currentCount >= cloneCapacity.limit) return templateLimitResponse(cloneCapacity.owner, 'save', cloneCapacity.limit, currentCount);
       }
 
       const [source] = await withRulesColumnFallback((includeRules) =>
@@ -1137,54 +1037,62 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       const isPublic = visibility === 'public' ? true : visibility === 'preserve' ? true : false;
 
       const templateId = crypto.randomUUID();
-      const slug = await generateUniqueSlug(env, source.title || '', templateId);
       const now = new Date().toISOString();
-
-      const clonedTemplate: TemplateInsertValues = {
-        id: templateId,
-        user_id: userId,
-        title: source.title || '',
-        description: source.description || '',
-        type: typeof source.type === 'string' ? source.type : 'checklist',
-        seo_title: typeof source.seo_title === 'string' ? source.seo_title : '',
-        seo_description: typeof source.seo_description === 'string' ? source.seo_description : '',
-        rules: typeof source.rules === 'string' ? source.rules : null,
-        items: source.items,
-        version: typeof source.version === 'number' ? source.version : 1,
-        is_public: isPublic,
-        category: source.category,
-        tags: source.tags,
-        slug,
-        owner_type: cloneTeamId ? 'team' : 'user',
-        team_id: cloneTeamId,
-        created_by_user_id: userId,
-        created_at: now,
-        updated_at: now,
-      };
       const subject: AuditSubject = cloneTeamId ? { type: 'team', id: cloneTeamId } : { type: 'user', id: userId };
 
-      const versionValues = await buildTemplateVersionValues({
-        templateId,
-        version: typeof clonedTemplate.version === 'number' ? clonedTemplate.version : 1,
-        changedByUserId: userId,
-        subject,
-        snapshot: clonedTemplate as Record<string, unknown>,
-        changeSummary: 'template.cloned',
-        createdAt: now,
+      const buildRows = async (candidateSlug: string): Promise<NewTemplateRows> => {
+        const clonedTemplate: TemplateInsertValues = {
+          id: templateId,
+          user_id: userId,
+          title: source.title || '',
+          description: source.description || '',
+          type: typeof source.type === 'string' ? source.type : 'checklist',
+          seo_title: typeof source.seo_title === 'string' ? source.seo_title : '',
+          seo_description: typeof source.seo_description === 'string' ? source.seo_description : '',
+          rules: typeof source.rules === 'string' ? source.rules : null,
+          items: source.items,
+          // A copy is a new template: its edit counter and content version start at 1, like
+          // create and import. The source's counters are provenance, kept in the audit event.
+          version: 1,
+          content_version: 1,
+          is_public: isPublic,
+          category: source.category,
+          tags: source.tags,
+          slug: candidateSlug,
+          owner_type: cloneTeamId ? 'team' : 'user',
+          team_id: cloneTeamId,
+          created_by_user_id: userId,
+          created_at: now,
+          updated_at: now,
+        };
+        const snapshot = clonedTemplate as Record<string, unknown>;
+        return {
+          template: clonedTemplate,
+          version: await buildTemplateVersionValues({
+            templateId, version: 1, changedByUserId: userId, subject, snapshot, changeSummary: 'template.cloned', createdAt: now,
+          }),
+          audit: await buildAuditEventValues({
+            actorUserId: userId,
+            subject,
+            resource: { type: 'template', id: templateId },
+            action: 'template.cloned',
+            after: snapshot,
+            metadata: {
+              sourceTemplateId: sourceId,
+              sourceVersion: typeof source.version === 'number' ? source.version : null,
+              sourceContentVersion: typeof source.content_version === 'number' ? source.content_version : null,
+            },
+            request,
+            createdAt: now,
+          }),
+        };
+      };
+      const title = source.title || '';
+      const inserted = await insertTemplateWithUniqueSlug(db, {
+        title, slug: await generateUniqueSlug(env, title, templateId), buildRows, capacity: cloneCapacity,
       });
-      const auditEvent = await buildAuditEventValues({
-        actorUserId: userId,
-        subject,
-        resource: { type: 'template', id: templateId },
-        action: 'template.cloned',
-        after: clonedTemplate as Record<string, unknown>,
-        metadata: { sourceTemplateId: sourceId },
-        request,
-        createdAt: now,
-      });
-      await insertTemplateWithHistoryFallback(db, clonedTemplate, versionValues, auditEvent);
 
-      return json({ id: templateId, slug });
+      return newTemplateResponse(env, templateId, inserted, cloneCapacity, 'save');
     }
 
     let body: unknown;
@@ -1209,29 +1117,17 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     const entitlements = requestedTeamId
       ? await getEntitlementsForContext(env, { type: 'team', teamId: requestedTeamId, userId })
       : await getEntitlementsForUser(env, userId);
-    if (entitlements.limits.maxTemplates) {
-      const [row] = await db
-        .select({ count: sql<number>`count(*)` })
-          .from(templates)
-          .where(
-            requestedTeamId
-              ? and(eq(templates.owner_type, 'team'), eq(templates.team_id, requestedTeamId), isNull(templates.deleted_at))
-              : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at)),
-          )
-          .limit(1);
-
-      const currentCount = row?.count ?? 0;
-      if (currentCount >= entitlements.limits.maxTemplates) {
-        return jsonError('Template limit reached. Upgrade to create more templates.', 403, {
-          code: 'limit_reached',
-          details: { limit: entitlements.limits.maxTemplates, current: currentCount, resource: 'templates' },
-        });
-      }
+    const createCapacity = entitlements.limits.maxTemplates
+      ? { owner: { userId, teamId: requestedTeamId }, limit: entitlements.limits.maxTemplates }
+      : undefined;
+    if (createCapacity) {
+      const currentCount = await countTemplates(env, createCapacity.owner);
+      if (currentCount >= createCapacity.limit) return templateLimitResponse(createCapacity.owner, 'create', createCapacity.limit, currentCount);
     }
 
     const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
 
-    const normalizedSections = normalizeSectionsPayload(sections ?? bodyItems);
+    const normalizedSections = parseSectionsPayload(sections ?? bodyItems);
     if (normalizedSections.error) {
       return jsonError(normalizedSections.error, 400);
     }
@@ -1243,7 +1139,6 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     const templateId = crypto.randomUUID();
     const slugSource = typeof requestedSlug === 'string' && requestedSlug.trim() ? requestedSlug.trim() : title || '';
-    const slug = await generateUniqueSlug(env, slugSource, templateId);
 
     const finalCategories = normalizeStringArray(categories ?? category);
     const finalTags = normalizeStringArray(tags);
@@ -1255,50 +1150,51 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     }
 
     const now = new Date().toISOString();
-    const insertedTemplate: TemplateInsertValues = {
-      id: templateId,
-      user_id: userId,
-      title: title || '',
-      description: description || '',
-      type: finalType,
-      seo_title: seoTitle || '',
-      seo_description: seoDescription || '',
-      rules: Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null,
-      items: JSON.stringify(normalizedSections.sections),
-      version: 1,
-      is_public: isPublic,
-      category: JSON.stringify(finalCategories),
-      tags: JSON.stringify(finalTags),
-      slug,
-      owner_type: requestedTeamId ? 'team' : 'user',
-      team_id: requestedTeamId,
-      created_by_user_id: userId,
-      created_at: now,
-      updated_at: now,
-    };
     const subject: AuditSubject = requestedTeamId ? { type: 'team', id: requestedTeamId } : { type: 'user', id: userId };
-
-    const versionValues = await buildTemplateVersionValues({
-      templateId,
-      version: 1,
-      changedByUserId: userId,
-      subject,
-      snapshot: insertedTemplate as Record<string, unknown>,
-      changeSummary: 'template.created',
-      createdAt: now,
+    const buildRows = async (candidateSlug: string): Promise<NewTemplateRows> => {
+      const insertedTemplate: TemplateInsertValues = {
+        id: templateId,
+        user_id: userId,
+        title: title || '',
+        description: description || '',
+        type: finalType,
+        seo_title: seoTitle || '',
+        seo_description: seoDescription || '',
+        rules: Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null,
+        items: JSON.stringify(normalizedSections.sections),
+        version: 1,
+        is_public: isPublic,
+        category: JSON.stringify(finalCategories),
+        tags: JSON.stringify(finalTags),
+        slug: candidateSlug,
+        owner_type: requestedTeamId ? 'team' : 'user',
+        team_id: requestedTeamId,
+        created_by_user_id: userId,
+        created_at: now,
+        updated_at: now,
+      };
+      const snapshot = insertedTemplate as Record<string, unknown>;
+      return {
+        template: insertedTemplate,
+        version: await buildTemplateVersionValues({
+          templateId, version: 1, changedByUserId: userId, subject, snapshot, changeSummary: 'template.created', createdAt: now,
+        }),
+        audit: await buildAuditEventValues({
+          actorUserId: userId,
+          subject,
+          resource: { type: 'template', id: templateId },
+          action: 'template.created',
+          after: snapshot,
+          request,
+          createdAt: now,
+        }),
+      };
+    };
+    const inserted = await insertTemplateWithUniqueSlug(db, {
+      title: slugSource, slug: await generateUniqueSlug(env, slugSource, templateId), buildRows, capacity: createCapacity,
     });
-    const auditEvent = await buildAuditEventValues({
-      actorUserId: userId,
-      subject,
-      resource: { type: 'template', id: templateId },
-      action: 'template.created',
-      after: insertedTemplate as Record<string, unknown>,
-      request,
-      createdAt: now,
-    });
-    await insertTemplateWithHistoryFallback(db, insertedTemplate, versionValues, auditEvent);
 
-    return json({ id: templateId, slug });
+    return newTemplateResponse(env, templateId, inserted, createCapacity, 'create');
   }
 
   if (request.method === 'PUT') {
@@ -1319,7 +1215,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError('Invalid JSON payload', 400);
     }
 
-    const parsed = templatePayloadSchema.safeParse(body);
+    const parsed = templateUpdatePayloadSchema.safeParse(body);
     if (!parsed.success) {
       const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
       return jsonError(message, 400, { details });
@@ -1329,15 +1225,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     const rawBody = body as Record<string, unknown>;
 
     // Only update slug if explicitly provided (avoid breaking shared URLs on title edits).
-    const requestedSlugValue = typeof requestedSlug === 'string' && requestedSlug.trim()
-      ? generateSlug(requestedSlug.trim())
-      : null;
-
     const now = new Date().toISOString();
-    const updates: Record<string, unknown> = {
-      updated_at: now,
-      updated_by_user_id: userId,
-    };
+    const updates: Record<string, unknown> = {};
     let syncedItems: string | null = null;
     let incomingSections: unknown[] | null = null;
 
@@ -1360,12 +1249,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       updates.rules = Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null;
     }
     if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
-      const normalizedSections = normalizeSectionsPayload(sections ?? bodyItems);
+      const normalizedSections = parseSectionsPayload(sections ?? bodyItems);
       if (normalizedSections.error) {
         return jsonError(normalizedSections.error, 400);
       }
       incomingSections = normalizedSections.sections;
-      updates.items = JSON.stringify(normalizedSections.sections);
     }
     if (Object.prototype.hasOwnProperty.call(rawBody, 'is_public') && typeof is_public === 'boolean') {
       updates.is_public = is_public;
@@ -1379,7 +1267,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       updates.tags = JSON.stringify(finalTags);
     }
 
-    if (Object.keys(changedTemplateFields(updates)).length === 0 && !requestedSlugValue) {
+    if (Object.keys(updates).length === 0 && !incomingSections && !requestedSlug?.trim()) {
       return jsonError('No fields to update', 400);
     }
 
@@ -1404,12 +1292,18 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       if (identityError) {
         return jsonError(identityError, 400);
       }
-      syncedItems = JSON.stringify(stableSections);
-      updates.items = syncedItems;
+      // Clients resend unchanged sections on every save; only a real structure change may
+      // bump content_version and reconcile runs.
+      if (templateStructureChanged(previousSections, stableSections)) {
+        syncedItems = JSON.stringify(stableSections);
+        updates.items = syncedItems;
+      }
     }
+    const slugRequest = resolveRequestedSlug(requestedSlug, existingTemplate.slug);
+    if (slugRequest.kind === 'invalid') return jsonError(slugRequest.message, 400);
     // A content edit must say which version it was based on; without one the check
     // would be skipped and a stale editor would overwrite newer work.
-    const versionRequired = shouldCreateTemplateVersion(rawBody, requestedSlugValue);
+    const versionRequired = requestsContentChange(rawBody, slugRequest.kind === 'changed');
     if (typeof expected_version === 'number' ? expected_version !== existingTemplate.version : versionRequired) {
       return jsonError('Template changed since it was loaded. Refresh before saving again.', 409, {
         code: 'edit_conflict',
@@ -1417,35 +1311,55 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       });
     }
 
-    let nextSlug: string | null = null;
-    if (requestedSlugValue) {
-      nextSlug = requestedSlugValue;
+    // A body whose only field is the stored slug asks for nothing.
+    if (slugRequest.kind === 'unchanged' && Object.keys(updates).length === 0 && !incomingSections) {
+      return jsonError('No fields to update', 400);
+    }
+    if (slugRequest.kind === 'changed') {
+      const requestedSlugValue = slugRequest.slug;
       const [conflict] = await db
         .select({ id: templates.id })
         .from(templates)
-        .where(and(eq(templates.slug, nextSlug), ne(templates.id, templateId)))
+        .where(and(eq(templates.slug, requestedSlugValue), ne(templates.id, templateId)))
         .limit(1);
 
-      // A slug the Template already holds is kept, even a bundled starter's, so its URL never changes.
-      if (conflict || (nextSlug !== existingTemplate.slug && isReservedTemplateSlug(nextSlug))) {
-        nextSlug = appendTemplateSlugSuffix(nextSlug, templateId.slice(0, 8));
-      }
-
-      updates.slug = nextSlug;
+      // A requested slug a bundled starter holds is taken too (the Template keeps a slug it
+      // already has: resolveRequestedSlug never reports that as a change).
+      const slug = conflict || isReservedTemplateSlug(requestedSlugValue)
+        ? await findFreeSuffixedSlug(db, requestedSlugValue, templateId)
+        : requestedSlugValue;
+      if (!slug) return slugInUseResponse(requestedSlugValue);
+      updates.slug = slug;
     }
 
-    const shouldVersion = shouldCreateTemplateVersion(rawBody, nextSlug);
+    const changes = omitUnchangedTemplateColumns(existingTemplate as unknown as Record<string, unknown>, updates);
+    const invalidField = validateChangedTemplateFields(changes, parsed.data);
+    if (invalidField) {
+      return jsonError(invalidField.message, 400, { details: invalidField.details });
+    }
     const currentVersion = typeof existingTemplate.version === 'number' ? existingTemplate.version : 1;
-    const nextVersion = shouldVersion ? currentVersion + 1 : currentVersion;
     const currentContentVersion = typeof existingTemplate.content_version === 'number'
       ? existingTemplate.content_version
       : currentVersion;
-    const nextContentVersion = syncedItems === null ? currentContentVersion : currentContentVersion + 1;
-    if (shouldVersion) {
-      updates.version = nextVersion;
+    if (Object.keys(changes).length === 0) {
+      return json({
+        success: true,
+        id: templateId,
+        slug: existingTemplate.slug ?? undefined,
+        version: currentVersion,
+        content_version: currentContentVersion,
+        structureChanged: false,
+        reconciledRuns: 0,
+      });
     }
+    // Every stored change is a new version, visibility included, so an editor loaded before
+    // a Share gets 409 instead of silently reverting it. content_version (run staleness and
+    // reconciliation) still moves only when the checklist structure changes.
+    const nextVersion = currentVersion + 1;
+    const nextContentVersion = syncedItems === null ? currentContentVersion : currentContentVersion + 1;
+    const templateValues: Record<string, unknown> = { ...changes, version: nextVersion, updated_at: now, updated_by_user_id: userId };
     if (syncedItems !== null) {
-      updates.content_version = nextContentVersion;
+      templateValues.content_version = nextContentVersion;
     }
 
     if (typeof title === 'string' && junkTemplateTitles.has(title)) {
@@ -1453,26 +1367,24 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     }
 
     const templateUpdateWhere = existingTemplate.owner_type === 'team' && existingTemplate.team_id
-      ? and(eq(templates.id, templateId), eq(templates.team_id, existingTemplate.team_id), eq(templates.version, currentVersion))
-      : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), eq(templates.version, currentVersion));
+      ? and(eq(templates.id, templateId), eq(templates.team_id, existingTemplate.team_id), eq(templates.version, currentVersion), isNull(templates.deleted_at))
+      : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), eq(templates.version, currentVersion), isNull(templates.deleted_at));
 
     const subject = getTemplateSubject(existingTemplate as unknown as Record<string, unknown>, userId);
     const updatedTemplate = {
       ...(existingTemplate as unknown as Record<string, unknown>),
-      ...updates,
+      ...templateValues,
     };
 
-    const versionValues = shouldVersion
-      ? await buildTemplateVersionValues({
-        templateId,
-        version: nextVersion,
-        changedByUserId: userId,
-        subject,
-        snapshot: updatedTemplate,
-        changeSummary: 'template.updated',
-        createdAt: now,
-      })
-      : undefined;
+    const versionValues = await buildTemplateVersionValues({
+      templateId,
+      version: nextVersion,
+      changedByUserId: userId,
+      subject,
+      snapshot: updatedTemplate,
+      changeSummary: 'template.updated',
+      createdAt: now,
+    });
     const auditEvent = await buildAuditEventValues({
       actorUserId: userId,
       subject,
@@ -1480,7 +1392,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       action: 'template.updated',
       before: existingTemplate as unknown as Record<string, unknown>,
       after: updatedTemplate,
-      diff: changedTemplateFields(updates),
+      diff: changes,
+      // History lists return metadata, not diffs: the Changelog labels a Share or switch by it.
+      metadata: visibilityChangeMetadata(changes),
       request,
       createdAt: now,
     });
@@ -1517,14 +1431,16 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     );
 
     const nextTemplateSections = syncedItems === null ? [] : (parseJsonArray(syncedItems) ?? []);
-    const reconciledRunUpdates = activeRuns.map((run) => {
+    const reconciledRunUpdates = await Promise.all(activeRuns.map(async (run): Promise<ReconciledRunUpdate> => {
       const previousSections = parseJsonArray(run.items) ?? [];
       const previousRetired = parseJsonArray(run.retired_items) ?? [];
       const reconciled = reconcileRunSections(previousSections, nextTemplateSections, previousRetired);
       const revision = typeof run.revision === 'number' ? run.revision : 1;
+      const items = JSON.stringify(reconciled.sections);
+      const runChanged = reconciled.newlyRetired.length > 0 || items !== JSON.stringify(previousSections);
 
       return {
-        items: JSON.stringify(reconciled.sections),
+        items,
         retiredItems: JSON.stringify(reconciled.retired),
         progress: calculateRunProgress(reconciled.sections),
         templateVersion: nextContentVersion,
@@ -1537,23 +1453,44 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
           isNull(checklist_runs.deleted_at),
         ),
+        // The run's Changelog records the save. The event names retired work by id and
+        // title; its notes stay in the run's retired_items.
+        auditEvent: runChanged
+          ? await buildAuditEventValues({
+            actorUserId: userId,
+            subject,
+            resource: { type: 'checklist_run', id: run.id },
+            action: 'checklist_run.reconciled',
+            metadata: {
+              templateId,
+              templateVersion: nextContentVersion,
+              fromRevision: revision,
+              toRevision: revision + 1,
+              retired: summarizeRetiredEntries(reconciled.newlyRetired),
+            },
+            request,
+            createdAt: now,
+          })
+          : undefined,
       };
-    });
+    }));
 
+    let reconciledRuns = 0;
     try {
-      const batchResults = await updateTemplateWithHistoryFallback(
+      const { updated, runResults } = await updateTemplateWithHistoryFallback(
         db,
-        updates as TemplateUpdateValues,
+        templateValues as TemplateUpdateValues,
         templateUpdateWhere,
         auditEvent,
         versionValues,
         reconciledRunUpdates,
       );
-      if (batchUpdateMissed(batchResults[0])) {
+      if (!updated) {
         return jsonError('Template changed while it was being saved. Refresh before saving again.', 409, {
           code: 'edit_conflict',
         });
       }
+      reconciledRuns = runResults.filter((result) => !batchUpdateMissed(result)).length;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (/unique constraint failed:.*template_versions|template_versions.*unique/i.test(message)) {
@@ -1561,19 +1498,24 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           code: 'edit_conflict',
         });
       }
+      // Another save claimed the slug between the check above and this write.
+      if (isTemplateSlugUniqueViolation(error) && typeof changes.slug === 'string') {
+        return slugInUseResponse(changes.slug);
+      }
       throw error;
     }
 
     // The next save sends this version as expected_version. The slug is the one the template
     // has after the write, requested (it may carry a -<id8> suffix) or kept, so the editor
     // never guesses.
-    const savedSlug = typeof updates.slug === 'string' ? updates.slug : existingTemplate.slug ?? undefined;
     return json({
       success: true,
       id: templateId,
-      slug: savedSlug,
+      slug: typeof changes.slug === 'string' ? changes.slug : existingTemplate.slug ?? undefined,
       version: nextVersion,
       content_version: nextContentVersion,
+      structureChanged: syncedItems !== null,
+      reconciledRuns,
     });
   }
 
@@ -1628,16 +1570,18 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       request,
       createdAt: now,
     });
-    await db.batch([
-      db.update(templates)
-        .set(archiveUpdates)
-        .where(
-          existingTemplate.owner_type === 'team' && existingTemplate.team_id
-            ? and(eq(templates.id, templateId), eq(templates.team_id, existingTemplate.team_id), isNull(templates.deleted_at))
-            : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at)),
-        ),
-      db.insert(audit_events).values(auditEvent),
+    const activeTemplate = existingTemplate.owner_type === 'team' && existingTemplate.team_id
+      ? and(eq(templates.team_id, existingTemplate.team_id), isNull(templates.deleted_at))
+      : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at));
+    // The audit row is written first and only while the template is still active.
+    const archiveResults = await db.batch([
+      insertRowWhere(db, audit_events, auditEvent, rowExistsSql(templates.id, templateId, activeTemplate)),
+      db.update(templates).set(archiveUpdates).where(and(eq(templates.id, templateId), activeTemplate)),
     ]);
+    if (batchUpdateMissed(archiveResults[1])) {
+      // A concurrent request archived it first.
+      return jsonError('Template not found or unauthorized', 404);
+    }
 
     return json({ success: true });
   }

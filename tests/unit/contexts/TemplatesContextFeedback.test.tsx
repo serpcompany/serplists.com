@@ -117,6 +117,22 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
 
     expectNoToasts();
     expect(isInvalidated(client, ['templates', 'user-1', 'personal'])).toBe(true);
+    // A metadata-only save reconciles no runs, so the run lists stay as they are.
+    expect(isInvalidated(client, ['runs', 'user-1', 'personal'])).toBe(false);
+  });
+
+  it('refreshes the run lists when the save changed the checklist structure', async () => {
+    apiMock.updateTemplate.mockResolvedValue({
+      id: 'template-1',
+      version: 4,
+      structureChanged: true,
+      reconciledRuns: 2,
+    });
+    const { client, context } = renderProvider();
+
+    await context.updateTemplate({ ...template });
+
+    expectNoToasts();
     expect(isInvalidated(client, ['runs', 'user-1', 'personal'])).toBe(true);
   });
 

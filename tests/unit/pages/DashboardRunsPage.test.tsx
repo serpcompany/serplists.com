@@ -2,10 +2,11 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Route, Routes } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Dashboard from '@/pages/Dashboard';
-import { createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
+import { createRunSharingActions, createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
 import { createApiError } from '@/lib/api-errors';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
@@ -177,6 +178,17 @@ const publicCatalogTemplate: ChecklistTemplate = {
 const templates: ChecklistTemplate[] = [publicCatalogTemplate];
 const allTemplates: ChecklistTemplate[] = [privateTemplate];
 
+const renderRunsPage = () =>
+  renderToStaticMarkup(
+    <QueryClientProvider client={new QueryClient()}>
+      <StaticRouter location="/dashboard/runs">
+        <Routes>
+          <Route path="*" element={<Dashboard />} />
+        </Routes>
+      </StaticRouter>
+    </QueryClientProvider>,
+  );
+
 describe('/dashboard/runs presentation', () => {
   beforeEach(() => {
     mockUseAuth.mockReset();
@@ -199,13 +211,7 @@ describe('/dashboard/runs presentation', () => {
       deleteRun: vi.fn(),
     });
 
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/runs">
-        <Routes>
-          <Route path="*" element={<Dashboard />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    const html = renderRunsPage();
 
     expect(html).toContain('My Runs');
     expect(html).toContain('data-dashboard-content-shell="true"');
@@ -260,13 +266,7 @@ describe('/dashboard/runs presentation', () => {
       deleteRun: vi.fn(),
     });
 
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/runs">
-        <Routes>
-          <Route path="*" element={<Dashboard />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    const html = renderRunsPage();
 
     expect(html).toContain('From Org Checklist');
     expect(html).toContain('href="/dashboard/templates/org-template"');
@@ -290,13 +290,7 @@ describe('/dashboard/runs presentation', () => {
       deleteRun: vi.fn(),
     });
 
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/runs">
-        <Routes>
-          <Route path="*" element={<Dashboard />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    const html = renderRunsPage();
 
     expect(html).toContain('My Runs');
     expect(html).toContain('data-dashboard-content-shell="true"');
@@ -325,13 +319,7 @@ describe('/dashboard/runs presentation', () => {
       deleteRun: vi.fn(),
     });
 
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/runs">
-        <Routes>
-          <Route path="*" element={<Dashboard />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    const html = renderRunsPage();
 
     expect(html).toContain('My Runs');
     expect(html).toContain('Couldn&#x27;t load your runs');
@@ -354,16 +342,64 @@ describe('/dashboard/runs presentation', () => {
       deleteRun: vi.fn(),
     });
 
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/runs">
-        <Routes>
-          <Route path="*" element={<Dashboard />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    const html = renderRunsPage();
 
     expect(html).toContain('Shared snapshot is out of date');
     expect(html).not.toContain('>Revalidate<');
+    // Stopping the share is the way out: the run becomes private and can be revalidated.
+    expect(html).toContain('Stop sharing to update');
+  });
+
+  it('marks shared runs so owners can see which links are live', () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
+      logout: vi.fn(),
+    });
+    mockUseTemplates.mockReturnValue({
+      templates,
+      templatesLoading: false,
+      runs: [{ ...runs[0], isPublic: true }, runs[1]],
+      runsLoading: false,
+      updateRun: vi.fn(),
+      revalidateRun: vi.fn(),
+      deleteRun: vi.fn(),
+    });
+
+    const html = renderRunsPage();
+
+    expect(html.match(/>Shared</g)).toHaveLength(1);
+    expect(html).not.toContain('Stop sharing to update');
+  });
+
+  it('stops sharing through the API and refreshes the runs list', async () => {
+    const apiClient = {
+      createChecklistRunShare: vi.fn().mockResolvedValue({ shareToken: 'share-token-1' }),
+      revokeChecklistRunShare: vi.fn().mockResolvedValue({ id: 'run-5', isPublic: false }),
+    };
+    const queryClient = { invalidateQueries: vi.fn().mockResolvedValue(undefined) };
+    const actions = createRunSharingActions(queryClient, apiClient);
+
+    await actions.stopSharingRun('run-5');
+    expect(apiClient.revokeChecklistRunShare).toHaveBeenCalledWith('run-5');
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['runs'] });
+
+    // Sharing refreshes the list through onShared (markRunShared) once the run is public.
+    const onShared = vi.fn();
+    await expect(
+      createRunsDashboardShareUrl('run-5', 'https://serplists.com', apiClient, onShared),
+    ).resolves.toBe('https://serplists.com/share/share-token-1');
+    expect(onShared).toHaveBeenCalledWith('run-5');
+  });
+
+  it('does not refresh the runs list when stopping sharing fails', async () => {
+    const apiClient = {
+      createChecklistRunShare: vi.fn(),
+      revokeChecklistRunShare: vi.fn().mockRejectedValue(new Error('Forbidden')),
+    };
+    const queryClient = { invalidateQueries: vi.fn() };
+
+    await expect(createRunSharingActions(queryClient, apiClient).stopSharingRun('run-5')).rejects.toThrow('Forbidden');
+    expect(queryClient.invalidateQueries).not.toHaveBeenCalled();
   });
 
   it('hides run actions an Organization viewer cannot use', () => {
@@ -380,13 +416,7 @@ describe('/dashboard/runs presentation', () => {
       deleteRun: vi.fn(),
     });
 
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/runs">
-        <Routes>
-          <Route path="*" element={<Dashboard />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    const html = renderRunsPage();
 
     expect(html).toContain('Onboarding - Sarah Chen');
     expect(html).not.toContain('>Revalidate<');
@@ -407,13 +437,7 @@ describe('/dashboard/runs presentation', () => {
       deleteRun: vi.fn(),
     });
 
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/runs">
-        <Routes>
-          <Route path="*" element={<Dashboard />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    const html = renderRunsPage();
 
     expect(html).toContain('>Revalidate<');
     expect(html).toContain('aria-label="Run options"');

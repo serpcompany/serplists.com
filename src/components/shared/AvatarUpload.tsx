@@ -9,6 +9,7 @@ import { authClient } from "@/lib/auth-client";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { isAllowedUpload, uploadAcceptAttribute } from "@/lib/schemas/uploadTypes";
 import { deleteUploadedAsset } from "@/lib/utils/fileUpload";
+import { UPLOAD_MAX_BYTES, formatUploadLimit } from "@/lib/schemas/uploadLimits";
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;
@@ -51,9 +52,9 @@ export const AvatarUpload = ({
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File size must be less than 5MB");
+    // Validate file size (the API enforces the same limit)
+    if (file.size > UPLOAD_MAX_BYTES.avatars) {
+      toast.error(`File size must be less than ${formatUploadLimit(UPLOAD_MAX_BYTES.avatars)}`);
       return;
     }
 

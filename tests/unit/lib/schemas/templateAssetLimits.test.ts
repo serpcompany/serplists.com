@@ -5,7 +5,7 @@ import {
   formatAssetSizeLimit,
   TEMPLATE_IMPORT_MAX_ASSET_BYTES,
 } from "@/lib/schemas/templateAssetLimits";
-import { UPLOAD_MAX_BYTES } from "@/lib/schemas/uploadTypes";
+import { TEMPLATE_UPLOAD_MAX_BYTES as UPLOAD_MAX_BYTES } from "@/lib/schemas/uploadLimits";
 import { exportPortableTemplatesToJSON, parseTemplatesFromData } from "@/lib/utils/templateBackup";
 import { validateFile } from "@/lib/utils/fileUpload";
 import type { ChecklistTemplate } from "@/types/checklist";

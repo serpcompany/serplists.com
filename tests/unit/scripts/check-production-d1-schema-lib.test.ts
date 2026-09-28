@@ -1,12 +1,219 @@
+import { readFileSync } from "node:fs";
+import { is } from "drizzle-orm";
+import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { describe, expect, it } from "vitest";
+import * as drizzleSchema from "../../../db/schema/index";
 import {
+  REQUIRED_D1_COLUMN_CONSTRAINTS,
+  REQUIRED_D1_FOREIGN_KEYS,
+  REQUIRED_D1_INDEXES,
+  REQUIRED_D1_SCHEMA,
+  REQUIRED_D1_TRIGGERS,
+  buildSchemaQuery,
   diffD1Schema,
+  diffD1Triggers,
   formatSchemaDrift,
+  hasSchemaDrift,
   mapColumnConstraintPragmaResults,
   mapForeignKeyPragmaResults,
   mapIndexPragmaResults,
   mapPragmaResults,
+  mapTriggerResults,
+  splitSchemaQueryResults,
 } from "../../../scripts/check-production-d1-schema-lib.mjs";
+
+type RequiredIndex = { name: string; unique?: boolean; partial?: boolean };
+type RequiredForeignKey = { from: string; table: string; to: string; onDelete?: string };
+type SqlOnlyTrigger = { name: string; table: string; definition: string };
+
+const drizzleTables = Object.values(drizzleSchema as Record<string, unknown>)
+  .filter((value): value is SQLiteTable => is(value, SQLiteTable))
+  .map((table) => getTableConfig(table));
+
+const sqlOnlyTriggers = (JSON.parse(readFileSync("db/sql-only-schema.json", "utf8")) as {
+  triggers: SqlOnlyTrigger[];
+}).triggers;
+
+const ADDED_IN_0024 = ["content_version", "template_version", "revision", "retired_items"];
+
+function sortIndexesByTable(record: Record<string, RequiredIndex[]>) {
+  return Object.fromEntries(
+    Object.entries(record)
+      .filter(([, indexes]) => indexes.length > 0)
+      .map(([table, indexes]) => [
+        table,
+        indexes
+          .map((index) => ({ name: index.name, unique: index.unique === true, partial: index.partial === true }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      ]),
+  );
+}
+
+// When one of these fails, update REQUIRED_D1_* in
+// scripts/check-production-d1-schema-lib.mjs to match db/schema/.
+describe("required D1 schema matches Drizzle", () => {
+  it("requires every table and column in the Drizzle schema", () => {
+    const required = Object.fromEntries(
+      Object.entries(REQUIRED_D1_SCHEMA as Record<string, string[]>).map(([table, columns]) => [
+        table,
+        [...columns].sort(),
+      ]),
+    );
+    const drizzle = Object.fromEntries(
+      drizzleTables.map((table) => [table.name, table.columns.map((column) => column.name).sort()]),
+    );
+
+    expect(required).toEqual(drizzle);
+  });
+
+  it("requires every named Drizzle index with its unique and partial flags", () => {
+    const drizzle = Object.fromEntries(
+      drizzleTables.map((table) => [
+        table.name,
+        table.indexes.map((index) => ({
+          name: index.config.name,
+          unique: Boolean(index.config.unique),
+          partial: Boolean(index.config.where),
+        })),
+      ]),
+    );
+
+    expect(sortIndexesByTable(REQUIRED_D1_INDEXES as Record<string, RequiredIndex[]>)).toEqual(
+      sortIndexesByTable(drizzle),
+    );
+  });
+
+  it("only requires column constraints and foreign keys that Drizzle declares", () => {
+    const constraints = REQUIRED_D1_COLUMN_CONSTRAINTS as Record<
+      string,
+      Record<string, { notNull?: boolean; primaryKey?: boolean }>
+    >;
+    for (const [tableName, columns] of Object.entries(constraints)) {
+      const table = drizzleTables.find((candidate) => candidate.name === tableName);
+      const tablePrimaryKeyColumns = (table?.primaryKeys ?? []).flatMap((key) => key.columns.map((column) => column.name));
+      for (const [columnName, required] of Object.entries(columns)) {
+        const column = table?.columns.find((candidate) => candidate.name === columnName);
+        expect(column, `${tableName}.${columnName}`).toBeDefined();
+        if (required.notNull) expect(column?.notNull).toBe(true);
+        if (required.primaryKey) expect(column?.primary || tablePrimaryKeyColumns.includes(columnName)).toBe(true);
+      }
+    }
+
+    const foreignKeysByTable = REQUIRED_D1_FOREIGN_KEYS as Record<string, RequiredForeignKey[]>;
+    for (const [tableName, foreignKeys] of Object.entries(foreignKeysByTable)) {
+      const table = drizzleTables.find((candidate) => candidate.name === tableName);
+      const declared = (table?.foreignKeys ?? []).map((foreignKey) => {
+        const reference = foreignKey.reference();
+        return {
+          from: reference.columns.map((column) => column.name).join(","),
+          table: getTableConfig(reference.foreignTable).name,
+          to: reference.foreignColumns.map((column) => column.name).join(","),
+          onDelete: (foreignKey.onDelete ?? "no action").toUpperCase(),
+        };
+      });
+      for (const foreignKey of foreignKeys) {
+        expect(declared).toContainEqual({ ...foreignKey, onDelete: (foreignKey.onDelete ?? "NO ACTION").toUpperCase() });
+      }
+    }
+  });
+
+  it("requires every SQL-only trigger on its table", () => {
+    expect(REQUIRED_D1_TRIGGERS).toEqual(sqlOnlyTriggers);
+  });
+
+  it("reports the 0024 columns missing from a database that stopped at 0023", () => {
+    const actual = Object.fromEntries(
+      Object.entries(REQUIRED_D1_SCHEMA as Record<string, string[]>).map(([table, columns]) => [
+        table,
+        columns.filter((column) => !ADDED_IN_0024.includes(column)),
+      ]),
+    );
+
+    expect(diffD1Schema(REQUIRED_D1_SCHEMA, actual).missingColumns).toEqual({
+      templates: ["content_version"],
+      checklist_runs: ["template_version", "revision", "retired_items"],
+    });
+  });
+});
+
+describe("schema query", () => {
+  it("reads table, index and foreign-key pragmas per table, then the triggers", () => {
+    expect(buildSchemaQuery(["users", "templates"])).toBe(
+      "pragma table_info('users'); pragma table_info('templates'); " +
+        "pragma index_list('users'); pragma index_list('templates'); " +
+        "pragma foreign_key_list('users'); pragma foreign_key_list('templates'); " +
+        "SELECT name, tbl_name, sql FROM sqlite_master WHERE type = 'trigger';",
+    );
+  });
+
+  it("splits Wrangler results into bounded groups", () => {
+    const results = ["t1", "t2", "i1", "i2", "f1", "f2", "triggers"].map((id) => ({ results: [{ id }] }));
+
+    expect(splitSchemaQueryResults(["users", "templates"], results)).toEqual({
+      tableResults: [results[0], results[1]],
+      indexResults: [results[2], results[3]],
+      foreignKeyResults: [results[4], results[5]],
+      triggerResult: results[6],
+    });
+    expect(() => splitSchemaQueryResults(["users", "templates"], results.slice(0, 6))).toThrow(
+      /expected 7 result sets/,
+    );
+  });
+});
+
+describe("trigger checks", () => {
+  const ownerInsert = sqlOnlyTriggers.find((trigger) => trigger.name === "sitemap_owner_users_insert")!;
+  const templatesUpdate = sqlOnlyTriggers.find((trigger) => trigger.name === "sitemap_templates_update")!;
+
+  it("accepts a trigger whose SQL differs only in whitespace and quoting", () => {
+    const actual = mapTriggerResults({
+      results: [
+        {
+          name: ownerInsert.name,
+          tbl_name: "users",
+          sql: ownerInsert.definition.replace("AFTER INSERT ON users", 'AFTER INSERT\n  ON "users"'),
+        },
+      ],
+    });
+
+    expect(diffD1Triggers([ownerInsert], actual)).toEqual({ missingTriggers: [], invalidTriggers: [] });
+  });
+
+  it("reports missing triggers, triggers on the wrong table and changed definitions", () => {
+    const actual = mapTriggerResults({
+      results: [
+        { name: ownerInsert.name, tbl_name: "templates", sql: ownerInsert.definition },
+        {
+          name: templatesUpdate.name,
+          tbl_name: "templates",
+          sql: "CREATE TRIGGER sitemap_templates_update AFTER UPDATE ON templates BEGIN SELECT 1; END",
+        },
+      ],
+    });
+
+    const diff = diffD1Triggers(sqlOnlyTriggers, actual);
+
+    expect(diff.missingTriggers).toEqual(
+      sqlOnlyTriggers
+        .map((trigger) => trigger.name)
+        .filter((name) => name !== ownerInsert.name && name !== templatesUpdate.name),
+    );
+    expect(diff.invalidTriggers).toEqual([
+      { name: ownerInsert.name, issues: ["expected on users, found on templates"] },
+      { name: templatesUpdate.name, issues: ["definition differs from db/sql-only-schema.json"] },
+    ]);
+
+    const noSchemaDrift = diffD1Schema({}, {});
+    expect(hasSchemaDrift({ ...noSchemaDrift, ...diff })).toBe(true);
+    expect(hasSchemaDrift({ ...noSchemaDrift, missingTriggers: [], invalidTriggers: [] })).toBe(false);
+
+    const message = formatSchemaDrift({ ...noSchemaDrift, ...diff }, "staging:DB");
+    expect(message).toContain("D1 schema drift detected for staging:DB.");
+    expect(message).not.toContain("Production");
+    expect(message).toContain(`- missing trigger: ${diff.missingTriggers[0]}`);
+    expect(message).toContain(`- invalid trigger ${ownerInsert.name} (expected on users, found on templates)`);
+  });
+});
 
 describe("mapPragmaResults", () => {
   it("maps wrangler pragma results back to their table names", () => {
@@ -225,7 +432,7 @@ describe("formatSchemaDrift", () => {
       "serp-checklists-db",
     );
 
-    expect(message).toContain("Production D1 schema drift detected for serp-checklists-db.");
+    expect(message).toContain("D1 schema drift detected for serp-checklists-db.");
     expect(message).toContain("- missing table: entitlement_overrides");
     expect(message).toContain("- templates: missing columns version");
     expect(message).toContain("- checklist_runs: missing columns share_token, share_used_at");

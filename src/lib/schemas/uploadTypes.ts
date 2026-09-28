@@ -20,7 +20,7 @@ export const UPLOAD_BUCKETS = [
 
 export type UploadBucket = (typeof UPLOAD_BUCKETS)[number];
 
-export const UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
+// Size limits per bucket are in ./uploadLimits.ts.
 
 // Image types the API stores for avatars and Image blocks. The avatar picker offers
 // and checks the same list, so a file the API would refuse is caught first.

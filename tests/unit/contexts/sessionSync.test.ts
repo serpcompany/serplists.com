@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { SessionCheck, SessionState } from '@/contexts/authSession';
 import {
+  SESSION_KEEPALIVE_INTERVAL_MS,
   SESSION_RECHECK_INTERVAL_MS,
   SESSION_UNAUTHORIZED_RECHECK_INTERVAL_MS,
   createSessionSync,
@@ -387,6 +388,79 @@ describe('session sync after a 401', () => {
     loading.receive401();
     await flush();
 
+    expect(signedOut.readSession).not.toHaveBeenCalled();
+    expect(loading.readSession).not.toHaveBeenCalled();
+  });
+});
+
+// Only get-session extends a session and resends its cookie, so an open tab must read it now
+// and then. Focus and a timer ask keepAlive(), which reads at most once per interval.
+describe('session keep-alive', () => {
+  it('reads the session once per interval, however often the tab regains focus', async () => {
+    let now = 1_000_000;
+    const tab = createTab({
+      state: signedInAs(alice),
+      answers: [signedInCheck(alice), signedInCheck(alice)],
+      now: () => now,
+    });
+    tab.sync.connect(tab.environment());
+    tab.sync.claim();
+
+    expect(tab.sync.keepAlive()).toBe(false);
+    now += SESSION_KEEPALIVE_INTERVAL_MS - 1;
+    expect(tab.sync.keepAlive()).toBe(false);
+    now += 1;
+    expect(tab.sync.keepAlive()).toBe(true);
+    await flush();
+    expect(tab.sync.keepAlive()).toBe(false);
+    now += SESSION_KEEPALIVE_INTERVAL_MS;
+    expect(tab.sync.keepAlive()).toBe(true);
+    await flush();
+
+    expect(tab.readSession).toHaveBeenCalledTimes(2);
+    expect(tab.state().user).toEqual(alice);
+  });
+
+  it('does not start a read while another check runs', async () => {
+    let now = 1_000_000;
+    const tab = createTab({ state: signedInAs(alice), answers: [signedInCheck(alice)], now: () => now });
+    tab.sync.connect(tab.environment());
+    tab.sync.claim();
+    now += SESSION_KEEPALIVE_INTERVAL_MS;
+
+    expect([tab.sync.keepAlive(), tab.sync.keepAlive()]).toEqual([true, false]);
+    await flush();
+
+    expect(tab.readSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the user when the read fails and signs out when the session has expired', async () => {
+    let now = 1_000_000;
+    const tab = createTab({
+      state: signedInAs(alice),
+      answers: [{ kind: 'unknown', status: 0 }, { kind: 'unauthenticated' }],
+      now: () => now,
+    });
+    tab.sync.connect(tab.environment());
+    tab.sync.claim();
+
+    now += SESSION_KEEPALIVE_INTERVAL_MS;
+    tab.sync.keepAlive();
+    await flush();
+    expect(tab.state().user).toEqual(alice);
+
+    now += SESSION_KEEPALIVE_INTERVAL_MS;
+    tab.sync.keepAlive();
+    await flush();
+    expect(tab.state().status).toBe('unauthenticated');
+  });
+
+  it('never reads for a signed-out or loading tab', () => {
+    const signedOut = createTab({ state: { user: null, session: null, status: 'unauthenticated' } });
+    const loading = createTab({ state: { user: null, session: null, status: 'loading' } });
+
+    expect(signedOut.sync.keepAlive()).toBe(false);
+    expect(loading.sync.keepAlive()).toBe(false);
     expect(signedOut.readSession).not.toHaveBeenCalled();
     expect(loading.readSession).not.toHaveBeenCalled();
   });

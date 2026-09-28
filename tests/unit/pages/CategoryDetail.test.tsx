@@ -14,6 +14,7 @@ import CategoryDetail from '@/pages/CategoryDetail';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 const mockUseTemplateLibrary = vi.fn();
+const mockSeoHead = vi.fn();
 
 vi.mock('@/hooks/useTemplateLibrary', () => ({
   useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
@@ -24,7 +25,10 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 }));
 
 vi.mock('@/components/shared/SEOHead', () => ({
-  SEOHead: (props: Record<string, unknown>) => <div data-seo-head={String(props.url)}>{String(props.title)}</div>,
+  SEOHead: (props: Record<string, unknown>) => {
+    mockSeoHead(props);
+    return <div data-seo-head={String(props.url)}>{String(props.title)}</div>;
+  },
 }));
 
 const renderCategoryPage = (location: string) =>
@@ -171,3 +175,86 @@ describe('CategoryDetail for categories in other scripts', () => {
   });
 });
 
+const engineeringTemplate: ChecklistTemplate = {
+  id: 'code-review',
+  title: 'Code Review Checklist',
+  sections: [],
+  userId: 'user-1',
+  createdAt: '2026-03-24T00:00:00.000Z',
+  updatedAt: '2026-03-24T00:00:00.000Z',
+  isPublic: true,
+  categories: ['Engineering'],
+};
+
+const campingTemplate: ChecklistTemplate = {
+  ...engineeringTemplate,
+  id: 'camping',
+  title: 'Camping Checklist',
+  categories: ['outdoor'],
+};
+
+const renderCategory = (slug: string) => renderCategoryPage(`/categories/${slug}`);
+
+const robots = () => mockSeoHead.mock.calls.at(-1)?.[0].robots;
+
+describe('CategoryDetail empty categories', () => {
+  beforeEach(() => {
+    mockSeoHead.mockClear();
+  });
+
+  it('keeps a loaded category with no public Templates out of search results', () => {
+    mockUseTemplateLibrary.mockReturnValue({ templates: [campingTemplate], loading: false, allCategories: ['outdoor'] });
+    const markup = renderCategory('engineering');
+
+    expect(markup).toContain('Engineering &amp; Development');
+    expect(markup).toContain('No public templates in this category yet.');
+    expect(markup).not.toContain('matching your search');
+    expect(robots()).toBe('noindex, follow');
+  });
+
+  it('does not mark a category empty or noindex while the catalog is loading', () => {
+    // Bundled Templates are always present, so a Template list is no sign that the catalog
+    // API answered; the hook's `loading` follows the catalog request itself.
+    mockUseTemplateLibrary.mockReturnValue({
+      templates: [campingTemplate],
+      loading: true,
+      allCategories: ['outdoor'],
+    });
+    const markup = renderCategory('engineering');
+
+    expect(markup).toContain('Engineering &amp; Development');
+    expect(markup).toContain('Loading templates…');
+    expect(markup).not.toContain('No public templates in this category yet.');
+    expect(markup).not.toContain('matching your search');
+    expect(markup).not.toContain('0 templates');
+    expect(robots()).not.toBe('noindex, follow');
+  });
+
+  it('waits for the catalog before treating an unregistered category as missing', () => {
+    mockUseTemplateLibrary.mockReturnValue({
+      templates: [campingTemplate],
+      loading: true,
+      allCategories: ['outdoor'],
+    });
+    const loadingMarkup = renderCategory('seo');
+
+    expect(loadingMarkup).toContain('Loading templates…');
+    expect(loadingMarkup).not.toContain('That page does not exist');
+
+    mockUseTemplateLibrary.mockReturnValue({
+      templates: [campingTemplate],
+      loading: false,
+      allCategories: ['outdoor'],
+    });
+    expect(renderCategory('seo')).toContain('That page does not exist');
+  });
+
+  it('indexes a category that has public Templates', () => {
+    mockUseTemplateLibrary.mockReturnValue({ templates: [engineeringTemplate], loading: false, allCategories: ['Engineering'] });
+    const markup = renderCategory('engineering');
+
+    expect(markup).toContain('Code Review Checklist');
+    expect(markup).toContain('1 templates');
+    expect(robots()).not.toBe('noindex, follow');
+  });
+});

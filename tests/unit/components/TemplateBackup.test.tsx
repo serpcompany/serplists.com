@@ -55,6 +55,11 @@ vi.mock('@/contexts/TemplatesContext', () => ({
   },
 }));
 
+// The catalog loads only for an export that includes public templates.
+vi.mock('@/features/template-backup/publicCatalogLoader', () => ({
+  usePublicCatalogLoader: () => vi.fn().mockResolvedValue([]),
+}));
+
 // The page's export guard: tests set whether an export is in flight.
 vi.mock('@/hooks/useSingleFlight', () => ({
   useSingleFlight: () => ({

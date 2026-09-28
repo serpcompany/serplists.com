@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ChecklistTemplate } from "@/types/checklist";
 
 import {
+  buildTemplateEditorSavedState,
   loadTemplateEditorData,
   saveTemplateEditorData,
   shouldLoadTemplateEditorRecord,
@@ -423,6 +424,53 @@ describe("saveTemplateEditorData validation", () => {
     expect(saveTemplate).toHaveBeenCalledWith(
       expect.objectContaining({ seoUrl: "my-launch-checklist" }),
     );
+  });
+});
+
+describe("stale editor protection", () => {
+  const values = {
+    title: "Existing Template",
+    description: "",
+    templateType: "checklist" as const,
+    categories: [],
+    tags: [],
+    isPublic: false,
+    seoTitle: "",
+    seoDescription: "",
+    seoUrl: "",
+    sections: [],
+  };
+
+  it("keeps the version the template was loaded at", async () => {
+    const apiClient = { getTemplateById: vi.fn().mockResolvedValue({ id: "template-1", title: "API", version: 7, sections: [] }) };
+    const fetched = await loadTemplateEditorData({ id: "template-1" }, { apiClient });
+
+    expect(fetched.version).toBe(7);
+  });
+
+  it("sends the loaded version, and leaves visibility out unless the editor changed it", async () => {
+    const saveTemplate = vi.fn().mockResolvedValue({ success: true, errors: [] });
+    const loaded = { expectedVersion: 3, loadedIsPublic: false };
+
+    await saveTemplateEditorData({ id: "template-1", values, ...loaded }, { saveTemplate });
+    await saveTemplateEditorData({ id: "template-1", values: { ...values, isPublic: true }, ...loaded }, { saveTemplate });
+
+    expect(saveTemplate.mock.calls[0][0]).toEqual(expect.objectContaining({ expectedVersion: 3, isPublic: undefined }));
+    expect(saveTemplate.mock.calls[1][0]).toEqual(expect.objectContaining({ expectedVersion: 3, isPublic: true }));
+  });
+
+  it("always sends visibility when creating a template", async () => {
+    const saveTemplate = vi.fn().mockResolvedValue({ success: true, errors: [] });
+
+    await saveTemplateEditorData({ values }, { saveTemplate });
+
+    expect(saveTemplate.mock.calls[0][0]).toEqual(expect.objectContaining({ id: undefined, isPublic: false }));
+  });
+
+  it("moves the baseline to what was saved", () => {
+    const saved = buildTemplateEditorSavedState({ ...values, isPublic: true });
+
+    expect(saved.initialValues.isPublic).toBe(true);
   });
 });
 

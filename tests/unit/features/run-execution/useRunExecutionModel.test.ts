@@ -9,6 +9,7 @@ import {
   loadRunExecutionData,
   saveRunExecutionTitle,
   saveRunItemNotes,
+  stopRunExecutionSharing,
   toggleRunItem,
   toggleRunSubItem,
 } from '@/features/run-execution/useRunExecutionModel';
@@ -357,19 +358,28 @@ describe('run execution model actions', () => {
   });
 });
 
+// Every task and Sub-task ticked: completion checks Sub-tasks too.
+const allDone = (run: ChecklistRun): ChecklistRun => ({
+  ...run,
+  sections: run.sections.map((section) => ({
+    ...section,
+    items: section.items.map((item) => ({
+      ...item,
+      isCompleted: true,
+      contents: item.contents?.map((content) => ({
+        ...content,
+        subItems: content.subItems?.map((subItem) => ({ ...subItem, isCompleted: true })),
+      })),
+    })),
+  })),
+});
+
 describe('completing a run', () => {
   const apiClient = () => ({
     createChecklistRunShare: vi.fn(),
     getChecklistById: vi.fn(),
     getSharedChecklist: vi.fn(),
     updateSharedChecklist: vi.fn(),
-  });
-  const allDone = (run: ChecklistRun): ChecklistRun => ({
-    ...run,
-    sections: run.sections.map((section) => ({
-      ...section,
-      items: section.items.map((item) => ({ ...item, isCompleted: true })),
-    })),
   });
 
   it('completes an in-progress run whose tasks are all done', async () => {
@@ -500,14 +510,7 @@ describe('unsaved task notes ride along with the save that would lose them', () 
 
   it('completing the run saves every draft before the page leaves', async () => {
     const updateRun = vi.fn(async (run: ChecklistRun) => run);
-    const run = buildRun();
-    const doneRun: ChecklistRun = {
-      ...run,
-      sections: run.sections.map((section) => ({
-        ...section,
-        items: section.items.map((item) => ({ ...item, isCompleted: true })),
-      })),
-    };
+    const doneRun = allDone(buildRun());
 
     const result = await completeRunExecution(
       { noteDrafts: { 'item-1': 'first', 'item-2': 'second' }, run: doneRun },
@@ -519,7 +522,6 @@ describe('unsaved task notes ride along with the save that would lose them', () 
     expect(updateRun.mock.calls[0][0].sections[0].items.map((item) => item.notes)).toEqual(['first', 'second']);
   });
 });
-
 
 describe('a task with several Sub-tasks blocks', () => {
   // Task item-1 has blocks [a, b] and [c], with a text block and an empty block between them.
@@ -741,5 +743,98 @@ describe('sharing from the run page', () => {
 
     expect(result.kind).toBe('error');
     expect(onShared).not.toHaveBeenCalled();
+  });
+});
+
+describe('Sub-tasks in more than one block', () => {
+  it('keeps the task open while another Sub-tasks block has an unfinished Sub-task', async () => {
+    const run = buildRun();
+    run.sections[0].items[0].contents = [
+      { type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Short', isCompleted: false }] },
+      { type: 'subItems', value: '', subItems: [{ id: 'sub-2', title: 'Tagline', isCompleted: false }] },
+    ];
+    const apiClient = {
+      createChecklistRunShare: vi.fn(),
+      getChecklistById: vi.fn(),
+      getSharedChecklist: vi.fn(),
+      updateChecklist: vi.fn(),
+      updateSharedChecklist: vi.fn(),
+    };
+
+    const result = await toggleRunSubItem(
+      { contentIndex: 0, isCompleted: true, itemId: 'item-1', run, shareToken: 'share-token', subItemIndex: 0 },
+      { apiClient, updateRun: vi.fn() },
+    );
+
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') throw new Error('expected ok result');
+    expect(result.run.sections[0]?.items[0]?.isCompleted).toBe(false);
+    expect(result.shouldPromptComplete).toBe(false);
+  });
+});
+
+describe('run page sharing', () => {
+  const sharingApiClient = () => ({
+    createChecklistRunShare: vi.fn().mockResolvedValue({ shareToken: 'token-1' }),
+    getChecklistById: vi.fn(),
+    getSharedChecklist: vi.fn(),
+    revokeChecklistRunShare: vi.fn().mockResolvedValue({ id: 'run-1', isPublic: false }),
+    updateSharedChecklist: vi.fn(),
+  });
+
+  it('marks the run shared and refreshes the runs list after sharing', async () => {
+    const apiClient = sharingApiClient();
+    // onShared marks the run shared in the cached runs lists and reloads them (markRunShared).
+    const onShared = vi.fn();
+
+    const result = await createRunExecutionShare(
+      { run: buildRun({ isPublic: false }) },
+      { apiClient, onShared, origin: 'https://app.test', updateRun: vi.fn() },
+    );
+
+    expect(result).toEqual({
+      kind: 'ok',
+      run: expect.objectContaining({ id: 'run-1', isPublic: true }),
+      shareUrl: 'https://app.test/share/token-1',
+    });
+    expect(onShared).toHaveBeenCalledWith('run-1');
+  });
+
+  it('stops sharing through the API, marks the run private and refreshes the runs list', async () => {
+    const apiClient = sharingApiClient();
+    const refreshRuns = vi.fn();
+    const run = buildRun({ isPublic: true, revision: 4 });
+
+    const result = await stopRunExecutionSharing({ run }, { apiClient, refreshRuns, updateRun: vi.fn() });
+
+    expect(apiClient.revokeChecklistRunShare).toHaveBeenCalledWith('run-1');
+    // Stopping sharing does not bump the revision, so later saves keep working.
+    expect(result).toEqual({ kind: 'ok', run: { ...run, isPublic: false } });
+    expect(refreshRuns).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the API error and keeps the run shared when stopping fails', async () => {
+    const apiClient = sharingApiClient();
+    apiClient.revokeChecklistRunShare.mockRejectedValue(createApiError(403, { error: 'Forbidden' }));
+    const refreshRuns = vi.fn();
+
+    const result = await stopRunExecutionSharing(
+      { run: buildRun({ isPublic: true }) },
+      { apiClient, refreshRuns, updateRun: vi.fn() },
+    );
+
+    expect(result).toEqual({ kind: 'error', message: 'Forbidden' });
+    expect(refreshRuns).not.toHaveBeenCalled();
+  });
+
+  it('never stops sharing from a share link or without a loaded run', async () => {
+    const apiClient = sharingApiClient();
+
+    expect(await stopRunExecutionSharing(
+      { run: buildRun({ isPublic: true }), shareToken: 'token-1' },
+      { apiClient, updateRun: vi.fn() },
+    )).toEqual({ kind: 'shared_disabled' });
+    expect(await stopRunExecutionSharing({}, { apiClient, updateRun: vi.fn() })).toEqual({ kind: 'not_found' });
+    expect(apiClient.revokeChecklistRunShare).not.toHaveBeenCalled();
   });
 });

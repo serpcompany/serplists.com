@@ -83,6 +83,30 @@ describe('checkSessionWithRetry', () => {
     expect(getSession).toHaveBeenCalledTimes(3);
   });
 
+  it('retries a rate-limited check and a failed request, and keeps the user signed in', async () => {
+    const getSession = vi
+      .fn<() => Promise<AuthClientResult>>()
+      .mockResolvedValueOnce({ data: null, error: { status: 429 } })
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce({ data: { user, session: {} }, error: null });
+
+    await expect(checkSessionWithRetry(getSession, { retryDelaysMs: [10, 20], wait })).resolves.toMatchObject({
+      kind: 'authenticated',
+    });
+    expect(getSession).toHaveBeenCalledTimes(3);
+  });
+
+  it('reports the last failure as unknown after waiting out each retry delay', async () => {
+    const getSession = vi.fn(async (): Promise<AuthClientResult> => ({ data: null, error: { status: 503 } }));
+    const delays = vi.fn(async (_ms: number) => {});
+
+    await expect(checkSessionWithRetry(getSession, { retryDelaysMs: [10, 20], wait: delays })).resolves.toEqual({
+      kind: 'unknown',
+      status: 503,
+    });
+    expect(delays.mock.calls).toEqual([[10], [20]]);
+  });
+
   it('gives up as unknown after its retries, including when the request throws', async () => {
     const getSession = vi.fn(async (): Promise<AuthClientResult> => {
       throw new TypeError('Failed to fetch');

@@ -2,10 +2,10 @@ import { ZodError } from "zod";
 import { 
   validateBackup, 
   validatePortableTemplatePackEnvelope,
-  validatePortableTemplatePack,
   validateTemplateImportArray,
   PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION
 } from "@/lib/schemas/checklistSchema";
+import { parsePortableTemplate } from "@/lib/schemas/portableTemplateNormalize";
 import type { 
   ChecklistTemplateImport,
   PortableChecklistTemplate,
@@ -25,7 +25,7 @@ import {
   parseTemplateMarkdown,
   parseTemplateYaml,
 } from "@/lib/templates/templateMarkdown";
-import type { ChecklistSection, ChecklistTemplate, TemplateImportOptions } from "@/types/checklist";
+import type { ChecklistSection, ChecklistTemplate } from "@/types/checklist";
 
 export type TemplateImportWarning = {
   templateTitle: string;
@@ -233,32 +233,38 @@ export const exportPortableTemplatesToJSON = (
   exportedBy?: string
 ): PortableTemplatePack => {
   const warnings = collectAssetWarnings(templates);
+  const results = templates.map((template) => parsePortableTemplate({
+    title: template.title,
+    description: template.description || "",
+    type: template.type,
+    slug: template.slug || undefined,
+    seoTitle: template.seoTitle || undefined,
+    seoDescription: template.seoDescription || undefined,
+    visibility: template.isPublic ? "public" : "private",
+    categories: normalizeCategoryList(template.categories),
+    tags: normalizeStringList(template.tags),
+    // Only portable keys: no run state such as isCompleted.
+    sections: toPortableSections(template.sections) as PortableChecklistTemplate["sections"],
+    rules: template.rules,
+  }));
+  const exported = results.flatMap((result) => (result.success ? [result.data] : []));
+  const skippedTemplates = results.flatMap((result) =>
+    result.success ? [] : [{ title: result.title, reason: result.reason }]
+  );
 
   return {
     kind: "serplists-template-pack",
     schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     exportedBy,
-    templates: templates.map((template) => ({
-      title: template.title,
-      description: template.description || "",
-      type: template.type,
-      slug: template.slug || undefined,
-      seoTitle: template.seoTitle || undefined,
-      seoDescription: template.seoDescription || undefined,
-      visibility: template.isPublic ? "public" : "private",
-      categories: normalizeCategoryList(template.categories),
-      tags: normalizeStringList(template.tags),
-      // Only portable keys: no run state such as isCompleted.
-      sections: toPortableSections(template.sections) as PortableChecklistTemplate["sections"],
-      rules: template.rules,
-    })),
+    templates: exported,
     manifest: {
-      totalTemplates: templates.length,
+      totalTemplates: exported.length,
       format: "portable",
       includesVisibility: true,
-      includesRules: templates.some((template) => Array.isArray(template.rules) && template.rules.length > 0),
+      includesRules: exported.some((template) => Array.isArray(template.rules) && template.rules.length > 0),
       assetWarnings: warnings.length,
+      ...(skippedTemplates.length > 0 ? { skippedTemplates } : {}),
     },
   };
 };
@@ -317,6 +323,25 @@ export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
   });
 };
 
+// Each template in a portable pack is normalized and validated on its own: invalid ones are
+// skipped with a preview warning, and the file fails only when none of them is valid.
+const parsePortablePackTemplates = (
+  templates: unknown[],
+  now: string,
+): { templates: ChecklistTemplate[]; warnings: TemplateImportWarning[] } => {
+  const results = templates.map(parsePortableTemplate);
+  const warnings = results.flatMap((result, index) => result.success ? [] : [{
+    templateTitle: result.title || `Template ${index + 1}`,
+    message: `Skipped: ${result.reason}`,
+  }]);
+  const valid = results.flatMap((result) => (result.success ? [result.data] : []));
+  if (valid.length === 0 && warnings.length > 0) {
+    throw new Error(warnings.map((warning) => `${warning.templateTitle}: ${warning.message}`).join("; "));
+  }
+
+  return { templates: valid.map((template) => normalizePortableTemplate(template, now)), warnings };
+};
+
 export const parseTemplatesFromData = (
   data: unknown,
   { fallbackTimestamp }: ParseTemplatesOptions = {},
@@ -325,6 +350,7 @@ export const parseTemplatesFromData = (
   try {
     let rawTemplates: ChecklistTemplateImport[] = [];
     let normalizedTemplates: ChecklistTemplate[] = [];
+    let skippedWarnings: TemplateImportWarning[] = [];
 
     if (Array.isArray(data)) {
       rawTemplates = validateTemplateImportArray(data);
@@ -334,8 +360,9 @@ export const parseTemplatesFromData = (
       if (portablePackEnvelope.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
         throw new Error(`Unsupported portable template schema version: ${portablePackEnvelope.schemaVersion}`);
       }
-      const portablePack = validatePortableTemplatePack(data);
-      normalizedTemplates = portablePack.templates.map((template) => normalizePortableTemplate(template, now));
+      const portablePack = parsePortablePackTemplates(portablePackEnvelope.templates, now);
+      normalizedTemplates = portablePack.templates;
+      skippedWarnings = portablePack.warnings;
     } else if (data && typeof data === "object" && "templates" in data) {
       try {
         const backup = validateBackup(data);
@@ -348,7 +375,7 @@ export const parseTemplatesFromData = (
       throw new Error("Unsupported JSON format (expected backup or template array)");
     }
 
-    const warnings = collectAssetWarnings(normalizedTemplates);
+    const warnings = [...skippedWarnings, ...collectAssetWarnings(normalizedTemplates)];
 
     return { templates: normalizedTemplates, warnings };
   } catch (error) {
@@ -413,86 +440,11 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
   }
 };
 
-/**
- * Generate unique IDs for imported templates to avoid conflicts
- */
-export const generateUniqueIds = (templates: ChecklistTemplate[]): ChecklistTemplate[] => {
-  return templates.map(template => {
-    const newTemplate: ChecklistTemplate = {
-      ...template,
-      id: `imported_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      sections: template.sections.map(section => ({
-        ...section,
-        id: `section_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        items: section.items.map(item => ({
-          ...item,
-          id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          contents: item.contents?.map(content => ({
-            ...content,
-            subItems: content.subItems?.map(subItem => ({
-              ...subItem,
-              id: `subitem_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-            }))
-          }))
-        }))
-      })),
-      // Update timestamps
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      // Clear slug to regenerate
-      slug: ""
-    };
-    
-    return newTemplate;
-  });
-};
-
-export type ImportVisibility = NonNullable<TemplateImportOptions["visibility"]>;
-
-/**
- * Whether an imported template ends up public under the chosen visibility override.
- * The import preview and the import payload both use this, and the server applies
- * the same rule (functions/api/handlers/templates.ts), so they cannot disagree.
- * A template with no visibility flag is private unless the override says otherwise.
- */
-export const resolveImportIsPublic = (
-  isPublic: boolean | undefined,
-  visibility: ImportVisibility = "preserve",
-): boolean => (visibility === "preserve" ? isPublic ?? false : visibility === "public");
-
-export const countImportPublicTemplates = (
-  templates: Pick<ChecklistTemplate, "isPublic">[],
-  visibility: ImportVisibility = "preserve",
-): number => templates.filter((template) => resolveImportIsPublic(template.isPublic, visibility)).length;
-
-/**
- * Prepare templates for import (clean and validate)
- */
-export const prepareTemplatesForImport = (
-  templates: ChecklistTemplate[], 
-  userId: string,
-  options: TemplateImportOptions = {}
-): ChecklistTemplate[] => {
-  const templatesWithUniqueIds = generateUniqueIds(templates);
-
-  return templatesWithUniqueIds.map(template => ({
-    ...template,
-    userId,
-    isPublic: resolveImportIsPublic(template.isPublic, options.visibility),
-    // Reset completion states for fresh imports
-    sections: template.sections.map(section => ({
-      ...section,
-      items: section.items.map(item => ({
-        ...item,
-        isCompleted: false,
-        contents: item.contents?.map(content => ({
-          ...content,
-          subItems: content.subItems?.map(subItem => ({
-            ...subItem,
-            isCompleted: false
-          }))
-        }))
-      }))
-    }))
-  }));
-};
+// Preparing parsed templates for the import request lives in ./templateImportPrep.ts.
+export {
+  countImportPublicTemplates,
+  generateUniqueIds,
+  prepareTemplatesForImport,
+  resolveImportIsPublic,
+  type ImportVisibility,
+} from "./templateImportPrep";

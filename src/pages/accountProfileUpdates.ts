@@ -1,3 +1,5 @@
+import { getAuthErrorMessage } from "@/lib/auth/authErrors";
+
 interface ProfileDataInput {
   fullName: string;
   username: string;
@@ -93,7 +95,7 @@ export const saveProfileChanges = async (
 ): Promise<SaveProfileResult> => {
   const result = await deps.updateUser(updates);
   if (result?.error) {
-    return { ok: false, error: result.error.message || "Failed to update profile" };
+    return { ok: false, error: getAuthErrorMessage(result.error, "Failed to update profile") };
   }
 
   deps.onSaved();

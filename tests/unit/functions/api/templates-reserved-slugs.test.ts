@@ -10,7 +10,8 @@ const dbMocks = vi.hoisted(() => {
     orderBy: vi.fn(),
     limit: vi.fn(),
   };
-  const insertChain = { values: vi.fn() };
+  // select: INSERT ... SELECT, which guarded writes (audit rows, versions) use.
+  const insertChain = { values: vi.fn(), select: vi.fn() };
   const updateChain = { set: vi.fn(), where: vi.fn() };
   const db = {
     select: vi.fn(() => selectChain),
@@ -71,6 +72,7 @@ describe('bundled starter slugs are reserved', () => {
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockResolvedValue(undefined);
+    dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
     dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
     dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
     dbMocks.db.batch.mockResolvedValue([]);
@@ -152,11 +154,11 @@ describe('bundled starter slugs are reserved', () => {
     updated_at: null,
   });
 
-  const put = (slug: string) =>
+  const put = (slug: string, fields: Record<string, unknown> = {}) =>
     handleTemplates(
       new Request('http://localhost/api/templates/template-1', {
         method: 'PUT',
-        body: JSON.stringify({ slug, expected_version: 1 }),
+        body: JSON.stringify({ ...fields, slug, expected_version: 1 }),
       }),
       mockEnv as never,
     );
@@ -174,10 +176,13 @@ describe('bundled starter slugs are reserved', () => {
     const [slug] = bundledSlugs;
     dbMocks.selectChain.limit.mockResolvedValueOnce([existingTemplate(slug)]);
 
-    const response = await put(slug);
+    // The editor sends the stored slug with every save.
+    const response = await put(slug, { title: 'Renamed Template' });
 
     expect(response.status).toBe(200);
-    expect(dbMocks.updateChain.set.mock.calls[0][0].slug).toBe(slug);
+    const stored = dbMocks.updateChain.set.mock.calls[0][0];
+    expect(stored.title).toBe('Renamed Template');
+    expect(stored).not.toHaveProperty('slug');
   });
 
   it('keeps ordinary slugs unsuffixed', async () => {

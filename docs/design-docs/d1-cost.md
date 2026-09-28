@@ -19,12 +19,18 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
   with `rowsRead`, `rowsWritten`, `rowsReturned`, and `durationMs`
   (`functions/api/utils/d1-profiler.ts`, wired in `functions/api/db.ts`).
 - **Per endpoint, at scale:** `pnpm run d1:profile` builds an isolated local D1 with
-  about 150k synthetic rows (20k templates, 40k runs, 40k audit events), replays
+  about 150k synthetic rows (20k templates, 40k runs, 40k audit events, 5k invites), replays
   anonymous, Personal, and Organization requests, and writes
   `tmp/d1-profile/report.md` with rows read and written per request and per
   statement, efficiency (rows returned / rows read), and `EXPLAIN QUERY PLAN`. Use
-  `-- --scale N` for more volume and `-- --reuse` to skip rebuilding. Local D1 reports
-  rows read with production semantics.
+  `-- --scale N` for more volume and `-- --reuse` to skip rebuilding: each build is
+  copied to `.wrangler/d1-profile-pristine`, and `--reuse` restores that copy, so the
+  workload's writes (new Runs, the template updates, john's Free-plan run count) never
+  carry over into the next run. It rebuilds when the snapshot is missing or was built
+  at another scale or from other migrations, seed or synthetic data. Every request
+  declares its expected status (`scripts/d1-profile-lib.ts`); a request that returns
+  anything else measured an error path, so the report marks it `INVALID` and the
+  command exits 1. Local D1 reports rows read with production semantics.
 - **Production:** `pnpm exec wrangler d1 insights serp-checklists-db --sort-by reads
   --time-period 31d --limit 25` (Cloudflare login required; analytics only).
 
@@ -40,7 +46,10 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
    avoid single-column indexes on low-cardinality columns (`is_public`, `status`); the
    planner picks them and scans half the table. When such an index still beats a better
    one, write the term as ``sql`+${column} = 1` ``: unary `+` stops SQLite using an index
-   for that term (the public profile query does this).
+   for that term (the public profile query does this). Never wrap an indexed column in a
+   function: `lower(email) = ?` cannot use the email index and reads the whole table.
+   Normalize on write and compare with plain equality (invite emails are lowercased by
+   the create-invite Zod schema, so incoming invites match `email = ?`).
 3. **Never write on a read path.** Make upserts conditional so an unchanged value writes
    nothing.
 4. **Every index costs a write.** Each insert writes one row per index, and updates do
@@ -49,9 +58,17 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
 5. **Cache public, anonymous responses** at the edge (the Cache API, per data center).
    Choose the invalidation by how often the content changes:
    - **Rarely, relative to reads:** key by a revision. Sitemaps use `cachedSitemap()`
-     (`functions/sitemap/shared.ts`), keyed by the trigger-maintained
-     `sitemap_revisions` and the bundled catalog, so a hit reads 3 rows and any content
-     change or deploy misses.
+     (`functions/sitemap/cache.ts`), keyed by the bundled catalog and the
+     trigger-maintained `sitemap_revisions` kinds each sitemap depends on, so a hit reads
+     3 rows and a deploy or a change to what that sitemap lists misses. Each shard
+     depends only on its own kind (a sign-up or avatar change bumps only `profiles`, so
+     the templates and categories shards stay cached); the index depends on all three.
+     The triggers must bump a family's kind whenever its inputs change: the dependency
+     list beside `cachedSitemap()` and `tests/unit/functions/sitemap-migrations.test.ts`
+     record which. A key that the caller controls (such as a page number)
+     must be bounded before the cache, or every new value is a miss: shard pages above
+     1 that the index never published (no `sitemap_shard_revisions` row) get an uncached
+     404 after a 1-row primary-key read, and page numbers above 50,000 read nothing.
    - **Often:** use a short TTL, so cost is bounded by the TTL rather than the edit
      rate. The anonymous catalog uses `withEdgeCache()`
      (`functions/api/utils/edge-cache.ts`) for 5 minutes: a hit reads nothing. So does
@@ -64,7 +81,13 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
    some plans and worsen others, so profile before and after.
 7. **Request data only where it is shown.** Rows are billed per request, so a provider
    that loads a list on every route multiplies its cost by page views. Template lists
-   load on demand ([FRONTEND.md](../FRONTEND.md)).
+   load on demand ([FRONTEND.md](../FRONTEND.md)). The same goes for columns and
+   limits: the Changelog cards ask for `HISTORY_DISPLAY_LIMIT` (8) entries
+   (`src/lib/history.ts`), history lists never return audit `diff_json` (a template or
+   run update diff holds the whole template or run), and template history orders by
+   `version` so the unique `(template_id, version)` index stops at `LIMIT`
+   (`functions/api/utils/history-queries.ts`, plans checked by
+   `tests/unit/functions/api/history-query-plan.test.ts`).
 
 ## Hotspots (2026-09-27)
 
@@ -82,7 +105,7 @@ Open, all unbounded lists:
 | Organization runs | 12,007 | Unbounded, plus a correlated template subquery per run; loaded only on the runs page |
 | Organization templates | 3,007 | Unbounded |
 | Personal and archived runs | about 1,000 each | Unbounded; archived filters `deleted_at IS NOT NULL` after reading every run |
-| Sitemap cache miss | 41,449 (index), 19,419 (templates shard) | Builds every entry; now only after a content change or deploy, once per data center |
+| Sitemap cache miss | 41,449 (index), 19,419 (templates shard) | Builds every entry; now only after a deploy or a change to what that sitemap lists, once per data center, and only for pages the index published |
 
 Everything else (session, detail pages, history, members, billing, run starts, template
 updates, cached sitemaps) reads under 25 rows. The seed has about one audit event per
@@ -107,6 +130,13 @@ Fixed (rows read before, after; see the plan's progress):
 | Signed-in Personal template list | 19,219 | 609 for 200 templates | `?scope=personal` reads only the user's own templates through `idx_templates_owner` |
 | Any signed-in page view (run list) | 1,007 Personal, 12,007 Organization | 0 | Runs load only on the runs page; the run page fetches one run by id |
 | Open a template detail page (template list) | 609 for 200 Personal templates, 3,007 Organization, plus the template by id | The template by id only (under 25) | The page fetches its template by id instead of loading the workspace list; edits refetch that one template, not the list |
+
+Template export (`GET /api/templates/backup`) reads only the active context's own
+templates through the owner indexes. With "Include public community templates" on, it
+used to OR every public template into that query, uncached, on each click (the whole
+catalog, like a catalog cache miss). The page now adds public templates from the
+edge-cached catalog it already loaded (`src/lib/templates/portableExport.ts`), and the
+API ignores `includePublic=1` from older tabs.
 
 Writes per request after step 1 (dropped `idx_templates_slug`, `idx_templates_user_id`,
 `idx_templates_category`, `idx_checklist_runs_assigned_to_user_id`,

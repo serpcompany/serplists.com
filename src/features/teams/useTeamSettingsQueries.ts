@@ -15,6 +15,7 @@ export function useTeamSettingsQueries({ activeTeamId, canManageTeam }: { active
     members: queryKeys.teamMembers(userId, activeTeamId),
     activity: queryKeys.teamActivity(userId, activeTeamId),
     incomingInvites: queryKeys.incomingTeamInvites(userId),
+    invites: queryKeys.teamInvites(userId, activeTeamId),
   };
 
   const membersQuery = useQuery({
@@ -50,6 +51,11 @@ export function useTeamSettingsQueries({ activeTeamId, canManageTeam }: { active
       members: reloadWith(membersQuery, keys.members),
       activity: reloadWith(activityQuery, keys.activity),
       incomingInvites: reloadWith(incomingInvitesQuery, keys.incomingInvites),
+      // Pending invites are read by TeamInvitesPanel (useTeamInvites); reload that list.
+      invites: async () => {
+        await queryClient.cancelQueries({ queryKey: keys.invites });
+        await queryClient.refetchQueries({ queryKey: keys.invites, type: 'active' });
+      },
     },
   };
 }

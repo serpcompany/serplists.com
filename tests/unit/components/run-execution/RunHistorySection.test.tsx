@@ -26,6 +26,17 @@ const render = (events: TemplateHistoryEvent[]) =>
 
 // The API writes more run actions than created, updated and deleted; each needs a label.
 describe('RunHistorySection', () => {
+  it('labels Template reconciles and stopped shares', () => {
+    const html = render([
+      event('checklist_run.reconciled', owner),
+      event('checklist_run.share_revoked', owner),
+    ]);
+
+    expect(html).toContain('Updated from Template');
+    expect(html).toContain('Stopped sharing');
+    expect(html).not.toContain('checklist_run.');
+  });
+
   it('labels share, guest, revalidate and restore events instead of showing raw action ids', () => {
     const html = render([
       event('checklist_run.share_created', owner),

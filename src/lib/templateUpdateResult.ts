@@ -3,15 +3,21 @@ import { z } from "zod";
 // PUT /api/templates/:id answers with the version and slug it stored. The next save sends
 // that version as expected_version (never a local +1: some edits keep the version), and the
 // slug may carry a -<id8> suffix when the requested one was taken.
+// structureChanged and reconciledRuns say whether the checklist structure changed and how
+// many active private runs were reconciled (only then do the run lists change).
 export type TemplateUpdateResult = {
   version: number;
   slug?: string;
+  structureChanged?: boolean;
+  reconciledRuns?: number;
 };
 
 const templateUpdateResponseSchema = z
   .object({
     version: z.number().int().positive(),
     slug: z.string().nullish(),
+    structureChanged: z.boolean().optional(),
+    reconciledRuns: z.number().int().nonnegative().optional(),
   })
   .passthrough();
 
@@ -23,5 +29,10 @@ export function parseTemplateUpdateResponse(body: unknown): TemplateUpdateResult
   if (!parsed.success) {
     throw new Error(TEMPLATE_UPDATE_RESPONSE_ERROR);
   }
-  return { version: parsed.data.version, slug: parsed.data.slug || undefined };
+  return {
+    version: parsed.data.version,
+    slug: parsed.data.slug || undefined,
+    structureChanged: parsed.data.structureChanged,
+    reconciledRuns: parsed.data.reconciledRuns,
+  };
 }

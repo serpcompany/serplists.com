@@ -12,8 +12,10 @@ are generated from it and must pass `pnpm run templates:check`.
 ## Storage strategy (D1)
 - `templates.items` stores the full sections JSON today's UI uses (array of sections with nested items/contents).
 - `checklist_runs.items` stores the current sections JSON with completion state.
+- Every write of that JSON from a request (template create, save, and import; run create and save) is checked against `src/lib/schemas/storedSections.ts` (a shared-run save takes the task structure from the stored run and only completion and notes from the request): `items`, `contents`, and `subItems` are arrays of objects, `title`, `description`, `notes`, and `value` are text, and a content block's `type` is one of `text`, `image`, `video`, `file`, `embed`, `subItems`. Ids, run state, and unknown keys pass through, and `null` counts as absent. A failure is a `400` (an `invalid_sections` failure on import) whose message names the path, for example `sections[0].items[2].contents[1].subItems: Expected array, received string`. Content stored before the check is made safe (a malformed Sub-task list becomes empty, a non-text value becomes empty text, a block with an unknown type is dropped) when it is copied into a run or shown in the app, and `db/maintenance/find-malformed-checklist-content.sql` lists it for review.
 - Section, item, and sub-item `id` values are stable identities. Renaming or reordering must retain them.
 - `templates.content_version` advances only for checklist-structure changes. `checklist_runs.template_version` records the content version last applied; `revision` protects run writes from stale clients; `retired_items` preserves removed run state outside readiness calculations.
+- Clients resend the full sections on every save, so `PUT /api/templates/:id` compares them with the stored structure (`functions/api/utils/template-changes.ts`): run state (`isCompleted`, `completed`, `notes`), key order, and empty values are ignored, while text, ids, additions, removals, and reordering count. Only a real structure change bumps `content_version` and reconciles runs. `templates.version` and a `template_versions` row advance whenever a stored field actually changes, visibility included (so an editor loaded before a Share gets `409 edit_conflict` rather than reverting it), and a save with no changes writes nothing. The response reports `version`, `content_version`, `structureChanged`, and `reconciledRuns`.
 - Migration `0024` first normalizes legacy flat item arrays into the canonical `Checklist` section, then backfills deterministic path identities into template/run JSON and marks linked legacy runs stale (`template_version = 0`) because historical divergence cannot be inferred safely.
 - `templates.category` and `templates.tags` store JSON arrays as text.
 - `templates.seo_title` and `templates.seo_description` store template SEO metadata.
@@ -36,9 +38,31 @@ export const portableTemplatePackSchema = z.object({
     includesVisibility: z.boolean().optional(),
     includesRules: z.boolean().optional(),
     assetWarnings: z.number().optional(),
+    skippedTemplates: z.array(z.object({ title: z.string(), reason: z.string() })).optional(),
   }).optional(),
 });
 ```
+
+Export and import both pass each template through `parsePortableTemplate`
+(`src/lib/schemas/portableTemplateNormalize.ts`) so every pack we write can be read
+back, including packs exported before this normalization existed. It keeps ids and
+fixes what the editor can save but the strict schema rejects:
+- a blank section title becomes `Section N` and a blank task title `Task N` (N is the position, as the editor outline shows it)
+- blank sub-tasks, sub-task blocks left empty, and image/video/file/embed blocks without a value are dropped
+- sections without tasks are dropped, and an unknown `type` becomes `checklist`
+
+A template that still fails (for example one with no tasks) is left out of an export
+and listed in `manifest.skippedTemplates`; `manifest.totalTemplates` counts only the
+templates written. The export page then shows a warning that names each left-out
+template and its reason instead of the success message, or an error with no download
+when nothing could be exported. On import, it becomes a per-template failure instead
+of rejecting the whole file.
+
+`GET /api/templates/backup` exports the active context's own templates (Personal or
+the Organization). "Include public community templates" adds, in the browser, the
+public templates from the loaded catalog that the context does not own (never the
+bundled library), and recomputes the manifest for the whole pack with the same
+`buildPortablePackManifest` the API uses (`src/lib/schemas/portableTemplatePack.ts`).
 
 Portable template fields are intentionally cleaner than app row exports:
 - no `userId`
@@ -75,10 +99,14 @@ validation failures by the current runtime.
 
 Three versions serve different contracts:
 
-- `templates.version` is the storage schema version for `templates.items`;
-  its current value is `1`.
+- `templates.version` is the template's edit counter, used for save conflict
+  checks (`expected_version`) and Changelog numbers. Create, import, and copy all
+  start it at `1` (a copy never inherits its source's counter; the source's
+  `version` and `content_version` go in the copy's audit event), and each save that
+  changes a stored field advances it. `templates.content_version` counts checklist
+  structure changes, which runs follow.
 - Backup exports use root format version `1.0.0` and retain each template's
-  storage version.
+  `version`.
 - Portable packs use `schemaVersion`; the current portable version is `2.0.0`.
 
 When evolving a format, accept and migrate supported older versions during
@@ -192,11 +220,47 @@ Backup and portable imports return a structured summary with `total`,
 `imported`, `successes[]`, and `failed[]`. Successful entries identify their
 input index, title, stored id, slug, and visibility. Failures identify their
 index, title, human-readable reason, and stable code. Current failure codes are
-`invalid_sections`, `oversized_asset`, and `insert_failed`.
+`invalid_fields`, `invalid_sections`, `oversized_asset`, and `insert_failed`.
+
+`invalid_fields` means a template's fields exceed the bounds every save enforces
+(`src/lib/schemas/templateLimits.ts`): a non-blank title of at most 160 characters,
+description 5000, `seoTitle` 160, `seoDescription` 320, at most 20 categories and 20
+tags of 80 characters, and rules with non-empty `id`, `type`, and `path`. The reason
+names the field (for example `description: String must contain at most 5000
+character(s)`). Imported values are never truncated. Generated slugs (import, clone,
+create, and a de-duplicated slug on save) are shortened to fit 160 characters, and
+Organization slugs to 120.
+
+A template save (`PUT /api/templates/:id`) checks bounds only for fields whose value
+changes, so a row that predates these bounds, or a legacy slug with punctuation, can
+still be saved and toggled. A changed slug is normalized rather than rejected; one
+with nothing left after normalizing (only non-Latin letters, for example) is a `400`
+naming `slug` instead of being ignored.
+
+Slugs are unique across all templates, archived ones included
+(`idx_templates_slug_unique`), and are chosen by reading before writing
+(`functions/api/utils/template-insert.ts`). Create, copy, and import take the clean
+slug, then a `-<id>` suffix, then a random one; if a concurrent request claims the
+slug before the write, the whole insert (template, first version, audit event) is
+retried with a random suffix, up to 3 attempts, then `409 slug_taken`. Every attempt
+of a create or copy keeps the template-limit check inside its write
+([pricing and entitlements](pricing-and-entitlements.md)). An import reports a slug
+that stays taken as `insert_failed`. A save that changes the slug to one another template
+uses gets the `-<id>` suffix or a random one, each checked, and `409 slug_taken`
+(with `details.slug`) when those are taken or another save claims the slug first.
+
+A portable-pack template that fails validation after normalization is reported as an
+`invalid_sections` failure at its index in the file; the envelope (`kind`,
+`schemaVersion`) and the 5-template limit still apply to the whole file. The import
+preview in the app skips such templates with a warning.
 
 Mixed-result imports retain both lists. When every template fails, the API
 returns `400` with `code: "template_import_failed"` and the full summary in
-`details`, so clients must not discard all but the first failure.
+`details`, so clients must not discard all but the first failure. The import page
+parses that summary and shows the same Failed Templates list either way (an untitled
+template is named by its position), keeping the preview when nothing imported so the
+file can be imported again. An `insert_failed` reason is a fixed message; the database
+error is logged, not returned.
 
 ## Template structure
 ```ts
@@ -316,6 +380,11 @@ JSON exports **do not** include R2 assets. If a template references uploaded fil
 - For live public-library publishing today, the imported template should be owned by the intended public publisher account before import, because author username is resolved from DB ownership, not from the portable JSON file.
 
 `seoUrl` is represented by the stored `slug` field and mapped back into the editor's `Custom URL Slug` input.
+A new or changed slug must be lowercase letters, numbers, and hyphens (160 characters
+at most). An update that echoes the stored slug unchanged is accepted even when that
+slug predates the rule (the legacy backfills in migrations 0002 and 0005), and it is
+never rewritten on an unrelated save. `GET /api/templates/slug/:slug` percent-decodes
+the slug before looking it up.
 
 ## Sections and items
 ```ts

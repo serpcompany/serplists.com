@@ -12,6 +12,8 @@ import {
 import { createStripeCustomer, replaceMissingStripeCustomer, storeFirstStripeCustomer } from "../utils/stripe-customers";
 import { settleOpenCheckoutSessions } from "../utils/stripe-checkout-sessions";
 import { getSessionUserId } from "../utils/session";
+import { checkRateLimit } from "../utils/rate-limit";
+import { ROUTE_RATE_LIMIT_MESSAGES } from "../utils/route-rate-limit";
 import { getEntitlementsForContext, getEntitlementsForUser } from "../utils/entitlements";
 import { log } from "../utils/logger";
 import {
@@ -28,6 +30,11 @@ type StripePortalSession = { id: string; url: string };
 // API cannot import). Stripe returns here directly: Billing reads ?billing= on it, and
 // a redirecting legacy path such as /account could drop that query.
 const SETTINGS_PATH = "/dashboard/settings";
+
+// Checkout and portal each call Stripe, whose rate limit the whole account
+// shares. The router limits them per IP; this limits each account, whatever IP
+// it uses. Checked after authentication so anonymous requests cannot use it up.
+const ACCOUNT_STRIPE_CALL_LIMIT = { windowMs: 60 * 1000, max: 10 };
 
 function getAppOrigin(request: Request, env: Env): string {
   if (env.FRONTEND_URL) {
@@ -212,6 +219,15 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
 
   const userId = await getSessionUserId(request, env);
   if (!userId) return jsonError("Unauthorized", 401);
+
+  if (request.method === "POST" && (billingSubpath[0] === "checkout" || billingSubpath[0] === "portal")) {
+    const limit = checkRateLimit(`billing-user:${userId}`, ACCOUNT_STRIPE_CALL_LIMIT);
+    if (!limit.allowed) {
+      const response = jsonError(ROUTE_RATE_LIMIT_MESSAGES.billing, 429);
+      response.headers.set("Retry-After", String(limit.retryAfterSeconds));
+      return response;
+    }
+  }
 
   const origin = getAppOrigin(request, env);
 

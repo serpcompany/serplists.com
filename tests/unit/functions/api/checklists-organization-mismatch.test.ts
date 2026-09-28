@@ -56,9 +56,10 @@ const privateTeamBTemplate = {
   is_public: false,
 };
 
+// Starting a run is the only route that makes one from a template (the old
+// POST /api/checklists/:templateId/share route is gone).
 const routes = [
   ['POST /api/checklists', 'http://localhost/api/checklists', { template_id: 'template-b', teamId: 'team-a' }],
-  ['POST /api/checklists/:templateId/share', 'http://localhost/api/checklists/template-b/share', { teamId: 'team-a' }],
 ] as const;
 
 const post = (url: string, body: unknown) =>

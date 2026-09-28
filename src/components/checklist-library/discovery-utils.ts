@@ -1,9 +1,8 @@
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { uniqueCategoryNames } from '@/lib/categorySlug';
-import { buildCategorySlug } from '@/lib/routes';
+import { buildCategorySlug, findCategoryNameByLegacySlug } from '@/lib/routes';
 import { getTemplateRecencyTime } from '@/lib/templates/templateRecency';
-import { generateSlug } from '@/utils/urlHelpers';
 
 export type DiscoverySort = 'popular' | 'trending' | 'recent';
 
@@ -197,9 +196,7 @@ export const findCategoryByLegacySlug = (
   slug: string,
 ): DiscoveryCategory | null => {
   if (!slug) return null;
-  return (
-    categories.find(
-      (category) => category.slug !== slug && generateSlug(category.name.trim()) === slug,
-    ) ?? null
-  );
+  const renamed = categories.filter((category) => category.slug !== slug);
+  const name = findCategoryNameByLegacySlug(renamed.map((category) => category.name), slug);
+  return renamed.find((category) => category.name === name) ?? null;
 };

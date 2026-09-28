@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { getAuthStatus } from "@/lib/auth-client";
 import { buildEmailVerifiedCallbackURL } from "@/lib/auth/loginNotice";
+import { getAuthErrorMessage } from "@/lib/auth/authErrors";
 import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
 import {
   buildAuthLinkState,
@@ -17,6 +18,7 @@ import {
   getReturnPath,
   withReturnPath,
 } from "@/lib/auth/returnPath";
+import { USER_NAME_MAX_LENGTH } from "@/lib/schemas/userProfileSchema";
 
 const Register = () => {
   const [name, setName] = useState("");
@@ -71,7 +73,7 @@ const Register = () => {
         toast.error(result.error ?? "Registration failed.");
       }
     } catch (error) {
-      toast.error("An error occurred during registration");
+      toast.error(getAuthErrorMessage(error, "An error occurred during registration"));
       console.error("Registration error:", error);
     } finally {
       setIsSubmitting(false);
@@ -103,6 +105,7 @@ const Register = () => {
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Your name"
+            maxLength={USER_NAME_MAX_LENGTH}
             required
           />
         </div>

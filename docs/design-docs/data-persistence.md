@@ -61,7 +61,8 @@ columns are stored as text and parsed in handlers.
 - `templates.tags`: JSON array of tag strings.
 - `templates.rules`: template rule metadata.
 - `checklist_runs.items`: sectioned run content with completion state.
-- `audit_events.before_json`, `after_json`, `diff_json`, `metadata_json`: structured audit payloads.
+- `audit_events.before_json`, `after_json`, `diff_json`, `metadata_json`: structured audit payloads, kept small by `functions/api/utils/audit-compaction.ts`. Snapshots omit run and template content (`items`, `retired_items`) and share tokens; a diff's `items` records only the task ids that were completed, reopened, edited, added, or removed, or whose notes changed (never the notes text); each column is capped at 64 KB of UTF-8, with larger values replaced by a `{truncated, bytes, sha256}` marker. An audit row therefore can never push the write it shares a batch with past D1's 2,000,000-byte row limit. History lists never return `diff_json`, so the full copies that older rows still hold are never served. Run events written through MCP store only scalar run fields in `before`/`after` and an operation summary in `diff` (operation, task/subtask ids, progress and revision from/to, notes length), never copies of `items`, `retired_items`, or the share token.
+- Audit rows record only writes that happened. Run and template writes guard their `UPDATE` (revision or version, owner scope, archive state), and a guarded `UPDATE` that loses a race matches no row without failing the batch. So each write inserts its audit row first, as `INSERT ... SELECT ... WHERE EXISTS` on the same condition (`auditedRunUpdate` in `functions/api/utils/checklist-runs.ts`; the template handlers do the same, and a template's version row and reconciled runs also require that audit row). A write that loses returns `409 edit_conflict`, or the not-found / not-archived answer a later request would get, and leaves no history.
 - `template_versions.snapshot_json`: full template snapshot.
 
 ## Resource Ownership
@@ -71,7 +72,7 @@ Personal data uses User ownership. Organization data uses Organization ownership
 - Personal templates: `templates.owner_type = 'user'`, `templates.user_id = current user`, `templates.team_id IS NULL`.
 - Organization Templates: `templates.owner_type = 'team'`, `templates.team_id = active Organization`, with creator/updater attribution on User columns. The stored `team` values are legacy identifiers.
 - Personal runs: `checklist_runs.user_id = current user`, `checklist_runs.team_id IS NULL`.
-- Organization Runs: `checklist_runs.team_id = active Organization`, with creator/started/completed User attribution.
+- Organization Runs: `checklist_runs.team_id = active Organization`, with creator/started/completed User attribution. `completed_by_user_id` and `completed_at` are written only when a run becomes completed (`functions/api/utils/run-completion.ts`), so a teammate's later save does not take over the completion.
 
 Handlers must authorize Organization access before returning or mutating Organization-scoped rows. Do not trust the legacy client-supplied `teamId` without checking Organization Membership and role.
 
@@ -80,7 +81,9 @@ Handlers must authorize Organization access before returning or mutating Organiz
 Client requests go through `src/lib/api.ts`, which uses:
 
 - `http://localhost:8788/api` in dev unless `VITE_API_URL` overrides it.
-- `/api` in deployed environments.
+- `/api` in deployed environments. `src/lib/apiBaseUrl.ts` resolves the base for
+  both `api.ts` and the Better Auth client, and ignores a loopback `VITE_API_URL`
+  unless the page is served from a loopback host.
 - Better Auth cookies for session state.
 
 Main server handlers:
@@ -90,6 +93,7 @@ Main server handlers:
 - `functions/api/handlers/stripe.ts`
 - `functions/api/handlers/templates.ts`
 - `functions/api/handlers/checklists.ts`
+- `functions/api/handlers/checklists-shared.ts` (the `/share/:token` guest route)
 - `functions/api/handlers/teams.ts`
 - `functions/api/handlers/admin.ts`
 - `functions/api/handlers/uploads.ts`
@@ -145,10 +149,19 @@ round-trip, and structured import-result contracts.
 
 ## Shared-run links
 
-Sharing is run-scoped. Each share action mints a fresh token for the current
-run and deactivates any previously active shared run for the same user/template
-so older guest links do not remain active or count toward active-run limits.
-The public guest URL is `/share/:token`. When sharing fails, distinguish an
+Sharing is run-scoped. Each share action (`POST /api/checklists/run/:id/share`)
+mints a fresh token for the run and replaces its previous one, so the older guest
+link stops working. `DELETE /api/checklists/run/:id/share` stops sharing: one
+guarded update clears `is_public` and every share field, and the
+`checklist_run.share_revoked` audit row is written only if the run was still
+shared. It leaves the run's revision, tasks, and progress unchanged, so open run
+pages keep saving. Archiving and restoring a run also clear its share fields.
+Sharing never creates a run, and a shared run in progress counts toward the
+active-run limit like any other (the old `POST /api/checklists/:templateId/share`
+route, which created public runs outside that count, is gone and returns `404`).
+The public guest URL is `/share/:token`. Guest saves never replace the run's
+structure: the server copies only completion and notes from the payload onto the
+stored sections, matched by the ids the share page uses. When sharing fails, distinguish an
 entitlement `limit_reached` response from schema/migration failures before
 changing sharing logic.
 

@@ -13,12 +13,22 @@ pnpm run setup      # safe to re-run
 
 `setup` creates `.dev.vars` from `.dev.vars.example` with a generated
 `BETTER_AUTH_SECRET` and optional integrations commented out (never overwriting an
-existing file), creates and seeds local D1 if the checkout has none (otherwise
-applies pending migrations), installs the Playwright browser, and builds `dist/`
-if it is missing. `.dev.vars` is the only local env file; variables are listed in
+existing file), creates local D1 if the checkout has none (otherwise applies pending
+migrations), seeds whatever seed data is missing, installs the Playwright browser,
+and builds `dist/` if it is missing. The seed decision comes from the database, not
+its directory: `tsx scripts/data/local-d1-data.ts seed-status` reports whether the
+test data, the official Templates and the official login are there, and setup runs
+only the missing stages, so a seed that failed or was interrupted is finished on the
+next run and data you created is never reset. Setup fails, without printing the
+sign-in hint, if seed data is still missing afterwards. `.dev.vars` is the only local env file; variables are listed in
 [SECURITY.md](../SECURITY.md#secrets-and-environment). The client reads `VITE_*`
 variables through `src/env.ts`; `VITE_API_URL` overrides the dev API base
-(`http://localhost:8788/api`; `/api` when deployed).
+(`http://localhost:8788/api`; `/api` when deployed). `pnpm run build` (the
+deployable build) does not read `.dev.vars` and fails if `VITE_API_URL` points at a
+loopback host, from the shell or any `.env` file (`scripts/lib/buildEnv.ts`);
+`pnpm run build:dev` still reads `.dev.vars` for local bundles. At runtime,
+`src/lib/apiBaseUrl.ts` also ignores a loopback `VITE_API_URL` unless the page itself
+is served from a loopback host.
 
 ## Run
 
@@ -35,6 +45,20 @@ updates `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, `PORT`, and `VITE_API_URL` toget
 (do not hand-edit one side; auth origins and CORS must match). Use
 `pnpm run dev:stop` to stop: killing only the parent process leaves Vite and
 Wrangler running on Windows and holding the ports.
+
+The session records each launcher's pid with its process start time. A launch or
+`dev:stop` trusts a recorded pid only while that pid still runs
+`scripts/dev-auto.mjs` and started at the recorded time, because the OS reuses the
+pid of a launcher that was killed. So a stale session file never makes `dev:all`
+skip starting, and `dev:stop` never kills an unrelated process: it skips (and
+reports) such pids and always clears the file.
+
+`dev` and `dev:api` join the pair of any launcher that is still running.
+`dev:all` treats `dev` plus `dev:api` on one pair as the full stack, but refuses
+(exit 1) while only one of them is running: a second pair would drop that launcher
+from the session, and `dev:stop` could no longer stop it. Start the missing half
+with the other single-role command, or run `dev:stop` first. The launcher never
+writes a session that forgets a launcher that is still running.
 
 Output is mirrored to `tmp/logs/dev-<mode>.log`. API logs are JSON lines with a
 `requestId` (also the `X-Request-Id` response header):
@@ -63,7 +87,7 @@ bottom of the app. `pnpm run db:reset:test-user-passwords` restores changed
 passwords. Admin and Jane are Pro only through their seeded overrides, never by
 email address, so a local D1 seeded before those rows existed shows them as Free
 until `pnpm run db:seed`. If sign-in fails, check the API is running, local D1 is seeded, and the
-browser calls the intended API URL. A `429` means the local auth rate limit (300
+browser calls the intended API URL. A `429` means the local sign-in rate limit (300
 per hour), not bad credentials.
 
 ## See the UI
@@ -73,10 +97,14 @@ pnpm run ui:snap -- dashboard/templates --login admin@test.com
 pnpm run ui:snap -- templates --mobile
 ```
 
-Saves a full-page screenshot in `tmp/snapshots/` and prints the accessibility tree
-(a readable text outline of the page), console errors, and failed requests. Write
-routes without the leading slash; Git Bash rewrites `/path` arguments into file
-paths. Use it to reproduce a bug before fixing it and to show the fix afterwards.
+Saves a full-page screenshot in `tmp/snapshots/` (or at `--out`, which must end in
+`.png`, `.jpg` or `.jpeg`) with the accessibility tree beside it as `<name>.aria.yml`,
+and prints the tree (a readable text outline of the page), console errors, and
+failed requests. Write routes without the leading slash; Git Bash rewrites `/path`
+arguments into file paths. Flags (`--login`, `--password`, `--mobile`, `--out`, `--base`, `--api`) may
+come before or after the route; an unknown flag, a flag with no value, or a second
+route stops with the usage text instead of snapshotting another page. Use it to
+reproduce a bug before fixing it and to show the fix afterwards.
 
 ## Local database
 
@@ -128,5 +156,32 @@ Testing conventions are in [RELIABILITY.md](../RELIABILITY.md#testing-convention
 | Tests | `test`, `test:run`, `test:unit`, `test:local-d1`, `test:coverage`, `test:smoke`, `test:e2e`, `test:e2e:full`, `test:e2e:ui` |
 | Generators | `schema:portable:generate`, `db:schema:generate`, `sitemap:generate`, `templates:generate`, `templates:render-markdown`, `docs:references` |
 | Local D1 | `d1:profile`, `db:reset`, `db:seed`, `db:seed:official:local`, `db:migrate:d1:local`, `db:migrations:list:local`, `db:query`, `db:cleanup:local`, `db:reset:test-user-passwords`, `db:generate`, `check:db:drizzle-parity` |
-| Remote D1 | `verify:staging`, `verify:prod:d1`, `db:migrate:d1:staging`, `db:migrate:d1:prod`, `db:migrations:*`, `check:*:d1-schema`, `check:preview:d1-binding`, `db:seed:official:staging`, `db:seed:official:remote`, `db:cleanup:remote` |
+| Remote D1 | `verify:staging`, `verify:prod:d1`, `db:migrate:d1:staging`, `db:migrate:d1:prod`, `db:migrations:*`, `check:*:d1-schema`, `check:preview:d1-binding`, `db:seed:official:staging`, `db:seed:official:remote` |
 | Stripe (test mode) | `stripe:local:setup`, `stripe:local:listen`, `stripe:local:scrub-live`, `stripe:portal:configure` |
+
+## Writing scripts
+
+Scripts under `scripts/`, `tests/e2e/` and `tests/integration/` start tools through
+`scripts/lib/run-tool.mjs`: `execTool`/`spawnTool` run a dev dependency's bin script
+(wrangler, vite, tsx, concurrently, playwright, drizzle-kit) with the current Node,
+and `execPnpm` runs pnpm itself through the pnpm that launched the script. Never
+spawn `npx` or `pnpm` by name: on Windows they are `.cmd` shims, so a spawn without a
+shell fails with `ENOENT` (or `EINVAL` for `npx.cmd`), and passing arguments through
+a shell lets `cmd.exe` reinterpret characters such as `&`, `^` and `%` in values like
+the auth secret. `tests/unit/scripts/tool-spawns.test.ts` fails when a script names
+`npx` or `pnpm` as a command.
+
+## Line endings
+
+`.gitattributes` checks every text file out with LF (`* text=auto eol=lf`) and marks
+fonts and images as binary, so a Windows clone gets LF even with Git for Windows'
+default `core.autocrlf=true`. Generators always write LF. The `--check` scripts
+(`db:schema:check`, `schema:portable:check`, `sitemap:check`) and `templates:check`
+compare through `scripts/lib/line-endings.mjs`, which ignores CRLF versus LF but
+still fails on any other difference, including a missing final newline.
+`tests/unit/scripts/line-endings.test.ts` fails if a binary file is not marked
+binary or a CRLF file reaches the index.
+
+A clone made before `.gitattributes` existed keeps its CRLF files until they are
+checked out again. Commit or stash your work first, because this discards
+uncommitted changes: `git rm -rq --cached . && git reset --hard`.

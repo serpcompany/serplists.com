@@ -7,10 +7,12 @@ import type {
   TemplateHistoryVersion,
 } from '@/lib/api';
 import { formatAuditAction, TEMPLATE_HISTORY_LABELS } from '@/lib/auditLabels';
+import { HISTORY_DISPLAY_LIMIT } from '@/lib/history';
 import { queryKeys } from '@/lib/queryCache';
 import { parseDbTimestamp } from '@/lib/utils/dbTimestamp';
 
-export const TEMPLATE_HISTORY_DISPLAY_LIMIT = 8;
+// The API client asks for the same number (src/lib/history.ts).
+export const TEMPLATE_HISTORY_DISPLAY_LIMIT = HISTORY_DISPLAY_LIMIT;
 
 export type TemplateHistoryTimelineEntry = {
   actorName: string;
@@ -27,10 +29,16 @@ export const getTemplateHistoryQueryKey = (
   teamId: string | undefined,
 ) => queryKeys.templateHistoryFor(templateId ?? 'none', userId, teamId);
 
-// Share and the visibility switch send only is_public, which creates no version.
-const visibilityOnlyDiffSchema = z
-  .object({ is_public: z.union([z.boolean(), z.literal(0), z.literal(1)]) })
-  .strict();
+// Share and the visibility switch change only is_public; the API marks that update's audit
+// event with metadata.visibility (history lists carry metadata, never diffs).
+const visibilityChangeSchema = z.object({ visibility: z.enum(['public', 'private']) }).passthrough();
+
+const getVisibilityLabel = (event: TemplateHistoryEvent): string | null => {
+  if (event.action !== 'template.updated') return null;
+  const change = visibilityChangeSchema.safeParse(event.metadata);
+  if (!change.success) return null;
+  return change.data.visibility === 'public' ? 'Made template public' : 'Made template private';
+};
 
 const getActorName = (actor?: TemplateHistoryActor): string =>
   actor?.name || actor?.username || actor?.email || 'Unknown user';
@@ -38,16 +46,8 @@ const getActorName = (actor?: TemplateHistoryActor): string =>
 const getVersionLabel = (version: TemplateHistoryVersion): string =>
   `${formatAuditAction(TEMPLATE_HISTORY_LABELS, version.action)} v${version.version}`;
 
-const getEventLabel = (event: TemplateHistoryEvent): string => {
-  if (event.action === 'template.updated') {
-    const visibility = visibilityOnlyDiffSchema.safeParse(event.diff);
-    if (visibility.success) {
-      return visibility.data.is_public ? 'Made template public' : 'Made template private';
-    }
-  }
-
-  return formatAuditAction(TEMPLATE_HISTORY_LABELS, event.action);
-};
+const getEventLabel = (event: TemplateHistoryEvent): string =>
+  getVisibilityLabel(event) ?? formatAuditAction(TEMPLATE_HISTORY_LABELS, event.action);
 
 // Every versioned write also records an audit event with the same action and time.
 const getPairKey = (entry: { action: string; createdAt: string }): string =>
@@ -58,9 +58,10 @@ const getTime = (value: string): number => parseDbTimestamp(value)?.getTime() ??
 type RankedEntry = TemplateHistoryTimelineEntry & { rank: number; time: number };
 
 /**
- * One Changelog: every version, plus the events no version records (archive, restore,
- * visibility changes). Newest first. The API returns up to 50 of each list, newest
- * first, which always covers the newest `limit` entries of the merge.
+ * One Changelog: every version, plus the events no version records (archive, restore).
+ * A visibility change is versioned too, and its version reads as the change it made
+ * ("Made template public"). Newest first. The API returns up to `limit` of each list,
+ * newest first, which always covers the newest `limit` entries of the merge.
  */
 export const buildTemplateHistoryTimeline = (
   history: TemplateHistoryResponse | null | undefined,
@@ -71,12 +72,18 @@ export const buildTemplateHistoryTimeline = (
   }
 
   const versionKeys = new Set(history.versions.map(getPairKey));
+  const visibilityLabels = new Map(
+    history.events.flatMap((event) => {
+      const label = getVisibilityLabel(event);
+      return label ? [[getPairKey(event), label] as const] : [];
+    }),
+  );
   const entries: RankedEntry[] = [
     ...history.versions.map((version) => ({
       actorName: getActorName(version.actor),
       createdAt: version.createdAt,
       key: `version-${version.id}`,
-      label: getVersionLabel(version),
+      label: visibilityLabels.get(getPairKey(version)) ?? getVersionLabel(version),
       rank: 0,
       time: getTime(version.createdAt),
     })),

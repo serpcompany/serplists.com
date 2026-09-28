@@ -10,9 +10,12 @@ A video block holds a URL or pasted `<iframe>` code. `getVideoEmbedSource`
 
 - YouTube links on youtu.be, youtube.com and its subdomains (www, m, music) or
   youtube-nocookie.com, in watch, share, Shorts, live or embed form, become a
-  `https://www.youtube.com/embed/<id>` iframe. A YouTube link with no video id (a
-  channel or playlist) shows "Invalid video URL or embed code".
+  `https://www.youtube.com/embed/<id>` iframe (`www.youtube-nocookie.com` for a
+  nocookie link), keeping a `t` or `start` time. A YouTube link with no video id (a
+  channel or playlist) is shown as an "Open video" link, never in the native player.
 - Clipy watch and embed links become a Clipy iframe.
+- Pasted `<iframe>` code is framed only when its origin is in `EMBED_FRAME_ORIGINS`
+  (`src/lib/utils/embedOrigins.ts`); any other origin is shown as a link.
 - Any other http(s) URL plays in the native `<video>` player.
 
 Every iframe origin the helper can produce must be listed in `frame-src` in
@@ -40,7 +43,7 @@ line with a literal backslash-n for each line break. `expandLegacyEscapedNewline
 (`src/lib/utils/markdownDisplay.ts`) still lays those out: for a text block with no real
 line break, it turns each literal backslash-n into a line break, except inside inline
 code and after an escaping backslash. It goes away once the stored rows are migrated
-(TD-18 in the [tech debt tracker](../exec-plans/tech-debt-tracker.md)).
+(TD-22 in the [tech debt tracker](../exec-plans/tech-debt-tracker.md)).
 
 ### Migrating the legacy seed rows (proposal, needs human approval)
 

@@ -8,7 +8,8 @@ const dbMocks = vi.hoisted(() => {
     orderBy: vi.fn(),
     limit: vi.fn(),
   };
-  const insertChain = { values: vi.fn() };
+  // select: INSERT ... SELECT, which guarded writes (audit rows, versions) use.
+  const insertChain = { values: vi.fn(), select: vi.fn() };
   const updateChain = { set: vi.fn(), where: vi.fn() };
   const db = {
     select: vi.fn(() => selectChain),
@@ -70,6 +71,7 @@ describe('PUT /api/templates/:id response', () => {
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockResolvedValue(undefined);
+    dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
     dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
     dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
     dbMocks.db.batch.mockResolvedValue([]);
@@ -88,10 +90,12 @@ describe('PUT /api/templates/:id response', () => {
   it('returns the unchanged version when the edit does not create one', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([existingTemplate]);
 
-    const { status, data } = await put({ is_public: true, expected_version: 3 });
+    // A save that stores nothing new (visibility changes do create a version).
+    const { status, data } = await put({ title: 'Existing Template', expected_version: 3 });
 
     expect(status).toBe(200);
     expect(data).toMatchObject({ success: true, version: 3, slug: 'existing-template' });
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
   });
 
   it('returns the suffixed slug it stored when the requested one was taken', async () => {

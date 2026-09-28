@@ -10,7 +10,9 @@ export const RUN_AUDIT_ACTIONS = [
   'checklist_run.deleted',
   'checklist_run.restored',
   'checklist_run.revalidated',
+  'checklist_run.reconciled',
   'checklist_run.share_created',
+  'checklist_run.share_revoked',
   'checklist_run.shared_updated',
 ] as const;
 

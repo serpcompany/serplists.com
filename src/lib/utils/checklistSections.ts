@@ -1,4 +1,5 @@
 import { toProgressPercent } from "@/lib/progress";
+import { sanitizeStoredItem } from "@/lib/schemas/storedSections";
 import type { ChecklistItemContent, ChecklistSection, ChecklistSubItem } from "@/types/checklist";
 
 // The label an untitled section gets: the template editor's outline shows it, a save
@@ -66,6 +67,10 @@ const normalizeContent = (content: JsonRecord): JsonRecord => {
   };
 };
 
+// Stored and imported checklist JSON is untrusted: runs and templates saved before the API
+// checked content, or edited by hand, can hold any shape. After text tasks and Sub-tasks
+// become titled ones, sanitizeStoredItem (shared with the API) makes every task safe to
+// render, count and save back, so one malformed task never breaks a page or the Runs list.
 // Fallback ids use each entry's position in the stored array, so skipping an entry that is
 // not an object never changes the ids of the entries around it.
 export function normalizeSections(raw: unknown): ChecklistSection[] {
@@ -79,13 +84,16 @@ export function normalizeSections(raw: unknown): ChecklistSection[] {
       id: typeof section.id === "string" ? section.id : String(sectionIndex + 1),
       title: typeof section.title === "string" ? section.title : "Checklist",
       items: rawItems.flatMap((entry, itemIndex) => {
-        const it = toTitledRecord(entry);
-        if (!it) return [];
+        const titled = toTitledRecord(entry);
+        if (!titled) return [];
 
-        // Content entries are passed through from stored/imported JSON as-is (only legacy
-        // sub-item completion is normalized), so their shape is trusted here rather than validated.
+        const it = sanitizeStoredItem(
+          Array.isArray(titled.contents)
+            ? { ...titled, contents: titled.contents.filter(isJsonRecord).map(normalizeContent) }
+            : titled,
+        );
         const contents = Array.isArray(it.contents)
-          ? (it.contents.filter(isJsonRecord).map(normalizeContent) as unknown as ChecklistItemContent[])
+          ? (it.contents as unknown as ChecklistItemContent[])
           : undefined;
 
         const { completed: _completed, ...rest } = it;
@@ -119,7 +127,7 @@ export function countRunTasks(sections: ChecklistSection[]): RunTaskCounts {
       if (item.isCompleted === true) counts.tasksCompleted += 1;
 
       for (const content of item.contents ?? []) {
-        if (content.type !== "subItems" || !content.subItems) continue;
+        if (content.type !== "subItems" || !Array.isArray(content.subItems)) continue;
         for (const subItem of content.subItems) {
           counts.subTasksTotal += 1;
           if (subItem.isCompleted === true) counts.subTasksCompleted += 1;
@@ -148,7 +156,7 @@ export function resetSectionsCompletion(sections: ChecklistSection[]): Checklist
       isCompleted: false,
       contents: item.contents?.map((content) => {
         if (content.type !== "subItems") return content;
-        if (!content.subItems) return { ...content, subItems: [] };
+        if (!Array.isArray(content.subItems)) return { ...content, subItems: [] };
         return {
           ...content,
           subItems: content.subItems.map((subItem) => ({

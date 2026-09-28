@@ -6,6 +6,9 @@ import { api } from "@/lib/api";
 import { isStaleRecordError } from "@/lib/editConflicts";
 import { markRunShared } from "@/lib/queryCache";
 import { prepareTemplatesForImport } from "@/lib/utils/templateBackup";
+import { buildTemplateUpdateRequest, describeTemplateUpdate } from "@/lib/templates/templateUpdate";
+import { MAX_TEMPLATES_PER_IMPORT } from "@/lib/templates/templateImportLimits";
+import { RUN_TITLE_MAX } from "@/lib/schemas/templateLimits";
 import { 
   ChecklistTemplate, 
   ChecklistRun, 
@@ -43,7 +46,15 @@ import {
   refreshRunLists,
   refreshRunsAfterConflict,
 } from "./templateListCache";
-import { createTemplateListFetcher, fetchRunList, shouldRetryListFetch, type TemplateListRequest } from "./templateListFetchers";
+import {
+  CATALOG_QUERY_KEY,
+  createTemplateListFetcher,
+  fetchRunList,
+  shouldRetryListFetch,
+  type TemplateListRequest,
+} from "./templateListFetchers";
+
+export { mapApiTemplate } from "./templateListFetchers";
 import { buildRunUpdatePayload, type RunUpdateOptions } from "./runUpdatePayload";
 import { assertWorkspaceReady } from "./workspaceSelection";
 import {
@@ -80,7 +91,7 @@ export const buildTemplateListQueries = (params: TemplateListReadiness & {
   fetchList: (request: TemplateListRequest) => () => Promise<ChecklistTemplate[]>;
 }): TemplateListQueries => ({
   catalog: {
-    queryKey: ['templates', 'catalog'],
+    queryKey: CATALOG_QUERY_KEY,
     queryFn: params.fetchList({ scope: 'public' }),
     staleTime: 5 * 60 * 1000,
     retry: shouldRetryListFetch,
@@ -115,7 +126,8 @@ export function buildCreateRunRequest(params: {
   templateId: string;
 }): CreateRunRequest {
   const runSections = resetSectionsCompletion(params.template.sections);
-  const title = params.runName || params.template.title;
+  // Template titles can be longer than a run title may be (imports, older rows).
+  const title = (params.runName || params.template.title).slice(0, RUN_TITLE_MAX).trimEnd();
   const teamId = resolveTemplateDestinationTeamId(params.template, params.activeTeamId);
 
   if (isRepoTemplate(params.template)) {
@@ -286,22 +298,11 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (!user) throw new Error("User must be logged in to update a template");
 
       // Resolves with the stored version, which the caller keeps for its next save.
-      return api.updateTemplate(template.id, {
-        title: template.title,
-        description: template.description,
-        type: template.type,
-        seoTitle: template.seoTitle,
-        seoDescription: template.seoDescription,
-        rules: template.rules,
-        sections: template.sections,
-        categories: template.categories,
-        tags: template.tags,
-        is_public: template.isPublic,
-        slug: template.seoUrl?.trim() || template.slug?.trim() || undefined,
-        expected_version: template.version,
-      });
+      return api.updateTemplate(template.id, buildTemplateUpdateRequest(template));
     },
-    onSuccess: (_result, template) => refreshAfterTemplateSave(queryClient, template.id),
+    // Only a checklist-structure change reconciles runs, so only then do the run lists reload.
+    onSuccess: (result, template) =>
+      refreshAfterTemplateSave(queryClient, template.id, { runs: describeTemplateUpdate(result).invalidateRuns }),
     // A conflict means the cached copy is stale: lists reload when a page shows them again.
     onError: (error) => {
       if (isStaleRecordError(error)) void queryClient.invalidateQueries({ queryKey: ['templates'], refetchType: 'none' });
@@ -400,8 +401,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     mutationFn: async ({ templatesData, options }: { templatesData: ChecklistTemplate[]; options?: TemplateImportOptions }): Promise<TemplateImportSummary> => {
       if (!user) throw new Error("User must be logged in to import templates");
       assertWorkspaceReady(workspaceStatus);
-
-      const MAX_TEMPLATES_PER_IMPORT = 5;
 
       if (templatesData.length > MAX_TEMPLATES_PER_IMPORT) {
         throw new Error(`Import limited to ${MAX_TEMPLATES_PER_IMPORT} templates per file for now`);

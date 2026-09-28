@@ -131,3 +131,45 @@ describe('useTemplateLibrary', () => {
     expect(library.allCategories).not.toContain('orphaned');
   });
 });
+
+// Bundled Templates are always present, so a non-empty list says nothing about the
+// catalog API: `loading` follows the catalog query itself.
+describe('useTemplateLibrary loading flags', () => {
+  const bundledTemplate: ChecklistTemplate = {
+    id: 'repo:camping',
+    title: 'Camping Checklist',
+    sections: [],
+    userId: 'repo-template-catalog',
+    createdAt: '2026-03-24T00:00:00.000Z',
+    updatedAt: '2026-03-24T00:00:00.000Z',
+    isPublic: true,
+    categories: ['outdoor'],
+  };
+
+  it('reports the catalog as loading while bundled Templates are already present', () => {
+    mockUseTemplateLists.mockReturnValue({
+      templates: [bundledTemplate],
+      templatesLoading: true,
+      catalogPending: true,
+      catalogError: false,
+      refetchCatalog: vi.fn(),
+    });
+
+    const state = renderFirstPass();
+
+    expect(state.templates).toHaveLength(1);
+    expect(state.loading).toBe(true);
+  });
+
+  it('clears loading once the catalog query settles', () => {
+    mockUseTemplateLists.mockReturnValue({
+      templates: [bundledTemplate],
+      templatesLoading: false,
+      catalogPending: false,
+      catalogError: false,
+      refetchCatalog: vi.fn(),
+    });
+
+    expect(renderFirstPass().loading).toBe(false);
+  });
+});

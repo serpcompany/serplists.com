@@ -30,6 +30,7 @@ describe('RequireAuth', () => {
     expect(html).toContain('data-session-unavailable="true"');
     expect(html).toContain('Retry');
     expect(html).not.toContain('Protected page');
+    expect(html).not.toContain('animate-spin');
   });
 
   it('renders the page for a signed-in user', () => {
@@ -41,5 +42,6 @@ describe('RequireAuth', () => {
 
     expect(html).toContain('animate-spin');
     expect(html).not.toContain('data-session-unavailable');
+    expect(html).not.toContain('Protected page');
   });
 });

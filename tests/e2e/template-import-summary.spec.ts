@@ -60,3 +60,48 @@ test("template import API returns structured per-template failures for rejected 
     }),
   );
 });
+
+test("the import page lists every failed template when none imported", async ({ page }) => {
+  await signInAsAdmin(page);
+  const saveFailure = "Could not save this template. Try importing it again.";
+  const shapeFailure = "sections[0].items[0].contents[0].subItems: Expected array, received string";
+  await page.route("**/api/templates/backup", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    await route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "Template import failed",
+        code: "template_import_failed",
+        details: {
+          total: 2,
+          imported: 0,
+          successes: [],
+          failed: [
+            { index: 0, title: "Launch plan", reason: saveFailure, code: "insert_failed" },
+            { index: 1, title: "", reason: shapeFailure, code: "invalid_sections" },
+          ],
+        },
+      }),
+    });
+  });
+
+  await page.goto("/dashboard/import-templates");
+  await page.locator("#template-file-input").setInputFiles({
+    name: "launch-plan.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({
+      title: "Launch plan",
+      sections: [{ title: "Checklist", items: [{ title: "Check DNS" }] }],
+    })),
+  });
+  await page.getByRole("button", { name: "Confirm Import" }).click();
+
+  await expect(page.getByText("Last Import Result")).toBeVisible();
+  await expect(page.getByText("0 imported")).toBeVisible();
+  await expect(page.getByText("2 failed")).toBeVisible();
+  await expect(page.getByText(`Launch plan: ${saveFailure}`)).toBeVisible();
+  await expect(page.getByText(`Template 2: ${shapeFailure}`)).toBeVisible();
+  // The preview stays, so the file can be fixed and imported again.
+  await expect(page.getByRole("button", { name: "Confirm Import" })).toBeVisible();
+});

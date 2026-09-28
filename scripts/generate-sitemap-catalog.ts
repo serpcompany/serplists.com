@@ -1,42 +1,30 @@
 import { execFile } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
-
-type SitemapTemplate = {
-  slug: string;
-  // Page text for link previews (functions/seo/public-page-meta.ts).
-  title: string;
-  description?: string;
-  seoTitle?: string;
-  seoDescription?: string;
-  categories: string[];
-  contentHash: string;
-  lastmod: string;
-};
+import { z } from 'zod';
+import {
+  deriveCommittedDates,
+  inventoryHashes,
+  listPublicTemplates,
+  parseTemplatePack,
+  resolveLastmod,
+  type SourceSnapshot,
+  type TemplatePack,
+} from './lib/sitemapLastmod';
+import { matchesGeneratedText } from './lib/line-endings.mjs';
 
 type StaticPage = {
   path: string;
   lastmod: string;
 };
 
-type GeneratedCatalog = {
-  templates?: SitemapTemplate[];
-  staticPages?: StaticPage[];
-  inventory?: {
-    templatesHash: string;
-    templatesLastmod: string;
-    categoriesHash: string;
-    categoriesLastmod: string;
-    implementationLastmod: string;
-  };
-};
-
 const execFileAsync = promisify(execFile);
 
 const repoRoot = process.cwd();
-const packsDirectory = path.join(repoRoot, 'src/data/public-template-packs');
+const packsSource = 'src/data/public-template-packs';
+const categoriesSourcePath = 'src/data/publicCategories.ts';
+const packsDirectory = path.join(repoRoot, packsSource);
 const outputPath = path.join(
   repoRoot,
   'functions/sitemap/bundled-catalog.generated.json',
@@ -64,25 +52,73 @@ const normalizeDate = (value: unknown): string | null => {
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 };
 
-let previousCatalog: GeneratedCatalog = {};
+// The previous output is only a fallback: for static pages when git has no date, and
+// for template content that is not committed yet (see resolveLastmod).
+const previousCatalogSchema = z
+  .object({
+    templates: z.array(z.object({ slug: z.string(), contentHash: z.string(), lastmod: z.string() })),
+    staticPages: z.array(z.object({ path: z.string(), lastmod: z.string() })),
+    inventory: z.object({
+      templatesHash: z.string(),
+      templatesLastmod: z.string(),
+      categoriesHash: z.string(),
+      categoriesLastmod: z.string(),
+      implementationLastmod: z.string(),
+    }),
+  })
+  .partial();
+
+let previousCatalog: z.infer<typeof previousCatalogSchema> = {};
 try {
-  previousCatalog = JSON.parse(await readFile(outputPath, 'utf8')) as GeneratedCatalog;
+  const parsed = previousCatalogSchema.safeParse(JSON.parse(await readFile(outputPath, 'utf8')));
+  if (parsed.success) previousCatalog = parsed.data;
 } catch {
   // The first generation has no previous artifact to fall back to.
 }
 
-const gitLastmod = async (sources: readonly string[]): Promise<string | null> => {
+const git = async (args: string[]): Promise<string | null> => {
   try {
-    const { stdout } = await execFileAsync(
-      'git',
-      ['log', '-1', '--format=%aI', '--', ...sources],
-      { cwd: repoRoot },
-    );
-    return normalizeDate(stdout.trim());
+    const { stdout } = await execFileAsync('git', args, { cwd: repoRoot, maxBuffer: 64 * 1024 * 1024 });
+    return stdout;
   } catch {
     return null;
   }
 };
+
+const gitLastmod = async (sources: readonly string[]): Promise<string | null> =>
+  normalizeDate((await git(['log', '-1', '--format=%aI', '--', ...sources]))?.trim());
+
+// A shallow clone has no history before its tip, so every template would get the tip's date.
+if ((await git(['rev-parse', '--is-shallow-repository']))?.trim() === 'true') {
+  const message = 'Sitemap lastmod dates need full git history; this clone is shallow (use fetch-depth: 0).';
+  if (process.env.CI) throw new Error(message);
+  console.warn(`Warning: ${message}`);
+}
+
+// The packs and category list at every commit on this branch that changed them, oldest first.
+async function readCommittedSnapshots(): Promise<SourceSnapshot[]> {
+  const log = await git([
+    'log', '--first-parent', '--reverse', '--format=%H%x09%aI', '--', packsSource, categoriesSourcePath,
+  ]);
+  const snapshots: SourceSnapshot[] = [];
+  for (const line of (log ?? '').split('\n').filter(Boolean)) {
+    const [sha, rawDate] = line.split('\t');
+    const date = normalizeDate(rawDate);
+    if (!sha || !date) continue;
+
+    const packNames = ((await git(['ls-tree', '--name-only', `${sha}:${packsSource}`])) ?? '')
+      .split('\n')
+      .filter((name) => name.endsWith('.json'))
+      .sort();
+    const packs: TemplatePack[] = [];
+    for (const name of packNames) {
+      const pack = parseTemplatePack(await git(['show', `${sha}:${packsSource}/${name}`]));
+      if (pack) packs.push(pack);
+    }
+    snapshots.push({ date, packs, categoriesSource: (await git(['show', `${sha}:${categoriesSourcePath}`])) ?? '' });
+  }
+  return snapshots;
+}
 
 const staticPages: StaticPage[] = [];
 for (const page of staticPageSources) {
@@ -95,77 +131,75 @@ for (const page of staticPageSources) {
 const files = (await readdir(packsDirectory))
   .filter((fileName) => fileName.endsWith('.json'))
   .sort();
-const templates: SitemapTemplate[] = [];
-
+const currentPacks: TemplatePack[] = [];
 for (const fileName of files) {
-  const pack = JSON.parse(
-    await readFile(path.join(packsDirectory, fileName), 'utf8'),
-  ) as { exportedAt?: string; templates?: Array<Record<string, unknown>> };
-  const packGitLastmod = await gitLastmod([
-    path.relative(repoRoot, path.join(packsDirectory, fileName)),
-  ]);
-  const packFallbackLastmod = normalizeDate(pack.exportedAt);
+  const pack = parseTemplatePack(await readFile(path.join(packsDirectory, fileName), 'utf8'));
+  if (!pack) throw new Error(`${packsSource}/${fileName} is not a template pack`);
+  currentPacks.push(pack);
+}
 
+// Page text for link previews (functions/seo/public-page-meta.ts), read from the pack.
+const packTemplatesBySlug = new Map<string, Record<string, unknown>>();
+for (const pack of currentPacks) {
   for (const template of pack.templates ?? []) {
     const slug = typeof template.slug === 'string' ? template.slug.trim() : '';
-    const visibility = template.visibility;
-    if (!slug || visibility !== 'public') continue;
-    const contentHash = createHash('sha256')
-      .update(JSON.stringify(template))
-      .digest('hex');
-    const previous = previousCatalog.templates?.find((entry) => entry.slug === slug);
-    const lastmod = previous?.contentHash === contentHash
-      ? normalizeDate(previous.lastmod)
-      : packGitLastmod ?? packFallbackLastmod;
-    if (!lastmod) throw new Error(`Unable to determine lastmod for ${slug}`);
-
-    const title = optionalText(template.title);
-    if (!title) throw new Error(`Public template ${slug} has no title`);
-
-    templates.push({
-      slug,
-      title,
-      description: optionalText(template.description),
-      seoTitle: optionalText(template.seoTitle),
-      seoDescription: optionalText(template.seoDescription),
-      categories: Array.isArray(template.categories)
-        ? template.categories.filter((value): value is string => typeof value === 'string')
-        : [],
-      contentHash,
-      lastmod,
-    });
+    if (slug && template.visibility === 'public') packTemplatesBySlug.set(slug, template);
   }
 }
+const pageText = (slug: string) => {
+  const template = packTemplatesBySlug.get(slug);
+  const title = optionalText(template?.title);
+  if (!title) throw new Error(`Public template ${slug} has no title`);
+  return {
+    title,
+    description: optionalText(template?.description),
+    seoTitle: optionalText(template?.seoTitle),
+    seoDescription: optionalText(template?.seoDescription),
+  };
+};
 
-templates.sort((left, right) => left.slug.localeCompare(right.slug));
-const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const templatesHash = hash(templates.map(({ slug, contentHash }) => ({ slug, contentHash })));
-const categoriesSource = await readFile(
-  path.join(repoRoot, 'src/data/publicCategories.ts'),
-  'utf8',
-);
-const categoriesHash = hash({
-  categoriesSource,
-  templateCategories: templates.map(({ slug, categories }) => ({ slug, categories })),
+const committed = deriveCommittedDates(await readCommittedSnapshots());
+const now = new Date().toISOString();
+const templates = listPublicTemplates(currentPacks).map((template) => {
+  const previous = previousCatalog.templates?.find((entry) => entry.slug === template.slug);
+  return {
+    slug: template.slug,
+    ...pageText(template.slug),
+    categories: template.categories,
+    contentHash: template.contentHash,
+    lastmod: resolveLastmod({
+      hash: template.contentHash,
+      committed: committed.templates.get(template.slug),
+      previous: previous && { hash: previous.contentHash, lastmod: normalizeDate(previous.lastmod) },
+      now,
+    }),
+  };
 });
-const templateSources = ['src/data/public-template-packs'] as const;
-const categorySources = [...templateSources, 'src/data/publicCategories.ts'] as const;
-const templateSourcesLastmod = await gitLastmod(templateSources);
-const categorySourcesLastmod = await gitLastmod(categorySources);
-const changedLastmod = (gitDate: string | null, previous?: string) =>
-  gitDate ?? normalizeDate(previous);
-const templatesLastmod = previousCatalog.inventory?.templatesHash === templatesHash
-  ? normalizeDate(previousCatalog.inventory.templatesLastmod)
-  : changedLastmod(templateSourcesLastmod, previousCatalog.inventory?.templatesLastmod);
-const categoriesLastmod = previousCatalog.inventory?.categoriesHash === categoriesHash
-  ? normalizeDate(previousCatalog.inventory.categoriesLastmod)
-  : changedLastmod(categorySourcesLastmod, previousCatalog.inventory?.categoriesLastmod);
-if (!templatesLastmod || !categoriesLastmod) {
-  throw new Error('Unable to determine sitemap inventory modification dates');
-}
+
+const categoriesSource = await readFile(path.join(repoRoot, categoriesSourcePath), 'utf8');
+const { templatesHash, categoriesHash } = inventoryHashes(templates, categoriesSource);
+const templatesLastmod = resolveLastmod({
+  hash: templatesHash,
+  committed: committed.templatesInventory,
+  previous: {
+    hash: previousCatalog.inventory?.templatesHash,
+    lastmod: normalizeDate(previousCatalog.inventory?.templatesLastmod),
+  },
+  now,
+});
+const categoriesLastmod = resolveLastmod({
+  hash: categoriesHash,
+  committed: committed.categoriesInventory,
+  previous: {
+    hash: previousCatalog.inventory?.categoriesHash,
+    lastmod: normalizeDate(previousCatalog.inventory?.categoriesLastmod),
+  },
+  now,
+});
 const implementationLastmod = await gitLastmod([
   'functions/sitemap.xml.ts',
   'functions/sitemap/shared.ts',
+  'functions/sitemap/cache.ts',
   'functions/sitemaps/pages/[page].xml.ts',
   'functions/sitemaps/categories/[page].xml.ts',
   'functions/sitemaps/profiles/[page].xml.ts',
@@ -178,8 +212,8 @@ const output = `${JSON.stringify({
   inventory: { templatesHash, templatesLastmod, categoriesHash, categoriesLastmod, implementationLastmod },
 }, null, 2)}\n`;
 if (process.argv.includes('--check')) {
-  const existing = await readFile(outputPath, 'utf8').catch(() => '');
-  if (existing !== output) {
+  const existing = await readFile(outputPath, 'utf8').catch(() => null);
+  if (!matchesGeneratedText(existing, output)) {
     throw new Error(
       'Generated sitemap catalog is stale. Run `pnpm run sitemap:generate` and commit functions/sitemap/bundled-catalog.generated.json.',
     );

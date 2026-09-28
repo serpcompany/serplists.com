@@ -2,6 +2,7 @@ import type { ChecklistTemplate } from '@/types/checklist';
 
 import { resolvePublicTemplateOwnerSlug } from '@/lib/repoTemplateCatalog';
 import { categorySlug } from '@/lib/categorySlug';
+import { CANONICAL_ORIGIN } from '@/lib/seo/siteOrigin';
 
 export { resolvePublicTemplateOwnerSlug };
 
@@ -17,9 +18,8 @@ export const LEGACY_CONSOLE_TEMPLATES_PATH = '/console/templates';
 export const LEGACY_CONSOLE_RUNS_PATH = '/console/runs';
 
 // Canonical URLs (rel=canonical, og:url) always name the production site, also on staging
-// and preview hosts. The sitemaps use the same origin (CANONICAL_ORIGIN in
-// functions/sitemap/shared.ts).
-export const SITE_ORIGIN = 'https://serplists.com';
+// and preview hosts. The sitemaps use the same origin (src/lib/seo/siteOrigin.ts).
+export const SITE_ORIGIN = CANONICAL_ORIGIN;
 
 export const buildSiteUrl = (path: string): string => new URL(path, SITE_ORIGIN).toString();
 
@@ -52,6 +52,30 @@ export const findCategoryNameBySlug = (
   );
 };
 
+// Category slugs from before accented letters were folded ('Café Guides' gave
+// 'caf-guides'). Only used to send an already indexed URL to the current one.
+const buildLegacyCategorySlug = (categoryName: string): string =>
+  categoryName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+export const findCategoryNameByLegacySlug = (
+  categories: string[],
+  categorySlug: string,
+): string | null => {
+  const normalizedSlug = categorySlug.trim().toLowerCase();
+  if (!normalizedSlug) return null;
+  return (
+    categories.find(
+      (category) => buildLegacyCategorySlug(category) === normalizedSlug,
+    ) ?? null
+  );
+};
+
 export const buildPublicCategoriesPath = (): string => '/categories';
 
 export const buildPublicCategoryPathForSlug = (slug: string): string =>
@@ -80,6 +104,19 @@ export const resolveLegacyTemplatesCategoryRedirectPath = (
 
 export const buildPublicProfilePath = (username: string): string =>
   `/profile/${encodeURIComponent(username)}`;
+
+/**
+ * Usernames are stored lowercase and profile lookups ignore case, so
+ * /profile/JohnDoe loads @johndoe. Returns the path to replace the URL with
+ * when its casing differs from the stored username, or null.
+ */
+export const getCanonicalProfilePath = (
+  routeUsername: string | undefined,
+  storedUsername: string | null | undefined,
+): string | null =>
+  routeUsername && storedUsername && routeUsername !== storedUsername
+    ? buildPublicProfilePath(storedUsername)
+    : null;
 
 export const buildPublicTemplatePath = (
   ownerSlug: string,

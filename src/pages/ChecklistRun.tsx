@@ -8,7 +8,6 @@ import {
   Edit2,
   Loader2,
   ListChecks,
-  Share2,
 } from 'lucide-react';
 
 import { PageContainer, Surface } from '@/components/layout/page-shell';
@@ -28,7 +27,9 @@ import { Badge } from '@/components/ui/badge';
 import { RunCompleteDialog } from '@/components/run-execution/RunCompleteDialog';
 import { RunHistorySection } from '@/components/run-execution/RunHistorySection';
 import { MobileRunProgress } from '@/components/run-execution/MobileRunProgress';
+import { RetiredRunItems } from '@/components/run-execution/RetiredRunItems';
 import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar';
+import { RunShareActions } from '@/components/run-execution/RunShareActions';
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -36,11 +37,11 @@ import { canFinishRun, getPrimaryTaskAction } from '@/features/run-execution/pri
 import { confirmLeaveWithUnsavedNotes, useUnsavedNotesWarning } from '@/features/run-execution/noteDrafts';
 import { getTaskCheckboxLabel } from '@/features/run-execution/taskCheckboxLabel';
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
+import { useRunShareLink } from '@/features/run-execution/useRunShareLink';
 import { usePageVisit } from '@/hooks/usePageVisit';
 import { isRunTitleChange } from '@/features/run-execution/runTitle';
 import { cn } from '@/lib/utils';
 import { copyTextToClipboard } from '@/lib/clipboard';
-import { createShareLinkAndCopy } from '@/lib/shareLink';
 import {
   buildConsoleHomePath,
   buildConsoleRunsPath,
@@ -61,9 +62,6 @@ const ChecklistRunPage = () => {
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
-  const [isCreatingShare, setIsCreatingShare] = useState(false);
-  const [shareLink, setShareLink] = useState<{ runId: string; url: string } | null>(null);
-  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
 
   const {
     counts,
@@ -83,6 +81,7 @@ const ChecklistRunPage = () => {
     selectedData,
     selectedItemId,
     setSelectedItemId,
+    stopSharing,
     completeRun,
     toggleItem,
     toggleSubItem,
@@ -95,6 +94,7 @@ const ChecklistRunPage = () => {
   });
   const displayRun = run;
   const displayProgress = displayRun?.progress ?? progress;
+  const shareLinkState = useRunShareLink(displayRun?.id, { createShare, stopSharing });
   useUnsavedNotesWarning(hasUnsavedNotes);
 
   useEffect(() => {
@@ -203,34 +203,6 @@ const ChecklistRunPage = () => {
   const handleTitleCancel = () => {
     setIsEditingTitle(false);
     setEditTitle('');
-  };
-
-  // The link is always shown in a dialog and copying is best effort (createShareLinkAndCopy).
-  // Each create replaces the share token, so reopening reuses this run's link.
-  const handleCreateShare = async () => {
-    if (!displayRun) return;
-    if (shareLink?.runId === displayRun.id) {
-      setIsShareDialogOpen(true);
-      return;
-    }
-
-    setIsCreatingShare(true);
-    try {
-      const result = await createShareLinkAndCopy(async () => {
-        const shared = await createShare();
-        if (shared.kind === 'error') throw new Error(shared.message || 'Failed to create share link for this run.');
-        return shared.kind === 'ok' && shared.shareUrl ? shared.shareUrl : null;
-      });
-      if (result.kind === 'error') {
-        toast.error(result.message);
-      } else if (result.kind === 'ok') {
-        setShareLink({ runId: displayRun.id, url: result.shareUrl });
-        setIsShareDialogOpen(true);
-        if (result.copied) toast.success('Share link copied to clipboard');
-      }
-    } finally {
-      setIsCreatingShare(false);
-    }
   };
 
   const handleCopyCurrentLink = async () => {
@@ -398,15 +370,12 @@ const ChecklistRunPage = () => {
         <div className="text-right text-sm font-medium">{displayProgress}%</div>
       </div>
       {canUpdateRun ? (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={isCreatingShare}
-          onClick={() => void handleCreateShare()}
-        >
-          <Share2 className="mr-2 h-4 w-4" />
-          {isCreatingShare ? 'Creating link...' : 'Share'}
-        </Button>
+        <RunShareActions
+          isCreatingShare={shareLinkState.isCreatingShare}
+          isPublic={displayRun.isPublic === true}
+          onShare={() => void shareLinkState.createShareLink()}
+          onStopSharing={shareLinkState.stopSharing}
+        />
       ) : null}
     </>
   );
@@ -662,6 +631,7 @@ const ChecklistRunPage = () => {
                   Select a task to continue.
                 </div>
               )}
+              <RetiredRunItems items={displayRun.retiredItems ?? []} />
               <RunHistorySection history={history} />
             </main>
             <RunProgressPanel
@@ -679,10 +649,10 @@ const ChecklistRunPage = () => {
       <ShareLinkDialog
         copiedMessage="Share link copied to clipboard"
         description="Anyone with this link can open this run without signing in."
-        onOpenChange={setIsShareDialogOpen}
-        open={isShareDialogOpen && shareLink?.runId === displayRun.id}
+        onOpenChange={shareLinkState.setIsShareDialogOpen}
+        open={shareLinkState.isShareDialogOpen}
         title="Share run"
-        url={shareLink?.url ?? ''}
+        url={shareLinkState.shareUrl}
       />
 
       <RunCompleteDialog

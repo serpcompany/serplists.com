@@ -52,11 +52,16 @@ export const refreshAfterTemplateDelete = (queryClient: QueryClient, templateId:
 
 // The PUT answer carries the version the next save needs, so a template save never waits for
 // (or causes) a reload of the whole list: the Template lists are only marked stale and load
-// when a page that shows them mounts. Run lists refresh because in-progress Runs of the
-// template were reconciled, and the Template's open Changelogs because the save added a version.
-export const refreshAfterTemplateSave = (queryClient: QueryClient, templateId: string): void => {
+// when a page that shows them mounts. Run lists refresh only when the save changed the
+// checklist structure, since only then were in-progress Runs of the template reconciled
+// (describeTemplateUpdate), and the Template's open Changelogs because the save added a version.
+export const refreshAfterTemplateSave = (
+  queryClient: QueryClient,
+  templateId: string,
+  options: { runs?: boolean } = {},
+): void => {
   void queryClient.invalidateQueries({ queryKey: ['templates'], refetchType: 'none' });
-  void refreshRunLists(queryClient);
+  if (options.runs ?? true) void refreshRunLists(queryClient);
   void refreshTemplateHistory(queryClient, templateId);
 };
 

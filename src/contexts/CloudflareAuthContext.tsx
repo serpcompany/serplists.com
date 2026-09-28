@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useState, useEffect, use
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
+import { getAuthErrorMessage, isEmailNotVerifiedError } from '@/lib/auth/authErrors';
 import { EMAIL_VERIFIED_CALLBACK_URL } from '@/lib/auth/loginNotice';
 import { isUserSwitch, removeSignedOutUserQueries } from '@/lib/queryKeys';
 import {
@@ -18,6 +19,9 @@ import {
   type SessionUser,
 } from './authSession';
 import { browserSessionSyncEnvironment, createSessionSync } from './sessionSync';
+
+/** How often a visible, signed-in tab asks whether its session keep-alive read is due. */
+const SESSION_KEEPALIVE_TICK_MS = 15 * 60 * 1000;
 
 interface RegisterResult extends AuthActionResult {
   requiresEmailVerification?: boolean;
@@ -142,12 +146,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('online', retrySession);
   }, [retrySession, sessionStatus]);
 
+  // Only GET /api/auth/get-session extends a session and resends its cookie, so a signed-in
+  // tab that stays open reads it when it regains focus and on a timer while it is visible;
+  // keepAlive reads it at most once an hour (see sessionSync.ts). The answer is applied like
+  // any re-check: a failure changes nothing, and a confirmed "no session" signs the tab out.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const keepAliveIfVisible = () => {
+      if (document.visibilityState === 'visible') sessionSync.keepAlive();
+    };
+    window.addEventListener('focus', keepAliveIfVisible);
+    const tick = window.setInterval(keepAliveIfVisible, SESSION_KEEPALIVE_TICK_MS);
+    return () => {
+      window.removeEventListener('focus', keepAliveIfVisible);
+      window.clearInterval(tick);
+    };
+  }, [isAuthenticated, sessionSync]);
+
   const login = async (email: string, password: string): Promise<AuthActionResult> => {
     try {
       const result = await authClient.signIn.email({ email, password });
       if (result?.error) {
-        const message = result.error.message ?? "Login failed";
-        if (message.toLowerCase().includes("email not verified")) {
+        const message = getAuthErrorMessage(result.error, "Login failed");
+        if (isEmailNotVerifiedError(result.error)) {
           return { ok: false, error: message, errorCode: "EMAIL_NOT_VERIFIED" };
         }
         return { ok: false, error: message, errorCode: "UNKNOWN" };
@@ -175,7 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = await authClient.signUp.email({ name, email, password, callbackURL });
       if (result?.error) {
-        return { ok: false, error: result.error.message ?? "Registration failed", errorCode: "UNKNOWN" };
+        return { ok: false, error: getAuthErrorMessage(result.error, "Registration failed"), errorCode: "UNKNOWN" };
       }
 
       // The server says whether the account must verify its email: no session token.

@@ -4,6 +4,8 @@ import {
   TEMPLATE_SLUG_PATTERN,
   TEMPLATE_SLUG_PATTERN_MESSAGE,
 } from "../../../src/lib/schemas/templateFields";
+import { RUN_TITLE_MAX } from "../../../src/lib/schemas/templateLimits";
+import { findStoredSectionsIssue } from "../../../src/lib/schemas/storedSections";
 
 const boundedOptionalString = (max: number) => z.string().trim().max(max).optional();
 const boundedRequiredString = (max: number) => z.string().trim().min(1).max(max);
@@ -25,6 +27,13 @@ const templateRuleSchema = z.object({
 // Limits come from src/lib/schemas/templateFields.ts, which the template editor also uses.
 const limits = TEMPLATE_FIELD_LIMITS;
 
+export const templateSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(limits.slug)
+  .regex(TEMPLATE_SLUG_PATTERN, TEMPLATE_SLUG_PATTERN_MESSAGE);
+
 export const templatePayloadSchema = z.object({
   teamId: z.string().trim().min(1).optional(),
   team_id: z.string().trim().min(1).optional(),
@@ -40,21 +49,45 @@ export const templatePayloadSchema = z.object({
   tags: stringListField(limits.listItems, limits.listItemLength),
   sections: z.unknown().optional(),
   items: z.unknown().optional(),
-  slug: z
-    .string()
-    .trim()
-    .min(1)
-    .max(limits.slug)
-    .regex(TEMPLATE_SLUG_PATTERN, TEMPLATE_SLUG_PATTERN_MESSAGE)
-    .optional(),
+  slug: templateSlugSchema.optional(),
   expected_version: z.number().int().positive().optional(),
 });
+
+// Saves resend every stored field, and stored values can predate these bounds (imports,
+// clones, legacy slugs such as those migrations 0002 and 0005 backfilled). So PUT checks
+// only types on the wire; the handler validates the fields that actually change against
+// templatePayloadSchema once it has read the row, and normalizes a changed slug instead
+// of rejecting it (resolveRequestedSlug).
+const looseStringList = z.union([z.array(z.string().trim()), z.string().trim()]).optional();
+export const templateUpdatePayloadSchema = templatePayloadSchema.extend({
+  title: z.string().trim().optional(),
+  description: z.string().trim().optional(),
+  seoTitle: z.string().trim().optional(),
+  seoDescription: z.string().trim().optional(),
+  rules: z.array(templateRuleSchema.extend({ id: z.string().trim(), type: z.string().trim(), path: z.string().trim() })).optional(),
+  categories: looseStringList,
+  category: z.string().trim().optional(),
+  tags: looseStringList,
+  slug: z.string().trim().optional(),
+});
+
+// Import files are free-form; each template's fields must fit the same bounds as a save.
+export const templateImportFieldsSchema = templatePayloadSchema
+  .pick({ title: true, description: true, seoTitle: true, seoDescription: true, categories: true, tags: true, rules: true })
+  .required({ title: true });
+
+/** An error message that names the field: "description: String must contain at most 5000 character(s)". */
+export function formatPayloadIssue(error: z.ZodError, fallback: string): string {
+  const issue = error.issues[0];
+  if (!issue) return fallback;
+  return `${issue.path.join(".") || "payload"}: ${issue.message}`;
+}
 
 export const checklistPayloadSchema = z.object({
   teamId: z.string().trim().min(1).optional(),
   team_id: z.string().trim().min(1).optional(),
   template_id: z.string().trim().min(1).nullable().optional(),
-  title: boundedRequiredString(160).optional(),
+  title: boundedRequiredString(RUN_TITLE_MAX).optional(),
   sections: z.unknown().optional(),
   items: z.unknown().optional(),
   status: z.enum(["in_progress", "completed"]).optional(),
@@ -99,6 +132,18 @@ export function normalizeStringArray(value: unknown): string[] {
   }
   if (typeof value === "string" && value.trim()) return [value.trim()];
   return [];
+}
+
+/**
+ * normalizeSectionsPayload for writes: also checks every section, task, content block and
+ * Sub-task against storedSectionsSchema, so stored content never breaks a reader. The
+ * error names the first bad path.
+ */
+export function parseSectionsPayload(input: unknown): { sections: unknown[]; error?: string } {
+  const normalized = normalizeSectionsPayload(input);
+  if (normalized.error) return normalized;
+  const issue = findStoredSectionsIssue(normalized.sections);
+  return issue ? { sections: [], error: issue } : normalized;
 }
 
 export function normalizeSectionsPayload(input: unknown): { sections: unknown[]; error?: string } {

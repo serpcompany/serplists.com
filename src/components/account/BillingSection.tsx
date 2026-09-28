@@ -7,6 +7,7 @@ import { useWorkspace } from "@/contexts/WorkspaceContext";
 import {
   BILLING_STATUS_QUERY_PREFIX,
   getBillingPlanLabel,
+  getBillingPlanStatus,
   getBillingStatusQueryKey,
   getPersonalBillingAction,
   getSubscriptionAttentionMessage,
@@ -19,6 +20,7 @@ import { usePageRestoredFromCache, useRedirectPending } from "@/hooks/useRedirec
 import { buildConsoleTemplateCreatePath } from "@/lib/routes";
 import { readTemplateDraft } from "@/features/template-editor/templateDraftStore";
 import { Button } from "@/components/ui/button";
+import { QueryErrorNotice } from "@/components/shared/QueryListState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 
@@ -36,6 +38,7 @@ export function BillingSection() {
     enabled: !!user,
     retry: false,
   });
+  const { refetch: refetchBilling } = billing;
   const queryClient = useQueryClient();
   const userId = user?.id;
   // The plan may have changed at Stripe before the user pressed Back.
@@ -50,7 +53,9 @@ export function BillingSection() {
   );
 
   const plan = billing.data?.plan;
-  const planLabel = getBillingPlanLabel(plan);
+  // "unknown" (status failed to load) is not Free: offer Retry, never an upgrade.
+  const planStatus = getBillingPlanStatus(billing);
+  const planLabel = getBillingPlanLabel(plan) ?? (planStatus === "unknown" ? "Unavailable" : "Checking...");
   const billingEnabled = billing.data?.billingEnabled ?? true;
   const personalAction = getPersonalBillingAction(billing.data);
   const subscriptionAttention = getSubscriptionAttentionMessage(billing.data?.subscriptionStatus);
@@ -153,7 +158,7 @@ export function BillingSection() {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="text-sm text-muted-foreground">
-          Current {isTeamWorkspace ? "Organization" : "Personal"} plan: <span className="font-medium text-foreground">{planLabel ?? "Checking..."}</span>
+          Current {isTeamWorkspace ? "Organization" : "Personal"} plan: <span className="font-medium text-foreground">{planLabel}</span>
         </div>
 
         {hasTemplateDraft ? (
@@ -169,7 +174,10 @@ export function BillingSection() {
         ) : null}
 
         {billing.isError ? (
-          <div className="text-sm text-muted-foreground">Billing status unavailable.</div>
+          <QueryErrorNotice
+            message={planStatus === "unknown" ? "Billing status unavailable." : "Couldn't refresh billing status."}
+            onRetry={() => void refetchBilling()}
+          />
         ) : null}
         {!billing.isError && !billingEnabled ? (
           <div className="text-sm text-muted-foreground">Billing checkout is currently unavailable.</div>
@@ -179,7 +187,7 @@ export function BillingSection() {
           <div className="text-sm text-muted-foreground">
             {teamBillingMessage}
           </div>
-        ) : personalAction === "support" ? (
+        ) : planStatus === "unknown" ? null : personalAction === "support" ? (
           <>
             <div className="text-sm text-muted-foreground">{PLAN_MANAGED_BY_SUPPORT_MESSAGE}</div>
             {billing.data?.canManageBilling ? manageButton : null}

@@ -9,6 +9,7 @@ export type RunExecutionApiClient = Pick<
   | 'createChecklistRunShare'
   | 'getChecklistById'
   | 'getSharedChecklist'
+  | 'revokeChecklistRunShare'
   | 'updateSharedChecklist'
 >;
 
@@ -24,6 +25,8 @@ export type RunExecutionDependencies = {
   // Called once a share has made the run public, so cached runs lists can follow.
   onShared?: (runId: string) => void;
   origin?: string;
+  // Refreshes the runs lists, which show whether a run is shared (and offer Revalidate).
+  refreshRuns?: () => unknown;
   updateRun: UpdateRun;
 };
 

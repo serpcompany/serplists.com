@@ -95,11 +95,23 @@ comment when it finds none. The review is advisory and never blocks merging.
 - Cost: runs use the Claude subscription of whoever generated the token (counting
   against its usage limits) plus GitHub Actions minutes.
 - Until the setup below is done, the job logs a notice and skips.
+- Tools: `claude_args` must allow every tool in the plugin's `allowed-tools`
+  frontmatter (its `gh pr`, `gh issue`, and `gh search` commands and the inline
+  comment tool) plus `Task` for its subagents. A tool left out is denied, the review
+  stops before posting anything, and the action still exits 0.
+- Guard: the step after the review reads the action's `execution_file` log and fails
+  the job when Claude was denied any tool, the run ended in an error, or there is no
+  log, so a review that did not happen shows red instead of green. The annotation
+  names the denied tool; add it to `claude_args`. The guard is inline in the
+  workflow (the job can mint an OIDC token, so it runs no script from the PR), and
+  `tests/unit/workflows/claude-code-review.test.ts` runs it and checks the allow
+  list against the plugin's.
 - Workflow validation: the action runs only when the workflow file on the PR is
   identical to the one on the default branch (`main`), so a PR cannot edit the
   workflow to reach the secret. A new or edited review or maintenance workflow
   therefore skips (the log says "Skipping action due to workflow validation") until
-  it is promoted to `main`. The weekly schedule also runs only from `main`.
+  it is promoted to `main`, and the review guard marks that run red because no
+  review happened. The weekly schedule also runs only from `main`.
 
 ## Repository settings (admin only)
 

@@ -211,6 +211,10 @@ Authenticated:
   says support manages the plan and shows no Upgrade, only Manage subscription
   for an existing customer.
 
+Checkout and portal each call Stripe, whose rate limit the whole Stripe account
+shares, so they are limited per IP and per account and answer `429` with
+`Retry-After` ([rate limits](../SECURITY.md#rate-limits)).
+
 Webhook:
 - `POST /api/stripe/webhook` (verifies `Stripe-Signature`, idempotent via `stripe_webhook_events`)
 

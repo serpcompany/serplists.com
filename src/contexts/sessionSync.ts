@@ -23,6 +23,10 @@ export const SESSION_SYNC_STORAGE_KEY = 'serplists.sessionChanged';
 export const SESSION_RECHECK_INTERVAL_MS = 60_000;
 // A burst of 401s from parallel requests costs one check, and repeats wait this long.
 export const SESSION_UNAUTHORIZED_RECHECK_INTERVAL_MS = 5_000;
+// Only GET /api/auth/get-session extends a session: Better Auth refreshes it at most once a
+// day and resends the 7-day cookie, which only reaches the browser from that route. So a tab
+// left open (and visible) for days reads it at least this often (keepAlive()).
+export const SESSION_KEEPALIVE_INTERVAL_MS = 60 * 60 * 1000;
 
 export type SessionSyncChannel = {
   postMessage: (message: unknown) => void;
@@ -149,6 +153,15 @@ export function createSessionSync(deps: {
     // Tabs never announce what they learned from a re-check, so a change is announced once.
     announce: (userId: string | null) => post?.(userId),
     recheck,
+    // Re-reads the session for a signed-in tab that has not read it for
+    // SESSION_KEEPALIVE_INTERVAL_MS, never while another check runs. Returns whether it started.
+    keepAlive: (): boolean => {
+      const current = deps.getState();
+      if (!current.user || current.status === 'loading' || running) return false;
+      if (now() - lastReadAt < SESSION_KEEPALIVE_INTERVAL_MS) return false;
+      void recheck();
+      return true;
+    },
     connect(environment: SessionSyncEnvironment): () => void {
       let channel: SessionSyncChannel | null = null;
       try {

@@ -13,9 +13,10 @@ const pack = (templates: unknown[]) => ({
   templates,
 });
 
-const buildDependencies = (response: unknown) => ({
+const buildDependencies = (response: unknown, catalog: unknown[] = []) => ({
   download: vi.fn(),
   exportBackup: vi.fn().mockResolvedValue(response),
+  loadPublicCatalog: vi.fn().mockResolvedValue(catalog),
 });
 
 describe('exportTemplatePack', () => {
@@ -25,8 +26,10 @@ describe('exportTemplatePack', () => {
 
     const result = await exportTemplatePack({ includePublic: false, teamId: 'team-1' }, dependencies);
 
-    expect(dependencies.exportBackup).toHaveBeenCalledWith({ includePublic: false, teamId: 'team-1' });
-    expect(result).toEqual({ kind: 'exported', count: 1 });
+    // The server exports only the context's own templates.
+    expect(dependencies.exportBackup).toHaveBeenCalledWith({ teamId: 'team-1' });
+    expect(dependencies.loadPublicCatalog).not.toHaveBeenCalled();
+    expect(result).toEqual({ exported: 1, skipped: [] });
   });
 
   it('reports nothing to export without downloading when the server returns no templates', async () => {
@@ -35,7 +38,7 @@ describe('exportTemplatePack', () => {
     const result = await exportTemplatePack({ includePublic: false }, dependencies);
 
     expect(dependencies.exportBackup).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ kind: 'empty' });
+    expect(result).toEqual({ exported: 0, skipped: [] });
     expect(dependencies.download).not.toHaveBeenCalled();
   });
 
@@ -47,8 +50,10 @@ describe('exportTemplatePack', () => {
       dependencies,
     );
 
-    expect(dependencies.exportBackup).toHaveBeenCalledWith({ includePublic: true, teamId: undefined });
-    expect(result).toEqual({ kind: 'empty' });
+    expect(dependencies.exportBackup).toHaveBeenCalledWith({ teamId: undefined });
+    // Public templates come from the catalog, loaded only for this export.
+    expect(dependencies.loadPublicCatalog).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ exported: 0, skipped: [] });
     expect(dependencies.download).not.toHaveBeenCalled();
   });
 
@@ -62,7 +67,7 @@ describe('exportTemplatePack', () => {
     );
 
     expect(dependencies.download).toHaveBeenCalledWith(response);
-    expect(result).toEqual({ kind: 'exported', count: 2 });
+    expect(result).toEqual({ exported: 2, skipped: [] });
   });
 
   it('rejects a response that is not a template pack with a readable message', async () => {
@@ -100,7 +105,7 @@ describe('exportTemplatePack behind the page export guard', () => {
     const second = click();
     resolveExport(pack([{ title: 'Owned' }, { title: 'Public' }]));
 
-    await expect(first).resolves.toEqual({ kind: 'exported', count: 2 });
+    await expect(first).resolves.toEqual({ exported: 2, skipped: [] });
     await expect(second).resolves.toBeUndefined();
     expect(exportBackup).toHaveBeenCalledTimes(1);
     expect(download).toHaveBeenCalledTimes(1);

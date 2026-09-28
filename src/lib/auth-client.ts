@@ -1,19 +1,18 @@
 import { env } from "@/env";
 import { createAuthClient } from "better-auth/react";
 import { usernameClient } from "better-auth/client/plugins";
+import { AuthStatusError, parseRetryAfterSeconds } from "@/lib/auth/authErrors";
 
-const DEV_API_BASE_URL = env.VITE_API_URL ?? "http://localhost:8788/api";
-const API_BASE_URL = import.meta.env.DEV ? DEV_API_BASE_URL : env.VITE_API_URL ?? "/api";
+import { resolveApiBaseUrl, resolveApiServerOrigin } from "@/lib/apiBaseUrl";
 
-const resolveServerOrigin = (): string => {
-  if (API_BASE_URL.startsWith("http://") || API_BASE_URL.startsWith("https://")) {
-    return new URL(API_BASE_URL).origin;
-  }
-  return window.location.origin;
-};
+const API_BASE_URL = resolveApiBaseUrl({
+  isDev: import.meta.env.DEV,
+  configuredUrl: env.VITE_API_URL,
+  pageHostname: typeof window === "undefined" ? undefined : window.location.hostname,
+});
 
 export const authClient = createAuthClient({
-  baseURL: resolveServerOrigin(),
+  baseURL: resolveApiServerOrigin(API_BASE_URL, () => window.location.origin),
   plugins: [usernameClient()],
   fetchOptions: {
     credentials: "include",
@@ -30,7 +29,7 @@ export async function getAuthStatus(): Promise<{
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to load auth status: ${response.status}`);
+    throw new AuthStatusError(response.status, parseRetryAfterSeconds(response.headers.get("Retry-After")));
   }
 
   return (await response.json()) as { emailAuthAvailable: boolean };

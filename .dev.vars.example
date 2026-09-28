@@ -36,5 +36,8 @@ STRIPE_PORTAL_CONFIGURATION_ID=bpc_xxx
 # Optional admin/ops
 ENTITLEMENTS_ADMIN_SECRET=replace-with-admin-secret
 
-# Optional client override consumed by Vite scripts
-VITE_API_URL=http://localhost:8788/api
+# Optional client API override for `pnpm run build:dev`. `pnpm dev`/`dev:all` and
+# the smoke runner set it for the ports they pick, and the dev fallback is already
+# http://localhost:8788/api. `pnpm run build` never reads this file and refuses a
+# localhost value, so a deploy cannot ship one.
+# VITE_API_URL=http://localhost:8788/api

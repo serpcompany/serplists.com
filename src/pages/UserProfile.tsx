@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowUpRight,
   CalendarDays,
@@ -27,6 +27,7 @@ import {
 import {
   buildCanonicalPublicTemplatePath,
   buildPublicTemplatesPath,
+  getCanonicalProfilePath,
 } from '@/lib/routes';
 import { formatMonthYear } from '@/lib/utils/dbTimestamp';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -359,6 +360,7 @@ export const UserProfileContent = ({
 
 const UserProfile = () => {
   const { username } = useParams<{ username: string }>();
+  const navigate = useNavigate();
   const [result, setResult] = useState<LoadUserProfileResult | null>(null);
   // Bumped by Try again; a retry starts from the loading state.
   const [reloadKey, setReloadKey] = useState(0);
@@ -368,15 +370,22 @@ const UserProfile = () => {
     setResult(null);
 
     void loadUserProfile(username).then((nextResult) => {
-      if (!isCancelled) {
-        setResult(nextResult);
+      if (isCancelled) return;
+      // /profile/JohnDoe found @johndoe: move to the one canonical URL, which loads again
+      // from there.
+      const canonicalPath =
+        nextResult.kind === 'ok' ? getCanonicalProfilePath(username, nextResult.profile.username) : null;
+      if (canonicalPath) {
+        navigate(canonicalPath, { replace: true });
+        return;
       }
+      setResult(nextResult);
     });
 
     return () => {
       isCancelled = true;
     };
-  }, [reloadKey, username]);
+  }, [navigate, reloadKey, username]);
 
   return (
     <UserProfileContent

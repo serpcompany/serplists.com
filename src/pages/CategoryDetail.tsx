@@ -58,6 +58,7 @@ const backToCategories = (
 
 const templateGridSkeleton = (
   <div aria-busy="true" className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <span className="sr-only">Loading templates…</span>
     {Array.from({ length: 6 }).map((_, index) => (
       <Skeleton key={index} className="h-[220px] rounded-lg" />
     ))}
@@ -85,6 +86,13 @@ const CategoryDetail = () => {
   const categoryStats = categories.find((item) => item.slug === slug);
   const category = resolveCategoryPresentation(slug, categoryStats);
   const categoryTemplateCount = categoryStats?.count ?? 0;
+  // Registry categories render before any public Template uses them; keep those empty
+  // pages out of search results, but only once the catalog API has answered. Bundled
+  // Templates arrive first, so a count of 0 means nothing until then.
+  const isEmptyCategory = !loading && !catalogError && categoryTemplateCount === 0;
+  const emptyMessage = searchQuery.trim()
+    ? 'No templates found matching your search.'
+    : 'No public templates in this category yet.';
 
   const filteredTemplates = useMemo(() => {
     const base =
@@ -144,9 +152,14 @@ const CategoryDetail = () => {
     <div className="bg-background">
       <SEOHead
         title={buildCategoryPageTitle(category.name)}
-        description={`${categoryTemplateCount} templates for ${category.name}. ${category.description}`}
+        description={
+          loading
+            ? `Templates for ${category.name}. ${category.description}`
+            : `${categoryTemplateCount} templates for ${category.name}. ${category.description}`
+        }
         keywords={[category.name, 'checklist templates', 'workflow templates']}
         url={`${CATEGORY_BASE_URL}/${encodeURIComponent(slug)}`}
+        robots={isEmptyCategory ? 'noindex, follow' : undefined}
       />
       <main className="mx-auto max-w-6xl px-4 py-8">
         {backToCategories}
@@ -255,9 +268,7 @@ const CategoryDetail = () => {
           </div>
         ) : catalogError ? null : (
           <div className="mt-6 rounded-xl border border-border bg-card p-12 text-center">
-            <p className="text-muted-foreground">
-              No templates found matching your search.
-            </p>
+            <p className="text-muted-foreground">{emptyMessage}</p>
           </div>
         )}
 

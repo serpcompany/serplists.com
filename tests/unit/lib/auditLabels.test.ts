@@ -26,7 +26,7 @@ describe('audit action labels', () => {
   });
 
   it('shows an unknown action as words, never as a dotted id', () => {
-    expect(formatAuditAction(RUN_HISTORY_LABELS, 'checklist_run.share_revoked')).toBe('Share revoked');
+    expect(formatAuditAction(RUN_HISTORY_LABELS, 'checklist_run.share_expired')).toBe('Share expired');
     expect(formatAuditAction(RUN_HISTORY_LABELS, 'toString')).toBe('ToString');
   });
 });

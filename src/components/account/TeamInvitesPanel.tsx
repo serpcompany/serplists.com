@@ -3,6 +3,7 @@ import { Copy, Link2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { QueryListState } from '@/components/shared/QueryListState';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -19,7 +20,8 @@ const errorMessage = (error: unknown, fallback: string) =>
 export function TeamInvitesPanel({ teamId }: { teamId: string }) {
   const {
     invites,
-    isLoadingInvites,
+    invitesQuery,
+    reloadInvites,
     link,
     conflict,
     dismissConflict,
@@ -164,11 +166,14 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
 
       <div className="space-y-3">
         <div className="text-sm font-medium text-foreground">Pending invites</div>
-        {isLoadingInvites ? (
-          <div className="text-sm text-muted-foreground">Loading invites...</div>
-        ) : invites.length === 0 ? (
-          <div className="text-sm text-muted-foreground">No pending invites.</div>
-        ) : (
+        <QueryListState
+          query={invitesQuery}
+          loadingLabel="Loading invites..."
+          loadErrorLabel="Couldn't load pending invites."
+          refreshErrorLabel="Couldn't refresh pending invites. Showing the last loaded list."
+          onRetry={() => void reloadInvites()}
+          empty={<div className="text-sm text-muted-foreground">No pending invites.</div>}
+        >
           <div className="divide-y rounded-md border border-border">
             {invites.map((invite) => (
               <div key={invite.id} className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_120px_160px_auto]">
@@ -207,7 +212,7 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
               </div>
             ))}
           </div>
-        )}
+        </QueryListState>
       </div>
     </>
   );

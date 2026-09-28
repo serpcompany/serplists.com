@@ -11,7 +11,8 @@ const dbMocks = vi.hoisted(() => {
     orderBy: vi.fn(),
     limit: vi.fn(),
   };
-  const insertChain = { values: vi.fn() };
+  // select: INSERT ... SELECT, which guarded writes (audit rows, versions) use.
+  const insertChain = { values: vi.fn(), select: vi.fn() };
   const db = {
     select: vi.fn(() => selectChain),
     insert: vi.fn(() => insertChain),
@@ -75,6 +76,7 @@ describe('POST /api/templates/:id/clone into an Organization', () => {
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockResolvedValue(undefined);
+    dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
     dbMocks.db.batch.mockResolvedValue([]);
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     vi.mocked(getEntitlementsForContext).mockResolvedValue({

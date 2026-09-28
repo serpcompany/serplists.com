@@ -60,6 +60,8 @@ export type ChecklistTemplate = {
     username?: string;
   };
   teamId?: string;
+  // Public catalog rows carry no teamId, so this is what marks an Organization template there.
+  ownerType?: "user" | "team";
 };
 
 export type TemplateSavePayload = {
@@ -68,7 +70,8 @@ export type TemplateSavePayload = {
   description?: string;
   type?: "checklist" | "recipe";
   sections: ChecklistSection[];
-  isPublic: boolean;
+  // Left out when the editor did not change visibility, so a save never resends a stale value.
+  isPublic?: boolean;
   seoTitle?: string;
   seoDescription?: string;
   seoUrl?: string;
@@ -76,8 +79,30 @@ export type TemplateSavePayload = {
   categories?: string[];
   tags?: string[];
   slug?: string;
+  // The version the editor loaded; the API answers 409 edit_conflict if it has moved on.
   version?: number;
 };
+
+// What a template save returns (src/lib/templateUpdateResult.ts).
+export type { TemplateUpdateResult };
+
+// Work a Template change removed from a Run. It keeps its completion and notes, stays
+// read-only, and never counts toward progress (parsed in features/run-execution).
+export type RetiredRunSubTask = {
+  id: string;
+  title: string;
+  isCompleted: boolean;
+};
+
+export type RetiredRunTask = RetiredRunSubTask & {
+  notes?: string;
+  subTasks: RetiredRunSubTask[];
+};
+
+export type RetiredRunItem =
+  | { kind: "section"; id: string; title: string; tasks: RetiredRunTask[] }
+  | { kind: "item"; id: string; sectionTitle?: string; task: RetiredRunTask }
+  | { kind: "subItem"; id: string; itemTitle?: string; subTask: RetiredRunSubTask };
 
 export type ChecklistRun = {
   id: string;
@@ -94,6 +119,7 @@ export type ChecklistRun = {
   isStale?: boolean;
   isPublic?: boolean;
   teamId?: string;
+  retiredItems?: RetiredRunItem[];
 };
 
 export type TemplateImportOptions = {
@@ -106,7 +132,7 @@ export type TemplateImportFailure = {
   index: number;
   title: string;
   reason: string;
-  code: "invalid_sections" | "oversized_asset" | "insert_failed";
+  code: "invalid_fields" | "invalid_sections" | "oversized_asset" | "insert_failed";
 };
 
 export type TemplateImportSuccess = {

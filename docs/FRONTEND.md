@@ -93,7 +93,8 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   would reload the lists being left. The new context's lists load once when the page
   moves onto their keys (`markListsStaleForWorkspaceSwitch` in
   `src/contexts/templateListCache.ts`). Billing keys
-  include the user id; never show a Free or Pro label while status is loading.
+  include the user id; never show a Free or Pro label while status is loading, and
+  treat a failed status as unknown, never Free (`getBillingPlanStatus`).
   Build other private keys (invites, Organization members, Run Keys, archives) with
   `queryKeys` in `src/lib/queryKeys.ts`, and give those queries `enabled: Boolean(userId)`.
   The archive lists load only on `/dashboard/archive`; deleting a Template or Run
@@ -103,6 +104,11 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   mounted page reads, except the public catalog. Never call `refetchQueries` without
   `type: 'active'`: an inactive key keeps the query function (and user) of the page
   that last read it. Invalidate instead.
+- React Query v5 reports a failed first load as `isLoading: false` with no data, so
+  a list that only checks `isLoading` shows its empty state for an error. Render
+  query-backed lists with `QueryListState` (`src/components/shared/QueryListState.tsx`):
+  loading, a load error with Retry, the empty state only for a loaded empty list,
+  and the last loaded list (with a Retry notice) when a refresh fails.
 - Template and run lists load on demand. `TemplatesProvider` wraps every route but
   never fetches them. A page that reads `templates` (the public catalog) calls
   `useTemplateLists({ catalog: true, workspace: false })`, one that reads `allTemplates`
@@ -148,6 +154,10 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   a component mounted on every route replaces the whole app with the error screen. The
   helper never throws and keeps values it cannot persist in memory for the session.
   ESLint rejects direct access anywhere else in `src/`.
+- After a write, reload the affected query with `reloadQuery`
+  (`src/lib/queryReload.ts`), not `refetch()` or `fetchQuery`. Those join a fetch
+  already in flight (a first load, for `refetch()`), which read the server before
+  the write and puts the old list back when it lands.
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.

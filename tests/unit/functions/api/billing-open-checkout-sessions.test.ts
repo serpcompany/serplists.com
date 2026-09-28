@@ -7,6 +7,12 @@ import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlit
 // billed the customer twice.
 
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
+// Each test here is its own checkout for the same user, so the per-account limit on
+// checkout and portal (tested in billing-handler.test.ts) would block the later ones.
+vi.mock("@functions/api/utils/rate-limit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@functions/api/utils/rate-limit")>()),
+  checkRateLimit: () => ({ allowed: true, remaining: 1, resetAt: 0 }),
+}));
 vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: sessionMocks.getSessionUserId }));
 
 import { handleBilling } from "@functions/api/handlers/billing";

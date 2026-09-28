@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
+import { HISTORY_DISPLAY_LIMIT } from '@/lib/history';
 
 // The run page shows the latest few history events. Without a limit the API reads 50 audit
 // rows (and their users) for every run that has had 50 saves.
@@ -28,12 +29,12 @@ describe('api.getChecklistHistory', () => {
     expect(requestedUrl(fetchSpy)).toMatch(/\/checklists\/run-1\/history\?limit=8$/);
   });
 
-  it('keeps the API default when no limit is given', async () => {
+  it('asks for the events the Changelog shows when no limit is given', async () => {
     const fetchSpy = stubFetch();
 
     await api.getChecklistHistory('run 1');
 
-    expect(requestedUrl(fetchSpy)).toMatch(/\/checklists\/run%201\/history$/);
+    expect(requestedUrl(fetchSpy).endsWith(`/checklists/run%201/history?limit=${HISTORY_DISPLAY_LIMIT}`)).toBe(true);
   });
 
   it.each([0, -3, 2.5, Number.NaN, Number.POSITIVE_INFINITY])('ignores an invalid limit (%s)', async (limit) => {
@@ -41,6 +42,6 @@ describe('api.getChecklistHistory', () => {
 
     await api.getChecklistHistory('run-1', { limit });
 
-    expect(requestedUrl(fetchSpy)).toMatch(/\/checklists\/run-1\/history$/);
+    expect(requestedUrl(fetchSpy).endsWith(`/checklists/run-1/history?limit=${HISTORY_DISPLAY_LIMIT}`)).toBe(true);
   });
 });

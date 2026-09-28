@@ -7,11 +7,14 @@
 const SHARED_FROM_SRC = [
   "^src/lib/schemas/",
   "^src/lib/utils/clipyUrl\\.ts$",
+  "^src/lib/utils/slug\\.ts$",
+  "^src/lib/utils/loopbackHostname\\.ts$",
   "^src/data/publicCategories\\.ts$",
   "^src/lib/categorySlug\\.ts$",
   "^src/lib/brand\\.ts$",
   "^src/lib/publicPageMeta\\.ts$",
   "^src/lib/progress\\.ts$",
+  "^src/lib/seo/siteOrigin\\.ts$",
 ];
 
 // Pages Functions entry points (file-based routes).

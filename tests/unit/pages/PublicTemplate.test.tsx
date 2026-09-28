@@ -368,6 +368,26 @@ describe('PublicTemplate rendered route', () => {
     expect(helmet.title.toString()).toContain('Reviewed Clipy Checklist');
     expect(helmet.meta.toString()).toContain('content="Persisted Clipy summary."');
   });
+
+  it('points the canonical at the production template path from any host', () => {
+    const { helmet } = renderPublishedRoute(publishedClipyTemplate, {}, {
+      path: '/profile/Alice/reviewed-clipy-checklist',
+      origin: 'https://staging.serplists.com',
+      search: '?ref=x',
+    });
+
+    expect(helmet.link.toString()).toContain(
+      'href="https://serplists.com/profile/alice/reviewed-clipy-checklist"',
+    );
+    expect(helmet.meta.toString()).toContain('name="robots" content="noindex, nofollow"');
+    expect(helmet.meta.toString()).not.toContain('staging.serplists.com');
+  });
+
+  it('keeps the production template page indexable', () => {
+    const { helmet } = renderPublishedRoute(publishedClipyTemplate);
+
+    expect(helmet.meta.toString()).toContain('name="robots" content="index, follow"');
+  });
 });
 
 type CapturedViewProps = {

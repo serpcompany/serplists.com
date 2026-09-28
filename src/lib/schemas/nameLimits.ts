@@ -4,7 +4,10 @@
 // numbers, so a long name gets a clear message instead of the API's raw schema error.
 // maxLength and String.length both count UTF-16 code units, as Zod does.
 
-export const RUN_TITLE_MAX = 160;
+import { RUN_TITLE_MAX } from "./templateLimits";
+
+// The run title limit lives with the other write limits in ./templateLimits.ts.
+export { RUN_TITLE_MAX };
 export const ORGANIZATION_NAME_MAX = 120;
 
 // Why a run title cannot be saved, or null when it can.

@@ -1,14 +1,30 @@
 import { Env } from '../types';
-import { and, desc, eq, getTableColumns, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { createDb, schema } from '../db';
-import { checklistPayloadSchema, normalizeSectionsPayload, parseJsonArray } from '../utils/payloads';
+import { checklistPayloadSchema, normalizeSectionsPayload, parseJsonArray, parseSectionsPayload } from '../utils/payloads';
+import { sanitizeStoredSections } from '../../../src/lib/schemas/storedSections';
 import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
-import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
-import { buildAuditEventValues, type AuditSubject } from '../utils/audit';
-import { canManageTeam, canRunTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
+import { buildAuditEventValues } from '../utils/audit';
+import { parseHistoryLimit, selectAuditEventHistory, serializeHistoryEvent } from '../utils/history-queries';
+import { canRunTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
+import { canDeleteRun, canRestoreRun, canUpdateRun, canViewRun, canViewRunHistory } from '../utils/run-access';
 import { z } from 'zod';
-import { calculateRunProgress, reconcileRunSections } from '../utils/template-reconciliation';
+import { calculateRunProgress, reconcileRunSections, resetRunCompletionState, summarizeRetiredEntries } from '../utils/template-reconciliation';
+import { auditedRunUpdate, batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
+import { canUseTemplateAsRunSource } from '../utils/template-access';
+import {
+  activeRunCapacityAvailableSql,
+  activeRunLimitResponse,
+  checkActiveRunCapacity,
+  countActiveRuns,
+  findActiveRunLimitHit,
+  isReopening,
+  runInsertStatements,
+} from '../utils/active-run-limit';
+import { findHiddenShareLinkActors, HIDDEN_ACTOR } from '../utils/share-link-actors';
+import { completionStamps } from '../utils/run-completion';
+import { handleSharedChecklist } from './checklists-shared';
 
 function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: URL): string | null {
   return parsed.teamId ?? parsed.team_id ?? url.searchParams.get('teamId');
@@ -17,128 +33,6 @@ function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: 
 function isMissingHistoryReadTableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /no such table: audit_events/i.test(message);
-}
-
-function parseOptionalJson(value: unknown): unknown {
-  if (typeof value !== 'string' || value.length === 0) return null;
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
-const checklistRunSelect = {
-  ...getTableColumns(schema.checklist_runs),
-  current_template_version: sql<number | null>`(
-    SELECT content_version FROM templates WHERE templates.id = ${schema.checklist_runs.template_id}
-  )`,
-};
-
-function serializeChecklistRun(run: Record<string, unknown>) {
-  const templateVersion = typeof run.template_version === 'number' ? run.template_version : 1;
-  const currentTemplateVersion = typeof run.current_template_version === 'number'
-    ? run.current_template_version
-    : templateVersion;
-
-  return {
-    ...run,
-    current_template_version: currentTemplateVersion,
-    is_stale: currentTemplateVersion > templateVersion,
-  };
-}
-
-function batchUpdateMissed(result: unknown): boolean {
-  if (!isRecord(result)) return false;
-  const meta = result.meta;
-  return isRecord(meta) && typeof meta.changes === 'number' && meta.changes === 0;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function resetCompletionState(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(resetCompletionState);
-  }
-
-  if (!isRecord(value)) {
-    return value;
-  }
-
-  const next: Record<string, unknown> = { ...value };
-  if (Object.prototype.hasOwnProperty.call(next, 'isCompleted')) {
-    next.isCompleted = false;
-  }
-  if (Array.isArray(next.items)) {
-    next.items = next.items.map(resetCompletionState);
-  }
-  if (Array.isArray(next.subItems)) {
-    next.subItems = next.subItems.map(resetCompletionState);
-  }
-
-  return next;
-}
-
-function getRunSubject(run: Record<string, unknown>, fallbackUserId: string): AuditSubject {
-  if (typeof run.team_id === 'string' && run.team_id) {
-    return { type: 'team', id: run.team_id };
-  }
-
-  return {
-    type: 'user',
-    id: typeof run.user_id === 'string' && run.user_id ? run.user_id : fallbackUserId,
-  };
-}
-
-async function canViewRun(env: Env, run: Record<string, unknown>, userId: string): Promise<boolean> {
-  if (typeof run.deleted_at === 'string' && run.deleted_at) return false;
-  if (typeof run.team_id === 'string' && run.team_id) {
-    const membership = await getActiveTeamMembership(env, run.team_id, userId);
-    return membership ? canViewTeam(normalizeTeamRole(membership.role)) : false;
-  }
-
-  return run.user_id === userId;
-}
-
-async function canViewRunHistory(env: Env, run: Record<string, unknown>, userId: string): Promise<boolean> {
-  if (typeof run.team_id === 'string' && run.team_id) {
-    const membership = await getActiveTeamMembership(env, run.team_id, userId);
-    return membership ? canViewTeam(normalizeTeamRole(membership.role)) : false;
-  }
-
-  return run.user_id === userId;
-}
-
-async function canUpdateRun(env: Env, run: Record<string, unknown>, userId: string): Promise<boolean> {
-  if (typeof run.deleted_at === 'string' && run.deleted_at) return false;
-  if (typeof run.team_id === 'string' && run.team_id) {
-    const membership = await getActiveTeamMembership(env, run.team_id, userId);
-    return membership ? canRunTeamTemplates(normalizeTeamRole(membership.role)) : false;
-  }
-
-  return run.user_id === userId;
-}
-
-async function canDeleteRun(env: Env, run: Record<string, unknown>, userId: string): Promise<boolean> {
-  if (typeof run.deleted_at === 'string' && run.deleted_at) return false;
-  if (typeof run.team_id === 'string' && run.team_id) {
-    const membership = await getActiveTeamMembership(env, run.team_id, userId);
-    return membership ? canManageTeam(normalizeTeamRole(membership.role)) : false;
-  }
-
-  return run.user_id === userId;
-}
-
-async function canRestoreRun(env: Env, run: Record<string, unknown>, userId: string): Promise<boolean> {
-  if (typeof run.team_id === 'string' && run.team_id) {
-    const membership = await getActiveTeamMembership(env, run.team_id, userId);
-    return membership ? canManageTeam(normalizeTeamRole(membership.role)) : false;
-  }
-
-  return run.user_id === userId;
 }
 
 async function assertTeamRunAccess(env: Env, teamId: string, userId: string): Promise<Response | null> {
@@ -188,6 +82,7 @@ async function resolveTemplateRunSource(
     : null;
   const sourceIsPublic = Boolean(sourceTemplate.is_public);
   const isPrivateTeamTemplate = sourceTemplate.owner_type === 'team' && sourceTeamId && !sourceIsPublic;
+  const effectiveTeamId = isPrivateTeamTemplate ? sourceTeamId : requestedTeamId;
 
   // A private Organization template's content never goes into another context's Run. Its own
   // members learn where it belongs; to anyone else it does not exist.
@@ -201,7 +96,7 @@ async function resolveTemplateRunSource(
         : jsonError('Template not found', 404),
     };
   }
-  if (!isPrivateTeamTemplate && !sourceIsPublic && sourceTemplate.user_id !== userId) {
+  if (!canUseTemplateAsRunSource(sourceTemplate, { userId, runTeamId: effectiveTeamId })) {
     return { error: jsonError('Template not found', 404) };
   }
 
@@ -212,8 +107,8 @@ async function resolveTemplateRunSource(
 
   return {
     source: {
-      effectiveTeamId: isPrivateTeamTemplate ? sourceTeamId : requestedTeamId,
-      sections: resetCompletionState(normalizedSections.sections) as unknown[],
+      effectiveTeamId,
+      sections: resetRunCompletionState(sanitizeStoredSections(normalizedSections.sections)),
       title: sourceTemplate.title || '',
       version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
     },
@@ -225,7 +120,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
   const pathParts = url.pathname.split('/').filter(Boolean); // ["api", "checklists", ...]
   const checklistsSubpath = pathParts.slice(2); // after /api/checklists
   const db = createDb(env);
-  const { audit_events, checklist_runs, templates, users } = schema;
+  const { checklist_runs, templates } = schema;
   const shareToken = checklistsSubpath[1];
   const userId = await getSessionUserId(request, env);
   const isSharedRoute = checklistsSubpath[0] === 'shared';
@@ -235,116 +130,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       return jsonError('Share token required', 400);
     }
 
-    if (request.method === 'GET') {
-      const [checklist] = await db
-        .select(checklistRunSelect)
-        .from(checklist_runs)
-        .where(and(eq(checklist_runs.share_token, shareToken), eq(checklist_runs.is_public, true), isNull(checklist_runs.deleted_at)))
-        .limit(1);
-
-      if (!checklist) {
-        return jsonError('Shared run not found', 404);
-      }
-
-      return json(serializeChecklistRun(checklist as unknown as Record<string, unknown>));
-    }
-
-    if (request.method === 'PUT') {
-      let body: unknown;
-      try {
-        body = await request.json();
-      } catch {
-        return jsonError('Invalid JSON payload', 400);
-      }
-
-      const parsed = checklistPayloadSchema.safeParse(body);
-      if (!parsed.success) {
-        return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
-      }
-
-      const { sections, items, status, progress, completed_at, expected_revision } = parsed.data;
-      const rawBody = body as Record<string, unknown>;
-
-      const updates: Record<string, unknown> = {};
-      if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
-        const normalizedSections = normalizeSectionsPayload(sections ?? items);
-        if (normalizedSections.error) {
-          return jsonError(normalizedSections.error, 400);
-        }
-        updates.items = JSON.stringify(normalizedSections.sections);
-      }
-      if (status !== undefined) {
-        updates.status = status;
-      }
-      if (progress !== undefined) {
-        updates.progress = progress;
-      }
-      if (completed_at !== undefined) {
-        updates.completed_at = completed_at;
-      }
-
-      if (Object.keys(updates).length === 0) {
-        return jsonError('No fields to update', 400);
-      }
-
-      if (status === 'completed') {
-        updates.share_used_at = new Date().toISOString();
-      }
-
-      const [existingSharedRun] = await db
-        .select()
-        .from(checklist_runs)
-        .where(and(eq(checklist_runs.share_token, shareToken), eq(checklist_runs.is_public, true), isNull(checklist_runs.deleted_at)))
-        .limit(1);
-
-      if (!existingSharedRun || !existingSharedRun.id) {
-        return jsonError('Shared run not found', 404);
-      }
-
-      const currentRevision = typeof existingSharedRun.revision === 'number' ? existingSharedRun.revision : 1;
-      if (typeof expected_revision === 'number' && expected_revision !== currentRevision) {
-        return jsonError('Checklist run changed since it was loaded. Refresh before saving again.', 409, {
-          code: 'edit_conflict',
-          details: { expectedRevision: expected_revision, currentRevision },
-        });
-      }
-
-      const now = new Date().toISOString();
-      updates.revision = currentRevision + 1;
-      updates.updated_at = now;
-      const auditEvent = await buildAuditEventValues({
-        actorUserId: userId,
-        subject: getRunSubject(
-          existingSharedRun as unknown as Record<string, unknown>,
-          typeof existingSharedRun.user_id === 'string' ? existingSharedRun.user_id : 'unknown',
-        ),
-        resource: { type: 'checklist_run', id: existingSharedRun.id },
-        action: 'checklist_run.shared_updated',
-        before: existingSharedRun as unknown as Record<string, unknown>,
-        after: { ...(existingSharedRun as unknown as Record<string, unknown>), ...updates },
-        diff: updates,
-        metadata: { source: 'public_share' },
-        request,
-        createdAt: now,
-      });
-      const batchResults = await db.batch([
-        db
-          .update(checklist_runs)
-          .set(updates)
-          .where(and(eq(checklist_runs.id, existingSharedRun.id), eq(checklist_runs.revision, currentRevision), eq(checklist_runs.share_token, shareToken), eq(checklist_runs.is_public, true), isNull(checklist_runs.deleted_at))),
-        db.insert(audit_events).values(auditEvent),
-      ]);
-
-      if (batchUpdateMissed(batchResults[0])) {
-        return jsonError('Checklist run changed while it was being saved. Refresh before saving again.', 409, {
-          code: 'edit_conflict',
-        });
-      }
-
-      return json({ success: true, revision: currentRevision + 1 });
-    }
-
-    return new Response('Method Not Allowed', { status: 405 });
+    return handleSharedChecklist(request, env, shareToken, userId);
   }
 
   if (!userId) {
@@ -355,10 +141,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     // GET /api/checklists/:id/history
     if (checklistsSubpath[0] && checklistsSubpath[1] === 'history') {
       const checklistId = checklistsSubpath[0];
-      const requestedLimit = Number(url.searchParams.get('limit') ?? '50');
-      const historyLimit = Number.isFinite(requestedLimit)
-        ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
-        : 50;
+      const historyLimit = parseHistoryLimit(url.searchParams.get('limit'));
       const [checklist] = await db
         .select()
         .from(checklist_runs)
@@ -370,46 +153,19 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
 
       try {
-        const eventRows = await db
-          .select({
-            id: audit_events.id,
-            actor_user_id: audit_events.actor_user_id,
-            subject_type: audit_events.subject_type,
-            subject_id: audit_events.subject_id,
-            resource_type: audit_events.resource_type,
-            resource_id: audit_events.resource_id,
-            action: audit_events.action,
-            diff_json: audit_events.diff_json,
-            metadata_json: audit_events.metadata_json,
-            request_id: audit_events.request_id,
-            created_at: audit_events.created_at,
-            actor_email: users.email,
-            actor_name: users.name,
-            actor_username: users.username,
-          })
-          .from(audit_events)
-          .leftJoin(users, eq(users.id, audit_events.actor_user_id))
-          .where(and(eq(audit_events.resource_type, 'checklist_run'), eq(audit_events.resource_id, checklistId)))
-          .orderBy(desc(audit_events.created_at))
-          .limit(historyLimit);
+        const eventRows = await selectAuditEventHistory(db, 'checklist_run', checklistId, historyLimit);
+        const hideActor = await findHiddenShareLinkActors(env, {
+          userId: checklist.user_id,
+          teamId: checklist.team_id ?? null,
+        }, eventRows);
 
         return json({
           checklistId,
           subject: getRunSubject(checklist as unknown as Record<string, unknown>, userId),
-          events: eventRows.map((row) => ({
-            id: row.id,
-            action: row.action,
-            createdAt: row.created_at,
-            requestId: row.request_id,
-            diff: parseOptionalJson(row.diff_json),
-            metadata: parseOptionalJson(row.metadata_json),
-            actor: {
-              userId: row.actor_user_id,
-              email: row.actor_email,
-              name: row.actor_name,
-              username: row.actor_username,
-            },
-          })),
+          events: eventRows.map((row) => {
+            const event = serializeHistoryEvent(row);
+            return hideActor(row) ? { ...event, actor: HIDDEN_ACTOR } : event;
+          }),
         });
       } catch (error) {
         if (isMissingHistoryReadTableError(error)) {
@@ -434,7 +190,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         }
 
         const checklists = await db
-          .select(checklistRunSelect)
+          .select(checklistRunSelectFor(userId))
           .from(checklist_runs)
           .where(and(eq(checklist_runs.team_id, teamId), isNotNull(checklist_runs.deleted_at)))
           .orderBy(desc(checklist_runs.updated_at));
@@ -443,7 +199,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
 
       const checklists = await db
-        .select(checklistRunSelect)
+        .select(checklistRunSelectFor(userId))
         .from(checklist_runs)
         .where(and(eq(checklist_runs.user_id, userId), isNull(checklist_runs.team_id), isNotNull(checklist_runs.deleted_at)))
         .orderBy(desc(checklist_runs.updated_at));
@@ -455,7 +211,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     if (checklistsSubpath[0]) {
       const checklistId = checklistsSubpath[0];
       const [checklist] = await db
-        .select(checklistRunSelect)
+        .select(checklistRunSelectFor(userId))
         .from(checklist_runs)
         .where(and(eq(checklist_runs.id, checklistId), isNull(checklist_runs.deleted_at)))
         .limit(1);
@@ -475,7 +231,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
 
       const checklists = await db
-        .select(checklistRunSelect)
+        .select(checklistRunSelectFor(userId))
         .from(checklist_runs)
         .where(and(eq(checklist_runs.team_id, teamId), isNull(checklist_runs.deleted_at)))
         .orderBy(desc(checklist_runs.created_at));
@@ -484,7 +240,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     }
 
     const checklists = await db
-      .select(checklistRunSelect)
+      .select(checklistRunSelectFor(userId))
       .from(checklist_runs)
       .where(and(eq(checklist_runs.user_id, userId), isNull(checklist_runs.team_id), isNull(checklist_runs.deleted_at)))
       .orderBy(desc(checklist_runs.created_at));
@@ -518,30 +274,11 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
 
       const teamId = typeof runRecord.team_id === 'string' && runRecord.team_id ? runRecord.team_id : null;
-      if (runRecord.status === 'in_progress') {
-        const entitlements = teamId
-          ? await getEntitlementsForContext(env, { type: 'team', teamId, userId })
-          : await getEntitlementsForUser(env, userId);
-        if (entitlements.plan === 'free' && entitlements.limits.maxActiveRuns) {
-          const [row] = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(checklist_runs)
-            .where(
-              teamId
-                ? and(eq(checklist_runs.team_id, teamId), eq(checklist_runs.status, 'in_progress'), isNull(checklist_runs.deleted_at))
-                : and(eq(checklist_runs.user_id, userId), eq(checklist_runs.status, 'in_progress'), isNull(checklist_runs.team_id), isNull(checklist_runs.deleted_at)),
-            )
-            .limit(1);
-
-          const currentCount = row?.count ?? 0;
-          if (currentCount >= entitlements.limits.maxActiveRuns) {
-            return jsonError('Active run limit reached. Upgrade to Pro to restore more checklist runs.', 403, {
-              code: 'limit_reached',
-              details: { limit: entitlements.limits.maxActiveRuns, current: currentCount, resource: 'active_runs' },
-            });
-          }
-        }
-      }
+      const owner = { userId, teamId };
+      const capacity = runRecord.status === 'in_progress'
+        ? await checkActiveRunCapacity(env, owner, userId)
+        : { limit: null, hit: null };
+      if (capacity.hit) return activeRunLimitResponse(owner, capacity.hit, 'restore');
 
       const now = new Date().toISOString();
       const restoreUpdates = {
@@ -564,16 +301,22 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         request,
         createdAt: now,
       });
-      await db.batch([
-        db.update(checklist_runs)
-          .set(restoreUpdates)
-          .where(
-            teamId
-              ? and(eq(checklist_runs.id, checklistId), eq(checklist_runs.team_id, teamId), isNotNull(checklist_runs.deleted_at))
-              : and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId), isNotNull(checklist_runs.deleted_at)),
-          ),
-        db.insert(audit_events).values(auditEvent),
-      ]);
+      const archivedRun = and(
+        teamId ? eq(checklist_runs.team_id, teamId) : eq(checklist_runs.user_id, userId),
+        isNotNull(checklist_runs.deleted_at),
+      );
+      // With a limit, the restore re-checks it in the same statement.
+      const batchResults = await db.batch(auditedRunUpdate(db, checklistId, capacity.limit === null
+        ? archivedRun
+        : and(archivedRun, activeRunCapacityAvailableSql(owner, capacity.limit)), restoreUpdates, auditEvent));
+      if (batchUpdateMissed(batchResults[1])) {
+        if (capacity.limit !== null) {
+          const current = await countActiveRuns(env, owner);
+          if (current >= capacity.limit) return activeRunLimitResponse(owner, { limit: capacity.limit, current }, 'restore');
+        }
+        // A concurrent request restored it first.
+        return jsonError('Checklist is not archived', 400);
+      }
 
       return json({ success: true });
     }
@@ -606,7 +349,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         return jsonError('Forbidden', 403);
       }
       if (existingRun.is_public) {
-        return jsonError('Shared runs must be made private before revalidation.', 409, { code: 'shared_run_conflict' });
+        return jsonError('Stop sharing this run before revalidating it.', 409, { code: 'shared_run_conflict' });
       }
       if (!existingRun.template_id) {
         return jsonError('Checklist run is not linked to a template.', 400);
@@ -621,12 +364,28 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
 
       const [sourceTemplate] = await db
-        .select({ id: templates.id, items: templates.items, version: templates.content_version })
+        .select({
+          id: templates.id,
+          items: templates.items,
+          version: templates.content_version,
+          is_public: templates.is_public,
+          owner_type: templates.owner_type,
+          team_id: templates.team_id,
+          user_id: templates.user_id,
+        })
         .from(templates)
         .where(and(eq(templates.id, existingRun.template_id), isNull(templates.deleted_at)))
         .limit(1);
-      if (!sourceTemplate) {
+      // Same answer whether the template is gone or no longer usable here, so the
+      // response does not reveal that a private template exists.
+      if (!sourceTemplate || !canUseTemplateAsRunSource(sourceTemplate, { userId, runTeamId: existingRun.team_id ?? null })) {
         return jsonError('Source template not found', 404);
+      }
+      // Revalidation always leaves the run in_progress, which reopens a completed run.
+      if (isReopening(existingRun.status, 'in_progress')) {
+        const runOwner = { userId: existingRun.user_id, teamId: existingRun.team_id ?? null };
+        const limitHit = await findActiveRunLimitHit(env, runOwner, userId);
+        if (limitHit) return activeRunLimitResponse(runOwner, limitHit, 'reopen');
       }
 
       const previousSections = parseJsonArray(existingRun.items) ?? [];
@@ -653,19 +412,20 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         before: existingRun as unknown as Record<string, unknown>,
         after: { ...(existingRun as unknown as Record<string, unknown>), ...updates },
         diff: updates,
+        metadata: {
+          templateId: sourceTemplate.id,
+          templateVersion: updates.template_version,
+          retired: summarizeRetiredEntries(reconciled.newlyRetired),
+        },
         request,
         createdAt: now,
       });
-      const batchResults = await db.batch([
-        db.update(checklist_runs).set(updates).where(and(
-          eq(checklist_runs.id, checklistId),
-          eq(checklist_runs.revision, currentRevision),
-          isNull(checklist_runs.deleted_at),
-        )),
-        db.insert(audit_events).values(auditEvent),
-      ]);
+      const batchResults = await db.batch(auditedRunUpdate(db, checklistId, and(
+        eq(checklist_runs.revision, currentRevision),
+        isNull(checklist_runs.deleted_at),
+      ), updates, auditEvent));
 
-      if (batchUpdateMissed(batchResults[0])) {
+      if (batchUpdateMissed(batchResults[1])) {
         return jsonError('Checklist run changed while it was being revalidated. Refresh and try again.', 409, {
           code: 'edit_conflict',
         });
@@ -676,152 +436,6 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         progress: updates.progress,
         revision: updates.revision,
         template_version: updates.template_version,
-      });
-    }
-
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return jsonError('Invalid JSON payload', 400);
-    }
-
-    const parsed = checklistPayloadSchema.safeParse(body);
-    if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
-    }
-
-    const isTemplateShareRequest = checklistsSubpath.length === 2 && checklistsSubpath[1] === 'share' && checklistsSubpath[0] !== 'run';
-    if (isTemplateShareRequest) {
-      const templateId = checklistsSubpath[0];
-      if (!templateId || templateId === 'checklists') {
-        return jsonError('Template ID required', 400);
-      }
-
-      const shareBody = z.object({
-        runName: z.string().trim().max(160).optional(),
-        teamId: z.string().trim().min(1).optional(),
-        team_id: z.string().trim().min(1).optional(),
-      }).safeParse(body);
-      if (!shareBody.success) {
-        return jsonError(shareBody.error.issues[0]?.message || 'Invalid share payload', 400);
-      }
-
-      const requestedTeamId = getRequestedTeamId(shareBody.data, url);
-      const { error: sourceError, source: sourceTemplate } = await resolveTemplateRunSource(env, templateId, userId, requestedTeamId);
-      if (!sourceTemplate) return sourceError ?? jsonError('Template not found', 404);
-      const effectiveTeamId = sourceTemplate.effectiveTeamId;
-      if (effectiveTeamId) {
-        const accessError = await assertTeamRunAccess(env, effectiveTeamId, userId);
-        if (accessError) return accessError;
-      }
-
-      const now = new Date().toISOString();
-
-      const entitlements = effectiveTeamId
-        ? await getEntitlementsForContext(env, { type: 'team', teamId: effectiveTeamId, userId })
-        : await getEntitlementsForUser(env, userId);
-      if (entitlements.plan === 'free' && entitlements.limits.maxActiveRuns) {
-        const [row] = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(checklist_runs)
-          .where(
-            effectiveTeamId
-              ? and(
-                  eq(checklist_runs.team_id, effectiveTeamId),
-                  eq(checklist_runs.status, 'in_progress'),
-                  or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
-                  isNull(checklist_runs.deleted_at),
-                )
-              : and(
-                  eq(checklist_runs.user_id, userId),
-                  isNull(checklist_runs.team_id),
-                  eq(checklist_runs.status, 'in_progress'),
-                  or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
-                  isNull(checklist_runs.deleted_at),
-                )
-          )
-          .limit(1);
-
-        const currentCount = row?.count ?? 0;
-        if (currentCount >= entitlements.limits.maxActiveRuns) {
-          return jsonError('Active run limit reached. Upgrade to Pro to create more checklist runs.', 403, {
-            code: 'limit_reached',
-            details: { limit: entitlements.limits.maxActiveRuns, current: currentCount, resource: 'active_runs' },
-          });
-        }
-      }
-
-      const shareToken = crypto.randomUUID();
-      const checklistId = crypto.randomUUID();
-      const runName = shareBody.data.runName?.trim() || sourceTemplate.title;
-
-      const insertedRun = {
-        id: checklistId,
-        user_id: userId,
-        team_id: effectiveTeamId,
-        template_id: templateId,
-        title: runName,
-        items: JSON.stringify(sourceTemplate.sections),
-        status: 'in_progress',
-        started_at: now,
-        created_by_user_id: userId,
-        started_by_user_id: userId,
-        created_at: now,
-        is_public: true,
-        share_token: shareToken,
-        template_version: sourceTemplate.version,
-        revision: 1,
-        retired_items: '[]',
-      };
-      const subject: AuditSubject = effectiveTeamId
-        ? { type: 'team', id: effectiveTeamId }
-        : { type: 'user', id: userId };
-
-      const auditEvent = await buildAuditEventValues({
-        actorUserId: userId,
-        subject,
-        resource: { type: 'checklist_run', id: checklistId },
-        action: 'checklist_run.share_created',
-        after: insertedRun,
-        metadata: { source: 'template_share', templateId },
-        request,
-        createdAt: now,
-      });
-      await db.batch([
-        db
-          .update(checklist_runs)
-          .set({
-            status: 'completed',
-            completed_at: now,
-            is_public: false,
-            share_expires_at: now,
-            share_used_at: now,
-          })
-          .where(
-            effectiveTeamId
-              ? and(
-                  eq(checklist_runs.team_id, effectiveTeamId),
-                  eq(checklist_runs.template_id, templateId),
-                  eq(checklist_runs.is_public, true),
-                  isNull(checklist_runs.deleted_at),
-                )
-              : and(
-                  eq(checklist_runs.user_id, userId),
-                  isNull(checklist_runs.team_id),
-                  eq(checklist_runs.template_id, templateId),
-                  eq(checklist_runs.is_public, true),
-                  isNull(checklist_runs.deleted_at),
-                )
-          ),
-        db.insert(checklist_runs).values(insertedRun),
-        db.insert(audit_events).values(auditEvent),
-      ]);
-
-      return json({
-        id: checklistId,
-        shareToken,
-        sharePath: `/share/${shareToken}`,
       });
     }
 
@@ -865,32 +479,38 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         request,
         createdAt: now,
       });
-      await db.batch([
-        db
-          .update(checklist_runs)
-          .set({
-            is_public: false,
-            share_token: null,
-            share_expires_at: null,
-            share_used_at: null,
-          })
-          .where(and(eq(checklist_runs.id, runId), eq(checklist_runs.is_public, true), isNull(checklist_runs.deleted_at))),
-        db
-          .update(checklist_runs)
-          .set(shareUpdates)
-          .where(
-            run.team_id
-              ? and(eq(checklist_runs.id, runId), eq(checklist_runs.team_id, run.team_id), isNull(checklist_runs.deleted_at))
-              : and(eq(checklist_runs.id, runId), eq(checklist_runs.user_id, userId), isNull(checklist_runs.deleted_at)),
-          ),
-        db.insert(audit_events).values(auditEvent),
-      ]);
+      // The new token replaces the old one, so the previous link stops working.
+      const batchResults = await db.batch(auditedRunUpdate(db, runId, and(
+        run.team_id ? eq(checklist_runs.team_id, run.team_id) : eq(checklist_runs.user_id, userId),
+        isNull(checklist_runs.deleted_at),
+      ), shareUpdates, auditEvent));
+      if (batchUpdateMissed(batchResults[1])) {
+        return jsonError('Checklist run not found', 404);
+      }
 
       return json({
         id: runId,
         shareToken,
         sharePath: `/share/${shareToken}`,
       });
+    }
+
+    // Only POST /api/checklists creates a run. Anything else (including the removed
+    // /:templateId/share route) must not fall through to it.
+    if (checklistsSubpath.length > 0) {
+      return jsonError('Not found', 404);
+    }
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return jsonError('Invalid JSON payload', 400);
+    }
+
+    const parsed = checklistPayloadSchema.safeParse(body);
+    if (!parsed.success) {
+      return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
     }
 
     const { template_id, title, items, sections, status, teamId: payloadTeamId, team_id: payloadTeamIdSnake } = parsed.data;
@@ -908,35 +528,16 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       if (accessError) return accessError;
     }
 
-    const entitlements = effectiveTeamId
-      ? await getEntitlementsForContext(env, { type: 'team', teamId: effectiveTeamId, userId })
-      : await getEntitlementsForUser(env, userId);
-    if (entitlements.plan === 'free' && entitlements.limits.maxActiveRuns) {
-      const [row] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(checklist_runs)
-        .where(
-          effectiveTeamId
-            ? and(eq(checklist_runs.team_id, effectiveTeamId), eq(checklist_runs.status, 'in_progress'), isNull(checklist_runs.deleted_at))
-            : and(eq(checklist_runs.user_id, userId), eq(checklist_runs.status, 'in_progress'), isNull(checklist_runs.team_id), isNull(checklist_runs.deleted_at))
-        )
-        .limit(1);
-
-      const currentCount = row?.count ?? 0;
-      if (currentCount >= entitlements.limits.maxActiveRuns) {
-        return jsonError('Active run limit reached. Upgrade to Pro to create more checklist runs.', 403, {
-          code: 'limit_reached',
-          details: { limit: entitlements.limits.maxActiveRuns, current: currentCount, resource: 'active_runs' },
-        });
-      }
-    }
+    const owner = { userId, teamId: effectiveTeamId };
+    const capacity = await checkActiveRunCapacity(env, owner, userId);
+    if (capacity.hit) return activeRunLimitResponse(owner, capacity.hit, 'create');
 
     const checklistId = crypto.randomUUID();
     const now = new Date().toISOString();
 
     const normalizedSections = templateRunSource.source
       ? { sections: templateRunSource.source.sections }
-      : normalizeSectionsPayload(sections ?? items);
+      : parseSectionsPayload(sections ?? items);
     if (normalizedSections.error) {
       return jsonError(normalizedSections.error, 400);
     }
@@ -956,6 +557,8 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       template_version: templateRunSource.source?.version ?? 1,
       revision: 1,
       retired_items: '[]',
+      // A run created as completed is stamped like any other completion.
+      ...completionStamps({ currentStatus: null, currentCompletedAt: null, nextStatus: status, userId, now }),
     };
 
     const auditEvent = await buildAuditEventValues({
@@ -967,10 +570,10 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       request,
       createdAt: now,
     });
-    await db.batch([
-      db.insert(checklist_runs).values(insertedRun),
-      db.insert(audit_events).values(auditEvent),
-    ]);
+    const batchResults = await db.batch(runInsertStatements(db, insertedRun, auditEvent, owner, capacity.limit));
+    if (capacity.limit !== null && batchUpdateMissed(batchResults[0])) {
+      return activeRunLimitResponse(owner, { limit: capacity.limit, current: await countActiveRuns(env, owner) }, 'create');
+    }
 
     return json({ id: checklistId });
   }
@@ -1004,7 +607,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       updates.title = title;
     }
     if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
-      const normalizedSections = normalizeSectionsPayload(sections ?? items);
+      const normalizedSections = parseSectionsPayload(sections ?? items);
       if (normalizedSections.error) {
         return jsonError(normalizedSections.error, 400);
       }
@@ -1016,9 +619,8 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     if (progress !== undefined) {
       updates.progress = progress;
     }
-    if (completed_at !== undefined) {
-      updates.completed_at = completed_at;
-    }
+    // completed_at is not a field of its own: completionStamps below uses it only when the
+    // run becomes completed, and ignores the value the run page echoes on later saves.
 
     if (Object.keys(updates).length === 0) {
       return jsonError('No fields to update', 400);
@@ -1044,16 +646,26 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         details: { expectedRevision: expected_revision, currentRevision },
       });
     }
+    // Only a real reopen counts: the run page sends the current status with every save.
+    if (isReopening(existingRun.status, status)) {
+      const runOwner = { userId: existingRun.user_id, teamId: existingRun.team_id ?? null };
+      const limitHit = await findActiveRunLimitHit(env, runOwner, userId);
+      if (limitHit) return activeRunLimitResponse(runOwner, limitHit, 'reopen');
+    }
 
     const now = new Date().toISOString();
     updates.updated_at = now;
     updates.revision = currentRevision + 1;
-    if (status === 'completed') {
-      updates.completed_by_user_id = userId;
-      if (!Object.prototype.hasOwnProperty.call(rawBody, 'completed_at')) {
-        updates.completed_at = now;
-      }
-    }
+    // Only a real completion names the completer; the revision guard below keeps
+    // existingRun.status current for this decision.
+    Object.assign(updates, completionStamps({
+      currentStatus: existingRun.status,
+      currentCompletedAt: existingRun.completed_at,
+      nextStatus: status,
+      requestedCompletedAt: completed_at,
+      userId,
+      now,
+    }));
 
     const auditEvent = await buildAuditEventValues({
       actorUserId: userId,
@@ -1066,24 +678,65 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       request,
       createdAt: now,
     });
-    const batchResults = await db.batch([
-      db.update(checklist_runs)
-        .set(updates)
-        .where(
-          existingRun.team_id
-            ? and(eq(checklist_runs.id, checklistId), eq(checklist_runs.team_id, existingRun.team_id), eq(checklist_runs.revision, currentRevision), isNull(checklist_runs.deleted_at))
-            : and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId), eq(checklist_runs.revision, currentRevision), isNull(checklist_runs.deleted_at))
-        ),
-      db.insert(audit_events).values(auditEvent),
-    ]);
+    const batchResults = await db.batch(auditedRunUpdate(db, checklistId, and(
+      existingRun.team_id ? eq(checklist_runs.team_id, existingRun.team_id) : eq(checklist_runs.user_id, userId),
+      eq(checklist_runs.revision, currentRevision),
+      isNull(checklist_runs.deleted_at),
+    ), updates, auditEvent));
 
-    if (batchUpdateMissed(batchResults[0])) {
+    if (batchUpdateMissed(batchResults[1])) {
       return jsonError('Checklist run changed while it was being saved. Refresh before saving again.', 409, {
         code: 'edit_conflict',
       });
     }
 
     return json({ success: true, revision: currentRevision + 1 });
+  }
+
+  // DELETE /api/checklists/run/:id/share: stop sharing. The old link stops working at once.
+  if (request.method === 'DELETE' && checklistsSubpath.length === 3 && checklistsSubpath[0] === 'run' && checklistsSubpath[2] === 'share') {
+    const runId = checklistsSubpath[1];
+    const [run] = await db
+      .select()
+      .from(checklist_runs)
+      .where(and(eq(checklist_runs.id, runId), isNull(checklist_runs.deleted_at)))
+      .limit(1);
+    const runRecord = run as unknown as Record<string, unknown>;
+
+    if (!run || !(await canViewRun(env, runRecord, userId))) {
+      return jsonError('Checklist run not found', 404);
+    }
+    if (!(await canUpdateRun(env, runRecord, userId))) {
+      return jsonError('Forbidden', 403);
+    }
+    // Already private (or a concurrent request got there first): nothing to write.
+    if (!run.is_public) {
+      return json({ id: runId, isPublic: false });
+    }
+
+    const now = new Date().toISOString();
+    // No revision bump: share state is not run content, so open run pages keep saving.
+    const revokeUpdates = { is_public: false, share_token: null, share_expires_at: null, share_used_at: null, updated_at: now };
+    const sharedRun = and(
+      run.team_id ? eq(checklist_runs.team_id, run.team_id) : eq(checklist_runs.user_id, userId),
+      eq(checklist_runs.is_public, true),
+      isNull(checklist_runs.deleted_at),
+    );
+    const auditEvent = await buildAuditEventValues({
+      actorUserId: userId,
+      subject: getRunSubject(runRecord, userId),
+      resource: { type: 'checklist_run', id: runId },
+      action: 'checklist_run.share_revoked',
+      before: runRecord,
+      after: { ...runRecord, ...revokeUpdates },
+      diff: revokeUpdates,
+      request,
+      createdAt: now,
+    });
+    // Written only while the run is still shared, so a repeat or concurrent revoke records nothing.
+    await db.batch(auditedRunUpdate(db, runId, sharedRun, revokeUpdates, auditEvent));
+
+    return json({ id: runId, isPublic: false });
   }
 
   if (request.method === 'DELETE') {
@@ -1133,16 +786,14 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       request,
       createdAt: now,
     });
-    await db.batch([
-      db.update(checklist_runs)
-        .set(archiveUpdates)
-        .where(
-          existingChecklist.team_id
-            ? and(eq(checklist_runs.id, checklistId), eq(checklist_runs.team_id, existingChecklist.team_id), isNull(checklist_runs.deleted_at))
-            : and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId), isNull(checklist_runs.deleted_at))
-        ),
-      db.insert(audit_events).values(auditEvent),
-    ]);
+    const batchResults = await db.batch(auditedRunUpdate(db, checklistId, and(
+      existingChecklist.team_id ? eq(checklist_runs.team_id, existingChecklist.team_id) : eq(checklist_runs.user_id, userId),
+      isNull(checklist_runs.deleted_at),
+    ), archiveUpdates, auditEvent));
+    if (batchUpdateMissed(batchResults[1])) {
+      // A concurrent request archived it first.
+      return jsonError('Checklist not found or unauthorized', 404);
+    }
 
     return json({ success: true });
   }

@@ -3,21 +3,21 @@ import { schema, type createDb } from "../db";
 
 type Db = ReturnType<typeof createDb>;
 
+// D1 runs a batch as one transaction, but a handler validates with a SELECT in an
+// earlier round trip. Guarded statements re-check their preconditions in SQL so a
+// change that commits in between turns the write into a no-op instead of a partial one.
+
 /**
- * Inserts an audit event only when `condition` holds when the statement runs.
- * Put it in the same db.batch as a guarded write, with a condition that is
- * true only if that write landed, so a write that lost a race leaves no audit row.
- * A delete leaves nothing to check afterwards: put the insert before it, with
- * the delete's own condition. A batch runs as one transaction, so both see the same rows.
+ * Inserts an audit event only when `guard` holds as the statement runs. Put it in the
+ * same batch after the write it records, and guard on that write's effect (for example
+ * `updated_at = now`), so a skipped write never logs an event.
  */
-export function insertAuditEventWhen(
+export function insertAuditEventWhere(
   db: Db,
   auditEvent: typeof schema.audit_events.$inferInsert,
-  condition: SQL,
+  guard: SQL,
 ) {
-  const { audit_events } = schema;
-
-  return db.insert(audit_events).select(sql`
+  return db.insert(schema.audit_events).select(sql`
     select
       ${auditEvent.id},
       ${auditEvent.actor_user_id},
@@ -34,14 +34,11 @@ export function insertAuditEventWhen(
       ${auditEvent.ip_hash},
       ${auditEvent.user_agent},
       ${auditEvent.created_at}
-    where ${condition}
+    where ${guard}
   `);
 }
 
-/**
- * True when a batched update or delete changed no rows: its guard no longer
- * matched because another request got there between the read and the write.
- */
+/** True when a D1 batch result reports that its write changed no rows. */
 export function batchWriteMissed(result: unknown): boolean {
   if (typeof result !== "object" || result === null) return false;
   const meta = (result as { meta?: unknown }).meta;

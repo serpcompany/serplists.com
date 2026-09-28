@@ -5,7 +5,6 @@ import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
 import { api, type ChecklistRunHistoryResponse } from '@/lib/api';
 import { markRunShared, refreshRunHistory } from '@/lib/queryCache';
 import { getRunTitleError } from '@/lib/schemas/nameLimits';
-import { buildSharePath } from '@/lib/routes';
 import type { ChecklistRun } from '@/types/checklist';
 
 import {
@@ -39,8 +38,10 @@ import {
   type UpdateRun,
 } from './runPersistence';
 import { isRunTitleChange } from './runTitle';
+import { createRunExecutionShare, stopRunExecutionSharing } from './runSharing';
 
 export type { RunExecutionActionResult, RunExecutionLoadResult, RunExecutionMode } from './runExecutionResult';
+export { createRunExecutionShare, stopRunExecutionSharing } from './runSharing';
 
 type RunExecutionLoadOptions = {
   getCachedRun?: (id: string) => ChecklistRun | undefined;
@@ -354,38 +355,6 @@ export const saveRunExecutionTitle = async (
   }
 };
 
-export const createRunExecutionShare = async (
-  params: RunExecutionMutationParams,
-  dependencies: RunExecutionDependencies,
-): Promise<RunExecutionActionResult> => {
-  if (!params.run) {
-    return { kind: 'not_found' };
-  }
-
-  if (params.shareToken) {
-    return { kind: 'shared_disabled' };
-  }
-
-  const apiClient = getApiClient(dependencies);
-
-  try {
-    const result = await apiClient.createChecklistRunShare(params.run.id);
-    dependencies.onShared?.(params.run.id);
-    const origin =
-      dependencies.origin ??
-      (typeof window !== 'undefined' ? window.location.origin : '');
-
-    return {
-      kind: 'ok',
-      // Public now; the server does not change the revision.
-      run: { ...params.run, isPublic: true },
-      shareUrl: `${origin}${buildSharePath(result.shareToken)}`,
-    };
-  } catch (error) {
-    return toErrorResult(error, 'Failed to create share link for this run.');
-  }
-};
-
 export const completeRunExecution = async (
   params: CompleteRunExecutionParams,
   dependencies: RunExecutionDependencies,
@@ -448,6 +417,10 @@ export const bindRunSaves = ({ dependencies, noteDrafts, shareToken }: {
     bind: (): RunSave => ({ save: (run) => createRunExecutionShare({ run, shareToken }, dependencies) }),
     key: 'share',
   } satisfies QueuedRunSave,
+  stopSharing: {
+    bind: (): RunSave => ({ save: (run) => stopRunExecutionSharing({ run, shareToken }, dependencies) }),
+    key: 'stop-sharing',
+  } satisfies QueuedRunSave,
   title: (title: string): QueuedRunSave => ({
     bind: (current) => ({
       canRetryOn: (fresh) => fresh.title === current.title,
@@ -483,6 +456,7 @@ export const useRunExecutionModel = (
       apiClient: options.dependencies?.apiClient,
       onShared: (runId) => void markRunShared(queryClient, runId),
       origin: options.dependencies?.origin,
+      refreshRuns: () => queryClient.invalidateQueries({ queryKey: ['runs'] }),
       updateRun: options.updateRun,
     }),
     [options.dependencies?.apiClient, options.dependencies?.origin, options.updateRun, queryClient],
@@ -625,6 +599,8 @@ export const useRunExecutionModel = (
     selectedData,
     selectedItemId,
     setSelectedItemId,
+    // Stop sharing: the share link stops working and the run becomes private.
+    stopSharing: () => enqueueSave(saves.stopSharing),
     completeRun: () => enqueueSave(saves.complete),
     // isCompleted is the value the user clicked on the run they saw.
     toggleItem: async (itemId: string, isCompleted: boolean) => {

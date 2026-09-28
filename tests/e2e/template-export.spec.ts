@@ -50,7 +50,7 @@ test('a double click on Export Portable Pack runs one export and downloads one f
   await expect(page.getByRole('switch', { name: 'Include public community templates' })).toBeDisabled();
 
   releaseExport();
-  await expect(page.getByText('Exported 1 templates successfully')).toBeVisible();
+  await expect(page.getByText('Exported 1 template successfully')).toBeVisible();
   await expect(exportButton).toBeEnabled();
   await expect.poll(() => downloads.length).toBe(1);
   expect(exportRequests).toBe(1);

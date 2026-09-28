@@ -64,15 +64,17 @@ describe('template and run list fetchers', () => {
     await expect(fetchRunList(client)).rejects.toThrow();
   });
 
-  it('skip one malformed run instead of emptying the list', async () => {
+  it('keep one malformed run listed with no tasks instead of emptying the list', async () => {
     const client = clientReturning([], [runRow('good-1'), runRow('bad', { items: '{bad' }), runRow('good-2')]);
 
     const runs = await fetchRunList(client, 'team-1');
 
     expect(client.getChecklists).toHaveBeenCalledWith({ teamId: 'team-1' });
-    expect(runs.map((run) => [run.id, run.progress, run.revision])).toEqual([
-      ['good-1', 50, 3],
-      ['good-2', 50, 3],
+    // The unreadable run stays listed, with no tasks, so it can still be deleted.
+    expect(runs.map((run) => [run.id, run.progress, run.revision, run.sections.length])).toEqual([
+      ['good-1', 50, 3, 1],
+      ['bad', 0, 3, 0],
+      ['good-2', 50, 3, 1],
     ]);
   });
 

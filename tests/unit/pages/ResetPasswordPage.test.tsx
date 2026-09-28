@@ -9,6 +9,10 @@ vi.mock('@/lib/auth-client', () => ({
   authClient: { resetPassword: vi.fn() },
 }));
 
+vi.mock('@/contexts/CloudflareAuthContext', () => ({
+  useAuth: () => ({ isAuthenticated: false, logout: vi.fn() }),
+}));
+
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));

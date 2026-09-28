@@ -16,12 +16,18 @@ import { downloadBackupFile, exportPortableTemplatesToJSON, parseTemplatesFromFi
 import type { ImportVisibility } from "@/lib/utils/templateBackup";
 import type { ChecklistTemplate, TemplateImportSummary } from "@/types/checklist";
 import { exportTemplatePack } from "@/features/template-backup/exportTemplatePack";
+import { usePublicCatalogLoader } from "@/features/template-backup/publicCatalogLoader";
 import { selectImportFile } from "@/features/template-backup/importFileSelection";
 import type { ImportPreview } from "@/features/template-backup/importFileSelection";
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
 import { getAccessFailure } from "@/lib/api-errors";
 import { useBillingStatus } from "@/hooks/useBillingStatus";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
+import {
+  formatExportSummaryMessage, formatImportFailure, formatImportSummaryMessage, getImportSummaryFromError,
+} from "@/lib/templates/templateImportSummary";
+import { MAX_TEMPLATES_PER_IMPORT } from "@/lib/templates/templateImportLimits";
+import { isPersonalTemplateOf } from "@/lib/templates/templateOwnership";
 import { cn } from "@/lib/utils";
 import { countOversizedTemplateAssets } from "@/lib/schemas/templateAssetLimits";
 import { ORGANIZATION_BACKUP_UPGRADE_MESSAGE, TemplateBackupPlanNotice } from "@/components/TemplateBackupPlanNotice";
@@ -30,8 +36,6 @@ import { TemplateImportPreview } from "@/components/TemplateImportPreview";
 interface TemplateBackupProps {
   className?: string;
 }
-
-const MAX_TEMPLATES_PER_IMPORT = 5;
 
 // The same check the API applies per template; it only warns here.
 const countOversizedAssets = (templates: ChecklistTemplate[]): number =>
@@ -56,6 +60,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     isTeamWorkspace,
   } = useWorkspace();
   const billing = useBillingStatus({ enabled: !!user, teamId: activeTeamId, userId: user?.id });
+  const loadPublicCatalog = usePublicCatalogLoader();
   const billingEnabled = billing.status === "known" ? billing.billingEnabled : true;
   // Only a plan the server reported as Free is gated here. When the status check
   // failed, actions go through and the server's 403 upgrade_required decides.
@@ -78,7 +83,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const ownedTemplates = activeTeamId
     ? allTemplates.filter(t => t.teamId === activeTeamId)
     : user
-      ? allTemplates.filter(t => t.userId === user.id && !t.teamId)
+      ? allTemplates.filter((t) => isPersonalTemplateOf(t, user.id))
       : [];
   const importOversizeAssets = importPreview ? countOversizedAssets(importPreview.templates) : 0;
   const exceedsTemplateLimit = importPreview ? importPreview.templates.length > MAX_TEMPLATES_PER_IMPORT : false;
@@ -126,15 +131,18 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     }
 
     try {
-      const result = await exportTemplatePack(
-        { includePublic: includePublicTemplates, teamId: activeTeamId },
-        { download: (pack) => downloadBackupFile(pack) },
+      const summary = await exportTemplatePack(
+        {
+          includePublic: includePublicTemplates,
+          teamId: activeTeamId,
+          userId: user.id,
+          ownedTemplateIds: ownedTemplates.map((t) => t.id),
+        },
+        { download: (pack) => downloadBackupFile(pack), loadPublicCatalog },
       );
-      if (result.kind === "empty") {
-        toast.error("No templates available to export");
-        return;
-      }
-      toast.success(`Exported ${result.count} templates successfully`);
+      // Templates that cannot be made valid are left out (manifest.skippedTemplates): name them.
+      const { kind, message } = formatExportSummaryMessage(summary);
+      toast[kind](message, summary.skipped.length > 0 ? { duration: 15000 } : undefined);
     } catch (error) {
       console.error("Export error:", error);
       await handleBackupFailure(error, "Failed to export templates");
@@ -173,6 +181,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       return;
     }
 
+    setLastImportSummary(null);
     setIsImporting(true);
     try {
       // The importPreview has already been validated by parseTemplatesFromJSON
@@ -180,20 +189,19 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
         visibility: importVisibility
       });
       setLastImportSummary(result);
-      if (result.failed.length > 0) {
-        const failedTitles = result.failed
-          .slice(0, 2)
-          .map((failure) => failure.title)
-          .join(", ");
-        const overflowLabel =
-          result.failed.length > 2 ? ` +${result.failed.length - 2} more` : "";
-        toast.error(`Imported ${result.imported}/${result.total}. Failed: ${failedTitles}${overflowLabel}`);
-      } else {
-        toast.success(`Successfully imported ${result.imported}/${result.total} templates`);
-      }
+      const { kind, message } = formatImportSummaryMessage(result);
+      toast[kind](message);
       setImportPreview(null);
     } catch (error) {
-      await handleBackupFailure(error, "Failed to import templates");
+      // When every template fails, the API still sends the per-template summary. Show it,
+      // and keep the preview so the file can be fixed and imported again.
+      const summary = getImportSummaryFromError(error);
+      if (summary) {
+        setLastImportSummary(summary);
+        toast.error(formatImportSummaryMessage(summary).message);
+      } else {
+        await handleBackupFailure(error, "Failed to import templates");
+      }
     } finally {
       setIsImporting(false);
     }
@@ -487,7 +495,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                           </p>
                           <ul className="text-amber-700 dark:text-amber-300 mt-1 space-y-1">
                             {lastImportSummary.failed.map((failure) => <li key={`${failure.index}-${failure.title}`}>
-                                • {failure.title}: {failure.reason}
+                                • {formatImportFailure(failure)}
                               </li>)}
                           </ul>
                         </div>

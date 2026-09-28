@@ -4,10 +4,10 @@ import { formatAssetSizeLimit } from "@/lib/schemas/templateAssetLimits";
 import { getUploadedAssetKey, isUploadedAssetUrl } from "@/lib/utils/mediaSource";
 import {
   isAllowedUpload,
-  UPLOAD_MAX_BYTES,
   unsupportedUploadMessage,
   uploadAcceptAttribute,
 } from "@/lib/schemas/uploadTypes";
+import { UPLOAD_MAX_BYTES } from "@/lib/schemas/uploadLimits";
 
 export type TemplateUploadBucket =
   | 'template-images'
@@ -73,13 +73,15 @@ export const uploadFile = async (
 
 export { getUploadedAssetKey, isUploadedAssetUrl };
 
-// Only avatars can be deleted (the API refuses template uploads): a template
-// upload may still be referenced by the saved template, its runs, versions, and
-// copies, and uploads are not reference-counted.
+/**
+ * Deletes a replaced or removed avatar. Only avatars can be deleted: Templates,
+ * versions, Runs and clones may still reference template media, so clearing or
+ * replacing it only unlinks it, and the API refuses the delete.
+ */
 export const deleteUploadedAsset = async (url: string): Promise<boolean> => {
   const key = getUploadedAssetKey(url);
 
-  if (!key) {
+  if (!key?.startsWith('avatars/')) {
     return false;
   }
 
@@ -104,8 +106,10 @@ export const validateFile = (
   file: File,
   type: 'image' | 'video' | 'file'
 ): { valid: boolean; error?: string } => {
-  if (file.size > UPLOAD_MAX_BYTES) {
-    return { valid: false, error: `File size must be ${formatAssetSizeLimit(UPLOAD_MAX_BYTES)} or less` };
+  // The API enforces the same limit for the block's bucket.
+  const maxSize = UPLOAD_MAX_BYTES[BUCKET_BY_BLOCK_TYPE[type]];
+  if (file.size > maxSize) {
+    return { valid: false, error: `File size must be ${formatAssetSizeLimit(maxSize)} or less` };
   }
 
   if (type === 'image') {

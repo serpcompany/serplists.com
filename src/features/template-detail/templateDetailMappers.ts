@@ -86,6 +86,10 @@ export const mapApiTemplateToChecklistTemplate = (
     isPublic: Boolean(foundTemplate.is_public),
     slug: asString(foundTemplate.slug) ?? fallbackSlug,
     version: typeof foundTemplate.version === 'number' ? foundTemplate.version : 1,
+    ownerType:
+      foundTemplate.owner_type === 'team' || foundTemplate.owner_type === 'user'
+        ? foundTemplate.owner_type
+        : undefined,
     ownerProfile:
       typeof foundTemplate.owner_username === 'string' ||
       typeof foundTemplate.owner_full_name === 'string'

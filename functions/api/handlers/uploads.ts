@@ -1,14 +1,14 @@
 import type { Env } from '../types';
 import { getSessionUserId } from '../utils/session';
+import { serveR2Object } from '../utils/r2-file-response';
 import {
   isUploadBucket,
   resolveUploadContentType,
-  UPLOAD_MAX_BYTES,
   unsupportedUploadMessage,
   uploadAcceptAttribute,
   type UploadBucket,
 } from '../../../src/lib/schemas/uploadTypes';
-import { formatAssetSizeLimit } from '../../../src/lib/schemas/templateAssetLimits';
+import { UPLOAD_MAX_BYTES, formatUploadLimit } from '../../../src/lib/schemas/uploadLimits';
 
 const TEMPLATE_BUCKETS: readonly UploadBucket[] = ['template-images', 'template-videos', 'template-files'];
 
@@ -21,6 +21,19 @@ function json(data: unknown, status = 200): Response {
 
 function sanitizeFilename(filename: string): string {
   return filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
+}
+
+/**
+ * Only an account's own avatar (`avatars/<userId>/<file>`) can be deleted.
+ * Template media is referenced by Templates, template versions, Runs and
+ * public-template clones, and uploads record neither their Personal or
+ * Organization owner nor their references, so no one can know a delete is
+ * safe, and the uploader may have been disabled in or removed from the
+ * Organization. Clearing template media only unlinks it (TD-19).
+ */
+function isOwnAvatarKey(key: string, userId: string): boolean {
+  const [bucket, owner, file, ...rest] = key.split('/');
+  return bucket === 'avatars' && owner === userId && Boolean(file) && rest.length === 0;
 }
 
 function buildApiUrl(base: string, key: string): string {
@@ -37,19 +50,8 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
     const key = url.searchParams.get('key');
     if (!key) return json({ error: 'key required' }, 400);
 
-    const object = await env.R2_UPLOADS.get(key);
-    if (!object) return json({ error: 'Not Found' }, 404);
-
-    const headers = new Headers();
-    object.writeHttpMetadata(headers);
-    // Files are served from the app's origin: never let a browser guess another type.
-    headers.set('X-Content-Type-Options', 'nosniff');
-    headers.set('etag', object.httpEtag);
-    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-
-    if (request.method === 'HEAD') return new Response(null, { status: 200, headers });
-
-    return new Response(object.body, { status: 200, headers });
+    // Keys contain a UUID, so objects never change once uploaded.
+    return serveR2Object(request, env.R2_UPLOADS, key, 'public, max-age=31536000, immutable');
   }
 
   // Delete: DELETE /api/uploads/file?key=...
@@ -62,18 +64,16 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
 
     // Template uploads are shared by the saved template, its versions, every run
     // started from it, and copies or clones, and nothing counts those references.
-    // Deleting one on request would break all of them, so only avatars (referenced
-    // only by the user's own profile) can be deleted here.
     if (TEMPLATE_BUCKETS.some((bucket) => key.startsWith(`${bucket}/`))) {
       return json(
         {
           error: 'Template uploads cannot be deleted because templates, runs, and copies may still use them',
           code: 'asset_referenced',
         },
-        409,
+        403,
       );
     }
-    if (!key.startsWith(`avatars/${userId}/`)) {
+    if (!isOwnAvatarKey(key, userId)) {
       return json({ error: 'Forbidden' }, 403);
     }
 
@@ -93,9 +93,8 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
     const file = form.get('file');
     if (!(file instanceof File)) return json({ error: 'file required' }, 400);
 
-    if (file.size > UPLOAD_MAX_BYTES) {
-      return json({ error: `File too large (max ${formatAssetSizeLimit(UPLOAD_MAX_BYTES)})` }, 413);
-    }
+    const maxBytes = UPLOAD_MAX_BYTES[bucket];
+    if (file.size > maxBytes) return json({ error: `File too large (max ${formatUploadLimit(maxBytes)})` }, 413);
 
     // The same list the upload pickers use (src/lib/schemas/uploadTypes.ts).
     const contentType = resolveUploadContentType(bucket, file);
@@ -113,10 +112,12 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
     }
 
     const filename = sanitizeFilename(file.name || 'upload');
-    const ext = filename.includes('.') ? filename.split('.').pop() : '';
+    const ext = filename.includes('.') ? filename.split('.').pop() ?? '' : '';
     const key = `${bucket}/${userId}/${crypto.randomUUID()}${ext ? `.${ext}` : ''}`;
 
-    await env.R2_UPLOADS.put(key, await file.arrayBuffer(), {
+    // Pass the File itself: copying it into an ArrayBuffer would hold a 50MB
+    // upload twice, close to the isolate's 128MB memory limit.
+    await env.R2_UPLOADS.put(key, file, {
       httpMetadata: {
         contentType,
         contentDisposition: bucket === 'template-files' ? `attachment; filename="${filename}"` : undefined,

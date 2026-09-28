@@ -2,7 +2,6 @@ import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import {
   sitemap_category_revisions,
   sitemap_owner_revisions,
-  sitemap_revisions,
   sitemap_shard_revisions,
   templates,
   users,
@@ -12,14 +11,15 @@ import type { Env } from '../api/types';
 import bundledTemplateCatalog from './bundled-catalog.generated.json';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../src/data/publicCategories';
 import { categorySlug } from '../../src/lib/categorySlug';
+import { CANONICAL_ORIGIN } from '../../src/lib/seo/siteOrigin';
 
-export const CANONICAL_ORIGIN = 'https://serplists.com';
+export { CANONICAL_ORIGIN };
 export const SITEMAP_PAGE_SIZE = 25_000;
+// A sitemap index lists at most 50,000 sitemaps, so no shard number above it is ever
+// published. Rejecting it early also keeps the page's row offset a safe integer.
+export const SITEMAP_MAX_PAGE = 50_000;
 
-const XML_HEADERS = {
-  'Cache-Control': 'public, max-age=300, s-maxage=86400, stale-while-revalidate=3600',
-  'Content-Type': 'application/xml; charset=utf-8',
-} as const;
+const XML_CACHE_CONTROL = 'public, max-age=300, s-maxage=86400, stale-while-revalidate=3600';
 
 export type SitemapEntry = {
   path: string;
@@ -135,10 +135,15 @@ export function renderSitemapIndex(entries: SitemapEntry[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemaps}\n</sitemapindex>\n`;
 }
 
-export function xmlResponse(request: Request, xml: string, status = 200): Response {
+export function xmlResponse(
+  request: Request,
+  xml: string,
+  status = 200,
+  cacheControl = XML_CACHE_CONTROL,
+): Response {
   return new Response(request.method === 'HEAD' ? null : xml, {
     status,
-    headers: XML_HEADERS,
+    headers: { 'Cache-Control': cacheControl, 'Content-Type': 'application/xml; charset=utf-8' },
   });
 }
 
@@ -153,7 +158,7 @@ export function parsePage(value: string | string[] | undefined): number | null {
   const candidate = Array.isArray(value) ? value[0] : value;
   if (!candidate || !/^\d+$/.test(candidate)) return null;
   const page = Number(candidate);
-  return Number.isSafeInteger(page) && page >= 1 ? page : null;
+  return Number.isSafeInteger(page) && page >= 1 && page <= SITEMAP_MAX_PAGE ? page : null;
 }
 
 export function latestLastmod(entries: SitemapEntry[]): string | null {
@@ -215,50 +220,10 @@ export function buildInMemoryShardIndex(
   });
 }
 
-export type SitemapRevisions = Map<(typeof sitemap_revisions.$inferSelect)['kind'], string>;
-
-export async function loadSitemapRevisions(env: Env): Promise<SitemapRevisions> {
-  const rows = await createDb(env)
-    .select({ kind: sitemap_revisions.kind, revised_at: sitemap_revisions.revised_at })
-    .from(sitemap_revisions);
-  return new Map(rows.map((row) => [row.kind, row.revised_at]));
-}
-
-async function contentHash(value: string): Promise<string> {
+export async function contentHash(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-const bundledCatalogVersion = JSON.stringify(bundledTemplateCatalog);
-
-type SitemapContext = Pick<EventContext<Env, string, unknown>, 'request' | 'env' | 'waitUntil'>;
-
-// Building a database sitemap scans every public Template or User, and D1 bills every
-// row scanned. Cache each response in the data center under a key that changes when the
-// sitemap triggers bump `sitemap_revisions` or a deploy changes the bundled catalog, so a
-// repeat request reads only the revision rows (docs/design-docs/d1-cost.md). The key drops
-// the query string and leading zeros in page numbers, so variants cannot bypass it.
-export async function cachedSitemap(
-  context: SitemapContext,
-  build: (request: Request, revisions: SitemapRevisions) => Promise<Response>,
-): Promise<Response> {
-  const { request } = context;
-  if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
-  const revisions = await loadSitemapRevisions(context.env);
-  const url = new URL(request.url);
-  const version = await contentHash(JSON.stringify([[...revisions].sort(), bundledCatalogVersion]));
-  const path = url.pathname.replace(/\/0+(?=\d)/g, '/');
-  const key = new Request(`${url.origin}${path}?v=${version}`);
-  const cache = typeof caches === 'undefined' ? undefined : caches.default;
-
-  let response = await cache?.match(key);
-  if (!response) {
-    // Always build the GET body so a HEAD request never caches an empty sitemap.
-    response = await build(new Request(request.url), revisions);
-    if (cache) context.waitUntil(cache.put(key, response.clone()));
-  }
-  return request.method === 'HEAD' ? new Response(null, response) : response;
 }
 
 type ExistingShardRevision = {
@@ -381,10 +346,12 @@ export async function handleInMemoryPagedSitemap(
     : xmlResponse(request, renderUrlset(pageEntries));
 }
 
-export async function loadCategoryEntries(
-  env: Env,
-  inventoryLastmod?: string | null,
-): Promise<SitemapEntry[]> {
+// The index hashes this list to date the categories shard and the shard serves it, so it
+// takes nothing a caller could pass differently. The landing page lists every category,
+// so its lastmod follows every category revision, including the row of a category whose
+// last public Template just left. It ignores sitemap_revisions['categories'], which the
+// triggers bump on every public Template change, with or without a category.
+export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
   const db = createDb(env);
   const rows = await db
     .select({
@@ -417,9 +384,6 @@ export async function loadCategoryEntries(
   bundledTemplates.forEach((template) => {
     template.categories?.forEach((category) => addCategory(category, template.lastmod));
   });
-  PUBLIC_CATEGORY_REGISTRY.forEach((category) => {
-    addCategory(category.slug, catalogPageEntry('/categories').lastmod);
-  });
   rows.forEach((row) => {
     const lastmod = mostRecentLastmod(
       row.updated_at || row.created_at,
@@ -427,18 +391,27 @@ export async function loadCategoryEntries(
     );
     parseCategories(row.category).forEach((category) => addCategory(category, lastmod));
   });
+  // A registry category's page shows its registry name and description, but it is only
+  // worth listing once a public Template uses it; otherwise it is an empty page.
+  PUBLIC_CATEGORY_REGISTRY.forEach((category) => {
+    if (lastmodBySlug.has(category.slug)) addCategory(category.slug, catalogPageEntry('/categories').lastmod);
+  });
   const categoryRevisions = await db
     .select({
       category: sitemap_category_revisions.category,
       revised_at: sitemap_category_revisions.revised_at,
     })
     .from(sitemap_category_revisions);
-  categoryRevisions.forEach((row) => {
-    parseCategories(row.category).forEach((category) => {
-      const slug = categorySlug(category);
-      if (lastmodBySlug.has(slug)) addCategory(category, row.revised_at);
+  let categoryRevisedAt: string | null = null;
+  for (const row of categoryRevisions) {
+    const categories = parseCategories(row.category).filter((category) => categorySlug(category));
+    // Uncategorized Templates store '[]', and the triggers record that value too.
+    if (categories.length === 0) continue;
+    categoryRevisedAt = mostRecentLastmod(categoryRevisedAt, row.revised_at);
+    categories.forEach((category) => {
+      if (lastmodBySlug.has(categorySlug(category))) addCategory(category, row.revised_at);
     });
-  });
+  }
 
   const categoryEntries = Array.from(lastmodBySlug, ([slug, lastmod]) => ({
     path: `/categories/${encodeURIComponent(slug)}`,
@@ -451,7 +424,8 @@ export async function loadCategoryEntries(
       ...landingPage,
       lastmod: mostRecentLastmod(
         landingPage.lastmod,
-        inventoryLastmod,
+        bundledInventoryLastmod('categories'),
+        categoryRevisedAt,
         ...categoryEntries.map((entry) => entry.lastmod),
       ),
     },

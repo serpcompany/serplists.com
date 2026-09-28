@@ -20,7 +20,7 @@ async function deleteRun(page: Page, runId: string) {
 
 test('starts a run from a public template page opened directly', async ({ page }) => {
   await loginAsAdmin(page);
-  await page.goto('/profile/admin/technical-seo-audit-checklist');
+  await page.goto('/profile/admin/sample-technical-seo-audit-checklist');
 
   await page.getByRole('button', { name: 'Start Run' }).first().click();
 

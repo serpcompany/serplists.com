@@ -25,9 +25,11 @@ import {
   buildPublicCategoryPath,
   buildPublicFeaturePath,
   buildPublicProfilePath,
+  getCanonicalProfilePath,
   buildPublicTemplatesPath,
   buildPublicTemplatePath,
   buildSharePath,
+  findCategoryNameByLegacySlug,
   findCategoryNameBySlug,
   hasCanonicalPublicTemplatePath,
   isBlankTemplateEditorRoute,
@@ -104,6 +106,15 @@ describe('routes', () => {
     expect(
       findCategoryNameBySlug(['Technical SEO', 'Content Ops'], 'missing'),
     ).toBeNull();
+  });
+
+  it('finds an accented category from the URL it had before its letters were folded', () => {
+    const categories = ['Café Guides', 'Technical SEO'];
+
+    expect(buildPublicCategoryPath('Café Guides')).toBe('/categories/cafe-guides');
+    expect(findCategoryNameBySlug(categories, 'caf-guides')).toBeNull();
+    expect(findCategoryNameByLegacySlug(categories, 'caf-guides')).toBe('Café Guides');
+    expect(findCategoryNameByLegacySlug(categories, 'missing')).toBeNull();
   });
 
   it('redirects legacy category-only template queries to canonical category routes', () => {
@@ -245,5 +256,22 @@ describe('routes', () => {
     expect(hasCanonicalPublicTemplatePath({ ...baseTemplate, ownerProfile: { full_name: 'No Handle' } })).toBe(false);
     expect(hasCanonicalPublicTemplatePath({ ...baseTemplate, ownerProfile: { username: '  ' } })).toBe(false);
     expect(hasCanonicalPublicTemplatePath(baseTemplate)).toBe(false);
+  });
+});
+
+describe('getCanonicalProfilePath', () => {
+  it('sends a mixed-case profile URL to the stored lowercase username', () => {
+    expect(getCanonicalProfilePath('JohnDoe', 'johndoe')).toBe('/profile/johndoe');
+  });
+
+  it('stays on a URL that already uses the stored username', () => {
+    expect(getCanonicalProfilePath('johndoe', 'johndoe')).toBeNull();
+    // A legacy mixed-case username is its own canonical form.
+    expect(getCanonicalProfilePath('MixedCase', 'MixedCase')).toBeNull();
+  });
+
+  it('does nothing without both usernames', () => {
+    expect(getCanonicalProfilePath(undefined, 'johndoe')).toBeNull();
+    expect(getCanonicalProfilePath('JohnDoe', null)).toBeNull();
   });
 });

@@ -19,6 +19,7 @@ import {
   buildConsoleTemplateEditPath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
+import { isPersonalTemplateOf } from '@/lib/templates/templateOwnership';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
 type CreateRun = (params: {
@@ -128,7 +129,7 @@ export const buildDashboardTemplatesState = ({
   const templates = teamId
     ? allTemplates.filter((template) => template.teamId === teamId)
     : userId
-      ? allTemplates.filter((template) => template.userId === userId && !template.teamId)
+      ? allTemplates.filter((template) => isPersonalTemplateOf(template, userId))
       : [];
   const totalTemplateItems = templates.reduce(
     (total, template) => total + countTemplateItems(template),

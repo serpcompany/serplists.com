@@ -2,7 +2,7 @@ import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
-import { batchWriteMissed, insertAuditEventWhen } from "../utils/conditional-audit";
+import { batchWriteMissed, insertAuditEventWhere } from "../utils/guarded-writes";
 import { sha256Hex } from "../utils/crypto";
 import { json, jsonError } from "../utils/response";
 import { normalizeTeamRole, type TeamMembership } from "../utils/team-access";
@@ -191,7 +191,7 @@ export async function declineTeamInvite({
           isNull(team_invites.revoked_at),
         ),
       ),
-    insertAuditEventWhen(
+    insertAuditEventWhere(
       db,
       auditEvent,
       sql`exists (
@@ -261,7 +261,7 @@ export async function leaveTeam({
   // first with the delete's own condition. A batch is one transaction, so both
   // statements see the same row: the audit row exists only if the delete lands.
   const results = await db.batch([
-    insertAuditEventWhen(
+    insertAuditEventWhere(
       db,
       auditEvent,
       sql`exists (select 1 from ${team_members} where ${leavableMembership()})`,

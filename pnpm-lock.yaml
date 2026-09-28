@@ -198,6 +198,9 @@ importers:
       '@playwright/test':
         specifier: ^1.57.0
         version: 1.57.0
+      '@secretlint/node':
+        specifier: ^11.3.1
+        version: 11.3.1
       '@secretlint/secretlint-rule-preset-recommend':
         specifier: ^11.3.1
         version: 11.3.1

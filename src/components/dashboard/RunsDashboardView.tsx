@@ -1,10 +1,11 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CheckCircle2,
   Clock,
   ExternalLink,
   Filter,
+  Link2Off,
   MoreHorizontal,
   Play,
   RefreshCw,
@@ -56,7 +57,7 @@ import { countRunTasks } from '@/lib/utils/checklistSections';
 import type { ChecklistRun } from '@/types/checklist';
 import { toast } from 'sonner';
 import { getRevalidateRunErrorMessage } from '@/lib/editConflicts';
-import { createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
+import { useRunsDashboardSharing } from '@/features/dashboard-runs/useRunsDashboardSharing';
 import {
   buildRunTemplateLookup,
   filterDashboardRuns,
@@ -66,7 +67,6 @@ import {
 } from '@/features/dashboard-runs/runTemplateLookup';
 import { getRunRowActions } from '@/features/dashboard-runs/runRowActions';
 import type { ResourcePermissions } from '@/lib/organizationPermissions';
-import { createShareLinkAndCopy } from '@/lib/shareLink';
 
 interface RunsDashboardViewProps {
   runs: ChecklistRun[];
@@ -79,6 +79,8 @@ interface RunsDashboardViewProps {
   onRevalidateRun?: (run: ChecklistRun) => void | Promise<void>;
   // Called once a share has made the run public (see createRunsDashboardShareUrl).
   onRunShared?: (runId: string) => void;
+  /** Turns the run's share link off; the run becomes private and can be revalidated. */
+  onStopSharingRun?: (runId: string) => Promise<void>;
   loading?: boolean;
   loadError?: unknown;
   onRetryLoad?: () => void;
@@ -105,6 +107,7 @@ export function RunsDashboardView({
   onDeleteRun,
   onRevalidateRun,
   onRunShared,
+  onStopSharingRun,
   loading = false,
   loadError,
   onRetryLoad = () => undefined,
@@ -114,9 +117,8 @@ export function RunsDashboardView({
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeletingRun, setIsDeletingRun] = useState(false);
   const [revalidatingRunId, setRevalidatingRunId] = useState<string | null>(null);
-  const [sharedLink, setSharedLink] = useState<{ runId: string; url: string } | null>(null);
-  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
-  const sharingRunId = useRef<string | null>(null);
+  const { isShareDialogOpen, setIsShareDialogOpen, sharedLink, shareRun, stopSharing, stoppingShareRunId } =
+    useRunsDashboardSharing({ onRunShared, onStopSharingRun });
 
   const inProgressCount = runs.filter((run) => run.status === 'in_progress').length;
   const completedCount = runs.filter((run) => run.status === 'completed').length;
@@ -129,36 +131,6 @@ export function RunsDashboardView({
     () => filterDashboardRuns(runs, templatesById, searchQuery, statusFilter),
     [runs, searchQuery, statusFilter, templatesById],
   );
-
-  // The link is always shown in a dialog; copying is best effort (see createShareLinkAndCopy).
-  // Each create replaces the run's share token, so a second tap waits and a reopen reuses it.
-  const shareRun = async (runId: string) => {
-    if (sharingRunId.current) {
-      return;
-    }
-    if (sharedLink?.runId === runId) {
-      setIsShareDialogOpen(true);
-      return;
-    }
-
-    sharingRunId.current = runId;
-    try {
-      const result = await createShareLinkAndCopy(() =>
-        createRunsDashboardShareUrl(runId, window.location.origin, undefined, onRunShared),
-      );
-      if (result.kind === 'error') {
-        toast.error(result.message);
-        return;
-      }
-      if (result.kind === 'ok') {
-        setSharedLink({ runId, url: result.shareUrl });
-        setIsShareDialogOpen(true);
-        if (result.copied) toast.success('Share link copied');
-      }
-    } finally {
-      sharingRunId.current = null;
-    }
-  };
 
   const confirmDeleteRun = async () => {
     if (!runToDelete) {
@@ -334,6 +306,10 @@ export function RunsDashboardView({
                       <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
                         {run.isPublic ? 'Shared snapshot is out of date' : 'Needs revalidation'}
                       </span>
+                    ) : run.isPublic ? (
+                      <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                        Shared
+                      </span>
                     ) : null}
                   </div>
 
@@ -360,6 +336,17 @@ export function RunsDashboardView({
                       >
                         <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                         {revalidatingRunId === run.id ? 'Revalidating...' : 'Revalidate'}
+                      </Button>
+                    ) : null}
+                    {actions.canShare && run.isStale && run.isPublic && onStopSharingRun ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={stoppingShareRunId === run.id}
+                        onClick={() => void stopSharing(run.id)}
+                      >
+                        <Link2Off className="mr-1.5 h-3.5 w-3.5" />
+                        {stoppingShareRunId === run.id ? 'Stopping...' : 'Stop sharing to update'}
                       </Button>
                     ) : null}
                     {!isCompleted ? (
@@ -395,6 +382,15 @@ export function RunsDashboardView({
                             <DropdownMenuItem onClick={() => void shareRun(run.id)}>
                               <Share2 className="mr-2 h-4 w-4" />
                               Share Run
+                            </DropdownMenuItem>
+                          ) : null}
+                          {actions.canShare && run.isPublic && onStopSharingRun ? (
+                            <DropdownMenuItem
+                              disabled={stoppingShareRunId === run.id}
+                              onClick={() => void stopSharing(run.id)}
+                            >
+                              <Link2Off className="mr-2 h-4 w-4" />
+                              Stop sharing
                             </DropdownMenuItem>
                           ) : null}
                           {actions.canShare && actions.canDelete ? <DropdownMenuSeparator /> : null}

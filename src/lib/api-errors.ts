@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 const DEFAULT_ERROR_PREFIX = "HTTP";
 
 type ApiErrorPayload = {
@@ -54,10 +56,32 @@ export const isAuthRequiredError = (error: unknown): error is ApiError => {
   return isApiError(error) && error.status === 401;
 };
 
+export type LimitContext = "personal" | "organization";
+
+// `details` of a 403 limit_reached response. `context` names whose limit was hit: a Personal
+// Pro plan never lifts an Organization's limit, so only a Personal limit may lead to checkout.
+const limitReachedDetailsSchema = z.object({
+  context: z.enum(["personal", "organization"]),
+});
+
+/** The context of a limit_reached error, or null when the response did not name a valid one. */
+export const getLimitContext = (error: ApiError): LimitContext | null => {
+  const parsed = limitReachedDetailsSchema.safeParse(error.details);
+  return parsed.success ? parsed.data.context : null;
+};
+
 export const isUpgradeRequiredError = (error: unknown): error is ApiError => {
-  return isApiError(error)
-    && error.status === 403
-    && (error.code === "upgrade_required" || error.code === "limit_reached");
+  if (!isApiError(error) || error.status !== 403) {
+    return false;
+  }
+
+  if (error.code === "upgrade_required") {
+    return true;
+  }
+
+  // An Organization limit is not something a Personal Pro checkout can fix, so it is a plain
+  // error carrying the server's message. A missing context keeps the old Personal behavior.
+  return error.code === "limit_reached" && getLimitContext(error) !== "organization";
 };
 
 // A template or run changed after the editor loaded it.

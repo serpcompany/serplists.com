@@ -9,6 +9,8 @@ one stopped without chat history.
   current as you go.
 - **Finished work**: set the status to completed and move the file to `completed/`.
   Do not delete plans; their decision logs explain why the code looks the way it does.
+  Keep the `.gitkeep` in both folders so they exist in a fresh checkout when empty;
+  `docs:check` fails on a backticked folder that git does not track.
 - **Shortcuts and known debt**: record them in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
 
 The weekly [maintenance report](design-docs/agent-workflow.md#weekly-maintenance) flags active plans that
@@ -22,6 +24,9 @@ have not been updated in 30 days.
   amplification.
 - [UI decoupling](exec-plans/active/ui-decoupling.md): screens consume feature state instead of
   transport code.
+- [Upload quota and ownership](exec-plans/active/upload-quota-and-ownership.md): record uploads
+  in D1 for a per-account quota, Organization-owned deletes and orphan cleanup, with the
+  proposed migrations.
 
 ## Completed
 

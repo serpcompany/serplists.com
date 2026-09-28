@@ -1,7 +1,7 @@
 # D1 Cost
 
 - **Status:** active
-- **Last updated:** 2026-09-27
+- **Last updated:** 2026-09-28
 - **Goal:** keep D1 rows read per request bounded by what the request returns, not by
   table size, and cut write amplification. Findings and rules are in
   [D1 cost](../../design-docs/d1-cost.md).
@@ -57,6 +57,10 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   for 200 templates) instead of "public OR mine" (19,219). The UI merges the two as
   before; the user's own copy now wins over a cached catalog copy. The no-scope request
   stays for old tabs (TD-15).
+- [x] **Stop template export reading the public catalog.** With "Include public
+  community templates" on, `GET /api/templates/backup` OR-ed every public template into
+  the owned query, uncached, on each click. It now reads only the active context's own
+  templates; the page adds public ones from its edge-cached catalog.
 - [ ] **Paginate the public catalog** once it is large enough that cache misses or the
   response size matter. Cursor pagination on `created_at` using
   `idx_templates_public_created_at` (never `OFFSET`), FTS5 for search, an indexed
@@ -130,6 +134,11 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   what the no-parameter request returns. Browser tabs opened before a deploy keep the
   old client, which reads the Personal list from the no-parameter request; changing it
   would hide their private templates until a reload. The old branch is TD-15.
+- 2026-09-28: Build the public part of a template export in the page, from the catalog
+  it already loaded, rather than splitting the API query or reading the edge cache in the
+  export handler. The export page loads the catalog anyway, so this reads nothing extra.
+  The API ignores `includePublic=1`: an old tab gets only its own templates until a
+  reload, which is acceptable for an opt-in switch on a paid-only page.
 - 2026-09-27: Share the edge-cached catalog between anonymous and signed-in requests
   (same key, since both are public only), and let the user's own templates override the
   catalog copy when merging, because the cached copy can be 5 minutes old. The smoke
@@ -145,3 +154,18 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   `isWorkspaceLoading` also covered an unconfirmed stored Organization, a failed teams
   request kept the public library on the bundled starters. The workspace and run lists
   still wait for the active context (`src/contexts/templateListObservers.ts`).
+- 2026-09-28: Refuse sitemap shard pages the index never published before reading the
+  cache. The cache key includes the page number, so each new out-of-range number was a
+  miss that scanned every public row to return 404. Pages above 1 now need a
+  `sitemap_shard_revisions` row (the index writes one for every page it lists before
+  responding), checked by primary key; the 404 is `no-store` so a page added later is
+  served at once. Page 1 is always built because a new database has no shard rows yet.
+- 2026-09-28: Key each sitemap by only the `sitemap_revisions` kinds it lists. One key
+  over all three kinds meant every sign-up or avatar change (which bump only
+  `profiles`) rebuilt the templates and categories shards, about 19k rows each at 20k
+  templates, for identical output. Shards now depend on their own kind and the index on
+  all three; builds receive only the kinds in their key. Every family still keys on the
+  bundled catalog, so deploys miss. The trade-off is that a trigger that changes a
+  shard's input without bumping its kind now serves that shard stale for up to the
+  1-day `s-maxage`, where an unrelated bump used to hide it, so the migration test pins
+  which kinds each trigger bumps.

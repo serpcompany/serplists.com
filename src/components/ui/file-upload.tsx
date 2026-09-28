@@ -7,10 +7,17 @@ import { X, File, Image, Video } from 'lucide-react';
 import { uploadAcceptTypesForBlock, type UploadResult } from '@/lib/utils/fileUpload';
 import { formatAssetSizeLimit } from '@/lib/schemas/templateAssetLimits';
 import { imagePreviewSrc, isUploadedAssetUrl } from '@/lib/utils/mediaSource';
-import { UPLOAD_MAX_BYTES } from '@/lib/schemas/uploadTypes';
+import { UPLOAD_MAX_BYTES } from '@/lib/schemas/uploadLimits';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
 import { uploadSelectedFile, type FileUploadType } from './file-upload-flow';
+
+// The bucket each block type uploads to, for the size limit the API enforces there.
+const UPLOAD_BUCKET_BY_TYPE = {
+  image: 'template-images',
+  video: 'template-videos',
+  file: 'template-files',
+} as const satisfies Record<FileUploadType, string>;
 
 // An upload or a clear, reported as one change so the URL and the file details are
 // never written separately (a second write could restore a stale URL).
@@ -194,7 +201,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                 )}
               </Button>
               <p className="text-xs text-muted-foreground mt-1">
-                Max file size: {formatAssetSizeLimit(UPLOAD_MAX_BYTES)}
+                Max file size: {formatAssetSizeLimit(UPLOAD_MAX_BYTES[UPLOAD_BUCKET_BY_TYPE[type]])}
               </p>
             </div>
           )}

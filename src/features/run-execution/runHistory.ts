@@ -1,9 +1,10 @@
 import type { api, ChecklistRunHistoryResponse, TemplateHistoryEvent } from '@/lib/api';
+import { HISTORY_DISPLAY_LIMIT } from '@/lib/history';
 import { queryKeys } from '@/lib/queryCache';
 
 // The run page shows the latest few events. Every progress save writes an audit event, so
 // without a limit the API reads its default of 50 audit rows (plus their users) per view.
-export const RUN_HISTORY_PREVIEW_LIMIT = 8;
+export const RUN_HISTORY_PREVIEW_LIMIT = HISTORY_DISPLAY_LIMIT;
 
 type RunHistoryClient = Pick<typeof api, 'getChecklistHistory'>;
 

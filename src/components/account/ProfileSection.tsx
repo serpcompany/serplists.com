@@ -8,6 +8,7 @@ import { ExternalLink, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AvatarUpload } from '@/components/shared/AvatarUpload';
 import { buildPublicProfilePath } from '@/lib/routes';
+import { USER_NAME_MAX_LENGTH } from '@/lib/schemas/userProfileSchema';
 
 interface ProfileData {
   email: string;
@@ -81,6 +82,7 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
                 onProfileDataChange((current) => ({ ...current, fullName }));
               }}
               placeholder="Enter your full name"
+              maxLength={USER_NAME_MAX_LENGTH}
             />
           </div>
         </div>
@@ -102,15 +104,16 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             Public profile URL:{' '}
+            {/* Usernames are saved lowercase, so preview the URL that will exist. */}
             {profileData.username ? (
               <Link
-                to={buildPublicProfilePath(profileData.username)}
+                to={buildPublicProfilePath(profileData.username.toLowerCase())}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-primary hover:underline"
               >
                 {origin}
-                {buildPublicProfilePath(profileData.username)}
+                {buildPublicProfilePath(profileData.username.toLowerCase())}
                 <ExternalLink className="h-3 w-3" />
               </Link>
             ) : (

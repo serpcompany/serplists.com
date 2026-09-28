@@ -248,6 +248,22 @@ describe("persistTemplateSave", () => {
     );
   });
 
+  it("leaves visibility out of an update the editor's switch did not change, and returns the saved version", async () => {
+    const dependencies = buildDependencies({
+      updateTemplate: vi.fn().mockResolvedValue({ version: 6 }),
+    });
+
+    const result = await persistTemplateSave(
+      dependencies,
+      buildInput({ id: "template-1", isPublic: undefined, expectedVersion: 3 }),
+    );
+
+    expect(result).toMatchObject({ success: true, errors: [], version: 6 });
+    const payload = dependencies.updateTemplate.mock.calls[0][0];
+    expect(payload.version).toBe(3);
+    expect(payload.isPublic).toBeUndefined();
+  });
+
   it("returns failure when create rejects", async () => {
     const dependencies = buildDependencies({
       createTemplate: vi.fn().mockRejectedValue(new Error("create failed")),

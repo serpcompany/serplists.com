@@ -1,59 +1,59 @@
+// Scans files for secrets with secretlint.
+//
+//   node scripts/secret-scan.mjs              every file tracked by git
+//   node scripts/secret-scan.mjs <files...>   just these files (the pre-commit hook)
+//
+// Files go to secretlint's engine as literal paths. The secretlint CLI reads
+// its arguments as globs, which silently skipped route files like
+// functions/api/[[route]].ts.
 import { spawnSync } from "node:child_process";
+import { createEngine } from "@secretlint/node";
 
-const gitResult = spawnSync("git", ["ls-files", "-z"], {
-  encoding: "utf8",
-});
+import { selectScanTargets } from "./secret-scan-lib.mjs";
 
-if (gitResult.error) {
-  console.error(gitResult.error.message);
-  process.exit(1);
-}
-
-if (gitResult.status !== 0) {
-  process.stderr.write(gitResult.stderr ?? "");
-  process.exit(gitResult.status ?? 1);
-}
-
-const files = gitResult.stdout.split("\0").filter(Boolean);
-
-if (files.length === 0) {
-  process.exit(0);
-}
-
-const secretlintBin = process.platform === "win32" ? "secretlint.cmd" : "secretlint";
-const maxCommandLength = process.platform === "win32" ? 7_000 : 100_000;
-let chunk = [];
-let chunkLength = secretlintBin.length;
-
-function runSecretlint(paths) {
-  const result = spawnSync(secretlintBin, paths, {
-    shell: process.platform === "win32",
-    stdio: "inherit",
-  });
+function listTrackedFiles() {
+  const result = spawnSync("git", ["ls-files", "-z"], { encoding: "utf8" });
 
   if (result.error) {
     console.error(result.error.message);
-    process.exit(1);
+    process.exit(2);
   }
 
   if (result.status !== 0) {
-    process.exit(result.status ?? 1);
-  }
-}
-
-for (const file of files) {
-  const nextLength = chunkLength + file.length + 1;
-
-  if (chunk.length > 0 && nextLength > maxCommandLength) {
-    runSecretlint(chunk);
-    chunk = [];
-    chunkLength = secretlintBin.length;
+    process.stderr.write(result.stderr ?? "");
+    process.exit(result.status ?? 2);
   }
 
-  chunk.push(file);
-  chunkLength += file.length + 1;
+  return result.stdout.split("\0").filter(Boolean);
 }
 
-if (chunk.length > 0) {
-  runSecretlint(chunk);
+const cwd = process.cwd();
+const requested = process.argv.length > 2 ? process.argv.slice(2) : listTrackedFiles();
+const targets = selectScanTargets(requested, { cwd });
+
+if (targets.length === 0) {
+  process.exit(0);
+}
+
+try {
+  const engine = await createEngine({
+    cwd,
+    formatter: "stylish",
+    color: Boolean(process.stdout.isTTY),
+    maskSecrets: true,
+  });
+  const { ok, output } = await engine.executeOnFiles({ filePathList: targets });
+
+  if (output) {
+    process.stdout.write(output.endsWith("\n") ? output : `${output}\n`);
+  }
+
+  if (!ok) {
+    process.exit(1);
+  }
+
+  console.log(`secret-scan: no secrets found in ${targets.length} file(s).`);
+} catch (error) {
+  console.error(`secret-scan: ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(2);
 }

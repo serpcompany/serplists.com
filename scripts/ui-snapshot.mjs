@@ -1,20 +1,23 @@
 #!/usr/bin/env node
 // Look at a page of the running app without a browser integration.
 //   pnpm run ui:snap -- dashboard/templates --login john@test.com [--mobile] [--out tmp/snapshots/x.png]
-// Saves a full-page screenshot and prints the accessibility tree (readable text),
-// console errors, and failed requests. Start the app first with `pnpm run dev:all`.
+// Flags may come before or after the route. Saves a full-page screenshot (.png, or JPEG
+// for .jpg/.jpeg) with the accessibility tree beside it as <name>.aria.yml, and prints
+// the tree (readable text), console errors, and failed requests. Start the app first
+// with `pnpm run dev:all`.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { chromium, devices } from "@playwright/test";
+import { parseUiSnapArgs, UI_SNAP_USAGE } from "./ui-snapshot-lib.mjs";
 
-const args = process.argv.slice(2).filter((arg) => arg !== "--");
-const flag = (name) => {
-  const index = args.indexOf(`--${name}`);
-  return index === -1 ? undefined : args[index + 1];
-};
-// Routes may omit the leading slash (`dashboard`), which Git Bash would otherwise rewrite into a file path.
-const routeArg = args.find((arg, index) => !arg.startsWith("--") && !args[index - 1]?.startsWith("--")) ?? "";
-const routePath = routeArg.startsWith("/") ? routeArg : `/${routeArg}`;
+let options;
+try {
+  options = parseUiSnapArgs(process.argv.slice(2));
+} catch (error) {
+  console.error(`${error instanceof Error ? error.message : String(error)}\n${UI_SNAP_USAGE}`);
+  process.exit(2);
+}
+const { routePath, outPath, ariaPath } = options;
 
 let ports = { frontendPort: 8080, apiPort: 8788 };
 try {
@@ -22,18 +25,16 @@ try {
 } catch {
   // No dev session file: fall back to the default port pair.
 }
-const baseUrl = flag("base") ?? `http://localhost:${ports.frontendPort}`;
-const apiUrl = flag("api") ?? `http://localhost:${ports.apiPort}/api`;
-const slug = routePath.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "home";
-const outPath = flag("out") ?? path.join("tmp", "snapshots", `${slug}.png`);
+const baseUrl = options.base ?? `http://localhost:${ports.frontendPort}`;
+const apiUrl = options.api ?? `http://localhost:${ports.apiPort}/api`;
 
 const browser = await chromium.launch();
 try {
-  const context = await browser.newContext(args.includes("--mobile") ? devices["iPhone 13"] : { viewport: { width: 1440, height: 900 } });
-  const email = flag("login");
+  const context = await browser.newContext(options.mobile ? devices["iPhone 13"] : { viewport: { width: 1440, height: 900 } });
+  const email = options.login;
   if (email) {
     const response = await context.request.post(`${apiUrl}/auth/sign-in/email`, {
-      data: { email, password: flag("password") ?? "password123" },
+      data: { email, password: options.password ?? "password123" },
       headers: { Origin: baseUrl },
     });
     if (!response.ok()) {
@@ -56,11 +57,12 @@ try {
   mkdirSync(path.dirname(outPath), { recursive: true });
   await page.screenshot({ path: outPath, fullPage: true });
   const aria = await page.locator("body").ariaSnapshot();
-  writeFileSync(outPath.replace(/\.png$/, ".aria.yml"), aria);
+  writeFileSync(ariaPath, aria);
 
   console.log(`URL:        ${page.url()}`);
   console.log(`Title:      ${await page.title()}`);
   console.log(`Screenshot: ${outPath}`);
+  console.log(`Aria YAML:  ${ariaPath}`);
   console.log(`Console errors (${consoleErrors.length}):${consoleErrors.map((line) => `\n  ${line}`).join("")}`);
   console.log(`Failed requests (${failedRequests.length}):${failedRequests.map((line) => `\n  ${line}`).join("")}`);
   console.log(`\nAccessibility tree:\n${aria}`);

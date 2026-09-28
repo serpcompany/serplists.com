@@ -18,6 +18,7 @@ import {
   startTemplateRun,
   type TemplateDetailBillingState,
 } from '@/features/template-detail/useTemplateDetailModel';
+import { setTemplateVisibility } from '@/features/template-detail/templateVisibility';
 
 const buildTemplate = (
   overrides: Partial<ChecklistTemplate> = {},
@@ -98,6 +99,14 @@ describe('template detail mappers', () => {
         items: [],
       },
     ]);
+  });
+
+  it('keeps the owner type, which public responses send instead of team_id', () => {
+    const base = { id: 'template-1', title: 'Plan', sections: [], user_id: 'user-1', is_public: true };
+
+    expect(mapApiTemplateToChecklistTemplate({ ...base, owner_type: 'team' }, 'plan').ownerType).toBe('team');
+    expect(mapApiTemplateToChecklistTemplate({ ...base, owner_type: 'user' }, 'plan').ownerType).toBe('user');
+    expect(mapApiTemplateToChecklistTemplate(base, 'plan').ownerType).toBeUndefined();
   });
 
   it('wraps legacy flat items into a single checklist section', () => {
@@ -589,6 +598,72 @@ describe('template detail actions', () => {
     expect(createTemplate.mock.calls[0][0]).toMatchObject({ teamId: 'team-b' });
     expect(createTemplate.mock.calls[1][0]).toMatchObject({ teamId: 'team-a' });
   });
+  it('returns an error, not upgrade_required, when an Organization limit blocks a run', async () => {
+    const message =
+      'Active run limit reached. This Organization needs a paid plan to create more checklist runs.';
+    const result = await startTemplateRun({
+      createRun: vi.fn().mockRejectedValue(
+        createApiError(403, {
+          code: 'limit_reached',
+          error: message,
+          details: { limit: 1, current: 1, resource: 'active_runs', context: 'organization' },
+        }),
+      ),
+      isAuthenticated: true,
+      template: buildTemplate(),
+      runName: 'Trip Run',
+    });
+
+    expect(result).toEqual({ kind: 'error', message });
+  });
+
+  it('still returns upgrade_required when a Personal limit blocks a run', async () => {
+    const result = await startTemplateRun({
+      createRun: vi.fn().mockRejectedValue(
+        createApiError(403, {
+          code: 'limit_reached',
+          error: 'Active run limit reached. Upgrade to Pro to create more checklist runs.',
+          details: { limit: 1, current: 1, resource: 'active_runs', context: 'personal' },
+        }),
+      ),
+      isAuthenticated: true,
+      template: buildTemplate(),
+      runName: 'Trip Run',
+    });
+
+    expect(result).toEqual({ kind: 'upgrade_required' });
+  });
+
+  it('returns an error when an Organization template limit blocks a save', async () => {
+    const message =
+      'Template limit reached. This Organization needs a paid plan to create more templates.';
+    const apiClient = {
+      getBillingStatus: vi.fn(),
+      getTemplateById: vi.fn(),
+      getTemplateBySlug: vi.fn(),
+      getProfileById: vi.fn(),
+      clonePublicTemplate: vi.fn().mockRejectedValue(
+        createApiError(403, {
+          code: 'limit_reached',
+          error: message,
+          details: { limit: 3, current: 3, resource: 'templates', context: 'organization' },
+        }),
+      ),
+      updateTemplate: vi.fn(),
+    };
+
+    const result = await saveTemplateToAccount({
+      apiClient,
+      billingState: buildBillingState(),
+      createTemplate: vi.fn(),
+      isAuthenticated: true,
+      teamId: 'team-1',
+      template: buildTemplate(),
+      userId: 'user-1',
+    });
+
+    expect(result).toEqual({ kind: 'error', message });
+  });
 });
 
 describe('resolveShareOwnerTemplate', () => {
@@ -631,5 +706,42 @@ describe('resolveShareOwnerTemplate', () => {
     const shared = await resolveShareOwnerTemplate(template, renamedOwner, apiClient);
 
     expect(buildCanonicalPublicTemplatePath(shared)).toBe('/profile/bob/seo-audit');
+  });
+});
+
+describe('setTemplateVisibility', () => {
+  const visibilityClient = (updateTemplate: ReturnType<typeof vi.fn>) => ({
+    clonePublicTemplate: vi.fn(),
+    getBillingStatus: vi.fn(),
+    getProfileById: vi.fn(),
+    getTemplateById: vi.fn(),
+    getTemplateBySlug: vi.fn(),
+    updateTemplate,
+  });
+  const applyChange = (onTemplateChange: ReturnType<typeof vi.fn>, current: ChecklistTemplate) =>
+    (onTemplateChange.mock.calls[0]?.[0] as (value: ChecklistTemplate | null) => ChecklistTemplate | null)(current);
+
+  it('sends only the visibility flag and version guard, never the template content', async () => {
+    const apiClient = visibilityClient(vi.fn().mockResolvedValue({ version: 4 }));
+    const onTemplateChange = vi.fn();
+    const template = buildTemplate({ isPublic: false, version: 4 });
+
+    await setTemplateVisibility({ apiClient, canEdit: true, isPublic: true, onTemplateChange, template });
+
+    expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
+    expect(apiClient.updateTemplate.mock.calls[0]).toEqual(['template-1', { is_public: true, expected_version: 4 }]);
+    expect(applyChange(onTemplateChange, template)).toEqual({ ...template, isPublic: true, version: 4 });
+  });
+
+  it('keeps the next toggle on the version the server returned', async () => {
+    const apiClient = visibilityClient(vi.fn().mockResolvedValue({ version: 7 }));
+    const onTemplateChange = vi.fn();
+    const template = buildTemplate({ version: 6 });
+
+    await setTemplateVisibility({ apiClient, canEdit: true, isPublic: false, onTemplateChange, template });
+
+    const next = applyChange(onTemplateChange, template);
+    expect(next?.version).toBe(7);
+    expect(next?.isPublic).toBe(false);
   });
 });
