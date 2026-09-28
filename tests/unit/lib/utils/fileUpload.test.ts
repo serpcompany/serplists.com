@@ -44,10 +44,10 @@ describe('uploaded asset deletion helpers', () => {
 
   it('deletes app-owned uploaded assets through the shared API delete path', async () => {
     await expect(
-      deleteUploadedAsset('/api/uploads/file?key=template-files/user/doc.pdf'),
+      deleteUploadedAsset('/api/uploads/file?key=avatars/user/avatar.png'),
     ).resolves.toBe(true);
 
-    expect(api.deleteFromR2).toHaveBeenCalledWith('template-files/user/doc.pdf');
+    expect(api.deleteFromR2).toHaveBeenCalledWith('avatars/user/avatar.png');
   });
 
   it('skips deletion for non-owned URLs', async () => {

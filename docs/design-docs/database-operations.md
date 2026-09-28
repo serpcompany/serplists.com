@@ -156,8 +156,17 @@ writes keys under per-user prefixes:
 - `template-videos/<userId>/<uuid>.<ext>`
 - `template-files/<userId>/<uuid>.<ext>`
 
-Uploads are not reference-counted, so do not add expiration rules yet; they would
-break templates and avatars. The safe baseline aborts incomplete multipart uploads:
+Uploads are not reference-counted. A template upload's URL is copied into the
+saved template, its `template_versions` snapshots, every run started from it, and
+duplicates and clones, so deleting the object breaks all of them.
+`DELETE /api/uploads/file` therefore deletes only the caller's own
+`avatars/<userId>/` keys and refuses template-bucket keys with 409
+`asset_referenced`; the template editor never deletes uploads when a file is
+cleared or replaced. Unreferenced template uploads accumulate until a
+reference-checked cleanup exists (TD-16).
+
+Do not add expiration rules yet; they would break templates and avatars. The safe
+baseline aborts incomplete multipart uploads:
 
 ```bash
 npx wrangler r2 bucket lifecycle list serp-checklists-uploads

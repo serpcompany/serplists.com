@@ -33,3 +33,60 @@ describe('Uploads Handler', () => {
     expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
   });
 });
+
+describe('Uploads Handler DELETE', () => {
+  function deleteRequest(key: string): Request {
+    return new Request(
+      `http://localhost/api/uploads/file?key=${encodeURIComponent(key)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  function buildEnv(): any {
+    return {
+      BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
+      R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
+    };
+  }
+
+  it.each(['template-images', 'template-videos', 'template-files'])(
+    'refuses to delete the caller\'s own %s upload because templates, runs, and copies share it',
+    async (bucket) => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+      const env = buildEnv();
+
+      const response = await handleUploads(
+        deleteRequest(`${bucket}/user-123/asset.bin`),
+        env,
+      );
+
+      expect(response.status).toBe(409);
+      expect(env.R2_UPLOADS.delete).not.toHaveBeenCalled();
+    },
+  );
+
+  it('deletes the caller\'s own avatar', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env = buildEnv();
+
+    const response = await handleUploads(deleteRequest('avatars/user-123/a.png'), env);
+
+    expect(response.status).toBe(200);
+    expect(env.R2_UPLOADS.delete).toHaveBeenCalledWith('avatars/user-123/a.png');
+  });
+
+  it.each([
+    'avatars/user-999/a.png',
+    'other-bucket/user-123/a.png',
+    'avatars/evil/user-123/a.png',
+    'template-images/evil/user-123/a.png',
+  ])('rejects deleting %s', async (key) => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env = buildEnv();
+
+    const response = await handleUploads(deleteRequest(key), env);
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(env.R2_UPLOADS.delete).not.toHaveBeenCalled();
+  });
+});
