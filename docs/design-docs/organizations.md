@@ -50,13 +50,16 @@ Organization operations use legacy `/api/teams` route identifiers and require a 
 - `GET /api/teams/:teamId/members`: list members. Managers can see inactive rows; non-managers see active members.
 - `PUT /api/teams/:teamId/members/:memberId`: update role or status. Requires `owner` or `admin`; owners cannot be changed through this route.
 - `PUT /api/teams/:teamId/owner`: transfer the Organization's `owner` role. Requires current `owner`.
+- `POST /api/teams/:teamId/leave`: leave the Organization. Any active member except the `owner` (who gets `400 owner_must_transfer`); deletes the membership row so a manager cannot re-activate it, and records `team_member.left`.
 - `GET /api/teams/:teamId/invites`: list pending invites. Requires `owner` or `admin`.
 - `POST /api/teams/:teamId/invites`: create a link invite. Requires `owner` or `admin`.
 - `DELETE /api/teams/:teamId/invites/:inviteId`: revoke a pending invite. Requires `owner` or `admin`.
 - `GET /api/teams/:teamId/activity`: read Organization audit history. Requires `owner` or `admin`.
 - `GET /api/teams/invites/pending`: list pending invites for the current user's email.
 - `POST /api/teams/invites/pending/:inviteId/accept`: accept from the settings page.
+- `GET /api/teams/invites/:token`: read-only preview of a link invite (Organization, inviter, role, expiry, and `status` `pending` or `already_member`). Only the invited email sees it: another account gets `403 invite_email_mismatch` with no Organization details; revoked, used, or archived invites return `404`, expired ones `410`.
 - `POST /api/teams/invites/:token/accept`: accept from a link.
+- `POST /api/teams/invites/:token/decline`: the invited email revokes its own pending invite and records `team_invite.declined`.
 
 Template and Run routes accept the legacy `teamId` parameter where Organization scoping is supported:
 
@@ -78,6 +81,8 @@ Invites are link-based today:
 2. The API stores only `token_hash`, never the raw invite token.
 3. The response includes `delivery.mode = "link"`, `invitePath`, and `inviteUrl`.
 4. Invitees can accept through the legacy compatibility route `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
+5. Opening `/team-invites/:token` never joins anyone. The page loads the read-only preview and shows the Organization, inviter, and role with **Accept invite** and **Decline**; only a click accepts. Accepting leaves the active context unchanged and offers **Switch to <Organization>**, so a link from another site cannot quietly move a User's new Templates and Runs into an Organization.
+6. Members other than the `owner` can leave from **Leave Organization** on `/dashboard/settings`, which returns them to Personal.
 
 The API response already uses a `delivery` object so email can be added later without changing the UI contract. A future email implementation should keep the link accept route and switch delivery from `link` to a queued/sent email mode.
 

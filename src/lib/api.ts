@@ -2,6 +2,7 @@ import { env } from "@/env";
 import { createApiError } from "@/lib/api-errors";
 import type { TemplateImportSummary } from "@/types/checklist";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
+import { teamInvitePreviewSchema, type TeamInvitePreview } from "@/lib/schemas/teamInvite";
 
 const DEV_API_BASE_URL = env.VITE_API_URL ?? 'http://localhost:8788/api';
 const API_BASE_URL = import.meta.env.DEV
@@ -523,6 +524,25 @@ class ApiClient {
 
   async acceptTeamInvite(inviteToken: string): Promise<AcceptedTeamInvite> {
     return this.request(`/teams/invites/${encodeURIComponent(inviteToken)}/accept`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  async getTeamInvitePreview(inviteToken: string): Promise<TeamInvitePreview> {
+    const preview = await this.request(`/teams/invites/${encodeURIComponent(inviteToken)}`);
+    return teamInvitePreviewSchema.parse(preview);
+  }
+
+  async declineTeamInvite(inviteToken: string): Promise<{ success: true }> {
+    return this.request(`/teams/invites/${encodeURIComponent(inviteToken)}/decline`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  async leaveTeam(teamId: string): Promise<{ success: true }> {
+    return this.request(`/teams/${encodeURIComponent(teamId)}/leave`, {
       method: 'POST',
       body: JSON.stringify({}),
     });

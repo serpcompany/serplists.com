@@ -58,7 +58,8 @@ Canonical private routes:
   - `runner`: start and execute runs.
   - `viewer`: read-only access.
 - Organization management currently lives on `/dashboard/settings`.
-- Organization invites are link-based today. The legacy compatibility route `/team-invites/:token` and incoming invites on `/dashboard/settings` support acceptance.
+- Organization invites are link-based today. The legacy compatibility route `/team-invites/:token` and incoming invites on `/dashboard/settings` support acceptance. The link page shows the Organization, inviter, and role and waits for **Accept invite** or **Decline**; accepting does not switch the active context.
+- Members other than the owner can leave an Organization from `/dashboard/settings`.
 - Organization and Template changes are recorded in D1-backed audit/history tables.
 
 ## Entitlements

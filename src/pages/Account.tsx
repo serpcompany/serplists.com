@@ -6,6 +6,7 @@ import { authClient } from '@/lib/auth-client';
 import { SecuritySection } from '@/components/account/SecuritySection';
 import { BillingSection } from '@/components/account/BillingSection';
 import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
+import { LeaveOrganizationCard } from '@/components/account/LeaveOrganizationCard';
 import { AgentAccessSection } from '@/components/account/AgentAccessSection';
 import { isPersonalRunMcpUiEnabled } from '@/env';
 import { buildAccountUpdatePayload } from './accountProfileUpdates';
@@ -124,6 +125,8 @@ const Account = () => {
         {isPersonalRunMcpUiEnabled() ? <AgentAccessSection /> : null}
 
         <TeamSettingsSection />
+
+        <LeaveOrganizationCard />
 
         <SecuritySection />
         </div>

@@ -113,9 +113,9 @@ Testing conventions are in [RELIABILITY.md](../RELIABILITY.md#testing-convention
 1. Sign in as `admin@test.com` and create an Organization at `/dashboard/settings`.
 2. Create a link invite for another seeded or newly registered email.
 3. In a separate browser context, sign in as the invitee.
-4. Accept through `/team-invites/:token` (legacy route) or the incoming invites on
-   `/dashboard/settings`.
-5. Confirm the context switcher shows the Organization and Personal data stays separate.
+4. Open `/team-invites/:token` (legacy route) and click **Accept invite**, or accept from
+   the incoming invites on `/dashboard/settings`.
+5. Switch to the Organization and confirm Personal data stays separate.
 
 ## All scripts
 

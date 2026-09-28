@@ -101,7 +101,7 @@ async function expectWorkspaceSelected(
   }
 }
 
-test('@smoke team invite flow works through link and account settings', async ({ browser, page }) => {
+test('@smoke team invite flow asks before joining through a link, lets members leave, and works from account settings', async ({ browser, page }) => {
   test.setTimeout(120_000);
 
   const suffix = uniqueSuffix();
@@ -140,15 +140,42 @@ test('@smoke team invite flow works through link and account settings', async ({
     email: linkInviteeEmail,
     name: 'Link Invitee',
   });
+  const acceptRequests: string[] = [];
+  linkInviteePage.on('request', (request) => {
+    if (request.method() === 'POST' && /\/api\/teams\/invites\/[^/]+\/accept$/.test(request.url())) {
+      acceptRequests.push(request.url());
+    }
+  });
   await gotoInvite(linkInviteePage, linkInviteUrl);
+
+  // Opening the link only previews the invite: no accept request, no context switch.
+  await expect(linkInviteePage.getByText(teamName, { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(linkInviteePage.getByText('Owner User invited you to join as Viewer.')).toBeVisible();
+  const acceptButton = linkInviteePage.getByRole('button', { name: 'Accept invite' });
+  await expect(acceptButton).toBeVisible();
+  expect(acceptRequests).toEqual([]);
+
+  await acceptButton.dblclick();
   await expectInviteAccepted(linkInviteePage, linkInviteResponses);
+  expect(acceptRequests).toHaveLength(1);
   const storedWorkspaceAfterAccept = await linkInviteePage.evaluate(() =>
     window.localStorage.getItem('serplists.activeWorkspaceId'),
   );
-  linkInviteResponses.push(`STORED_AFTER_ACCEPT ${storedWorkspaceAfterAccept ?? '<null>'}`);
+  expect(storedWorkspaceAfterAccept ?? 'personal').toBe('personal');
+
+  await linkInviteePage.getByRole('button', { name: `Switch to ${teamName}` }).click();
   await linkInviteePage.goto('/dashboard/settings');
   await expectWorkspaceSelected(linkInviteePage, teamName, linkInviteResponses);
   await expect(linkInviteePage.getByText('Your role: Viewer')).toBeVisible();
+
+  // Members can leave on their own; the context returns to Personal.
+  linkInviteePage.once('dialog', (dialog) => void dialog.accept());
+  await linkInviteePage.getByRole('button', { name: 'Leave Organization' }).click();
+  await expect(linkInviteePage.getByRole('button', { name: 'Switch context' })).toContainText(
+    'Personal',
+    { timeout: 15_000 },
+  );
+  await expect(linkInviteePage.getByRole('button', { name: 'Leave Organization' })).toHaveCount(0);
   await linkInviteeContext.close();
 
   const settingsInviteeContext = await browser.newContext();
@@ -179,8 +206,10 @@ test('@smoke team invite flow works through link and account settings', async ({
     teamName,
     { timeout: 15_000 },
   );
-  await expect(page.getByText(linkInviteeEmail)).toBeVisible({
+  await expect(page.getByText(settingsInviteeEmail)).toBeVisible({
     timeout: 15_000,
   });
-  await expect(page.getByText(settingsInviteeEmail)).toBeVisible();
+  // The link invitee left, so only the activity history remembers them.
+  await expect(page.getByText(linkInviteeEmail)).toHaveCount(0);
+  await expect(page.getByText('Member left')).toBeVisible();
 });

@@ -19,6 +19,7 @@ import { api, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/li
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
+import { formatTeamActivityAction } from '@/components/account/teamActivityLabels';
 
 type AssignableTeamRole = Exclude<TeamRole, 'owner'>;
 
@@ -39,36 +40,11 @@ const roleDescriptions: Record<TeamRole, string> = {
   viewer: 'Views shared templates and runs.',
 };
 
-const teamActivityActionLabels: Record<string, string> = {
-  'checklist_run.created': 'Run created',
-  'checklist_run.deleted': 'Run archived',
-  'checklist_run.restored': 'Run restored',
-  'checklist_run.share_created': 'Run share created',
-  'checklist_run.shared_updated': 'Shared run updated',
-  'checklist_run.updated': 'Run updated',
-  'team.created': 'Organization created',
-  'team.owner_transferred': 'Owner transferred',
-  'team.updated': 'Organization updated',
-  'team_invite.accepted': 'Invite accepted',
-  'team_invite.created': 'Invite created',
-  'team_invite.revoked': 'Invite revoked',
-  'team_member.updated': 'Member updated',
-  'template.cloned': 'Template cloned',
-  'template.created': 'Template created',
-  'template.deleted': 'Template archived',
-  'template.imported': 'Template imported',
-  'template.restored': 'Template restored',
-  'template.updated': 'Template updated',
-};
-
 const formatRole = (role: TeamRole): string =>
   role.charAt(0).toUpperCase() + role.slice(1);
 
 const formatMemberStatus = (status: TeamMemberStatus): string =>
   status.charAt(0).toUpperCase() + status.slice(1);
-
-const formatTeamActivityAction = (action: string): string =>
-  teamActivityActionLabels[action] ?? action;
 
 const formatInviteExpiration = (value: string): string => {
   const date = new Date(value);

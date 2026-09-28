@@ -13,6 +13,12 @@ import {
   normalizeTeamRole,
 } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
+import {
+  declineTeamInvite,
+  getCurrentUserEmail,
+  leaveTeam,
+  previewTeamInvite,
+} from "./team-self-service";
 
 const createTeamBodySchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -75,14 +81,6 @@ async function generateUniqueTeamSlug(env: Env, name: string, teamId: string, re
   if (!existingSuffixed) return suffixed;
 
   return `${base}-${crypto.randomUUID().slice(0, 8)}`;
-}
-
-async function getCurrentUserEmail(env: Env, userId: string): Promise<string | null> {
-  const db = createDb(env);
-  const { users } = schema;
-
-  const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
-  return user?.email ?? null;
 }
 
 function parseOptionalJson(value: string | null): unknown {
@@ -501,6 +499,15 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     return json(rows);
   }
 
+  if (teamsSubpath[0] === "invites" && teamsSubpath[1] && teamsSubpath[1] !== "pending") {
+    if (request.method === "GET" && teamsSubpath.length === 2) {
+      return previewTeamInvite({ db, env, token: teamsSubpath[1], userId });
+    }
+    if (request.method === "POST" && teamsSubpath.length === 3 && teamsSubpath[2] === "decline") {
+      return declineTeamInvite({ db, env, request, token: teamsSubpath[1], userId });
+    }
+  }
+
   if (request.method === "POST" && teamsSubpath[0] === "invites" && teamsSubpath[1] === "pending" && teamsSubpath[3] === "accept") {
     const inviteId = teamsSubpath[2];
     if (!inviteId) {
@@ -526,6 +533,10 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
   }
 
   const role = normalizeTeamRole(membership.role);
+
+  if (request.method === "POST" && teamsSubpath.length === 2 && teamsSubpath[1] === "leave") {
+    return leaveTeam({ db, memberId: membership.id, membership, request, teamId, userId });
+  }
 
   if (request.method === "GET" && teamsSubpath.length === 1) {
     const [team] = await db.select().from(teams).where(and(eq(teams.id, teamId), isNull(teams.archived_at))).limit(1);
