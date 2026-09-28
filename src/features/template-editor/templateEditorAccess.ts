@@ -88,6 +88,14 @@ export const isTemplateLimitReached = (params: {
   typeof params.ownedCount === "number" &&
   params.ownedCount >= params.maxTemplates;
 
+// The limit pre-check needs the context's template count, which only the workspace list
+// has. Load that list only on the new-template editor and only when the plan has a template
+// limit: an editor of an existing template, or a plan without a limit, never reads a list.
+export const shouldLoadTemplateCountForLimit = (params: {
+  isCreate: boolean;
+  maxTemplates?: number | null;
+}): boolean => params.isCreate && typeof params.maxTemplates === "number";
+
 // Shown on the new-template editor before the user writes a template the plan cannot save.
 export const resolveTemplateLimitNotice = (
   limitReached: boolean,

@@ -18,6 +18,7 @@ import {
   isTemplateLimitReached,
   resolveTemplateLimitNotice,
   resolveTemplateSaveFailureNotice,
+  shouldLoadTemplateCountForLimit,
   type TemplateEditorAccessNotice,
 } from "@/features/template-editor/templateEditorAccess";
 import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
@@ -48,12 +49,18 @@ export const useTemplateEditorAccess = ({
   const { activeTeamId, isTeamWorkspace } = useWorkspace();
   const navigate = useNavigate();
   const location = useLocation();
-  const { allTemplates, templatesLoading } = useTemplateLists();
   const billing = useQuery({
     queryKey: getBillingStatusQueryKey(user?.id, activeTeamId),
     queryFn: () => api.getBillingStatus(activeTeamId ? { teamId: activeTeamId } : undefined),
     enabled: Boolean(user) && isCreate,
     retry: false,
+  });
+  // The editor loads its template by id; the workspace list is read only for the count.
+  const { allTemplates, templatesLoading } = useTemplateLists({
+    workspace: shouldLoadTemplateCountForLimit({
+      isCreate,
+      maxTemplates: billing.data?.limits?.maxTemplates,
+    }),
   });
   const [saveNotice, setSaveNotice] = useState<TemplateEditorAccessNotice | null>(null);
   const [draft, setDraft] = useState<StoredTemplateDraft | null>(null);

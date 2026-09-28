@@ -6,6 +6,7 @@ import {
   ORGANIZATION_TEMPLATE_PLAN_MESSAGE,
   resolveTemplateLimitNotice,
   resolveTemplateSaveFailureNotice,
+  shouldLoadTemplateCountForLimit,
 } from "@/features/template-editor/templateEditorAccess";
 import { BILLING_UNAVAILABLE_MESSAGE } from "@/lib/api-errors";
 import type { ChecklistTemplate } from "@/types/checklist";
@@ -89,5 +90,14 @@ describe("template limit pre-check", () => {
   it("warns before the user writes a template the plan cannot save", () => {
     expect(resolveTemplateLimitNotice(true, personal)?.action).toBe("checkout");
     expect(resolveTemplateLimitNotice(false, personal)).toBeNull();
+  });
+
+  // The editor loads its template by id: the workspace list (every template with its
+  // items) is read only when the new-template editor needs a count for a known limit.
+  it("loads the workspace list only on the new-template editor of a limited plan", () => {
+    expect(shouldLoadTemplateCountForLimit({ isCreate: true, maxTemplates: 1 })).toBe(true);
+    expect(shouldLoadTemplateCountForLimit({ isCreate: false, maxTemplates: 1 })).toBe(false);
+    expect(shouldLoadTemplateCountForLimit({ isCreate: true, maxTemplates: null })).toBe(false);
+    expect(shouldLoadTemplateCountForLimit({ isCreate: true, maxTemplates: undefined })).toBe(false);
   });
 });

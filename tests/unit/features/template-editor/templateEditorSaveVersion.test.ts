@@ -154,4 +154,15 @@ describe("template editor versions", () => {
       expect(source, file).not.toMatch(/useTemplateLists/);
     }
   });
+
+  it("reads the workspace list only for the new-template limit check", () => {
+    const source = readFileSync(
+      path.resolve(__dirname, "../../../..", "src/features/template-editor/useTemplateEditorAccess.ts"),
+      "utf8",
+    );
+    const calls = source.match(/useTemplateLists\([^)]*/g) ?? [];
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("workspace: shouldLoadTemplateCountForLimit(");
+  });
 });
