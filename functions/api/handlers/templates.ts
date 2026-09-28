@@ -22,6 +22,10 @@ import {
 } from '../../../src/lib/schemas/checklistSchema';
 import { appendTemplateSlugSuffix, capTemplateSlug } from '../../../src/lib/schemas/templateFields';
 import {
+  countOversizedTemplateAssets,
+  oversizedTemplateAssetMessage,
+} from '../../../src/lib/schemas/templateAssetLimits';
+import {
   assignMissingStableTemplateIdentities,
   calculateRunProgress,
   reconcileRunSections,
@@ -407,27 +411,6 @@ type TemplateImportSummary = {
   successes: TemplateImportSuccess[];
 };
 
-function hasOversizedAssets(sections: unknown[], maxAssetBytes: number): boolean {
-  for (const section of sections) {
-    if (!isRecord(section)) continue;
-    const items = section.items;
-    if (!Array.isArray(items)) continue;
-    for (const item of items) {
-      if (!isRecord(item)) continue;
-      const contents = item.contents;
-      if (!Array.isArray(contents)) continue;
-      for (const content of contents) {
-        if (!isRecord(content)) continue;
-        const type = content.type;
-        if (type !== 'image' && type !== 'video' && type !== 'file') continue;
-        const fileSize = content.fileSize;
-        if (typeof fileSize === 'number' && fileSize > maxAssetBytes) return true;
-      }
-    }
-  }
-  return false;
-}
-
 function countReferencedUploads(sections: unknown[]): number {
   let count = 0;
 
@@ -572,7 +555,6 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     if (request.method === 'POST') {
       const MAX_TEMPLATES_PER_IMPORT = 5;
-      const MAX_ASSET_BYTES = 5 * 1024 * 1024;
 
       let body: unknown;
       try {
@@ -644,11 +626,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           continue;
         }
 
-        if (hasOversizedAssets(normalizedSections.sections, MAX_ASSET_BYTES)) {
+        // The upload limit: an asset the uploader accepted always imports again.
+        if (countOversizedTemplateAssets(normalizedSections.sections) > 0) {
           summary.failed.push({
             index,
             title: template.title,
-            reason: 'Import blocked: one or more assets are over 5MB',
+            reason: oversizedTemplateAssetMessage(),
             code: 'oversized_asset',
           });
           continue;

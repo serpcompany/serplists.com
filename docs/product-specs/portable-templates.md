@@ -257,8 +257,12 @@ JSON exports **do not** include R2 assets. If a template references uploaded fil
 - Template import/export is a **Pro** feature.
 - Export defaults to the portable template pack format.
 - Backup export is still available for compatibility.
-- Guardrails are enforced (max 5 templates/import; block assets > 5MB).
-- Asset uploads should be <= 5MB each (compress before publishing).
+- Guardrails are enforced: at most 5 templates per import, and a template with an
+  asset whose recorded `fileSize` is over the 50MB upload limit fails with
+  `oversized_asset` while the other templates in the file still import.
+- Asset uploads are limited to 50MB each. Import accepts any size an upload can have
+  (one shared limit, `src/lib/schemas/templateAssetLimits.ts`), so a template
+  exported from the app always imports again; import copies asset URLs, not the files.
 - For live public-library publishing today, the imported template should be owned by the intended public publisher account before import, because author username is resolved from DB ownership, not from the portable JSON file.
 
 `seoUrl` is represented by the stored `slug` field and mapped back into the editor's `Custom URL Slug` input.

@@ -1,5 +1,6 @@
 import { optimizeImage, isImageFile } from "@/lib/imageOptimization";
 import { api } from "@/lib/api";
+import { formatAssetSizeLimit } from "@/lib/schemas/templateAssetLimits";
 import {
   isAllowedUpload,
   UPLOAD_MAX_BYTES,
@@ -118,7 +119,7 @@ export const validateFile = (
   type: 'image' | 'video' | 'file'
 ): { valid: boolean; error?: string } => {
   if (file.size > UPLOAD_MAX_BYTES) {
-    return { valid: false, error: 'File size must be less than 50MB' };
+    return { valid: false, error: `File size must be ${formatAssetSizeLimit(UPLOAD_MAX_BYTES)} or less` };
   }
 
   if (type === 'image') {

@@ -21,32 +21,25 @@ import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
 import { getAccessFailure } from "@/lib/api-errors";
 import { getBillingStatusQueryKey } from "@/lib/billing";
 import { cn } from "@/lib/utils";
+import {
+  countOversizedTemplateAssets,
+  formatAssetSizeLimit,
+  TEMPLATE_IMPORT_MAX_ASSET_BYTES,
+} from "@/lib/schemas/templateAssetLimits";
 
 interface TemplateBackupProps {
   className?: string;
 }
 
 const MAX_TEMPLATES_PER_IMPORT = 5;
-const MAX_ASSET_BYTES = 5 * 1024 * 1024;
 const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024; // 2MB
 const SUPPORTED_IMPORT_EXTENSIONS = [".json", ".md", ".markdown", ".yaml", ".yml"];
 
-const countOversizedAssets = (templates: ChecklistTemplate[]): number => {
-  let count = 0;
-  templates.forEach((template) => {
-    template.sections.forEach((section) => {
-      section.items.forEach((item) => {
-        item.contents?.forEach((content) => {
-          if (content.type !== "image" && content.type !== "video" && content.type !== "file") return;
-          if (typeof content.fileSize === "number" && content.fileSize > MAX_ASSET_BYTES) {
-            count += 1;
-          }
-        });
-      });
-    });
-  });
-  return count;
-};
+const ASSET_LIMIT = formatAssetSizeLimit(TEMPLATE_IMPORT_MAX_ASSET_BYTES);
+
+// The same check the API applies per template; it only warns here.
+const countOversizedAssets = (templates: ChecklistTemplate[]): number =>
+  templates.reduce((count, template) => count + countOversizedTemplateAssets(template.sections), 0);
 
 export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   className
@@ -196,11 +189,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 
     if (exceedsTemplateLimit) {
       toast.error(`Import limited to ${MAX_TEMPLATES_PER_IMPORT} templates per file for now`);
-      return;
-    }
-
-    if (importOversizeAssets > 0) {
-      toast.error("Import blocked: one or more assets are over 5MB (compress or re-upload after import)");
       return;
     }
 
@@ -547,7 +535,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                                 • {importPreview.templates.length} templates selected; limit is {MAX_TEMPLATES_PER_IMPORT} per import
                               </li>}
                             {importOversizeAssets > 0 && <li>
-                                • {importOversizeAssets} asset{importOversizeAssets === 1 ? "" : "s"} over 5MB; compress or remove to import
+                                • {importOversizeAssets} asset{importOversizeAssets === 1 ? "" : "s"} over {ASSET_LIMIT}; templates with them will not be imported
                               </li>}
                           </ul>
                         </div>
@@ -568,7 +556,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                           <li>• Slugs will be regenerated to avoid conflicts</li>
                           <li>• Uploaded assets are not copied; re-upload if needed</li>
                           <li>• Limit: max {MAX_TEMPLATES_PER_IMPORT} templates per import (enforced)</li>
-                          <li>• Limit: assets should be ≤ 5MB each (enforced when size is provided)</li>
+                          <li>• Limit: assets up to {ASSET_LIMIT} each, the upload limit (checked when size is provided)</li>
                         </ul>
                       </div>
                     </div>
@@ -577,7 +565,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                   <div className="flex gap-2">
                     <Button
                       onClick={handleConfirmImport}
-                      disabled={isImporting || exceedsTemplateLimit || importOversizeAssets > 0}
+                      disabled={isImporting || exceedsTemplateLimit}
                       className="flex items-center gap-2"
                     >
                       <Upload className="h-4 w-4" />

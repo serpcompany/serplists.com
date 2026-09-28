@@ -10,6 +10,8 @@ import {
   validateFile,
   UploadResult,
 } from '@/lib/utils/fileUpload';
+import { formatAssetSizeLimit } from '@/lib/schemas/templateAssetLimits';
+import { UPLOAD_MAX_BYTES } from '@/lib/schemas/uploadTypes';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
@@ -201,7 +203,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                 )}
               </Button>
               <p className="text-xs text-muted-foreground mt-1">
-                Max file size: 50MB
+                Max file size: {formatAssetSizeLimit(UPLOAD_MAX_BYTES)}
               </p>
             </div>
           )}

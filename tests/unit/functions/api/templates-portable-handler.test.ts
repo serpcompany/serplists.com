@@ -253,4 +253,62 @@ describe('portable template import/export API', () => {
     expect(response.status).toBe(400);
     expect(data.code).toBe('unsupported_portable_schema_version');
   });
+
+  const packWithAsset = (fileSize: number) => ({
+    title: `Template with a ${fileSize} byte asset`,
+    sections: [
+      {
+        title: 'Docs',
+        items: [
+          {
+            title: 'Read the brief',
+            contents: [
+              {
+                type: 'file',
+                value: '/api/uploads/file?key=template-files%2Fuser-123%2Fbrief.pdf',
+                fileName: 'brief.pdf',
+                fileSize,
+                uploadType: 'upload',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  const importPack = (templates: unknown[]) =>
+    handleTemplates(
+      new Request('http://localhost/api/templates/backup', {
+        method: 'POST',
+        body: JSON.stringify({
+          kind: 'serplists-template-pack',
+          schemaVersion: '2.0.0',
+          exportedAt: '2026-03-21T00:00:00.000Z',
+          templates,
+        }),
+      }),
+      mockEnv as never,
+    );
+
+  // The uploader accepts up to 50MB, so an export holding such an asset must import again.
+  it('imports assets up to the upload limit', async () => {
+    const response = await importPack([packWithAsset(8 * 1024 * 1024), packWithAsset(50 * 1024 * 1024)]);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.imported).toBe(2);
+    expect(data.failed).toEqual([]);
+  });
+
+  it('fails only the template whose asset is over the upload limit', async () => {
+    const response = await importPack([packWithAsset(50 * 1024 * 1024 + 1), packWithAsset(1024)]);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.imported).toBe(1);
+    expect(data.failed).toEqual([
+      expect.objectContaining({ index: 0, code: 'oversized_asset', reason: expect.stringContaining('50MB') }),
+    ]);
+  });
 });

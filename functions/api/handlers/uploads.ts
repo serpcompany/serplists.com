@@ -8,6 +8,7 @@ import {
   uploadAcceptAttribute,
   type UploadBucket,
 } from '../../../src/lib/schemas/uploadTypes';
+import { formatAssetSizeLimit } from '../../../src/lib/schemas/templateAssetLimits';
 
 const TEMPLATE_BUCKETS: readonly UploadBucket[] = ['template-images', 'template-videos', 'template-files'];
 
@@ -92,7 +93,9 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
     const file = form.get('file');
     if (!(file instanceof File)) return json({ error: 'file required' }, 400);
 
-    if (file.size > UPLOAD_MAX_BYTES) return json({ error: 'File too large (max 50MB)' }, 413);
+    if (file.size > UPLOAD_MAX_BYTES) {
+      return json({ error: `File too large (max ${formatAssetSizeLimit(UPLOAD_MAX_BYTES)})` }, 413);
+    }
 
     // The same list the upload pickers use (src/lib/schemas/uploadTypes.ts).
     const contentType = resolveUploadContentType(bucket, file);
