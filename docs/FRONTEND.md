@@ -51,6 +51,10 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
   ([D1 cost](design-docs/d1-cost.md)), so pages that only need official templates use
   the bundled `repoTemplates`. The catalog's query key has no user id because the
   catalog is the same for everyone.
+- After a write, reload the affected query with `reloadQuery`
+  (`src/lib/queryReload.ts`), not `refetch()` or `fetchQuery`. Those join a fetch
+  already in flight (a first load, for `refetch()`), which read the server before
+  the write and puts the old list back when it lands.
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.

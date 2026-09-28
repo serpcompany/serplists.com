@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Copy, Crown, Link2, Trash2, Users } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import { QueryListState } from '@/components/shared/QueryListState';
 import { TeamActivityList } from '@/components/account/TeamActivityList';
 import { api, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/lib/api';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { reloadQuery } from '@/lib/queryReload';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
 
@@ -136,11 +137,8 @@ export function TeamSettingsSection() {
 
   const incomingInvites = incomingInvitesQuery.data ?? [];
   const queryClient = useQueryClient();
-  // refetch() joins a first load still in flight, which predates the change; cancel it first.
-  const reload = async (query: { refetch: () => Promise<unknown> }, queryKey: unknown[]) => {
-    await queryClient.cancelQueries({ queryKey });
-    await query.refetch();
-  };
+  // A plain refetch() joins a first load still in flight, which predates the change.
+  const reload = (queryKey: QueryKey) => reloadQuery(queryClient, queryKey);
   const activeMemberId =
     isTeamWorkspace && 'memberId' in activeWorkspace
       ? activeWorkspace.memberId
@@ -209,7 +207,7 @@ export function TeamSettingsSection() {
         slug: slug || undefined,
       });
       await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload(['team-activity', activeTeamId]);
       toast.success('Organization updated');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update Organization');
@@ -240,8 +238,8 @@ export function TeamSettingsSection() {
       });
       setInviteUrl(resolveCreatedInviteUrl(invite));
       setInviteEmail('');
-      await reload(invitesQuery, ['team-invites', activeTeamId]);
-      await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload(['team-invites', activeTeamId]);
+      await reload(['team-activity', activeTeamId]);
       toast.success('Invite link created');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create invite');
@@ -258,8 +256,8 @@ export function TeamSettingsSection() {
     setRevokingInviteId(inviteId);
     try {
       await api.revokeTeamInvite(activeTeamId, inviteId);
-      await reload(invitesQuery, ['team-invites', activeTeamId]);
-      await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload(['team-invites', activeTeamId]);
+      await reload(['team-activity', activeTeamId]);
       toast.success('Invite revoked');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to revoke invite');
@@ -279,7 +277,7 @@ export function TeamSettingsSection() {
 
       persistAcceptedWorkspace(acceptedInvite.teamId);
       selectWorkspace(acceptedInvite.teamId);
-      await reload(incomingInvitesQuery, ['incoming-team-invites']);
+      await reload(['incoming-team-invites']);
       void refreshTeams().catch(() => undefined);
       toast.success('Organization invite accepted');
     } catch (error) {
@@ -313,9 +311,9 @@ export function TeamSettingsSection() {
     setUpdatingMemberId(member.id);
     try {
       await api.updateTeamMember(activeTeamId, member.id, updates);
-      await reload(membersQuery, ['team-members', activeTeamId]);
+      await reload(['team-members', activeTeamId]);
       await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload(['team-activity', activeTeamId]);
       toast.success('Member updated');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update member');
@@ -340,9 +338,9 @@ export function TeamSettingsSection() {
     setTransferringOwnerMemberId(member.id);
     try {
       await api.transferTeamOwnership(activeTeamId, member.id);
-      await reload(membersQuery, ['team-members', activeTeamId]);
+      await reload(['team-members', activeTeamId]);
       await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload(['team-activity', activeTeamId]);
       toast.success('Organization ownership transferred');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to transfer ownership');
@@ -568,7 +566,7 @@ export function TeamSettingsSection() {
                   loadingLabel="Loading invites..."
                   loadErrorLabel="Couldn't load pending invites."
                   refreshErrorLabel="Couldn't refresh pending invites. Showing the last loaded list."
-                  onRetry={() => void reload(invitesQuery, ['team-invites', activeTeamId])}
+                  onRetry={() => void reload(['team-invites', activeTeamId])}
                   empty={<div className="text-sm text-muted-foreground">No pending invites.</div>}
                 >
                   <div className="divide-y rounded-md border border-border">
@@ -615,7 +613,7 @@ export function TeamSettingsSection() {
                 loadingLabel="Loading members..."
                 loadErrorLabel="Couldn't load members."
                 refreshErrorLabel="Couldn't refresh members. Showing the last loaded list."
-                onRetry={() => void reload(membersQuery, ['team-members', activeTeamId])}
+                onRetry={() => void reload(['team-members', activeTeamId])}
                 empty={<div className="text-sm text-muted-foreground">No members found.</div>}
               >
                 <div className="divide-y rounded-md border border-border">
@@ -722,7 +720,7 @@ export function TeamSettingsSection() {
             {canManageTeam ? (
               <TeamActivityList
                 query={activityQuery}
-                onRetry={() => void reload(activityQuery, ['team-activity', activeTeamId])}
+                onRetry={() => void reload(['team-activity', activeTeamId])}
               />
             ) : null}
           </div>

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bot, Copy, KeyRound, Trash2, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { QueryListState } from '@/components/shared/QueryListState';
 import { api, getAgentMcpEndpoint, type AgentKey, type CreatedAgentKey } from '@/lib/api';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { reloadQuery } from '@/lib/queryReload';
 
 const agentKeysQueryKey = ['agent-keys'] as const;
 
@@ -270,6 +271,7 @@ export function AgentAccessSection() {
   const [createdKey, setCreatedKey] = useState<CreatedAgentKey | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const keysQuery = useQuery({
     queryKey: agentKeysQueryKey,
@@ -290,7 +292,11 @@ export function AgentAccessSection() {
       const result = await api.createAgentKey(name);
       setCreatedKey(result);
       setKeyName('');
-      await keysQuery.refetch();
+      // Show the new key at once; the list may still be loading from before the create.
+      await reloadQuery<AgentKey[]>(queryClient, agentKeysQueryKey, (keys = []) => [
+        result.key,
+        ...keys.filter((key) => key.id !== result.key.id),
+      ]);
       toast.success('Run Key created');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create Run Key');
@@ -324,7 +330,7 @@ export function AgentAccessSection() {
     try {
       await api.revokeAgentKey(key.id);
       if (createdKey?.key.id === key.id) setCreatedKey(null);
-      await keysQuery.refetch();
+      await reloadQuery(queryClient, agentKeysQueryKey);
       toast.success('Run Key revoked');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to revoke Run Key');
