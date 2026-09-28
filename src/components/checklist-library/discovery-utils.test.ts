@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { ChecklistTemplate } from '@/types/checklist';
 
+import { repoTemplates } from '@/lib/repoTemplateCatalog';
+
 import {
   buildDiscoveryCategories,
   filterAndSortTemplates,
@@ -74,6 +76,21 @@ describe('discovery-utils', () => {
       const filtered = filterAndSortTemplates(ordering, { sortBy: 'recent' });
       expect(filtered.map((template) => template.id)).toEqual(['delta', 'gamma', 'beta', 'alpha']);
     }
+  });
+
+  it('lists a template published yesterday above the bundled starter templates under recent', () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const published: ChecklistTemplate = {
+      ...templates[0],
+      id: 'fresh',
+      title: 'Zulu Fresh Template',
+      createdAt: yesterday,
+      updatedAt: yesterday,
+    };
+
+    const filtered = filterAndSortTemplates([...repoTemplates, published], { sortBy: 'recent' });
+
+    expect(filtered[0].id).toBe('fresh');
   });
 
   it('sorts by structural popularity when requested', () => {

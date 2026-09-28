@@ -37,6 +37,11 @@ export type TemplateImportResult = {
   warnings: TemplateImportWarning[];
 };
 
+export type ParseTemplatesOptions = {
+  /** Date for templates the source does not date. Defaults to the parse time. */
+  fallbackTimestamp?: string;
+};
+
 const generateTempId = (prefix: string) => {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 };
@@ -82,8 +87,10 @@ const coerceSections = (input: unknown): ChecklistSection[] | null => {
   ]);
 };
 
-const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTemplate => {
-  const now = new Date().toISOString();
+const normalizeImportTemplate = (
+  template: ChecklistTemplateImport,
+  now = new Date().toISOString(),
+): ChecklistTemplate => {
   const hasSectionsField = typeof template.sections !== "undefined" || typeof template.items !== "undefined";
   if (!hasSectionsField) {
     throw new Error(`Template "${template.title}" is missing sections/items`);
@@ -114,8 +121,10 @@ const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTe
   };
 };
 
-const normalizePortableTemplate = (template: PortableChecklistTemplate): ChecklistTemplate => {
-  const now = new Date().toISOString();
+const normalizePortableTemplate = (
+  template: PortableChecklistTemplate,
+  now = new Date().toISOString(),
+): ChecklistTemplate => {
   const sections = coerceSections(template.sections);
   if (!sections) {
     throw new Error(`Template "${template.title}" has invalid sections`);
@@ -294,21 +303,25 @@ export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
   });
 };
 
-export const parseTemplatesFromData = (data: unknown): TemplateImportResult => {
+export const parseTemplatesFromData = (
+  data: unknown,
+  { fallbackTimestamp }: ParseTemplatesOptions = {},
+): TemplateImportResult => {
+  const now = fallbackTimestamp ?? new Date().toISOString();
   try {
     let rawTemplates: ChecklistTemplateImport[] = [];
     let normalizedTemplates: ChecklistTemplate[] = [];
 
     if (Array.isArray(data)) {
       rawTemplates = validateTemplateImportArray(data);
-      normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template));
+      normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template, now));
     } else if (data && typeof data === "object" && "kind" in data && (data as { kind?: unknown }).kind === "serplists-template-pack") {
       const portablePackEnvelope = validatePortableTemplatePackEnvelope(data);
       if (portablePackEnvelope.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
         throw new Error(`Unsupported portable template schema version: ${portablePackEnvelope.schemaVersion}`);
       }
       const portablePack = validatePortableTemplatePack(data);
-      normalizedTemplates = portablePack.templates.map((template) => normalizePortableTemplate(template));
+      normalizedTemplates = portablePack.templates.map((template) => normalizePortableTemplate(template, now));
     } else if (data && typeof data === "object" && "templates" in data) {
       try {
         const backup = validateBackup(data);
@@ -316,7 +329,7 @@ export const parseTemplatesFromData = (data: unknown): TemplateImportResult => {
       } catch {
         rawTemplates = validateTemplateImportArray((data as { templates: unknown }).templates);
       }
-      normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template));
+      normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template, now));
     } else {
       throw new Error("Unsupported JSON format (expected backup or template array)");
     }

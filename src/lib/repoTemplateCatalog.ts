@@ -1,9 +1,16 @@
+import { z } from 'zod';
+
 import { parseTemplatesFromData } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 export const REPO_TEMPLATE_USER_ID = 'repo-template-catalog';
 export const REPO_TEMPLATE_OWNER_NAME = 'SERP Lists Library';
 export const REPO_TEMPLATE_OWNER_SLUG = 'serp';
+/**
+ * Date for repo templates whose pack has no valid `exportedAt`: the day the repo
+ * catalog shipped. Never the load time, which would rank starters as newest.
+ */
+export const REPO_TEMPLATE_FALLBACK_TIMESTAMP = '2026-03-22T00:00:00.000Z';
 
 type RepoTemplateModule = {
   default?: unknown;
@@ -41,6 +48,17 @@ const getSourceData = (value: unknown): unknown => {
   return value;
 };
 
+const packDateSchema = z.object({ exportedAt: z.string() });
+
+/** A pack's `exportedAt` as an ISO date, or the fixed fallback when it is missing or invalid. */
+const resolveRepoPackTimestamp = (sourceData: unknown): string => {
+  const parsed = packDateSchema.safeParse(sourceData);
+  const time = parsed.success ? Date.parse(parsed.data.exportedAt) : Number.NaN;
+  return Number.isFinite(time)
+    ? new Date(time).toISOString()
+    : REPO_TEMPLATE_FALLBACK_TIMESTAMP;
+};
+
 const buildRepoTemplateId = (
   sourcePath: string,
   template: ChecklistTemplate,
@@ -60,7 +78,11 @@ export const normalizeRepoTemplateSources = (
 
   Object.entries(sources).forEach(([sourcePath, value]) => {
     const sourceData = getSourceData(value);
-    const { templates } = parseTemplatesFromData(sourceData);
+    // Undated templates take their pack's date, so the Recent sort and published
+    // dates stay stable across page loads. Bump `exportedAt` when a pack changes.
+    const { templates } = parseTemplatesFromData(sourceData, {
+      fallbackTimestamp: resolveRepoPackTimestamp(sourceData),
+    });
 
     templates.forEach((template, index) => {
       const repoTemplate: ChecklistTemplate = {
@@ -86,6 +108,18 @@ export const normalizeRepoTemplateSources = (
   return Array.from(templatesByKey.values()).sort((left, right) =>
     left.title.localeCompare(right.title),
   );
+};
+
+/** When the repo library started: its earliest template date. */
+export const getRepoCatalogCreatedAt = (
+  templates: Pick<ChecklistTemplate, 'createdAt'>[],
+): string => {
+  const times = templates
+    .map((template) => Date.parse(template.createdAt))
+    .filter(Number.isFinite);
+  return times.length > 0
+    ? new Date(Math.min(...times)).toISOString()
+    : REPO_TEMPLATE_FALLBACK_TIMESTAMP;
 };
 
 export const mergePublicTemplateCollections = (
