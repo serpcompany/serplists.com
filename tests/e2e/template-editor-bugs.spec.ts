@@ -1471,10 +1471,9 @@ test.describe("template editor regressions", () => {
       // Another tab (or an Organization teammate) saves a new task meanwhile.
       await page.evaluate(async ({ id, apiBaseUrl }) => {
         const current = await fetch(`${apiBaseUrl}/templates/${id}`, { credentials: "include" });
-        const template = (await current.json()) as { items: unknown; version: number };
-        const sections = (
-          typeof template.items === "string" ? JSON.parse(template.items) : template.items
-        ) as Array<{ items: unknown[] }>;
+        // Reads return the checklist as parsed `sections` (the raw items column is not sent).
+        const template = (await current.json()) as { sections: Array<{ items: unknown[] }>; version: number };
+        const { sections } = template;
         sections[0].items.push({ id: "added-elsewhere", title: "Added elsewhere", description: "" });
         const response = await fetch(`${apiBaseUrl}/templates/${id}`, {
           method: "PUT",
@@ -1493,7 +1492,7 @@ test.describe("template editor regressions", () => {
       await expect(page.getByText("Template saved", { exact: true })).toBeVisible();
 
       const saved = await findTemplateByTitle(page, `${title} edited`);
-      expect(JSON.stringify(saved?.items)).toContain("Added elsewhere");
+      expect(JSON.stringify(saved?.sections)).toContain("Added elsewhere");
     } finally {
       await deleteTemplate(page, templateId);
     }
