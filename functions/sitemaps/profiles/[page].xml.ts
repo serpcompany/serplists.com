@@ -3,6 +3,7 @@ import { sitemap_profile_revisions, users } from '../../../db/schema/index';
 import { createDb } from '../../api/db';
 import type { Env } from '../../api/types';
 import {
+  cachedSitemap,
   handlePagedDatabaseSitemap,
   isValidUsername,
   mostRecentLastmod,
@@ -16,9 +17,10 @@ type ProfileRow = {
   profile_revision: string | null;
 };
 
-export const onRequest: PagesFunction<Env> = async ({ request, env, params }) => {
+export const onRequest: PagesFunction<Env> = async (context) => {
+  const { env, params } = context;
   const db = createDb(env);
-  return handlePagedDatabaseSitemap<ProfileRow>({
+  return cachedSitemap(context, (request) => handlePagedDatabaseSitemap<ProfileRow>({
     request,
     params,
     loadRows: async ({ limit, offset }) => await db
@@ -44,5 +46,5 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, params }) =>
         ),
       }) : null;
     },
-  });
+  }));
 };
