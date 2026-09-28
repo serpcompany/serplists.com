@@ -1,15 +1,22 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { trackApiRequests } from './support/api-requests';
+
 // Saves on the run page run one at a time, and a double click counts as one click
 // (src/features/run-execution/saveQueue.ts).
 
 const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 async function loginAsAdmin(page: Page) {
+  const apiRequests = trackApiRequests(page, DEV_API_BASE_URL);
   await page.goto('/login');
   await page.getByRole('button', { name: 'Fill Admin' }).click();
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+  // Signing in lands on Account Settings: let its requests finish before the test calls
+  // the API, which the local dev proxy can drop in a burst (see support/api-requests.ts).
+  await expect(page.getByRole('heading', { name: 'Account Settings' })).toBeVisible();
+  await apiRequests.settled();
 }
 
 async function createRun(page: Page, title: string) {
@@ -360,11 +367,24 @@ function recordSaves(page: Page, runId: string) {
   return saves;
 }
 
-async function pointAt(page: Page, name: string) {
-  const box = await page.getByRole('button', { name }).boundingBox();
+type Point = { x: number; y: number };
+type Box = { x: number; y: number; width: number; height: number } | null;
+
+const isInside = (box: Box, point: Point) =>
+  box !== null && point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height;
+
+// The window scrolls on the run page and the footer buttons start below the fold, and
+// page.mouse clicks where it is told without scrolling. Scroll just far enough to show the
+// button, as a person does (scrollIntoViewIfNeeded would centre it and push the task title
+// out of view, so moving on would scroll the page away from under the pointer).
+async function pointAt(page: Page, name: string): Promise<Point> {
+  const button = page.getByRole('button', { name });
+  await button.evaluate((element) => element.scrollIntoView({ block: 'nearest' }));
+  const box = await button.boundingBox();
   if (!box) throw new Error(`${name} is not visible`);
   const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   await page.mouse.move(point.x, point.y);
+  return point;
 }
 
 // One click of a double click, with the click count the browser reports as event.detail.
@@ -405,11 +425,21 @@ test('the second click of a double click after a fast save does not complete the
   await pointAt(page, 'Mark Complete');
   await clickHere(page, 1);
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  // The rest of the double click lands on Task B's Mark Complete. It is in the same spot
+  // unless the Changelog below the task has already grown with the save and pushed it down,
+  // so point at it again.
+  await pointAt(page, 'Mark Complete');
   await clickHere(page, 2);
 
-  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, false] });
+  // Saves run one at a time in order, so once a later save has landed, a save the second
+  // click wrongly queued before it has landed too.
+  await page.getByRole('textbox', { name: 'Task notes' }).fill('Checked after the double click');
+  await page.getByRole('button', { name: 'Save notes' }).click();
+  await expect(page.getByText('Saved to this run')).toBeVisible();
+
+  expect(await readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, false] });
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
-  expect(saves).toEqual([200]);
+  expect(saves).toEqual([200, 200]);
 
   await deleteRun(page, runId);
 });
@@ -421,10 +451,12 @@ test('the rest of the double click that completes the last task keeps the comple
 
   await page.goto(`/dashboard/runs/${runId}`);
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
-  await pointAt(page, 'Mark Complete');
+  const point = await pointAt(page, 'Mark Complete');
   await clickHere(page, 1);
   const dialog = page.getByRole('dialog', { name: 'Checklist Completed!' });
   await expect(dialog).toBeVisible();
+  // The rest of the double click lands on the overlay, outside the dialog.
+  expect(isInside(await dialog.boundingBox(), point)).toBe(false);
   await clickHere(page, 2);
 
   // A dismissed dialog animates out; give it time before checking it stayed.

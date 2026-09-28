@@ -1,15 +1,22 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { trackApiRequests } from './support/api-requests';
+
 // A task removed from a Template keeps its completion and notes on the Run, read-only
 // under "Removed from Template", and the Run's Changelog records the reconcile.
 
 const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 async function loginAsAdmin(page: Page) {
+  const apiRequests = trackApiRequests(page, DEV_API_BASE_URL);
   await page.goto('/login');
   await page.getByRole('button', { name: 'Fill Admin' }).click();
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+  // Signing in lands on Account Settings: let its requests finish before the test calls
+  // the API, which the local dev proxy can drop in a burst (see support/api-requests.ts).
+  await expect(page.getByRole('heading', { name: 'Account Settings' })).toBeVisible();
+  await apiRequests.settled();
 }
 
 async function api<T>(page: Page, path: string, method: string, body?: unknown): Promise<T> {
@@ -36,7 +43,7 @@ test('notes on a task removed from the Template stay visible on the Run', async 
       { id: `retired-copy-${suffix}`, title: 'Write copy' },
     ],
   }];
-  const template = await api<{ id: string; version: number }>(page, '/templates', 'POST', {
+  const template = await api<{ id: string }>(page, '/templates', 'POST', {
     title: `Retired work QA ${suffix}`,
     sections,
     is_public: false,
@@ -51,12 +58,16 @@ test('notes on a task removed from the Template stay visible on the Run', async 
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await expect(page.getByRole('heading', { name: 'Write copy' })).toBeVisible();
 
+  // A content edit names the version it was based on (the API refuses one without it).
+  const { version } = await api<{ version: number }>(page, `/templates/${template.id}`, 'GET');
   await api(page, `/templates/${template.id}`, 'PUT', {
     sections: [{ ...sections[0], items: [sections[0].items[1]] }],
+    expected_version: version,
   });
 
   await page.reload();
-  await expect(page.getByText('0 of 1 tasks finished')).toBeVisible();
+  // The header and the phone progress strip (hidden at this width) both show the count.
+  await expect(page.getByText('0 of 1 tasks finished').first()).toBeVisible();
   const retired = page.locator('[data-retired-run-items="true"]');
   await retired.getByText('Removed from Template (1)').click();
   await expect(retired.getByText('Check DNS')).toBeVisible();
