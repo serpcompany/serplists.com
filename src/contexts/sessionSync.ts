@@ -16,6 +16,10 @@ import { applySessionCheck, type SessionCheck, type SessionState } from './authS
 // The session can also end on the server (it expired, or the user signed out other sessions or
 // changed their password elsewhere). Every API request then gets a 401, which the API client
 // reports; the tab re-reads the session and signs out only if the server confirms it is gone.
+//
+// A background sign-out, or a switch to another user, unmounts the signed-in pages without
+// asking. Just before it is applied, beforeSessionLost lets pages keep their unsaved work
+// (keepGuardedWork in src/lib/navigation/leaveGuard.ts).
 
 export const SESSION_SYNC_CHANNEL = 'serplists-auth';
 export const SESSION_SYNC_STORAGE_KEY = 'serplists.sessionChanged';
@@ -60,6 +64,10 @@ export function applySessionRecheck(check: ConfirmedSessionCheck, current: Sessi
   return applySessionCheck(check, current);
 }
 
+// True when the check signs out, or replaces, the user this tab shows.
+const endsSessionOf = (previous: SessionState, check: ConfirmedSessionCheck): boolean =>
+  previous.user !== null && (check.kind === 'unauthenticated' || check.user.id !== previous.user.id);
+
 export function describeSessionChange(previous: SessionState, check: ConfirmedSessionCheck): string | null {
   if (!previous.user) return null;
   if (check.kind === 'unauthenticated') return 'Your session ended. Sign in again.';
@@ -72,6 +80,9 @@ export function createSessionSync(deps: {
   setState: (update: (current: SessionState) => SessionState) => void;
   notify: (message: string) => void;
   now?: () => number;
+  // Runs before a background check signs this tab out or switches it to another user,
+  // while the state still holds the previous user.
+  beforeSessionLost?: () => void;
 }) {
   const now = deps.now ?? Date.now;
   // Session answers can arrive out of order. Each read takes a ticket when it starts, and its
@@ -111,7 +122,9 @@ export function createSessionSync(deps: {
       return;
     }
     if (!acceptRead(ticket)) return;
-    const message = describeSessionChange(deps.getState(), check);
+    const previous = deps.getState();
+    const message = describeSessionChange(previous, check);
+    if (endsSessionOf(previous, check)) deps.beforeSessionLost?.();
     deps.setState((current) => applySessionRecheck(check, current));
     if (message) deps.notify(message);
   };

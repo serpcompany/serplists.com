@@ -34,6 +34,7 @@ import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPane
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { canFinishRun, getPrimaryTaskAction } from '@/features/run-execution/primaryTaskAction';
+import { useKeptRunNoteDrafts } from '@/features/run-execution/keptNoteDrafts';
 import { confirmLeaveWithUnsavedNotes, useUnsavedNotesWarning } from '@/features/run-execution/noteDrafts';
 import { getTaskCheckboxLabel } from '@/features/run-execution/taskCheckboxLabel';
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
@@ -74,6 +75,7 @@ const ChecklistRunPage = () => {
     notFound,
     noteDrafts,
     progress,
+    restoreNoteDrafts,
     run,
     saveItemNotes,
     setNoteDraft,
@@ -96,6 +98,7 @@ const ChecklistRunPage = () => {
   const displayProgress = displayRun?.progress ?? progress;
   const shareLinkState = useRunShareLink(displayRun?.id, { createShare, stopSharing });
   useUnsavedNotesWarning(hasUnsavedNotes);
+  useKeptRunNoteDrafts({ run: isSharedRun ? null : run, noteDrafts, restoreNoteDrafts });
 
   useEffect(() => {
     if (!notFound || loading) {

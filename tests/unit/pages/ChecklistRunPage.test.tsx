@@ -14,6 +14,10 @@ vi.mock('@/features/run-execution/useRunExecutionModel', () => ({
   useRunExecutionModel: (...args: unknown[]) => mockUseRunExecutionModel(...args),
 }));
 
+vi.mock('@/contexts/CloudflareAuthContext', () => ({
+  useAuth: () => ({ user: { id: 'user-1', email: 'jane@test.com' } }),
+}));
+
 vi.mock('@/contexts/TemplatesContext', () => ({
   useTemplates: () => ({
     getRun: vi.fn(),

@@ -61,6 +61,16 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   asks first, and if the server refuses the sign-out the user stays and the page asks
   again next time.
 - `beforeunload` covers reloads, tab closes, and external links.
+- A session that ends in the background (a sign-out in another tab, an expired or
+  revoked session, another tab signing in as someone else) unmounts the page without
+  asking. Just before that, `keepGuardedWork` asks each page with unsaved work to keep
+  it on the tab (the guard's `onSessionEnding`), and the page offers it back after
+  sign-in. The template editor keeps a new template's draft, or its edits to an
+  existing template with the version they were made on, so a save made since then
+  ends in a conflict instead of an overwrite (`templateDraftStore.ts`). The run page
+  keeps unsaved task notes and restores those whose saved notes did not change
+  (`keptNoteDrafts.ts`). When storage is blocked or full, a toast says the changes
+  could not be kept.
 - A save in flight does not lift the guard: it can still fail (a conflict, a slug
   rule, a network error, or the unload aborting it), and until it succeeds the edits
   exist only in the form. Leaving during a save asks with a message that says the

@@ -8,8 +8,11 @@ import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { cloneTemplateEditorFormValues } from "@/features/template-editor/postSaveFormState";
 import {
   clearTemplateDraft,
+  clearTemplateEditDraft,
   readTemplateDraft,
+  readTemplateEditDraft,
   saveTemplateDraft,
+  saveTemplateEditDraft,
   settleTemplateDraftAfterSave,
   type StoredTemplateDraft,
 } from "@/features/template-editor/templateDraftStore";
@@ -28,20 +31,26 @@ import { getBillingStatusQueryKey } from "@/lib/billing";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 type TemplateEditorAccessOptions = {
-  // The new-template route: the only one with a draft to keep, and a limit to hit.
+  // The new-template route: the only one with a limit to hit.
   isCreate: boolean;
+  // The existing template being edited.
+  templateId?: string;
   getValues: () => TemplateEditorFormValues;
+  // The version the form's edits are made on (see useTemplateEditorModel).
+  getVersion?: () => number | undefined;
   allowLeave: () => void;
   guardLeave: () => void;
 };
 
 // The plan and the session can stop a template from saving. This offers the way
-// forward (Personal checkout, the paid-Organization note, sign-in), and keeps a new
-// template's draft on this tab while the user upgrades or signs in, so the
-// new-template editor can restore it afterwards.
+// forward (Personal checkout, the paid-Organization note, sign-in), and keeps the
+// draft on this tab while the user upgrades or signs in, or when the session ends in
+// the background, so the editor can restore it afterwards.
 export const useTemplateEditorAccess = ({
   isCreate,
+  templateId,
   getValues,
+  getVersion,
   allowLeave,
   guardLeave,
 }: TemplateEditorAccessOptions) => {
@@ -67,16 +76,24 @@ export const useTemplateEditorAccess = ({
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
   const userId = user?.id;
   const owner = userId ? { userId, teamId: activeTeamId } : null;
+  const editOwner = userId && templateId && !isCreate ? { userId, templateId } : null;
   const context = {
     isOrganization: isTeamWorkspace,
     billingEnabled: billing.data?.billingEnabled ?? true,
   };
 
-  // Offer a kept draft only when this editor opens for a new template.
+  // Offer a kept draft when the editor opens: a new template's for this context, or the
+  // user's own edits to this template.
   useEffect(() => {
-    setDraft(isCreate && userId ? readTemplateDraft({ userId, teamId: activeTeamId }) : null);
+    if (!userId) {
+      setDraft(null);
+    } else if (isCreate) {
+      setDraft(readTemplateDraft({ userId, teamId: activeTeamId }));
+    } else {
+      setDraft(templateId ? readTemplateEditDraft({ userId, templateId }) : null);
+    }
     setSaveNotice(null);
-  }, [isCreate, userId, activeTeamId]);
+  }, [isCreate, templateId, userId, activeTeamId]);
 
   const limitReached =
     isCreate &&
@@ -87,17 +104,30 @@ export const useTemplateEditorAccess = ({
         owner && !templatesLoading ? countContextTemplates(allTemplates, owner) : undefined,
     });
 
-  // True when the draft is stored, so leaving the page loses nothing.
-  const keepDraft = (): boolean =>
-    isCreate && owner
-      ? saveTemplateDraft(owner, cloneTemplateEditorFormValues(getValues()))
+  // True when the draft is stored, so leaving the page loses nothing. Also runs when the
+  // session ends in the background, while this render still holds the user who typed it.
+  const keepDraft = (): boolean => {
+    if (isCreate && owner) {
+      return saveTemplateDraft(owner, cloneTemplateEditorFormValues(getValues()));
+    }
+    return editOwner
+      ? saveTemplateEditDraft(editOwner, {
+          values: cloneTemplateEditorFormValues(getValues()),
+          baseVersion: getVersion?.(),
+        })
       : false;
+  };
 
   // The stored draft after a save finishes. The page runs this even when the user left
   // while it saved, so a saved create never leaves a draft to restore (and save twice).
   // A plan gate or ended session keeps the values sent, so a draft survives however the
   // user leaves to upgrade or sign in (a new template is locked while it saves).
   const settleDraft = (result: SaveTemplateResult, submitted: TemplateEditorFormValues): void => {
+    // Saved edits replace any kept ones, which were made on an older version.
+    if (editOwner && result.success) {
+      clearTemplateEditDraft(editOwner);
+      setDraft(null);
+    }
     if (!isCreate || !owner) {
       return;
     }
@@ -140,14 +170,16 @@ export const useTemplateEditorAccess = ({
 
   // The draft stays stored until a save succeeds: the plan can still read Free for a
   // moment after checkout, and that save would need the draft again.
-  const restoreDraft = (): TemplateEditorFormValues | null => {
-    const values = draft ? cloneTemplateEditorFormValues(draft.values) : null;
+  const restoreDraft = (): StoredTemplateDraft | null => {
+    const restored = draft ? { ...draft, values: cloneTemplateEditorFormValues(draft.values) } : null;
     setDraft(null);
-    return values;
+    return restored;
   };
 
   const discardDraft = (): void => {
-    if (owner) {
+    if (editOwner) {
+      clearTemplateEditDraft(editOwner);
+    } else if (owner) {
       clearTemplateDraft(owner);
     }
     setDraft(null);
@@ -158,6 +190,7 @@ export const useTemplateEditorAccess = ({
     discardDraft,
     handleSaveResult,
     isStartingCheckout,
+    keepDraft,
     notice: saveNotice ?? resolveTemplateLimitNotice(limitReached, context),
     restoreDraft,
     settleDraft,

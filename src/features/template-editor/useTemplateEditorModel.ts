@@ -348,6 +348,13 @@ export const useTemplateEditorModel = (
     };
   }, [options.id, reloadCount]);
 
+  // The version saves send as expected_version. A restored draft saves against the version
+  // it was edited on, so a save made since then ends in a conflict, not an overwrite.
+  const getVersion = () => expectedVersionRef.current;
+  const setVersion = (version: number | undefined) => {
+    expectedVersionRef.current = version;
+  };
+
   // Loads the saved template again, replacing the form (the caller confirms first).
   const reload = () => {
     loadedTemplateIdRef.current = null;
@@ -404,11 +411,13 @@ export const useTemplateEditorModel = (
   };
 
   return {
+    getVersion,
     initialValues,
     loading,
     loadError,
     reload,
     save,
+    setVersion,
     isSaving,
     ownerSlug,
     templateSlug,

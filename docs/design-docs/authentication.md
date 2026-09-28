@@ -119,7 +119,9 @@ and user-facing failure states when a supporting service is unavailable.
   `/login`, and a failed check changes nothing. A tab also re-reads the session when
   it comes back into view, at most once a minute, and after a back/forward cache
   restore. Tabs never re-announce what they learned, so one change costs one session
-  read per other tab.
+  read per other tab. Before a background sign-out or switch to another user is
+  applied, pages with unsaved work keep it on the tab to offer it back after sign-in
+  (`beforeSessionLost`; see "Unsaved changes" in [FRONTEND.md](../FRONTEND.md)).
 - The server can end a session on its own: it expires, or the user signs out other
   sessions or changes their password on another device. The API client reports every
   `401` (`src/lib/unauthorizedResponses.ts`), and a signed-in tab re-reads the session:

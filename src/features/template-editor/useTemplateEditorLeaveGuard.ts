@@ -14,14 +14,19 @@ import { registerLeaveGuard } from "@/lib/navigation/leaveGuard";
 //   browser Back/Forward) through useBlocker, which needs the app's data router;
 // - signing out, which unmounts the editor, through the leave-guard registry;
 // - reloads, tab closes, and external links through beforeunload.
+// A session that ends in the background unmounts the editor without asking; `keepWork`
+// then keeps the edits on this tab (see leaveGuard.ts) and returns true when it did.
 // `message` is the question asked in the app (browsers show their own on unload).
 export const useTemplateEditorLeaveGuard = (
   shouldBlock: boolean,
   message: string = EDITOR_UNSAVED_CHANGES_MESSAGE,
+  keepWork?: () => boolean,
 ) => {
   // Set once the user chose to leave, or the editor navigates away after a create
   // saved, so the same exit is not questioned twice.
   const leaveAllowedRef = useRef(false);
+  const keepWorkRef = useRef(keepWork);
+  keepWorkRef.current = keepWork;
   const { pathname } = useLocation();
 
   // Editor routes share this component, so a new route starts guarded again.
@@ -64,6 +69,7 @@ export const useTemplateEditorLeaveGuard = (
         onLeaveCancelled: () => {
           leaveAllowedRef.current = false;
         },
+        onSessionEnding: () => keepWorkRef.current?.() ?? false,
       }),
     [shouldBlock, message],
   );

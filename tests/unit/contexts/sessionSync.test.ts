@@ -61,6 +61,7 @@ function createTab(options: {
   answers?: SessionCheck[];
   readSession?: () => Promise<SessionCheck>;
   now?: () => number;
+  beforeSessionLost?: (state: SessionState) => void;
 }) {
   let state = options.state;
   const answers = [...(options.answers ?? [])];
@@ -77,6 +78,7 @@ function createTab(options: {
     },
     notify,
     now: options.now,
+    beforeSessionLost: options.beforeSessionLost && (() => options.beforeSessionLost?.(state)),
   });
   const environment = (overrides: Partial<SessionSyncEnvironment> = {}): SessionSyncEnvironment => ({
     openChannel: () => null,
@@ -463,5 +465,117 @@ describe('session keep-alive', () => {
     expect(loading.sync.keepAlive()).toBe(false);
     expect(signedOut.readSession).not.toHaveBeenCalled();
     expect(loading.readSession).not.toHaveBeenCalled();
+  });
+});
+
+// A background sign-out (another tab signed out, the session expired or was revoked) unmounts
+// every signed-in page without asking. Pages with unsaved work keep it first, while the tab
+// still shows the user who typed it (src/lib/navigation/leaveGuard.ts).
+describe('keeping unsaved work before a background session change', () => {
+  it("runs before another tab's sign-out signs this tab out", async () => {
+    const hub = createChannelHub();
+    const beforeSessionLost = vi.fn();
+    const tab1 = createTab({ state: signedInAs(alice), answers: [{ kind: 'unauthenticated' }], beforeSessionLost });
+    const tab2 = createTab({ state: signedInAs(alice) });
+    tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
+    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
+
+    tab2.sync.announce(null);
+    await flush();
+
+    expect(beforeSessionLost).toHaveBeenCalledTimes(1);
+    expect(beforeSessionLost).toHaveBeenCalledWith(signedInAs(alice));
+    expect(tab1.state().status).toBe('unauthenticated');
+  });
+
+  it('runs before a 401, a visibility or restore re-check, or the keep-alive ends the session', async () => {
+    let now = 1_000_000;
+    const beforeSessionLost = vi.fn();
+    const signOuts = [
+      (tab: ReturnType<typeof createTab>) => tab.receive401(),
+      (tab: ReturnType<typeof createTab>) => tab.showTab(),
+      (tab: ReturnType<typeof createTab>) => tab.restoreFromCache(),
+      (tab: ReturnType<typeof createTab>) => {
+        now += SESSION_KEEPALIVE_INTERVAL_MS;
+        tab.sync.keepAlive();
+      },
+    ];
+    for (const signOut of signOuts) {
+      const tab = createTab({
+        state: signedInAs(alice),
+        answers: [{ kind: 'unauthenticated' }],
+        beforeSessionLost,
+        now: () => now,
+      });
+      tab.sync.connect(tab.environment());
+      signOut(tab);
+      await flush();
+      expect(tab.state().status).toBe('unauthenticated');
+    }
+
+    expect(beforeSessionLost).toHaveBeenCalledTimes(signOuts.length);
+    beforeSessionLost.mock.calls.forEach(([state]) => expect(state).toEqual(signedInAs(alice)));
+  });
+
+  it('runs before the tab switches to a user another tab signed in as', async () => {
+    const hub = createChannelHub();
+    const beforeSessionLost = vi.fn();
+    const tab1 = createTab({ state: signedInAs(alice), answers: [signedInCheck(bob)], beforeSessionLost });
+    const tab2 = createTab({ state: signedInAs(bob) });
+    tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
+    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
+
+    tab2.sync.announce(bob.id);
+    await flush();
+
+    expect(beforeSessionLost).toHaveBeenCalledWith(signedInAs(alice));
+    expect(tab1.state().user).toEqual(bob);
+  });
+
+  it('does not run when the check fails, finds the same user, or the tab is already signed out', async () => {
+    const hub = createChannelHub();
+    const beforeSessionLost = vi.fn();
+    const signedIn = createTab({
+      state: signedInAs(alice),
+      answers: [{ kind: 'unknown', status: 503 }, signedInCheck(alice)],
+      beforeSessionLost,
+    });
+    const signedOut = createTab({
+      state: { user: null, session: null, status: 'unauthenticated' },
+      answers: [{ kind: 'unauthenticated' }],
+      beforeSessionLost,
+    });
+    const tab2 = createTab({ state: signedInAs(bob) });
+    [signedIn, signedOut, tab2].forEach((tab) => tab.sync.connect(tab.environment({ openChannel: hub.open })));
+
+    tab2.sync.announce(bob.id);
+    await flush();
+    tab2.sync.announce(bob.id);
+    await flush();
+
+    expect(signedIn.readSession).toHaveBeenCalledTimes(2);
+    expect(signedOut.readSession).toHaveBeenCalled();
+    expect(beforeSessionLost).not.toHaveBeenCalled();
+  });
+
+  it('does not run for an answer that a sign-in or sign-out in this tab replaced', async () => {
+    let resolveCheck: (check: SessionCheck) => void = () => {};
+    const hub = createChannelHub();
+    const beforeSessionLost = vi.fn();
+    const tab1 = createTab({
+      state: signedInAs(alice),
+      readSession: () => new Promise<SessionCheck>((resolve) => { resolveCheck = resolve; }),
+      beforeSessionLost,
+    });
+    const tab2 = createTab({ state: signedInAs(bob) });
+    tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
+    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
+
+    tab2.sync.announce(null);
+    tab1.sync.claim();
+    resolveCheck({ kind: 'unauthenticated' });
+    await flush();
+
+    expect(beforeSessionLost).not.toHaveBeenCalled();
   });
 });

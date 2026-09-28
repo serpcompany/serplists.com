@@ -581,6 +581,8 @@ export const useRunExecutionModel = (
       commitNoteDrafts(
         updateNoteDraft(latestNoteDrafts.current, itemId, value, getSelectedRunItem(latestRun.current, itemId)?.item.notes),
       ),
+    // Notes kept when the session ended (keptNoteDrafts.ts), back as unsaved drafts.
+    restoreNoteDrafts: (drafts: NoteDrafts) => commitNoteDrafts({ ...latestNoteDrafts.current, ...drafts }),
     createShare: () => enqueueSave(saves.share),
     history: {
       data: history.data ?? null,

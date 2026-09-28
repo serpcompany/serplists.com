@@ -1,6 +1,7 @@
 // A page with unsaved changes registers a leave guard. Route changes are blocked by
 // the page itself (useBlocker); this covers actions that leave the page without a
-// navigation the page can block first, such as signing out, which unmounts it.
+// navigation the page can block first, such as signing out, which unmounts it, and a
+// session that ends in the background, which unmounts it without asking.
 export type LeaveGuard = {
   message: string;
   shouldConfirm: () => boolean;
@@ -9,6 +10,11 @@ export type LeaveGuard = {
   // The confirmed exit did not happen (a sign-out the server refused), so the page
   // stays and must ask again next time.
   onLeaveCancelled?: () => void;
+  // The session ended in the background (another tab signed out, the session expired
+  // or was revoked, or another tab signed in as someone else): the page is about to
+  // unmount without asking. It keeps its work on this tab, to offer it back after
+  // sign-in, and returns true when it did.
+  onSessionEnding?: () => boolean;
 };
 
 const guards = new Set<LeaveGuard>();
@@ -65,4 +71,21 @@ export const leaveAfterConfirmed = async (
       confirmed.forEach((guard) => guard.onLeaveCancelled?.());
     }
   }
+};
+
+// Runs just before a background session change unmounts the signed-in pages, while
+// they still show the user who typed the work. Only pages with unsaved work are asked,
+// and nobody is asked a question. Returns false when a page could not keep its work.
+export const keepGuardedWork = (): boolean => {
+  let keptAll = true;
+  Array.from(guards).forEach((guard) => {
+    try {
+      if (guard.shouldConfirm() && !guard.onSessionEnding?.()) {
+        keptAll = false;
+      }
+    } catch {
+      keptAll = false;
+    }
+  });
+  return keptAll;
 };
