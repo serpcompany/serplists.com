@@ -85,6 +85,8 @@ describe('private template detail load failures', () => {
     expect(apiClient.getTemplateBySlug).toHaveBeenCalledWith('camping-checklist');
     expect(result.kind).toBe('ok');
     expect(result.kind === 'ok' ? result.template.title : null).toBe('Camping Checklist');
+    // The page links Edit to this id; the editor cannot load a slug.
+    expect(result.kind === 'ok' ? result.template.id : null).toBe(TEMPLATE_UUID);
   });
 
   it('classifies a failing slug lookup by its status too', async () => {

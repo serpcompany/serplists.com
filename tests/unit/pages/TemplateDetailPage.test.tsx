@@ -334,6 +334,37 @@ describe('TemplateDetail Duplicate', () => {
   });
 });
 
+describe('TemplateDetail opened by slug', () => {
+  // The page resolves a slug through the API, but the editor loads by id only.
+  const renderAt = (location: string) =>
+    renderToStaticMarkup(
+      <StaticRouter location={location}>
+        <Routes>
+          <Route path="/dashboard/templates/:id" element={<TemplateDetail />} />
+          <Route path="/console/templates/:id" element={<TemplateDetail />} />
+        </Routes>
+      </StaticRouter>,
+    );
+
+  it.each(['/dashboard/templates/product-launch-checklist', '/console/templates/product-launch-checklist'])(
+    'links Edit on %s to the loaded template id',
+    (location) => {
+      mockUseTemplateDetailModel.mockReturnValue(baseModel());
+
+      const html = renderAt(location);
+
+      expect(hasEditLink(html)).toBe(true);
+      expect(html).not.toContain('/product-launch-checklist/edit');
+    },
+  );
+
+  it('keeps the id link when the page was opened by id', () => {
+    mockUseTemplateDetailModel.mockReturnValue(baseModel());
+
+    expect(hasEditLink(renderAt('/dashboard/templates/tpl-1'))).toBe(true);
+  });
+});
+
 describe('TemplateDetail visibility', () => {
   it('shows the visibility of the template the model holds', () => {
     mockUseTemplateDetailModel.mockReturnValue({

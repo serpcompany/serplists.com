@@ -482,8 +482,9 @@ const TemplateDetail = () => {
               {isCreatingShare ? 'Creating...' : 'Share'}
             </Button>
           ) : null}
+          {/* The loaded id, never the route param: this page also opens by slug, the editor only by id. */}
           <Button asChild variant="outline" size="sm" className="border-border">
-            <Link to={buildConsoleTemplateEditPath(id ?? displayTemplate.id)}>
+            <Link to={buildConsoleTemplateEditPath(displayTemplate.id)}>
               <Pencil className="mr-2 h-4 w-4" />
               Edit
             </Link>
