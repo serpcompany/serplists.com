@@ -67,3 +67,37 @@ describe('ContentRenderer accessibility', () => {
     expect(markup).toContain('href="/api/uploads/file?key=template-files/launch-plan.pdf"');
   });
 });
+
+// A broken task image used to fall back to a placehold.co URL from onError, which
+// reloaded forever when that host was unreachable too. Images now fall back to a
+// local "Image unavailable" box and never make a second request.
+describe('ContentRenderer images', () => {
+  const renderImage = (value: string) =>
+    renderToStaticMarkup(<ContentRenderer contents={[{ id: 'image-1', type: 'image', value }]} />);
+
+  it('renders a valid image url as an img', () => {
+    const markup = renderImage('https://cdn.example.com/photo.png');
+
+    expect(markup).toContain('<img');
+    expect(markup).toContain('src="https://cdn.example.com/photo.png"');
+    expect(markup).not.toContain('Image unavailable');
+  });
+
+  it('keeps uploaded images served from the app', () => {
+    const markup = renderImage('/api/uploads/file?key=template-images/photo.png');
+
+    expect(markup).toContain('src="/api/uploads/file?key=template-images/photo.png"');
+  });
+
+  it.each(['javascript:alert(1)', 'mailto:someone@example.com', 'tel:+15551234567', '#section', 'photo.png'])(
+    'shows a local fallback for %s without loading anything',
+    (value) => {
+      const markup = renderImage(value);
+
+      expect(markup).toContain('Image unavailable');
+      expect(markup).toContain('role="img"');
+      expect(markup).not.toContain('<img');
+      expect(markup).not.toContain('placehold.co');
+    },
+  );
+});

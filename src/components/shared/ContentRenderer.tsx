@@ -1,6 +1,7 @@
 import React from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { MarkdownBlock } from './MarkdownBlock';
+import { TaskImage } from './TaskImage';
 import { VideoEmbed } from './VideoEmbed';
 import { File, Code, ListCheck } from 'lucide-react';
 import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
@@ -36,14 +37,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
           
           {content.type === "image" && content.value && (
             <div className="rounded-lg border overflow-hidden">
-              <img 
-                src={safeUrl(content.value) || "https://placehold.co/400x200?text=Invalid+Image"} 
-                alt="Task content" 
-                className="w-full max-h-96 object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "https://placehold.co/400x200?text=Invalid+Image";
-                }}
-              />
+              <TaskImage url={content.value} />
             </div>
           )}
           

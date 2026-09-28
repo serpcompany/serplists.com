@@ -18,6 +18,16 @@ A video block holds a URL or pasted `<iframe>` code. `getVideoEmbedSource`
 Every iframe origin the helper can produce must be listed in `frame-src` in
 `public/_headers`; `tests/unit/security/headers.test.ts` checks this.
 
+## Image blocks
+
+`ContentRenderer` shows an image block through `TaskImage`
+(`src/components/shared/TaskImage.tsx`). Only an absolute http(s) URL or an app path
+such as `/api/uploads/...` is loaded (`safeImageUrl` in `src/lib/utils/safeUrl.ts`).
+Anything else, or an image that fails to load, shows a local "Image unavailable" box.
+The error handler only records the failure: it never sets `src`, and there is no
+remote placeholder, so a broken image makes one request and stops.
+`tests/unit/components/TaskImage.test.tsx` checks this.
+
 ## Text blocks and descriptions
 
 Text blocks are Markdown, rendered by `MarkdownBlock`; item and template descriptions
