@@ -79,6 +79,19 @@ async function createTemplateViaApi(page: Page, title: string) {
   }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
 }
 
+// A save leaves for the Templates list once the API answers. Wait for that answer, not
+// only the URL: under load a save can take longer than an assertion waits by default.
+async function saveAndReturnToTemplates(page: Page) {
+  const saved = page.waitForResponse((response) => {
+    const method = response.request().method();
+    const { pathname } = new URL(response.url());
+    return (method === "POST" || method === "PUT") && /\/api\/templates(\/[^/]+)?$/.test(pathname);
+  });
+  await page.getByRole("button", { name: "Save" }).click();
+  expect((await saved).ok()).toBe(true);
+  await expect(page).toHaveURL(/\/dashboard\/templates$/);
+}
+
 function getTemplateSections(template: Record<string, unknown>) {
   const rawSections = template.sections ?? template.items ?? [];
   const parsedSections =
@@ -496,8 +509,7 @@ test.describe("template editor regressions", () => {
       secondTaskDescription,
     );
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -555,8 +567,7 @@ test.describe("template editor regressions", () => {
       .getByPlaceholder("Enter text or markdown content")
       .fill(contentValue);
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -638,8 +649,7 @@ test.describe("template editor regressions", () => {
     });
     await expect(page.getByLabel("Image URL")).toHaveValue(uploadedUrl);
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     expect(savedTemplate).toBeTruthy();
@@ -708,8 +718,7 @@ test.describe("template editor regressions", () => {
     await page.getByPlaceholder("Sub-task 1").press("Enter");
     await expect(page.getByPlaceholder("Sub-task 2")).toBeVisible();
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     expect(savedTemplate).toBeTruthy();
@@ -779,8 +788,7 @@ test.describe("template editor regressions", () => {
     await expect(field).toHaveValue(embedUrl);
     await expect(field).toBeFocused();
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     expect(savedTemplate).toBeTruthy();
@@ -833,8 +841,7 @@ test.describe("template editor regressions", () => {
     await page.keyboard.press("ArrowUp");
     await expect(handles.first()).toHaveAccessibleName("Drag Embed block");
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     expect(savedTemplate).toBeTruthy();
@@ -1150,8 +1157,7 @@ test.describe("template editor regressions", () => {
 
     await page.goto("/dashboard/templates/new");
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
     expect(dialogs).toEqual([]);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
@@ -1278,8 +1284,7 @@ test.describe("template editor regressions", () => {
     await expect(page.getByText("report.pdf", { exact: true })).toHaveCount(0);
     await expect(page.getByLabel("File URL")).toHaveValue(externalUrl);
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     expect(savedTemplate).toBeTruthy();
@@ -1394,8 +1399,7 @@ test.describe("template editor regressions", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByText(categoryName, { exact: true }).first()).toBeVisible();
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -1429,8 +1433,7 @@ test.describe("template editor regressions", () => {
       .getByPlaceholder("Description shown in search results...")
       .fill(seoDescription);
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
