@@ -107,6 +107,42 @@ export function classifySessionResult(result: AuthClientResult): SessionCheck {
   return { kind: 'authenticated', user: user.data, session: result.data };
 }
 
+export const SESSION_UNCONFIRMED_MESSAGE =
+  'Signed in, but your session could not be loaded. Check your connection and try again.';
+const SESSION_NOT_ESTABLISHED_MESSAGE = 'Unable to establish session';
+
+export type SignInSessionOutcome = {
+  // The session to store, or null to keep the current state.
+  check: Exclude<SessionCheck, { kind: 'unknown' }> | null;
+  result: AuthActionResult;
+};
+
+// Better Auth's sign-in response carries a partial user (no username), so after a successful
+// sign-in the session is always read and its user stored. The sign-in user is only a fallback
+// for when that read fails: the session cookie is set, so the sign-in still counts.
+export async function resolveSignInSession(
+  signInData: unknown,
+  readSession: () => Promise<SessionCheck>,
+): Promise<SignInSessionOutcome> {
+  let session: SessionCheck;
+  try {
+    session = await readSession();
+  } catch {
+    session = { kind: 'unknown' };
+  }
+  if (session.kind === 'authenticated') {
+    return { check: session, result: { ok: true } };
+  }
+  const signIn = classifySessionResult({ data: signInData });
+  if (signIn.kind === 'authenticated') {
+    return { check: signIn, result: { ok: true } };
+  }
+  if (session.kind === 'unknown') {
+    return { check: null, result: { ok: false, error: SESSION_UNCONFIRMED_MESSAGE, errorCode: 'UNKNOWN' } };
+  }
+  return { check: session, result: { ok: false, error: SESSION_NOT_ESTABLISHED_MESSAGE, errorCode: 'UNKNOWN' } };
+}
+
 export type SessionState = { user: SessionUser | null; session: unknown; status: SessionStatus };
 
 // An unknown check never signs anyone out: a signed-in user stays signed in, and a first

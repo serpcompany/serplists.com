@@ -39,6 +39,11 @@ and user-facing failure states when a supporting service is unavailable.
   signed-in user, and the stored Organization choice is cleared only on a confirmed
   sign-out. Registration takes "verify your email" from the sign-up response (no
   session token), not from a later session check.
+- Sign-in stores the user from a session read, not from the sign-in response, whose
+  user has no `username` (so the account menu's Profile link and the `@username`
+  label would be missing until a reload). If that read fails after a successful
+  sign-in, the sign-in response's user is kept and the next session check completes
+  it (`resolveSignInSession` in `src/contexts/authSession.ts`).
 - Sign-out (`logout()` in `AuthProvider`, built in `src/contexts/authSession.ts`) clears
   the local session only when the server confirms it, or answers that there is no
   session (`400 FAILED_TO_GET_SESSION`, `401`). On a `429`, `403`, `5xx`, or network

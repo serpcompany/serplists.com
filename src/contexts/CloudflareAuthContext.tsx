@@ -8,6 +8,7 @@ import {
   checkSessionWithRetry,
   classifySessionResult,
   createSignOutRunner,
+  resolveSignInSession,
   signUpRequiresEmailVerification,
   type AuthActionResult,
   type SessionCheck,
@@ -42,9 +43,6 @@ interface AuthContextType {
 type ConfirmedSessionCheck = Exclude<SessionCheck, { kind: 'unknown' }>;
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const SESSION_UNCONFIRMED_MESSAGE =
-  "Signed in, but your session could not be loaded. Check your connection and try again.";
 
 const readSession = async (): Promise<SessionCheck> => {
   try {
@@ -149,16 +147,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, error: message, errorCode: "UNKNOWN" };
       }
 
-      const immediate = classifySessionResult(result);
-      const check = immediate.kind === 'authenticated' ? immediate : await readSession();
-      if (check.kind === 'unknown') {
-        // The sign-in worked; only reading the session failed. Keep the current state.
-        return { ok: false, error: SESSION_UNCONFIRMED_MESSAGE, errorCode: "UNKNOWN" };
+      // The sign-in response's user has no username: store the session's user instead, set
+      // once so the Login page never navigates with the partial one.
+      const { check, result: outcome } = await resolveSignInSession(result?.data, readSession);
+      if (check) {
+        applyConfirmedSession(check, { announce: true });
       }
-      applyConfirmedSession(check, { announce: true });
-      return check.kind === 'authenticated'
-        ? { ok: true }
-        : { ok: false, error: "Unable to establish session", errorCode: "UNKNOWN" };
+      return outcome;
     } catch (error) {
       console.error('Login failed:', error);
       return { ok: false, error: "Login failed", errorCode: "UNKNOWN" };
