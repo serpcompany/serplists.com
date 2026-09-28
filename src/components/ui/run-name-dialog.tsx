@@ -15,7 +15,8 @@ interface RunNameDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   templateTitle: string;
-  onConfirm: (name: string) => void;
+  // The page closes the dialog once the run starts; on failure it stays open.
+  onConfirm: (name: string) => void | Promise<void>;
   loading?: boolean;
 }
 
@@ -27,14 +28,21 @@ export const RunNameDialog: React.FC<RunNameDialogProps> = ({
   loading = false,
 }) => {
   const [runName, setRunName] = useState("");
-  
+  // The name is cleared when the dialog closes (Cancel, Escape, or a started run), never on
+  // submit, so a start that fails keeps what the user typed for the retry.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (!open) setRunName("");
+  }
+
   const defaultName = `${templateTitle} - ${new Date().toLocaleString()}`;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalName = runName.trim() || defaultName;
-    onConfirm(finalName);
-    setRunName("");
+    // Enter while the run is starting would start a second one.
+    if (loading) return;
+    void onConfirm(runName.trim() || defaultName);
   };
 
   return (
@@ -55,6 +63,7 @@ export const RunNameDialog: React.FC<RunNameDialogProps> = ({
                 value={runName}
                 onChange={(e) => setRunName(e.target.value)}
                 placeholder={defaultName}
+                disabled={loading}
                 autoFocus
               />
             </div>
