@@ -71,3 +71,25 @@ test('Start Run with a blank name uses the timestamped default the field shows',
     await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
   }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
 });
+
+test('grid cards name the actions menu and never focus the hidden Start Run shortcut', async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.goto('/dashboard/templates');
+  await page.getByRole('button', { name: 'Show templates in grid view' }).click();
+
+  const trigger = page.getByRole('button', { name: /^Actions for / }).first();
+  await expect(trigger).toBeAttached();
+  const card = trigger.locator(
+    'xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " group ")][1]',
+  );
+
+  await card.getByRole('link').first().focus();
+  await page.keyboard.press('Tab');
+  await expect(trigger).toBeFocused();
+  // toBeVisible ignores opacity, so check the faded trigger actually appeared.
+  await expect.poll(() => trigger.evaluate((node) => getComputedStyle(node).opacity)).toBe('1');
+
+  // The next Tab leaves the card instead of landing on the invisible, clipped overlay button.
+  await page.keyboard.press('Tab');
+  expect(await card.evaluate((node) => node.contains(document.activeElement))).toBe(false);
+});

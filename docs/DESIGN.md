@@ -28,6 +28,11 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
 - Every icon-only button has an `aria-label`, toggles expose `aria-pressed`, and
   inputs have a `Label`. The template grid/list toggle in `src/pages/Templates.tsx`
   is the reference.
+- A control that stays hidden until hover (`opacity-0`) must also show on focus
+  (`group-focus-within:opacity-100`). A hover-only duplicate of an action that is
+  reachable elsewhere leaves the tab order instead (`tabIndex={-1}` inside an
+  `aria-hidden` wrapper), like the Start Run overlay in
+  `src/components/dashboard/TemplateCard.tsx`.
 - Show a neutral loading state rather than a guessed value (for example, never
   render a plan label before billing status loads).
 - Check layouts at desktop and mobile widths with `pnpm run ui:snap` (`--mobile`).
