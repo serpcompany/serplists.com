@@ -9,7 +9,6 @@ import type { Env } from '../../api/types';
 import {
   bundledTemplateEntries,
   bundledInventoryLastmod,
-  cachedSitemap,
   catalogPageEntry,
   handlePagedDatabaseSitemap,
   isValidTemplateSlug,
@@ -19,6 +18,7 @@ import {
   validTemplateSlugCondition,
   validUsernameCondition,
 } from '../../sitemap/shared';
+import { cachedSitemap } from '../../sitemap/cache';
 
 type TemplateRow = {
   username: string | null;
@@ -72,5 +72,5 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         ),
       }) : null;
     },
-  }));
+  }), { kind: 'templates', page: params.page });
 };

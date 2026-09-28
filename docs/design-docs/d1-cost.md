@@ -49,9 +49,17 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
 5. **Cache public, anonymous responses** at the edge (the Cache API, per data center).
    Choose the invalidation by how often the content changes:
    - **Rarely, relative to reads:** key by a revision. Sitemaps use `cachedSitemap()`
-     (`functions/sitemap/shared.ts`), keyed by the trigger-maintained
-     `sitemap_revisions` and the bundled catalog, so a hit reads 3 rows and any content
-     change or deploy misses.
+     (`functions/sitemap/cache.ts`), keyed by the bundled catalog and the
+     trigger-maintained `sitemap_revisions` kinds each sitemap depends on, so a hit reads
+     3 rows and a deploy or a change to what that sitemap lists misses. Each shard
+     depends only on its own kind (a sign-up or avatar change bumps only `profiles`, so
+     the templates and categories shards stay cached); the index depends on all three.
+     The triggers must bump a family's kind whenever its inputs change: the dependency
+     list beside `cachedSitemap()` and `tests/unit/functions/sitemap-migrations.test.ts`
+     record which. A key that the caller controls (such as a page number)
+     must be bounded before the cache, or every new value is a miss: shard pages above
+     1 that the index never published (no `sitemap_shard_revisions` row) get an uncached
+     404 after a 1-row primary-key read, and page numbers above 50,000 read nothing.
    - **Often:** use a short TTL, so cost is bounded by the TTL rather than the edit
      rate. The anonymous catalog uses `withEdgeCache()`
      (`functions/api/utils/edge-cache.ts`) for 5 minutes: a hit reads nothing.
@@ -80,7 +88,7 @@ Open, all unbounded lists:
 | Organization runs | 12,007 | Unbounded, plus a correlated template subquery per run; loaded only on the runs page |
 | Organization templates | 3,007 | Unbounded |
 | Personal and archived runs | about 1,000 each | Unbounded; archived filters `deleted_at IS NOT NULL` after reading every run |
-| Sitemap cache miss | 41,449 (index), 19,419 (templates shard) | Builds every entry; now only after a content change or deploy, once per data center |
+| Sitemap cache miss | 41,449 (index), 19,419 (templates shard) | Builds every entry; now only after a deploy or a change to what that sitemap lists, once per data center, and only for pages the index published |
 
 Everything else (session, detail pages, history, members, billing, run starts, template
 updates, cached sitemaps) reads under 25 rows.

@@ -3,12 +3,12 @@ import { sitemap_profile_revisions, users } from '../../../db/schema/index';
 import { createDb } from '../../api/db';
 import type { Env } from '../../api/types';
 import {
-  cachedSitemap,
   handlePagedDatabaseSitemap,
   isValidUsername,
   mostRecentLastmod,
   validUsernameCondition,
 } from '../../sitemap/shared';
+import { cachedSitemap } from '../../sitemap/cache';
 
 type ProfileRow = {
   username: string | null;
@@ -46,5 +46,5 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         ),
       }) : null;
     },
-  }));
+  }), { kind: 'profiles', page: params.page });
 };

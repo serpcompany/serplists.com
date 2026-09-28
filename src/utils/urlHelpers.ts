@@ -1,4 +1,4 @@
-import { withSerpListsClipyRef } from '@/lib/utils/clipyUrl';
+import { clipyVideoId, withSerpListsClipyRef } from '@/lib/utils/clipyUrl';
 
 /**
  * Extracts YouTube video ID from various YouTube URL formats
@@ -47,21 +47,13 @@ export const getVideoEmbedSource = (value: string): VideoEmbedSource | null => {
     }
   }
 
-  const isClipyHost =
-    parsed.hostname === 'clipy.online' || parsed.hostname === 'www.clipy.online';
-  if (isClipyHost) {
-    const clipyMatch = parsed.pathname.match(/^\/(?:video|embed)\/([a-zA-Z0-9_-]+)\/?$/);
-    if (clipyMatch?.[1]) {
-      return {
-        kind: 'iframe',
-        url: withSerpListsClipyRef(
-          `https://clipy.online/embed/${clipyMatch[1]}${parsed.search}`,
-        ),
-        outboundUrl: withSerpListsClipyRef(
-          `https://clipy.online/video/${clipyMatch[1]}`,
-        ),
-      };
-    }
+  const clipyId = clipyVideoId(parsed);
+  if (clipyId) {
+    return {
+      kind: 'iframe',
+      url: withSerpListsClipyRef(`https://clipy.online/embed/${clipyId}${parsed.search}`),
+      outboundUrl: withSerpListsClipyRef(`https://clipy.online/video/${clipyId}`),
+    };
   }
 
   return { kind: iframeSource ? 'iframe' : 'video', url: parsed.toString() };

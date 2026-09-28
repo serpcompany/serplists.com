@@ -247,6 +247,11 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
       allPageLocations.add(location);
     }
     expect(lastmods.every((value) => Number.isFinite(Date.parse(value)))).toBe(true);
+    if (childLocation.includes("/sitemaps/categories/")) {
+      // The index dates the categories shard from the same entries the shard serves.
+      const indexLastmod = Date.parse(shardLastmods.find(([loc]) => loc === childLocation)?.[1] ?? "");
+      expect(indexLastmod, childLocation).toBeGreaterThanOrEqual(Math.max(...lastmods.map((value) => Date.parse(value))));
+    }
     expect(childXml).not.toContain("<priority>");
     expect(childXml).not.toContain("<changefreq>");
     await expectSchemaValid(childXml, sitemapSchema, new URL(childLocation).pathname);
@@ -263,6 +268,9 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     "https://serplists.com/profile/admin/technical-seo-audit-checklist",
   );
   expect(allPageLocations).toContain("https://serplists.com/categories/seo");
+  // Registry categories no public Template uses are empty pages, so they stay unlisted.
+  expect(allPageLocations).not.toContain("https://serplists.com/categories/engineering");
+  expect(allPageLocations).not.toContain("https://serplists.com/categories/compliance");
   expect(allPageLocations).not.toContain(
     "https://serplists.com/profile/admin/internal-publishing-checklist",
   );
@@ -292,7 +300,12 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     expect(unchangedPageLocations, childLocation).toEqual(pageLocationsByShard.get(childLocation));
   }
 
-  expect((await request.get(`${pagesOrigin}/sitemaps/profiles/999999.xml`)).status()).toBe(404);
+  // Pages the index never listed are refused before any build, and not cached.
+  for (const unpublished of ["profiles/999999", "templates/2", "templates/999", "categories/2"]) {
+    const unpublishedResponse = await request.get(`${pagesOrigin}/sitemaps/${unpublished}.xml`);
+    expect(unpublishedResponse.status(), unpublished).toBe(404);
+    expect(unpublishedResponse.headers()["cache-control"], unpublished).toBe("no-store");
+  }
   expect((await request.get(`${pagesOrigin}/sitemaps/static.xml`, { maxRedirects: 0 })).status()).toBe(308);
   expect((await request.get(`${pagesOrigin}/categories/sitemap.xml`, { maxRedirects: 0 })).status()).toBe(308);
 });

@@ -151,6 +151,7 @@ if (!templatesLastmod || !categoriesLastmod) {
 const implementationLastmod = await gitLastmod([
   'functions/sitemap.xml.ts',
   'functions/sitemap/shared.ts',
+  'functions/sitemap/cache.ts',
   'functions/sitemaps/pages/[page].xml.ts',
   'functions/sitemaps/categories/[page].xml.ts',
   'functions/sitemaps/profiles/[page].xml.ts',
