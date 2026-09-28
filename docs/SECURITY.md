@@ -31,6 +31,7 @@ and `.env.local` are deprecated. Production values are Cloudflare Pages secrets.
 | `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID` | Required for Checkout |
 | `STRIPE_WEBHOOK_SECRET` | Required only by the webhook endpoint |
 | `STRIPE_PORTAL_CONFIGURATION_ID` | Required for self-serve subscription management |
+| `STRIPE_PRO_LEGACY_PRICE_IDS` | Optional, comma-separated; earlier Pro prices that still grant Pro after a price change |
 | `RESEND_API_KEY` or `USESEND_API_KEY` | At least one, for verification and reset emails; otherwise auth-email actions return `503 auth_email_unavailable` |
 | `EMAIL_FROM` | Optional sender override (default `noreply@mail.auth.serp.co`) |
 | `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | Optional CORS allowlist |
@@ -104,3 +105,13 @@ curl -X POST "https://serplists.com/api/admin/entitlements/override" \
 curl -X DELETE "https://serplists.com/api/admin/entitlements/override?userId=USER_ID" \
   -H "X-Admin-Secret: $ENTITLEMENTS_ADMIN_SECRET"          # remove the override
 ```
+
+An active `"free"` override closes self-serve checkout: `POST /api/billing/checkout`
+returns `409 plan_managed_by_support` and Billing shows that support manages the plan,
+until the override is deleted or expires (a `"pro"` override already returns
+`409 already_subscribed`). A `"free"` override does not cancel an
+existing Stripe subscription, which keeps billing: cancel it in Stripe (the user can
+also still open the Customer Portal). A `"pro"` comp creates no Stripe customer, so
+Billing shows that support manages the plan instead of Manage subscription, and the
+portal returns `409 no_billing_account`. To end a comp, prefer `DELETE`, which returns the
+user to their Stripe state.

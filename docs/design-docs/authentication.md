@@ -40,11 +40,12 @@ and user-facing failure states when a supporting service is unavailable.
   Callbacks await delivery so provider failures surface in the request.
   `GET /api/auth/status` reports whether email delivery is available.
 - Protected routes preserve the requested destination (path, query, and hash)
-  through login and sign-up (`src/lib/auth/returnPath.ts`). It travels as router
-  state `from` and as a `next` query parameter, which Login, Register, and the
-  verification callback carry forward so a new account returns to the page that
-  sent it, such as an Organization invite. Only same-origin, non-auth paths are
-  accepted.
+  through login and sign-up (`src/lib/auth/returnPath.ts`), so a signed-out
+  return from Stripe keeps `?billing=success`. It travels as router state `from`
+  and as a `next` query parameter, which Login, Register, and the verification
+  callback carry forward so a new account returns to the page that sent it, such
+  as an Organization invite. Only same-origin, non-auth paths are accepted (one
+  leading `/`, not `//`); without one, Login goes to `/dashboard/settings`.
 - `logout()` from `useAuth` returns a promise that resolves once the session is
   cleared in the app, even if the server call failed (`src/lib/auth/signOut.ts`).
   A page that sends the user to `/login` after signing out must await it: Login

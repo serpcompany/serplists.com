@@ -1,3 +1,5 @@
+import { createPath } from "react-router-dom";
+
 import { buildConsoleHomePath } from "@/lib/routes";
 
 /**
@@ -76,8 +78,14 @@ function returnPathFromState(state: unknown): string | null {
     return null;
   }
 
+  // createPath adds a missing "?" or "#" separator, so a Stripe return such as
+  // ?billing=success survives sign-in whichever form the location was saved in.
   return sanitizeReturnPath(
-    `${pathname}${typeof search === "string" ? search : ""}${typeof hash === "string" ? hash : ""}`,
+    createPath({
+      pathname,
+      search: typeof search === "string" ? search : "",
+      hash: typeof hash === "string" ? hash : "",
+    }),
   );
 }
 

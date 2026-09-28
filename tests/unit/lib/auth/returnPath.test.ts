@@ -81,6 +81,49 @@ describe('getReturnPath', () => {
   });
 });
 
+describe('getReturnPath with the location RequireAuth saves', () => {
+  const fromState = (from: unknown) => ({ state: { from }, search: '' });
+
+  it('keeps the query and hash, so a Stripe return survives sign-in', () => {
+    expect(
+      getReturnPath(fromState({ pathname: '/dashboard/settings', search: '?billing=success', hash: '#x' })),
+    ).toBe('/dashboard/settings?billing=success#x');
+  });
+
+  it('accepts a full router location, as TemplateDetail passes it', () => {
+    expect(
+      getReturnPath(fromState({ pathname: '/templates/abc', search: '', hash: '', state: null, key: 'default' })),
+    ).toBe('/templates/abc');
+  });
+
+  it('adds the missing ? and # separators', () => {
+    expect(
+      getReturnPath(fromState({ pathname: '/dashboard/settings', search: 'billing=cancel', hash: 'top' })),
+    ).toBe('/dashboard/settings?billing=cancel#top');
+  });
+
+  it('returns null when no usable location was saved, so Login falls back to settings', () => {
+    expect(getReturnPath({ state: undefined })).toBeNull();
+    expect(getReturnPath({ state: null })).toBeNull();
+    expect(getReturnPath({ state: {} })).toBeNull();
+    expect(getReturnPath(fromState({ search: '?billing=success' }))).toBeNull();
+    expect(getReturnPath(fromState({ pathname: '' }))).toBeNull();
+    expect(getReturnPath(fromState({ pathname: 42 }))).toBeNull();
+  });
+
+  it.each([
+    '//evil.com',
+    '//evil.com/dashboard',
+    '/\\evil.com',
+    '/\t/evil.com',
+    'https://evil.com/dashboard',
+    'javascript:alert(1)',
+    'dashboard/settings',
+  ])('rejects the pathname %j, which is not a same-origin relative path', (pathname) => {
+    expect(getReturnPath(fromState({ pathname }))).toBeNull();
+  });
+});
+
 describe('withReturnPath', () => {
   it('adds the return path as next, encoded once', () => {
     expect(withReturnPath('/register', '/team-invites/abc?x=1')).toBe(

@@ -9,6 +9,10 @@ const entitlementsMocks = vi.hoisted(() => ({
   getEntitlementsForUser: vi.fn(),
 }));
 
+const subscriptionMocks = vi.hoisted(() => ({
+  getPersonalSubscriptionSummary: vi.fn(),
+}));
+
 const teamAccessMocks = vi.hoisted(() => ({
   canViewTeam: vi.fn(),
   getActiveTeamMembership: vi.fn(),
@@ -22,6 +26,11 @@ vi.mock("@functions/api/utils/session", () => ({
 vi.mock("@functions/api/utils/entitlements", () => ({
   getEntitlementsForContext: entitlementsMocks.getEntitlementsForContext,
   getEntitlementsForUser: entitlementsMocks.getEntitlementsForUser,
+}));
+
+vi.mock("@functions/api/utils/stripe-subscriptions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@functions/api/utils/stripe-subscriptions")>()),
+  getPersonalSubscriptionSummary: subscriptionMocks.getPersonalSubscriptionSummary,
 }));
 
 vi.mock("@functions/api/utils/team-access", () => ({
@@ -49,6 +58,7 @@ describe("Billing handler", () => {
       plan: "team",
       limits: { maxTemplates: null, maxActiveRuns: null },
     });
+    subscriptionMocks.getPersonalSubscriptionSummary.mockResolvedValue({ openStatus: null, hasCustomer: false });
     teamAccessMocks.getActiveTeamMembership.mockResolvedValue({
       id: "member-1",
       role: "viewer",

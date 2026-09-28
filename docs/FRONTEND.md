@@ -51,6 +51,12 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
 - Surface API failures by their structured code, not message text: `401` means sign
   in (keep the return path), `403 upgrade_required` and `403 limit_reached` mean a
   plan gate, `503 billing_unavailable` means checkout is down.
+- A button that sends the browser to another site (Stripe Checkout or the Customer
+  Portal) takes its pending flag from `useRedirectPending`
+  (`src/hooks/useRedirectPending.ts`). The flag stays set after the redirect starts,
+  so a second click cannot open a second session. Back can restore the page from the
+  back/forward cache with its React state intact, so the hook clears the flag on that
+  restore, and Billing and Pricing refetch billing status too.
 
 ## Template editor forms
 

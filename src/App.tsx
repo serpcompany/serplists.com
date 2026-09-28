@@ -1,6 +1,5 @@
 import {
   BrowserRouter as Router,
-  Navigate,
   Route,
   Routes,
 } from 'react-router-dom';
@@ -16,6 +15,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DevLoginBar } from './components/DevLoginBar';
 import RequireAuth from '@/components/RequireAuth';
+import { LegacyRedirect } from '@/components/LegacyRedirect';
 import Index from './pages/Index';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -93,7 +93,7 @@ const App = () => {
                     <Route
                       path={LEGACY_PUBLIC_LIBRARY_PATH}
                       element={
-                        <Navigate replace to={buildPublicTemplatesPath()} />
+                        <LegacyRedirect to={buildPublicTemplatesPath()} />
                       }
                     />
                     <Route
@@ -103,13 +103,13 @@ const App = () => {
                     {/* Canonical Private Routes */}
                     <Route
                       path={LEGACY_CONSOLE_HOME_PATH}
-                      element={<Navigate replace to={buildConsoleHomePath()} />}
+                      element={<LegacyRedirect to={buildConsoleHomePath()} />}
                     />
                     <Route
                       path={buildConsoleHomePath()}
                       element={
                         <RequireAuth>
-                          <Navigate replace to={buildConsoleTemplatesPath()} />
+                          <LegacyRedirect to={buildConsoleTemplatesPath()} />
                         </RequireAuth>
                       }
                     />
@@ -230,11 +230,11 @@ const App = () => {
                       />
                       <Route
                         path={LEGACY_CONSOLE_PROFILE_PATH}
-                        element={<Navigate replace to={buildConsoleSettingsPath()} />}
+                        element={<LegacyRedirect to={buildConsoleSettingsPath()} />}
                       />
                       <Route
                         path={LEGACY_ACCOUNT_PATH}
-                        element={<Navigate replace to={buildConsoleSettingsPath()} />}
+                        element={<LegacyRedirect to={buildConsoleSettingsPath()} />}
                       />
                     </Route>
                     <Route
