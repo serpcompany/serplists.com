@@ -19,6 +19,8 @@ import {
   renderUrlset,
   type SitemapEntry,
 } from '../../../functions/sitemap/shared';
+import { buildCategorySlug } from '@/lib/routes';
+import { CATEGORY_SLUG_FIXTURES } from '../../fixtures/categorySlugFixtures';
 
 const sitemapSchema = readFileSync(new URL('../../fixtures/sitemap.xsd', import.meta.url), 'utf8');
 const sitemapIndexSchema = readFileSync(new URL('../../fixtures/siteindex.xsd', import.meta.url), 'utf8');
@@ -99,6 +101,15 @@ describe('public sitemap behavior', () => {
     expect(categorySlug(' SEO & Analytics ')).toBe('seo-analytics');
     expect(parseCategories('["SEO & Analytics", "outdoor"]')).toEqual(['SEO & Analytics', 'outdoor']);
     expect(parseCategories('legacy category')).toEqual(['legacy category']);
+  });
+
+  it('slugs categories exactly like the category pages do, in every script', () => {
+    CATEGORY_SLUG_FIXTURES.forEach((name) => {
+      expect(categorySlug(name)).toBe(buildCategorySlug(name));
+    });
+    expect(categorySlug('日本語')).toBe('日本語');
+    expect(categorySlug('Русский')).toBe('русский');
+    expect(categorySlug('🚀')).toBe('');
   });
 
   it('builds deterministic numbered shards at the configured page size', () => {

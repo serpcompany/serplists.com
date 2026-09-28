@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import {
   applyStoredTheme,
   getStoredTheme,
-  THEME_CHANGE_EVENT,
+  subscribeToThemeChanges,
   toggleDocumentTheme,
   type SerpListsTheme,
 } from '@/lib/theme';
@@ -21,22 +21,8 @@ export function ThemeToggle({ className, showLabel = false }: ThemeToggleProps) 
 
   useEffect(() => {
     setTheme(applyStoredTheme());
-
-    const handleThemeChange = (event: Event) => {
-      const nextTheme =
-        event instanceof CustomEvent && event.detail
-          ? event.detail
-          : getStoredTheme();
-      setTheme(nextTheme);
-    };
-
-    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange);
-    window.addEventListener('storage', handleThemeChange);
-
-    return () => {
-      window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange);
-      window.removeEventListener('storage', handleThemeChange);
-    };
+    // Changes from other tabs are applied to the page before the label follows them.
+    return subscribeToThemeChanges(setTheme);
   }, []);
 
   const isDark = theme === 'dark';

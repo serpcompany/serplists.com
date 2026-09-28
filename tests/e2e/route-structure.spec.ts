@@ -146,6 +146,42 @@ test.describe('route structure', () => {
     ).toBeVisible();
   });
 
+  test('not-found pages are noindexed and real pages are not', async ({ page }) => {
+    // Pages answers unknown paths with index.html and a 200, so the robots tag is the
+    // only thing that keeps a missing URL out of search results.
+    for (const path of [
+      '/definitely-missing',
+      '/categories/definitely-missing',
+      '/features/definitely-missing',
+    ]) {
+      await page.goto(path);
+      await expect(
+        page.getByRole('heading', { name: 'That page does not exist' }),
+      ).toBeVisible();
+      await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+        'content',
+        /noindex/,
+      );
+    }
+
+    for (const [path, heading] of [
+      ['/categories/business', 'Business & Operations'],
+      ['/categories/outdoor', 'outdoor'],
+      ['/features/template-builder', 'Template Builder'],
+    ] as const) {
+      await page.goto(path);
+      await expect(
+        page.getByRole('heading', { exact: true, name: heading }).first(),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'That page does not exist' }),
+      ).toHaveCount(0);
+      await expect(
+        page.locator('meta[name="robots"][content*="noindex"]'),
+      ).toHaveCount(0);
+    }
+  });
+
   test('shared checklist pages use /share and render noindex,nofollow', async ({
     page,
   }) => {

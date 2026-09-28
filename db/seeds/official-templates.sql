@@ -31,7 +31,7 @@ VALUES
           "title":"Check robots.txt and meta robots",
           "description":"Confirm important sections are crawlable and not accidentally blocked.",
           "contents":[
-            {"type":"text","value":"- Verify `robots.txt` returns `200` and is reachable.\\n- Confirm important paths are not disallowed.\\n- Spot check a few key pages for `meta robots` (noindex/nofollow).\\n\\nUseful: https://developers.google.com/search/docs/crawling-indexing/robots/intro"}
+            {"type":"text","value":"- Verify `robots.txt` returns `200` and is reachable.\n- Confirm important paths are not disallowed.\n- Spot check a few key pages for `meta robots` (noindex/nofollow).\n\nUseful: https://developers.google.com/search/docs/crawling-indexing/robots/intro"}
           ]
         },
         {
@@ -39,7 +39,7 @@ VALUES
           "title":"Validate XML sitemap(s)",
           "description":"Make sure sitemaps are clean and actually represent the URLs you want indexed.",
           "contents":[
-            {"type":"text","value":"- Confirm sitemap URL(s) are listed in `robots.txt`.\\n- Ensure the sitemap has only canonical, indexable URLs.\\n- Remove parameters and duplicates.\\n\\nSpec: https://www.sitemaps.org/protocol.html"}
+            {"type":"text","value":"- Confirm sitemap URL(s) are listed in `robots.txt`.\n- Ensure the sitemap has only canonical, indexable URLs.\n- Remove parameters and duplicates.\n\nSpec: https://www.sitemaps.org/protocol.html"}
           ]
         },
         {
@@ -61,7 +61,7 @@ VALUES
           "title":"Internal linking and crawl depth",
           "description":"Key pages should be reachable within a few clicks and have relevant internal anchors.",
           "contents":[
-            {"type":"text","value":"- Identify your top money pages and confirm they have multiple internal links.\\n- Ensure nav/footer do not link to thin/duplicate pages.\\n- Add links from high authority pages to priority pages."}
+            {"type":"text","value":"- Identify your top money pages and confirm they have multiple internal links.\n- Ensure nav/footer do not link to thin/duplicate pages.\n- Add links from high authority pages to priority pages."}
           ]
         },
         {
@@ -69,7 +69,7 @@ VALUES
           "title":"Canonical tags",
           "description":"Canonicals should self-reference on canonical pages and consolidate duplicates.",
           "contents":[
-            {"type":"text","value":"- Spot check canonical tags across templates/variants.\\n- Confirm canonical points to the preferred URL and returns `200`.\\n- Avoid cross-domain canonicals unless intentional."}
+            {"type":"text","value":"- Spot check canonical tags across templates/variants.\n- Confirm canonical points to the preferred URL and returns `200`.\n- Avoid cross-domain canonicals unless intentional."}
           ]
         }
       ]
@@ -134,7 +134,7 @@ VALUES
           "title":"Expand to long-tail variations",
           "description":"Use modifiers, locations, and intent-based patterns.",
           "contents":[
-            {"type":"text","value":"Examples: `best`, `near me`, `pricing`, `template`, `checklist`, `how to`, `vs`.\\n\\nTip: group by intent (learn, compare, buy)."}
+            {"type":"text","value":"Examples: `best`, `near me`, `pricing`, `template`, `checklist`, `how to`, `vs`.\n\nTip: group by intent (learn, compare, buy)."}
           ]
         }
       ]
@@ -148,7 +148,7 @@ VALUES
           "title":"Map one primary keyword per page",
           "description":"Avoid cannibalization by giving each page a clear job.",
           "contents":[
-            {"type":"text","value":"- Assign a primary keyword per URL.\\n- Add a few close variants as secondary.\\n- If two pages compete, merge or differentiate."}
+            {"type":"text","value":"- Assign a primary keyword per URL.\n- Add a few close variants as secondary.\n- If two pages compete, merge or differentiate."}
           ]
         },
         {
@@ -244,7 +244,7 @@ VALUES
           "title":"Categories and services",
           "description":"Choose the most specific primary category and fill supporting services.",
           "contents":[
-            {"type":"text","value":"- Primary category should match your core offer.\\n- Add secondary categories sparingly.\\n- Fill services with natural phrasing."}
+            {"type":"text","value":"- Primary category should match your core offer.\n- Add secondary categories sparingly.\n- Fill services with natural phrasing."}
           ]
         },
         {
@@ -297,7 +297,7 @@ VALUES
           "title":"Add structured data where appropriate",
           "description":"Only add markup that matches visible page content.",
           "contents":[
-            {"type":"text","value":"Validate schema output after deploy.\\n\\nTool: https://search.google.com/test/rich-results"}
+            {"type":"text","value":"Validate schema output after deploy.\n\nTool: https://search.google.com/test/rich-results"}
           ]
         }
       ]

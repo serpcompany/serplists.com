@@ -48,4 +48,19 @@ describe('TemplateCard', () => {
     expect(markup).toContain('<span class="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Marketing</span>');
     expect(markup).toContain('>D</span>');
   });
+
+  it('never links a template without a public URL back to the library', () => {
+    const markup = renderToStaticMarkup(
+      <StaticRouter location="/categories/launch">
+        <TemplateCard
+          template={{ ...template, ownerProfile: { full_name: 'No Handle' } }}
+        />
+      </StaticRouter>,
+    );
+
+    expect(markup).toContain('Website Launch Checklist');
+    expect(markup).not.toContain('href="/templates"');
+    const hrefs = [...markup.matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
+    hrefs.forEach((href) => expect(href).toMatch(/^\/profile\/[^/]+(\/[^/]+)?$/));
+  });
 });

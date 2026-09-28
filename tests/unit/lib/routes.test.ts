@@ -28,6 +28,7 @@ import {
   buildPublicTemplatePath,
   buildSharePath,
   findCategoryNameBySlug,
+  hasCanonicalPublicTemplatePath,
   isBlankTemplateEditorRoute,
   resolveLegacyTemplatesCategoryRedirectPath,
   resolveConsoleSection,
@@ -232,5 +233,14 @@ describe('routes', () => {
         ownerProfile: { username: 'alice' },
       }),
     ).toBe('/profile/alice/template-1');
+  });
+
+  it('reports which templates have a public URL for discovery', () => {
+    expect(hasCanonicalPublicTemplatePath({ ...baseTemplate, ownerProfile: { username: 'alice' } })).toBe(true);
+    expect(hasCanonicalPublicTemplatePath({ ...baseTemplate, id: 'repo:starter' })).toBe(true);
+    expect(hasCanonicalPublicTemplatePath({ ...baseTemplate, userId: REPO_TEMPLATE_USER_ID })).toBe(true);
+    expect(hasCanonicalPublicTemplatePath({ ...baseTemplate, ownerProfile: { full_name: 'No Handle' } })).toBe(false);
+    expect(hasCanonicalPublicTemplatePath({ ...baseTemplate, ownerProfile: { username: '  ' } })).toBe(false);
+    expect(hasCanonicalPublicTemplatePath(baseTemplate)).toBe(false);
   });
 });

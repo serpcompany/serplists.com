@@ -6,7 +6,7 @@ import {
 } from 'react-router-dom';
 import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { HelmetProvider } from 'react-helmet-async';
+import { DocumentHeadProvider } from '@/components/shared/DocumentHeadProvider';
 import { AuthProvider } from './contexts/CloudflareAuthContext';
 import { TemplatesProvider } from './contexts/TemplatesContext';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
@@ -52,7 +52,7 @@ import {
   buildConsoleTemplatesPath,
   buildPublicTemplatesPath,
 } from './lib/routes';
-import { applyStoredTheme } from './lib/theme';
+import { applyStoredTheme, subscribeToThemeChanges } from './lib/theme';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -63,9 +63,12 @@ const queryClient = new QueryClient({
   },
 });
 
+// Applies the stored theme, and a theme chosen in another tab, on every route, including
+// those with no theme toggle.
 const RootThemeSync = () => {
   useEffect(() => {
     applyStoredTheme();
+    return subscribeToThemeChanges(() => undefined);
   }, []);
 
   return null;
@@ -74,7 +77,7 @@ const RootThemeSync = () => {
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
-      <HelmetProvider>
+      <DocumentHeadProvider>
         <ErrorBoundary>
           <TooltipProvider>
             <AuthProvider>
@@ -254,7 +257,7 @@ const App = () => {
             </AuthProvider>
           </TooltipProvider>
         </ErrorBoundary>
-      </HelmetProvider>
+      </DocumentHeadProvider>
     </QueryClientProvider>
   );
 };

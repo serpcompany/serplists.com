@@ -1,4 +1,5 @@
 import { api, type AcceptedTeamInvite, type TeamSummary } from '@/lib/api';
+import { safeLocalStorage } from '@/lib/browserStorage';
 
 const ACTIVE_WORKSPACE_STORAGE_KEY = 'serplists.activeWorkspaceId';
 
@@ -12,15 +13,12 @@ export type AcceptTeamInviteDependencies = {
 };
 
 export function persistAcceptedWorkspace(workspaceId: string): void {
-  if (typeof window === 'undefined' || !workspaceId) {
+  if (!workspaceId) {
     return;
   }
 
-  try {
-    window.localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, workspaceId);
-  } catch {
-    // The context selection still handles in-memory state when storage is unavailable.
-  }
+  // safeLocalStorage never throws; the context selection handles in-memory state too.
+  safeLocalStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, workspaceId);
 }
 
 export async function acceptTeamInviteForWorkspace(

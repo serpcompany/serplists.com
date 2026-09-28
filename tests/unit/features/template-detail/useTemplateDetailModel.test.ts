@@ -160,7 +160,7 @@ describe('loadTemplateDetailData', () => {
       { apiClient },
     );
 
-    expect(result).toEqual({ notFound: false, template: cachedTemplate });
+    expect(result).toEqual({ loadError: false, notFound: false, template: cachedTemplate });
     expect(apiClient.getTemplateById).not.toHaveBeenCalled();
     expect(apiClient.getTemplateBySlug).not.toHaveBeenCalled();
   });
@@ -280,7 +280,70 @@ describe('loadTemplateDetailData', () => {
       { apiClient },
     );
 
-    expect(result).toEqual({ notFound: true, template: null });
+    expect(result).toEqual({ loadError: false, notFound: true, template: null });
+  });
+
+  // Only a settled 404 may render the noindex "Template not found" state. A failure that can
+  // be transient must not tell crawlers that a real public template is gone.
+  const failingLookup = (error: unknown) => ({
+    getTemplateById: vi.fn().mockRejectedValue(error),
+    getTemplateBySlug: vi.fn().mockRejectedValue(error),
+    getProfileById: vi.fn(),
+    clonePublicTemplate: vi.fn(),
+    updateTemplate: vi.fn(),
+  });
+  const loadPublic = (identifier: string, error: unknown) =>
+    loadTemplateDetailData(
+      { mode: 'public', identifier, ownerUsername: 'alice', cachedTemplates: [] },
+      { apiClient: failingLookup(error) },
+    );
+
+  it('treats a 404 from the API as a settled not-found', async () => {
+    const missing = createApiError(404, { error: 'Template not found' });
+
+    expect(await loadPublic('camping-checklist', missing)).toEqual({
+      loadError: false,
+      notFound: true,
+      template: null,
+    });
+    expect(await loadPublic('0b8f8f3e-6f1a-4b7e-9d8e-1f2a3b4c5d6e', missing)).toEqual({
+      loadError: false,
+      notFound: true,
+      template: null,
+    });
+  });
+
+  it('reports server, rate-limit and network failures as a load error, not a missing template', async () => {
+    for (const error of [
+      createApiError(500, { error: 'Internal error' }),
+      createApiError(503),
+      createApiError(429, { error: 'Too many requests' }),
+      new TypeError('Failed to fetch'),
+    ]) {
+      expect(await loadPublic('camping-checklist', error)).toEqual({
+        loadError: true,
+        notFound: false,
+        template: null,
+      });
+    }
+  });
+
+  it('keeps a missing identifier or owner as a settled not-found', async () => {
+    const apiClient = failingLookup(new TypeError('Failed to fetch'));
+
+    expect(
+      await loadTemplateDetailData(
+        { mode: 'public', identifier: undefined, ownerUsername: 'alice', cachedTemplates: [] },
+        { apiClient },
+      ),
+    ).toEqual({ loadError: false, notFound: true, template: null });
+    expect(
+      await loadTemplateDetailData(
+        { mode: 'public', identifier: 'camping-checklist', ownerUsername: undefined, cachedTemplates: [] },
+        { apiClient },
+      ),
+    ).toEqual({ loadError: false, notFound: true, template: null });
+    expect(apiClient.getTemplateBySlug).not.toHaveBeenCalled();
   });
 });
 

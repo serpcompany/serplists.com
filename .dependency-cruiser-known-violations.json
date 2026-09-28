@@ -73,15 +73,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/pages/UserProfile.tsx",
-    "to": "src/lib/api.ts",
-    "rule": {
-      "severity": "error",
-      "name": "screens-do-not-call-transport"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/components/ui/file-upload.tsx",
     "to": "src/contexts/CloudflareAuthContext.tsx",
     "rule": {

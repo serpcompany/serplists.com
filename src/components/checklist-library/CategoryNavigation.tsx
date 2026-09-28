@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
+import { buildPublicCategoryPathForSlug } from '@/lib/routes';
 
 interface CategoryNavigationProps {
   categories: Array<{
@@ -30,7 +31,7 @@ export const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
       <h2 className="mb-4 text-lg font-semibold text-foreground">{title}</h2>
       <div className="flex flex-wrap gap-2">
         {relatedCategories.slice(0, 5).map((category) => (
-          <Link key={category.slug} to={`/categories/${category.slug}`}>
+          <Link key={category.slug} to={buildPublicCategoryPathForSlug(category.slug)}>
             <Badge
               className="border-border px-3 py-1.5 hover:bg-muted"
               variant="outline"

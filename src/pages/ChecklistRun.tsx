@@ -47,7 +47,6 @@ import {
 } from '@/lib/routes';
 import { RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
 import { countRunTasks } from '@/lib/utils/checklistSections';
-import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import { onSingleClick } from '@/lib/utils/repeatClick';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
 
@@ -541,7 +540,7 @@ const ChecklistRunPage = () => {
                             </h3>
                             {item.description ? (
                               <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
-                                {normalizeDisplayText(item.description)}
+                                {item.description}
                               </p>
                             ) : null}
                           </div>

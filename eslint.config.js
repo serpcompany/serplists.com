@@ -23,10 +23,17 @@ const LEGACY_MAX_LINES = {
   "src/lib/api.ts": 650,
   "src/components/template-editor/SectionSidebar.tsx": 650,
   "src/components/TemplateBackup.tsx": 650,
-  "src/contexts/TemplatesContext.tsx": 600,
-  "src/pages/UserProfile.tsx": 550,
+  "src/contexts/TemplatesContext.tsx": 550,
   "src/features/template-detail/useTemplateDetailModel.ts": 550,
 };
+
+const TOAST_MESSAGE =
+  "App.tsx mounts only the sonner Toaster, so toasts from any other toast store are never shown. " +
+  "Import { toast } from 'sonner' instead.";
+
+const STORAGE_MESSAGE =
+  "Reading window.localStorage throws when a browser blocks site data, which crashes the app. " +
+  "Use safeLocalStorage or getLocalStorage() from src/lib/browserStorage.ts, the only module allowed to touch it.";
 
 const VOCABULARY_MESSAGE =
   "User-visible text must use docs/PRODUCT_SENSE.md terms: 'Organization' (not Team/Workspace) and 'Personal' " +
@@ -89,6 +96,35 @@ export default tseslint.config(
     files: [file],
     rules: { "max-lines": ["error", { max }] },
   })),
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [{ name: "@radix-ui/react-toast", message: TOAST_MESSAGE }],
+          patterns: [{ group: ["**/use-toast", "**/ui/toast", "**/ui/toaster"], message: TOAST_MESSAGE }],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/lib/browserStorage.ts"],
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        { object: "window", property: "localStorage", message: STORAGE_MESSAGE },
+        { object: "window", property: "sessionStorage", message: STORAGE_MESSAGE },
+        { object: "globalThis", property: "localStorage", message: STORAGE_MESSAGE },
+      ],
+      "no-restricted-globals": [
+        "error",
+        { name: "localStorage", message: STORAGE_MESSAGE },
+        { name: "sessionStorage", message: STORAGE_MESSAGE },
+      ],
+    },
+  },
   {
     files: ["functions/**/*.ts"],
     ignores: ["functions/api/utils/logger.ts"],

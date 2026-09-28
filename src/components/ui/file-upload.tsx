@@ -4,18 +4,13 @@ import { Input } from './input';
 import { Textarea } from './textarea';
 import { Label } from './label';
 import { X, File, Image, Video } from 'lucide-react';
-import {
-  deleteUploadedAsset,
-  uploadFile,
-  validateFile,
-  UploadResult,
-} from '@/lib/utils/fileUpload';
+import { deleteUploadedAsset } from '@/lib/utils/fileUpload';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
-import { useToast } from '@/hooks/use-toast';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
+import { uploadSelectedFile, type FileUploadType } from './file-upload-flow';
 
 interface FileUploadProps {
-  type: 'image' | 'video' | 'file';
+  type: FileUploadType;
   value: string;
   fileName?: string;
   onValueChange: (value: string) => void;
@@ -36,15 +31,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const sourceInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
-  const { toast } = useToast();
-
-  const getBucketName = () => {
-    switch (type) {
-      case 'image': return 'template-images';
-      case 'video': return 'template-videos';
-      case 'file': return 'template-files';
-    }
-  };
 
   const getIcon = () => {
     switch (type) {
@@ -66,45 +52,18 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     const file = event.target.files?.[0];
     if (!file || !user) return;
 
-    // Validate file
-    const validation = validateFile(file, type);
-    if (!validation.valid) {
-      toast({
-        title: "Invalid file",
-        description: validation.error,
-        variant: "destructive"
-      });
-      return;
-    }
-
     setIsUploading(true);
 
     try {
-      const previousValue = value;
-      const result: UploadResult = await uploadFile(file, getBucketName(), user.id);
-      
-      if (result.success && result.url) {
-        onValueChange(result.url);
-        onFileInfoChange(result.fileName, result.fileSize);
-        if (previousValue && previousValue !== result.url) {
-          await deleteUploadedAsset(previousValue);
-        }
-        toast({
-          title: "Upload successful",
-          description: `${file.name} has been uploaded.`
-        });
-      } else {
-        toast({
-          title: "Upload failed",
-          description: result.error || "Unknown error occurred",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Upload failed",
-        description: "An unexpected error occurred",
-        variant: "destructive"
+      await uploadSelectedFile({
+        file,
+        type,
+        userId: user.id,
+        previousValue: value,
+        onUploaded: (uploaded) => {
+          onValueChange(uploaded.url);
+          onFileInfoChange(uploaded.fileName, uploaded.fileSize);
+        },
       });
     } finally {
       setIsUploading(false);

@@ -26,22 +26,35 @@ export const optimizeImage = async (
       return;
     }
 
+    // Created after the context check, so every path that creates it releases it once.
+    const objectUrl = URL.createObjectURL(file);
+    const releaseObjectUrl = () => URL.revokeObjectURL(objectUrl);
+
     img.onload = () => {
-      // Calculate new dimensions
-      let { width, height } = img;
-      
-      if (width > maxWidth || height > maxHeight) {
-        const ratio = Math.min(maxWidth / width, maxHeight / height);
-        width *= ratio;
-        height *= ratio;
+      try {
+        // Calculate new dimensions
+        let { width, height } = img;
+
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width *= ratio;
+          height *= ratio;
+        }
+
+        // Set canvas dimensions
+        canvas.width = width;
+        canvas.height = height;
+
+        // Draw and compress image. The pixels are on the canvas now, so toBlob no
+        // longer needs the object URL.
+        ctx.drawImage(img, 0, 0, width, height);
+      } catch (error) {
+        // A throw inside an event handler would leave the promise pending forever.
+        reject(error instanceof Error ? error : new Error('Failed to draw image'));
+        return;
+      } finally {
+        releaseObjectUrl();
       }
-
-      // Set canvas dimensions
-      canvas.width = width;
-      canvas.height = height;
-
-      // Draw and compress image
-      ctx.drawImage(img, 0, 0, width, height);
 
       canvas.toBlob(
         (blob) => {
@@ -68,10 +81,11 @@ export const optimizeImage = async (
     };
 
     img.onerror = () => {
+      releaseObjectUrl();
       reject(new Error('Failed to load image'));
     };
 
-    img.src = URL.createObjectURL(file);
+    img.src = objectUrl;
   });
 };
 
@@ -82,17 +96,18 @@ export const isImageFile = (file: File): boolean => {
 export const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    
+    const objectUrl = URL.createObjectURL(file);
+
     img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
       resolve({ width: img.width, height: img.height });
-      URL.revokeObjectURL(img.src);
     };
-    
+
     img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
       reject(new Error('Failed to load image'));
-      URL.revokeObjectURL(img.src);
     };
-    
-    img.src = URL.createObjectURL(file);
+
+    img.src = objectUrl;
   });
 };

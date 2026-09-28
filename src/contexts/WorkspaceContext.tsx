@@ -11,6 +11,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { api, type TeamRole, type TeamSummary } from '@/lib/api';
+import { safeLocalStorage } from '@/lib/browserStorage';
 import {
   getOrganizationPermissions,
   getResourcePermissions,
@@ -74,31 +75,12 @@ const personalWorkspace: Workspace = {
   type: 'personal',
 };
 
-const readStoredWorkspaceId = (): string => {
-  if (typeof window === 'undefined') {
-    return PERSONAL_WORKSPACE_ID;
-  }
+const readStoredWorkspaceId = (): string =>
+  safeLocalStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY) || PERSONAL_WORKSPACE_ID;
 
-  try {
-    return (
-      window.localStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY) ||
-      PERSONAL_WORKSPACE_ID
-    );
-  } catch {
-    return PERSONAL_WORKSPACE_ID;
-  }
-};
-
+// safeLocalStorage never throws; when storage is blocked the choice lasts for the session.
 const writeStoredWorkspaceId = (workspaceId: string): void => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, workspaceId);
-  } catch {
-    // Ignore local storage failures; the in-memory workspace still updates.
-  }
+  safeLocalStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, workspaceId);
 };
 
 export function WorkspaceProvider({

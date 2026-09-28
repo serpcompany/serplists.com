@@ -20,7 +20,6 @@ import { Button } from '@/components/ui/button';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { buildPublicCategoryPath, buildPublicTemplatesPath } from '@/lib/routes';
-import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistItem, ChecklistSection, ChecklistTemplate } from '@/types/checklist';
 
 interface PublicTemplateViewProps {
@@ -138,15 +137,26 @@ export function PublicTemplateView({
         <div className="mb-8">
           {template.categories?.length ? (
             <div className="mb-3 flex flex-wrap gap-2">
-              {template.categories.map((category) => (
-                <Link
-                  key={category}
-                  to={buildPublicCategoryPath(category)}
-                  className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  {category}
-                </Link>
-              ))}
+              {template.categories.map((category) => {
+                const categoryPath = buildPublicCategoryPath(category);
+                // A category with no letters or digits has no page to link to.
+                return categoryPath ? (
+                  <Link
+                    key={category}
+                    to={categoryPath}
+                    className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {category}
+                  </Link>
+                ) : (
+                  <span
+                    key={category}
+                    className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground"
+                  >
+                    {category}
+                  </span>
+                );
+              })}
             </div>
           ) : null}
 
@@ -156,7 +166,7 @@ export function PublicTemplateView({
 
           {template.description ? (
             <p className="mb-6 whitespace-pre-line text-pretty text-base leading-relaxed text-muted-foreground">
-              {normalizeDisplayText(template.description)}
+              {template.description}
             </p>
           ) : null}
 
@@ -343,7 +353,7 @@ function TaskPreviewItem({ item, index }: { item: ChecklistItem; index: number }
         <p className="text-sm text-foreground">{item.title}</p>
         {item.description ? (
           <p className="mt-0.5 whitespace-pre-line text-xs leading-5 text-muted-foreground">
-            {normalizeDisplayText(item.description)}
+            {item.description}
           </p>
         ) : null}
         {item.contents?.length ? (

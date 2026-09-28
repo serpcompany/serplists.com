@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowUpRight,
@@ -15,48 +15,25 @@ import {
 import { PublicPageContainer } from '@/components/layout/PublicPageLayout';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { NotFoundHead } from '@/components/shared/NotFoundHead';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
-import { api } from '@/lib/api';
-import {
-  REPO_TEMPLATE_OWNER_NAME,
-  REPO_TEMPLATE_OWNER_SLUG,
-  REPO_TEMPLATE_USER_ID,
-  repoTemplates,
-} from '@/lib/repoTemplateCatalog';
+import type {
+  ProfileSurfaceRecord,
+  UserProfileRecord,
+} from '@/features/public-profile/loadPublicProfile';
+import { usePublicProfile } from '@/features/public-profile/usePublicProfile';
 import {
   buildCanonicalPublicTemplatePath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
-import { normalizeSections } from '@/lib/utils/checklistSections';
 import type { ChecklistTemplate } from '@/types/checklist';
-
-type UserProfileRecord = {
-  id: string;
-  full_name: string | null;
-  username: string;
-  avatar_url: string | null;
-  created_at: string;
-};
-
-type ProfileSurfaceRecord = UserProfileRecord & {
-  bio?: string;
-  location?: string;
-  totalRuns?: number;
-  totalViews?: number;
-  website?: string;
-};
 
 type UserStats = {
   averageItemsPerTemplate: number;
   categoriesUsed: string[];
   totalItems: number;
   totalTemplates: number;
-};
-
-type ProfileFallbackState = {
-  profile: ProfileSurfaceRecord;
-  templates: ChecklistTemplate[];
 };
 
 const countTemplateItems = (template: ChecklistTemplate) =>
@@ -102,82 +79,6 @@ const buildProfileSummary = (
   return `Public checklist templates and repeatable workflow packs published by @${profile.username}.`;
 };
 
-const normalizeUsername = (value: string | undefined) =>
-  value?.trim().toLowerCase() ?? '';
-
-const mapApiTemplate = (
-  template: Record<string, unknown>,
-): ChecklistTemplate => {
-  const sections = Array.isArray(template.sections)
-    ? template.sections
-    : Array.isArray(template.items)
-      ? [
-          {
-            id: '1',
-            title: 'Checklist',
-            items: template.items,
-          },
-        ]
-      : [];
-
-  return {
-    id: String(template.id),
-    title: String(template.title),
-    description:
-      typeof template.description === 'string' ? template.description : '',
-    sections: normalizeSections(sections),
-    userId: String(template.user_id),
-    createdAt: String(template.created_at),
-    updatedAt:
-      typeof template.updated_at === 'string'
-        ? template.updated_at
-        : String(template.created_at),
-    isPublic: Boolean(template.is_public ?? true),
-    slug: typeof template.slug === 'string' ? template.slug : '',
-    categories: Array.isArray(template.categories)
-      ? (template.categories as string[])
-      : [],
-    tags: Array.isArray(template.tags) ? (template.tags as string[]) : [],
-    version: typeof template.version === 'number' ? template.version : 1,
-    ownerProfile:
-      typeof template.owner_username === 'string' ||
-      typeof template.owner_full_name === 'string'
-        ? {
-            username:
-              typeof template.owner_username === 'string'
-                ? template.owner_username
-                : undefined,
-            full_name:
-              typeof template.owner_full_name === 'string'
-                ? template.owner_full_name
-                : undefined,
-          }
-        : undefined,
-  };
-};
-
-const mergeProfileTemplates = (
-  username: string,
-  apiTemplates: ChecklistTemplate[],
-): ChecklistTemplate[] => {
-  const merged = new Map<string, ChecklistTemplate>();
-  const sources =
-    normalizeUsername(username) === REPO_TEMPLATE_OWNER_SLUG
-      ? [...repoTemplates, ...apiTemplates]
-      : apiTemplates;
-
-  sources.forEach((template) => {
-    const key = template.slug?.trim() || template.id;
-    if (!merged.has(key)) {
-      merged.set(key, template);
-    }
-  });
-
-  return Array.from(merged.values()).sort((left, right) =>
-    right.createdAt.localeCompare(left.createdAt),
-  );
-};
-
 const calculateStats = (templates: ChecklistTemplate[]): UserStats => {
   const totalItems = templates.reduce(
     (total, template) => total + countTemplateItems(template),
@@ -196,25 +97,6 @@ const calculateStats = (templates: ChecklistTemplate[]): UserStats => {
   };
 };
 
-const getFallbackProfileState = (
-  username: string | undefined,
-): ProfileFallbackState | null => {
-  if (normalizeUsername(username) === REPO_TEMPLATE_OWNER_SLUG) {
-    return {
-      profile: {
-        id: REPO_TEMPLATE_USER_ID,
-        full_name: REPO_TEMPLATE_OWNER_NAME,
-        username: REPO_TEMPLATE_OWNER_SLUG,
-        avatar_url: null,
-        created_at: repoTemplates[0]?.createdAt || new Date().toISOString(),
-      },
-      templates: repoTemplates,
-    };
-  }
-
-  return null;
-};
-
 const getProfileWebsiteHref = (website: string) =>
   website.startsWith('http://') || website.startsWith('https://')
     ? website
@@ -225,96 +107,16 @@ const formatWebsiteLabel = (website: string) =>
 
 const UserProfile = () => {
   const { username } = useParams<{ username: string }>();
-  const [profile, setProfile] = useState<ProfileSurfaceRecord | null>(null);
-  const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    const fetchProfile = async () => {
-      if (!username) {
-        setError('No username provided');
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const profileData = (await api.getProfileByUsername(
-          username,
-        )) as UserProfileRecord;
-
-        if (isCancelled) return;
-
-        const decoratedProfile = profileData;
-        let resolvedTemplates: ChecklistTemplate[] = [];
-
-        try {
-          const publicTemplates = (await api.getPublicTemplatesForUser(
-            profileData.id,
-          )) as Array<Record<string, unknown>>;
-
-          resolvedTemplates = mergeProfileTemplates(
-            profileData.username,
-            publicTemplates.map(mapApiTemplate),
-          );
-        } catch (caughtTemplateError) {
-          console.error('Error fetching public templates:', caughtTemplateError);
-
-          const fallbackState = getFallbackProfileState(profileData.username);
-          if (fallbackState) {
-            resolvedTemplates = fallbackState.templates;
-          } else {
-            setProfile(decoratedProfile);
-            setTemplates([]);
-            setError('Unable to load this public profile.');
-            return;
-          }
-        }
-
-        if (isCancelled) return;
-
-        setProfile(decoratedProfile);
-        setTemplates(resolvedTemplates);
-      } catch (caughtError) {
-        console.error('Error fetching public profile:', caughtError);
-
-        const fallbackState = getFallbackProfileState(username);
-        if (fallbackState) {
-          if (isCancelled) return;
-
-          setProfile(fallbackState.profile);
-          setTemplates(fallbackState.templates);
-          setError(null);
-          return;
-        }
-
-        if (isCancelled) return;
-
-        setProfile(null);
-        setTemplates([]);
-        setError('User not found');
-      } finally {
-        if (!isCancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void fetchProfile();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [username]);
+  const { result, retry } = usePublicProfile(username);
+  const profile = result?.status === 'found' ? result.profile : null;
+  const templates = useMemo(
+    () => (result?.status === 'found' ? result.templates : []),
+    [result],
+  );
 
   const stats = useMemo(() => calculateStats(templates), [templates]);
 
-  if (loading) {
+  if (!result) {
     return (
       <PublicPageContainer className="py-14">
         <div className="glass-panel p-8">
@@ -324,13 +126,23 @@ const UserProfile = () => {
     );
   }
 
-  if (error || !profile) {
+  // Only a settled 404 marks the page noindex. A failed lookup may be transient, so it
+  // offers a retry and keeps the page indexable.
+  if (!profile) {
+    const notFound = result.status === 'not_found';
+
     return (
       <PublicPageContainer className="py-14">
+        {notFound ? <NotFoundHead title="User not found" /> : null}
         <EmptyState
-          title={error === 'User not found' ? 'User not found' : 'Error'}
-          description={error || 'Unable to load this public profile.'}
+          title={notFound ? 'User not found' : 'Could not load this profile'}
+          description={
+            notFound
+              ? 'No public profile uses this username.'
+              : 'Check your connection and try again.'
+          }
           icon={Sparkles}
+          action={notFound ? undefined : { label: 'Try again', onClick: retry }}
           className="min-h-0"
         />
       </PublicPageContainer>

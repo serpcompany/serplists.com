@@ -11,6 +11,7 @@ import { createDb } from '../api/db';
 import type { Env } from '../api/types';
 import bundledTemplateCatalog from './bundled-catalog.generated.json';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../src/data/publicCategories';
+import { categorySlug } from '../../src/lib/categorySlug';
 
 export const CANONICAL_ORIGIN = 'https://serplists.com';
 export const SITEMAP_PAGE_SIZE = 25_000;
@@ -343,15 +344,8 @@ export async function buildDurableShardIndex(
   return plan.shards;
 }
 
-export function categorySlug(category: string): string {
-  return category
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-}
+// The category pages slug categories with the same function, so every entry resolves.
+export { categorySlug };
 
 export function parseCategories(value: unknown): string[] {
   if (typeof value !== 'string' || !value.trim()) return [];
@@ -402,8 +396,11 @@ export async function loadCategoryEntries(
     .from(templates)
     .innerJoin(users, eq(users.id, templates.user_id))
     .leftJoin(sitemap_owner_revisions, eq(sitemap_owner_revisions.user_id, users.id))
+    // Same owner rule as the template and profile sitemaps: a template whose owner has no
+    // valid username has no public URL, so the category page does not list it.
     .where(and(
       publicTemplateCondition,
+      validUsernameCondition,
       isNotNull(templates.category),
       nonEmptyTemplateCategoryCondition,
     ));

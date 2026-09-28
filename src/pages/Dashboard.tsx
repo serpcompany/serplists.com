@@ -36,6 +36,7 @@ import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplateLists, type ChecklistRun } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { averageProgress } from '@/lib/progress';
 import {
   resolveConsoleSection,
   buildConsoleRunPath,
@@ -109,13 +110,7 @@ const Dashboard = () => {
     [workspaceTemplates, user?.id],
   );
 
-  const activeRunAverage =
-    activeRuns.length > 0
-      ? Math.round(
-          activeRuns.reduce((total, run) => total + run.progress, 0) /
-            activeRuns.length,
-        )
-      : 0;
+  const activeRunAverage = averageProgress(activeRuns.map((run) => run.progress));
 
   if (isRunsRoute) {
     return (

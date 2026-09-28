@@ -1,0 +1,37 @@
+// Page locations shared by the analytics gating tests: the TypeScript rule in
+// src/lib/analyticsUrl.ts and the copy inlined in index.html must agree on all of them.
+
+export const SENSITIVE_ANALYTICS_LOCATIONS: Array<[pathname: string, search: string]> = [
+  ['/share/3f2c9a1e-5d4b-4c1a-9b7e-2f1d0c9b8a7e', ''],
+  ['/share/abc/', ''],
+  ['/SHARE/abc', ''],
+  ['/Share/abc/', '?utm_source=x'],
+  ['/%73hare/abc', ''],
+  ['//share/abc', ''],
+  ['/share/%E0%A4%A', ''],
+  ['/team-invites/invite-token', ''],
+  ['/team-invites/invite-token/', ''],
+  ['/reset-password', '?token=AbC123'],
+  ['/reset-password', '?error=INVALID_TOKEN'],
+  ['/reset-password/', ''],
+  ['/login', '?verify_email=1&email=alice%40example.com'],
+  ['/login', '?email=a%40b.c'],
+  ['/anything', '?TOKEN=x'],
+  ['/anything', '?utm_source=x&Token=y'],
+  ['/anything', '?%74oken=x'],
+  ['/callback', '?code=abc&state=xyz'],
+];
+
+export const SAFE_ANALYTICS_LOCATIONS: Array<[pathname: string, search: string]> = [
+  ['/', ''],
+  ['/templates', ''],
+  ['/pricing', ''],
+  ['/categories/seo', '?utm_source=twitter'],
+  ['/login', ''],
+  ['/login', '?verify_email=1'],
+  ['/login', '?verified=1'],
+  ['/profile/alice/seo-audit', ''],
+  ['/templates/%E0%A4%A', ''],
+  ['/shared-notes', ''],
+  ['/reset-passwords-guide', ''],
+];

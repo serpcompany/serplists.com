@@ -45,6 +45,18 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
   ([D1 cost](design-docs/d1-cost.md)), so pages that only need official templates use
   the bundled `repoTemplates`. The catalog's query key has no user id because the
   catalog is the same for everyone.
+- `templates` always includes the bundled `repoTemplates`, so a non-empty list does not
+  mean the catalog loaded. Discovery pages read `catalogPending` and `catalogError` from
+  `useTemplateLists` (`loading`, `catalogError`, and `retryCatalog` in
+  `useTemplateLibrary`): show a skeleton while pending, a retry state on error, and a
+  404 or "no templates" message only after the catalog loaded. A failed catalog request
+  stays an error; it is never cached as an empty catalog.
+- Browser storage goes through `src/lib/browserStorage.ts` (`safeLocalStorage`,
+  `getLocalStorage()`). When a browser blocks site data, even reading
+  `window.localStorage` throws, and one unguarded read in a component mounted on every
+  route replaces the whole app with the error screen. The helper never throws and keeps
+  values it cannot persist in memory for the session. ESLint rejects direct access
+  anywhere else in `src/`.
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.
@@ -68,8 +80,49 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
 
 ## Rendering user content
 
-Render Markdown with `react-markdown` with raw HTML disabled, and pass links and
-media URLs through `safeUrl` (`src/lib/utils/safeUrl.ts`).
+Render Markdown with `MarkdownBlock` (`src/components/shared/MarkdownBlock.tsx`), the
+only module that imports `react-markdown`. It disables raw HTML and passes links through
+`safeUrl` (`src/lib/utils/safeUrl.ts`); pass other media URLs through `safeUrl` too.
+
+## Page titles and meta tags
+
+Pages set their title and social tags with `SEOHead`
+(`src/components/shared/SEOHead.tsx`), which titles them "Page | SERP Lists" through
+`buildPageTitle` in `src/lib/brand.ts`. `App.tsx` wraps everything in
+`DocumentHeadProvider`, whose default title is the brand alone, so a page without
+`SEOHead` never keeps the previous page's title. Do not add a `titleTemplate`: `SEOHead`
+already adds the suffix.
+
+`index.html` keeps a static description, Open Graph and Twitter tags for crawlers that do
+not run JavaScript. Each carries `data-rh="true"`, so react-helmet-async owns it: a page's
+`SEOHead` replaces it by name or property instead of adding a second copy. The same tags
+are the defaults in `DocumentHeadProvider`, which puts them back when a page without
+`SEOHead` opens. Keep the two identical, and give any new static SEO tag `data-rh` and a
+matching default (`tests/unit/components/documentHeadMeta.test.tsx` checks both). The
+viewport and charset tags are global: they stay in `index.html` only, without `data-rh`.
+
+Every page shares one link-preview image, `public/og-default.png` (1200x630), named by
+its absolute URL on `https://serplists.com` (`SITE_SOCIAL_IMAGE` in
+`src/lib/publicPageMeta.ts`). Social sites ignore SVG images and relative URLs. Link
+previews do not run JavaScript either, so for public template, category, `/categories` and
+`/templates` pages the Pages Functions in `functions/seo/` serve `index.html` with the page's
+title, description, `og:type`, canonical link and `og:url` already filled in (with
+`data-rh`, so `SEOHead` takes them over). The pages and those functions read their text
+from `src/lib/publicPageMeta.ts`; change it there, not in the page, so the preview and the
+page agree. A new public route with its own `SEOHead` text needs a matching function.
+
+Cloudflare Pages serves `index.html` with a 200 for every unknown path, so the 404 page
+(`src/pages/NotFound.tsx`) marks itself `noindex` and declares no canonical URL. Render
+`NotFound` only once a lookup has settled: a page whose data is still loading, or failed
+to load, shows a loading or retry state instead, so a real page never sends `noindex`.
+Never render `NotFound` next to an `SEOHead`. Do not add a top-level `404.html`; it turns
+off the single-page app fallback.
+
+Pages with their own not-found message (a public template or profile) render
+`NotFoundHead` (`src/components/shared/NotFoundHead.tsx`) for the same title and
+`noindex` tag. Only an API 404 (`isNotFoundError` in `src/lib/api-errors.ts`) counts as
+settled. A network failure, 5xx or rate limit may be transient, so it shows a retry state
+without `noindex`; see `loadTemplateDetailData` and `loadPublicProfile`.
 
 ## Verifying UI changes
 

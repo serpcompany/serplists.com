@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { generateSlug, getVideoEmbedSource } from '@/utils/urlHelpers';
+import { generateSlug, getVideoEmbedSource, getYoutubeVideoId } from '@/utils/urlHelpers';
 import { getOutboundLinkProps, withSerpListsClipyRef } from '@/lib/utils/clipyUrl';
+
+import { YOUTUBE_VIDEO_LINKS } from '../../fixtures/videoLinks';
 
 describe('urlHelpers', () => {
   describe('generateSlug', () => {
@@ -65,6 +67,49 @@ describe('getVideoEmbedSource', () => {
       kind: 'video',
       url: 'https://cdn.example.com/walkthrough.mp4',
     });
+  });
+});
+
+describe('getVideoEmbedSource for YouTube links', () => {
+  const EMBED = { kind: 'iframe', url: 'https://www.youtube.com/embed/dQw4w9WgXcQ' };
+
+  it.each(YOUTUBE_VIDEO_LINKS)('embeds %s', (link) => {
+    expect(getVideoEmbedSource(link)).toEqual(EMBED);
+  });
+
+  it.each([
+    'https://www.youtube.com/@channel',
+    'https://www.youtube.com/watch',
+    'https://www.youtube.com/watch?v=short',
+    'https://www.youtube.com/shorts/',
+    'https://www.youtube.com/live/',
+    'https://www.youtube.com/playlist?list=PL1234567890',
+    'https://www.youtube.com/embed/videoseries?list=PL1234567890',
+    'https://www.youtube.com/redirect?q=https://youtu.be/dQw4w9WgXcQ',
+    'https://youtu.be/',
+  ])('reports %s as not a video instead of a broken native player', (link) => {
+    expect(getVideoEmbedSource(link)).toBeNull();
+  });
+
+  it.each([
+    'https://notyoutube.com/watch?v=dQw4w9WgXcQ',
+    'https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ',
+    'https://evil-youtube.com/embed/dQw4w9WgXcQ',
+  ])('does not treat the look-alike host %s as YouTube', (link) => {
+    expect(getVideoEmbedSource(link)).toEqual({ kind: 'video', url: link });
+  });
+
+  it('never sends a YouTube page to the native video player', () => {
+    for (const link of [...YOUTUBE_VIDEO_LINKS, 'https://m.youtube.com/@channel', 'https://music.youtube.com/']) {
+      expect(getVideoEmbedSource(link)?.kind).not.toBe('video');
+    }
+  });
+
+  it('reads the id from a URL object or string', () => {
+    expect(getYoutubeVideoId('https://m.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(getYoutubeVideoId(new URL('https://www.youtube.com/shorts/dQw4w9WgXcQ'))).toBe('dQw4w9WgXcQ');
+    expect(getYoutubeVideoId('not a url')).toBeNull();
+    expect(getYoutubeVideoId('https://example.com/watch?v=dQw4w9WgXcQ')).toBeNull();
   });
 });
 

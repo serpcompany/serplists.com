@@ -5,6 +5,7 @@ import type { ChecklistTemplate } from '@/types/checklist';
 import {
   buildDiscoveryCategories,
   filterAndSortTemplates,
+  findCategoryByLegacySlug,
 } from '@/components/checklist-library/discovery-utils';
 
 const templates: ChecklistTemplate[] = [
@@ -88,5 +89,46 @@ describe('discovery-utils', () => {
       { count: 2, name: 'Launch', slug: 'launch' },
       { count: 1, name: 'Security', slug: 'security' },
     ]);
+  });
+
+  it('keeps categories in other scripts apart and drops names that have no slug', () => {
+    const international = [
+      { ...templates[0], id: 'ja', categories: ['日本語'] },
+      { ...templates[1], id: 'ru', categories: ['Русский'] },
+      { ...templates[2], id: 'emoji', categories: ['🚀', '!!!'] },
+    ];
+
+    const categories = buildDiscoveryCategories(international, ['!!!', '🚀', 'Русский', '日本語']);
+
+    expect(categories).toEqual(
+      expect.arrayContaining([
+        { count: 1, name: '日本語', slug: '日本語' },
+        { count: 1, name: 'Русский', slug: 'русский' },
+      ]),
+    );
+    expect(categories).toHaveLength(2);
+    expect(categories.some((category) => category.slug === '')).toBe(false);
+  });
+
+  it('filters by a Unicode category slug in any normal form or case', () => {
+    const international = [
+      { ...templates[0], id: 'ja', categories: ['日本語'] },
+      { ...templates[1], id: 'cafe', categories: ['Café'] },
+    ];
+
+    expect(filterAndSortTemplates(international, { categorySlug: '日本語', sortBy: 'recent' }).map((t) => t.id)).toEqual(['ja']);
+    expect(filterAndSortTemplates(international, { categorySlug: 'CAFÉ', sortBy: 'recent' }).map((t) => t.id)).toEqual(['cafe']);
+    expect(filterAndSortTemplates(international, { categorySlug: '!!!', sortBy: 'recent' })).toEqual([]);
+  });
+
+  it('finds a category by the ASCII-only slug it used to have', () => {
+    const categories = [
+      { count: 1, name: 'Café Culture', slug: 'cafe-culture' },
+      { count: 1, name: 'Launch', slug: 'launch' },
+    ];
+
+    expect(findCategoryByLegacySlug(categories, 'caf-culture')?.slug).toBe('cafe-culture');
+    expect(findCategoryByLegacySlug(categories, 'launch')).toBeNull();
+    expect(findCategoryByLegacySlug(categories, '')).toBeNull();
   });
 });

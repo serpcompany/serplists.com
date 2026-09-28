@@ -2,7 +2,6 @@ import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { Button } from '@/components/ui/button';
-import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import { onSingleClick } from '@/lib/utils/repeatClick';
 import type { ChecklistItem, ChecklistSection } from '@/types/checklist';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
@@ -113,7 +112,7 @@ export function TaskExecutionPanel({
               </h2>
               {task.description ? (
                 <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
-                  {normalizeDisplayText(task.description)}
+                  {task.description}
                 </p>
               ) : null}
             </div>

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { getAuthStatus } from "@/lib/auth-client";
+import { buildVerifyEmailLoginRedirect } from "@/lib/auth/loginPrefill";
 import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
 import { buildConsoleHomePath } from "@/lib/routes";
 
@@ -49,8 +50,8 @@ const Register = () => {
       if (result.ok) {
         if (result.requiresEmailVerification || authStatus.emailVerificationRequired) {
           toast.success("Account created. Check your email to verify your address before signing in.");
-          const next = `/login?verify_email=1&email=${encodeURIComponent(email)}`;
-          navigate(next, { replace: true });
+          const redirect = buildVerifyEmailLoginRedirect(email);
+          navigate(redirect.to, { replace: true, state: redirect.state });
         } else {
           toast.success("Registration successful");
           navigate(buildConsoleHomePath());

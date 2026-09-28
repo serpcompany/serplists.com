@@ -71,6 +71,24 @@ Applied in `functions/api/[[route]].ts` through `functions/api/utils/cors.ts`:
 Locally, the dev launcher keeps the frontend origin and the allowlist in sync when
 it moves ports. Do not hand-edit only one side.
 
+## Secrets in URLs and third-party tags
+
+`index.html` loads the Google Tag Manager container, and its tags read the full page
+URL (GA4 sends it as `page_location`). So:
+
+- The bootstrap in `index.html` skips the container for any document that opens on
+  `/share/*`, `/team-invites/*` or `/reset-password`, or whose query has a `token`,
+  `email`, `code` or `state` parameter. The rule lives in `src/lib/analyticsUrl.ts`;
+  `index.html` inlines a copy, and `tests/unit/security/gtmBootstrap.test.ts` checks
+  that both agree.
+- The app never puts a secret or an email address into a URL it navigates to. Sign-up
+  passes the new account's email to `/login` in router state; the reset page reads its
+  token once and removes it from the address bar (a reload offers a new link). When
+  sign-in returns to an invite link in a document where the tags run, it loads the
+  invite as a new page instead of navigating client-side.
+- GA4 data redaction for email and the `token`/`email` query parameters is a useful
+  second layer in the GA admin, but it cannot remove tokens in a path.
+
 ## Rate limits
 
 Best-effort, per IP, in `functions/api/[[route]].ts`, before Better Auth dispatch:

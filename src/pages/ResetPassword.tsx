@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
+import { readResetPasswordLink } from "@/lib/auth/resetPasswordLink";
 
 const ResetPassword = () => {
   const location = useLocation();
@@ -16,9 +17,18 @@ const ResetPassword = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const token = searchParams.get("token");
-  const error = searchParams.get("error");
+  // Read the link once: the token then leaves the URL, so later renders cannot see it there.
+  const [{ token, error }] = useState(() => readResetPasswordLink(location.search));
+
+  useEffect(() => {
+    const { searchWithoutToken } = readResetPasswordLink(location.search);
+    if (searchWithoutToken !== null) {
+      navigate(
+        { pathname: location.pathname, search: searchWithoutToken, hash: location.hash },
+        { replace: true },
+      );
+    }
+  }, [location.hash, location.pathname, location.search, navigate]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -55,7 +65,9 @@ const ResetPassword = () => {
     }
   };
 
-  if (error) {
+  // A reload after the token left the URL lands here with no token: offer a new link
+  // instead of a form that cannot succeed.
+  if (error || !token) {
     return (
       <AuthPageShell
         title="Reset link expired"
