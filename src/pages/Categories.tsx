@@ -22,7 +22,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
-import { buildPublicCategoryPath } from '@/lib/routes';
+import { buildPublicCategoryPath, buildSiteUrl } from '@/lib/routes';
 import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 
 const categoryStyles = {
@@ -48,8 +48,8 @@ const defaultCategoryMeta = {
   color: 'text-slate-400',
   bgColor: 'bg-slate-500/10',
 };
-const CATEGORIES_URL = 'https://serplists.com/categories';
-const SEO_IMAGE_URL = 'https://serplists.com/placeholder.svg';
+const CATEGORIES_URL = buildSiteUrl('/categories');
+const SEO_IMAGE_URL = buildSiteUrl('/placeholder.svg');
 
 const getCategoryMeta = (slug: string) =>
   categoryMetadata.find((category) => category.slug === slug) ??

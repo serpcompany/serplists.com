@@ -17,11 +17,13 @@ import {
 } from '@/lib/access-flow';
 import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
 import {
+  buildCanonicalPublicTemplatePath,
   buildConsoleRunPath,
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
   buildPublicProfilePath,
   buildPublicTemplatesPath,
+  buildSiteUrl,
   resolvePublicTemplateOwnerSlug,
 } from '@/lib/routes';
 
@@ -178,6 +180,10 @@ const PublicTemplate = () => {
     );
   }
 
+  // The page also answers to other casings of the owner and to the template id, and visits
+  // carry tracking parameters. The canonical URL is the one the sitemap lists.
+  const canonicalPath = buildCanonicalPublicTemplatePath(displayTemplate);
+
   return (
     <div className="pb-24">
       <SEOHead
@@ -190,6 +196,7 @@ const PublicTemplate = () => {
         keywords={displayTemplate.categories || ['checklist', 'template']}
         type="article"
         publishedTime={displayTemplate.createdAt}
+        url={canonicalPath ? buildSiteUrl(canonicalPath) : undefined}
       />
       <PublicTemplateView
         template={displayTemplate}

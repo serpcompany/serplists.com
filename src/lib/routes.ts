@@ -17,6 +17,13 @@ export const LEGACY_CONSOLE_PROFILE_PATH = '/dashboard/profile';
 export const LEGACY_CONSOLE_TEMPLATES_PATH = '/console/templates';
 export const LEGACY_CONSOLE_RUNS_PATH = '/console/runs';
 
+// Canonical URLs (rel=canonical, og:url) always name the production site, also on staging
+// and preview hosts. The sitemaps use the same origin (CANONICAL_ORIGIN in
+// functions/sitemap/shared.ts).
+export const SITE_ORIGIN = 'https://serplists.com';
+
+export const buildSiteUrl = (path: string): string => new URL(path, SITE_ORIGIN).toString();
+
 export const buildPublicTemplatesPath = (): string => '/templates';
 
 export const isPublicTemplatesDiscoveryPath = (pathname: string): boolean => {

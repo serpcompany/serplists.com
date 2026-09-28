@@ -41,6 +41,7 @@ import { SEOHead } from '@/components/shared/SEOHead';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
 import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
+import { buildSiteUrl } from '@/lib/routes';
 
 const categoryData: Record<
   string,
@@ -133,8 +134,8 @@ const sortLabels: Record<CategorySort, string> = {
 
 const isCategorySort = (value: string): value is CategorySort =>
   Object.prototype.hasOwnProperty.call(sortLabels, value);
-const CATEGORY_BASE_URL = 'https://serplists.com/categories';
-const SEO_IMAGE_URL = 'https://serplists.com/placeholder.svg';
+const CATEGORY_BASE_URL = buildSiteUrl('/categories');
+const SEO_IMAGE_URL = buildSiteUrl('/placeholder.svg');
 
 const backToCategories = (
   <div className="mb-6 flex items-center gap-2 text-sm">

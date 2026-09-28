@@ -17,6 +17,7 @@ import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
 import {
   buildPublicCategoryPath,
+  buildSiteUrl,
   resolveLegacyTemplatesCategoryRedirectPath,
 } from '@/lib/routes';
 
@@ -27,8 +28,8 @@ type ChecklistLibraryProps = {
 };
 
 const DEFAULT_SORT: DiscoverySort = 'popular';
-const PUBLIC_TEMPLATES_URL = 'https://serplists.com/templates';
-const SEO_IMAGE_URL = 'https://serplists.com/placeholder.svg';
+const PUBLIC_TEMPLATES_URL = buildSiteUrl('/templates');
+const SEO_IMAGE_URL = buildSiteUrl('/placeholder.svg');
 
 const ChecklistLibrary = ({
   templateType,

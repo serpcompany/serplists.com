@@ -18,7 +18,9 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
   description = 'Create, share, and run interactive checklists for your workflows. Organize tasks, track progress, and boost productivity.',
   keywords = ['checklist', 'workflow', 'productivity', 'task management', 'templates'],
   image = '/placeholder.svg',
-  url = window.location.href,
+  // Without an explicit url, use the page address minus query and hash, so tracking
+  // parameters never become part of the canonical URL or og:url.
+  url = `${window.location.origin}${window.location.pathname}`,
   type = 'website',
   publishedTime,
   author,
