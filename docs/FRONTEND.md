@@ -84,6 +84,15 @@ Render Markdown with `MarkdownBlock` (`src/components/shared/MarkdownBlock.tsx`)
 only module that imports `react-markdown`. It disables raw HTML and passes links through
 `safeUrl` (`src/lib/utils/safeUrl.ts`); pass other media URLs through `safeUrl` too.
 
+## Page titles and meta tags
+
+Pages set their title and social tags with `SEOHead`
+(`src/components/shared/SEOHead.tsx`), which titles them "Page | SERP Lists" through
+`buildPageTitle` in `src/lib/brand.ts`. `App.tsx` wraps everything in
+`DocumentHeadProvider`, whose default title is the brand alone, so a page without
+`SEOHead` never keeps the previous page's title. Do not add a `titleTemplate`: `SEOHead`
+already adds the suffix.
+
 ## Verifying UI changes
 
 Show the change working in the real app before opening a PR:

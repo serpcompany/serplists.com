@@ -6,7 +6,7 @@ import {
 } from 'react-router-dom';
 import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { HelmetProvider } from 'react-helmet-async';
+import { DocumentHeadProvider } from '@/components/shared/DocumentHeadProvider';
 import { AuthProvider } from './contexts/CloudflareAuthContext';
 import { TemplatesProvider } from './contexts/TemplatesContext';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
@@ -74,7 +74,7 @@ const RootThemeSync = () => {
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
-      <HelmetProvider>
+      <DocumentHeadProvider>
         <ErrorBoundary>
           <TooltipProvider>
             <AuthProvider>
@@ -254,7 +254,7 @@ const App = () => {
             </AuthProvider>
           </TooltipProvider>
         </ErrorBoundary>
-      </HelmetProvider>
+      </DocumentHeadProvider>
     </QueryClientProvider>
   );
 };

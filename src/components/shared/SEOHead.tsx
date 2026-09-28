@@ -1,6 +1,8 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 
+import { APP_BRAND_NAME, buildPageTitle } from '@/lib/brand';
+
 interface SEOHeadProps {
   title?: string;
   description?: string;
@@ -14,7 +16,7 @@ interface SEOHeadProps {
 }
 
 export const SEOHead: React.FC<SEOHeadProps> = ({
-  title = 'Checklist App - Create and Manage Your Workflows',
+  title,
   description = 'Create, share, and run interactive checklists for your workflows. Organize tasks, track progress, and boost productivity.',
   keywords = ['checklist', 'workflow', 'productivity', 'task management', 'templates'],
   image = '/placeholder.svg',
@@ -26,7 +28,7 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
   author,
   robots = 'index, follow',
 }) => {
-  const fullTitle = title.includes('Checklist App') ? title : `${title} | Checklist App`;
+  const fullTitle = buildPageTitle(title);
   const fullImageUrl = image.startsWith('http') ? image : `${window.location.origin}${image}`;
 
   return (
@@ -42,7 +44,7 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
       <meta property="og:image" content={fullImageUrl} />
       <meta property="og:url" content={url} />
       <meta property="og:type" content={type} />
-      <meta property="og:site_name" content="Checklist App" />
+      <meta property="og:site_name" content={APP_BRAND_NAME} />
       
       {/* Twitter Card Meta Tags */}
       <meta name="twitter:card" content="summary_large_image" />
@@ -72,12 +74,10 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
           "description": description,
           "url": url,
           "image": fullImageUrl,
-          ...(type === 'article' && publishedTime && {
-            "datePublished": publishedTime,
-            "author": {
-              "@type": "Person",
-              "name": author || "Checklist App"
-            }
+          ...(type === 'article' && {
+            "publisher": { "@type": "Organization", "name": APP_BRAND_NAME },
+            ...(publishedTime && { "datePublished": publishedTime }),
+            ...(author && { "author": { "@type": "Person", "name": author } }),
           })
         })}
       </script>
