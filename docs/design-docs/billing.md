@@ -164,11 +164,19 @@ Webhook:
 ## Implementation note
 This project calls Stripe via `fetch` (form-encoded) and verifies webhook signatures using HMAC-SHA256 against the raw request body (no `stripe-node` dependency).
 
-Webhook event rows provide idempotency and retry state. A successfully handled
-event is a duplicate on replay. An event with a recorded processing error must
-be retried, and processing failures return `500` so Stripe will deliver the
-event again. Subscription events upsert their customer mapping before writing
-subscription state; checkout completion may use `metadata.userId` when
+Webhook event rows provide idempotency and retry state
+(`functions/api/utils/stripe-webhook-events.ts`). A row with no error records an
+event whose writes committed: it is written in the same D1 batch (one
+transaction) as the customer and subscription upserts, never before them, and a
+replay of such an event is a duplicate. Any other event is processed: no row, or
+a row with a recorded error. A failed write, a lost error record, or a Worker
+stopped mid-delivery therefore leaves the event retryable. Processing failures
+return `500` so Stripe delivers the event again, and the error is recorded best
+effort without overwriting a row a concurrent delivery already marked handled.
+Events the webhook does not act on (such as `invoice.*`) are recorded as handled.
+A subscription event for an unknown or deleted user is logged and acknowledged
+rather than retried. Subscription events upsert their customer mapping together
+with subscription state; checkout completion may use `metadata.userId` when
 `client_reference_id` is absent.
 
 Stripe does not deliver events in order, and a retried event carries its original,

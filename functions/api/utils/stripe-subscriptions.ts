@@ -169,9 +169,12 @@ export async function loadCurrentSubscription(
   return { ...current, metadataUserId: current.metadataUserId ?? eventSnapshot.metadataUserId };
 }
 
-export async function upsertStripeCustomer(db: Db, userId: string, stripeCustomerId: string, nowIso: string) {
+// The upserts below return the statement unexecuted, so the webhook can commit them in
+// one batch with its event record. Await one to run it on its own.
+
+export function upsertStripeCustomer(db: Db, userId: string, stripeCustomerId: string, nowIso: string) {
   const { stripe_customers } = schema;
-  await db
+  return db
     .insert(stripe_customers)
     .values({ user_id: userId, stripe_customer_id: stripeCustomerId, created_at: nowIso, updated_at: nowIso })
     .onConflictDoUpdate({
@@ -180,7 +183,7 @@ export async function upsertStripeCustomer(db: Db, userId: string, stripeCustome
     });
 }
 
-export async function upsertStripeSubscription(
+export function upsertStripeSubscription(
   db: Db,
   userId: string,
   subscription: SubscriptionSnapshot,
@@ -199,7 +202,7 @@ export async function upsertStripeSubscription(
     updated_at: nowIso,
   };
 
-  await db
+  return db
     .insert(stripe_subscriptions)
     .values({ stripe_subscription_id: subscription.id, ...state, created_at: nowIso })
     .onConflictDoUpdate({
