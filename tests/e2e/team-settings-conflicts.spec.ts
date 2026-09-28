@@ -236,3 +236,38 @@ test('Organization activity requests only the events the page shows', async ({ p
     .map(({ search }) => search);
   await expect.poll(activitySearches).toContain('?limit=10');
 });
+
+test('Save Organization stays disabled until a field changes and sends only what changed', async ({ page }) => {
+  const state: MockState = {
+    members: [ownerMember],
+    invites: [],
+    requests: [],
+    respond: (method, path) => (method === 'PUT' && path === '/api/teams/team-1'
+      ? { status: 200, body: { success: true, team: { id: 'team-1', name: 'Acme Ops', slug: 'acme-team' } } }
+      : null),
+  };
+  const updateBodies: unknown[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && new URL(request.url()).pathname === '/api/teams/team-1') {
+      updateBodies.push(request.postDataJSON());
+    }
+  });
+  await mockOrganizationApi(page, state);
+  await openOrganizationSettings(page);
+
+  const save = page.getByRole('button', { name: 'Save Organization' });
+  const name = page.locator('#team-settings-name');
+  await expect(name).toHaveValue('Acme Team');
+  await expect(save).toBeDisabled();
+
+  await name.fill('  Acme Team ');
+  await expect(save).toBeDisabled();
+
+  await name.fill('Acme Ops');
+  await expect(save).toBeEnabled();
+  await save.click();
+
+  await expect(page.getByText('Organization updated')).toBeVisible();
+  await expect(page.getByText('No fields to update')).toHaveCount(0);
+  expect(updateBodies).toEqual([{ name: 'Acme Ops' }]);
+});

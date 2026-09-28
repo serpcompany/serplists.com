@@ -19,6 +19,12 @@ import { api, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/li
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
+import {
+  formatActivityTime,
+  formatTeamActivityAction,
+  getActivityActorName,
+} from '@/features/teams/teamActivityFormat';
+import { getTeamSettingsUpdate } from '@/features/teams/teamSettingsUpdate';
 
 type AssignableTeamRole = Exclude<TeamRole, 'owner'>;
 
@@ -34,36 +40,11 @@ const roleDescriptions: Record<TeamRole, string> = {
   viewer: 'Views shared templates and runs.',
 };
 
-const teamActivityActionLabels: Record<string, string> = {
-  'checklist_run.created': 'Run created',
-  'checklist_run.deleted': 'Run archived',
-  'checklist_run.restored': 'Run restored',
-  'checklist_run.share_created': 'Run share created',
-  'checklist_run.shared_updated': 'Shared run updated',
-  'checklist_run.updated': 'Run updated',
-  'team.created': 'Organization created',
-  'team.owner_transferred': 'Owner transferred',
-  'team.updated': 'Organization updated',
-  'team_invite.accepted': 'Invite accepted',
-  'team_invite.created': 'Invite created',
-  'team_invite.revoked': 'Invite revoked',
-  'team_member.updated': 'Member updated',
-  'template.cloned': 'Template cloned',
-  'template.created': 'Template created',
-  'template.deleted': 'Template archived',
-  'template.imported': 'Template imported',
-  'template.restored': 'Template restored',
-  'template.updated': 'Template updated',
-};
-
 const formatRole = (role: TeamRole): string =>
   role.charAt(0).toUpperCase() + role.slice(1);
 
 const formatMemberStatus = (status: TeamMemberStatus): string =>
   status.charAt(0).toUpperCase() + status.slice(1);
-
-const formatTeamActivityAction = (action: string): string =>
-  teamActivityActionLabels[action] ?? action;
 
 const formatInviteExpiration = (value: string): string => {
   const date = new Date(value);
@@ -77,25 +58,6 @@ const formatInviteExpiration = (value: string): string => {
     year: 'numeric',
   })}`;
 };
-
-const formatActivityTime = (value: string): string => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-
-  return date.toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
-};
-
-const getActivityActorName = (actor: {
-  email?: string | null;
-  name?: string | null;
-  username?: string | null;
-  userId?: string | null;
-}): string => actor.name || actor.username || actor.email || actor.userId || 'Unknown user';
 
 const resolveCreatedInviteUrl = (
   invite: Awaited<ReturnType<typeof api.createTeamInvite>>,
@@ -127,8 +89,8 @@ export function TeamSettingsSection() {
   } = useWorkspace();
   const [teamName, setTeamName] = useState('');
   const [teamSlug, setTeamSlug] = useState('');
-  const [editTeamName, setEditTeamName] = useState('');
-  const [editTeamSlug, setEditTeamSlug] = useState('');
+  const [editTeamName, setEditTeamName] = useState(isTeamWorkspace ? activeWorkspace.name : '');
+  const [editTeamSlug, setEditTeamSlug] = useState(('slug' in activeWorkspace && activeWorkspace.slug) || '');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<AssignableTeamRole>('viewer');
   const [inviteUrl, setInviteUrl] = useState('');
@@ -185,6 +147,9 @@ export function TeamSettingsSection() {
       ? activeWorkspace.memberId
       : null;
   const canTransferOwnership = isTeamWorkspace && activeWorkspace.role === 'owner';
+  const teamSettingsUpdate = isTeamWorkspace
+    ? getTeamSettingsUpdate({ name: editTeamName, slug: editTeamSlug }, activeWorkspace)
+    : null;
 
   useEffect(() => {
     setInviteUrl('');
@@ -234,19 +199,18 @@ export function TeamSettingsSection() {
       return;
     }
 
-    const name = editTeamName.trim();
-    const slug = editTeamSlug.trim();
-    if (!name) {
+    // Save is disabled until a field changes; submitting unchanged values (Enter) sends nothing.
+    if (!teamSettingsUpdate) {
+      return;
+    }
+    if (teamSettingsUpdate.name === '') {
       toast.error('Organization name is required');
       return;
     }
 
     setIsUpdatingTeam(true);
     try {
-      await api.updateTeam(activeTeamId, {
-        name,
-        slug: slug || undefined,
-      });
+      await api.updateTeam(activeTeamId, teamSettingsUpdate);
       await refreshTeams();
       await reload(activityQuery, ['team-activity', activeTeamId]);
       toast.success('Organization updated');
@@ -537,7 +501,7 @@ export function TeamSettingsSection() {
                   />
                 </div>
                 <div className="flex items-end">
-                  <Button type="submit" disabled={isUpdatingTeam} className="w-full">
+                  <Button type="submit" disabled={isUpdatingTeam || !teamSettingsUpdate} className="w-full">
                     {isUpdatingTeam ? 'Saving...' : 'Save Organization'}
                   </Button>
                 </div>

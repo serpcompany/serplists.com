@@ -12,6 +12,7 @@ const workspaceMocks = vi.hoisted(() => ({
     memberId: 'member-current',
     name: 'Acme Team',
     role: 'admin',
+    slug: 'acme-team',
     teamId: 'team-1',
     type: 'team',
   },
@@ -187,6 +188,14 @@ describe('TeamSettingsSection', () => {
 
     expect(html.match(/Member updated/g)).toHaveLength(12);
     expect(html).toContain('Actor 11');
+  });
+
+  it('keeps Save Organization disabled until the name or slug differs from the saved Organization', () => {
+    const html = renderSectionWithMembers([]);
+
+    expect(html).toMatch(/<input[^>]*id="team-settings-name"[^>]*value="Acme Team"/);
+    expect(html).toMatch(/<input[^>]*id="team-settings-slug"[^>]*value="acme-team"/);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Save Organization<\/button>/);
   });
 
   it('renders team members as read-only for roles that cannot manage the team', () => {

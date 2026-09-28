@@ -59,7 +59,7 @@ Organization operations use legacy `/api/teams` route identifiers and require a 
 - `GET /api/teams`: list active Organizations for the current User.
 - `POST /api/teams`: create an Organization and its `owner` membership.
 - `GET /api/teams/:teamId`: read Organization details for a member.
-- `PUT /api/teams/:teamId`: update an Organization name or slug. Requires `owner` or `admin`.
+- `PUT /api/teams/:teamId`: update an Organization name or slug. Requires `owner` or `admin`. A body that names neither field is a 400; values that match the current ones (after trimming) return 200 without a write or audit event. The settings form keeps Save disabled until a field changes and sends only the changed fields; clearing the slug field keeps the current slug.
 - `GET /api/teams/:teamId/members`: list members. Managers can see inactive rows; non-managers see active members.
 - `PUT /api/teams/:teamId/members/:memberId`: update role or status. Requires `owner` or `admin`; owners cannot be changed through this route. A status change also revokes the member's pending invites to that Organization.
 - `PUT /api/teams/:teamId/owner`: transfer the Organization's `owner` role. Requires current `owner`.

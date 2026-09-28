@@ -545,8 +545,10 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       updates.slug = parsed.data.slug;
     }
 
+    const membershipSummary = { id: membership.id, role, status: membership.status };
     if (Object.keys(updates).length === 1) {
-      return jsonError("No fields to update", 400);
+      // Saving the current values (for example, after trimming) changes nothing to write or audit.
+      return json({ success: true, team: { ...team, membership: membershipSummary } });
     }
 
     const auditEvent = await buildAuditEventValues({
@@ -570,7 +572,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       team: {
         ...team,
         ...updates,
-        membership: { id: membership.id, role, status: membership.status },
+        membership: membershipSummary,
       },
     });
   }
