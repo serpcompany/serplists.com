@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { betterAuth } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
+import { APIError } from 'better-auth/api';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const BASE_URL = 'http://localhost:8788';
@@ -82,21 +83,64 @@ describe('getSessionUserId', { timeout: 30_000 }, () => {
     expect(new Date(db.session[0].expiresAt).getTime()).toBeGreaterThan(Date.now() + 6.9 * DAY_MS);
   });
 
-  it('asks Better Auth for a read-only lookup and returns null on failure', async () => {
+  it('asks Better Auth for a read-only lookup and returns null when there is no session', async () => {
     const getSession = vi
       .fn()
       .mockResolvedValueOnce({ user: { id: 'user-1' } })
-      .mockResolvedValueOnce(null)
-      .mockRejectedValueOnce(new Error('D1 unavailable'));
+      .mockResolvedValueOnce(null);
     const { getSessionUserId } = await loadSessionHelper({ api: { getSession } });
     const request = new Request(`${BASE_URL}/api/templates`);
 
     await expect(getSessionUserId(request, env)).resolves.toBe('user-1');
     await expect(getSessionUserId(request, env)).resolves.toBeNull();
-    await expect(getSessionUserId(request, env)).resolves.toBeNull();
     for (const [options] of getSession.mock.calls) {
       expect(options.query).toEqual({ disableRefresh: true });
     }
+  });
+
+  // A failed lookup is an outage, not a signed-out user: answering 401 would
+  // send a signed-in user to the sign-in page and hide the failure in the logs.
+  it('rethrows and logs a failed lookup instead of treating the user as signed out', async () => {
+    const errorLines: string[] = [];
+    vi.spyOn(console, 'error').mockImplementation((line: unknown) => {
+      errorLines.push(String(line));
+    });
+    const lookupError = new APIError('INTERNAL_SERVER_ERROR', { message: 'Failed to get session' });
+    const getSession = vi.fn().mockRejectedValue(lookupError);
+    const { getSessionUserId } = await loadSessionHelper({ api: { getSession } });
+    const request = new Request(`${BASE_URL}/api/templates`, {
+      headers: { Cookie: 'better-auth.session_token=SECRET.SIGNATURE', 'X-Request-Id': 'req-1' },
+    });
+
+    await expect(getSessionUserId(request, env)).rejects.toBe(lookupError);
+
+    expect(errorLines).toHaveLength(1);
+    expect(JSON.parse(errorLines[0])).toMatchObject({
+      level: 'error',
+      message: 'session_lookup_failed',
+      requestId: 'req-1',
+      errorName: 'APIError',
+      status: 'INTERNAL_SERVER_ERROR',
+    });
+    expect(errorLines[0]).not.toContain('SECRET');
+    vi.restoreAllMocks();
+  });
+
+  it('rethrows and logs when Better Auth cannot be set up', async () => {
+    const errorLines: string[] = [];
+    vi.spyOn(console, 'error').mockImplementation((line: unknown) => {
+      errorLines.push(String(line));
+    });
+    vi.doMock('../../../../functions/api/better-auth', () => ({
+      createBetterAuth: vi.fn(() => {
+        throw new Error('BETTER_AUTH_SECRET must be at least 32 characters');
+      }),
+    }));
+    const { getSessionUserId } = await import('../../../../functions/api/utils/session');
+
+    await expect(getSessionUserId(new Request(`${BASE_URL}/api/teams`), env)).rejects.toThrow('BETTER_AUTH_SECRET');
+    expect(JSON.parse(errorLines[0])).toMatchObject({ message: 'session_lookup_failed', errorName: 'Error' });
+    vi.restoreAllMocks();
   });
 });
 

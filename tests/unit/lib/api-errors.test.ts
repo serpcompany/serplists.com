@@ -29,6 +29,14 @@ describe("api-errors", () => {
     });
   });
 
+  it("keeps server errors retryable instead of asking a signed-in user to sign in", () => {
+    // The API answers 500 when it cannot look up a session (utils/session.ts).
+    expect(getAccessFailure(createApiError(500, { error: "Internal Server Error" }), "fallback")).toEqual({
+      kind: "error",
+      message: "Internal Server Error",
+    });
+  });
+
   it("maps upgrade and limit errors to upgrade_required", () => {
     expect(getAccessFailure(createApiError(403, { error: "Upgrade", code: "upgrade_required" }), "fallback")).toEqual({
       kind: "upgrade_required",

@@ -55,6 +55,12 @@ and user-facing failure states when a supporting service is unavailable.
   while the new cookie is dropped, so the browser cookie would expire first. The app
   calls get-session on page load and, while signed in, at most once an hour when the
   tab regains focus or stays visible (`createSessionRechecker`).
+- A handler's session lookup (`getSessionUserId`) returns `null`, and the handler
+  answers `401`, only when there is no valid session. If the lookup itself fails
+  (a D1 outage, or Better Auth cannot be set up), it logs `session_lookup_failed`
+  and rethrows, so the API answers `500`. A `401` there would send a signed-in user
+  to `/login`, or quietly show them anonymous data. Anonymous requests never reach
+  D1 here, so public pages are unaffected.
 - Only a definite answer changes the signed-in state: `get-session` returning no
   session (or a `401`) signs the user out. A `429`, `5xx`, or network failure is
   treated as unknown (`src/lib/auth/sessionCheck.ts`): the current user is kept,
