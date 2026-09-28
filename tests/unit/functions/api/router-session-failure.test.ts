@@ -53,7 +53,10 @@ describe('API router when the session lookup fails', { timeout: 30_000 }, () => 
 
     const response = await send(path, {
       method,
-      ...(method === 'POST' ? { body: '{}', headers: { 'Content-Type': 'application/json' } } : {}),
+      // Content-Length as a browser sends it: uploads without one get 411.
+      ...(method === 'POST'
+        ? { body: '{}', headers: { 'Content-Type': 'application/json', 'Content-Length': '2' } }
+        : {}),
     });
 
     expect(response.status).toBe(500);

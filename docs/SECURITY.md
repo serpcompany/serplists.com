@@ -186,10 +186,12 @@ Request bodies are capped in the router before any handler runs
 whatever the `Content-Type`, because handlers parse JSON without checking it: 1MB by
 default, 16KB for `/api/auth/*`, 2MB for Template backups, and 50MB (plus multipart
 overhead) for uploads.
-The cap uses `Content-Length`, or counts streamed bytes when it is missing
-(uploads without it are left to the upload handler, which requires a session before
-parsing and rejects files over 50MB). The unauthenticated shared Run update checks
-its share token before reading the body.
+The cap uses `Content-Length`, or counts streamed bytes when it is missing or
+malformed. Uploads are the exception: counting would buffer up to 51MB, and the
+upload handler's form parsing reads the whole body before it can check the file
+size, so an upload without a valid `Content-Length` (a chunked body) gets `411`
+before the handler runs. Browsers always send one for `FormData` uploads. The
+unauthenticated shared Run update checks its share token before reading the body.
 
 ## Admin entitlement override
 

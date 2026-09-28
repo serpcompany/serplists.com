@@ -7,7 +7,7 @@ import { checkAuthRateLimit } from './utils/auth-rate-limit';
 import { checkRouteRateLimit, routeRateLimitResponse } from './utils/route-rate-limit';
 import { createBetterAuth } from './better-auth';
 import { getAuthEmailPolicy, isProductionAuthPolicy } from './utils/auth-policy';
-import { findOversizedBody } from './utils/body-limit';
+import { checkRequestBodyLimit } from './utils/body-limit';
 import { rejectUnsafeAuthRequest } from './utils/auth-request-guard';
 import { TEST_ACCOUNTS_DISABLED_MESSAGE, blockedTestEmailDomain } from './utils/test-email-block';
 import { 
@@ -126,9 +126,9 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       return finalize(response);
     }
 
-    const oversizedLabel = await findOversizedBody(request, path);
-    if (oversizedLabel) {
-      response = errorResponse(`Payload too large (max ${oversizedLabel})`, 413);
+    const bodyRejection = await checkRequestBodyLimit(request, path);
+    if (bodyRejection) {
+      response = errorResponse(bodyRejection.error, bodyRejection.status);
       return finalize(response);
     }
 

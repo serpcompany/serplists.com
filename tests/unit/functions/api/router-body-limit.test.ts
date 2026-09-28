@@ -159,6 +159,24 @@ describe('API router request body limit', { timeout: 30_000 }, () => {
     expect(handlers.handleUploads).toHaveBeenCalledTimes(1);
   });
 
+  // Counting a chunked upload would tee up to 51MB into memory, and the handler's
+  // formData() buffers the whole body before it can check the file size.
+  it.each([
+    ['no Content-Length', {}],
+    ['a malformed Content-Length', { 'Content-Length': 'lots' }],
+  ])('refuses an upload streamed with %s before the handler parses it', async (_label, headers) => {
+    const response = await send(
+      request('POST', 'uploads', {
+        headers: { 'Content-Type': 'multipart/form-data; boundary=x', ...headers },
+        body: streamedBody(60 * MB),
+      }),
+    );
+
+    expect(response.status).toBe(411);
+    expect(await response.json()).toMatchObject({ error: 'Content-Length required' });
+    expect(handlers.handleUploads).not.toHaveBeenCalled();
+  });
+
   it('keeps small bodies readable for the handler', async () => {
     const payload = JSON.stringify({ id: 'evt_1', type: 'checkout.session.completed' });
     const response = await send(
