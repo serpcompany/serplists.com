@@ -239,6 +239,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
     applyConfirmedSession(check);
+    // Other tabs showing this user re-read the session, so they show the new name,
+    // username or avatar (and build links from the new username).
+    if (check.kind === 'authenticated') sessionSync.announceProfileChange(check.user.id);
     return check.kind === 'authenticated';
   };
 

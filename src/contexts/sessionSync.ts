@@ -3,13 +3,15 @@ import { z } from 'zod';
 import { getLocalStorage } from '@/lib/browserStorage';
 import { onUnauthorizedResponse } from '@/lib/unauthorizedResponses';
 
-import { applySessionCheck, type SessionCheck, type SessionState } from './authSession';
+import { applySessionCheck, type SessionCheck, type SessionState, type SessionUser } from './authSession';
 
 // Every tab of a browser sends the same session cookie, so when one tab signs in as someone
 // else or signs out, the others must follow before they show or write anything as the old user.
 // A tab that signs in or out announces it on a BroadcastChannel (a storage event where that is
 // missing). The message is only a hint: the other tabs re-read the session and trust the
-// server's answer. A tab also re-reads it when it comes back into view, at most once per
+// server's answer. A tab that changes the user's profile (name, username, avatar) announces
+// that too, so tabs showing the same user re-read it and show the new one. A tab also
+// re-reads the session when it comes back into view, at most once per
 // SESSION_RECHECK_INTERVAL_MS (each check reads the session from D1), and after a restore from
 // the back/forward cache, where it may have missed messages.
 //
@@ -49,17 +51,34 @@ export type SessionSyncEnvironment = {
 
 type ConfirmedSessionCheck = Exclude<SessionCheck, { kind: 'unknown' }>;
 
-const sessionReportSchema = z.object({ userId: z.string().min(1).nullable() });
+const sessionReportSchema = z.object({
+  userId: z.string().min(1).nullable(),
+  profileChanged: z.boolean().optional(),
+});
+type SessionReport = z.infer<typeof sessionReportSchema>;
 
-const parseReport = (data: unknown): string | null | undefined => {
+const parseReport = (data: unknown): SessionReport | undefined => {
   const report = sessionReportSchema.safeParse(data);
-  return report.success ? report.data.userId : undefined;
+  return report.success ? report.data : undefined;
 };
 
-// Applies a background re-check. Only a confirmed different user or a sign-out changes the
-// state; the same user keeps the current state object, so nothing re-renders.
+// The profile fields the app shows and builds links from. The session record itself
+// (expiresAt, updatedAt) changes on every refresh and is not compared.
+const sameProfile = (a: SessionUser, b: SessionUser): boolean =>
+  a.email === b.email &&
+  a.name === b.name &&
+  a.username === b.username &&
+  (a.image ?? null) === (b.image ?? null);
+
+// Applies a background re-check. A confirmed different user or a sign-out replaces the
+// state, and so does the same user with a changed profile (a rename in another tab). An
+// unchanged user keeps the current state object, so nothing re-renders.
 export function applySessionRecheck(check: ConfirmedSessionCheck, current: SessionState): SessionState {
-  if (check.kind === 'authenticated' && current.user?.id === check.user.id) return current;
+  if (check.kind === 'authenticated' && current.user?.id === check.user.id) {
+    return current.status === 'authenticated' && sameProfile(current.user, check.user)
+      ? current
+      : { user: check.user, session: check.session, status: 'authenticated' };
+  }
   if (check.kind === 'unauthenticated' && current.status === 'unauthenticated') return current;
   return applySessionCheck(check, current);
 }
@@ -94,7 +113,7 @@ export function createSessionSync(deps: {
   let lastUnauthorizedCheckAt = Number.NEGATIVE_INFINITY;
   let running: Promise<void> | null = null;
   let checkAgain = false;
-  let post: ((userId: string | null) => void) | null = null;
+  let post: ((report: SessionReport) => void) | null = null;
 
   const beginRead = () => {
     ticketsIssued += 1;
@@ -147,9 +166,11 @@ export function createSessionSync(deps: {
     return running;
   };
 
-  const onReport = (userId: string | null) => {
+  const onReport = ({ userId, profileChanged }: SessionReport) => {
     const current = deps.getState();
-    if (current.status === 'loading' || (current.user?.id ?? null) === userId) return;
+    if (current.status === 'loading') return;
+    const sameUser = (current.user?.id ?? null) === userId;
+    if (sameUser && !(profileChanged && userId)) return;
     void recheck();
   };
 
@@ -164,7 +185,9 @@ export function createSessionSync(deps: {
     },
     // Tell the other tabs who this tab is signed in as, after a sign-in, sign-out or page load.
     // Tabs never announce what they learned from a re-check, so a change is announced once.
-    announce: (userId: string | null) => post?.(userId),
+    announce: (userId: string | null) => post?.({ userId }),
+    // This tab changed the signed-in user's profile: tabs showing the same user re-read it.
+    announceProfileChange: (userId: string) => post?.({ userId, profileChanged: true }),
     recheck,
     // Re-reads the session for a signed-in tab that has not read it for
     // SESSION_KEEPALIVE_INTERVAL_MS, never while another check runs. Returns whether it started.
@@ -186,12 +209,12 @@ export function createSessionSync(deps: {
       if (channel) {
         const open = channel;
         open.onMessage((data) => {
-          const userId = parseReport(data);
-          if (userId !== undefined) onReport(userId);
+          const report = parseReport(data);
+          if (report) onReport(report);
         });
-        post = (userId) => {
+        post = (report) => {
           try {
-            open.postMessage({ userId });
+            open.postMessage(report);
           } catch {
             // A closed channel: the other tabs fall back to their visibility re-check.
           }
@@ -206,11 +229,11 @@ export function createSessionSync(deps: {
           } catch {
             return;
           }
-          const userId = parseReport(data);
-          if (userId !== undefined) onReport(userId);
+          const report = parseReport(data);
+          if (report) onReport(report);
         }));
         // The timestamp makes every write a change, so the storage event always fires.
-        post = (userId) => environment.writeStorage(SESSION_SYNC_STORAGE_KEY, JSON.stringify({ userId, at: now() }));
+        post = (report) => environment.writeStorage(SESSION_SYNC_STORAGE_KEY, JSON.stringify({ ...report, at: now() }));
       }
       stops.push(environment.onVisible(() => {
         if (deps.getState().status !== 'loading' && now() - lastReadAt >= SESSION_RECHECK_INTERVAL_MS) void recheck();

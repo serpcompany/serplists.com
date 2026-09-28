@@ -118,7 +118,11 @@ and user-facing failure states when a supporting service is unavailable.
   cached queries are then dropped), a confirmed sign-out sends protected pages to
   `/login`, and a failed check changes nothing. A tab also re-reads the session when
   it comes back into view, at most once a minute, and after a back/forward cache
-  restore. Tabs never re-announce what they learned, so one change costs one session
+  restore. A re-check that finds the same user with a changed profile (name,
+  username, avatar, email) shows the new one, and a tab that saves a profile change
+  announces it (`refreshProfile`), so the other tabs showing that user re-read the
+  session: share links and the Profile link are built from the session's username.
+  Tabs never re-announce what they learned, so one change costs one session
   read per other tab. Before a background sign-out or switch to another user is
   applied, pages with unsaved work keep it on the tab to offer it back after sign-in
   (`beforeSessionLost`; see "Unsaved changes" in [FRONTEND.md](../FRONTEND.md)).

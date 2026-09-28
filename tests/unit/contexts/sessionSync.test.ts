@@ -5,6 +5,7 @@ import {
   SESSION_KEEPALIVE_INTERVAL_MS,
   SESSION_RECHECK_INTERVAL_MS,
   SESSION_UNAUTHORIZED_RECHECK_INTERVAL_MS,
+  applySessionRecheck,
   createSessionSync,
   type SessionSyncChannel,
   type SessionSyncEnvironment,
@@ -577,5 +578,97 @@ describe('keeping unsaved work before a background session change', () => {
     await flush();
 
     expect(beforeSessionLost).not.toHaveBeenCalled();
+  });
+});
+
+// A profile change (a rename, a new avatar) made in another tab reaches this tab through its
+// session re-checks. The share links and the account menu's Profile link are built from the
+// session's username, so a stale one points at a profile that no longer exists.
+describe('profile changes made in another tab', () => {
+  const aliceProfile = { id: 'user-alice', email: 'alice@example.com', name: 'Alice', username: 'alice', image: null };
+
+  it('replaces the user when the same account comes back with a changed profile', () => {
+    const current: SessionState = { user: aliceProfile, session: { v: 1 }, status: 'authenticated' };
+    const changes = [
+      { username: 'alice2' },
+      { name: 'Alice Smith' },
+      { image: 'https://cdn.example.com/alice.png' },
+      { email: 'alice@example.org' },
+    ];
+    changes.forEach((change) => {
+      const user = { ...aliceProfile, ...change };
+      expect(applySessionRecheck({ kind: 'authenticated', user, session: { v: 2 } }, current)).toEqual({
+        user,
+        session: { v: 2 },
+        status: 'authenticated',
+      });
+    });
+  });
+
+  it('keeps the same state object when only the session record changed', () => {
+    const current: SessionState = { user: aliceProfile, session: { expiresAt: 1 }, status: 'authenticated' };
+
+    expect(
+      applySessionRecheck({ kind: 'authenticated', user: { ...aliceProfile, image: undefined }, session: { expiresAt: 2 } }, current),
+    ).toBe(current);
+  });
+
+  // After a sign-in whose session read failed, the tab holds the sign-in response's user,
+  // which has no username; the next check completes it.
+  it('completes a partial sign-in user', () => {
+    const partial = { id: 'user-alice', email: 'alice@example.com', name: 'Alice' };
+    const current: SessionState = { user: partial, session: {}, status: 'authenticated' };
+
+    expect(applySessionRecheck({ kind: 'authenticated', user: aliceProfile, session: {} }, current).user).toEqual(aliceProfile);
+  });
+
+  it('shows the new username after a visible re-check, without a toast', async () => {
+    const renamed = { ...aliceProfile, username: 'alice2' };
+    const tab = createTab({
+      state: { user: aliceProfile, session: {}, status: 'authenticated' },
+      answers: [{ kind: 'authenticated', user: renamed, session: {} }],
+    });
+    tab.sync.connect(tab.environment());
+
+    tab.showTab();
+    await flush();
+
+    expect(tab.state().user?.username).toBe('alice2');
+    expect(tab.notify).not.toHaveBeenCalled();
+  });
+
+  it('re-reads the session when another tab of the same user announces a profile change', async () => {
+    const hub = createChannelHub();
+    const renamed = { ...aliceProfile, username: 'alice2' };
+    const tab1 = createTab({
+      state: { user: aliceProfile, session: {}, status: 'authenticated' },
+      answers: [{ kind: 'authenticated', user: renamed, session: {} }],
+    });
+    const tab2 = createTab({ state: { user: renamed, session: {}, status: 'authenticated' } });
+    tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
+    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
+
+    tab2.sync.announceProfileChange(renamed.id);
+    await flush();
+
+    expect(tab1.readSession).toHaveBeenCalledTimes(1);
+    expect(tab1.state().user?.username).toBe('alice2');
+    expect(tab2.readSession).not.toHaveBeenCalled();
+  });
+
+  it('carries the profile change over the storage fallback too', async () => {
+    const storage = createStorageHub();
+    const tab1 = createTab({
+      state: { user: aliceProfile, session: {}, status: 'authenticated' },
+      answers: [{ kind: 'authenticated', user: { ...aliceProfile, name: 'Alice Smith' }, session: {} }],
+    });
+    const tab2 = createTab({ state: { user: aliceProfile, session: {}, status: 'authenticated' } });
+    tab1.sync.connect(tab1.environment(storage.environment()));
+    tab2.sync.connect(tab2.environment(storage.environment()));
+
+    tab2.sync.announceProfileChange(aliceProfile.id);
+    await flush();
+
+    expect(tab1.state().user?.name).toBe('Alice Smith');
   });
 });
