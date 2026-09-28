@@ -1,3 +1,4 @@
+import { ZodError } from "zod";
 import { 
   validateBackup, 
   validatePortableTemplatePackEnvelope,
@@ -11,6 +12,7 @@ import type {
   PortableTemplatePack,
   TemplateBackup
 } from "@/lib/schemas/checklistSchema";
+import { formatValidationError } from "@/lib/schemas/formatValidationError";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
 import {
   detectTemplateSourceExtension,
@@ -290,7 +292,7 @@ export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
         if (error instanceof SyntaxError) {
           reject(new Error("Invalid JSON file format"));
         } else {
-          reject(new Error(`Backup validation failed: ${(error as Error).message}`));
+          reject(new Error(`Backup validation failed: ${formatValidationError(error)}`));
         }
       }
     };
@@ -338,7 +340,7 @@ export const parseTemplatesFromData = (
 
     return { templates: normalizedTemplates, warnings };
   } catch (error) {
-    throw new Error(`Template validation failed: ${(error as Error).message}`);
+    throw new Error(`Template validation failed: ${formatValidationError(error)}`);
   }
 };
 
@@ -391,7 +393,11 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
     if (error instanceof SyntaxError) {
       throw new Error("Invalid JSON file format");
     }
-    throw error instanceof Error ? error : new Error("Failed to parse template file");
+    // Markdown and YAML parsers throw raw ZodErrors, whose message is a JSON dump.
+    if (error instanceof ZodError) {
+      throw new Error(`Template validation failed: ${formatValidationError(error)}`);
+    }
+    throw new Error(error instanceof Error ? formatValidationError(error) : "Failed to parse template file");
   }
 };
 

@@ -285,7 +285,9 @@ describe('Template Backup Utilities', () => {
         type: 'application/json'
       });
       
-      await expect(parseTemplatesFromJSON(file)).rejects.toThrow('Template validation failed');
+      await expect(parseTemplatesFromJSON(file)).rejects.toThrow(
+        'Template validation failed: Template 1 > title: Required',
+      );
     });
   });
 
@@ -330,6 +332,57 @@ describe('Template Backup Utilities', () => {
       expect(result.templates[0].title).toBe('Markdown Template');
       expect(result.templates[0].isPublic).toBe(true);
       expect(result.templates[0].sections[0].items[0].contents).toHaveLength(2);
+    });
+
+    describe('readable validation errors', () => {
+      const expectReadableRejection = async (file: File, pathPattern: RegExp) => {
+        const error = await parseTemplatesFromFile(file).then(
+          () => { throw new Error('expected the file to be rejected'); },
+          (reason: Error) => reason,
+        );
+        expect(error.message).toMatch(/^Template validation failed: /);
+        expect(error.message).toMatch(pathPattern);
+        expect(error.message).not.toMatch(/"code"\s*:/);
+        expect(error.message).not.toMatch(/"path"/);
+        expect(error.message).not.toMatch(/:\s*\[/);
+        expect(error.message).not.toContain('\n');
+      };
+
+      it('names the section for a YAML template with a blank section title', async () => {
+        const source = ['title: YAML Template', 'sections:', '  - title: ""', '    items:', '      - title: Task'].join('\n');
+
+        await expectReadableRejection(
+          new File([source], 'template.yaml', { type: 'application/x-yaml' }),
+          /Section 1 > title: String must contain at least 1 character/,
+        );
+      });
+
+      it('names the field for a Markdown template with no title', async () => {
+        const markdown = ['---', 'visibility: private', '---', '## Prep', '', '### Task'].join('\n');
+
+        await expectReadableRejection(new File([markdown], 'template.md', { type: 'text/markdown' }), /title: String must contain/);
+      });
+
+      it('names the item for a portable JSON pack with a blank item title', async () => {
+        const pack = {
+          kind: 'serplists-template-pack',
+          schemaVersion: '2.0.0',
+          exportedAt: '2026-03-22T00:00:00.000Z',
+          templates: [{ title: 'Pack Template', sections: [{ title: 'Prep', items: [{ title: '' }] }] }],
+        };
+
+        await expectReadableRejection(
+          new File([JSON.stringify(pack)], 'pack.json', { type: 'application/json' }),
+          /Template 1 > Section 1 > Item 1 > title: String must contain at least 1 character/,
+        );
+      });
+
+      it('names the template for a JSON array entry with no title', async () => {
+        await expectReadableRejection(
+          new File([JSON.stringify([{ sections: [] }])], 'templates.json', { type: 'application/json' }),
+          /Template 1 > title: Required/,
+        );
+      });
     });
 
     it('should parse single-template YAML files', async () => {

@@ -197,6 +197,12 @@ Minimal template fields:
 
 Missing fields are auto-filled during import (ids, timestamps, userId).
 
+A file that fails validation is rejected before anything is sent, with a
+one-line reason that names up to three problems by 1-based position, for example
+`Template validation failed: Section 1 > title: String must contain at least 1 character(s)`.
+YAML syntax errors report their line (`Invalid YAML at line 3: ...`). The shared
+formatter is `src/lib/schemas/formatValidationError.ts`.
+
 ## Strict Markdown template format
 
 The strict Markdown dialect is still supported for compatibility and lintable round-trips, but it is no longer the recommended primary authoring format.
