@@ -18,7 +18,12 @@ applies pending migrations), installs the Playwright browser, and builds `dist/`
 if it is missing. `.dev.vars` is the only local env file; variables are listed in
 [SECURITY.md](../SECURITY.md#secrets-and-environment). The client reads `VITE_*`
 variables through `src/env.ts`; `VITE_API_URL` overrides the dev API base
-(`http://localhost:8788/api`; `/api` when deployed).
+(`http://localhost:8788/api`; `/api` when deployed). `pnpm run build` (the
+deployable build) does not read `.dev.vars` and fails if `VITE_API_URL` points at a
+loopback host, from the shell or any `.env` file (`scripts/lib/buildEnv.ts`);
+`pnpm run build:dev` still reads `.dev.vars` for local bundles. At runtime,
+`src/lib/apiBaseUrl.ts` also ignores a loopback `VITE_API_URL` unless the page itself
+is served from a loopback host.
 
 ## Run
 

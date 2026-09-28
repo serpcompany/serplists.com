@@ -1,12 +1,14 @@
 import { env } from "@/env";
 import { createApiError } from "@/lib/api-errors";
+import { resolveApiBaseUrl } from "@/lib/apiBaseUrl";
 import type { TemplateImportSummary } from "@/types/checklist";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
-const DEV_API_BASE_URL = env.VITE_API_URL ?? 'http://localhost:8788/api';
-const API_BASE_URL = import.meta.env.DEV
-  ? DEV_API_BASE_URL
-  : env.VITE_API_URL ?? '/api';
+const API_BASE_URL = resolveApiBaseUrl({
+  isDev: import.meta.env.DEV,
+  configuredUrl: env.VITE_API_URL,
+  pageHostname: typeof window === 'undefined' ? undefined : window.location.hostname,
+});
 
 export const getAgentMcpEndpoint = (origin?: string): string => {
   const endpoint = `${API_BASE_URL}/mcp`;

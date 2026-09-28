@@ -10,7 +10,7 @@
     "dev:auto": "node scripts/dev-auto.mjs all",
     "dev:stop": "node scripts/dev-stop.mjs",
     "setup": "node scripts/setup-local.mjs",
-    "build": "pnpm run sitemap:generate && dotenv -e .dev.vars -- vite build",
+    "build": "pnpm run sitemap:generate && vite build",
     "build:dev": "pnpm run sitemap:generate && dotenv -e .dev.vars -- vite build --mode development",
     "lint": "eslint .",
     "typecheck": "tsc -b",

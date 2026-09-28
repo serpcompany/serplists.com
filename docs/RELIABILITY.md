@@ -68,7 +68,9 @@ Cloudflare Pages settings:
   to 22 in both workflows.
 
 To deploy by hand (rarely needed): `pnpm run build`, then
-`npx wrangler pages deploy ./dist --project-name serplists-com`.
+`npx wrangler pages deploy ./dist --project-name serplists-com`. Never deploy a
+`build:dev` bundle. `build` ignores `.dev.vars` and refuses a localhost
+`VITE_API_URL`, so a local API URL cannot ship.
 
 ## Observability
 
