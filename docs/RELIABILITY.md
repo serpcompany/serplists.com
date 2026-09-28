@@ -122,6 +122,12 @@ Common failures:
   production. They use an isolated stack: frontend `localhost:4173`, API
   `localhost:8788`, and D1 state in `.wrangler/smoke-state`. Keep both on the
   `localhost` host name; mixing `127.0.0.1` drops `SameSite=Lax` cookies.
+  `tests/e2e/run-smoke.mjs` seeds the same directory the API server runs on
+  (`PLAYWRIGHT_WRANGLER_PERSIST_TO`) whatever ports or URLs you preset, and a
+  preset `PLAYWRIGHT_WRANGLER_PERSIST_TO` must be a folder inside `.wrangler/`
+  other than `.wrangler/state`. It stops if a local `VITE_API_URL` or
+  `PLAYWRIGHT_API_URL` uses another port than `PLAYWRIGHT_API_PORT`, and seeds
+  nothing for a remote API or with `PLAYWRIGHT_REUSE_EXISTING_SERVER=1`.
 - e2e specs share one database, so `test:e2e:full` runs with one worker (TD-11).
 - Reuse stable test identities instead of registering a new account on every run.
   Production auth blocks known test-email domains; keep that coverage when auth
