@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { safeLocalStorage } from '@/lib/browserStorage';
 import {
   buildViewModePreferenceKey,
   readViewModePreference,
@@ -14,8 +15,8 @@ type UseViewModePreferenceOptions = {
   userId?: string;
 };
 
-const getBrowserStorage = (): Storage | undefined =>
-  typeof window === 'undefined' ? undefined : window.localStorage;
+// Reading window.localStorage throws when site data is blocked; safeLocalStorage never does.
+const getBrowserStorage = () => safeLocalStorage;
 
 export const useViewModePreference = ({
   defaultValue = 'grid',

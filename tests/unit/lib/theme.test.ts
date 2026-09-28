@@ -1,9 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   applyStoredTheme,
   getDocumentTheme,
   getStoredTheme,
+  setStoredTheme,
+  THEME_CHANGE_EVENT,
   toggleDocumentTheme,
 } from '@/lib/theme';
 
@@ -85,5 +87,74 @@ describe('theme helpers', () => {
       'serplists-theme',
       'light',
     );
+  });
+});
+
+// Chrome's "Don't allow sites to save data" (or blocked cookies) makes reading
+// window.localStorage itself throw, so a default parameter that reads it crashes the app.
+const stubWindowWithBlockedStorage = () => {
+  const dispatchEvent = vi.fn();
+  const windowStub = {
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent,
+  };
+  Object.defineProperty(windowStub, 'localStorage', {
+    configurable: true,
+    get() {
+      throw new DOMException('Access is denied for this document.', 'SecurityError');
+    },
+  });
+  vi.stubGlobal('window', windowStub);
+  return { dispatchEvent };
+};
+
+describe('theme helpers when the browser blocks site data', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('falls back to light mode instead of throwing', () => {
+    stubWindowWithBlockedStorage();
+    const harness = createThemeHarness();
+
+    expect(getStoredTheme()).toBe('light');
+    expect(applyStoredTheme(harness.document)).toBe('light');
+    expect(harness.isDark()).toBe(false);
+  });
+
+  it('still toggles, announces and remembers the theme for the session', () => {
+    const { dispatchEvent } = stubWindowWithBlockedStorage();
+    const harness = createThemeHarness();
+
+    expect(toggleDocumentTheme(harness.document)).toBe('dark');
+    expect(harness.isDark()).toBe(true);
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: THEME_CHANGE_EVENT, detail: 'dark' }),
+    );
+
+    // A component that mounts later re-applies the stored theme; it must not undo the choice.
+    expect(applyStoredTheme(harness.document)).toBe('dark');
+    expect(harness.isDark()).toBe(true);
+    setStoredTheme('light', harness.document);
+  });
+
+  it('survives a storage whose reads and writes throw', () => {
+    const { dispatchEvent } = stubWindowWithBlockedStorage();
+    const harness = createThemeHarness();
+    const throwingStorage = {
+      getItem: () => {
+        throw new DOMException('denied', 'SecurityError');
+      },
+      setItem: () => {
+        throw new DOMException('quota', 'QuotaExceededError');
+      },
+    };
+
+    expect(getStoredTheme(throwingStorage)).toBe('light');
+    expect(applyStoredTheme(harness.document, throwingStorage)).toBe('light');
+    expect(toggleDocumentTheme(harness.document, throwingStorage)).toBe('dark');
+    expect(harness.isDark()).toBe(true);
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
 });
