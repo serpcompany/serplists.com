@@ -239,11 +239,14 @@ export const saveTemplateToAccount = async (params: {
     return { kind: 'login_required' };
   }
 
-  if (params.billingState.isLoading) {
+  // Only Personal copying is a Pro feature. The API enforces an Organization's Template
+  // limit (a Free Organization may copy within it) and reports limit_reached, which
+  // maps to upgrade_required.
+  if (!params.teamId && params.billingState.isLoading) {
     return { kind: 'error', message: 'Checking your plan. Try again in a moment.' };
   }
 
-  if (!params.billingState.isPro) {
+  if (!params.teamId && !params.billingState.isPro) {
     return { kind: 'upgrade_required' };
   }
 

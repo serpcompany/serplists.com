@@ -1085,7 +1085,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return json({ success: true });
     }
 
-    // POST /api/templates/:id/clone (Pro only)
+    // POST /api/templates/:id/clone (within the target context's Template limit)
     if (templatesSubpath[0] && templatesSubpath[1] === 'clone') {
       const sourceId = templatesSubpath[0];
       let visibility: 'preserve' | 'public' | 'private' = 'private';

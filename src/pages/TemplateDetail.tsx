@@ -69,6 +69,7 @@ import {
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplateLists } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { getCopyTemplateButton } from '@/features/template-detail/copyTemplateButton';
 import {
   exportTemplateFile,
   getTemplateExportLabel,
@@ -212,6 +213,12 @@ const TemplateDetail = () => {
   const metrics = (displayTemplate as (ChecklistTemplate & TemplateMetrics) | null) ?? null;
   // Organization Templates follow the viewer's role, never who created them.
   const { canEdit: canEditTemplate, canViewHistory: canViewTemplateHistory } = permissions;
+  const copyButton = getCopyTemplateButton({
+    billingState,
+    canEditTemplates,
+    isCloning: isCloningTemplate,
+    isTeamWorkspace,
+  });
   const isPublic = visibilityOverride ?? displayTemplate?.isPublic ?? false;
   const totalTasks = displayTemplate?.sections.reduce(
     (count, section) => count + section.items.length,
@@ -366,7 +373,11 @@ const TemplateDetail = () => {
         return;
       }
 
-      toast.success('Template copied to your account');
+      toast.success(
+        isTeamWorkspace
+          ? 'Template copied to this Organization'
+          : 'Template copied to your account',
+      );
       if (result.templateId) {
         navigate(buildConsoleTemplatePath(result.templateId));
         return;
@@ -518,22 +529,18 @@ const TemplateDetail = () => {
           </Button>
         </>
       ) : user ? (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleCloneTemplate}
-          disabled={isCloningTemplate || billingState.isLoading}
-          className="border-border"
-        >
-          <Copy className="mr-2 h-4 w-4" />
-          {isCloningTemplate
-            ? 'Copying...'
-            : billingState.isLoading
-              ? 'Checking plan...'
-              : !billingState.isPro
-                ? 'Upgrade to copy template'
-                : 'Copy to My Templates'}
-        </Button>
+        copyButton.visible ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCloneTemplate}
+            disabled={copyButton.disabled}
+            className="border-border"
+          >
+            <Copy className="mr-2 h-4 w-4" />
+            {copyButton.label}
+          </Button>
+        ) : null
       ) : (
         <Button asChild variant="outline" size="sm" className="border-border">
           <Link to="/login" state={{ from: location }}>

@@ -152,6 +152,47 @@ describe('TemplateDetail Organization permissions', () => {
   });
 });
 
+describe('TemplateDetail copy into an Organization', () => {
+  const otherUsersPublicTemplate = () => ({
+    ...buildV0DemoPrivateTemplate(),
+    isPublic: true,
+    userId: 'someone-else',
+  });
+
+  beforeEach(() => {
+    workspaceState.activeTeamId = 'team-1';
+    workspaceState.isTeamWorkspace = true;
+  });
+
+  it("offers the copy although the Organization's plan is Free", () => {
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      billingState: { billingEnabled: true, isLoading: false, isPro: false },
+      template: otherUsersPublicTemplate(),
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(html).toContain('Copy to Organization');
+    expect(html).not.toContain('Upgrade to copy template');
+    expect(html).not.toContain('Copy to My Templates');
+  });
+
+  it('hides the copy from roles that cannot add Templates to the Organization', () => {
+    workspaceState.canEditTemplates = false;
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      template: otherUsersPublicTemplate(),
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(html).not.toContain('Copy to');
+    expect(html).not.toContain('Upgrade to copy template');
+    expect(html).toContain('Start Run');
+  });
+});
+
 describe('TemplateDetail page', () => {
   it('looks templates up in the workspace list, which refreshes after edits, never the catalog', () => {
     mockUseTemplateDetailModel.mockReturnValue(baseModel());
