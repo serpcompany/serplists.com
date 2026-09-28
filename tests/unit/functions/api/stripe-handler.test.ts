@@ -62,13 +62,8 @@ function failWritesAfter(okWrites: number) {
 }
 
 function checkoutCompletedEvent(id: string) {
-  return {
-    id,
-    type: "checkout.session.completed",
-    created: 123,
-    livemode: true,
-    data: { object: { customer: "cus_123", metadata: { userId: "user-123" } } },
-  };
+  const object: Record<string, unknown> = { customer: "cus_123", metadata: { userId: "user-123" } };
+  return { id, type: "checkout.session.completed", created: 123, livemode: true, data: { object } };
 }
 
 describe("Stripe webhook handler", () => {
@@ -163,6 +158,32 @@ describe("Stripe webhook handler", () => {
     expect(data.error).toBe("Stripe webhook processing failed");
     expect(d1.rows<{ error: string }>("SELECT error FROM stripe_webhook_events WHERE id = ?", "evt_retry")[0]?.error)
       .toContain("from \"stripe_customers\"");
+  });
+
+  it("stores the subscription a completed Checkout created, without waiting for its own event", async () => {
+    const event = checkoutCompletedEvent("evt_checkout_subscription");
+    event.data.object = { ...event.data.object, mode: "subscription", subscription: "sub_123" };
+
+    const response = await deliver(event);
+
+    expect(response.status).toBe(200);
+    expect(fetch).toHaveBeenCalledWith("https://api.stripe.com/v1/subscriptions/sub_123", expect.anything());
+    expect(storedSubscriptions()).toEqual([{ status: "active" }]);
+    expect(d1.rows("SELECT user_id, stripe_customer_id FROM stripe_customers")).toEqual([
+      { user_id: "user-123", stripe_customer_id: "cus_123" },
+    ]);
+  });
+
+  it("returns 500 so Stripe retries when a completed Checkout's subscription cannot be read", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 503 })));
+    const event = checkoutCompletedEvent("evt_checkout_unreadable");
+    event.data.object = { ...event.data.object, mode: "subscription", subscription: "sub_123" };
+
+    const response = await deliver(event);
+
+    expect(response.status).toBe(500);
+    expect(eventErrors("evt_checkout_unreadable")[0]?.error).toContain("503");
+    expect(d1.rows("SELECT user_id FROM stripe_customers")).toEqual([]);
   });
 
   it("records nothing for an event until its writes commit", async () => {

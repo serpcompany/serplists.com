@@ -5,6 +5,7 @@ import {
   BILLING_UNAVAILABLE_MESSAGE,
   createApiError,
   getAccessFailure,
+  isOpenSubscriptionConflictError,
 } from "@/lib/api-errors";
 
 describe("api-errors", () => {
@@ -62,5 +63,14 @@ describe("api-errors", () => {
       kind: "subscription_needs_attention",
       message: "Your Pro subscription needs attention.",
     });
+  });
+
+  it("recognizes checkout refusals that mean billing status is out of date", () => {
+    // Checkout may find a subscription the page does not show yet, so the page refetches.
+    expect(isOpenSubscriptionConflictError(createApiError(409, { code: "already_subscribed" }))).toBe(true);
+    expect(isOpenSubscriptionConflictError(createApiError(409, { code: "subscription_needs_attention" }))).toBe(true);
+    expect(isOpenSubscriptionConflictError(createApiError(409, { code: "plan_managed_by_support" }))).toBe(false);
+    expect(isOpenSubscriptionConflictError(createApiError(503, { code: "billing_unavailable" }))).toBe(false);
+    expect(isOpenSubscriptionConflictError(new Error("already_subscribed"))).toBe(false);
   });
 });

@@ -12,6 +12,7 @@ import {
   PLAN_MANAGED_BY_SUPPORT_MESSAGE,
   PRO_MONTHLY_PRICE_LABEL,
 } from "@/lib/billing";
+import { isOpenSubscriptionConflictError } from "@/lib/api-errors";
 import { fetchPersonalBillingStatus, waitForPersonalPro } from "@/lib/billing-return";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -93,6 +94,10 @@ export function BillingSection() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start checkout");
       setIsStartingCheckout(false);
+      // Show the subscription checkout found, so Manage subscription replaces Upgrade.
+      if (isOpenSubscriptionConflictError(err)) {
+        void queryClient.invalidateQueries({ queryKey: getBillingStatusQueryKey(userId, null) });
+      }
     }
   };
 

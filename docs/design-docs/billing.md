@@ -140,8 +140,14 @@ Authenticated:
   when an open subscription is not paid up (`past_due`, `unpaid`, `paused`,
   `incomplete`). Only `canceled` and `incomplete_expired` subscriptions allow a
   new Checkout, because Stripe would bill both subscriptions. The client opens the
-  Customer Portal on `subscription_needs_attention`. An active manual override
+  Customer Portal on `subscription_needs_attention`, and Billing and Pricing
+  refetch billing status on either `409`. An active manual override
   returns `409 plan_managed_by_support` before any Stripe call.
+  Stored rows come from webhooks, which can lag or fail, so when D1 shows no
+  open subscription and the user has a Stripe customer, checkout also lists the
+  customer's subscriptions in Stripe (`GET /v1/subscriptions?customer=...`),
+  stores them, and applies the same rules. If Stripe cannot answer, checkout
+  fails closed with `503 billing_unavailable` and creates no session.
 - `POST /api/billing/portal` → returns `{ url }` to redirect user to Stripe Customer Portal
 - Stripe returns the user to `/dashboard/settings?billing=success` or
   `?billing=cancel` after Checkout, and to `/dashboard/settings` from the Portal.
@@ -177,7 +183,9 @@ Events the webhook does not act on (such as `invoice.*`) are recorded as handled
 A subscription event for an unknown or deleted user is logged and acknowledged
 rather than retried. Subscription events upsert their customer mapping together
 with subscription state; checkout completion may use `metadata.userId` when
-`client_reference_id` is absent.
+`client_reference_id` is absent. A completed subscription-mode Checkout also
+reads its subscription from Stripe and stores it, so Pro does not wait on a late
+or lost `customer.subscription.*` event.
 
 Stripe does not deliver events in order, and a retried event carries its original,
 possibly stale, snapshot. So `customer.subscription.*` events are only a trigger:

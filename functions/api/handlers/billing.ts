@@ -5,7 +5,12 @@ import { json, jsonError } from "../utils/response";
 import { getStripeBillingConfig, stripePostForm } from "../utils/stripe";
 import { getSessionUserId } from "../utils/session";
 import { getEntitlementsForContext, getEntitlementsForUser } from "../utils/entitlements";
-import { getPersonalSubscriptionSummary, isPaidSubscriptionStatus } from "../utils/stripe-subscriptions";
+import { log } from "../utils/logger";
+import {
+  getPersonalSubscriptionSummary,
+  isPaidSubscriptionStatus,
+  syncCustomerSubscriptions,
+} from "../utils/stripe-subscriptions";
 import { canViewTeam, getActiveTeamMembership, normalizeTeamRole } from "../utils/team-access";
 
 type StripeCustomer = { id: string };
@@ -32,6 +37,26 @@ function alreadySubscribed(): Response {
   return jsonError("You already have Pro. Manage your subscription from Billing.", 409, {
     code: "already_subscribed",
   });
+}
+
+function billingUnavailable(): Response {
+  return jsonError("Billing is temporarily unavailable. Please contact support.", 503, {
+    code: "billing_unavailable",
+  });
+}
+
+/**
+ * A subscription on any price, paid or not, blocks a second one: Stripe would bill
+ * both, and a failed payment is fixed in the Customer Portal instead.
+ */
+function openSubscriptionConflict(openStatus: string | null): Response | null {
+  if (!openStatus) return null;
+  if (isPaidSubscriptionStatus(openStatus)) return alreadySubscribed();
+  return jsonError(
+    "Your Pro subscription needs attention. Update your payment method with Manage subscription in Billing.",
+    409,
+    { code: "subscription_needs_attention" },
+  );
 }
 
 export async function handleBilling(request: Request, env: Env): Promise<Response> {
@@ -77,11 +102,7 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
 
   if (request.method === "POST" && billingSubpath[0] === "checkout") {
     const stripe = getStripeBillingConfig(env);
-    if (!stripe) {
-      return jsonError("Billing is temporarily unavailable. Please contact support.", 503, {
-        code: "billing_unavailable",
-      });
-    }
+    if (!stripe) return billingUnavailable();
     const { secretKey, proPriceId } = stripe;
     const entitlements = await getEntitlementsForUser(env, userId);
     if (entitlements.plan === "pro") return alreadySubscribed();
@@ -93,17 +114,9 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
       });
     }
 
-    // A subscription on any price, paid or not, blocks a second one: Stripe would
-    // bill both, and a failed payment is fixed in the Customer Portal instead.
     const { openStatus } = await getPersonalSubscriptionSummary(env, userId);
-    if (openStatus && isPaidSubscriptionStatus(openStatus)) return alreadySubscribed();
-    if (openStatus) {
-      return jsonError(
-        "Your Pro subscription needs attention. Update your payment method with Manage subscription in Billing.",
-        409,
-        { code: "subscription_needs_attention" },
-      );
-    }
+    const storedConflict = openSubscriptionConflict(openStatus);
+    if (storedConflict) return storedConflict;
 
     const nowIso = new Date().toISOString();
     const db = createDb(env);
@@ -117,7 +130,22 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
 
     let stripeCustomerId: string | null = existingCustomer?.stripe_customer_id ?? null;
 
-    if (!stripeCustomerId) {
+    if (stripeCustomerId) {
+      // D1 learns about subscriptions from webhooks, which can lag or fail, so ask
+      // Stripe too. Fail closed: a missed subscription would be billed twice.
+      let stripeOpenStatus: string | null;
+      try {
+        stripeOpenStatus = await syncCustomerSubscriptions(env, secretKey, userId, stripeCustomerId);
+      } catch (error) {
+        log("error", "stripe_subscription_check_failed", {
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return billingUnavailable();
+      }
+      const stripeConflict = openSubscriptionConflict(stripeOpenStatus);
+      if (stripeConflict) return stripeConflict;
+    } else {
       const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
       const email = user?.email;
 
@@ -174,11 +202,7 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
 
   if (request.method === "POST" && billingSubpath[0] === "portal") {
     const stripe = getStripeBillingConfig(env);
-    if (!stripe) {
-      return jsonError("Billing is temporarily unavailable. Please contact support.", 503, {
-        code: "billing_unavailable",
-      });
-    }
+    if (!stripe) return billingUnavailable();
     const { secretKey } = stripe;
     const db = createDb(env);
     const { stripe_customers } = schema;

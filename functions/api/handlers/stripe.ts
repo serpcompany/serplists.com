@@ -8,6 +8,8 @@ import { assertStripeWebhookConfigured, verifyStripeWebhookSignature } from "../
 import {
   loadCurrentSubscription,
   parseSubscriptionSnapshot,
+  retrieveSubscription,
+  type SubscriptionSnapshot,
   upsertStripeCustomer,
   upsertStripeSubscription,
 } from "../utils/stripe-subscriptions";
@@ -56,6 +58,43 @@ async function userExists(db: Db, userId: string): Promise<boolean> {
   return row !== undefined;
 }
 
+async function subscriptionWrites(
+  db: Db,
+  event: StripeEvent,
+  userId: string,
+  subscription: SubscriptionSnapshot,
+  nowIso: string,
+): Promise<BatchItem<"sqlite">[]> {
+  // A deleted user's subscription row would fail its foreign key on every retry.
+  if (!(await userExists(db, userId))) return logSkippedEvent(event, "user_deleted");
+  return [
+    upsertStripeCustomer(db, userId, subscription.customerId, nowIso),
+    upsertStripeSubscription(db, userId, subscription, nowIso),
+  ];
+}
+
+/**
+ * The subscription a completed subscription-mode Checkout created, read from Stripe.
+ * Storing it here grants Pro even when its customer.subscription.* event is late or lost.
+ */
+async function loadCheckoutSubscription(
+  env: Env,
+  event: StripeEvent,
+  session: Record<string, unknown> | null,
+): Promise<SubscriptionSnapshot | null> {
+  if (session?.mode !== "subscription") return null;
+  const reference = session.subscription;
+  const subscriptionId = typeof reference === "string"
+    ? reference
+    : isRecord(reference) && typeof reference.id === "string" ? reference.id : null;
+  if (!subscriptionId) return null;
+  if (!env.STRIPE_SECRET_KEY) {
+    logSkippedEvent(event, "subscription_read_needs_secret_key");
+    return null;
+  }
+  return retrieveSubscription(env.STRIPE_SECRET_KEY, subscriptionId);
+}
+
 /** Reads what the event needs and returns its writes, unexecuted. */
 async function buildEventWrites(env: Env, db: Db, event: StripeEvent, nowIso: string): Promise<BatchItem<"sqlite">[]> {
   const object = isRecord(event.data?.object) ? (event.data.object as Record<string, unknown>) : null;
@@ -66,6 +105,8 @@ async function buildEventWrites(env: Env, db: Db, event: StripeEvent, nowIso: st
       : getEventUserIdFallback(object);
     const stripeCustomerId = typeof object?.customer === "string" ? object.customer : null;
     if (!userId || !stripeCustomerId) return logSkippedEvent(event, "missing_user_or_customer");
+    const subscription = await loadCheckoutSubscription(env, event, object);
+    if (subscription) return subscriptionWrites(db, event, userId, subscription, nowIso);
     return [upsertStripeCustomer(db, userId, stripeCustomerId, nowIso)];
   }
 
@@ -82,17 +123,12 @@ async function buildEventWrites(env: Env, db: Db, event: StripeEvent, nowIso: st
     .limit(1);
   const userId = row?.user_id ?? eventSnapshot.metadataUserId;
   if (!userId) return logSkippedEvent(event, "unknown_user");
-  // A deleted user's subscription row would fail its foreign key on every retry.
-  if (!(await userExists(db, userId))) return logSkippedEvent(event, "user_deleted");
 
   // The event snapshot may be older than state already stored, so write what
   // Stripe reports now (see loadCurrentSubscription).
   const subscription = await loadCurrentSubscription(env, eventSnapshot);
   if (!subscription) return [];
-  return [
-    upsertStripeCustomer(db, userId, subscription.customerId, nowIso),
-    upsertStripeSubscription(db, userId, subscription, nowIso),
-  ];
+  return subscriptionWrites(db, event, userId, subscription, nowIso);
 }
 
 export async function handleStripe(request: Request, env: Env): Promise<Response> {

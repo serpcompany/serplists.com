@@ -26,7 +26,10 @@ function env() {
 }
 
 function sentForm(): URLSearchParams {
-  const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+  const [, init] = fetchMock.mock.calls.find(([, call]) => (call as RequestInit).method === "POST") as [
+    string,
+    RequestInit,
+  ];
   return new URLSearchParams(String(init.body));
 }
 
@@ -37,7 +40,11 @@ beforeEach(() => {
     INSERT INTO stripe_customers (user_id, stripe_customer_id, created_at) VALUES ('user-1', 'cus_1', '2026-01-01T00:00:00.000Z')
   `).run();
   sessionMocks.getSessionUserId.mockResolvedValue("user-1");
-  fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: "session_1", url: "https://stripe.test/session_1" })));
+  fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    // Checkout first lists the customer's subscriptions: none.
+    if ((init?.method ?? "GET") === "GET") return new Response(JSON.stringify({ data: [], has_more: false }));
+    return new Response(JSON.stringify({ id: "session_1", url: "https://stripe.test/session_1" }));
+  });
   vi.stubGlobal("fetch", fetchMock);
 });
 

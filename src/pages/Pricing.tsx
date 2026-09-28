@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { api } from '@/lib/api';
+import { isOpenSubscriptionConflictError } from '@/lib/api-errors';
 import {
   getBillingStatusQueryKey,
   getPersonalBillingAction,
@@ -27,6 +28,7 @@ const Pricing = () => {
     retry: false,
   });
 
+  const queryClient = useQueryClient();
   const personalAction = getPersonalBillingAction(billing.data);
 
   const handleUpgrade = async () => {
@@ -37,6 +39,10 @@ const Pricing = () => {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to start checkout');
       setIsStartingCheckout(false);
+      // Show the subscription checkout found, so Manage replaces Upgrade.
+      if (isOpenSubscriptionConflictError(error)) {
+        void queryClient.invalidateQueries({ queryKey: getBillingStatusQueryKey(user?.id) });
+      }
     }
   };
 

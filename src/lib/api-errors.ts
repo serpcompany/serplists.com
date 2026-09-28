@@ -63,6 +63,16 @@ export const isSubscriptionNeedsAttentionError = (error: unknown): error is ApiE
   return isApiError(error) && error.status === 409 && error.code === "subscription_needs_attention";
 };
 
+/**
+ * Checkout refused because the user already has a subscription. Checkout also asks
+ * Stripe, so it can find one the displayed billing status does not show yet.
+ */
+export const isOpenSubscriptionConflictError = (error: unknown): error is ApiError => {
+  return isApiError(error)
+    && error.status === 409
+    && (error.code === "already_subscribed" || error.code === "subscription_needs_attention");
+};
+
 export type AccessFailure =
   | { kind: "auth_required"; message: string }
   | { kind: "upgrade_required"; message: string }

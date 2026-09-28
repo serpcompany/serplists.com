@@ -61,10 +61,18 @@ export async function getPersonalSubscriptionSummary(env: Env, userId: string): 
       .limit(10),
   ]);
 
-  const [openStatus] = openSubscriptions
-    .map((row) => row.status)
+  return {
+    openStatus: mostUrgentOpenStatus(openSubscriptions.map((row) => row.status)),
+    hasCustomer: customers.length > 0,
+  };
+}
+
+/** The most urgent open (non-terminal) status among `statuses`, or null. */
+export function mostUrgentOpenStatus(statuses: string[]): string | null {
+  const [openStatus] = statuses
+    .filter((status) => !isTerminalSubscriptionStatus(status))
     .sort((left, right) => statusPriority(left) - statusPriority(right));
-  return { openStatus: openStatus ?? null, hasCustomer: customers.length > 0 };
+  return openStatus ?? null;
 }
 
 // Expandable references arrive as an id string, or as an object when expanded.
@@ -127,6 +135,77 @@ export function parseSubscriptionSnapshot(value: unknown): SubscriptionSnapshot 
   };
 }
 
+const subscriptionListSchema = z
+  .object({ data: z.array(z.unknown()), has_more: z.boolean() })
+  .passthrough();
+
+/**
+ * Reads a subscription's current state from Stripe. Returns null when Stripe has no
+ * such subscription; other failures throw.
+ */
+export async function retrieveSubscription(
+  secretKey: string,
+  subscriptionId: string,
+): Promise<SubscriptionSnapshot | null> {
+  let body: unknown;
+  try {
+    body = await stripeGet(secretKey, `/v1/subscriptions/${encodeURIComponent(subscriptionId)}`);
+  } catch (error) {
+    if (error instanceof StripeApiError && error.status === 404) {
+      log("warn", "stripe_subscription_not_found", { stripeSubscriptionId: subscriptionId });
+      return null;
+    }
+    throw error;
+  }
+
+  const current = parseSubscriptionSnapshot(body);
+  if (!current || current.id !== subscriptionId) {
+    throw new Error("Stripe returned an unexpected subscription shape");
+  }
+  return current;
+}
+
+/**
+ * Asks Stripe for a customer's subscriptions, stores them, and returns the most urgent
+ * open status. D1 only learns about subscriptions from webhooks, which can lag or fail,
+ * so Checkout checks here before selling a second subscription. Throws when Stripe
+ * cannot answer, or when the list is incomplete and shows nothing open.
+ */
+export async function syncCustomerSubscriptions(
+  env: Env,
+  secretKey: string,
+  userId: string,
+  stripeCustomerId: string,
+): Promise<string | null> {
+  // Stripe's default filter leaves out canceled subscriptions, so the list stays short.
+  const body = await stripeGet(
+    secretKey,
+    `/v1/subscriptions?customer=${encodeURIComponent(stripeCustomerId)}&limit=100`,
+  );
+  const list = subscriptionListSchema.parse(body);
+  const subscriptions = list.data.map(parseSubscriptionSnapshot);
+  if (subscriptions.some((subscription) => subscription === null)) {
+    throw new Error("Stripe returned an unexpected subscription shape");
+  }
+  const found = subscriptions.filter((subscription): subscription is SubscriptionSnapshot => subscription !== null);
+
+  const openStatus = mostUrgentOpenStatus(found.map((subscription) => subscription.status));
+  if (!openStatus && list.has_more) {
+    throw new Error("Stripe returned an incomplete subscription list");
+  }
+
+  const [first, ...rest] = found;
+  if (first) {
+    const db = createDb(env);
+    const nowIso = new Date().toISOString();
+    await db.batch([
+      upsertStripeSubscription(db, userId, first, nowIso),
+      ...rest.map((subscription) => upsertStripeSubscription(db, userId, subscription, nowIso)),
+    ]);
+  }
+  return openStatus;
+}
+
 /**
  * Returns the subscription state to store for a customer.subscription.* event.
  *
@@ -151,21 +230,8 @@ export async function loadCurrentSubscription(
     return eventSnapshot;
   }
 
-  let body: unknown;
-  try {
-    body = await stripeGet(secretKey, `/v1/subscriptions/${encodeURIComponent(eventSnapshot.id)}`);
-  } catch (error) {
-    if (error instanceof StripeApiError && error.status === 404) {
-      log("warn", "stripe_subscription_not_found", { stripeSubscriptionId: eventSnapshot.id });
-      return null;
-    }
-    throw error;
-  }
-
-  const current = parseSubscriptionSnapshot(body);
-  if (!current || current.id !== eventSnapshot.id) {
-    throw new Error("Stripe returned an unexpected subscription shape");
-  }
+  const current = await retrieveSubscription(secretKey, eventSnapshot.id);
+  if (!current) return null;
   return { ...current, metadataUserId: current.metadataUserId ?? eventSnapshot.metadataUserId };
 }
 
