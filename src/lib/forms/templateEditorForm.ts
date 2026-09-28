@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { ChecklistTemplate } from "@/types/checklist";
+import { hasCurrentFileInfo, mediaSourceTypeFor } from "@/lib/utils/mediaSource";
 import {
   buildTemplateEditorDetailsFormValues,
   normalizeTemplateEditorDetailsForSave,
@@ -156,6 +157,8 @@ const toEditorId = (value: unknown, prefix: string): string => {
     : createTemplateEditorId(prefix);
 };
 
+const MEDIA_CONTENT_TYPES = new Set<TemplateEditorContentType>(["file", "image", "video"]);
+
 const toEditorContentType = (value: unknown): TemplateEditorContentType =>
   TEMPLATE_EDITOR_CONTENT_TYPES.find((type) => type === value) ?? "text";
 
@@ -184,10 +187,17 @@ function normalizeTemplateEditorContent(
   usedContentIds.add(id);
 
   const fileSize = content.fileSize;
+  const value = toEditorText(content.value);
+  const storedUploadType =
+    content.uploadType === "upload" || content.uploadType === "url" ? content.uploadType : undefined;
+  // A name and size saved next to a URL typed over an upload describe that upload,
+  // not the URL: they are dropped here, so the next save stores the fix.
+  const staleFileInfo =
+    MEDIA_CONTENT_TYPES.has(type) && !hasCurrentFileInfo({ value, uploadType: storedUploadType });
   return {
-    fileName: typeof content.fileName === "string" ? content.fileName : undefined,
+    fileName: typeof content.fileName === "string" && !staleFileInfo ? content.fileName : undefined,
     fileSize:
-      typeof fileSize === "number" && Number.isFinite(fileSize) && fileSize >= 0
+      typeof fileSize === "number" && Number.isFinite(fileSize) && fileSize >= 0 && !staleFileInfo
         ? fileSize
         : undefined,
     id,
@@ -199,10 +209,8 @@ function normalizeTemplateEditorContent(
           : [createTemplateEditorSubItem()],
     type,
     uploadType:
-      content.uploadType === "upload" || content.uploadType === "url"
-        ? content.uploadType
-        : undefined,
-    value: toEditorText(content.value),
+      storedUploadType === "upload" && staleFileInfo ? mediaSourceTypeFor(value) : storedUploadType,
+    value,
   };
 }
 

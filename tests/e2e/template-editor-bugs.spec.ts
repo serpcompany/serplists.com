@@ -1039,6 +1039,59 @@ test.describe("template editor regressions", () => {
     expect(uploadRequests).toBe(0);
   });
 
+  test("drops an uploaded file's name when a URL is typed over it", async ({ page }) => {
+    const stamp = Date.now();
+    const templateTitle = `QA File URL ${stamp}`;
+    const uploadedUrl = `/api/uploads/file?key=${encodeURIComponent(`template-files/e2e/${stamp}.pdf`)}`;
+    const externalUrl = "https://example.com/pricing.pdf";
+
+    // Stub storage so the test checks the editor, not R2.
+    await page.route("**/api/uploads", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ url: uploadedUrl, fileName: "report.pdf", fileSize: 2048 }),
+      });
+    });
+
+    await registerAccount(page);
+    await page.goto("/dashboard/templates/new");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await page.getByLabel("Task Title").fill(`Task with file ${stamp}`);
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("button", { name: "File", exact: true }).last().click();
+    await page.locator('input[type="file"]').last().setInputFiles({
+      name: "report.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.4"),
+    });
+    await expect(page.getByText("report.pdf", { exact: true })).toBeVisible();
+
+    await page.getByLabel("File URL").fill(externalUrl);
+    await expect(page.getByRole("button", { name: "Remove uploaded file" })).toHaveCount(0);
+    await expect(page.getByText("report.pdf", { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("File URL")).toHaveValue(externalUrl);
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    expect(savedTemplate).toBeTruthy();
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    const saved = sections[0]?.items[0]?.contents?.[0] as Record<string, unknown> | undefined;
+    expect(saved).toEqual(expect.objectContaining({ type: "file", value: externalUrl, uploadType: "url" }));
+    expect(saved).not.toHaveProperty("fileName");
+    expect(saved).not.toHaveProperty("fileSize");
+
+    if (savedTemplate && typeof savedTemplate.id === "string") {
+      await deleteTemplate(page, savedTemplate.id);
+    }
+  });
+
   test("opens every section of a saved template expanded, from the first frame", async ({ page }) => {
     await loginAsSeedUser(page);
     const stamp = Date.now();

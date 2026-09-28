@@ -271,3 +271,68 @@ describe('ContentEditor media uploads', () => {
     expect(contentAt(0)?.value).toBe('');
   });
 });
+
+// After an upload the block holds its URL plus the file's name and size. Typing a URL
+// over it must drop the name and size, or runs label the new link with the old file
+// and the editor keeps a Remove button that would clear the typed URL.
+describe('ContentEditor media URL typed over an upload', () => {
+  const EXTERNAL_URL = 'https://example.com/pricing.pdf';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    harness.uploads = createPendingUploads();
+  });
+
+  function typeUrl(tree: React.ReactNode, value: string): void {
+    const input = findElement(
+      tree,
+      (element) => element.props.id === 'content-editor-test' && typeof element.props.onChange === 'function',
+    );
+    expect(input).not.toBeNull();
+    (input!.props.onChange as (event: unknown) => void)({ target: { value } });
+  }
+
+  it('drops the uploaded file name and size and records a URL source', () => {
+    createForm([
+      { id: 'c1', type: 'file', value: UPLOADED_URL, fileName: 'report.pdf', fileSize: 2048, uploadType: 'upload' },
+    ]);
+
+    typeUrl(renderFileUpload(), EXTERNAL_URL);
+
+    const content = contentAt(0);
+    expect(content?.value).toBe(EXTERNAL_URL);
+    expect(content?.fileName).toBeUndefined();
+    expect(content?.fileSize).toBeUndefined();
+    expect(content?.uploadType).toBe('url');
+    expect(api.deleteFromR2).not.toHaveBeenCalled();
+    const [, , options] = vi.mocked(harness.editorSetValue).mock.calls.at(-1) ?? [];
+    expect(options).toEqual(expect.objectContaining({ shouldDirty: true }));
+  });
+
+  it('no longer offers to remove the upload, so the typed URL cannot be cleared by it', () => {
+    createForm([
+      { id: 'c1', type: 'file', value: UPLOADED_URL, fileName: 'report.pdf', fileSize: 2048, uploadType: 'upload' },
+    ]);
+
+    typeUrl(renderFileUpload(), EXTERNAL_URL);
+    const tree = renderFileUpload();
+
+    expect(
+      findElement(tree, (element) => element.props['aria-label'] === 'Remove uploaded file'),
+    ).toBeNull();
+    expect(findElement(tree, (element) => element.props.type === 'file')).not.toBeNull();
+  });
+
+  it('keeps the file details while the value stays the same', () => {
+    createForm([
+      { id: 'c1', type: 'file', value: UPLOADED_URL, fileName: 'report.pdf', fileSize: 2048, uploadType: 'upload' },
+    ]);
+
+    typeUrl(renderFileUpload(), UPLOADED_URL);
+
+    expect(contentAt(0)).toEqual(
+      expect.objectContaining({ value: UPLOADED_URL, fileName: 'report.pdf', fileSize: 2048, uploadType: 'upload' }),
+    );
+  });
+});
+

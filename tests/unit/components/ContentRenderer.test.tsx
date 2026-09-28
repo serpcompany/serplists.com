@@ -94,3 +94,32 @@ describe('ContentRenderer embed blocks', () => {
     expect(hrefs(renderEmbed('https://example.com/embed'))).toEqual(['https://example.com/embed']);
   });
 });
+
+describe('ContentRenderer file blocks', () => {
+  const renderFile = (content: Record<string, unknown>) =>
+    renderToStaticMarkup(
+      <ContentRenderer contents={[{ id: 'file-1', type: 'file', value: '', ...content }]} />,
+    );
+
+  // Saved before typing a URL over an upload dropped the old name and size.
+  it.each([
+    ['with an upload source', { uploadType: 'upload' }],
+    ['with no source recorded', {}],
+  ])('does not label a linked file with a name left over from an upload (%s)', (_label, extra) => {
+    const markup = renderFile({ value: 'https://example.com/pricing.pdf', fileName: 'report.pdf', ...extra });
+
+    expect(markup).not.toContain('report.pdf');
+    expect(markup).toContain('aria-label="Download file"');
+    expect(markup).toContain('href="https://example.com/pricing.pdf"');
+  });
+
+  it('labels an uploaded file and a named linked file with their names', () => {
+    expect(
+      renderFile({ value: '/api/uploads/file?key=template-files%2Fu1%2Freport.pdf', fileName: 'report.pdf' }),
+    ).toContain('aria-label="Download report.pdf"');
+    expect(
+      renderFile({ value: 'https://example.com/launch.pdf', fileName: 'launch-packet.pdf', uploadType: 'url' }),
+    ).toContain('aria-label="Download launch-packet.pdf"');
+  });
+});
+

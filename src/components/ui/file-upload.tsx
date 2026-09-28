@@ -11,6 +11,7 @@ import {
   UploadResult,
 } from '@/lib/utils/fileUpload';
 import { formatAssetSizeLimit } from '@/lib/schemas/templateAssetLimits';
+import { isUploadedAssetUrl } from '@/lib/utils/mediaSource';
 import { UPLOAD_MAX_BYTES } from '@/lib/schemas/uploadTypes';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -125,6 +126,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     onFileChange({ value: '', fileName: undefined, fileSize: undefined });
   };
 
+  // The uploaded-file row (and its Remove button, which clears the value) only while
+  // the value is that upload: a name next to a typed URL is not an upload to remove.
+  const uploadedFileName = fileName && isUploadedAssetUrl(value) ? fileName : undefined;
+
   return (
     <div className={`space-y-4 ${className}`}>
       {/* URL Input */}
@@ -160,12 +165,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         </Label>
         
         <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-2">
-          {fileName ? (
+          {uploadedFileName ? (
             <div className="flex items-center justify-between p-2 bg-muted rounded">
               <div className="flex items-center gap-2">
                 {getIcon()}
                 <span className="text-sm font-medium">
-                  {fileName}
+                  {uploadedFileName}
                 </span>
               </div>
               <Button

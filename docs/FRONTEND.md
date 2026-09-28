@@ -107,6 +107,14 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   file details are dropped, and every content block gets its own id (uploads find
   their block by id). A loaded template can always be saved. Save validation errors
   inside the outline name the section, task, and content block.
+- An image, video, or file block's `fileName` and `fileSize` describe the file its
+  value points to: an upload, or a linked file an author named (`uploadType: "url"`).
+  Typing in the URL field writes the value with `withMediaValue`
+  (`src/lib/utils/mediaSource.ts`), which drops the name and size once the value
+  changes and records the source type. `FileUpload` shows the uploaded-file row and
+  its Remove button only while the value is an uploaded file, so Remove never clears a
+  typed URL. A name saved next to a URL typed over an upload is dropped on load and
+  not shown by `ContentRenderer`.
 - Omit an empty slug from create and update payloads rather than sending `""`, and
   omit an update's slug when it is the one already stored, so a stored slug that
   predates today's rules never blocks a save or moves the URL. After a save the URL

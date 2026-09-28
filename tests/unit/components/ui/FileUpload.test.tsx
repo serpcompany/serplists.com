@@ -161,4 +161,22 @@ describe('FileUpload', () => {
 
     expect(api.uploadToR2).toHaveBeenCalledWith({ bucket: 'template-files', file: zip });
   });
+
+  // A name next to a URL that is not an upload is left over from an earlier upload (or
+  // names a linked file). Its Remove button would clear a URL the author typed.
+  it('shows the uploaded-file row only while the value is an uploaded file', () => {
+    const tree = FileUpload({
+      type: 'file',
+      value: 'https://example.com/pricing.pdf',
+      fileName: 'report.pdf',
+      onValueChange: vi.fn(),
+      onFileChange: vi.fn(),
+    });
+
+    expect(
+      findElement(tree, (element) => element.props['aria-label'] === 'Remove uploaded file'),
+    ).toBeNull();
+    expect(findElement(tree, (element) => element.props.type === 'file')).not.toBeNull();
+  });
 });
+

@@ -62,7 +62,7 @@ describe("buildTemplateEditorFormValues with stored content", () => {
               contents: [
                 { id: "c2", type: "link", value: "https://example.com" },
                 { id: 1, type: "text", value: 5 },
-                { id: "c1", type: "file", value: "https://x/doc.pdf", fileName: "doc.pdf", fileSize: 2048, uploadType: "upload" },
+                { id: "c1", type: "file", value: "/api/uploads/file?key=template-files%2Fu1%2Fdoc.pdf", fileName: "doc.pdf", fileSize: 2048, uploadType: "upload" },
                 "Just some text",
               ],
             },
@@ -77,6 +77,39 @@ describe("buildTemplateEditorFormValues with stored content", () => {
       expect.objectContaining({ fileName: "doc.pdf", fileSize: 2048, uploadType: "upload" }),
     );
     expect(bare).toEqual(expect.objectContaining({ type: "text", value: "Just some text" }));
+  });
+
+  // Before typing a URL over an upload dropped the upload's name and size, they were
+  // saved next to the new URL. Loading drops them, so the next save stores the fix; a
+  // name an author gave a linked file (uploadType "url") is kept.
+  it("drops a file name and size left over from an upload the value no longer points to", () => {
+    const contents = buildTemplateEditorFormValues({
+      sections: [
+        {
+          id: "section-1",
+          title: "Prep",
+          items: [
+            {
+              id: "item-1",
+              title: "Task",
+              contents: [
+                { id: "c1", type: "file", value: "https://example.com/pricing.pdf", fileName: "report.pdf", fileSize: 2048, uploadType: "upload" },
+                { id: "c2", type: "image", value: "https://example.com/a.png", fileName: "a.png", fileSize: 10 },
+                { id: "c3", type: "file", value: "https://example.com/launch.pdf", fileName: "launch.pdf", uploadType: "url" },
+                { id: "c4", type: "file", value: "/api/uploads/file?key=k", fileName: "doc.pdf", fileSize: 5 },
+              ],
+            },
+          ],
+        },
+      ] as unknown as ChecklistSection[],
+    }).sections[0].items[0].contents ?? [];
+
+    expect(contents[0]).toEqual(
+      expect.objectContaining({ value: "https://example.com/pricing.pdf", fileName: undefined, fileSize: undefined, uploadType: "url" }),
+    );
+    expect(contents[1]).toEqual(expect.objectContaining({ fileName: undefined, fileSize: undefined }));
+    expect(contents[2]).toEqual(expect.objectContaining({ fileName: "launch.pdf", uploadType: "url" }));
+    expect(contents[3]).toEqual(expect.objectContaining({ fileName: "doc.pdf", fileSize: 5 }));
   });
 
   // Uploads find their block by content id, so two blocks must never share one.

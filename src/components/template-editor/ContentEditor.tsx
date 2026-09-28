@@ -16,6 +16,7 @@ import {
   type TemplateEditorContentType,
   type TemplateEditorFormValues,
 } from "@/lib/forms/templateEditorForm";
+import { withMediaValue } from "@/lib/utils/mediaSource";
 
 type ActiveAddPanel = "empty" | "header" | null;
 
@@ -62,6 +63,21 @@ export function ContentEditor({
     );
   }
 
+  // Typing in an image, video, or file block's URL field. A new value no longer points
+  // at the uploaded file, so its name and size go in the same write (withMediaValue).
+  function handleMediaValueChange(contentId: string, value: string): void {
+    const path = findTemplateEditorContentPath(getValues("sections"), contentId);
+    if (!path) {
+      return;
+    }
+
+    const current = getValues(path);
+    const next = withMediaValue(current, value);
+    if (next !== current) {
+      setValue(path, next, { shouldDirty: true });
+    }
+  }
+
   // An upload finishes after the render that started it, so never spread the
   // render-time `contents` snapshot here: it still holds the old URL. Find the block
   // by id in the current form values and write the whole change at once.
@@ -105,7 +121,7 @@ export function ContentEditor({
             fileName={content.fileName}
             onFileChange={(change) => handleFileChange(content.id, change)}
             onUploadStart={trackUpload}
-            onValueChange={(value) => handleContentValueChange(contentIndex, value)}
+            onValueChange={(value) => handleMediaValueChange(content.id, value)}
             type={content.type}
             value={content.value}
           />

@@ -1,6 +1,7 @@
 import { optimizeImage, isImageFile } from "@/lib/imageOptimization";
 import { api } from "@/lib/api";
 import { formatAssetSizeLimit } from "@/lib/schemas/templateAssetLimits";
+import { getUploadedAssetKey, isUploadedAssetUrl } from "@/lib/utils/mediaSource";
 import {
   isAllowedUpload,
   UPLOAD_MAX_BYTES,
@@ -70,22 +71,7 @@ export const uploadFile = async (
   }
 };
 
-export const getUploadedAssetKey = (url: string): string | null => {
-  try {
-    const parsed = new URL(url, 'https://serplists.local');
-    const isUploadEndpoint =
-      parsed.pathname === '/api/uploads/file' ||
-      parsed.pathname === '/uploads/file';
-    const key = parsed.searchParams.get('key')?.trim();
-
-    return isUploadEndpoint && key ? key : null;
-  } catch (error) {
-    return null;
-  }
-};
-
-export const isUploadedAssetUrl = (url: string): boolean =>
-  getUploadedAssetKey(url) !== null;
+export { getUploadedAssetKey, isUploadedAssetUrl };
 
 // Only avatars can be deleted (the API refuses template uploads): a template
 // upload may still be referenced by the saved template, its runs, versions, and
