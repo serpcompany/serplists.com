@@ -39,8 +39,9 @@ vi.mock('sonner', () => ({
 }));
 
 const refreshProfile = vi.fn();
+const auth = vi.hoisted(() => ({ user: { id: 'u1' } as { id: string } | null }));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ user: { id: 'u1' }, refreshProfile }),
+  useAuth: () => ({ user: auth.user, refreshProfile }),
 }));
 
 type AnyElement = React.ReactElement<Record<string, unknown>>;
@@ -92,6 +93,7 @@ const png = () => new File(['png'], 'new.png', { type: 'image/png' });
 describe('AvatarUpload', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    auth.user = { id: 'u1' };
     vi.mocked(api.uploadToR2).mockResolvedValue({ url: NEW_URL });
     vi.mocked(api.deleteFromR2).mockResolvedValue({ success: true });
   });
@@ -181,5 +183,74 @@ describe('AvatarUpload', () => {
 
     expect(api.uploadToR2).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalled();
+  });
+
+  // A file input fires no change event when the picked file is the one it already
+  // holds, so every attempt must leave it empty or the same file cannot be retried.
+  describe('clears the file input after every attempt', () => {
+    beforeEach(() => {
+      vi.mocked(authClient.updateUser).mockResolvedValue({ data: { status: true }, error: null } as never);
+    });
+
+    it('after the upload fails', async () => {
+      vi.mocked(api.uploadToR2).mockRejectedValue(new Error('R2 unavailable'));
+
+      const target = await render().selectFile(png());
+
+      expect(toast.error).toHaveBeenCalled();
+      expect(target.value).toBe('');
+    });
+
+    it('after the account update is refused', async () => {
+      vi.mocked(authClient.updateUser).mockResolvedValue({
+        data: null,
+        error: { status: 500, statusText: 'Internal Server Error' },
+      } as never);
+
+      const target = await render().selectFile(png());
+
+      expect(toast.error).toHaveBeenCalled();
+      expect(target.value).toBe('');
+    });
+
+    it('after a file of the wrong type is refused', async () => {
+      const target = await render().selectFile(new File(['x'], 'notes.txt', { type: 'text/plain' }));
+
+      expect(api.uploadToR2).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalled();
+      expect(target.value).toBe('');
+    });
+
+    it('after a file over 5MB is refused', async () => {
+      const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'big.png', { type: 'image/png' });
+
+      const target = await render().selectFile(big);
+
+      expect(api.uploadToR2).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalled();
+      expect(target.value).toBe('');
+    });
+
+    it('when no one is signed in', async () => {
+      auth.user = null;
+
+      const target = await render().selectFile(png());
+
+      expect(api.uploadToR2).not.toHaveBeenCalled();
+      expect(target.value).toBe('');
+    });
+
+    it('uploads the same file again after it was removed', async () => {
+      const view = render();
+      const file = png();
+
+      const first = await view.selectFile(file);
+      await view.remove();
+      const again = await view.selectFile(file);
+
+      expect(api.uploadToR2).toHaveBeenCalledTimes(2);
+      expect(first.value).toBe('');
+      expect(again.value).toBe('');
+    });
   });
 });

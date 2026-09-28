@@ -41,18 +41,19 @@ export const AvatarUpload = ({
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const input = event.target;
     const file = input.files?.[0];
+    // A file input fires no change event when the same file is picked again, so it is
+    // cleared at once (the File is already held) and every attempt below can be retried.
+    input.value = "";
     if (!file || !user) return;
 
     if (!isAllowedUpload("avatars", file)) {
       toast.error("Please select a PNG, JPEG, WebP, or GIF image");
-      input.value = "";
       return;
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast.error("File size must be less than 5MB");
-      input.value = "";
       return;
     }
 
@@ -83,7 +84,6 @@ export const AvatarUpload = ({
       toast.error(getApiErrorMessage(error, "Failed to upload avatar"));
     } finally {
       setIsUploading(false);
-      input.value = "";
     }
   };
 
