@@ -79,6 +79,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
   // Some paths carry a secret token: log this copy, route on the raw path.
   const logPath = sanitizeLogPath(path);
   const startMs = Date.now();
+  // Only for the in-memory rate limits: a client IP is personal data, never logged.
   const ip = getClientIp(request);
 
   const finalize = (resp: Response) => {
@@ -90,7 +91,6 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       path: logPath,
       status: resp.status,
       durationMs: Date.now() - startMs,
-      ip: ip ?? undefined,
     });
     return resp;
   };
@@ -233,7 +233,6 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         requestId,
         method: request.method,
         path: logPath,
-        ip: ip ?? undefined,
         error: error instanceof Error ? error.message : String(error),
       });
       response = new Response(JSON.stringify({ error: 'Internal Server Error' }), {

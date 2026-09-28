@@ -69,7 +69,11 @@ To deploy by hand (rarely needed): `pnpm run build`, then
 
 - API logs are JSON lines from `log()` in `functions/api/utils/logger.ts`. Every
   request gets a `requestId`, returned as the `X-Request-Id` header. ESLint rejects
-  direct `console.*` in `functions/`. Log ids, never emails or tokens.
+  direct `console.*` in `functions/`. Log ids, never emails, tokens, or client IP
+  addresses (the router keeps the IP in memory for rate limits only). As a backstop,
+  `log()` writes any field named `ip`, `email`, `password`, `token`,
+  `authorization`, or `cookie` as `"[redacted]"`, and a field cannot replace the
+  `level` or `message` (event name) of the line.
 - The router logs each request's path through `sanitizeLogPath()`
   (`functions/api/utils/log-path.ts`), which replaces the secrets some routes carry
   in the URL with `:token`: `auth/reset-password/<token>`,
