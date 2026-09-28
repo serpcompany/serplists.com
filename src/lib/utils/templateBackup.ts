@@ -14,6 +14,7 @@ import type {
 import { toPortableSections } from "@/lib/schemas/portableSections";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
 import { findInvalidImportSectionEntry } from "@/lib/utils/importSectionEntries";
+import { withImportedLinkSource } from "@/lib/utils/mediaSource";
 import {
   detectTemplateSourceExtension,
   isMarkdownTemplateExtension,
@@ -78,7 +79,13 @@ const coerceSections = (input: unknown, templateTitle: string): ChecklistSection
   if (invalidEntry) {
     throw new Error(`Template "${templateTitle}": ${invalidEntry}`);
   }
-  return normalizeSections(sections);
+  // A linked file named without uploadType keeps its name in the editor and in runs.
+  return normalizeSections(sections).map((section) => ({
+    ...section,
+    items: section.items.map((item) =>
+      item.contents ? { ...item, contents: item.contents.map(withImportedLinkSource) } : item,
+    ),
+  }));
 };
 
 const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTemplate => {

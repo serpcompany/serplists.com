@@ -60,6 +60,13 @@ JSON Schema states the same rules and allows additional properties, so a pack va
 against it imports, and a pack it rejects fails import too
 (`tests/unit/lib/schemas/portableTemplateJsonSchemaParity.test.ts` checks both with Ajv).
 
+An `image`, `video` or `file` block that links to a file outside the app shows its
+`fileName` and `fileSize` only with `uploadType: "url"`. Without it they are treated as
+left over from an earlier upload and are not shown. Import fills in
+`uploadType: "url"` for a named link that has none (JSON, Markdown and YAML), so packs
+written without it keep their names (`withImportedLinkSource` in
+`src/lib/utils/mediaSource.ts`).
+
 Portable round-trips must preserve `seoTitle`, `seoDescription`, and `rules`.
 Rules are structurally stored and exported but are not executed or surfaced as
 validation failures by the current runtime.

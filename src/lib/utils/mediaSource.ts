@@ -63,6 +63,29 @@ export const hasCurrentFileInfo = (content: { value?: unknown; uploadType?: unkn
   typeof content.value === 'string' &&
   (isUploadedAssetUrl(content.value) || content.uploadType === 'url');
 
+const MEDIA_TYPES: ReadonlySet<string> = new Set(['image', 'video', 'file']);
+
+// Import: the portable format lists uploadType and fileName as independent fields, so
+// a hand-written or third-party pack can name a linked file without uploadType. Once
+// stored, that could not be told apart from a name left over from an upload, so
+// import states the link here and hasCurrentFileInfo keeps the name. Uploads, a
+// stated uploadType, unnamed links and other block types are unchanged.
+export function withImportedLinkSource<T extends MediaSource & { type: string }>(content: T): T {
+  if (
+    content.uploadType !== undefined ||
+    !MEDIA_TYPES.has(content.type) ||
+    typeof content.fileName !== 'string' ||
+    !content.fileName.trim() ||
+    typeof content.value !== 'string' ||
+    !content.value.trim() ||
+    isUploadedAssetUrl(content.value)
+  ) {
+    return content;
+  }
+
+  return { ...content, uploadType: 'url' };
+}
+
 // Typing in a media block's URL field. The name and size described the file the old
 // value pointed to, so a new value drops them (the upload itself is not deleted: the
 // saved template may still use it). An unchanged value keeps everything.
