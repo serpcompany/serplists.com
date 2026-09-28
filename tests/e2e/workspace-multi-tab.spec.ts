@@ -63,10 +63,11 @@ test('a Personal tab stays Personal after another tab selects an Organization', 
   await tabA.getByRole('menuitem', { name: /Acme Org/ }).click();
   await expect(tabA.getByRole('button', { name: 'Switch context' }).first()).toContainText('Acme Org');
 
-  // Tab B comes back after the teams list went stale and refetches it.
+  // Tab B comes back after the teams list went stale and refetches it. A browser's
+  // visibilitychange bubbles from document to window, where React Query listens.
   const requestsBefore = tabBTeamsRequests.length;
   await tabB.clock.fastForward('02:00');
-  await tabB.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await tabB.evaluate(() => document.dispatchEvent(new Event('visibilitychange', { bubbles: true })));
   await expect.poll(() => tabBTeamsRequests.length).toBeGreaterThan(requestsBefore);
 
   await expect(switcherB).toContainText('Personal');
