@@ -129,6 +129,14 @@ baseline.
 - Staging: `pnpm run db:seed:official:staging` for official templates only, unless
   there is a deliberate test-data plan.
 - Production: never seed test Users or Organization fixtures.
+- Staging and production have no cleanup command. Deleting accounts or other data
+  in a remote database is a manual operation a human approves ([AGENTS.md](../../AGENTS.md)).
+  It has to resolve the `ON DELETE RESTRICT` references to `users` first:
+  `teams.created_by_user_id`, `team_invites.invited_by_user_id` and
+  `template_versions.changed_by_user_id`. It also has to target exact user ids,
+  never an email pattern. `tests/unit/scripts/package-scripts.test.ts` fails if a
+  package script runs a SQL file against a remote D1, other than the official
+  Template seed.
 - `db/seeds/official-templates.sql` skips rows whose id already exists, so reruns
   are safe. Any other conflict (another Template with an official slug, or another
   User with the `serp` email or username) fails with a UNIQUE constraint error
