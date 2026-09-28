@@ -252,3 +252,59 @@ test('a new invitee who signs up from the invite link comes back to the invite',
   await expect(inviteePage.getByText('Invite accepted.')).toBeVisible({ timeout: 30_000 });
   await inviteeContext.close();
 });
+
+test('a manager who lost an invite link can replace it, and the old link stops working', async ({ browser, page }) => {
+  test.setTimeout(120_000);
+
+  const suffix = uniqueSuffix();
+  const teamName = `Relink Team ${suffix}`;
+  const inviteeEmail = `relink+${suffix}@e2e.local`;
+
+  await registerAccount(page, { email: `owner+${suffix}@e2e.local`, name: 'Owner User' });
+  await page.goto('/dashboard/settings');
+  await page.locator('#team-name').fill(teamName);
+  await page.getByRole('button', { name: 'Create Organization' }).click();
+  await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(teamName, {
+    timeout: 15_000,
+  });
+  const lostInviteUrl = await createLinkInvite(page, inviteeEmail);
+
+  // The link is gone after a reload; inviting the same email again offers a new link.
+  await page.reload();
+  await expect(page.getByRole('textbox', { name: 'Invite link' })).toHaveCount(0);
+  await page.getByLabel('Invite email').fill(inviteeEmail);
+  await page.getByRole('button', { name: /create link/i }).click();
+  await expect(page.getByText(`An invite is already pending for ${inviteeEmail}`)).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.getByRole('button', { name: 'Create new link' }).click();
+  const inviteLink = page.getByRole('textbox', { name: 'Invite link' });
+  await expect(inviteLink).toHaveValue(/\/team-invites\/.+/, { timeout: 15_000 });
+  const replacedUrl = await inviteLink.inputValue();
+  expect(replacedUrl).not.toBe(lostInviteUrl);
+
+  // The pending row offers the same action after another reload.
+  await page.reload();
+  await page.getByRole('button', { name: `New link for ${inviteeEmail}` }).click();
+  await expect(inviteLink).toHaveValue(/\/team-invites\/.+/, { timeout: 15_000 });
+  const newInviteUrl = await inviteLink.inputValue();
+  expect(newInviteUrl).not.toBe(replacedUrl);
+
+  const inviteeContext = await browser.newContext();
+  const inviteePage = await inviteeContext.newPage();
+  await registerAccount(inviteePage, { email: inviteeEmail, name: 'Relink Invitee' });
+
+  await gotoInvite(inviteePage, lostInviteUrl);
+  await expect(inviteePage.getByText('This invite is no longer available.', { exact: false })).toBeVisible({
+    timeout: 30_000,
+  });
+  await gotoInvite(inviteePage, replacedUrl);
+  await expect(inviteePage.getByText('This invite is no longer available.', { exact: false })).toBeVisible({
+    timeout: 30_000,
+  });
+
+  await gotoInvite(inviteePage, newInviteUrl);
+  await inviteePage.getByRole('button', { name: 'Accept invite' }).click();
+  await expect(inviteePage.getByText('Invite accepted.')).toBeVisible({ timeout: 30_000 });
+  await inviteeContext.close();
+});

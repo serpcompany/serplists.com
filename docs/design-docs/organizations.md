@@ -53,6 +53,7 @@ Organization operations use legacy `/api/teams` route identifiers and require a 
 - `POST /api/teams/:teamId/leave`: leave the Organization. Any active member except the `owner` (who gets `400 owner_must_transfer`); deletes the membership row so a manager cannot re-activate it, and records `team_member.left`.
 - `GET /api/teams/:teamId/invites`: list pending invites. Requires `owner` or `admin`.
 - `POST /api/teams/:teamId/invites`: create a link invite. Requires `owner` or `admin`.
+- `POST /api/teams/:teamId/invites/:inviteId/link`: replace a pending invite's link. Requires `owner` or `admin`. Stores a new `token_hash` (the previous link stops working), restarts the 7-day expiry, optionally sets a new `role`, records `team_invite.link_reissued` (never the token or its hash), and returns the same shape as create. Returns `404` for an invite that is not pending in this Organization, including one accepted or revoked during the write.
 - `DELETE /api/teams/:teamId/invites/:inviteId`: revoke a pending invite. Requires `owner` or `admin`.
 - `GET /api/teams/:teamId/activity`: read Organization audit history. Requires `owner` or `admin`.
 - `GET /api/teams/invites/pending`: list pending invites for the current user's email.
@@ -80,6 +81,7 @@ Invites are link-based today:
 1. A manager creates an invite from `/dashboard/settings`.
 2. The API stores only `token_hash`, never the raw invite token.
 3. The response includes `delivery.mode = "link"`, `invitePath`, and `inviteUrl`.
+   The link is shown once. A manager who lost it uses **New link** on the pending invite, or **Create new link** when creating an invite for an email that already has one pending (`409 team_invite_exists` with `details.inviteId`); the previous link stops working.
 4. Invitees can accept through the legacy compatibility route `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
 5. A signed-out invitee can **Log in to accept** or **Create an account**; both return to the invite link afterward, including through email verification.
 6. Opening `/team-invites/:token` never joins anyone. The page loads the read-only preview and shows the Organization, inviter, and role with **Accept invite** and **Decline**; only a click accepts. Accepting leaves the active context unchanged and offers **Switch to <Organization>**, so a link from another site cannot quietly move a User's new Templates and Runs into an Organization.

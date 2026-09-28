@@ -2,7 +2,13 @@ import { env } from "@/env";
 import { createApiError } from "@/lib/api-errors";
 import type { TemplateImportSummary } from "@/types/checklist";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
-import { teamInvitePreviewSchema, type TeamInvitePreview } from "@/lib/schemas/teamInvite";
+import {
+  createdTeamInviteSchema,
+  teamInvitePreviewSchema,
+  type CreatedTeamInvite,
+  type TeamInvitePreview,
+  type TeamInviteDelivery,
+} from "@/lib/schemas/teamInvite";
 
 const DEV_API_BASE_URL = env.VITE_API_URL ?? 'http://localhost:8788/api';
 const API_BASE_URL = import.meta.env.DEV
@@ -51,30 +57,7 @@ export type TeamInvite = {
   inviterName?: string | null;
 };
 
-export type TeamInviteDelivery =
-  | {
-      mode: 'link';
-      status: 'ready';
-      invitePath: string;
-      inviteUrl: string;
-    }
-  | {
-      mode: 'email';
-      status: 'queued' | 'sent';
-      invitePath: string;
-      inviteUrl: string;
-    };
-
-export type CreatedTeamInvite = {
-  id: string;
-  email: string;
-  role: Exclude<TeamRole, 'owner'>;
-  expiresAt: string;
-  inviteToken: string;
-  invitePath: string;
-  inviteUrl?: string;
-  delivery?: TeamInviteDelivery;
-};
+export type { CreatedTeamInvite, TeamInviteDelivery };
 
 export type AcceptedTeamInvite = {
   memberId: string;
@@ -516,10 +499,24 @@ class ApiClient {
     teamId: string,
     payload: { email: string; role?: Exclude<TeamRole, 'owner'> },
   ): Promise<CreatedTeamInvite> {
-    return this.request(`/teams/${encodeURIComponent(teamId)}/invites`, {
+    const invite = await this.request(`/teams/${encodeURIComponent(teamId)}/invites`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+    return createdTeamInviteSchema.parse(invite);
+  }
+
+  /** Replaces a pending invite's link; the previous link stops working. */
+  async reissueTeamInviteLink(
+    teamId: string,
+    inviteId: string,
+    payload: { role?: Exclude<TeamRole, 'owner'> } = {},
+  ): Promise<CreatedTeamInvite> {
+    const invite = await this.request(
+      `/teams/${encodeURIComponent(teamId)}/invites/${encodeURIComponent(inviteId)}/link`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    );
+    return createdTeamInviteSchema.parse(invite);
   }
 
   async acceptTeamInvite(inviteToken: string): Promise<AcceptedTeamInvite> {

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Copy, Crown, Link2, Trash2, Users } from 'lucide-react';
+import { Crown, Users } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
@@ -16,19 +16,12 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { api, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/lib/api';
-import { copyTextToClipboard } from '@/lib/clipboard';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
 import { formatTeamActivityAction } from '@/components/account/teamActivityLabels';
-
-type AssignableTeamRole = Exclude<TeamRole, 'owner'>;
-
-const assignableRoles: AssignableTeamRole[] = [
-  'admin',
-  'editor',
-  'runner',
-  'viewer',
-];
+import { TeamInvitesPanel } from '@/components/account/TeamInvitesPanel';
+import { assignableRoles, formatInviteExpiration, formatRole } from '@/components/account/teamSettingsFormat';
+import type { AssignableTeamRole } from '@/features/teams/teamInviteLinks';
 
 const memberStatuses: TeamMemberStatus[] = ['active', 'disabled'];
 
@@ -40,24 +33,8 @@ const roleDescriptions: Record<TeamRole, string> = {
   viewer: 'Views shared templates and runs.',
 };
 
-const formatRole = (role: TeamRole): string =>
-  role.charAt(0).toUpperCase() + role.slice(1);
-
 const formatMemberStatus = (status: TeamMemberStatus): string =>
   status.charAt(0).toUpperCase() + status.slice(1);
-
-const formatInviteExpiration = (value: string): string => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return 'Unknown expiration';
-  }
-
-  return `Expires ${date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })}`;
-};
 
 const formatActivityTime = (value: string): string => {
   const date = new Date(value);
@@ -78,22 +55,6 @@ const getActivityActorName = (actor: {
   userId?: string | null;
 }): string => actor.name || actor.username || actor.email || actor.userId || 'Unknown user';
 
-const resolveCreatedInviteUrl = (
-  invite: Awaited<ReturnType<typeof api.createTeamInvite>>,
-): string => {
-  if (invite.delivery?.mode === 'link') {
-    return invite.delivery.inviteUrl;
-  }
-
-  if (invite.inviteUrl) {
-    return invite.inviteUrl;
-  }
-
-  return typeof window === 'undefined'
-    ? invite.invitePath
-    : `${window.location.origin}${invite.invitePath}`;
-};
-
 export function TeamSettingsSection() {
   const {
     activeTeamId,
@@ -110,15 +71,10 @@ export function TeamSettingsSection() {
   const [teamSlug, setTeamSlug] = useState('');
   const [editTeamName, setEditTeamName] = useState('');
   const [editTeamSlug, setEditTeamSlug] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<AssignableTeamRole>('viewer');
-  const [inviteUrl, setInviteUrl] = useState('');
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
   const [isUpdatingTeam, setIsUpdatingTeam] = useState(false);
-  const [isCreatingInvite, setIsCreatingInvite] = useState(false);
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
   const [transferringOwnerMemberId, setTransferringOwnerMemberId] = useState<string | null>(null);
-  const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
   const [acceptingIncomingInviteId, setAcceptingIncomingInviteId] = useState<string | null>(null);
 
   const membersQuery = useQuery({
@@ -129,15 +85,6 @@ export function TeamSettingsSection() {
   });
 
   const members = membersQuery.data ?? [];
-
-  const invitesQuery = useQuery({
-    queryKey: ['team-invites', activeTeamId],
-    queryFn: () => api.getTeamInvites(activeTeamId as string),
-    enabled: Boolean(activeTeamId && canManageTeam),
-    staleTime: 30 * 1000,
-  });
-
-  const invites = invitesQuery.data ?? [];
 
   const activityQuery = useQuery({
     queryKey: ['team-activity', activeTeamId],
@@ -166,10 +113,6 @@ export function TeamSettingsSection() {
       ? activeWorkspace.memberId
       : null;
   const canTransferOwnership = isTeamWorkspace && activeWorkspace.role === 'owner';
-
-  useEffect(() => {
-    setInviteUrl('');
-  }, [activeTeamId]);
 
   useEffect(() => {
     if (!isTeamWorkspace) {
@@ -238,56 +181,6 @@ export function TeamSettingsSection() {
     }
   };
 
-  const handleCreateInvite = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!activeTeamId) {
-      toast.error('Select an Organization before inviting members');
-      return;
-    }
-
-    const email = inviteEmail.trim();
-    if (!email) {
-      toast.error('Email is required');
-      return;
-    }
-
-    setIsCreatingInvite(true);
-    try {
-      const invite = await api.createTeamInvite(activeTeamId, {
-        email,
-        role: inviteRole,
-      });
-      setInviteUrl(resolveCreatedInviteUrl(invite));
-      setInviteEmail('');
-      await reload(invitesQuery, ['team-invites', activeTeamId]);
-      await reload(activityQuery, ['team-activity', activeTeamId]);
-      toast.success('Invite link created');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create invite');
-    } finally {
-      setIsCreatingInvite(false);
-    }
-  };
-
-  const handleRevokeInvite = async (inviteId: string) => {
-    if (!activeTeamId) {
-      return;
-    }
-
-    setRevokingInviteId(inviteId);
-    try {
-      await api.revokeTeamInvite(activeTeamId, inviteId);
-      await reload(invitesQuery, ['team-invites', activeTeamId]);
-      await reload(activityQuery, ['team-activity', activeTeamId]);
-      toast.success('Invite revoked');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to revoke invite');
-    } finally {
-      setRevokingInviteId(null);
-    }
-  };
-
   const handleAcceptIncomingInvite = async (inviteId: string) => {
     setAcceptingIncomingInviteId(inviteId);
     try {
@@ -307,19 +200,6 @@ export function TeamSettingsSection() {
     } finally {
       setAcceptingIncomingInviteId(null);
     }
-  };
-
-  const handleCopyInvite = async () => {
-    if (!inviteUrl) {
-      return;
-    }
-
-    if (await copyTextToClipboard(inviteUrl)) {
-      toast.success('Invite link copied');
-      return;
-    }
-
-    toast.error('Unable to copy invite link');
   };
 
   const handleUpdateMember = async (
@@ -520,108 +400,11 @@ export function TeamSettingsSection() {
               </form>
             ) : null}
 
-            {canManageTeam ? (
-              <form className="grid gap-3 md:grid-cols-[1fr_160px_auto]" onSubmit={handleCreateInvite}>
-                <div className="space-y-2">
-                  <Label htmlFor="team-invite-email">Invite email</Label>
-                  <Input
-                    id="team-invite-email"
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(event) => setInviteEmail(event.target.value)}
-                    placeholder="teammate@example.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="team-invite-role">Role</Label>
-                  <Select
-                    value={inviteRole}
-                    onValueChange={(value) => setInviteRole(value as AssignableTeamRole)}
-                  >
-                    <SelectTrigger id="team-invite-role">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {assignableRoles.map((role) => (
-                        <SelectItem key={role} value={role}>
-                          {formatRole(role)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end">
-                  <Button type="submit" disabled={isCreatingInvite} className="w-full">
-                    <Link2 className="mr-2 h-4 w-4" />
-                    {isCreatingInvite ? 'Creating...' : 'Create link'}
-                  </Button>
-                </div>
-              </form>
-            ) : null}
-
-            {inviteUrl ? (
-              <div className="flex items-center gap-2">
-                <Input aria-label="Invite link" readOnly value={inviteUrl} />
-                <Button
-                  aria-label="Copy invite link"
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={handleCopyInvite}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : null}
+            {canManageTeam && activeTeamId ? <TeamInvitesPanel teamId={activeTeamId} /> : null}
 
             {!canManageTeam ? (
               <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
                 Owners and admins manage Organization settings, invites, and activity.
-              </div>
-            ) : null}
-
-            {canManageTeam ? (
-              <div className="space-y-3">
-                <div className="text-sm font-medium text-foreground">Pending invites</div>
-                {invitesQuery.isLoading ? (
-                  <div className="text-sm text-muted-foreground">Loading invites...</div>
-                ) : invites.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No pending invites.</div>
-                ) : (
-                  <div className="divide-y rounded-md border border-border">
-                    {invites.map((invite) => (
-                      <div
-                        key={invite.id}
-                        className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_120px_160px_auto]"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-foreground">
-                            {invite.email}
-                          </div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            Invited by {invite.inviterName || invite.inviterEmail || 'an Organization admin'}
-                          </div>
-                        </div>
-                        <div className="text-sm capitalize text-muted-foreground">
-                          {formatRole(invite.role)}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {formatInviteExpiration(invite.expires_at)}
-                        </div>
-                        <Button
-                          aria-label={`Revoke invite for ${invite.email}`}
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          disabled={revokingInviteId === invite.id}
-                          onClick={() => void handleRevokeInvite(invite.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             ) : null}
 

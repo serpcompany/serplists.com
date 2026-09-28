@@ -12,6 +12,7 @@ const teamActivityActionLabels: Record<string, string> = {
   'team_invite.accepted': 'Invite accepted',
   'team_invite.created': 'Invite created',
   'team_invite.declined': 'Invite declined',
+  'team_invite.link_reissued': 'Invite link replaced',
   'team_invite.revoked': 'Invite revoked',
   'team_member.left': 'Member left',
   'team_member.updated': 'Member updated',

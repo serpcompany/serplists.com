@@ -51,6 +51,7 @@ vi.mock('@/lib/api', () => ({
     getTeamActivity: vi.fn().mockResolvedValue([]),
     getTeamInvites: vi.fn().mockResolvedValue([]),
     getTeamMembers: vi.fn().mockResolvedValue([]),
+    reissueTeamInviteLink: vi.fn(),
     revokeTeamInvite: vi.fn(),
     transferTeamOwnership: vi.fn(),
     updateTeam: vi.fn(),
@@ -65,12 +66,12 @@ vi.mock('sonner', () => ({
   },
 }));
 
-function renderSectionWithMembers(members: unknown[]) {
+function renderSectionWithMembers(members: unknown[], invites: unknown[] = []) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   queryClient.setQueryData(['team-members', 'team-1'], members);
-  queryClient.setQueryData(['team-invites', 'team-1'], []);
+  queryClient.setQueryData(['team-invites', 'team-1'], invites);
   queryClient.setQueryData(['team-activity', 'team-1'], []);
 
   return renderToStaticMarkup(
@@ -170,6 +171,26 @@ describe('TeamSettingsSection', () => {
 
     expect(html).toContain('Admin User');
     expect(html).toContain('Make owner');
+  });
+
+  it('offers a new link for each pending invite, since a lost link cannot be shown again', () => {
+    const html = renderSectionWithMembers(
+      [],
+      [
+        {
+          id: 'invite-1',
+          team_id: 'team-1',
+          email: 'newhire@example.com',
+          role: 'viewer',
+          invited_by_user_id: 'user-1',
+          expires_at: '2026-10-05T00:00:00.000Z',
+          created_at: '2026-09-28T00:00:00.000Z',
+        },
+      ],
+    );
+
+    expect(html).toContain('aria-label="New link for newhire@example.com"');
+    expect(html).toContain('aria-label="Revoke invite for newhire@example.com"');
   });
 
   it('renders team members as read-only for roles that cannot manage the team', () => {

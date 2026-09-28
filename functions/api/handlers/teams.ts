@@ -4,6 +4,7 @@ import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { createInviteToken, sha256Hex } from "../utils/crypto";
 import { buildAuditEventValues } from "../utils/audit";
+import { insertAuditEventWhen } from "../utils/conditional-audit";
 import { getSessionUserId } from "../utils/session";
 import { generateSlug } from "../utils/slug";
 import { buildTeamInviteDelivery } from "../utils/team-invite-delivery";
@@ -13,6 +14,7 @@ import {
   normalizeTeamRole,
 } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
+import { reissueTeamInviteLink } from "./team-invite-links";
 import {
   declineTeamInvite,
   getCurrentUserEmail,
@@ -133,27 +135,7 @@ function insertAuditEventWhenInviteAccepted(
   userId: string,
   acceptedAt: string,
 ) {
-  const { audit_events } = schema;
-
-  return db.insert(audit_events).select(sql`
-    select
-      ${auditEvent.id},
-      ${auditEvent.actor_user_id},
-      ${auditEvent.subject_type},
-      ${auditEvent.subject_id},
-      ${auditEvent.resource_type},
-      ${auditEvent.resource_id},
-      ${auditEvent.action},
-      ${auditEvent.before_json},
-      ${auditEvent.after_json},
-      ${auditEvent.diff_json},
-      ${auditEvent.metadata_json},
-      ${auditEvent.request_id},
-      ${auditEvent.ip_hash},
-      ${auditEvent.user_agent},
-      ${auditEvent.created_at}
-    where ${acceptedInviteExistsSql(inviteId, userId, acceptedAt)}
-  `);
+  return insertAuditEventWhen(db, auditEvent, acceptedInviteExistsSql(inviteId, userId, acceptedAt));
 }
 
 async function acceptTeamInviteRecord({
@@ -827,7 +809,15 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     return json(rows);
   }
 
-  if (request.method === "POST" && teamsSubpath[1] === "invites") {
+  if (request.method === "POST" && teamsSubpath[1] === "invites" && teamsSubpath[3] === "link" && teamsSubpath.length === 4) {
+    if (!canManageTeam(role)) {
+      return jsonError("Forbidden", 403);
+    }
+
+    return reissueTeamInviteLink({ db, env, inviteId: teamsSubpath[2], request, teamId, userId });
+  }
+
+  if (request.method === "POST" && teamsSubpath[1] === "invites" && teamsSubpath.length === 2) {
     if (!canManageTeam(role)) {
       return jsonError("Forbidden", 403);
     }
