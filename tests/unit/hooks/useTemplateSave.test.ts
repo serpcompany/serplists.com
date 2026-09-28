@@ -153,6 +153,36 @@ describe("persistTemplateSave", () => {
     expect(result.saved?.sections[2].items.map((item) => item.title)).toEqual(["Task 1"]);
   });
 
+  it("sends no blank section title or blank sub-task", async () => {
+    const dependencies = buildDependencies({ applyDefaults: applyTemplateSaveDefaults });
+
+    const result = await persistTemplateSave(
+      dependencies,
+      buildInput({
+        sections: [{
+          id: "section-1",
+          title: "",
+          items: [{
+            id: "item-1",
+            title: "Audit",
+            contents: [{
+              id: "content-1",
+              type: "subItems",
+              value: "",
+              subItems: [{ id: "sub-a", title: "A" }, { id: "sub-b", title: "" }],
+            }],
+          }],
+        }],
+      }),
+    );
+
+    const sent = dependencies.createTemplate.mock.calls[0][0];
+    expect(sent.sections[0].title).toBe("Section 1");
+    expect(sent.sections[0].items[0].contents?.[0].subItems).toEqual([{ id: "sub-a", title: "A" }]);
+    // The editor rebuilds its form from what was sent.
+    expect(result.saved?.sections).toEqual(sent.sections);
+  });
+
   it("returns the created title and sections, after defaults", async () => {
     const dependencies = buildDependencies({ applyDefaults: applyTemplateSaveDefaults });
 

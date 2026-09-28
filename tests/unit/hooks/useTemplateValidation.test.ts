@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { validateStableTemplateIdentities } from "@functions/api/utils/template-reconciliation";
 import { applyTemplateSaveDefaults as applyDefaults } from "@/hooks/useTemplateValidation";
-import type { ChecklistSection } from "@/types/checklist";
+import {
+  createTemplateEditorContent,
+  createTemplateEditorItem,
+  createTemplateEditorSection,
+} from "@/lib/forms/templateEditorForm";
+import { portableChecklistSectionSchema } from "@/lib/schemas/checklistSchema";
+import type { ChecklistItemContent, ChecklistSection } from "@/types/checklist";
 
 const emptySection = (id: string, title = "Phase 2"): ChecklistSection => ({
   id,
@@ -70,5 +76,145 @@ describe("applyTemplateSaveDefaults", () => {
 
     expect(second).toEqual(first);
     expect(first.sections[0].items).toHaveLength(1);
+  });
+
+  // The outline shows an untitled section as "Section N"; runs and public pages show the
+  // stored title, so the saved title must be the label the author saw.
+  it("titles a blank or whitespace-only section by its position, keeping its id", () => {
+    const result = applyDefaults("Moving", [
+      { id: "section-a", title: "", items: [{ id: "item-1", title: "Pack" }] },
+      { id: "section-b", title: "   ", items: [{ id: "item-2", title: "Load" }] },
+      { id: "section-c", title: "  Unpack  ", items: [{ id: "item-3", title: "Sort" }] },
+    ]);
+
+    expect(result.sections.map((section) => section.title)).toEqual([
+      "Section 1",
+      "Section 2",
+      "Unpack",
+    ]);
+    expect(result.sections.map((section) => section.id)).toEqual([
+      "section-a",
+      "section-b",
+      "section-c",
+    ]);
+  });
+
+  it("titles a blank empty section too", () => {
+    const result = applyDefaults("Moving", [emptySection("section-1", "")]);
+
+    expect(result.sections[0].title).toBe("Section 1");
+    expect(result.sections[0].items[0].title).toBe("New task");
+  });
+
+  // Runs draw each sub-task as a checkbox that counts toward progress, so a blank one
+  // (Enter or "Add Sub-task" appends one) would be an unlabeled box the task waits on.
+  it("drops blank sub-tasks and keeps the others with their ids", () => {
+    const subItemsBlock: ChecklistItemContent = {
+      id: "content-1",
+      type: "subItems",
+      value: "",
+      subItems: [
+        { id: "sub-1", title: "Check title" },
+        { id: "sub-2", title: "" },
+        { id: "sub-3", title: "   " },
+        { id: "sub-4", title: " Check links ", isCompleted: false },
+      ],
+    };
+
+    const result = applyDefaults("Moving", [
+      { id: "section-1", title: "Prep", items: [{ id: "item-1", title: "Audit", contents: [subItemsBlock] }] },
+    ]);
+
+    expect(result.sections[0].items[0].contents).toEqual([
+      {
+        id: "content-1",
+        type: "subItems",
+        value: "",
+        subItems: [
+          { id: "sub-1", title: "Check title" },
+          { id: "sub-4", title: "Check links", isCompleted: false },
+        ],
+      },
+    ]);
+  });
+
+  it("removes a Sub-tasks block left with no sub-tasks and keeps the other blocks", () => {
+    const result = applyDefaults("Moving", [
+      {
+        id: "section-1",
+        title: "Prep",
+        items: [
+          {
+            id: "item-1",
+            title: "Audit",
+            contents: [
+              { id: "content-1", type: "subItems", value: "", subItems: [{ id: "sub-1", title: " " }] },
+              { id: "content-2", type: "text", value: "Read the brief" },
+              { id: "content-3", type: "subItems", value: "" },
+              { id: "content-4", type: "subItems", value: "", subItems: [] },
+            ],
+          },
+          { id: "item-2", title: "No blocks" },
+        ],
+      },
+    ]);
+
+    expect(result.sections[0].items[0].contents).toEqual([
+      { id: "content-2", type: "text", value: "Read the brief" },
+    ]);
+    // A task without contents is left as it was.
+    expect(result.sections[0].items[1]).not.toHaveProperty("contents");
+  });
+
+  it("does not change the sections it was given", () => {
+    const sections: ChecklistSection[] = [
+      {
+        id: "section-1",
+        title: "",
+        items: [{
+          id: "item-1",
+          title: "",
+          contents: [{ id: "content-1", type: "subItems", value: "", subItems: [{ id: "sub-1", title: "" }] }],
+        }],
+      },
+    ];
+    const before = structuredClone(sections);
+
+    const result = applyDefaults("", sections);
+
+    expect(sections).toEqual(before);
+    expect(applyDefaults(result.title, result.sections)).toEqual(result);
+  });
+
+  // New sections and Sub-tasks blocks start blank. Whatever the editor produces, the
+  // saved sections must have titled sections and sub-tasks, like the portable format.
+  it("saves sections built from the editor's blank defaults in the portable shape", () => {
+    const item = {
+      ...createTemplateEditorItem(),
+      contents: [
+        createTemplateEditorContent("subItems"),
+        createTemplateEditorContent("text"),
+        {
+          ...createTemplateEditorContent("subItems"),
+          subItems: [
+            { id: "sub-a", title: "Check title" },
+            { id: "sub-b", title: "" },
+          ],
+        },
+      ],
+    };
+    const sections: ChecklistSection[] = [
+      { ...createTemplateEditorSection(), items: [item] },
+      createTemplateEditorSection(),
+    ];
+
+    const result = applyDefaults("", sections);
+
+    for (const section of result.sections) {
+      expect(portableChecklistSectionSchema.safeParse(section).error).toBeUndefined();
+    }
+    const blocks = result.sections[0].items[0].contents ?? [];
+    expect(blocks.map((content) => content.type)).toEqual(["text", "subItems"]);
+    expect(blocks[1].subItems).toEqual([{ id: "sub-a", title: "Check title" }]);
   });
 });

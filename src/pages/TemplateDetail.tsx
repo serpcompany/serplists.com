@@ -84,6 +84,7 @@ import {
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
+import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistTemplate, TemplateSavePayload } from '@/types/checklist';
 
@@ -656,7 +657,7 @@ const TemplateDetail = () => {
                     {sectionIndex + 1}
                   </div>
                   <span className="font-medium text-foreground">
-                    {section.title}
+                    {getSectionDisplayTitle(section, sectionIndex)}
                   </span>
                   <Badge variant="secondary" className="ml-auto">
                     {section.items.length} tasks

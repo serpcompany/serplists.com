@@ -1,4 +1,5 @@
-import { ChecklistSection } from "@/types/checklist";
+import type { ChecklistItem, ChecklistItemContent, ChecklistSection } from "@/types/checklist";
+import { sectionFallbackTitle } from "@/lib/utils/checklistSections";
 
 export interface ValidationError {
   type: string;
@@ -19,9 +20,34 @@ const placeholderItemId = (sectionId: string, usedItemIds: Set<string>): string 
   return id;
 };
 
-// Fills what a saved template needs: a title, at least one section, and at least one
-// titled task per section. Deterministic, so applying it to its own result changes
-// nothing; the editor shows the result after a save, since it is what was stored.
+const trimmedTitle = (title: unknown): string => (typeof title === "string" ? title.trim() : "");
+
+// Runs show every sub-task as a checkbox that counts toward progress, and Enter or "Add
+// Sub-task" leaves a blank one behind, so blank sub-tasks are dropped (the others keep
+// their ids: runs match them by id), and so is a Sub-tasks block left with none.
+const withoutBlankSubItems = (contents: ChecklistItemContent[]): ChecklistItemContent[] =>
+  contents.flatMap((content) => {
+    if (content.type !== "subItems") {
+      return [content];
+    }
+
+    const subItems = (content.subItems ?? []).flatMap((subItem) => {
+      const title = trimmedTitle(subItem.title);
+      return title ? [{ ...subItem, title }] : [];
+    });
+    return subItems.length > 0 ? [{ ...content, subItems }] : [];
+  });
+
+const withItemDefaults = (item: ChecklistItem, itemIndex: number): ChecklistItem => ({
+  ...item,
+  title: trimmedTitle(item.title) || `Task ${itemIndex + 1}`,
+  ...(item.contents ? { contents: withoutBlankSubItems(item.contents) } : {}),
+});
+
+// Fills what a saved template needs: a title, at least one section, a title for every
+// section ("Section N", the label the editor's outline showed), at least one titled task
+// per section, and no blank sub-tasks. Deterministic, so applying it to its own result
+// changes nothing; the editor shows the result after a save, since it is what was stored.
 export const applyTemplateSaveDefaults = (
   title: string,
   sections: ChecklistSection[],
@@ -50,10 +76,13 @@ export const applyTemplateSaveDefaults = (
 
   return {
     title: defaultTitle,
-    sections: sections.map((section) => {
+    sections: sections.map((section, sectionIndex) => {
+      const sectionTitle = trimmedTitle(section.title) || sectionFallbackTitle(sectionIndex);
+
       if (section.items.length === 0) {
         return {
           ...section,
+          title: sectionTitle,
           items: [{
             id: placeholderItemId(section.id, usedItemIds),
             title: "New task",
@@ -63,13 +92,10 @@ export const applyTemplateSaveDefaults = (
         };
       }
 
-      // Auto-generate titles for items without titles
       return {
         ...section,
-        items: section.items.map((item, itemIndex: number) => ({
-          ...item,
-          title: item.title.trim() || `Task ${itemIndex + 1}`,
-        })),
+        title: sectionTitle,
+        items: section.items.map(withItemDefaults),
       };
     }),
   };

@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { VideoEmbed } from './VideoEmbed';
 import { File, Code, ListCheck } from 'lucide-react';
 import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
+import { getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
 import { normalizeMarkdownDisplayText } from '@/lib/utils/markdownDisplay';
 import { safeUrl } from '@/lib/utils/safeUrl';
 
@@ -117,7 +118,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
                         onSubItemToggle?.(contentIndex, subItemIndex, !subItem.isCompleted)
                       }
                     />
-                    <span className={subItem.isCompleted ? "line-through text-muted-foreground" : ""}>{subItem.title}</span>
+                    <span className={subItem.isCompleted ? "line-through text-muted-foreground" : ""}>{getSubItemDisplayTitle(subItem, subItemIndex)}</span>
                   </div>
                 ))}
               </div>

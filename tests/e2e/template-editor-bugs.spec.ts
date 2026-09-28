@@ -549,6 +549,57 @@ test.describe("template editor regressions", () => {
     }
   });
 
+  test("saves an untitled section as 'Section 1' and drops a trailing blank sub-task", async ({ page }) => {
+    const stamp = Date.now();
+    const templateTitle = `QA Blank titles ${stamp}`;
+
+    await registerAccount(page);
+    await page.goto("/dashboard/templates/new");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await page.getByLabel("Task Title").fill(`Task with sub-tasks ${stamp}`);
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("button", { name: "Sub-tasks", exact: true }).last().click();
+    await page.getByPlaceholder("Sub-task 1").fill("Check title");
+    // Enter adds a blank sub-task below.
+    await page.getByPlaceholder("Sub-task 1").press("Enter");
+    await expect(page.getByPlaceholder("Sub-task 2")).toBeVisible();
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    expect(savedTemplate).toBeTruthy();
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    expect((sections[0] as { title?: string }).title).toBe("Section 1");
+    const subItems = (sections[0]?.items[0]?.contents?.[0] as { subItems?: Array<{ title: string }> })
+      ?.subItems;
+    expect(subItems?.map((subItem) => subItem.title)).toEqual(["Check title"]);
+
+    const templateId = String(savedTemplate?.id);
+    const runId = await page.evaluate(async ({ id, runSections, apiBaseUrl }) => {
+      const response = await fetch(`${apiBaseUrl}/checklists`, {
+        body: JSON.stringify({ template_id: id, title: "Blank titles run", sections: runSections }),
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      if (!response.ok) throw new Error(`Failed to create run: ${response.status}`);
+      return ((await response.json()) as { id: string }).id;
+    }, { id: templateId, runSections: sections, apiBaseUrl: DEV_API_BASE_URL });
+
+    await page.goto(`/dashboard/runs/${runId}`);
+    await expect(page.getByText("Section 1", { exact: true }).first()).toBeVisible();
+    const checkboxes = page.getByRole("checkbox");
+    await expect(checkboxes).toHaveCount(1);
+    await expect(page.getByText("Check title", { exact: true })).toBeVisible();
+
+    await page.evaluate(async ({ id, apiBaseUrl }) => {
+      await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: "include", method: "DELETE" });
+    }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+    await deleteTemplate(page, templateId);
+  });
+
   test("keeps focus while an embed URL is typed across the https:// prefix", async ({ page }) => {
     const stamp = Date.now();
     const templateTitle = `QA Embed ${stamp}`;

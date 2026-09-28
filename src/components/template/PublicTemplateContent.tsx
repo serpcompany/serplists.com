@@ -15,6 +15,7 @@ import {
   normalizeDisplayText,
   normalizeMarkdownDisplayText,
 } from '@/lib/utils/markdownDisplay';
+import { getSectionDisplayTitle, getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
 import { safeUrl } from '@/lib/utils/safeUrl';
 import type {
   ChecklistItem,
@@ -113,7 +114,7 @@ export function PublicTemplateContent({
                 className="flex items-center gap-2 text-sm text-foreground/90"
               >
                 <Checkbox disabled className="h-4 w-4" />
-                <span>{subItem.title}</span>
+                <span>{getSubItemDisplayTitle(subItem, index)}</span>
               </div>
             ))}
           </div>
@@ -219,7 +220,7 @@ export function PublicTemplateContent({
                 Section {sectionIndex + 1}
               </div>
               <h3 className="mt-2 text-xl font-semibold text-foreground">
-                {section.title}
+                {getSectionDisplayTitle(section, sectionIndex)}
               </h3>
             </div>
             <div className="text-sm text-muted-foreground">

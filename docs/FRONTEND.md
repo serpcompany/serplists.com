@@ -125,11 +125,20 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   form's baseline and keeps any field edited while the save was in flight, so the
   form stays dirty and the unsaved-changes guards still warn.
 - The saved values are what was stored, after `applyTemplateSaveDefaults`: a blank
-  title becomes "Untitled Template", an untitled task "Task N", and an empty section
-  gets a "New task" whose id comes from the section id. The editor shows them after
-  the save, and the defaults are deterministic, so saving again sends the same task
-  ids and active runs keep the task (and its completion). A create leaves the
-  page when it finishes, so the editor is locked (a disabled `fieldset`) until then.
+  title becomes "Untitled Template", an untitled section "Section N" (the label the
+  outline shows, from `sectionFallbackTitle`), an untitled task "Task N", and an
+  empty section gets a "New task" whose id comes from the section id. Blank
+  sub-tasks are dropped (the others keep their ids), and so is a Sub-tasks block
+  left with none, since runs count every sub-task checkbox toward progress. The
+  editor shows them after the save, and the defaults are deterministic, so saving
+  again sends the same task ids and active runs keep the task (and its completion).
+  A create leaves the page when it finishes, so the editor is locked (a disabled
+  `fieldset`) until then.
+- Templates and runs saved before those defaults can still hold blank section or
+  sub-task titles. Pages render them with `getSectionDisplayTitle` and
+  `getSubItemDisplayTitle` (`src/lib/utils/checklistSections.ts`), which fall back to
+  "Section N" and "Sub-task N"; a blank sub-task is labeled, never hidden, because
+  it still counts toward progress.
 - Plan limits (`useTemplateEditorAccess`): the new-template editor warns up front
   when billing status shows the context's template limit is reached, and a save
   refused as a plan gate or for an ended session shows a notice with its action

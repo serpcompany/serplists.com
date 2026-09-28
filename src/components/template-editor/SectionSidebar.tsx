@@ -19,6 +19,7 @@ import {
   type TemplateEditorFormValues,
 } from "@/lib/forms/templateEditorForm";
 import { cn } from "@/lib/utils";
+import { getSectionDisplayTitle } from "@/lib/utils/checklistSections";
 
 type EditingItemState = {
   itemIndex: number;
@@ -61,10 +62,6 @@ interface SectionSidebarProps {
   selectedItemIndex: number | null;
   onSelectSection: (sectionIndex: number) => void;
   onSelectItem: (sectionIndex: number, itemIndex: number) => void;
-}
-
-function buildSectionFallbackLabel(sectionIndex: number): string {
-  return `Section ${sectionIndex + 1}`;
 }
 
 function buildItemFallbackLabel(itemIndex: number): string {
@@ -377,6 +374,8 @@ export function SectionSidebar({
         <div className="overflow-hidden p-2">
           {sectionsFieldArray.fields.map((sectionField, sectionIndex) => {
             const section = sections?.[sectionIndex];
+            // A save stores this label for an untitled section, so the outline shows it.
+            const sectionLabel = getSectionDisplayTitle(section ?? { title: "" }, sectionIndex);
             const sectionSelected =
               outlineSelectionActive &&
               selectedSectionIndex === sectionIndex &&
@@ -416,7 +415,7 @@ export function SectionSidebar({
                   )}
                 >
                   <button
-                    aria-label={`Drag ${section?.title || buildSectionFallbackLabel(sectionIndex)}`}
+                    aria-label={`Drag ${sectionLabel}`}
                     draggable
                     onDragEnd={finishDrag}
                     onDragStart={(event) =>
@@ -431,8 +430,8 @@ export function SectionSidebar({
                   <button
                     aria-label={
                       isExpanded
-                        ? `Collapse ${section?.title || buildSectionFallbackLabel(sectionIndex)}`
-                        : `Expand ${section?.title || buildSectionFallbackLabel(sectionIndex)}`
+                        ? `Collapse ${sectionLabel}`
+                        : `Expand ${sectionLabel}`
                     }
                     onClick={() => toggleSection(sectionField.id)}
                     className="flex h-7 w-6 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
@@ -465,19 +464,19 @@ export function SectionSidebar({
                       onDoubleClick={() =>
                         handleStartEditingSection(
                           sectionIndex,
-                          section?.title || buildSectionFallbackLabel(sectionIndex),
+                          sectionLabel,
                         )
                       }
                       className="flex-1 truncate py-1.5 text-left text-sm text-sidebar-foreground"
                       type="button"
                     >
-                      {section?.title || buildSectionFallbackLabel(sectionIndex)}
+                      {sectionLabel}
                     </button>
                   )}
 
                   <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <Button
-                      aria-label={`Add task to ${section?.title || buildSectionFallbackLabel(sectionIndex)}`}
+                      aria-label={`Add task to ${sectionLabel}`}
                       variant="ghost"
                       size="icon"
                       onClick={() => handleAddTask(sectionIndex)}
@@ -487,7 +486,7 @@ export function SectionSidebar({
                       <Plus className="h-3 w-3" />
                     </Button>
                     <Button
-                      aria-label={`Remove ${section?.title || buildSectionFallbackLabel(sectionIndex)}`}
+                      aria-label={`Remove ${sectionLabel}`}
                       variant="ghost"
                       size="icon"
                       onClick={() => handleRemoveSection(sectionIndex)}

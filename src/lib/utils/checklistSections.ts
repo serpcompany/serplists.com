@@ -1,4 +1,28 @@
-import type { ChecklistItemContent, ChecklistSection } from "@/types/checklist";
+import type { ChecklistItemContent, ChecklistSection, ChecklistSubItem } from "@/types/checklist";
+
+// The label an untitled section gets: the template editor's outline shows it, a save
+// stores it, and pages show it for sections saved blank before saves defaulted them.
+export function sectionFallbackTitle(sectionIndex: number): string {
+  return `Section ${sectionIndex + 1}`;
+}
+
+const displayTitle = (title: unknown): string =>
+  typeof title === "string" ? title.trim() : "";
+
+export function getSectionDisplayTitle(
+  section: Pick<ChecklistSection, "title">,
+  sectionIndex: number,
+): string {
+  return displayTitle(section.title) || sectionFallbackTitle(sectionIndex);
+}
+
+// Saves drop blank sub-tasks; older templates and runs can still hold them.
+export function getSubItemDisplayTitle(
+  subItem: Pick<ChecklistSubItem, "title">,
+  subItemIndex: number,
+): string {
+  return displayTitle(subItem.title) || `Sub-task ${subItemIndex + 1}`;
+}
 
 export function isSectionsShape(value: unknown): value is ChecklistSection[] {
   if (!Array.isArray(value)) return false;
