@@ -1,12 +1,6 @@
 import { z } from "zod";
 
-import type {
-  ChecklistItem,
-  ChecklistItemContent,
-  ChecklistSection,
-  ChecklistSubItem,
-  ChecklistTemplate,
-} from "@/types/checklist";
+import type { ChecklistTemplate } from "@/types/checklist";
 import {
   buildTemplateEditorDetailsFormValues,
   normalizeTemplateEditorDetailsForSave,
@@ -130,63 +124,122 @@ export function createTemplateEditorSection(): TemplateEditorSection {
   };
 }
 
-function normalizeTemplateEditorSubItem(
-  subItem: Partial<ChecklistSubItem>,
-): TemplateEditorSubItem {
+// Stored content is not validated on import (TD-3): legacy backups and hand-written or
+// generated JSON can hold nulls, numbers, unknown types, or bare values. Loading
+// coerces all of it into values the editor schema accepts, keeping what it can (an
+// unknown block becomes a text block with its value), so a template is never stuck
+// unsaveable. Values are read as unknown for that reason.
+const TEMPLATE_EDITOR_CONTENT_TYPES = templateEditorContentSchema.shape.type.options;
+
+type StoredRecord = Record<string, unknown>;
+
+const isStoredRecord = (value: unknown): value is StoredRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const toEditorText = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return (typeof value === "number" && Number.isFinite(value)) || typeof value === "boolean"
+    ? String(value)
+    : "";
+};
+
+const toEditorId = (value: unknown, prefix: string): string => {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+
+  return typeof value === "number" && Number.isFinite(value)
+    ? String(value)
+    : createTemplateEditorId(prefix);
+};
+
+const toEditorContentType = (value: unknown): TemplateEditorContentType =>
+  TEMPLATE_EDITOR_CONTENT_TYPES.find((type) => type === value) ?? "text";
+
+function normalizeTemplateEditorSubItem(raw: unknown): TemplateEditorSubItem {
+  const subItem = isStoredRecord(raw) ? raw : { title: raw };
   return {
-    id: subItem.id ?? createTemplateEditorId("subitem"),
-    isCompleted: subItem.isCompleted,
-    title: subItem.title ?? "",
+    id: toEditorId(subItem.id, "subitem"),
+    isCompleted: typeof subItem.isCompleted === "boolean" ? subItem.isCompleted : undefined,
+    title: toEditorText(subItem.title),
   };
 }
 
+// usedContentIds spans the whole template: uploads find their block by content id, so
+// a repeated id (or 1 and "1") gets a new one.
 function normalizeTemplateEditorContent(
-  content: Partial<ChecklistItemContent>,
+  raw: unknown,
+  usedContentIds: Set<string>,
 ): TemplateEditorContent {
-  const type: TemplateEditorContentType = content.type ?? "text";
-  const subItems =
-    type === "subItems"
-      ? (content.subItems?.map(normalizeTemplateEditorSubItem) ?? [
-          createTemplateEditorSubItem(),
-        ])
-      : content.subItems;
+  // A bare value becomes a text block, so its text is not lost.
+  const content = isStoredRecord(raw) ? raw : { value: raw };
+  const type = toEditorContentType(content.type);
+  let id = toEditorId(content.id, "content");
+  if (usedContentIds.has(id)) {
+    id = createTemplateEditorId("content");
+  }
+  usedContentIds.add(id);
 
+  const fileSize = content.fileSize;
   return {
-    fileName: content.fileName,
-    fileSize: content.fileSize,
-    id: content.id ?? createTemplateEditorId("content"),
-    subItems,
+    fileName: typeof content.fileName === "string" ? content.fileName : undefined,
+    fileSize:
+      typeof fileSize === "number" && Number.isFinite(fileSize) && fileSize >= 0
+        ? fileSize
+        : undefined,
+    id,
+    subItems:
+      type !== "subItems"
+        ? undefined
+        : Array.isArray(content.subItems)
+          ? content.subItems.map(normalizeTemplateEditorSubItem)
+          : [createTemplateEditorSubItem()],
     type,
-    uploadType: content.uploadType,
-    value: content.value ?? "",
+    uploadType:
+      content.uploadType === "upload" || content.uploadType === "url"
+        ? content.uploadType
+        : undefined,
+    value: toEditorText(content.value),
   };
 }
 
-function normalizeTemplateEditorItem(item: Partial<ChecklistItem>): TemplateEditorItem {
+function normalizeTemplateEditorItem(
+  raw: unknown,
+  usedContentIds: Set<string>,
+): TemplateEditorItem {
+  const item = isStoredRecord(raw) ? raw : { title: raw };
+  const contents = Array.isArray(item.contents) ? item.contents : [];
   return {
-    contents: (item.contents ?? []).map(normalizeTemplateEditorContent),
-    description: item.description ?? "",
-    id: item.id ?? createTemplateEditorId("item"),
-    isCompleted: item.isCompleted,
-    title: item.title ?? "",
+    contents: contents
+      .filter((content) => content !== null && content !== undefined)
+      .map((content) => normalizeTemplateEditorContent(content, usedContentIds)),
+    description: toEditorText(item.description),
+    id: toEditorId(item.id, "item"),
+    isCompleted: typeof item.isCompleted === "boolean" ? item.isCompleted : undefined,
+    title: toEditorText(item.title),
   };
 }
 
 function normalizeTemplateEditorSection(
-  section: Partial<ChecklistSection>,
+  raw: unknown,
+  usedContentIds: Set<string>,
 ): TemplateEditorSection {
+  const section = isStoredRecord(raw) ? raw : {};
+  const items = Array.isArray(section.items) ? section.items : [];
   return {
-    id: section.id ?? createTemplateEditorId("section"),
-    items: (section.items ?? []).map(normalizeTemplateEditorItem),
-    title: section.title ?? "",
+    id: toEditorId(section.id, "section"),
+    items: items.map((item) => normalizeTemplateEditorItem(item, usedContentIds)),
+    title: toEditorText(section.title),
   };
 }
 
-function buildTemplateEditorSections(
-  sections?: ChecklistSection[],
-): TemplateEditorSection[] {
-  if (sections?.length) {
-    return sections.map(normalizeTemplateEditorSection);
+function buildTemplateEditorSections(sections?: unknown): TemplateEditorSection[] {
+  if (Array.isArray(sections) && sections.length > 0) {
+    const usedContentIds = new Set<string>();
+    return sections.map((section) => normalizeTemplateEditorSection(section, usedContentIds));
   }
 
   return [createTemplateEditorSection()];
@@ -214,8 +267,25 @@ export function normalizeTemplateEditorFormForSave(
   };
 }
 
+// "Section 2, task 1, content block 3" for an issue inside the outline; null otherwise.
+const describeTemplateEditorIssueLocation = (path: Array<string | number>): string | null => {
+  const [sections, sectionIndex, items, itemIndex, contents, contentIndex] = path;
+  if (sections !== "sections" || typeof sectionIndex !== "number") {
+    return null;
+  }
+
+  const parts = [`Section ${sectionIndex + 1}`];
+  if (items === "items" && typeof itemIndex === "number") {
+    parts.push(`task ${itemIndex + 1}`);
+  }
+  if (contents === "contents" && typeof contentIndex === "number") {
+    parts.push(`content block ${contentIndex + 1}`);
+  }
+  return parts.join(", ");
+};
+
 // Checks save-ready values against the editor schema, which carries the API's limits.
-// Each message names the field as the editor labels it.
+// Each message names the field as the editor labels it, or where in the outline it is.
 export function validateTemplateEditorFormForSave(
   values: TemplateEditorFormValues,
 ): Array<{ type: "validation"; message: string }> {
@@ -224,6 +294,11 @@ export function validateTemplateEditorFormForSave(
     return [];
   }
 
-  const messages = new Set(result.error.issues.map((issue) => issue.message));
+  const messages = new Set(
+    result.error.issues.map((issue) => {
+      const location = describeTemplateEditorIssueLocation(issue.path);
+      return location ? `${location}: ${issue.message}` : issue.message;
+    }),
+  );
   return Array.from(messages, (message) => ({ type: "validation" as const, message }));
 }

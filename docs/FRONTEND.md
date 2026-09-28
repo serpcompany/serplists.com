@@ -86,6 +86,12 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   types with guaranteed ids, and nested field factories.
 - Use React Hook Form field arrays for sections, items, content blocks, and
   sub-items instead of a second nested state tree.
+- Stored content is not validated on import (TD-3), so `buildTemplateEditorFormValues`
+  coerces it into values the editor schema accepts: numeric ids and values become
+  strings, an unknown block type becomes a text block that keeps its value, invalid
+  file details are dropped, and every content block gets its own id (uploads find
+  their block by id). A loaded template can always be saved. Save validation errors
+  inside the outline name the section, task, and content block.
 - Omit an empty slug from create and update payloads rather than sending `""`, and
   omit an update's slug when it is the one already stored, so a stored slug that
   predates today's rules never blocks a save or moves the URL.

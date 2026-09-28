@@ -898,4 +898,52 @@ test.describe("template editor regressions", () => {
       await deleteTemplate(page, templateId);
     }
   });
+
+  test("saves a template whose stored content came from a legacy import", async ({ page }) => {
+    await loginAsSeedUser(page);
+    const title = `Legacy content ${uniqueSuffix()}`;
+    // The API stores content as given (TD-3), as a lenient JSON import does.
+    const templateId = await page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
+      const response = await fetch(`${apiBaseUrl}/templates`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: templateTitle,
+          is_public: false,
+          sections: [
+            {
+              id: "legacy-section",
+              title: "Prep",
+              items: [
+                {
+                  id: "legacy-task",
+                  title: "Legacy task",
+                  contents: [
+                    { id: 1, type: "text", value: "Numeric id" },
+                    { type: "file", value: "https://example.com/doc.pdf", fileName: null, fileSize: null },
+                    { id: "c3", type: "link", value: "https://example.com" },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      });
+      if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
+      return ((await response.json()) as { id: string }).id;
+    }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+
+    try {
+      await page.goto(`/dashboard/templates/${templateId}/edit`);
+      await page.getByPlaceholder("Enter template name...").fill(`${title} saved`);
+      await page.getByRole("button", { name: "Save", exact: true }).click();
+
+      await expect(page.getByText(/Template updated/)).toBeVisible();
+      const saved = await findTemplateByTitle(page, `${title} saved`);
+      expect(JSON.stringify(saved?.items)).toContain("https://example.com/doc.pdf");
+    } finally {
+      await deleteTemplate(page, templateId);
+    }
+  });
 });
