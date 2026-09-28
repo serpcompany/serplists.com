@@ -16,6 +16,7 @@ import {
   Zap,
 } from 'lucide-react';
 
+import { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
 import { CategoryNavigation } from '@/components/checklist-library/CategoryNavigation';
 import { SearchAndFilters } from '@/components/checklist-library/SearchAndFilters';
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
@@ -26,6 +27,7 @@ import {
 } from '@/components/checklist-library/discovery-utils';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import NotFound from '@/pages/NotFound';
 import {
   Select,
@@ -134,6 +136,26 @@ const isCategorySort = (value: string): value is CategorySort =>
 const CATEGORY_BASE_URL = 'https://serplists.com/categories';
 const SEO_IMAGE_URL = 'https://serplists.com/placeholder.svg';
 
+const backToCategories = (
+  <div className="mb-6 flex items-center gap-2 text-sm">
+    <Link
+      className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
+      to="/categories"
+    >
+      <ArrowLeft className="h-4 w-4" />
+      All Categories
+    </Link>
+  </div>
+);
+
+const templateGridSkeleton = (
+  <div aria-busy="true" className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    {Array.from({ length: 6 }).map((_, index) => (
+      <Skeleton key={index} className="h-[220px] rounded-lg" />
+    ))}
+  </div>
+);
+
 const CategoryDetail = () => {
   const { categorySlug } = useParams<{ categorySlug: string }>();
   const { user } = useAuth();
@@ -143,7 +165,8 @@ const CategoryDetail = () => {
     surface: 'category-templates',
     userId: user?.id,
   });
-  const { allCategories, templates } = useTemplateLibrary();
+  const { allCategories, templates, loading, catalogError, retryCatalog } =
+    useTemplateLibrary();
 
   const slug = categorySlug ?? 'business';
   const categories = useMemo(
@@ -187,7 +210,32 @@ const CategoryDetail = () => {
       : base;
   }, [searchQuery, slug, sortBy, templates]);
 
+  // Categories that exist only in database templates are unknown until the catalog loads,
+  // so the 404 page waits for a successful load.
   if (!isKnownCategory) {
+    if (loading || catalogError) {
+      return (
+        <div className="bg-background">
+          <main className="mx-auto max-w-6xl px-4 py-8">
+            {backToCategories}
+            {catalogError ? (
+              <CatalogLoadError onRetry={retryCatalog} />
+            ) : (
+              <>
+                <div aria-busy="true" className="mb-8 flex items-start gap-6">
+                  <Skeleton className="h-16 w-16 shrink-0 rounded-2xl" />
+                  <div className="flex-1 space-y-3">
+                    <Skeleton className="h-8 w-64 max-w-full" />
+                    <Skeleton className="h-5 w-96 max-w-full" />
+                  </div>
+                </div>
+                {templateGridSkeleton}
+              </>
+            )}
+          </main>
+        </div>
+      );
+    }
     return <NotFound />;
   }
 
@@ -201,15 +249,7 @@ const CategoryDetail = () => {
         url={`${CATEGORY_BASE_URL}/${encodeURIComponent(slug)}`}
       />
       <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-6 flex items-center gap-2 text-sm">
-          <Link
-            className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-            to="/categories"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            All Categories
-          </Link>
-        </div>
+        {backToCategories}
 
         <div className="mb-8 flex items-start gap-6">
           <div
@@ -222,9 +262,13 @@ const CategoryDetail = () => {
               {category.name}
             </h1>
             <p className="mt-1 text-muted-foreground">{category.description}</p>
-            <Badge className="mt-3" variant="secondary">
-              {categoryTemplateCount} templates
-            </Badge>
+            {loading ? (
+              <Skeleton className="mt-3 h-5 w-24" />
+            ) : (
+              <Badge className="mt-3" variant="secondary">
+                {categoryTemplateCount} templates
+              </Badge>
+            )}
           </div>
         </div>
 
@@ -288,7 +332,12 @@ const CategoryDetail = () => {
           }
         />
 
-        {filteredTemplates.length > 0 ? (
+        {catalogError ? (
+          <CatalogLoadError className="mt-6" onRetry={retryCatalog} />
+        ) : null}
+        {loading ? (
+          templateGridSkeleton
+        ) : filteredTemplates.length > 0 ? (
           <div
             className={
               viewMode === 'grid'
@@ -304,7 +353,7 @@ const CategoryDetail = () => {
               />
             ))}
           </div>
-        ) : (
+        ) : catalogError ? null : (
           <div className="mt-6 rounded-xl border border-border bg-card p-12 text-center">
             <p className="text-muted-foreground">
               No templates found matching your search.

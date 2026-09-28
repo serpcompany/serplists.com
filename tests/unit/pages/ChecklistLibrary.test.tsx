@@ -252,3 +252,100 @@ describe('ChecklistLibrary route behavior', () => {
     expect(markup).not.toContain('0 templates');
   });
 });
+
+describe('Discovery pages while the catalog loads', () => {
+  const bundledTemplate: ChecklistTemplate = {
+    ...baseTemplate,
+    id: 'repo:camping',
+    slug: 'camping',
+    title: 'Camping Checklist',
+    categories: ['outdoor'],
+    userId: REPO_TEMPLATE_USER_ID,
+  };
+  const movingTemplate: ChecklistTemplate = {
+    ...baseTemplate,
+    id: 'db-moving',
+    slug: 'moving-day',
+    title: 'Moving Day',
+    categories: ['moving'],
+    ownerProfile: { username: 'alice' },
+  };
+  const libraryState = (overrides: Record<string, unknown>) => ({
+    templates: [bundledTemplate],
+    loading: false,
+    catalogError: false,
+    retryCatalog: vi.fn(),
+    allCategories: ['moving', 'outdoor'],
+    ...overrides,
+  });
+  const renderCategory = (location: string) =>
+    renderToStaticMarkup(
+      <StaticRouter location={location}>
+        <Routes>
+          <Route path="/categories/:categorySlug" element={<CategoryDetail />} />
+        </Routes>
+      </StaticRouter>,
+    );
+  const renderLibrary = (location: string) =>
+    renderToStaticMarkup(
+      <StaticRouter location={location}>
+        <ChecklistLibrary />
+      </StaticRouter>,
+    );
+
+  it('shows a loading category page, not the 404 page, for a database-only category', () => {
+    mockUseTemplateLibrary.mockReturnValue(libraryState({ loading: true }));
+
+    const markup = renderCategory('/categories/moving');
+
+    expect(markup).not.toContain('That page does not exist');
+    expect(markup).toContain('aria-busy="true"');
+  });
+
+  it('renders the category once the catalog brings its templates', () => {
+    mockUseTemplateLibrary.mockReturnValue(
+      libraryState({ templates: [bundledTemplate, movingTemplate] }),
+    );
+
+    const markup = renderCategory('/categories/moving');
+
+    expect(markup).not.toContain('That page does not exist');
+    expect(markup).toContain('Moving Day');
+    expect(markup).toContain('1 templates');
+  });
+
+  it('shows a retry state, not the 404 page, when the catalog failed to load', () => {
+    mockUseTemplateLibrary.mockReturnValue(libraryState({ catalogError: true }));
+
+    const markup = renderCategory('/categories/moving');
+
+    expect(markup).not.toContain('That page does not exist');
+    expect(markup).toContain('Could not load templates');
+    expect(markup).toContain('Try again');
+  });
+
+  it('renders known categories at once and keeps the empty message back while loading', () => {
+    mockUseTemplateLibrary.mockReturnValue(libraryState({ loading: true }));
+
+    const bundled = renderCategory('/categories/outdoor');
+    expect(bundled).not.toContain('That page does not exist');
+    expect(bundled).toContain('<h1');
+    expect(bundled).toContain('aria-busy="true"');
+
+    const registry = renderCategory('/categories/business');
+    expect(registry).toContain('Business &amp; Operations');
+    expect(registry).not.toContain('No templates found matching your search.');
+    expect(registry).toContain('aria-busy="true"');
+  });
+
+  it('never tells a library search that nothing matched before the catalog has loaded', () => {
+    mockUseTemplateLibrary.mockReturnValue(libraryState({ loading: true }));
+    expect(renderLibrary('/templates?search=moving')).not.toContain('No templates found');
+
+    mockUseTemplateLibrary.mockReturnValue(libraryState({ catalogError: true }));
+    const failed = renderLibrary('/templates?search=moving');
+    expect(failed).not.toContain('No templates found');
+    expect(failed).toContain('Could not load templates');
+    expect(failed).toContain('Try again');
+  });
+});

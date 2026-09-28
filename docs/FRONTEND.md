@@ -45,6 +45,12 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
   ([D1 cost](design-docs/d1-cost.md)), so pages that only need official templates use
   the bundled `repoTemplates`. The catalog's query key has no user id because the
   catalog is the same for everyone.
+- `templates` always includes the bundled `repoTemplates`, so a non-empty list does not
+  mean the catalog loaded. Discovery pages read `catalogPending` and `catalogError` from
+  `useTemplateLists` (`loading`, `catalogError`, and `retryCatalog` in
+  `useTemplateLibrary`): show a skeleton while pending, a retry state on error, and a
+  404 or "no templates" message only after the catalog loaded. A failed catalog request
+  stays an error; it is never cached as an empty catalog.
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.

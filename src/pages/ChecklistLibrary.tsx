@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { ChevronRight, Filter, Search } from 'lucide-react';
 
+import { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
 import { SearchAndFilters } from '@/components/checklist-library/SearchAndFilters';
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import {
@@ -50,10 +51,8 @@ const ChecklistLibrary = ({
       : DEFAULT_SORT;
   });
 
-  const { templates, loading, allCategories } = useTemplateLibrary(
-    undefined,
-    templateType,
-  );
+  const { templates, loading, catalogError, retryCatalog, allCategories } =
+    useTemplateLibrary(undefined, templateType);
 
   const categories = useMemo(
     () => buildDiscoveryCategories(templates, allCategories),
@@ -195,7 +194,17 @@ const ChecklistLibrary = ({
           sortBy={sortBy}
         />
 
-        {filteredTemplates.length === 0 ? (
+        {/* A failed catalog load must not read as "no templates matched". */}
+        {catalogError ? (
+          <CatalogLoadError className="mb-6" onRetry={retryCatalog} />
+        ) : null}
+        {filteredTemplates.length > 0 ? (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredTemplates.map((template) => (
+              <TemplateCard key={template.id} template={template} />
+            ))}
+          </div>
+        ) : catalogError ? null : (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
               <Filter className="h-7 w-7 text-muted-foreground" />
@@ -213,12 +222,6 @@ const ChecklistLibrary = ({
             >
               Reset filters
             </Button>
-          </div>
-        ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredTemplates.map((template) => (
-              <TemplateCard key={template.id} template={template} />
-            ))}
           </div>
         )}
 
