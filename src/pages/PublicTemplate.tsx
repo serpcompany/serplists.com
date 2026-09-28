@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
@@ -37,6 +37,8 @@ const PublicTemplate = () => {
   const { activeTeamId, isTeamWorkspace, isWorkspaceLoading } = useWorkspace();
   const { createRun, createTemplate, templates } = useTemplates();
   const [isCreatingRun, setIsCreatingRun] = useState(false);
+  // Set synchronously, so a second click before the re-render cannot create a second run.
+  const startRunInFlight = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const {
     billingState,
@@ -82,8 +84,9 @@ const PublicTemplate = () => {
 
   const handleStartRun = async () => {
     // Until the stored Organization is restored, a click would land in Personal.
-    if (!template || isWorkspaceLoading) return;
+    if (!template || isWorkspaceLoading || startRunInFlight.current) return;
 
+    startRunInFlight.current = true;
     setIsCreatingRun(true);
     try {
       const result = await startRun(
@@ -110,6 +113,7 @@ const PublicTemplate = () => {
         navigate(buildConsoleRunPath(result.runId));
       }
     } finally {
+      startRunInFlight.current = false;
       setIsCreatingRun(false);
     }
   };

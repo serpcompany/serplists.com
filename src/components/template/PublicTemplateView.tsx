@@ -130,7 +130,7 @@ export function PublicTemplateView({
               onClick={onStartRun}
               className="gap-2"
               type="button"
-              disabled={isWorkspaceLoading}
+              disabled={isCreatingRun || isWorkspaceLoading}
             >
               <Play className="h-3.5 w-3.5" />
               {isCreatingRun ? 'Starting...' : 'Start Run'}

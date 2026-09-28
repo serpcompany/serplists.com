@@ -420,3 +420,63 @@ describe('PublicTemplate ownership context', () => {
     }
   });
 });
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, reject, resolve };
+};
+
+describe('PublicTemplate Start Run', () => {
+  beforeEach(() => {
+    mockNavigate.mockReset();
+    mockToastError.mockReset();
+    mockUseTemplateDetailModel.mockReset();
+    mockViewProps.mockReset();
+    authState.isAuthenticated = true;
+    authState.user = { id: 'user-1' };
+    workspaceState.activeTeamId = undefined;
+    workspaceState.isTeamWorkspace = false;
+    workspaceState.isWorkspaceLoading = false;
+  });
+
+  it('creates one run when Start Run is clicked twice before the first finishes', async () => {
+    const pending = deferred<{ kind: 'ok'; runId: string }>();
+    const startRun = vi.fn().mockReturnValue(pending.promise);
+    renderPublishedRoute(publishedClipyTemplate, { startRun });
+    const { onStartRun } = lastViewProps();
+
+    const first = onStartRun();
+    const second = onStartRun();
+    pending.resolve({ kind: 'ok', runId: 'run-1' });
+    await Promise.all([first, second]);
+
+    expect(startRun).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+
+    startRun.mockResolvedValue({ kind: 'ok', runId: 'run-2' });
+    await onStartRun();
+    expect(startRun).toHaveBeenCalledTimes(2);
+  });
+
+  it('allows another Start Run after a failed attempt', async () => {
+    const startRun = vi
+      .fn()
+      .mockResolvedValueOnce({ kind: 'error', message: 'Failed to start template run' })
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce({ kind: 'ok', runId: 'run-1' });
+    renderPublishedRoute(publishedClipyTemplate, { startRun });
+    const { onStartRun } = lastViewProps();
+
+    await onStartRun();
+    await expect(onStartRun()).rejects.toThrow('network down');
+    await onStartRun();
+
+    expect(startRun).toHaveBeenCalledTimes(3);
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+  });
+});
