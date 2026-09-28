@@ -33,6 +33,7 @@ import {
   mergePublicTemplateCollections,
   repoTemplates,
 } from "@/lib/repoTemplateCatalog";
+import { refreshRunLists } from "./templateListCache";
 
 
 const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
@@ -410,8 +411,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       };
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['runs'] });
-      await queryClient.refetchQueries({ queryKey: ['runs'] });
+      await refreshRunLists(queryClient);
       toast.success("Checklist run created successfully");
     },
     onError: (error: Error) => {
@@ -487,8 +487,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await api.revalidateChecklist(run.id, run.revision);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['runs'] });
-      await queryClient.refetchQueries({ queryKey: ['runs'] });
+      await refreshRunLists(queryClient);
     },
   });
 
