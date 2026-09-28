@@ -370,31 +370,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     mutationFn: async (run: ChecklistRun) => {
       if (!user) throw new Error("User must be logged in to update a run");
       
-      // Calculate progress
-      let completed = 0;
-      let total = 0;
-      
-      run.sections.forEach((section) => {
-        section.items.forEach((item) => {
-          total++;
-          if (item.isCompleted) {
-            completed++;
-          }
-          // Count sub-items if they exist
-          item.contents?.forEach((content) => {
-            if (content.type === "subItems" && content.subItems) {
-              content.subItems.forEach((subItem) => {
-                total++;
-                if (subItem.isCompleted) {
-                  completed++;
-                }
-              });
-            }
-          });
-        });
-      });
-      
-      const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+      const progress = calculateSectionsProgress(run.sections);
       const runWithProgress = { ...run, progress };
       
       const result = await api.updateChecklist(runWithProgress.id, {

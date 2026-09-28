@@ -39,7 +39,7 @@ Canonical private routes:
 ## Runs And Sharing
 
 - Users can start checklist runs from templates.
-- Runs store progress independently from templates.
+- Runs store progress independently from templates. Progress counts every task and sub-task as one unit and is a whole percentage: 100% only when every unit is done, 0% only when none is, and anything in between rounds to 1-99% (so 199 of 200 is 99%, not 100%). The app and the API compute it with the same function (`src/lib/progress.ts`), and the dashboard's average progress follows the same rule.
 - Runs record both the template content version last reconciled and a run revision. API responses expose `is_stale` when the source checklist structure is newer; metadata-only template edits do not stale runs.
 - Completed, archived, and publicly shared runs are frozen when a template changes. A completed private run can be explicitly reconciled and reopened with `POST /api/checklists/:id/revalidate`.
 - Runs that predate stable identities are conservatively marked stale during migration. Their legacy IDs are backfilled deterministically, and their completion/notes remain intact until explicit reconciliation.

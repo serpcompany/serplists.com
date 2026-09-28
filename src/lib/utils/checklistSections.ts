@@ -1,3 +1,4 @@
+import { toProgressPercent } from "@/lib/progress";
 import type { ChecklistItemContent, ChecklistSection } from "@/types/checklist";
 
 export function isSectionsShape(value: unknown): value is ChecklistSection[] {
@@ -84,7 +85,7 @@ export function calculateSectionsProgress(sections: ChecklistSection[]): number 
     });
   });
 
-  return total > 0 ? Math.round((completed / total) * 100) : 0;
+  return toProgressPercent(completed, total);
 }
 
 export function resetSectionsCompletion(sections: ChecklistSection[]): ChecklistSection[] {

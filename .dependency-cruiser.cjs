@@ -11,6 +11,7 @@ const SHARED_FROM_SRC = [
   "^src/lib/categorySlug\\.ts$",
   "^src/lib/brand\\.ts$",
   "^src/lib/publicPageMeta\\.ts$",
+  "^src/lib/progress\\.ts$",
 ];
 
 // Pages Functions entry points (file-based routes).

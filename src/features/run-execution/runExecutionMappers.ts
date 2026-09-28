@@ -1,3 +1,4 @@
+import { toProgressPercent } from '@/lib/progress';
 import {
   calculateSectionsProgress,
   isSectionsShape,
@@ -153,7 +154,7 @@ export const countRunExecutionItems = (
 
   return {
     completed,
-    progress: total > 0 ? Math.round((completed / total) * 100) : 0,
+    progress: toProgressPercent(completed, total),
     total,
   };
 };
