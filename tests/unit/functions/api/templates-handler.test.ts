@@ -1207,6 +1207,27 @@ describe('Templates Handlers', () => {
     });
   });
 
+  it('reports a failed template insert with a readable reason, not the database error', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } });
+    dbMocks.selectChain.limit.mockResolvedValue([]);
+    dbMocks.db.batch.mockRejectedValue(new Error('D1_ERROR: string or blob too big: SQLITE_TOOBIG'));
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/backup', {
+      method: 'POST',
+      body: JSON.stringify({ templates: [{ title: 'Huge', sections: [{ id: 's1', title: 'S', items: [{ id: 'i1', title: 'T' }] }] }] }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.details.failed).toEqual([expect.objectContaining({
+      title: 'Huge',
+      code: 'insert_failed',
+      reason: 'Could not save this template. Try importing it again.',
+    })]);
+    expect(JSON.stringify(data)).not.toContain('SQLITE');
+  });
+
   it('should allow cloning templates for free users within template limit', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit

@@ -195,7 +195,11 @@ preview in the app skips such templates with a warning.
 
 Mixed-result imports retain both lists. When every template fails, the API
 returns `400` with `code: "template_import_failed"` and the full summary in
-`details`, so clients must not discard all but the first failure.
+`details`, so clients must not discard all but the first failure. The import page
+parses that summary and shows the same Failed Templates list either way (an untitled
+template is named by its position), keeping the preview when nothing imported so the
+file can be imported again. An `insert_failed` reason is a fixed message; the database
+error is logged, not returned.
 
 ## Template structure
 ```ts

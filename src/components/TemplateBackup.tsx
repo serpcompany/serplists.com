@@ -20,6 +20,7 @@ import { api } from "@/lib/api";
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
 import { getAccessFailure } from "@/lib/api-errors";
 import { getBillingStatusQueryKey } from "@/lib/billing";
+import { formatImportFailure, formatImportSummaryMessage, getImportSummaryFromError } from "@/lib/templates/templateImportSummary";
 import { cn } from "@/lib/utils";
 
 interface TemplateBackupProps {
@@ -204,6 +205,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       return;
     }
 
+    setLastImportSummary(null);
     setIsImporting(true);
     try {
       // The importPreview has already been validated by parseTemplatesFromJSON
@@ -211,23 +213,22 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
         visibility: importVisibility
       });
       setLastImportSummary(result);
-      if (result.failed.length > 0) {
-        const failedTitles = result.failed
-          .slice(0, 2)
-          .map((failure) => failure.title)
-          .join(", ");
-        const overflowLabel =
-          result.failed.length > 2 ? ` +${result.failed.length - 2} more` : "";
-        toast.error(`Imported ${result.imported}/${result.total}. Failed: ${failedTitles}${overflowLabel}`);
-      } else {
-        toast.success(`Successfully imported ${result.imported}/${result.total} templates`);
-      }
+      const { kind, message } = formatImportSummaryMessage(result);
+      toast[kind](message);
       setImportPreview(null);
       // Reset file input
       const fileInput = document.getElementById('template-file-input') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
     } catch (error) {
-      await handleBackupFailure(error, "Failed to import templates");
+      // When every template fails, the API still sends the per-template summary. Show it,
+      // and keep the preview so the file can be fixed and imported again.
+      const summary = getImportSummaryFromError(error);
+      if (summary) {
+        setLastImportSummary(summary);
+        toast.error(formatImportSummaryMessage(summary).message);
+      } else {
+        await handleBackupFailure(error, "Failed to import templates");
+      }
     } finally {
       setIsImporting(false);
     }
@@ -625,7 +626,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                           </p>
                           <ul className="text-amber-700 dark:text-amber-300 mt-1 space-y-1">
                             {lastImportSummary.failed.map((failure) => <li key={`${failure.index}-${failure.title}`}>
-                                • {failure.title}: {failure.reason}
+                                • {formatImportFailure(failure)}
                               </li>)}
                           </ul>
                         </div>

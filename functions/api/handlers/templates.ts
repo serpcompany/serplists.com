@@ -693,10 +693,16 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             visibility: isPublic ? 'public' : 'private',
           });
         } catch (err) {
+          // The reason is shown to the user; the database error stays in the logs.
+          log('error', 'template_import_insert_failed', {
+            userId,
+            index,
+            error: err instanceof Error ? err.message : String(err),
+          });
           summary.failed.push({
             index,
             title: template.title,
-            reason: err instanceof Error ? err.message : 'Unknown error',
+            reason: 'Could not save this template. Try importing it again.',
             code: 'insert_failed',
           });
         }
