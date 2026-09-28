@@ -40,6 +40,8 @@ export function TemplateCard({
     (total, section) => total + section.items.length,
     0,
   );
+  const title = template.title.trim();
+  const actionsLabel = title ? `Actions for ${title}` : 'Template actions';
 
   return (
     <div className="group relative overflow-hidden rounded-lg border border-border bg-card transition-all hover:border-muted-foreground/30">
@@ -72,11 +74,12 @@ export function TemplateCard({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                aria-label={actionsLabel}
+                className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100"
                 size="icon"
                 variant="ghost"
               >
-                <MoreHorizontal className="h-4 w-4" />
+                <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
@@ -147,8 +150,18 @@ export function TemplateCard({
         </div>
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-card to-transparent p-4 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
-        <Button className="w-full" onClick={() => onStartRun(template.id)} size="sm">
+      {/* A pointer shortcut only: keyboard and screen reader users start runs from the
+          actions menu, so this hidden, clipped copy never takes focus. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-card to-transparent p-4 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100"
+      >
+        <Button
+          className="w-full"
+          onClick={() => onStartRun(template.id)}
+          size="sm"
+          tabIndex={-1}
+        >
           <Play className="mr-2 h-3.5 w-3.5" />
           Start Run
         </Button>

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { ChecklistTemplate } from '@/types/checklist';
 
+import { repoTemplates } from '@/lib/repoTemplateCatalog';
+
 import {
   buildDiscoveryCategories,
   filterAndSortTemplates,
@@ -58,6 +60,37 @@ describe('discovery-utils', () => {
     });
 
     expect(filtered.map((template) => template.id)).toEqual(['gamma', 'alpha']);
+  });
+
+  it('sorts never-edited templates by creation date under recent', () => {
+    const neverEdited: ChecklistTemplate = {
+      ...templates[0],
+      id: 'delta',
+      title: 'Delta Fresh',
+      createdAt: '2024-05-01T00:00:00Z',
+      updatedAt: '',
+    };
+    const input = [templates[0], neverEdited, templates[1], templates[2]];
+
+    for (const ordering of [input, [...input].reverse()]) {
+      const filtered = filterAndSortTemplates(ordering, { sortBy: 'recent' });
+      expect(filtered.map((template) => template.id)).toEqual(['delta', 'gamma', 'beta', 'alpha']);
+    }
+  });
+
+  it('lists a template published yesterday above the bundled starter templates under recent', () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const published: ChecklistTemplate = {
+      ...templates[0],
+      id: 'fresh',
+      title: 'Zulu Fresh Template',
+      createdAt: yesterday,
+      updatedAt: yesterday,
+    };
+
+    const filtered = filterAndSortTemplates([...repoTemplates, published], { sortBy: 'recent' });
+
+    expect(filtered[0].id).toBe('fresh');
   });
 
   it('sorts by structural popularity when requested', () => {

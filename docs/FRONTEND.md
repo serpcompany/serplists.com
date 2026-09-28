@@ -45,7 +45,9 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
   that needs one Template or run never loads a list just to look it up. A catalog miss reads every public Template from D1
   ([D1 cost](design-docs/d1-cost.md)), so pages that only need official templates use
   the bundled `repoTemplates`. The catalog's query key has no user id because the
-  catalog is the same for everyone.
+  catalog is the same for everyone. Only pages that display the catalog may load it;
+  `tests/unit/contexts/catalogConsumers.test.ts` lists them, and data built on the
+  server (such as the import/export pack) never needs it on the client.
 - Template detail pages never show a copy from a list: a list is refetched after an
   edit only while a page observes it, so an unobserved copy can be arbitrarily old. The
   public template page loads its template from the API on every visit (bundled library

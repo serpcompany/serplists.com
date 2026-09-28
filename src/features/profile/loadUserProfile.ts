@@ -6,6 +6,7 @@ import {
   REPO_TEMPLATE_OWNER_NAME,
   REPO_TEMPLATE_OWNER_SLUG,
   REPO_TEMPLATE_USER_ID,
+  getRepoCatalogCreatedAt,
   repoTemplates,
 } from '@/lib/repoTemplateCatalog';
 import { normalizeSections } from '@/lib/utils/checklistSections';
@@ -144,7 +145,7 @@ const getFallbackProfileState = (
       full_name: REPO_TEMPLATE_OWNER_NAME,
       username: REPO_TEMPLATE_OWNER_SLUG,
       avatar_url: null,
-      created_at: repoTemplates[0]?.createdAt || new Date().toISOString(),
+      created_at: getRepoCatalogCreatedAt(repoTemplates),
     },
     templates: repoTemplates,
   };

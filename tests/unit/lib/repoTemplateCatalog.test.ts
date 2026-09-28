@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION } from "@/lib/schemas/checklistSchema";
 import {
+  REPO_TEMPLATE_FALLBACK_TIMESTAMP,
   REPO_TEMPLATE_OWNER_NAME,
   REPO_TEMPLATE_OWNER_SLUG,
   REPO_TEMPLATE_USER_ID,
@@ -9,10 +10,146 @@ import {
   isRepoTemplate,
   mergeAccountTemplateCollections,
   mergePublicTemplateCollections,
+  getRepoCatalogCreatedAt,
   normalizeRepoTemplateSources,
+  repoTemplates,
 } from "@/lib/repoTemplateCatalog";
+import bundledPack from "@/data/public-template-packs/foundational-checklists.json";
+
+const portablePackSource = (exportedAt: string) => ({
+  "../data/public-template-packs/portable.json": {
+    default: {
+      kind: "serplists-template-pack",
+      schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
+      exportedAt,
+      templates: [
+        {
+          title: "Portable Checklist",
+          slug: "portable-checklist",
+          visibility: "public",
+          sections: [{ title: "Prep", items: [{ title: "Review checklist" }] }],
+        },
+      ],
+    },
+  },
+});
 
 describe("repo template catalog", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("dates portable pack templates by the pack's exportedAt, not the load time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
+    const first = normalizeRepoTemplateSources(portablePackSource("2026-03-22T00:00:00.000Z"));
+
+    vi.setSystemTime(new Date("2031-06-15T12:00:00.000Z"));
+    const second = normalizeRepoTemplateSources(portablePackSource("2026-03-22T00:00:00.000Z"));
+
+    expect(first[0].createdAt).toBe("2026-03-22T00:00:00.000Z");
+    expect(first[0].updatedAt).toBe("2026-03-22T00:00:00.000Z");
+    expect(second.map(({ createdAt, updatedAt }) => ({ createdAt, updatedAt }))).toEqual(
+      first.map(({ createdAt, updatedAt }) => ({ createdAt, updatedAt })),
+    );
+  });
+
+  it("uses a fixed fallback date when a pack's exportedAt is not a date", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
+    const [template] = normalizeRepoTemplateSources(portablePackSource("not-a-date"));
+
+    expect(REPO_TEMPLATE_FALLBACK_TIMESTAMP).toBe("2026-03-22T00:00:00.000Z");
+    expect(template.createdAt).toBe(REPO_TEMPLATE_FALLBACK_TIMESTAMP);
+    expect(template.updatedAt).toBe(REPO_TEMPLATE_FALLBACK_TIMESTAMP);
+  });
+
+  it("keeps a template's own dates and gives undated ones the pack date", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
+    const templates = normalizeRepoTemplateSources({
+      "../data/public-template-packs/backup.json": {
+        default: {
+          version: "1.0.0",
+          exportedAt: "2026-04-01T00:00:00.000Z",
+          templates: [
+            {
+              id: "dated",
+              title: "Dated",
+              userId: "example-user",
+              createdAt: "2026-01-05T00:00:00.000Z",
+              updatedAt: "2026-02-05T00:00:00.000Z",
+              slug: "dated",
+              sections: [{ id: "s", title: "S", items: [{ id: "i", title: "I" }] }],
+            },
+            {
+              title: "Undated in pack",
+              slug: "undated-in-pack",
+              sections: [{ id: "s", title: "S", items: [{ id: "i", title: "I" }] }],
+            },
+          ],
+        },
+      },
+      "../data/public-template-packs/array.json": {
+        default: [
+          {
+            title: "Undated",
+            slug: "undated",
+            sections: [{ id: "s", title: "S", items: [{ id: "i", title: "I" }] }],
+          },
+        ],
+      },
+    });
+
+    const bySlug = new Map(templates.map((template) => [template.slug, template]));
+    expect(bySlug.get("dated")).toMatchObject({
+      createdAt: "2026-01-05T00:00:00.000Z",
+      updatedAt: "2026-02-05T00:00:00.000Z",
+    });
+    expect(bySlug.get("undated-in-pack")).toMatchObject({
+      createdAt: "2026-04-01T00:00:00.000Z",
+      updatedAt: "2026-04-01T00:00:00.000Z",
+    });
+    expect(bySlug.get("undated")).toMatchObject({
+      createdAt: REPO_TEMPLATE_FALLBACK_TIMESTAMP,
+      updatedAt: REPO_TEMPLATE_FALLBACK_TIMESTAMP,
+    });
+  });
+
+  it("takes the date from the pack whose copy of a slug wins", () => {
+    const templates = normalizeRepoTemplateSources({
+      ...portablePackSource("2026-03-22T00:00:00.000Z"),
+      "../data/public-template-packs/z-later.json": {
+        default: {
+          ...portablePackSource("2026-05-01T00:00:00.000Z")["../data/public-template-packs/portable.json"].default,
+        },
+      },
+    });
+
+    expect(templates).toHaveLength(1);
+    expect(templates[0].updatedAt).toBe("2026-05-01T00:00:00.000Z");
+  });
+
+  it("dates the bundled starter templates by their pack", () => {
+    expect(repoTemplates.length).toBeGreaterThan(0);
+    repoTemplates.forEach((template) => {
+      expect(template.createdAt).toBe(bundledPack.exportedAt);
+      expect(template.updatedAt).toBe(bundledPack.exportedAt);
+    });
+    expect(getRepoCatalogCreatedAt(repoTemplates)).toBe(bundledPack.exportedAt);
+  });
+
+  it("reports the earliest repo template date as the library's creation date", () => {
+    const [template] = repoTemplates;
+    expect(
+      getRepoCatalogCreatedAt([
+        { ...template, createdAt: "2026-05-01T00:00:00.000Z" },
+        { ...template, createdAt: "2026-02-01T00:00:00.000Z" },
+      ]),
+    ).toBe("2026-02-01T00:00:00.000Z");
+    expect(getRepoCatalogCreatedAt([])).toBe(REPO_TEMPLATE_FALLBACK_TIMESTAMP);
+  });
+
   it("assigns repo templates to the SERP library profile", () => {
     expect(REPO_TEMPLATE_OWNER_SLUG).toBe("serp");
     expect(REPO_TEMPLATE_OWNER_NAME).toBe("SERP Lists Library");

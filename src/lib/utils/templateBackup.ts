@@ -1,3 +1,4 @@
+import { ZodError } from "zod";
 import { 
   validateBackup, 
   validatePortableTemplatePackEnvelope,
@@ -11,6 +12,7 @@ import type {
   PortableTemplatePack,
   TemplateBackup
 } from "@/lib/schemas/checklistSchema";
+import { formatValidationError } from "@/lib/schemas/formatValidationError";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
 import {
   detectTemplateSourceExtension,
@@ -35,6 +37,11 @@ export type TemplateBackupExport = Omit<TemplateBackup, "templates"> & {
 export type TemplateImportResult = {
   templates: ChecklistTemplate[];
   warnings: TemplateImportWarning[];
+};
+
+export type ParseTemplatesOptions = {
+  /** Date for templates the source does not date. Defaults to the parse time. */
+  fallbackTimestamp?: string;
 };
 
 const generateTempId = (prefix: string) => {
@@ -82,8 +89,10 @@ const coerceSections = (input: unknown): ChecklistSection[] | null => {
   ]);
 };
 
-const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTemplate => {
-  const now = new Date().toISOString();
+const normalizeImportTemplate = (
+  template: ChecklistTemplateImport,
+  now = new Date().toISOString(),
+): ChecklistTemplate => {
   const hasSectionsField = typeof template.sections !== "undefined" || typeof template.items !== "undefined";
   if (!hasSectionsField) {
     throw new Error(`Template "${template.title}" is missing sections/items`);
@@ -114,8 +123,10 @@ const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTe
   };
 };
 
-const normalizePortableTemplate = (template: PortableChecklistTemplate): ChecklistTemplate => {
-  const now = new Date().toISOString();
+const normalizePortableTemplate = (
+  template: PortableChecklistTemplate,
+  now = new Date().toISOString(),
+): ChecklistTemplate => {
   const sections = coerceSections(template.sections);
   if (!sections) {
     throw new Error(`Template "${template.title}" has invalid sections`);
@@ -281,7 +292,7 @@ export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
         if (error instanceof SyntaxError) {
           reject(new Error("Invalid JSON file format"));
         } else {
-          reject(new Error(`Backup validation failed: ${(error as Error).message}`));
+          reject(new Error(`Backup validation failed: ${formatValidationError(error)}`));
         }
       }
     };
@@ -294,21 +305,25 @@ export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
   });
 };
 
-export const parseTemplatesFromData = (data: unknown): TemplateImportResult => {
+export const parseTemplatesFromData = (
+  data: unknown,
+  { fallbackTimestamp }: ParseTemplatesOptions = {},
+): TemplateImportResult => {
+  const now = fallbackTimestamp ?? new Date().toISOString();
   try {
     let rawTemplates: ChecklistTemplateImport[] = [];
     let normalizedTemplates: ChecklistTemplate[] = [];
 
     if (Array.isArray(data)) {
       rawTemplates = validateTemplateImportArray(data);
-      normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template));
+      normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template, now));
     } else if (data && typeof data === "object" && "kind" in data && (data as { kind?: unknown }).kind === "serplists-template-pack") {
       const portablePackEnvelope = validatePortableTemplatePackEnvelope(data);
       if (portablePackEnvelope.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
         throw new Error(`Unsupported portable template schema version: ${portablePackEnvelope.schemaVersion}`);
       }
       const portablePack = validatePortableTemplatePack(data);
-      normalizedTemplates = portablePack.templates.map((template) => normalizePortableTemplate(template));
+      normalizedTemplates = portablePack.templates.map((template) => normalizePortableTemplate(template, now));
     } else if (data && typeof data === "object" && "templates" in data) {
       try {
         const backup = validateBackup(data);
@@ -316,7 +331,7 @@ export const parseTemplatesFromData = (data: unknown): TemplateImportResult => {
       } catch {
         rawTemplates = validateTemplateImportArray((data as { templates: unknown }).templates);
       }
-      normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template));
+      normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template, now));
     } else {
       throw new Error("Unsupported JSON format (expected backup or template array)");
     }
@@ -325,7 +340,7 @@ export const parseTemplatesFromData = (data: unknown): TemplateImportResult => {
 
     return { templates: normalizedTemplates, warnings };
   } catch (error) {
-    throw new Error(`Template validation failed: ${(error as Error).message}`);
+    throw new Error(`Template validation failed: ${formatValidationError(error)}`);
   }
 };
 
@@ -378,7 +393,11 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
     if (error instanceof SyntaxError) {
       throw new Error("Invalid JSON file format");
     }
-    throw error instanceof Error ? error : new Error("Failed to parse template file");
+    // Markdown and YAML parsers throw raw ZodErrors, whose message is a JSON dump.
+    if (error instanceof ZodError) {
+      throw new Error(`Template validation failed: ${formatValidationError(error)}`);
+    }
+    throw new Error(error instanceof Error ? formatValidationError(error) : "Failed to parse template file");
   }
 };
 
@@ -416,6 +435,24 @@ export const generateUniqueIds = (templates: ChecklistTemplate[]): ChecklistTemp
   });
 };
 
+export type ImportVisibility = NonNullable<TemplateImportOptions["visibility"]>;
+
+/**
+ * Whether an imported template ends up public under the chosen visibility override.
+ * The import preview and the import payload both use this, and the server applies
+ * the same rule (functions/api/handlers/templates.ts), so they cannot disagree.
+ * A template with no visibility flag is private unless the override says otherwise.
+ */
+export const resolveImportIsPublic = (
+  isPublic: boolean | undefined,
+  visibility: ImportVisibility = "preserve",
+): boolean => (visibility === "preserve" ? isPublic ?? false : visibility === "public");
+
+export const countImportPublicTemplates = (
+  templates: Pick<ChecklistTemplate, "isPublic">[],
+  visibility: ImportVisibility = "preserve",
+): number => templates.filter((template) => resolveImportIsPublic(template.isPublic, visibility)).length;
+
 /**
  * Prepare templates for import (clean and validate)
  */
@@ -425,17 +462,11 @@ export const prepareTemplatesForImport = (
   options: TemplateImportOptions = {}
 ): ChecklistTemplate[] => {
   const templatesWithUniqueIds = generateUniqueIds(templates);
-  const visibility = options.visibility ?? "preserve";
-  
+
   return templatesWithUniqueIds.map(template => ({
     ...template,
     userId,
-    isPublic:
-      visibility === "public"
-        ? true
-        : visibility === "private"
-          ? false
-          : template.isPublic ?? false,
+    isPublic: resolveImportIsPublic(template.isPublic, options.visibility),
     // Reset completion states for fresh imports
     sections: template.sections.map(section => ({
       ...section,

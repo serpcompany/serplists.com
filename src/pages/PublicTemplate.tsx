@@ -13,7 +13,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import { analytics } from '@/lib/analytics';
 import {
-  handleUpgradeRequired,
+  handleUpgradeRequiredForContext,
   navigateToLoginWithReturnPath,
 } from '@/lib/access-flow';
 import {
@@ -90,8 +90,10 @@ const PublicTemplate = () => {
     analytics.trackTemplateView(displayTemplate.id, displayTemplate.title);
   }, [displayTemplate]);
 
+  // Save and Start Run both act in the active context, so an Organization at its limit
+  // needs an Organization plan; a Personal checkout cannot lift it.
   const handleUpgrade = () =>
-    handleUpgradeRequired({
+    handleUpgradeRequiredForContext({
       billingEnabled: billingState.billingEnabled,
       isTeamWorkspace,
     });
@@ -103,10 +105,9 @@ const PublicTemplate = () => {
     startRunInFlight.current = true;
     setIsCreatingRun(true);
     try {
-      // This page has no name field, so the default must always fit the run title limit.
-      const result = await startRun(
-        buildDefaultRunName(template.title, new Date().toLocaleDateString()),
-      );
+      // This page has no name field: it uses the default name the other Start Run entry
+      // points give, which always fits the run title limit.
+      const result = await startRun(buildDefaultRunName(template.title));
 
       if (result.kind === 'login_required') {
         navigateToLoginWithReturnPath(navigate, location);

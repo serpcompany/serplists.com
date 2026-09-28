@@ -177,7 +177,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     tags: typeof template.tags === 'string' ? JSON.parse(template.tags) : (Array.isArray(template.tags) ? template.tags as string[] : []),
     userId: typeof template.user_id === 'string' ? template.user_id : '',
     createdAt: typeof template.created_at === 'string' ? template.created_at : '',
-    updatedAt: typeof template.updated_at === 'string' ? template.updated_at : '',
+    // A never-edited template has a null updated_at; its last activity is its creation.
+    updatedAt: String(template.updated_at || template.created_at || ''),
     isPublic: Boolean(template.is_public),
     slug: typeof template.slug === 'string' ? template.slug : '',
     version: typeof template.version === 'number' ? template.version : 1,
@@ -410,9 +411,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await queryClient.refetchQueries({ queryKey: ['runs'] });
       toast.success("Checklist run created successfully");
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    }
+    // No onError toast: every caller maps the failure (login, the context's
+    // upgrade flow, or one error message), so a toast here would duplicate it.
   });
 
   const updateRunMutation = useMutation({

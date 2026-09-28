@@ -1,82 +1,73 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { mockCreateBillingCheckout, mockToastError } = vi.hoisted(() => ({
-  mockCreateBillingCheckout: vi.fn(),
-  mockToastError: vi.fn(),
+const mocks = vi.hoisted(() => ({
+  createBillingCheckout: vi.fn(),
+  toastError: vi.fn(),
 }));
 
 vi.mock('@/lib/api', () => ({
-  api: { createBillingCheckout: mockCreateBillingCheckout },
+  api: { createBillingCheckout: mocks.createBillingCheckout },
 }));
 
 vi.mock('sonner', () => ({
-  toast: { error: mockToastError, success: vi.fn() },
+  toast: { error: mocks.toastError, success: vi.fn() },
 }));
 
 import {
-  handleUpgradeRequired,
   ORGANIZATION_UPGRADE_MESSAGE,
+  handleUpgradeRequiredForContext,
 } from '@/lib/access-flow';
 import { BILLING_UNAVAILABLE_MESSAGE } from '@/lib/api-errors';
 
-const originalWindow = (globalThis as { window?: unknown }).window;
-
-describe('handleUpgradeRequired', () => {
-  beforeEach(() => {
-    mockCreateBillingCheckout.mockReset();
-    mockToastError.mockReset();
-    Object.defineProperty(globalThis, 'window', {
-      configurable: true,
-      value: { location: { href: 'https://serplists.com/profile/alice/t' } },
-    });
-  });
+describe('handleUpgradeRequiredForContext', () => {
+  const originalWindow = globalThis.window;
 
   afterEach(() => {
-    Object.defineProperty(globalThis, 'window', {
-      configurable: true,
-      value: originalWindow,
-    });
+    mocks.createBillingCheckout.mockReset();
+    mocks.toastError.mockReset();
+    globalThis.window = originalWindow;
   });
 
-  it('never starts a Personal checkout while an Organization is active', async () => {
-    const started = await handleUpgradeRequired({
+  it('starts a Personal checkout in the Personal context', async () => {
+    const location = { href: 'http://localhost/dashboard/templates' };
+    globalThis.window = { location } as unknown as Window & typeof globalThis;
+    mocks.createBillingCheckout.mockResolvedValue({ url: 'https://checkout.example/session' });
+
+    const redirecting = await handleUpgradeRequiredForContext({
+      billingEnabled: true,
+      isTeamWorkspace: false,
+    });
+
+    expect(mocks.createBillingCheckout).toHaveBeenCalledTimes(1);
+    expect(location.href).toBe('https://checkout.example/session');
+    expect(mocks.toastError).not.toHaveBeenCalled();
+    expect(redirecting).toBe(true);
+  });
+
+  it('shows the Organization plan message and never starts a Personal checkout', async () => {
+    const redirecting = await handleUpgradeRequiredForContext({
       billingEnabled: true,
       isTeamWorkspace: true,
     });
 
-    expect(started).toBe(false);
-    expect(mockCreateBillingCheckout).not.toHaveBeenCalled();
-    expect(mockToastError).toHaveBeenCalledWith(ORGANIZATION_UPGRADE_MESSAGE);
+    expect(mocks.createBillingCheckout).not.toHaveBeenCalled();
+    expect(mocks.toastError).toHaveBeenCalledTimes(1);
+    expect(mocks.toastError).toHaveBeenCalledWith(ORGANIZATION_UPGRADE_MESSAGE);
     expect(ORGANIZATION_UPGRADE_MESSAGE).toBe(
       'This Organization needs a paid plan before using this feature.',
     );
+    expect(redirecting).toBe(false);
   });
 
-  it('starts Personal checkout in Personal', async () => {
-    mockCreateBillingCheckout.mockResolvedValue({
-      url: 'https://checkout.stripe.com/c/pay/test',
-    });
-
-    const started = await handleUpgradeRequired({
-      billingEnabled: true,
-      isTeamWorkspace: false,
-    });
-
-    expect(started).toBe(true);
-    expect(mockCreateBillingCheckout).toHaveBeenCalledTimes(1);
-    expect((globalThis as unknown as { window: Window }).window.location.href).toBe(
-      'https://checkout.stripe.com/c/pay/test',
-    );
-  });
-
-  it('shows the billing-unavailable message in Personal when billing is off', async () => {
-    const started = await handleUpgradeRequired({
+  it('reports billing as unavailable once when billing is disabled', async () => {
+    const redirecting = await handleUpgradeRequiredForContext({
       billingEnabled: false,
       isTeamWorkspace: false,
     });
 
-    expect(started).toBe(false);
-    expect(mockCreateBillingCheckout).not.toHaveBeenCalled();
-    expect(mockToastError).toHaveBeenCalledWith(BILLING_UNAVAILABLE_MESSAGE);
+    expect(mocks.createBillingCheckout).not.toHaveBeenCalled();
+    expect(mocks.toastError).toHaveBeenCalledTimes(1);
+    expect(mocks.toastError).toHaveBeenCalledWith(BILLING_UNAVAILABLE_MESSAGE);
+    expect(redirecting).toBe(false);
   });
 });

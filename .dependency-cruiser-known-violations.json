@@ -55,15 +55,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/components/TemplateBackup.tsx",
-    "to": "src/lib/api.ts",
-    "rule": {
-      "severity": "error",
-      "name": "screens-do-not-call-transport"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/pages/Pricing.tsx",
     "to": "src/lib/api.ts",
     "rule": {

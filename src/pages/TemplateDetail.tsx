@@ -76,7 +76,7 @@ import {
 import { buildTemplateHistoryTimeline } from '@/features/template-detail/templateHistoryTimeline';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import {
-  handleUpgradeRequired,
+  handleUpgradeRequiredForContext,
   navigateToLoginWithReturnPath,
 } from '@/lib/access-flow';
 import {
@@ -155,7 +155,7 @@ const TemplateDetail = () => {
   const historyEntries = buildTemplateHistoryTimeline(history?.data);
 
   const handleUpgrade = () =>
-    handleUpgradeRequired({
+    handleUpgradeRequiredForContext({
       billingEnabled: billingState.billingEnabled,
       isTeamWorkspace,
     });

@@ -42,11 +42,12 @@ export const ORGANIZATION_UPGRADE_MESSAGE =
   "This Organization needs a paid plan before using this feature.";
 
 /**
- * Handles an upgrade_required result in the ownership context that produced it.
- * Organization limits come from the Organization's plan, so a Personal Pro
- * checkout can never lift them: in an Organization this only explains the limit.
+ * Handles a 403 upgrade_required/limit_reached in the ownership context that
+ * produced it. Organization limits come from the Organization's plan, so a Personal
+ * Pro checkout can never lift them: in an Organization this only explains the limit.
+ * Resolves true when a checkout redirect has started.
  */
-export const handleUpgradeRequired = async (options: {
+export const handleUpgradeRequiredForContext = async (options: {
   billingEnabled: boolean;
   isTeamWorkspace: boolean;
 }): Promise<boolean> => {

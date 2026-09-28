@@ -1,6 +1,7 @@
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { buildCategorySlug } from '@/lib/routes';
+import { getTemplateRecencyTime } from '@/lib/templates/templateRecency';
 
 export type DiscoverySort = 'popular' | 'trending' | 'recent';
 
@@ -56,7 +57,7 @@ const compareByPopularity = (
   }
 
   return (
-    new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime() ||
+    getTemplateRecencyTime(right) - getTemplateRecencyTime(left) ||
     compareText(left.title, right.title)
   );
 };
@@ -72,8 +73,8 @@ const compareByTrending = (
     return rightItemCount - leftItemCount;
   }
 
-  const leftUpdatedAt = new Date(left.updatedAt).getTime();
-  const rightUpdatedAt = new Date(right.updatedAt).getTime();
+  const leftUpdatedAt = getTemplateRecencyTime(left);
+  const rightUpdatedAt = getTemplateRecencyTime(right);
 
   if (rightUpdatedAt !== leftUpdatedAt) {
     return rightUpdatedAt - leftUpdatedAt;
@@ -86,8 +87,8 @@ const compareByRecent = (
   left: ChecklistTemplate,
   right: ChecklistTemplate,
 ): number => {
-  const leftUpdatedAt = new Date(left.updatedAt).getTime();
-  const rightUpdatedAt = new Date(right.updatedAt).getTime();
+  const leftUpdatedAt = getTemplateRecencyTime(left);
+  const rightUpdatedAt = getTemplateRecencyTime(right);
 
   if (rightUpdatedAt !== leftUpdatedAt) {
     return rightUpdatedAt - leftUpdatedAt;

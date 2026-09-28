@@ -111,7 +111,10 @@ Template backup and portable import/export are implemented through `src/lib/util
 The portable contract is shared by uploaded files and repo-backed public packs.
 Repo packs live in `src/data/public-template-packs/*.json` and are normalized by
 the same validation path as uploaded packs. If a repo pack and D1 template have
-the same public slug, the repo entry wins in the public catalog. Saving a repo
+the same public slug, the repo entry wins in the public catalog. Repo templates
+are dated by their pack's `exportedAt` (a fixed fallback date when it is missing
+or invalid, never the page-load time), which drives the library's Recent sort and
+their published date, so bump `exportedAt` when a pack's content changes. Saving a repo
 template creates a private D1 template; starting a run uses its normalized
 sections and does not require a source D1 row.
 

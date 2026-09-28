@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Grid3X3,
   List,
@@ -34,16 +35,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useDashboardTemplatesModel } from '@/features/dashboard-templates/useDashboardTemplatesModel';
+import {
+  reportDashboardTemplateRunFailure,
+  useDashboardTemplatesModel,
+} from '@/features/dashboard-templates/useDashboardTemplatesModel';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
 import { buildDefaultRunName, RUN_TITLE_MAX_LENGTH } from '@/lib/runs/runName';
+import { compareTemplatesByRecent } from '@/lib/templates/templateRecency';
+import {
+  handleUpgradeRequiredForContext,
+  navigateToLoginWithReturnPath,
+} from '@/lib/access-flow';
 
 type SortOption = 'recent' | 'alphabetical' | 'tasks';
 type VisibilityFilter = 'all' | 'public' | 'private';
 
 const Templates = () => {
   const model = useDashboardTemplatesModel();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [runName, setRunName] = useState('');
+  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+  const isLaunchingRun = model.isCreatingRun || isStartingCheckout;
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useViewModePreference({
     surface: 'dashboard-templates',
@@ -55,8 +68,9 @@ const Templates = () => {
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
   const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
 
+  // A blank name submits this same default (see resolveRunName).
   const defaultRunName = model.selectedTemplate
-    ? buildDefaultRunName(model.selectedTemplate.title, new Date().toLocaleString())
+    ? buildDefaultRunName(model.selectedTemplate.title)
     : '';
 
   const filteredTemplates = useMemo(() => {
@@ -95,14 +109,12 @@ const Templates = () => {
           return rightTasks - leftTasks;
         }
 
-        return (
-          new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
-        );
+        return compareTemplatesByRecent(left, right);
       });
   }, [filterVisibility, model.templates, searchQuery, sortBy]);
 
   const handleRunDialogChange = (open: boolean) => {
-    if (open) {
+    if (open || isStartingCheckout) {
       return;
     }
 
@@ -110,17 +122,40 @@ const Templates = () => {
     model.closeRunLauncher();
   };
 
+  const startUpgrade = async (): Promise<boolean> => {
+    // Keep the dialog busy until the checkout redirect starts, so a second
+    // click cannot open a second checkout session.
+    setIsStartingCheckout(true);
+    // No billing-status fetch here: a disabled billing config answers checkout
+    // with 503 billing_unavailable, which startBillingCheckout reports.
+    const redirecting = await handleUpgradeRequiredForContext({
+      billingEnabled: true,
+      isTeamWorkspace: Boolean(model.isTeamWorkspace),
+    });
+    if (!redirecting) {
+      setIsStartingCheckout(false);
+    }
+    return redirecting;
+  };
+
   const handleRunSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
-    const result = await model.createRunFromTemplate(runName.trim() || undefined);
-
-    if (result.kind === 'error') {
-      toast.error(result.message);
+    if (isLaunchingRun) {
       return;
     }
 
-    setRunName('');
+    const result = await model.createRunFromTemplate(runName);
+
+    if (result.kind === 'ok') {
+      setRunName('');
+      return;
+    }
+
+    await reportDashboardTemplateRunFailure(result, {
+      navigateToLogin: () => navigateToLoginWithReturnPath(navigate, location),
+      showError: (message) => toast.error(message),
+      upgrade: startUpgrade,
+    });
   };
 
   const handleDeleteTemplate = async () => {
@@ -317,17 +352,17 @@ const Templates = () => {
                 type="button"
                 variant="outline"
                 onClick={() => handleRunDialogChange(false)}
-                disabled={model.isCreatingRun}
+                disabled={isLaunchingRun}
                 className="rounded-md"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                disabled={!model.selectedTemplateId || model.isCreatingRun}
+                disabled={!model.selectedTemplateId || isLaunchingRun}
                 className="rounded-md"
               >
-                {model.isCreatingRun ? 'Creating...' : 'Start Run'}
+                {isLaunchingRun ? 'Creating...' : 'Start Run'}
               </Button>
             </DialogFooter>
           </form>

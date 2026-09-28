@@ -94,9 +94,27 @@ instead of inferring access state from message text:
 - `403 limit_reached` means the active plan limit has been reached.
 - `503 billing_unavailable` means checkout cannot currently be started.
 
+Route `upgrade_required` and `limit_reached` through
+`handleUpgradeRequiredForContext` in `src/lib/access-flow.ts` so every page
+answers them the same way: Personal starts the Pro checkout, and an Organization
+shows the Organization-plan message without starting a Personal checkout, since
+Personal Pro does not lift Organization limits. Report each failure once. Start
+Run follows this on My Templates, template detail and the public template page,
+because a run always starts in the active context. Copying a template (Save on the
+public template page, Copy on template detail) follows it too, because the copy
+goes to the active context: Personal keeps its Pro gate and starts the Personal
+checkout, and an Organization's copy is sent for the API to check against the
+Organization's Template limit.
+
 Billing status query keys must include the current user id (or an explicit
 guest marker). Never reuse a cached plan between accounts, and do not render a
 Free or Pro label as known while billing status is still loading.
+
+Feature gates read the plan through `useBillingStatus` (`src/hooks/useBillingStatus.ts`),
+which reports `loading`, `error` or `known`. Only a `known` Free plan shows an
+upgrade prompt or starts checkout. When the status check fails, offer a retry
+and no upgrade prompt: import/export lets the action through for the server to
+decide, and copying a public Template asks the user to try again.
 
 ### Manual personal-plan overrides
 

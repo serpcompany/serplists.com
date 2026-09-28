@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { HelmetProvider } from 'react-helmet-async';
 import { Route, Routes } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PublicTemplate from '@/pages/PublicTemplate';
 
@@ -15,6 +15,7 @@ import {
   buildConsoleTemplatePath,
   resolvePublicTemplateOwnerSlug,
 } from '@/lib/routes';
+import { buildDefaultRunName, RUN_TITLE_MAX_LENGTH } from '@/lib/runs/runName';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 const {
@@ -710,14 +711,38 @@ describe('PublicTemplate default run name', () => {
     workspaceState.isWorkspaceLoading = false;
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('names the run within the API limit for a template title at the limit', async () => {
     const startRun = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1' });
-    renderPublishedRoute({ ...publishedClipyTemplate, title: 'T'.repeat(160) }, { startRun });
+    renderPublishedRoute(
+      { ...publishedClipyTemplate, title: 'T'.repeat(RUN_TITLE_MAX_LENGTH) },
+      { startRun },
+    );
 
     await lastViewProps().onStartRun();
 
     const runName = startRun.mock.calls[0]?.[0] as string;
-    expect(runName.length).toBeLessThanOrEqual(160);
+    expect(runName.length).toBeLessThanOrEqual(RUN_TITLE_MAX_LENGTH);
     expect(runName.startsWith('TTT')).toBe(true);
+  });
+
+  it('names the run with the default My Templates and template detail give', async () => {
+    const now = new Date('2026-09-28T10:15:00.000Z');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
+    const startRun = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1' });
+    renderPublishedRoute(publishedClipyTemplate, { startRun });
+
+    await lastViewProps().onStartRun();
+
+    expect(startRun).toHaveBeenCalledWith(
+      buildDefaultRunName(publishedClipyTemplate.title, now),
+    );
+    expect(startRun.mock.calls[0]?.[0]).toBe(
+      `${publishedClipyTemplate.title} - ${now.toLocaleString()}`,
+    );
   });
 });
