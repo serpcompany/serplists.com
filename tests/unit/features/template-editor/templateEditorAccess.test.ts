@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   countContextTemplates,
+  findOtherContextDraft,
   isTemplateLimitReached,
   ORGANIZATION_TEMPLATE_PLAN_MESSAGE,
   resolveTemplateLimitNotice,
@@ -99,5 +100,56 @@ describe("template limit pre-check", () => {
     expect(shouldLoadTemplateCountForLimit({ isCreate: false, maxTemplates: 1 })).toBe(false);
     expect(shouldLoadTemplateCountForLimit({ isCreate: true, maxTemplates: null })).toBe(false);
     expect(shouldLoadTemplateCountForLimit({ isCreate: true, maxTemplates: undefined })).toBe(false);
+  });
+});
+
+// After a confirmed sign-out the tab signs back in to Personal, so a draft kept in an
+// Organization is offered from there, with a switch to the Organization it belongs to.
+describe("findOtherContextDraft", () => {
+  const orgDraft = { teamId: "org-1", savedAt: "2026-09-28T11:00:00.000Z" };
+  const personalDraft = { teamId: null, savedAt: "2026-09-28T10:00:00.000Z" };
+  const canCreateIn = (teamId: string | null) => teamId === null || teamId === "org-1";
+
+  it("offers a draft kept in an Organization the user can still create templates in", () => {
+    expect(
+      findOtherContextDraft([orgDraft], { activeTeamId: undefined, workspaceReady: true, canCreateIn }),
+    ).toBe(orgDraft);
+  });
+
+  it("offers nothing for an Organization the user left or can no longer edit in", () => {
+    expect(
+      findOtherContextDraft([{ ...orgDraft, teamId: "org-2" }], {
+        activeTeamId: undefined,
+        workspaceReady: true,
+        canCreateIn,
+      }),
+    ).toBeNull();
+  });
+
+  // The stored Organization may still resolve: the tab could be about to move into it.
+  it("decides nothing while the Organization list is loading", () => {
+    expect(
+      findOtherContextDraft([orgDraft], { activeTeamId: undefined, workspaceReady: false, canCreateIn }),
+    ).toBeNull();
+  });
+
+  it("offers a Personal draft from an Organization, and never the active context's own", () => {
+    expect(
+      findOtherContextDraft([orgDraft, personalDraft], { activeTeamId: "org-1", workspaceReady: true, canCreateIn }),
+    ).toBe(personalDraft);
+    expect(
+      findOtherContextDraft([personalDraft], { activeTeamId: undefined, workspaceReady: true, canCreateIn }),
+    ).toBeNull();
+  });
+
+  it("offers the first (newest) draft that can be restored", () => {
+    const olderOrgDraft = { ...orgDraft, savedAt: "2026-09-28T09:00:00.000Z" };
+    expect(
+      findOtherContextDraft([{ ...orgDraft, teamId: "org-2" }, olderOrgDraft], {
+        activeTeamId: undefined,
+        workspaceReady: true,
+        canCreateIn,
+      }),
+    ).toBe(olderOrgDraft);
   });
 });

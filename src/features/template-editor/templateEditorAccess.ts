@@ -102,3 +102,24 @@ export const resolveTemplateLimitNotice = (
   context: AccessContext,
 ): TemplateEditorAccessNotice | null =>
   limitReached ? upgradeNotice(TEMPLATE_LIMIT_MESSAGE, context) : null;
+
+// A new template's draft kept in another context: a confirmed sign-out returns the tab to
+// Personal, so a draft kept in an Organization is not the active context's after sign-in.
+// Offered (newest first) only for a context the user can still create templates in, and
+// only once the Organization list is known: the tab may still be moving into one.
+export const findOtherContextDraft = <T extends { teamId: string | null }>(
+  drafts: T[],
+  params: {
+    activeTeamId?: string;
+    workspaceReady: boolean;
+    canCreateIn: (teamId: string | null) => boolean;
+  },
+): T | null => {
+  if (!params.workspaceReady) {
+    return null;
+  }
+  const activeTeamId = params.activeTeamId ?? null;
+  return (
+    drafts.find((draft) => draft.teamId !== activeTeamId && params.canCreateIn(draft.teamId)) ?? null
+  );
+};

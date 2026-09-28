@@ -5,6 +5,7 @@ import {
   clearTemplateEditDraft,
   getTemplateDraftKey,
   getTemplateEditDraftKey,
+  listTemplateDraftContexts,
   readTemplateDraft,
   readTemplateEditDraft,
   saveTemplateDraft,
@@ -14,10 +15,14 @@ import {
 } from "@/features/template-editor/templateDraftStore";
 import { buildTemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
-const createStorage = (): TemplateDraftStorage & { items: Map<string, string> } => {
+const createStorage = (): TemplateDraftStorage & Pick<Storage, "key" | "length"> & { items: Map<string, string> } => {
   const items = new Map<string, string>();
   return {
     items,
+    get length() {
+      return items.size;
+    },
+    key: (index) => Array.from(items.keys())[index] ?? null,
     getItem: (key) => items.get(key) ?? null,
     setItem: (key, value) => {
       items.set(key, value);
@@ -183,5 +188,54 @@ describe("existing template drafts", () => {
     expect(saveTemplateEditDraft(owner, { values: draftValues }, throwingStorage)).toBe(false);
     expect(readTemplateEditDraft(owner, throwingStorage)).toBeNull();
     expect(() => clearTemplateEditDraft(owner, throwingStorage)).not.toThrow();
+  });
+});
+
+// A confirmed sign-out returns the tab to Personal, so after sign-in the new-template
+// editor looks for the user's kept drafts in every context, not only the active one.
+describe("listing a user's kept drafts across contexts", () => {
+  it("lists this user's new-template drafts with their context, newest first", () => {
+    const storage = createStorage();
+    storage.setItem(
+      getTemplateDraftKey({ userId: "u1", teamId: "org-1" }),
+      JSON.stringify({ format: 1, savedAt: "2026-09-28T10:00:00.000Z", values: draftValues }),
+    );
+    storage.setItem(
+      getTemplateDraftKey({ userId: "u1" }),
+      JSON.stringify({ format: 1, savedAt: "2026-09-28T11:00:00.000Z", values: draftValues }),
+    );
+    saveTemplateDraft({ userId: "u2", teamId: "org-1" }, draftValues, storage);
+    saveTemplateEditDraft({ userId: "u1", templateId: "template-1" }, { values: draftValues }, storage);
+    storage.setItem(getTemplateDraftKey({ userId: "u1", teamId: "org-2" }), "{not json");
+    storage.setItem("unrelated", "value");
+
+    const contexts = listTemplateDraftContexts("u1", storage);
+
+    expect(contexts.map((context) => context.teamId)).toEqual([null, "org-1"]);
+    expect(contexts[1].draft.values).toEqual(draftValues);
+  });
+
+  it("does not mistake another user whose id starts the same for this one", () => {
+    const storage = createStorage();
+    saveTemplateDraft({ userId: "u1x", teamId: "org-1" }, draftValues, storage);
+
+    expect(listTemplateDraftContexts("u1", storage)).toEqual([]);
+  });
+
+  it("finds nothing when storage is blocked", () => {
+    const blocked = {
+      getItem: () => {
+        throw new Error("SecurityError");
+      },
+      key: () => {
+        throw new Error("SecurityError");
+      },
+      get length(): number {
+        throw new Error("SecurityError");
+      },
+    };
+
+    expect(listTemplateDraftContexts("u1", blocked)).toEqual([]);
+    expect(listTemplateDraftContexts("u1", null)).toEqual([]);
   });
 });

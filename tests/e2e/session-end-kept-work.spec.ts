@@ -118,3 +118,42 @@ test('unsaved task notes are offered back after another tab signs out', async ({
 
   await callApi(page, `/checklists/${created.id}`, 'DELETE');
 });
+
+// A confirmed sign-out returns the tab to Personal, so the new-template draft kept in an
+// Organization is offered from Personal with a switch back to its Organization.
+test("a new template's draft kept in an Organization is offered after signing in again", async ({ page, context }) => {
+  test.setTimeout(120_000);
+  await signIn(page);
+  const organization = await callApi<{ id: string; name: string }>(page, '/teams', 'POST', {
+    name: `Kept draft Org ${Date.now()}`,
+  });
+  await page.evaluate((teamId) => window.localStorage.setItem('serplists.activeWorkspaceId', teamId), organization.id);
+  await page.goto('/dashboard/templates/new');
+  await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText(organization.name, {
+    timeout: 30_000,
+  });
+  const title = `Org kept draft QA ${Date.now()}`;
+  const titleField = page.getByPlaceholder('Enter template name...');
+  await titleField.fill(title);
+
+  // The session ends on the server; Save gets a 401 and the tab signs out.
+  await context.clearCookies();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await signInAgain(page);
+
+  await expect(page).toHaveURL(/\/dashboard\/templates\/new/, { timeout: 30_000 });
+  await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText('Personal');
+  await expect(page.getByText(`Unsaved template draft in ${organization.name}`)).toBeVisible();
+  await page.getByRole('button', { name: `Switch to ${organization.name}` }).click();
+  await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText(organization.name);
+  await page.getByRole('button', { name: 'Restore draft' }).click();
+  await expect(titleField).toHaveValue(title);
+
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard\/templates$/, { timeout: 30_000 });
+  const saved = await callApi<Array<{ id: string; title: string }>>(page, `/templates?teamId=${organization.id}`, 'GET');
+  const created = saved.find((template) => template.title === title);
+  expect(created).toBeTruthy();
+
+  await callApi(page, `/templates/${created?.id}`, 'DELETE');
+});

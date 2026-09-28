@@ -262,6 +262,9 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
         }}
         onSignIn={access.signIn}
         onUpgrade={() => void access.startUpgrade()}
+        otherContextDraft={access.otherContextDraft}
+        onSwitchToDraftContext={access.switchToDraftContext}
+        onDiscardOtherContextDraft={access.discardOtherContextDraft}
       />
 
       {/* A create leaves the page when it finishes, so edits made meanwhile could not

@@ -24,6 +24,7 @@ import {
   shouldLoadTemplateCountForLimit,
   type TemplateEditorAccessNotice,
 } from "@/features/template-editor/templateEditorAccess";
+import { useOtherContextTemplateDraft } from "@/features/template-editor/useOtherContextTemplateDraft";
 import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
 import { navigateToLoginWithReturnPath, startBillingCheckout } from "@/lib/access-flow";
 import { api } from "@/lib/api";
@@ -94,6 +95,8 @@ export const useTemplateEditorAccess = ({
     }
     setSaveNotice(null);
   }, [isCreate, templateId, userId, activeTeamId]);
+  // A new template's draft kept in another context, offered with a switch to it.
+  const otherContext = useOtherContextTemplateDraft({ enabled: isCreate && !draft, userId });
 
   const limitReached =
     isCreate &&
@@ -192,6 +195,7 @@ export const useTemplateEditorAccess = ({
     isStartingCheckout,
     keepDraft,
     notice: saveNotice ?? resolveTemplateLimitNotice(limitReached, context),
+    ...otherContext,
     restoreDraft,
     settleDraft,
     signIn,

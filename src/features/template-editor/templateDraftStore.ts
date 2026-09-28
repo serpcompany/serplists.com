@@ -24,6 +24,7 @@ const DRAFT_FORMAT = 1;
 export type TemplateDraftOwner = { userId: string; teamId?: string | null };
 export type TemplateEditDraftOwner = { userId: string; templateId: string };
 export type TemplateDraftStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+export type TemplateDraftListStorage = Pick<Storage, "getItem" | "key" | "length">;
 export type StoredTemplateDraft = {
   savedAt: string;
   values: TemplateEditorFormValues;
@@ -84,7 +85,7 @@ const writeDraft = (
 const readDraft = <T>(
   key: string,
   schema: z.ZodType<T>,
-  storage: TemplateDraftStorage | null,
+  storage: Pick<Storage, "getItem"> | null,
 ): T | null => {
   if (!storage) {
     return null;
@@ -124,6 +125,38 @@ export const readTemplateDraft = (
 ): StoredTemplateDraft | null => {
   const draft = readDraft(getTemplateDraftKey(owner), storedDraftSchema, storage);
   return draft ? { savedAt: draft.savedAt, values: draft.values } : null;
+};
+
+// This user's new-template drafts in every context, newest first. A confirmed sign-out
+// returns the tab to Personal, so after sign-in a draft kept in an Organization is only
+// found this way. The key prefix names the user, so no other account's drafts match.
+export const listTemplateDraftContexts = (
+  userId: string,
+  storage: TemplateDraftListStorage | null = getSessionStorage() ?? null,
+): Array<{ teamId: string | null; draft: StoredTemplateDraft }> => {
+  const prefix = `${DRAFT_KEY_PREFIX}:${userId}:`;
+  const keys: string[] = [];
+  try {
+    for (let index = 0; storage && index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+  } catch {
+    return [];
+  }
+
+  return keys
+    .flatMap((key) => {
+      const contextId = key.slice(prefix.length);
+      const draft = readDraft(key, storedDraftSchema, storage);
+      return draft
+        ? [{
+            teamId: contextId === "personal" ? null : contextId,
+            draft: { savedAt: draft.savedAt, values: draft.values },
+          }]
+        : [];
+    })
+    .sort((a, b) => b.draft.savedAt.localeCompare(a.draft.savedAt));
 };
 
 export const clearTemplateDraft = (
