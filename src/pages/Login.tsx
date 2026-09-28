@@ -10,7 +10,9 @@ import {
 import { toast } from "sonner";
 
 import { useAuth } from "@/contexts/CloudflareAuthContext";
+import { needsFullPageLoad } from "@/lib/analyticsUrl";
 import { authClient, getAuthStatus } from "@/lib/auth-client";
+import { readLoginPrefill } from "@/lib/auth/loginPrefill";
 import {
   DEV_TEST_USER_DEFAULT_PASSWORD,
   DEV_TEST_USER_PASSWORD_RESET_COMMAND,
@@ -33,25 +35,41 @@ const Login = () => {
   const from = location.state?.from?.pathname || "/account";
 
   useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const prefilledEmail = searchParams.get("email");
+    const prefill = readLoginPrefill(location.search, location.state);
 
-    if (prefilledEmail) {
-      setEmail(prefilledEmail);
-      setUnverifiedEmail(prefilledEmail);
+    if (prefill.searchWithoutEmail !== null) {
+      // An old link with ?email=: move the address into router state so it leaves the URL.
+      // The effect runs again for the cleaned location and shows the notices once.
+      const state = typeof location.state === "object" && location.state !== null ? location.state : {};
+      navigate(
+        { pathname: location.pathname, search: prefill.searchWithoutEmail, hash: location.hash },
+        { replace: true, state: prefill.email ? { ...state, email: prefill.email } : state },
+      );
+      return;
     }
 
-    if (searchParams.get("verify_email") === "1") {
+    if (prefill.email) {
+      setEmail(prefill.email);
+      setUnverifiedEmail(prefill.email);
+    }
+
+    if (prefill.verifyEmailNotice) {
       toast.info("Verify your email first, then sign in.");
     }
 
-    if (searchParams.get("verified") === "1") {
+    if (prefill.verifiedNotice) {
       toast.success("Email verified. You can sign in now.");
     }
-  }, [location.search]);
+  }, [location.hash, location.pathname, location.search, location.state, navigate]);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
+      // Returning to an invite link after sign-in: if analytics tags run in this document,
+      // load the invite as a new page so they never see its token.
+      if (needsFullPageLoad(from, "", window)) {
+        window.location.replace(from);
+        return;
+      }
       navigate(from, { replace: true });
     }
   }, [from, isAuthenticated, isLoading, navigate]);

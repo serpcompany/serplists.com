@@ -5,11 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- Google Tag Manager -->
     <script>
-      (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-      new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-      j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-      'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-      })(window,document,'script','dataLayer','GTM-PZZFQBGG');
+      (function (win, doc) {
+        // Tags in the container read location.href, so a document whose URL carries a
+        // share or invite token, a reset token or an email address never loads it. Keep
+        // in step with src/lib/analyticsUrl.ts (tests/unit/security/gtmBootstrap.test.ts).
+        function isSensitiveLocation(pathname, search) {
+          var path = pathname;
+          try {
+            path = decodeURIComponent(pathname);
+          } catch (_error) {
+            path = pathname;
+          }
+          path = path.replace(/^\/+/, '/');
+          if (/^\/(share|team-invites|reset-password)(\/|$)/i.test(path)) return true;
+          var sensitiveKeys = ['token', 'email', 'code', 'state'];
+          var sensitive = false;
+          new URLSearchParams(search).forEach(function (_value, key) {
+            if (sensitiveKeys.indexOf(key.toLowerCase()) !== -1) sensitive = true;
+          });
+          return sensitive;
+        }
+
+        var skipTagManager = true;
+        try {
+          skipTagManager = isSensitiveLocation(win.location.pathname, win.location.search);
+        } catch (_error) {
+          skipTagManager = true;
+        }
+        if (skipTagManager) return;
+
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+        new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+        j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+        'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+        })(win,doc,'script','dataLayer','GTM-PZZFQBGG');
+      })(window, document);
     </script>
     <!-- End Google Tag Manager -->
     <title>SERP Lists</title>
