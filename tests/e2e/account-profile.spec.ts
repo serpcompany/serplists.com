@@ -96,7 +96,9 @@ test.describe('account profile form', () => {
     await fullName.fill('John Smith');
     await username.fill('johnsmith');
 
-    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+    const fileChooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Upload avatar' }).click();
+    await (await fileChooser).setFiles({
       name: 'avatar.png',
       mimeType: 'image/png',
       buffer: PNG_BYTES,
