@@ -445,7 +445,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
   const { templates, users, checklist_runs, audit_events } = schema;
 
   // Pro-only: export/import templates as JSON backup
-  // GET  /api/templates/backup?includePublic=1&teamId=...
+  // GET  /api/templates/backup?teamId=...&format=portable|backup (owned templates only)
   // POST /api/templates/backup?teamId=...  { templates: [...], options?: { visibility } }
   if (templatesSubpath[0] === 'backup') {
     if (!userId) {
@@ -467,13 +467,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     if (request.method === 'GET') {
       const exportFormat = url.searchParams.get('format') === 'backup' ? 'backup' : 'portable';
-      const includePublic = url.searchParams.get('includePublic') === '1';
-      const ownedTemplateClause = backupTeamId
+      // Only the active context's own templates. The page adds public templates from the
+      // edge-cached catalog, so an export never reads every public template from D1; an
+      // old tab's includePublic=1 is ignored (see the D1 cost doc).
+      const whereClause = backupTeamId
         ? and(eq(templates.owner_type, 'team'), eq(templates.team_id, backupTeamId), isNull(templates.deleted_at))
         : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at));
-      const whereClause = includePublic
-        ? or(ownedTemplateClause, and(eq(templates.is_public, true), isNull(templates.deleted_at)))
-        : ownedTemplateClause;
 
       const rows = await withRulesColumnFallback((includeRules) =>
         db

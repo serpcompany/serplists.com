@@ -33,6 +33,8 @@ vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForContext: vi.fn(),
 }));
 
+import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
+import type { SQL } from 'drizzle-orm';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { portableTemplatePackSchema } from '@/lib/schemas/checklistSchema';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
@@ -195,6 +197,48 @@ describe('portable template import/export API', () => {
     );
     expect(data.kind).toBe('serplists-template-pack');
     expect(data.templates[0].title).toBe('Team Template');
+  });
+
+  describe('an export asked to include public templates', () => {
+    // The page adds public templates from the edge-cached catalog; the export reads only
+    // the active context's own templates, never an OR across every public template.
+    it.each([
+      ['Personal', '/api/templates/backup?includePublic=1'],
+      ['Organization', '/api/templates/backup?includePublic=1&teamId=team-1'],
+    ])('reads only the %s templates from D1', async (_label, path) => {
+      dbMocks.selectChain.limit.mockResolvedValueOnce([
+        { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'editor', status: 'active' },
+      ]);
+      dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+        {
+          id: 'template-1',
+          title: 'Owned',
+          description: '',
+          items: JSON.stringify([{ id: 's-1', title: 'Checklist', items: [{ id: 'i-1', title: 'Item' }] }]),
+          category: '[]',
+          tags: '[]',
+          user_id: 'user-123',
+          is_public: 0,
+          slug: 'owned',
+          created_at: new Date().toISOString(),
+          version: 1,
+        },
+      ]);
+
+      const response = await handleTemplates(new Request(`http://localhost${path}`), mockEnv as never);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.templates.map((template: { title: string }) => template.title)).toEqual(['Owned']);
+      const dialect = new SQLiteSyncDialect();
+      const templateQueries = dbMocks.selectChain.where.mock.calls
+        .map(([where]) => dialect.sqlToQuery(where as SQL).sql)
+        .filter((whereSql) => whereSql.includes('"templates".'));
+      expect(templateQueries).toHaveLength(1);
+      expect(templateQueries[0]).toContain('"templates"."owner_type" = ?');
+      expect(templateQueries[0]).not.toContain('is_public');
+      expect(templateQueries[0]).not.toMatch(/\bor\b/i);
+    });
   });
 
   it('imports portable template packs into paid team workspaces', async () => {

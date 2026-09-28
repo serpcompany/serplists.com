@@ -183,6 +183,7 @@ function scenarios(): Scenario[] {
     { name: "legacy templates list (public OR mine)", actor: "admin", path: "/api/templates" },
     { name: "dashboard templates (Organization)", actor: "admin", path: "/api/templates?teamId=team-seed-growth" },
     { name: "archived templates", actor: "admin", path: "/api/templates/archived" },
+    { name: "template export (owned only; public ones come from the cached catalog)", actor: "admin", path: "/api/templates/backup?includePublic=1" },
     { name: "dashboard runs (Personal)", actor: "admin", path: "/api/checklists" },
     { name: "dashboard runs (Organization)", actor: "admin", path: "/api/checklists?teamId=team-seed-growth" },
     { name: "archived runs", actor: "admin", path: "/api/checklists/archived" },

@@ -21,6 +21,7 @@ import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
 import { getAccessFailure } from "@/lib/api-errors";
 import { getBillingStatusQueryKey } from "@/lib/billing";
 import { formatImportFailure, formatImportSummaryMessage, getImportSummaryFromError } from "@/lib/templates/templateImportSummary";
+import { addPublicTemplatesToPack, selectPublicTemplatesForExport } from "@/lib/templates/portableExport";
 import { cn } from "@/lib/utils";
 
 interface TemplateBackupProps {
@@ -56,6 +57,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const {
     allTemplates,
     templates,
+    templatesLoading,
     importTemplates
   } = useTemplateLists({ catalog: true });
   const {
@@ -88,7 +90,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     : user
       ? allTemplates.filter(t => t.userId === user.id && !t.teamId)
       : [];
-  const communityTemplates = templates.filter(t => t.isPublic && t.userId !== user?.id);
+  const communityTemplates = selectPublicTemplatesForExport(templates, { userId: user?.id, teamId: activeTeamId });
   const templatesToExport = includePublicTemplates
     ? [...ownedTemplates, ...communityTemplates]
     : ownedTemplates;
@@ -142,10 +144,9 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     }
 
     try {
-      const backup = await api.exportTemplateBackup({
-        includePublic: includePublicTemplates,
-        teamId: activeTeamId,
-      });
+      // The API exports owned templates; public ones come from the catalog loaded here.
+      const ownedPack = await api.exportTemplateBackup({ teamId: activeTeamId });
+      const backup = includePublicTemplates ? addPublicTemplatesToPack(ownedPack, communityTemplates) : ownedPack;
       downloadBackupFile(backup);
       const count = Array.isArray((backup as { templates?: unknown }).templates) ? (backup as {
         templates: unknown[];
@@ -453,7 +454,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                   disabled={!user || billing.isLoading || !hasBackupAccess || !canEditTemplates}
                 />
               </div>
-	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={!user || billing.isLoading || !hasBackupAccess || !canEditTemplates}>
+	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={!user || billing.isLoading || templatesLoading || !hasBackupAccess || !canEditTemplates}>
 	              <Download className="h-4 w-4" />
 	              Export Portable Pack
 	            </Button>

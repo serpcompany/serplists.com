@@ -107,6 +107,13 @@ Fixed (rows read before, after; see the plan's progress):
 | Signed-in Personal template list | 19,219 | 609 for 200 templates | `?scope=personal` reads only the user's own templates through `idx_templates_owner` |
 | Any signed-in page view (run list) | 1,007 Personal, 12,007 Organization | 0 | Runs load only on the runs page; the run page fetches one run by id |
 
+Template export (`GET /api/templates/backup`) reads only the active context's own
+templates through the owner indexes. With "Include public community templates" on, it
+used to OR every public template into that query, uncached, on each click (the whole
+catalog, like a catalog cache miss). The page now adds public templates from the
+edge-cached catalog it already loaded (`src/lib/templates/portableExport.ts`), and the
+API ignores `includePublic=1` from older tabs.
+
 Writes per request after step 1 (dropped `idx_templates_slug`, `idx_templates_user_id`,
 `idx_templates_category`, `idx_checklist_runs_assigned_to_user_id`,
 `idx_audit_events_actor`, and `idx_template_versions_subject`, none of which any query

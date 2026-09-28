@@ -56,6 +56,12 @@ and listed in `manifest.skippedTemplates`; `manifest.totalTemplates` counts only
 templates written. On import, it becomes a per-template failure instead of rejecting
 the whole file.
 
+`GET /api/templates/backup` exports the active context's own templates (Personal or
+the Organization). "Include public community templates" adds, in the browser, the
+public templates from the loaded catalog that the context does not own (never the
+bundled library), and recomputes the manifest for the whole pack with the same
+`buildPortablePackManifest` the API uses (`src/lib/schemas/portableTemplatePack.ts`).
+
 Portable template fields are intentionally cleaner than app row exports:
 - no `userId`
 - no created/updated timestamps

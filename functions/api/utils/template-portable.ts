@@ -6,34 +6,10 @@ import {
   type PortableChecklistTemplate,
 } from '../../../src/lib/schemas/checklistSchema';
 import { parsePortableTemplate } from '../../../src/lib/schemas/portableTemplateNormalize';
+import { buildPortablePackManifest, type PortableSkippedTemplate } from '../../../src/lib/schemas/portableTemplatePack';
 
 // Portable packs are written and read through the same normalizer as the client, so an
 // export always passes the importer's schema (docs/product-specs/portable-templates.md).
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
-
-function countReferencedUploads(sections: unknown[]): number {
-  let count = 0;
-
-  for (const section of sections) {
-    if (!isRecord(section) || !Array.isArray(section.items)) continue;
-    for (const item of section.items) {
-      if (!isRecord(item) || !Array.isArray(item.contents)) continue;
-      for (const content of item.contents) {
-        if (!isRecord(content)) continue;
-        const type = content.type;
-        const value = typeof content.value === 'string' ? content.value : '';
-        const isUpload = content.uploadType === 'upload' || value.includes('/api/uploads/file') || value.includes('uploads/file?key=');
-        if ((type === 'image' || type === 'video' || type === 'file') && isUpload) {
-          count += 1;
-        }
-      }
-    }
-  }
-
-  return count;
-}
 
 // A parsed templates row; the portable schema validates each field.
 export type PortableExportSource = {
@@ -54,7 +30,7 @@ export type PortableExportSource = {
 /** Builds GET /api/templates/backup's portable pack. Templates that cannot be made valid are reported in the manifest. */
 export function buildPortableTemplatePack(templates: PortableExportSource[], exportedBy: string | undefined) {
   const exported: PortableChecklistTemplate[] = [];
-  const skippedTemplates: Array<{ title: string; reason: string }> = [];
+  const skippedTemplates: PortableSkippedTemplate[] = [];
 
   for (const template of templates) {
     const result = parsePortableTemplate({
@@ -84,14 +60,7 @@ export function buildPortableTemplatePack(templates: PortableExportSource[], exp
     exportedAt: new Date().toISOString(),
     exportedBy,
     templates: exported,
-    manifest: {
-      totalTemplates: exported.length,
-      format: 'portable',
-      includesVisibility: exported.length > 0,
-      includesRules: exported.some((template) => Array.isArray(template.rules) && template.rules.length > 0),
-      assetWarnings: exported.reduce((total, template) => total + countReferencedUploads(template.sections), 0),
-      ...(skippedTemplates.length > 0 ? { skippedTemplates } : {}),
-    },
+    manifest: buildPortablePackManifest(exported, skippedTemplates),
   };
 }
 

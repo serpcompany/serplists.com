@@ -324,9 +324,10 @@ class ApiClient {
     });
   }
 
-  async exportTemplateBackup(params?: { includePublic?: boolean; format?: 'backup' | 'portable'; teamId?: string | null }) {
+  // Exports the active context's own templates. The page adds public templates from the
+  // catalog it already loaded (src/lib/templates/portableExport.ts).
+  async exportTemplateBackup(params?: { format?: 'backup' | 'portable'; teamId?: string | null }) {
     const search = new URLSearchParams();
-    if (params?.includePublic) search.set('includePublic', '1');
     if (params?.teamId) search.set('teamId', params.teamId);
     search.set('format', params?.format ?? 'portable');
     const query = search.toString();
