@@ -22,7 +22,7 @@ async function signIn(page: Page, fillButton: 'Fill Admin' | 'Fill John') {
 }
 
 async function signOut(page: Page) {
-  await page.locator('header').first().getByRole('button', { name: /^[A-Z]$/ }).click();
+  await page.locator('header').first().getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
   await expect(page.getByRole('link', { name: 'Log in' }).first()).toBeVisible({ timeout: 15_000 });
 }
@@ -66,7 +66,7 @@ test('a user who signs in after another on the same tab never sees the other use
   // John signs in on the same tab and starts a run from a template, which refreshes run lists.
   await signIn(page, 'Fill John');
   const johnRunIds = [await createRun(page, johnRunTitle)];
-  await navigateInApp(page, '/profile/admin/technical-seo-audit-checklist');
+  await navigateInApp(page, '/profile/admin/sample-technical-seo-audit-checklist');
   await page.getByRole('button', { name: 'Start Run' }).first().click();
   await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+$/, { timeout: 15_000 });
   johnRunIds.push(decodeURIComponent(new URL(page.url()).pathname.split('/').pop() ?? ''));

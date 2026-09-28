@@ -14,7 +14,7 @@ async function signIn(page: Page, fillButton: 'Fill Admin' | 'Fill John') {
 }
 
 async function openAccountMenu(page: Page) {
-  await page.locator('header').first().getByRole('button', { name: /^[A-Z]$/ }).click();
+  await page.locator('header').first().getByRole('button', { name: 'Account menu' }).click();
 }
 
 async function signOut(page: Page) {

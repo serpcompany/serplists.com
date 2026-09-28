@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { trackApiRequests } from './support/api-requests';
+
 // A share link is a completion-only credential: a guest can tick tasks and write notes,
 // but a crafted PUT can never rewrite, inject into, or wipe the owner's run
 // (functions/api/utils/shared-run-merge.ts).
@@ -7,10 +9,15 @@ import { expect, test, type Page } from '@playwright/test';
 const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 async function loginAsAdmin(page: Page) {
+  const apiRequests = trackApiRequests(page, DEV_API_BASE_URL);
   await page.goto('/login');
   await page.getByRole('button', { name: 'Fill Admin' }).click();
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+  // Signing in lands on Account Settings: let its requests finish before the test calls
+  // the API, which the local dev proxy can drop in a burst (see support/api-requests.ts).
+  await expect(page.getByRole('heading', { name: 'Account Settings' })).toBeVisible();
+  await apiRequests.settled();
 }
 
 type StoredRun = {
@@ -67,7 +74,8 @@ test('a share-link guest can tick tasks but cannot rewrite or wipe the run', asy
 
   await guest.goto(`/share/${shareToken}`);
   await expect(guest.getByRole('heading', { name: 'Task A' })).toBeVisible();
-  await guest.getByRole('button', { name: 'Mark Complete' }).click();
+  // The shared view lists every task with its own checkbox (no step-by-step Mark Complete).
+  await guest.getByRole('checkbox', { name: 'Mark "Task A" complete' }).click();
   await expect.poll(() => readOwnerRun(page, runId)).toEqual({ progress: 50, tasks: ['Task A:true', 'Task B:false'] });
 
   const wipe = await guest.request.put(sharedUrl, {

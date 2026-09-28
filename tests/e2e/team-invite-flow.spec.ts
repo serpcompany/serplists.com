@@ -22,10 +22,10 @@ async function createLinkInvite(page: Page, email: string): Promise<string> {
   await page.getByLabel('Invite email').fill(email);
   await page.getByRole('button', { name: /create link/i }).click();
 
+  // Wait for this email's link: the link created before it may still be on screen.
+  await expect(page.getByText(`Invite link for ${email}`)).toBeVisible({ timeout: 15_000 });
   const inviteLink = page.getByRole('textbox', { name: 'Invite link' });
-  await expect(inviteLink).toHaveValue(/\/team-invites\/.+/, {
-    timeout: 15_000,
-  });
+  await expect(inviteLink).toHaveValue(/\/team-invites\/.+/);
 
   return inviteLink.inputValue();
 }
