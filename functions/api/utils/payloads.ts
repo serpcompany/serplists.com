@@ -17,6 +17,13 @@ const templateRuleSchema = z.object({
   severity: z.enum(["error", "warning"]).optional(),
 });
 
+export const templateSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(160)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, numbers, and hyphens only");
+
 export const templatePayloadSchema = z.object({
   teamId: z.string().trim().min(1).optional(),
   team_id: z.string().trim().min(1).optional(),
@@ -32,14 +39,15 @@ export const templatePayloadSchema = z.object({
   tags: stringListField(20, 80),
   sections: z.unknown().optional(),
   items: z.unknown().optional(),
-  slug: z
-    .string()
-    .trim()
-    .min(1)
-    .max(160)
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, numbers, and hyphens only")
-    .optional(),
+  slug: templateSlugSchema.optional(),
   expected_version: z.number().int().positive().optional(),
+});
+
+// Clients echo the stored slug on every save, and rows backfilled by migrations 0002
+// and 0005 can hold slugs the current rule rejects. The update handler checks the
+// slug against templateSlugSchema only when it changes (resolveRequestedSlug).
+export const templateUpdatePayloadSchema = templatePayloadSchema.extend({
+  slug: z.string().trim().max(320).optional(),
 });
 
 export const checklistPayloadSchema = z.object({
