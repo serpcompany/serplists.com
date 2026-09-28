@@ -1670,4 +1670,60 @@ describe('Templates Handlers', () => {
         .toEqual([[1, 'invalid_fields', 'title'], [2, 'invalid_fields', 'description'], [3, 'invalid_fields', 'rules.0.id'], [4, 'invalid_fields', 'title']]);
     });
   });
+
+  describe('slugs made from titles in any language', () => {
+    const create = (body: Record<string, unknown>) => handleTemplates(new Request('http://localhost/api/templates', {
+      method: 'POST',
+      body: JSON.stringify({ sections: [{ id: 's1', title: 'S', items: [] }], ...body }),
+    }), mockEnv);
+
+    it.each([
+      ['Café Opening Checklist', 'cafe-opening-checklist'],
+      ['Umzugscheckliste für Familien', 'umzugscheckliste-fur-familien'],
+      ['Straße fegen', 'strasse-fegen'],
+      ['Список покупок', 'template'],
+    ])('creates %s at /%s', async (title, slug) => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+
+      const response = await create({ title });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.slug).toBe(slug);
+      expect(dbMocks.insertChain.values.mock.calls[0][0]).toEqual(expect.objectContaining({ slug }));
+    });
+
+    it('folds the letters of a custom slug typed with accents', async () => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+      dbMocks.selectChain.limit
+        .mockResolvedValueOnce([{ id: 'template-1', user_id: 'user-123', owner_type: 'user', team_id: null, title: 'Plan', items: '[]', slug: 'plan', version: 1, is_public: false }])
+        .mockResolvedValueOnce([]);
+
+      const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+        method: 'PUT',
+        body: JSON.stringify({ slug: 'café-guide', expected_version: 1 }),
+      }), mockEnv);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.slug).toBe('cafe-guide');
+    });
+
+    it('rejects a custom slug with no letters it can use instead of silently keeping the old one', async () => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+      dbMocks.selectChain.limit.mockResolvedValueOnce([
+        { id: 'template-1', user_id: 'user-123', owner_type: 'user', team_id: null, title: 'Plan', items: '[]', slug: 'plan', version: 1, is_public: false },
+      ]);
+
+      const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+        method: 'PUT',
+        body: JSON.stringify({ title: 'Plan v2', slug: 'Список', expected_version: 1 }),
+      }), mockEnv);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toMatch(/^slug: /);
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    });
+  });
 });

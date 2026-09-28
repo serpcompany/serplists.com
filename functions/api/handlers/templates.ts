@@ -1309,7 +1309,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       updates.tags = JSON.stringify(finalTags);
     }
 
-    if (Object.keys(updates).length === 0 && !incomingSections && !requestedSlugValue) {
+    if (Object.keys(updates).length === 0 && !incomingSections && !requestedSlug?.trim()) {
       return jsonError('No fields to update', 400);
     }
 
@@ -1348,6 +1348,10 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       });
     }
 
+    // A new custom slug with no letters or digits to keep ('Список') is an error, not ignored.
+    if (requestedSlug?.trim() && !requestedSlugValue && requestedSlug !== existingTemplate.slug) {
+      return jsonError('slug: Use Latin letters or numbers in the URL slug.', 400);
+    }
     // Resending the stored slug is not a change, even when it predates today's slug rules.
     if (requestedSlugValue && requestedSlug !== existingTemplate.slug && requestedSlugValue !== existingTemplate.slug) {
       const [conflict] = await db

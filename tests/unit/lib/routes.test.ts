@@ -27,6 +27,7 @@ import {
   buildPublicTemplatesPath,
   buildPublicTemplatePath,
   buildSharePath,
+  findCategoryNameByLegacySlug,
   findCategoryNameBySlug,
   isBlankTemplateEditorRoute,
   resolveLegacyTemplatesCategoryRedirectPath,
@@ -102,6 +103,15 @@ describe('routes', () => {
     expect(
       findCategoryNameBySlug(['Technical SEO', 'Content Ops'], 'missing'),
     ).toBeNull();
+  });
+
+  it('finds an accented category from the URL it had before its letters were folded', () => {
+    const categories = ['Café Guides', 'Technical SEO'];
+
+    expect(buildPublicCategoryPath('Café Guides')).toBe('/categories/cafe-guides');
+    expect(findCategoryNameBySlug(categories, 'caf-guides')).toBeNull();
+    expect(findCategoryNameByLegacySlug(categories, 'caf-guides')).toBe('Café Guides');
+    expect(findCategoryNameByLegacySlug(categories, 'missing')).toBeNull();
   });
 
   it('redirects legacy category-only template queries to canonical category routes', () => {

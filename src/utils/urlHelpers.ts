@@ -67,17 +67,8 @@ export const getVideoEmbedSource = (value: string): VideoEmbedSource | null => {
   return { kind: iframeSource ? 'iframe' : 'video', url: parsed.toString() };
 };
 
-/**
- * Generates a URL-friendly slug from a title
- */
-export const generateSlug = (title: string): string => {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
-    .replace(/\s+/g, '-') // Replace spaces with hyphens
-    .replace(/-+/g, '-') // Replace multiple hyphens with single
-    .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
-};
+// Generates a URL-friendly slug from a title, with the same rule as the API and sitemap.
+export { generateSlug } from '@/lib/utils/slug';
 
 /**
  * Validates if a URL is a valid HTTP/HTTPS URL

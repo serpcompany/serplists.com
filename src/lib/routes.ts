@@ -43,6 +43,30 @@ export const findCategoryNameBySlug = (
   );
 };
 
+// Category slugs from before accented letters were folded ('Café Guides' gave
+// 'caf-guides'). Only used to send an already indexed URL to the current one.
+const buildLegacyCategorySlug = (categoryName: string): string =>
+  categoryName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+export const findCategoryNameByLegacySlug = (
+  categories: string[],
+  categorySlug: string,
+): string | null => {
+  const normalizedSlug = categorySlug.trim().toLowerCase();
+  if (!normalizedSlug) return null;
+  return (
+    categories.find(
+      (category) => buildLegacyCategorySlug(category) === normalizedSlug,
+    ) ?? null
+  );
+};
+
 export const buildPublicCategoriesPath = (): string => '/categories';
 
 export const buildPublicCategoryPath = (categoryName: string): string =>

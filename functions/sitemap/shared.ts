@@ -11,6 +11,7 @@ import { createDb } from '../api/db';
 import type { Env } from '../api/types';
 import bundledTemplateCatalog from './bundled-catalog.generated.json';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../src/data/publicCategories';
+import { generateSlug } from '../../src/lib/utils/slug';
 
 export const CANONICAL_ORIGIN = 'https://serplists.com';
 export const SITEMAP_PAGE_SIZE = 25_000;
@@ -343,14 +344,9 @@ export async function buildDurableShardIndex(
   return plan.shards;
 }
 
+// Must match the page's buildCategorySlug, or listed category URLs would not resolve.
 export function categorySlug(category: string): string {
-  return category
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
+  return generateSlug(category);
 }
 
 export function parseCategories(value: unknown): string[] {

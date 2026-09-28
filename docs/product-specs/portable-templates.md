@@ -192,7 +192,9 @@ Organization slugs to 120.
 
 A template save (`PUT /api/templates/:id`) checks bounds only for fields whose value
 changes, so a row that predates these bounds, or a legacy slug with punctuation, can
-still be saved and toggled. A changed slug is normalized rather than rejected.
+still be saved and toggled. A changed slug is normalized rather than rejected; one
+with nothing left after normalizing (only non-Latin letters, for example) is a `400`
+naming `slug` instead of being ignored.
 
 A portable-pack template that fails validation after normalization is reported as an
 `invalid_sections` failure at its index in the file; the envelope (`kind`,

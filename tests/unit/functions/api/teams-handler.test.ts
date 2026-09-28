@@ -161,6 +161,22 @@ describe("Teams handler", () => {
     );
   });
 
+  it("folds the accented letters of an Organization name into its slug", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "Équipe Café Straße" }),
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.slug).toBe("equipe-cafe-strasse");
+  });
+
   it("lists active team memberships", async () => {
     dbMocks.selectChain.orderBy.mockResolvedValueOnce([
       {

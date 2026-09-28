@@ -1,11 +1,5 @@
-export function generateSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-}
+// The slug rule itself is shared with the page and the sitemap, so their URLs match.
+export { generateSlug } from '../../../src/lib/utils/slug';
 
 /** Cuts a slug to `max` characters without leaving a trailing hyphen. */
 export function truncateSlug(slug: string, max: number): string {

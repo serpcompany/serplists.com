@@ -1,5 +1,5 @@
 import { useMemo, useState, type ElementType } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Briefcase,
@@ -39,6 +39,7 @@ import { SEOHead } from '@/components/shared/SEOHead';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
 import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
+import { buildPublicCategoryPath, findCategoryNameByLegacySlug } from '@/lib/routes';
 
 const categoryData: Record<
   string,
@@ -188,7 +189,9 @@ const CategoryDetail = () => {
   }, [searchQuery, slug, sortBy, templates]);
 
   if (!isKnownCategory) {
-    return <NotFound />;
+    // An accented category's URL from before its letters were folded ('caf-guides').
+    const renamed = findCategoryNameByLegacySlug(categories.map((item) => item.name), slug);
+    return renamed ? <Navigate to={buildPublicCategoryPath(renamed)} replace /> : <NotFound />;
   }
 
   return (
