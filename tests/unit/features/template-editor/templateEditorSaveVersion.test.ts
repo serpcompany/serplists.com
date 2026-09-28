@@ -3,7 +3,6 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  applyTemplateEditorSave,
   buildTemplateEditorSavedState,
   loadTemplateEditorData,
   saveTemplateEditorData,
@@ -14,7 +13,8 @@ import type { ChecklistSection, TemplateSavePayload } from "@/types/checklist";
 
 // The editor used to read version and rules from the whole workspace list, and each save
 // waited for that list to reload so the next save had the new version. It now loads the
-// template by id and keeps the version the PUT answer returns.
+// template by id, keeps the version the PUT answer returns, and leaves the rules (which it
+// does not edit) to the server.
 
 const rules = [{ id: "rule-1", type: "required-field", path: "sections[].items[].title", severity: "warning" }];
 const storedTemplate = {
@@ -50,13 +50,13 @@ const setup = (updates: Array<{ version: number; slug?: string } | Error>) => {
 };
 
 describe("template editor versions", () => {
-  it("loads the template by id and keeps its version and rules for the save", async () => {
+  it("loads the template by id and keeps its version for the save", async () => {
     const { apiClient } = setup([]);
 
     const loaded = await loadTemplateEditorData({ id: "template-1" }, { apiClient });
 
     expect(apiClient.getTemplateById).toHaveBeenCalledWith("template-1");
-    expect(loaded.baseline).toEqual({ version: 3, rules });
+    expect(loaded.version).toBe(3);
   });
 
   it("sends the version the previous save returned, so consecutive saves all succeed", async () => {
@@ -66,24 +66,32 @@ describe("template editor versions", () => {
     ]);
     const loaded = await loadTemplateEditorData({ id: "template-1" }, { apiClient });
 
-    let baseline = loaded.baseline;
     const first = await saveTemplateEditorData(
-      { id: "template-1", values: { ...loaded.initialValues, title: "Camping v2" }, baseline },
+      {
+        id: "template-1",
+        expectedVersion: loaded.version,
+        storedSlug: loaded.templateSlug,
+        values: { ...loaded.initialValues, title: "Camping v2" },
+      },
       { saveTemplate },
     );
-    baseline = applyTemplateEditorSave(baseline, first);
     const second = await saveTemplateEditorData(
-      { id: "template-1", values: { ...loaded.initialValues, title: "Camping v3" }, baseline },
+      {
+        id: "template-1",
+        expectedVersion: first.version,
+        storedSlug: first.slug,
+        values: { ...loaded.initialValues, title: "Camping v3" },
+      },
       { saveTemplate },
     );
 
     expect(first.success && second.success).toBe(true);
-    expect(updateTemplate.mock.calls[0][0]).toMatchObject({ version: 3, rules, title: "Camping v2" });
-    expect(updateTemplate.mock.calls[1][0]).toMatchObject({ version: 4, rules, title: "Camping v3" });
-    expect(applyTemplateEditorSave(baseline, second)).toEqual({ version: 5, rules });
+    expect(updateTemplate.mock.calls[0][0]).toMatchObject({ version: 3, title: "Camping v2" });
+    expect(updateTemplate.mock.calls[1][0]).toMatchObject({ version: 4, title: "Camping v3" });
+    expect(second.version).toBe(5);
   });
 
-  it("keeps the loaded version after a conflict, so the conflict is not hidden", async () => {
+  it("reports no new version after a conflict, so the loaded one is kept and the conflict is not hidden", async () => {
     const conflict = createApiError(409, {
       error: "Template changed since it was loaded. Refresh before saving again.",
       code: "edit_conflict",
@@ -92,22 +100,32 @@ describe("template editor versions", () => {
     const loaded = await loadTemplateEditorData({ id: "template-1" }, { apiClient });
 
     const result = await saveTemplateEditorData(
-      { id: "template-1", values: loaded.initialValues, baseline: loaded.baseline },
+      { id: "template-1", expectedVersion: loaded.version, values: loaded.initialValues },
       { saveTemplate },
     );
 
     expect(result.success).toBe(false);
-    expect(applyTemplateEditorSave(loaded.baseline, result)).toEqual(loaded.baseline);
+    expect(result.editConflict).toBe(true);
+    expect(result.version).toBeUndefined();
   });
 
-  it("leaves rules out when the template has none, instead of clearing them", async () => {
-    const { apiClient, updateTemplate, saveTemplate } = setup([{ version: 4 }]);
-    apiClient.getTemplateById.mockResolvedValueOnce({ ...storedTemplate, rules: undefined });
+  it("leaves rules out of the save, so the stored rules are kept rather than cleared", async () => {
+    const { apiClient, updateTemplate, saveTemplate } = setup([{ version: 4 }, { version: 5 }]);
     const loaded = await loadTemplateEditorData({ id: "template-1" }, { apiClient });
+    apiClient.getTemplateById.mockResolvedValueOnce({ ...storedTemplate, rules: undefined });
+    const loadedWithoutRules = await loadTemplateEditorData({ id: "template-1" }, { apiClient });
 
-    await saveTemplateEditorData({ id: "template-1", values: loaded.initialValues, baseline: loaded.baseline }, { saveTemplate });
+    await saveTemplateEditorData(
+      { id: "template-1", expectedVersion: loaded.version, values: loaded.initialValues },
+      { saveTemplate },
+    );
+    await saveTemplateEditorData(
+      { id: "template-1", expectedVersion: loadedWithoutRules.version, values: loadedWithoutRules.initialValues },
+      { saveTemplate },
+    );
 
-    expect(updateTemplate.mock.calls[0][0].rules).toBeUndefined();
+    expect(updateTemplate.mock.calls[0][0]).not.toHaveProperty("rules");
+    expect(updateTemplate.mock.calls[1][0]).not.toHaveProperty("rules");
   });
 
   it("shows the slug the server stored, including a suffix added after a conflict", () => {
@@ -124,7 +142,7 @@ describe("template editor versions", () => {
       sections: [],
     };
 
-    const saved = buildTemplateEditorSavedState(values, { version: 4, slug: "taken-slug-template" });
+    const saved = buildTemplateEditorSavedState(values, { savedSlug: "taken-slug-template" });
 
     expect(saved.templateSlug).toBe("taken-slug-template");
     expect(saved.initialValues.seoUrl).toBe("taken-slug-template");
