@@ -427,6 +427,29 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(errors).toEqual(["content_too_large", "content_too_large"]);
   });
 
+  it("holds a Free owner to the active run limit under concurrent start_run calls", async () => {
+    const freeLimit = 3;
+    const activeRuns = async () => (await rows<{ count: number }>(`
+      SELECT count(*) AS count FROM checklist_runs
+      WHERE user_id = 'user-a' AND team_id IS NULL AND status = 'in_progress' AND deleted_at IS NULL
+    `))[0].count;
+    const createdAudits = async () => (await rows<{ count: number }>(
+      "SELECT count(*) AS count FROM audit_events WHERE action = 'checklist_run.created' AND actor_user_id = 'user-a'",
+    ))[0].count;
+    const activeBefore = await activeRuns();
+    const auditsBefore = await createdAudits();
+    expect(activeBefore).toBeLessThan(freeLimit);
+
+    const bodies = await Promise.all([61, 62, 63, 64, 65].map(async (id) =>
+      bodyOf(await callTool("start_run", { templateId: "template-a" }, id))));
+
+    const started = bodies.filter((body) => toolError(body) === undefined);
+    expect(started).toHaveLength(freeLimit - activeBefore);
+    expect(bodies.filter((body) => toolError(body) === "limit_reached")).toHaveLength(bodies.length - started.length);
+    expect(await activeRuns()).toBe(freeLimit);
+    expect(await createdAudits()).toBe(auditsBefore + started.length);
+  });
+
   it("revokes immediately and cascades keys only with their owning user", async () => {
     await env.DB.prepare("UPDATE personal_run_keys SET revoked_at = ? WHERE id = ?")
       .bind("2026-09-19T03:00:00.000Z", keyId)

@@ -2,6 +2,12 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
+import {
+  countActiveRuns,
+  insertAuditWhenRunExists,
+  insertRunUnderActiveRunLimit,
+  personalActiveRunsWhere,
+} from "../utils/active-run-limit";
 import { buildAuditEventValues } from "../utils/audit";
 import { getEntitlementsForUser } from "../utils/entitlements";
 import {
@@ -246,24 +252,14 @@ async function startRun(
   }
 
   const entitlements = await getEntitlementsForUser(env, identity.userId);
-  if (entitlements.plan === "free" && entitlements.limits.maxActiveRuns) {
-    const [countRow] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(schema.checklist_runs)
-      .where(and(
-        eq(schema.checklist_runs.user_id, identity.userId),
-        isNull(schema.checklist_runs.team_id),
-        eq(schema.checklist_runs.status, "in_progress"),
-        isNull(schema.checklist_runs.deleted_at),
-      ))
-      .limit(1);
-    const currentCount = countRow?.count ?? 0;
-    if (currentCount >= entitlements.limits.maxActiveRuns) {
-      throw new ToolError("Active run limit reached", "limit_reached", {
-        limit: entitlements.limits.maxActiveRuns,
-        current: currentCount,
-      });
-    }
+  const activeRunLimit = entitlements.plan === "free" ? entitlements.limits.maxActiveRuns : null;
+  const activeRunsWhere = personalActiveRunsWhere(identity.userId);
+  const limitReached = (current: number) =>
+    new ToolError("Active run limit reached", "limit_reached", { limit: activeRunLimit, current });
+  if (activeRunLimit) {
+    // Fast path for a friendly error; the guarded insert below is what enforces the limit.
+    const current = await countActiveRuns(db, activeRunsWhere);
+    if (current >= activeRunLimit) throw limitReached(current);
   }
 
   const normalized = normalizeSectionsPayload(parseJsonArray(template.items) ?? []);
@@ -304,11 +300,21 @@ async function startRun(
     request,
     createdAt: now,
   });
-  await db.batch([
-    db.insert(schema.checklist_runs).values(run),
-    db.insert(schema.audit_events).values(auditEvent),
-  ]);
+  if (!activeRunLimit) {
+    await db.batch([
+      db.insert(schema.checklist_runs).values(run),
+      db.insert(schema.audit_events).values(auditEvent),
+    ]);
+    return result;
+  }
 
+  // Concurrent start_run calls can all pass the pre-check, so the insert enforces the
+  // limit again in the same statement, and a refused run writes no audit event.
+  const [runInsert] = await db.batch([
+    insertRunUnderActiveRunLimit(db, run, activeRunsWhere, activeRunLimit),
+    insertAuditWhenRunExists(db, auditEvent, run.id),
+  ]);
+  if (batchChanges(runInsert) === 0) throw limitReached(await countActiveRuns(db, activeRunsWhere));
   return result;
 }
 
