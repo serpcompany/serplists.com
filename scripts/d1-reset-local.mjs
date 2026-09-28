@@ -1,9 +1,8 @@
 import { rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { DATABASE_NAME, LOCAL_SEED_STEPS } from "./lib/local-d1-seed.mjs";
 import { execTool } from "./lib/run-tool.mjs";
-
-const DATABASE_NAME = "serp-checklists-db";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
@@ -23,17 +22,6 @@ function run(tool, args) {
     env: process.env,
     stdio: "inherit",
   });
-}
-
-function executeLocalSql(filePath) {
-  run("wrangler", [
-    "d1",
-    "execute",
-    DATABASE_NAME,
-    "--local",
-    "--file",
-    filePath,
-  ]);
 }
 
 function sleep(milliseconds) {
@@ -67,9 +55,7 @@ try {
     DATABASE_NAME,
     "--local",
   ]);
-  run("tsx", ["scripts/data/local-d1-data.ts", "seed-test"]);
-  executeLocalSql("./db/seeds/official-templates.sql");
-  run("tsx", ["scripts/data/local-d1-data.ts", "seed-official-login"]);
+  for (const step of LOCAL_SEED_STEPS) run(step.tool, step.args);
   console.log("Local D1 reset complete");
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

@@ -13,9 +13,14 @@ pnpm run setup      # safe to re-run
 
 `setup` creates `.dev.vars` from `.dev.vars.example` with a generated
 `BETTER_AUTH_SECRET` and optional integrations commented out (never overwriting an
-existing file), creates and seeds local D1 if the checkout has none (otherwise
-applies pending migrations), installs the Playwright browser, and builds `dist/`
-if it is missing. `.dev.vars` is the only local env file; variables are listed in
+existing file), creates local D1 if the checkout has none (otherwise applies pending
+migrations), seeds whatever seed data is missing, installs the Playwright browser,
+and builds `dist/` if it is missing. The seed decision comes from the database, not
+its directory: `tsx scripts/data/local-d1-data.ts seed-status` reports whether the
+test data, the official Templates and the official login are there, and setup runs
+only the missing stages, so a seed that failed or was interrupted is finished on the
+next run and data you created is never reset. Setup fails, without printing the
+sign-in hint, if seed data is still missing afterwards. `.dev.vars` is the only local env file; variables are listed in
 [SECURITY.md](../SECURITY.md#secrets-and-environment). The client reads `VITE_*`
 variables through `src/env.ts`; `VITE_API_URL` overrides the dev API base
 (`http://localhost:8788/api`; `/api` when deployed). `pnpm run build` (the

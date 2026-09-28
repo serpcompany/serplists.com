@@ -121,6 +121,11 @@ baseline.
   row: a save writes history row `version + 1`, so a lower value makes every save
   fail with a 409 edit conflict. `tests/integration/local-d1-fixtures.test.ts`
   checks this for every seeded Template and saves the seeded Organization Template.
+  The seed stages are listed once in `scripts/lib/local-d1-seed.mjs`.
+  `readLocalSeedStatus` (`db/seeds/local.ts`) marks each stage complete by the row
+  it writes last, so `pnpm run setup` seeds only the stages that are missing
+  (`tests/integration/setup-local-seed.test.ts`). If seedLocalTestData gains a later
+  insert, move the completion marker to it.
 - Staging: `pnpm run db:seed:official:staging` for official templates only, unless
   there is a deliberate test-data plan.
 - Production: never seed test Users or Organization fixtures.

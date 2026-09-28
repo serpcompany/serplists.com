@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, count, eq, inArray, or } from "drizzle-orm";
 import {
   account,
   audit_events,
@@ -1064,6 +1064,54 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
   ]);
 }
 
+export type LocalSeedStatus = {
+  /** seed-test finished: the test Users exist and the row it writes last is there. */
+  testData: boolean;
+  /** db/seeds/official-templates.sql ran (one INSERT for all official Templates). */
+  officialTemplates: boolean;
+  /** seed-official-login ran: the SERP persona can sign in. */
+  officialLogin: boolean;
+};
+
+// seedLocalTestData inserts audit events last and this one last among them, and it
+// runs without a transaction, so a seed cut short (an error, Ctrl+C) has no marker.
+const LOCAL_SEED_COMPLETE_AUDIT_ID = TEST_AUDIT_IDS[TEST_AUDIT_IDS.length - 1];
+const OFFICIAL_SEED_TEMPLATE_ID = "serp-template-technical-seo-audit";
+const OFFICIAL_LOGIN_ACCOUNT_ID = "account-serp-user-credential";
+
+/**
+ * Which local seed stages have completed. `pnpm run setup` reads this after migrating
+ * and seeds only what is missing, so a failed or interrupted seed is finished on the
+ * next run and data already there is never reset. A database without the tables
+ * (never migrated) reads as not seeded.
+ */
+export async function readLocalSeedStatus(db: LocalDb): Promise<LocalSeedStatus> {
+  try {
+    const [[testUsers], [marker], [officialTemplate], [officialLogin]] = await Promise.all([
+      db.select({ value: count() }).from(users).where(inArray(users.email, TEST_USER_EMAILS)),
+      db.select({ value: count() }).from(audit_events).where(eq(audit_events.id, LOCAL_SEED_COMPLETE_AUDIT_ID)),
+      db
+        .select({ value: count() })
+        .from(templates)
+        .where(and(eq(templates.id, OFFICIAL_SEED_TEMPLATE_ID), eq(templates.user_id, "serp-user"))),
+      db
+        .select({ value: count() })
+        .from(account)
+        .where(and(eq(account.id, OFFICIAL_LOGIN_ACCOUNT_ID), eq(account.userId, "serp-user"))),
+    ]);
+    return {
+      testData: testUsers.value === TEST_USER_EMAILS.length && marker.value === 1,
+      officialTemplates: officialTemplate.value === 1,
+      officialLogin: officialLogin.value === 1,
+    };
+  } catch (error) {
+    if (/no such table/i.test(error instanceof Error ? `${error.message} ${String(error.cause ?? "")}` : String(error))) {
+      return { testData: false, officialTemplates: false, officialLogin: false };
+    }
+    throw error;
+  }
+}
+
 export async function seedOfficialLocalLogin(db: LocalDb): Promise<void> {
   const now = new Date(Math.floor(Date.now() / 1000) * 1000);
   const timestamp = sqliteTime(now);
@@ -1072,7 +1120,7 @@ export async function seedOfficialLocalLogin(db: LocalDb): Promise<void> {
     .delete(account)
     .where(and(eq(account.userId, "serp-user"), eq(account.providerId, "credential")));
   await db.insert(account).values({
-    id: "account-serp-user-credential",
+    id: OFFICIAL_LOGIN_ACCOUNT_ID,
     accountId: "serp-user",
     providerId: "credential",
     userId: "serp-user",
