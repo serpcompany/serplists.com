@@ -12,6 +12,7 @@ import { TemplatesProvider } from './contexts/TemplatesContext';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { Layout } from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DevLoginBar } from './components/DevLoginBar';
@@ -77,7 +78,7 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <HelmetProvider>
-        <ErrorBoundary>
+        <ErrorBoundary resetOnHistoryChange>
           <TooltipProvider>
             <AuthProvider>
               <WorkspaceProvider>
@@ -100,7 +101,7 @@ const App = () => {
                     />
                     <Route
                       path="/share/:shareToken"
-                      element={<ChecklistRun />}
+                      element={<RouteErrorBoundary><ChecklistRun /></RouteErrorBoundary>}
                     />
                     {/* Canonical Private Routes */}
                     <Route

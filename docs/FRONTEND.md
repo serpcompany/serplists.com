@@ -27,6 +27,14 @@ reachable from `src/main.tsx`. Remaining legacy call sites are tracked in the
 Canonical private routes live under `/dashboard/*`; the full route list is in
 [system overview](design-docs/system-overview.md#routes).
 
+Every page renders inside `RouteErrorBoundary` (`src/components/RouteErrorBoundary.tsx`):
+`Layout` wraps its content, and routes outside `Layout` (the shared run page) wrap their
+element. A page that throws while rendering shows a "Something went wrong" card with Try
+again, Go back and a home link, the header and navigation keep working, and going to
+another path clears it (the boundary resets on a pathname change, so healthy pages are
+never remounted). The `ErrorBoundary` around the providers in `App.tsx` is the last
+resort: its fallback uses plain links, and browser Back clears it.
+
 ## Data and state
 
 - `src/lib/api.ts` handles the base URL, JSON, and structured errors, and sends the

@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 import { signOutAndLeave } from '@/features/auth/signOut';
 import {
   publicFooterGroups,
@@ -121,7 +122,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const shell = resolveRouteShell(location.pathname);
   const publicTier = resolvePublicRouteTier(location.pathname);
-  const content = children ?? <Outlet />;
+  const content = <RouteErrorBoundary>{children ?? <Outlet />}</RouteErrorBoundary>;
   const shouldRenderFooter = publicTier !== 'minimal';
 
   const [isSigningOut, setIsSigningOut] = useState(false);

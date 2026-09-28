@@ -74,8 +74,9 @@ To deploy by hand (rarely needed): `pnpm run build`, then
   log sink, metrics, traces, or alerting yet.
 - Local: `pnpm run dev:all` mirrors output to `tmp/logs/dev-all.log`; search for
   `"level":"error"` or a request id.
-- Frontend: `ErrorBoundary` and analytics (`src/lib/analytics.ts`, in-memory)
-  write to the browser console only.
+- Frontend: `ErrorBoundary` (the page-level `RouteErrorBoundary` and the last-resort
+  one in `App.tsx`, see [FRONTEND.md](FRONTEND.md#structure)) and analytics
+  (`src/lib/analytics.ts`, in-memory) write to the browser console only.
 - Weekly maintenance (`.github/workflows/maintenance.yml`): a Claude doc-gardening
   agent opens a PR fixing docs that drifted from the code, and a report of recorded
   debt is posted as an issue (`pnpm run maintenance:report`).
