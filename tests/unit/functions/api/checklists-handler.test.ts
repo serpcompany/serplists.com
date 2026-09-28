@@ -1198,6 +1198,10 @@ describe('Checklists Handlers', () => {
       .mockResolvedValueOnce([{
         id: 'template-1',
         version: 2,
+        owner_type: 'user',
+        team_id: null,
+        user_id: 'user-123',
+        is_public: false,
         items: JSON.stringify([{ id: 'section-1', title: 'Launch', items: [{ id: 'item-copy', title: 'Write copy' }] }]),
       }]);
 
@@ -1256,6 +1260,10 @@ describe('Checklists Handlers', () => {
         {
           id: 'template-1',
           version: 3,
+          owner_type: 'user',
+          team_id: null,
+          user_id: 'user-123',
+          is_public: false,
           items: JSON.stringify([
             {
               id: 'section-1',

@@ -1,6 +1,7 @@
 // A stored template that carries run state (ticked tasks and Sub-tasks, the legacy
 // `completed` key, run notes), as API-written, legacy, or cloned templates can. Every path
 // that starts a run from it (web create, MCP start_run) must store UNTICKED_RUN_SECTIONS.
+// Content blocks carry a text `value`, as stored content must (src/lib/schemas/storedSections.ts).
 
 export const TICKED_TEMPLATE_SECTIONS = [
   {
@@ -16,6 +17,7 @@ export const TICKED_TEMPLATE_SECTIONS = [
           { type: 'text', value: 'Run the checks' },
           {
             type: 'subItems',
+            value: '',
             subItems: [
               { id: 'sub-1', title: 'Tests pass', isCompleted: true, notes: 'green' },
               { id: 'sub-2', title: 'Preview checked', completed: true },
@@ -43,6 +45,7 @@ export const UNTICKED_RUN_SECTIONS = [
           { type: 'text', value: 'Run the checks' },
           {
             type: 'subItems',
+            value: '',
             subItems: [
               { id: 'sub-1', title: 'Tests pass', isCompleted: false },
               { id: 'sub-2', title: 'Preview checked', isCompleted: false },
