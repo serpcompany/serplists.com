@@ -86,7 +86,10 @@ pnpm run ui:snap -- templates --mobile
 Saves a full-page screenshot in `tmp/snapshots/` and prints the accessibility tree
 (a readable text outline of the page), console errors, and failed requests. Write
 routes without the leading slash; Git Bash rewrites `/path` arguments into file
-paths. Use it to reproduce a bug before fixing it and to show the fix afterwards.
+paths. Flags (`--login`, `--password`, `--mobile`, `--out`, `--base`, `--api`) may
+come before or after the route; an unknown flag, a flag with no value, or a second
+route stops with the usage text instead of snapshotting another page. Use it to
+reproduce a bug before fixing it and to show the fix afterwards.
 
 ## Local database
 
