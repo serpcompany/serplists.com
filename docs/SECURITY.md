@@ -17,7 +17,19 @@
   are read from D1; enabling Better Auth's `session.cookieCache` would let revoked
   sessions live until the cache expires. Run Keys are separate credentials and are
   not revoked by a reset.
-- **Production blocks known test-email domains** at sign-up and sign-in.
+- **Production blocks known test-email domains** at sign-up and sign-in. The
+  router checks the email in sign-up and sign-in bodies, and Better Auth's
+  `databaseHooks` (`user.create` and `session.create`) enforce it for every other
+  path, including username sign-in (`functions/api/utils/test-email-block.ts`).
+- **Auth requests are CSRF-protected in the router.** Better Auth also parses
+  form-encoded and multipart bodies and checks `Origin` only when cookies are sent,
+  so a cross-site HTML form could sign a visitor into another account or sign them
+  out. `functions/api/utils/auth-request-guard.ts` requires every non-`GET`
+  `/api/auth/*` request to send `Content-Type: application/json` (`415` otherwise),
+  which forces a CORS preflight for other origins, and refuses with `403` a request
+  whose `Origin` is not the API's own origin, `FRONTEND_URL`, or
+  `CORS_ALLOWED_ORIGINS` (including `Origin: null`), or that has no `Origin` but is
+  marked `Sec-Fetch-Site: cross-site`. Scripts that send neither header still work.
 - **Account fields are validated on every user write.** Better Auth accepts any
   value for `name` and `image`, so `databaseHooks.user` in
   `functions/api/better-auth.ts` (rules in `functions/api/utils/user-profile-validation.ts`

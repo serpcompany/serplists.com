@@ -2,10 +2,11 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { haveIBeenPwned, username } from "better-auth/plugins";
 import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
 import type { Env } from "./types";
 import { createDb, schema } from "./db";
 import { resolveAuthSecret } from "./utils/auth-secret";
-import { resolveConfiguredCorsOrigins } from "./utils/cors";
+import { resolveTrustedOrigins } from "./utils/cors";
 import {
   AuthEmailDeliveryError,
   isAuthEmailConfigured,
@@ -14,6 +15,7 @@ import {
 } from "./utils/auth-email";
 import { deliverAuthEmail, discardUnsentPasswordResetToken } from "./utils/auth-email-throttle";
 import { log } from "./utils/logger";
+import { assertNotBlockedTestEmail } from "./utils/test-email-block";
 import { buildUserProfileWritePolicy, validateUserProfileWrite } from "./utils/user-profile-validation";
 
 function isProductionHost(hostname: string): boolean {
@@ -73,14 +75,10 @@ export function createBetterAuth(env: Env, request: Request) {
   const authEmailPolicy = getAuthEmailPolicy(env, request);
 
   const origin = new URL(request.url).origin;
-
-  const trustedOrigins = new Set<string>();
-  trustedOrigins.add(origin);
-  for (const configuredOrigin of resolveConfiguredCorsOrigins(env)) {
-    trustedOrigins.add(configuredOrigin);
-  }
-
+  // The router's auth request guard checks Origin against the same set.
+  const trustedOrigins = resolveTrustedOrigins(request, env);
   const isSecure = origin.startsWith("https://");
+  const blockTestAccounts = isProductionAuthRequest(env, request);
   const userProfilePolicy = buildUserProfileWritePolicy(env, trustedOrigins);
 
   const db = createDb(env);
@@ -160,16 +158,34 @@ export function createBetterAuth(env: Env, request: Request) {
       },
     },
     plugins,
-    // Better Auth accepts any value for name and image; check them on every
-    // user write so an account cannot store a huge name or a foreign avatar URL.
     databaseHooks: {
       user: {
+        // Better Auth accepts any value for name and image; check them on every
+        // user write so an account cannot store a huge name or a foreign avatar URL.
         create: {
-          before: async (user) => ({ data: validateUserProfileWrite(user, "create", userProfilePolicy) }),
+          before: async (user) => {
+            if (blockTestAccounts) assertNotBlockedTestEmail(user.email);
+            return { data: validateUserProfileWrite(user, "create", userProfilePolicy) };
+          },
         },
         update: {
           // Better Auth replaces the update with the returned data, so always return it.
           before: async (user) => ({ data: validateUserProfileWrite(user, "update", userProfilePolicy) }),
+        },
+      },
+      // Every sign-in, whatever the endpoint (email, username) or body format,
+      // creates a session, so production blocks test-domain accounts here.
+      session: {
+        create: {
+          before: async (session) => {
+            if (!blockTestAccounts) return;
+            const owner = await db
+              .select({ email: schema.users.email })
+              .from(schema.users)
+              .where(eq(schema.users.id, session.userId))
+              .get();
+            assertNotBlockedTestEmail(owner?.email);
+          },
         },
       },
     },

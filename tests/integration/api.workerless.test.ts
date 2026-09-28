@@ -317,3 +317,97 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(preflightAllowed.headers.get('Access-Control-Allow-Origin')).toBe('http://127.0.0.1:4173');
   });
 });
+
+describe('API Worker auth request guard (no-wrangler integration)', () => {
+  const blockedCredentials = { email: 'test-user@serplists.dev', password: 'password123456' };
+
+  function formBody() {
+    const form = new FormData();
+    form.set('email', blockedCredentials.email);
+    form.set('password', blockedCredentials.password);
+    return form;
+  }
+
+  it.each([
+    ['sign-in/email', 'form-urlencoded', () => new URLSearchParams(blockedCredentials)],
+    ['sign-up/email', 'form-urlencoded', () => new URLSearchParams({ ...blockedCredentials, name: 'Blocked' })],
+    ['sign-in/email', 'multipart', formBody],
+    ['sign-up/email', 'multipart', formBody],
+  ])('refuses a %s %s body before Better Auth parses it', async (path, _label, body) => {
+    const response = await apiWorker.fetch(
+      new Request(`https://serplists.com/api/auth/${path}`, { method: 'POST', body: body() }),
+      buildEnv(),
+    );
+
+    expect(response.status).toBe(415);
+    expect(response.headers.get('Set-Cookie')).toBeNull();
+  });
+
+  it.each(['text/plain', 'text/plain; x=application/json', 'application/x-www-form-urlencoded'])(
+    'refuses a JSON body sent as %s',
+    async (contentType) => {
+      const response = await apiWorker.fetch(
+        new Request('https://serplists.com/api/auth/sign-in/email', {
+          method: 'POST',
+          headers: { 'Content-Type': contentType },
+          body: JSON.stringify(blockedCredentials),
+        }),
+        buildEnv(),
+      );
+
+      expect(response.status).toBe(415);
+    },
+  );
+
+  it.each([
+    ['a foreign Origin', { Origin: 'https://evil.example' }],
+    ['Origin: null', { Origin: 'null' }],
+    ['a cross-site fetch with no Origin', { 'Sec-Fetch-Site': 'cross-site' }],
+  ])('refuses a cookieless auth POST from %s', async (_label, headers) => {
+    for (const path of ['sign-in/email', 'sign-out']) {
+      const response = await apiWorker.fetch(
+        new Request(`https://serplists.com/api/auth/${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify(blockedCredentials),
+        }),
+        buildEnv(),
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.headers.get('Set-Cookie')).toBeNull();
+    }
+  });
+
+  it.each([
+    ['the API origin', { Origin: 'https://serplists.com' }],
+    ['the configured frontend origin', { Origin: 'https://app.serplists.com' }],
+    ['no Origin (scripts and server calls)', {}],
+    ['a same-site fetch', { 'Sec-Fetch-Site': 'same-site' }],
+  ])('lets a JSON auth POST from %s through to the test-account check', async (_label, headers) => {
+    const response = await apiWorker.fetch(
+      new Request('https://serplists.com/api/auth/sign-in/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'APPLICATION/JSON; charset=utf-8', ...headers },
+        body: JSON.stringify(blockedCredentials),
+      }),
+      buildEnv({ FRONTEND_URL: 'https://app.serplists.com' }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: 'Test accounts are disabled in production' });
+  });
+
+  it('answers malformed JSON on a guarded auth route with 400', async () => {
+    const response = await apiWorker.fetch(
+      new Request('https://serplists.com/api/auth/sign-in/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{"email":',
+      }),
+      buildEnv(),
+    );
+
+    expect(response.status).toBe(400);
+  });
+});

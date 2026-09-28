@@ -6,6 +6,8 @@ import { checkRateLimit } from './utils/rate-limit';
 import { checkAuthRateLimit } from './utils/auth-rate-limit';
 import { createBetterAuth, getAuthEmailPolicy } from './better-auth';
 import { findOversizedBody } from './utils/body-limit';
+import { rejectUnsafeAuthRequest } from './utils/auth-request-guard';
+import { TEST_ACCOUNTS_DISABLED_MESSAGE, blockedTestEmailDomain } from './utils/test-email-block';
 import { 
   handleProfileByUsername, 
   handleProfileById
@@ -23,8 +25,6 @@ import { handleAgentMcp } from './handlers/agentMcp';
 import { jsonError } from './utils/response';
 import { isPersonalRunMcpEnabled, isPersonalRunMcpPath } from './utils/personal-run-mcp-feature';
 
-const blockedTestEmailDomains = new Set(['serplists.dev', 'serp-checklists.dev']);
-
 function isProductionHost(hostname: string): boolean {
   return hostname === 'serplists.com' || hostname.endsWith('.serplists.com');
 }
@@ -35,14 +35,6 @@ function isLocalRequest(url: URL): boolean {
     url.hostname === '127.0.0.1' ||
     url.port === '8788'
   );
-}
-
-function isBlockedTestEmail(email: string): boolean {
-  const lower = email.trim().toLowerCase();
-  const atIndex = lower.lastIndexOf('@');
-  if (atIndex < 0) return false;
-  const domain = lower.slice(atIndex + 1);
-  return blockedTestEmailDomains.has(domain);
 }
 
 function requiresConfiguredAuthEmail(path: string, isProdRequest: boolean, emailVerificationRequired: boolean): boolean {
@@ -156,6 +148,11 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       }
     }
 
+    if (path.startsWith('auth')) {
+      const rejection = rejectUnsafeAuthRequest(request, env);
+      if (rejection) return finalize(rejection);
+    }
+
     // Handle specific auth routes
     if (path === 'health') {
       response = new Response(JSON.stringify({ status: 'ok' }), {
@@ -185,19 +182,23 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
           path === 'auth/sign-up/email' ||
           path === 'auth/sign-in/email')
       ) {
+        // A fast first check; Better Auth's database hooks enforce the same
+        // block for every sign-up and sign-in path (see better-auth.ts).
+        let body: unknown;
         try {
-          const body: unknown = await request.clone().json();
-          const email =
-            typeof body === 'object' && body !== null && 'email' in body && typeof body.email === 'string'
-              ? body.email
-              : '';
-          if (email && isBlockedTestEmail(email)) {
-            log('warn', 'blocked_test_user_auth', { email, path });
-            response = jsonError('Test accounts are disabled in production', 403);
-            return finalize(response);
-          }
+          body = await request.clone().json();
         } catch {
-          // Ignore parse errors; auth handler will validate payloads.
+          return finalize(jsonError('Invalid JSON', 400));
+        }
+        const email =
+          typeof body === 'object' && body !== null && 'email' in body && typeof body.email === 'string'
+            ? body.email
+            : '';
+        const blockedDomain = email ? blockedTestEmailDomain(email) : null;
+        if (blockedDomain) {
+          log('warn', 'blocked_test_user_auth', { domain: blockedDomain, path });
+          response = jsonError(TEST_ACCOUNTS_DISABLED_MESSAGE, 403);
+          return finalize(response);
         }
       }
 

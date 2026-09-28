@@ -74,6 +74,9 @@ and user-facing failure states when a supporting service is unavailable.
 Better Auth endpoints are under `/api/auth/*`, for example
 `POST /api/auth/sign-in/email`, `POST /api/auth/sign-up/email`,
 `POST /api/auth/sign-out`, `GET /api/auth/get-session`.
+State-changing auth requests must send a JSON body from a trusted origin; the
+router refuses form posts and cross-site requests before Better Auth runs
+([SECURITY.md](../SECURITY.md#model)).
 
 ## Local development
 
@@ -98,7 +101,8 @@ After changing auth configuration or email delivery:
 2. Open the verification link and confirm sign-in works only afterward.
 3. Request a password reset, open the link, and set a new password.
 4. Confirm the new password signs in and returns to the intended page.
-5. Confirm test-email blocking still covers the sign-up and sign-in endpoints.
+5. Confirm test-email blocking still covers the sign-up and sign-in endpoints,
+   including sign-in by username.
 
 ## Troubleshooting
 

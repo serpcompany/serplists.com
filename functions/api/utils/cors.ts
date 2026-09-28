@@ -28,6 +28,15 @@ export function resolveConfiguredCorsOrigins(env: Env): string[] {
   return Array.from(allowed);
 }
 
+/**
+ * Origins trusted to make authenticated, state-changing requests: the API's own
+ * origin plus FRONTEND_URL and CORS_ALLOWED_ORIGINS. Unlike resolveCorsOrigin,
+ * an empty allowlist does not mean "any origin".
+ */
+export function resolveTrustedOrigins(request: Request, env: Env): Set<string> {
+  return new Set([new URL(request.url).origin, ...resolveConfiguredCorsOrigins(env)]);
+}
+
 export function resolveCorsOrigin(request: Request, env: Env): string | null {
   const origin = request.headers.get('Origin');
   const allowed = new Set(resolveConfiguredCorsOrigins(env));
