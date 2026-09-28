@@ -18,7 +18,10 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
   (`whitespace-pre-line`); `src/lib/utils/markdownWhitespace.ts` removes the newlines
   between blocks that would otherwise show as blank lines.
 - **Themes:** light (default) and dark, stored under `serplists-theme` and applied
-  as the `dark` class on `<html>` (`src/lib/theme.ts`).
+  as the `dark` class on `<html>` (`src/lib/theme.ts`). A change in one tab applies to
+  the page in every open tab. Components follow the theme with `subscribeToThemeChanges`,
+  which applies another tab's change to the document before telling them, so a label
+  never disagrees with the page; do not add your own `storage` listener.
 - **Icons:** `lucide-react`.
 - **Feedback:** `sonner` toasts for results of user actions. `App.tsx` mounts only the sonner
   `Toaster`, so import `toast` from `sonner`; ESLint blocks the shadcn toast store, which has no renderer.

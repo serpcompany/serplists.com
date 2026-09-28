@@ -52,7 +52,7 @@ import {
   buildConsoleTemplatesPath,
   buildPublicTemplatesPath,
 } from './lib/routes';
-import { applyStoredTheme } from './lib/theme';
+import { applyStoredTheme, subscribeToThemeChanges } from './lib/theme';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -63,9 +63,12 @@ const queryClient = new QueryClient({
   },
 });
 
+// Applies the stored theme, and a theme chosen in another tab, on every route, including
+// those with no theme toggle.
 const RootThemeSync = () => {
   useEffect(() => {
     applyStoredTheme();
+    return subscribeToThemeChanges(() => undefined);
   }, []);
 
   return null;

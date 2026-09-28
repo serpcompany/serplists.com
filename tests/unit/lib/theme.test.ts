@@ -1,3 +1,6 @@
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -5,7 +8,10 @@ import {
   getDocumentTheme,
   getStoredTheme,
   setStoredTheme,
+  subscribeToThemeChanges,
+  syncThemeFromStorageEvent,
   THEME_CHANGE_EVENT,
+  THEME_STORAGE_KEY,
   toggleDocumentTheme,
 } from '@/lib/theme';
 
@@ -42,6 +48,7 @@ const createThemeHarness = () => {
       getItem: vi.fn((key: string) => storage.get(key) ?? null),
       setItem: vi.fn((key: string, value: string) => storage.set(key, value)),
     } as unknown as Storage,
+    storedValues: storage,
   };
 };
 
@@ -156,5 +163,125 @@ describe('theme helpers when the browser blocks site data', () => {
     expect(toggleDocumentTheme(harness.document, throwingStorage)).toBe('dark');
     expect(harness.isDark()).toBe(true);
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+});
+
+// A theme change in one tab reaches the others only as a `storage` event. Each tab has to
+// apply it to its own document, or its toggle label and toasts say dark while the page
+// stays light, and the next click does the opposite of what the label promised.
+describe('theme changes from another tab', () => {
+  const storageEvent = (key: string | null, storageArea: unknown) =>
+    Object.assign(new Event('storage'), { key, storageArea });
+
+  it('applies a theme another tab stored to this document', () => {
+    const harness = createThemeHarness();
+    harness.storedValues.set(THEME_STORAGE_KEY, 'dark');
+
+    expect(
+      syncThemeFromStorageEvent(
+        { key: THEME_STORAGE_KEY, storageArea: harness.storage },
+        harness.document,
+        harness.storage,
+        harness.storage,
+      ),
+    ).toBe('dark');
+    expect(harness.isDark()).toBe(true);
+    expect(getDocumentTheme(harness.document)).toBe('dark');
+  });
+
+  it('ignores other keys and sessionStorage', () => {
+    const harness = createThemeHarness();
+    harness.storedValues.set(THEME_STORAGE_KEY, 'dark');
+    const sessionArea = { getItem: () => null } as unknown as Storage;
+
+    expect(
+      syncThemeFromStorageEvent(
+        { key: 'workspace', storageArea: harness.storage },
+        harness.document,
+        harness.storage,
+        harness.storage,
+      ),
+    ).toBeNull();
+    expect(
+      syncThemeFromStorageEvent(
+        { key: THEME_STORAGE_KEY, storageArea: sessionArea },
+        harness.document,
+        harness.storage,
+        harness.storage,
+      ),
+    ).toBeNull();
+    expect(harness.isDark()).toBe(false);
+  });
+
+  it('falls back to light when another tab clears storage or stores junk', () => {
+    const harness = createThemeHarness();
+    harness.documentElementClassNames.add('dark');
+    harness.bodyClassNames.add('dark');
+
+    expect(
+      syncThemeFromStorageEvent(
+        { key: null, storageArea: harness.storage },
+        harness.document,
+        harness.storage,
+        harness.storage,
+      ),
+    ).toBe('light');
+    expect(harness.isDark()).toBe(false);
+
+    harness.storedValues.set(THEME_STORAGE_KEY, 'purple');
+    harness.documentElementClassNames.add('dark');
+    expect(
+      syncThemeFromStorageEvent(
+        { key: THEME_STORAGE_KEY, storageArea: harness.storage },
+        harness.document,
+        harness.storage,
+        harness.storage,
+      ),
+    ).toBe('light');
+    expect(harness.isDark()).toBe(false);
+  });
+
+  it('keeps subscribers and the document in step, and unsubscribes both listeners', () => {
+    const harness = createThemeHarness();
+    const target = new EventTarget();
+    const onChange = vi.fn();
+    const unsubscribe = subscribeToThemeChanges(onChange, {
+      documentRef: harness.document,
+      localStorageArea: harness.storage,
+      storage: harness.storage,
+      target,
+    });
+
+    harness.storedValues.set(THEME_STORAGE_KEY, 'dark');
+    target.dispatchEvent(storageEvent(THEME_STORAGE_KEY, harness.storage));
+    expect(harness.isDark()).toBe(true);
+    expect(onChange).toHaveBeenLastCalledWith('dark');
+
+    target.dispatchEvent(storageEvent('unrelated', harness.storage));
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    target.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: 'light' }));
+    expect(onChange).toHaveBeenLastCalledWith('light');
+
+    unsubscribe();
+    harness.storedValues.set(THEME_STORAGE_KEY, 'light');
+    target.dispatchEvent(storageEvent(THEME_STORAGE_KEY, harness.storage));
+    target.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: 'dark' }));
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(harness.isDark()).toBe(true);
+  });
+
+  it('leaves storage listening to theme.ts, so no component updates its label alone', () => {
+    const listFiles = (dir: string): string[] =>
+      readdirSync(dir).flatMap((name) => {
+        const path = join(dir, name);
+        return statSync(path).isDirectory() ? listFiles(path) : [path];
+      });
+    const offenders = listFiles('src')
+      .filter((path) => /\.(ts|tsx)$/.test(path))
+      .filter((path) => path.split('\\').join('/') !== 'src/lib/theme.ts')
+      .filter((path) => /addEventListener\(\s*['"]storage['"]/.test(readFileSync(path, 'utf8')));
+
+    expect(offenders).toEqual([]);
   });
 });
