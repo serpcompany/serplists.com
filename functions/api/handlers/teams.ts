@@ -4,6 +4,7 @@ import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { createInviteToken, sha256Hex } from "../utils/crypto";
 import { buildAuditEventValues } from "../utils/audit";
+import { insertAuditEventWhere } from "../utils/guarded-writes";
 import { getSessionUserId } from "../utils/session";
 import { generateSlug } from "../utils/slug";
 import { buildTeamInviteDelivery } from "../utils/team-invite-delivery";
@@ -13,6 +14,7 @@ import {
   normalizeTeamRole,
 } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
+import { transferTeamOwnership, updateTeamMember } from "./team-membership";
 
 const createTeamBodySchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -43,15 +45,6 @@ const updateTeamBodySchema = z
 const inviteTeamMemberBodySchema = z.object({
   email: z.string().trim().email().max(320),
   role: z.enum(["admin", "editor", "runner", "viewer"]).default("viewer"),
-});
-
-const updateTeamMemberBodySchema = z.object({
-  role: z.enum(["admin", "editor", "runner", "viewer"]).optional(),
-  status: z.enum(["active", "disabled"]).optional(),
-});
-
-const transferTeamOwnerBodySchema = z.object({
-  memberId: z.string().trim().min(1),
 });
 
 async function readJson(request: Request): Promise<unknown> {
@@ -126,36 +119,6 @@ function acceptedInviteExistsSql(inviteId: string, userId: string, acceptedAt: s
       and ${team_invites.accepted_at} = ${acceptedAt}
       and ${team_invites.revoked_at} is null
   )`;
-}
-
-function insertAuditEventWhenInviteAccepted(
-  db: ReturnType<typeof createDb>,
-  auditEvent: typeof schema.audit_events.$inferInsert,
-  inviteId: string,
-  userId: string,
-  acceptedAt: string,
-) {
-  const { audit_events } = schema;
-
-  return db.insert(audit_events).select(sql`
-    select
-      ${auditEvent.id},
-      ${auditEvent.actor_user_id},
-      ${auditEvent.subject_type},
-      ${auditEvent.subject_id},
-      ${auditEvent.resource_type},
-      ${auditEvent.resource_id},
-      ${auditEvent.action},
-      ${auditEvent.before_json},
-      ${auditEvent.after_json},
-      ${auditEvent.diff_json},
-      ${auditEvent.metadata_json},
-      ${auditEvent.request_id},
-      ${auditEvent.ip_hash},
-      ${auditEvent.user_agent},
-      ${auditEvent.created_at}
-    where ${acceptedInviteExistsSql(inviteId, userId, acceptedAt)}
-  `);
 }
 
 async function acceptTeamInviteRecord({
@@ -255,7 +218,7 @@ async function acceptTeamInviteRecord({
       });
       await db.batch([
         db.update(team_invites).set(inviteUpdates).where(pendingInviteWhere(invite.id, now)),
-        insertAuditEventWhenInviteAccepted(db, acceptedAuditEvent, invite.id, userId, now),
+        insertAuditEventWhere(db, acceptedAuditEvent, acceptedInviteExistsSql(invite.id, userId, now)),
       ]);
     } else {
       await db.batch([
@@ -266,7 +229,7 @@ async function acceptTeamInviteRecord({
           joined_at: existingMembership.joined_at ?? now,
           updated_at: now,
         }).where(and(eq(team_members.id, memberId), acceptedInviteExistsSql(invite.id, userId, now))),
-        insertAuditEventWhenInviteAccepted(db, auditEvent, invite.id, userId, now),
+        insertAuditEventWhere(db, auditEvent, acceptedInviteExistsSql(invite.id, userId, now)),
       ]);
     }
   } else {
@@ -299,7 +262,7 @@ async function acceptTeamInviteRecord({
           where ${acceptedInviteExistsSql(invite.id, userId, now)}
         `)
         .onConflictDoNothing({ target: [team_members.team_id, team_members.user_id] }),
-      insertAuditEventWhenInviteAccepted(db, auditEvent, invite.id, userId, now),
+      insertAuditEventWhere(db, auditEvent, acceptedInviteExistsSql(invite.id, userId, now)),
     ]);
   }
 
@@ -644,92 +607,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       });
     }
 
-    const body = await readJson(request);
-    const parsed = transferTeamOwnerBodySchema.safeParse(body);
-    if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message || "Invalid owner transfer payload", 400);
-    }
-
-    if (parsed.data.memberId === membership.id) {
-      return jsonError("This member is already the Organization owner", 400, {
-        code: "owner_transfer_noop",
-      });
-    }
-
-    const [targetMember] = await db
-      .select()
-      .from(team_members)
-      .where(
-        and(
-          eq(team_members.id, parsed.data.memberId),
-          eq(team_members.team_id, teamId),
-          eq(team_members.status, "active"),
-        ),
-      )
-      .limit(1);
-
-    if (!targetMember || !targetMember.id) {
-      return jsonError("Member not found", 404);
-    }
-    if (normalizeTeamRole(targetMember.role) === "owner") {
-      return jsonError("Member is already the Organization owner", 400, {
-        code: "owner_transfer_noop",
-      });
-    }
-
-    const now = new Date().toISOString();
-    const auditEvent = await buildAuditEventValues({
-      actorUserId: userId,
-      subject: { type: "team", id: teamId },
-      resource: { type: "team", id: teamId },
-      action: "team.owner_transferred",
-      before: {
-        ownerMemberId: membership.id,
-        ownerUserId: membership.user_id,
-      },
-      after: {
-        ownerMemberId: targetMember.id,
-        ownerUserId: targetMember.user_id,
-      },
-      diff: {
-        previousOwnerMemberId: membership.id,
-        previousOwnerUserId: membership.user_id,
-        nextOwnerMemberId: targetMember.id,
-        nextOwnerUserId: targetMember.user_id,
-      },
-      request,
-      createdAt: now,
-    });
-    await db.batch([
-      db
-        .update(team_members)
-        .set({
-          role: "admin",
-          updated_at: now,
-        })
-        .where(and(eq(team_members.id, membership.id), eq(team_members.team_id, teamId))),
-      db
-        .update(team_members)
-        .set({
-          role: "owner",
-          updated_at: now,
-        })
-        .where(and(eq(team_members.id, targetMember.id), eq(team_members.team_id, teamId), eq(team_members.status, "active"))),
-      db
-        .update(teams)
-        .set({
-          billing_owner_user_id: targetMember.user_id,
-          updated_at: now,
-        })
-        .where(and(eq(teams.id, teamId), isNull(teams.archived_at))),
-      db.insert(audit_events).values(auditEvent),
-    ]);
-
-    return json({
-      success: true,
-      ownerMemberId: targetMember.id,
-      ownerUserId: targetMember.user_id,
-    });
+    return transferTeamOwnership({ db, request, teamId, userId, membership }, await readJson(request));
   }
 
   if (request.method === "GET" && teamsSubpath[1] === "activity") {
@@ -991,60 +869,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       return jsonError("Forbidden", 403);
     }
 
-    const memberId = teamsSubpath[2];
-    const body = await readJson(request);
-    const parsed = updateTeamMemberBodySchema.safeParse(body);
-    if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message || "Invalid member payload", 400);
-    }
-    if (typeof parsed.data.role === "undefined" && typeof parsed.data.status === "undefined") {
-      return jsonError("No fields to update", 400);
-    }
-
-    const [targetMember] = await db
-      .select()
-      .from(team_members)
-      .where(and(eq(team_members.id, memberId), eq(team_members.team_id, teamId)))
-      .limit(1);
-
-    if (!targetMember) {
-      return jsonError("Member not found", 404);
-    }
-    if (targetMember.user_id === userId) {
-      return jsonError("Organization members cannot change their own membership from this endpoint", 400, {
-        code: "self_membership_update_forbidden",
-      });
-    }
-    if (normalizeTeamRole(targetMember.role) === "owner") {
-      return jsonError("Owner membership cannot be changed from this endpoint", 400, {
-        code: "owner_membership_update_forbidden",
-      });
-    }
-
-    const now = new Date().toISOString();
-    const updates = {
-      ...(parsed.data.role ? { role: parsed.data.role } : {}),
-      ...(parsed.data.status ? { status: parsed.data.status } : {}),
-      updated_at: now,
-    };
-
-    const auditEvent = await buildAuditEventValues({
-      actorUserId: userId,
-      subject: { type: "team", id: teamId },
-      resource: { type: "team_member", id: memberId },
-      action: "team_member.updated",
-      before: targetMember,
-      after: { ...targetMember, ...updates },
-      diff: updates,
-      request,
-      createdAt: now,
-    });
-    await db.batch([
-      db.update(team_members).set(updates).where(and(eq(team_members.id, memberId), eq(team_members.team_id, teamId))),
-      db.insert(audit_events).values(auditEvent),
-    ]);
-
-    return json({ success: true });
+    return updateTeamMember({ db, request, teamId, userId, membership }, teamsSubpath[2], await readJson(request));
   }
 
   return new Response("Method Not Allowed", { status: 405 });

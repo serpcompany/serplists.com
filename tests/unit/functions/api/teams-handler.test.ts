@@ -625,6 +625,62 @@ describe("Teams handler", () => {
     expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
   });
 
+  it("returns a conflict when the ownership transfer write changes nothing", async () => {
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        { id: "owner-member", team_id: "team-1", user_id: "owner-user", role: "owner", status: "active" },
+      ])
+      .mockResolvedValueOnce([
+        { id: "member-2", team_id: "team-1", user_id: "user-2", role: "admin", status: "active" },
+      ])
+      .mockResolvedValueOnce([]);
+    dbMocks.db.batch.mockResolvedValueOnce([
+      { meta: { changes: 0 } },
+      { meta: { changes: 0 } },
+      { meta: { changes: 0 } },
+      { meta: { changes: 0 } },
+    ]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams/team-1/owner", {
+        method: "PUT",
+        body: JSON.stringify({ memberId: "member-2" }),
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.code).toBe("owner_transfer_conflict");
+    expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+    expect(dbMocks.insertChain.select).toHaveBeenCalled();
+  });
+
+  it("returns a conflict when a member update write changes nothing", async () => {
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        { id: "admin-member", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
+      ])
+      .mockResolvedValueOnce([
+        { id: "member-2", team_id: "team-1", user_id: "user-2", role: "editor", status: "active" },
+      ]);
+    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams/team-1/members/member-2", {
+        method: "PUT",
+        body: JSON.stringify({ status: "disabled" }),
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.code).toBe("member_update_conflict");
+    expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+    expect(dbMocks.insertChain.select).toHaveBeenCalled();
+  });
+
   it("rejects invites for users who are already active members", async () => {
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([

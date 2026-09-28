@@ -22,12 +22,7 @@ import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
 
 type AssignableTeamRole = Exclude<TeamRole, 'owner'>;
 
-const assignableRoles: AssignableTeamRole[] = [
-  'admin',
-  'editor',
-  'runner',
-  'viewer',
-];
+const assignableRoles: AssignableTeamRole[] = ['admin', 'editor', 'runner', 'viewer'];
 
 const memberStatuses: TeamMemberStatus[] = ['active', 'disabled'];
 
@@ -357,13 +352,14 @@ export function TeamSettingsSection() {
     setUpdatingMemberId(member.id);
     try {
       await api.updateTeamMember(activeTeamId, member.id, updates);
-      await reload(membersQuery, ['team-members', activeTeamId]);
       await refreshTeams();
       await reload(activityQuery, ['team-activity', activeTeamId]);
       toast.success('Member updated');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update member');
     } finally {
+      // A 409 means the member changed elsewhere (for example, became the owner).
+      await reload(membersQuery, ['team-members', activeTeamId]);
       setUpdatingMemberId(null);
     }
   };
@@ -384,13 +380,14 @@ export function TeamSettingsSection() {
     setTransferringOwnerMemberId(member.id);
     try {
       await api.transferTeamOwnership(activeTeamId, member.id);
-      await reload(membersQuery, ['team-members', activeTeamId]);
       await refreshTeams();
       await reload(activityQuery, ['team-activity', activeTeamId]);
       toast.success('Organization ownership transferred');
     } catch (error) {
+      void refreshTeams().catch(() => undefined);
       toast.error(error instanceof Error ? error.message : 'Failed to transfer ownership');
     } finally {
+      await reload(membersQuery, ['team-members', activeTeamId]);
       setTransferringOwnerMemberId(null);
     }
   };

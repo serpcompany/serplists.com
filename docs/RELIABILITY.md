@@ -131,6 +131,12 @@ Common failures:
   vi.mock("drizzle-orm/d1", () => ({ drizzle: vi.fn(() => dbMocks.db) }));
   ```
 
+- To test SQL guards or races, run the real handler against `SqliteD1` from
+  `tests/support/sqlite-d1.ts`: a node:sqlite database with every migration applied that
+  implements the D1 calls Drizzle makes. `beforeNextBatch()` commits a competing write
+  just before the handler's next `db.batch()`, and `queryPlan()` returns
+  `EXPLAIN QUERY PLAN` for a recorded statement. See
+  `tests/unit/functions/api/teams-sqlite.test.ts`.
 - Coverage settings live under `test.coverage` in `vitest.config.ts`
   (`pnpm run test:coverage`); `@vitest/coverage-v8` must match the Vitest version.
   If you override `test.exclude`, keep `node_modules`, `dist`,

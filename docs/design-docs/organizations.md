@@ -26,6 +26,19 @@ User-facing language follows the [product glossary](../PRODUCT_SENSE.md) and the
 
 There must be exactly one active `owner` role per Organization. Role transfers demote the current `owner` to `admin` and promote the selected active member to `owner`.
 
+Ownership and membership writes re-check their conditions inside the D1 batch that
+applies them (`functions/api/handlers/team-membership.ts`), because another manager can
+change the same rows between the handler's read and its write:
+
+- A transfer demotes the owner only while the target is still an active non-owner and
+  the Organization is not archived, promotes the target only if that demotion happened,
+  and moves the billing owner and writes the `team.owner_transferred` audit event only if
+  the promotion happened. Otherwise nothing changes and the route returns 409
+  `owner_transfer_conflict`; repeating a transfer that already happened succeeds.
+- A member update applies only while the row is not the owner, is not the actor, and the
+  actor is still an active `owner` or `admin`. Otherwise the route returns 409
+  `member_update_conflict` and writes no audit event.
+
 ## Data Model
 
 Source of truth: `db/migrations/0021_add_teams_audit_history.sql` and `db/migrations/0022_enforce_single_active_team_owner.sql`.
