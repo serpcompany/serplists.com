@@ -189,7 +189,10 @@ const publishedClipyTemplate: ChecklistTemplate = {
   tags: ['Clipy'],
 };
 
-function renderPublishedRoute(template: ChecklistTemplate) {
+function renderPublishedRoute(
+  template: ChecklistTemplate,
+  href = 'https://serplists.com/profile/alice/reviewed-clipy-checklist',
+) {
   mockUseTemplateDetailModel.mockReturnValue({
     billingState: { billingEnabled: true, isLoading: false, isPro: false },
     loading: false,
@@ -201,12 +204,12 @@ function renderPublishedRoute(template: ChecklistTemplate) {
   });
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
-    value: { location: { href: 'https://serplists.com/profile/alice/reviewed-clipy-checklist', origin: 'https://serplists.com' } },
+    value: { location: { href, origin: new URL(href).origin } },
   });
   const helmetContext: Record<string, unknown> = {};
   const html = renderToStaticMarkup(
     <HelmetProvider context={helmetContext}>
-      <StaticRouter location="/profile/alice/reviewed-clipy-checklist">
+      <StaticRouter location={new URL(href).pathname}>
         <Routes>
           <Route path="/profile/:username/:templateSlug" element={<PublicTemplate />} />
         </Routes>
@@ -214,7 +217,14 @@ function renderPublishedRoute(template: ChecklistTemplate) {
     </HelmetProvider>,
   );
 
-  return { helmet: helmetContext.helmet as { meta: { toString(): string }; title: { toString(): string } }, html };
+  return {
+    helmet: helmetContext.helmet as {
+      link: { toString(): string };
+      meta: { toString(): string };
+      title: { toString(): string };
+    },
+    html,
+  };
 }
 
 describe('PublicTemplate rendered route', () => {
@@ -246,5 +256,24 @@ describe('PublicTemplate rendered route', () => {
 
     expect(helmet.title.toString()).toContain('Reviewed Clipy Checklist');
     expect(helmet.meta.toString()).toContain('content="Persisted Clipy summary."');
+  });
+
+  it('points the canonical at the production template path from any host', () => {
+    const { helmet } = renderPublishedRoute(
+      publishedClipyTemplate,
+      'https://staging.serplists.com/profile/Alice/reviewed-clipy-checklist?ref=x',
+    );
+
+    expect(helmet.link.toString()).toContain(
+      'href="https://serplists.com/profile/alice/reviewed-clipy-checklist"',
+    );
+    expect(helmet.meta.toString()).toContain('name="robots" content="noindex, nofollow"');
+    expect(helmet.meta.toString()).not.toContain('staging.serplists.com');
+  });
+
+  it('keeps the production template page indexable', () => {
+    const { helmet } = renderPublishedRoute(publishedClipyTemplate);
+
+    expect(helmet.meta.toString()).toContain('name="robots" content="index, follow"');
   });
 });

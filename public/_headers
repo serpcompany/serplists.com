@@ -8,3 +8,15 @@
 
 /share/*
   X-Robots-Tag: noindex, nofollow
+
+# Only https://serplists.com may be indexed. Staging and the *.pages.dev aliases
+# serve the same app (staging with test data), so keep them out of search results.
+# Never add noindex to a rule that matches serplists.com.
+https://staging.serplists.com/*
+  X-Robots-Tag: noindex, nofollow
+
+https://:project.pages.dev/*
+  X-Robots-Tag: noindex, nofollow
+
+https://:version.:project.pages.dev/*
+  X-Robots-Tag: noindex, nofollow

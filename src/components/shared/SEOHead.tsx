@@ -1,31 +1,50 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 
+import { buildCanonicalUrl, CANONICAL_ORIGIN, isIndexableHost } from '@/lib/seo/siteOrigin';
+
 interface SEOHeadProps {
   title?: string;
   description?: string;
   keywords?: string[];
   image?: string;
+  /** Canonical URL. Defaults to the production URL of the current path. */
   url?: string;
   type?: 'website' | 'article';
   publishedTime?: string;
   author?: string;
+  /** Defaults to 'index, follow' on serplists.com and 'noindex, nofollow' on any other host. */
   robots?: string;
 }
+
+const getCurrentPageUrl = (): URL | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return new URL(window.location.href);
+  } catch {
+    return null;
+  }
+};
 
 export const SEOHead: React.FC<SEOHeadProps> = ({
   title = 'Checklist App - Create and Manage Your Workflows',
   description = 'Create, share, and run interactive checklists for your workflows. Organize tasks, track progress, and boost productivity.',
   keywords = ['checklist', 'workflow', 'productivity', 'task management', 'templates'],
   image = '/placeholder.svg',
-  url = window.location.href,
+  url: urlProp,
   type = 'website',
   publishedTime,
   author,
-  robots = 'index, follow',
+  robots: robotsProp,
 }) => {
+  // Staging and the *.pages.dev aliases serve this same app: point every copy at
+  // production and keep the non-production hosts out of the index.
+  const currentPage = getCurrentPageUrl();
+  const url = urlProp ?? buildCanonicalUrl(currentPage?.pathname ?? '/');
+  const robots =
+    robotsProp ?? (isIndexableHost(currentPage?.hostname) ? 'index, follow' : 'noindex, nofollow');
   const fullTitle = title.includes('Checklist App') ? title : `${title} | Checklist App`;
-  const fullImageUrl = image.startsWith('http') ? image : `${window.location.origin}${image}`;
+  const fullImageUrl = image.startsWith('http') ? image : new URL(image, CANONICAL_ORIGIN).toString();
 
   return (
     <Helmet>

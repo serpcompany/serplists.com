@@ -54,6 +54,11 @@ Cloudflare Pages settings:
 - Project name `serplists-com`, set directly in the workflow. Do not use the
   `serp-checklists.pages.dev` domain or the `wrangler.toml` `name` as the project name.
 - Domains: `serp-checklists.pages.dev`, `serplists.com`, `staging.serplists.com`.
+- Only `serplists.com` may be indexed. `public/_headers` sends
+  `X-Robots-Tag: noindex, nofollow` on `staging.serplists.com` and every `*.pages.dev`
+  host, and `SEOHead` points canonical links at `https://serplists.com` and defaults
+  robots to noindex on any other host (`src/lib/seo/siteOrigin.ts`). Leave robots.txt
+  crawlable on those hosts: a `Disallow` would hide the noindex from crawlers.
 - GitHub secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL`, `CLOUDFLARE_API_KEY`.
   The workflow uses email plus global key because the repo's legacy
   `CLOUDFLARE_API_TOKEN` could not read the Pages project.
