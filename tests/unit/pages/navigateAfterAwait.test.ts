@@ -38,7 +38,9 @@ describe('navigation after a request', () => {
     for (const name of names) {
       const body = handlerBody(source, name);
       expect(body, name).toContain('beginVisit()');
-      expect(body, name).toMatch(/isCurrent\(\)|followTemplateActionResult\(|finishDashboardTemplateRun\(/);
+      expect(body, name).toMatch(
+        /isCurrent\(\)|followTemplateActionResult\(|finishDashboardTemplateRun\(|saveTemplateForVisit\(/,
+      );
     }
   });
 });
