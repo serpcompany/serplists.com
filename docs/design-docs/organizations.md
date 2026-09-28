@@ -50,7 +50,7 @@ Organization operations use legacy `/api/teams` route identifiers and require a 
 - `GET /api/teams/:teamId/members`: list members. Managers can see inactive rows; non-managers see active members.
 - `PUT /api/teams/:teamId/members/:memberId`: update role or status. Requires `owner` or `admin`; owners cannot be changed through this route.
 - `PUT /api/teams/:teamId/owner`: transfer the Organization's `owner` role. Requires current `owner`.
-- `POST /api/teams/:teamId/leave`: leave the Organization. Any active member except the `owner` (who gets `400 owner_must_transfer`); deletes the membership row so a manager cannot re-activate it, and records `team_member.left`.
+- `POST /api/teams/:teamId/leave`: leave the Organization. Any active member except the `owner` (who gets `400 owner_must_transfer`); deletes the membership row so a manager cannot re-activate it, and records `team_member.left`. If the membership changed after it was read (ownership moved to the member, or they already left in another tab), nothing is deleted or recorded and the route returns `409 membership_changed`.
 - `GET /api/teams/:teamId/invites`: list pending invites. Requires `owner` or `admin`.
 - `POST /api/teams/:teamId/invites`: create a link invite. Requires `owner` or `admin`.
 - `POST /api/teams/:teamId/invites/:inviteId/link`: replace a pending invite's link. Requires `owner` or `admin`. Stores a new `token_hash` (the previous link stops working), restarts the 7-day expiry, optionally sets a new `role`, records `team_invite.link_reissued` (never the token or its hash), and returns the same shape as create. Returns `404` for an invite that is not pending in this Organization, including one accepted or revoked during the write.
@@ -60,7 +60,7 @@ Organization operations use legacy `/api/teams` route identifiers and require a 
 - `POST /api/teams/invites/pending/:inviteId/accept`: accept from the settings page.
 - `GET /api/teams/invites/:token`: read-only preview of a link invite (Organization, inviter, role, expiry, and `status` `pending` or `already_member`). Only the invited email sees it: another account gets `403 invite_email_mismatch` with no Organization details; revoked, used, or archived invites return `404`, expired ones `410`.
 - `POST /api/teams/invites/:token/accept`: accept from a link. Both accept routes return `403 invite_email_mismatch`, without the invited email, to another account.
-- `POST /api/teams/invites/:token/decline`: the invited email revokes its own pending invite and records `team_invite.declined`.
+- `POST /api/teams/invites/:token/decline`: the invited email revokes its own pending invite and records `team_invite.declined`. If the invite was accepted or revoked after it was read, nothing is recorded and the route returns `404`.
 
 Template and Run routes accept the legacy `teamId` parameter where Organization scoping is supported:
 

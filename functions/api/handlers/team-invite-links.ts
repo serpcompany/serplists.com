@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
-import { insertAuditEventWhen } from "../utils/conditional-audit";
+import { batchWriteMissed, insertAuditEventWhen } from "../utils/conditional-audit";
 import { createInviteToken, sha256Hex } from "../utils/crypto";
 import { json, jsonError } from "../utils/response";
 import { buildTeamInviteDelivery } from "../utils/team-invite-delivery";
@@ -38,13 +38,6 @@ function pendingTeamInviteWhere(teamId: string, inviteId: string, now: string) {
     isNull(team_invites.revoked_at),
     gt(team_invites.expires_at, now),
   );
-}
-
-function batchUpdateMissed(result: unknown): boolean {
-  if (typeof result !== "object" || result === null) return false;
-  const meta = (result as { meta?: unknown }).meta;
-  if (typeof meta !== "object" || meta === null) return false;
-  return (meta as { changes?: unknown }).changes === 0;
 }
 
 /**
@@ -123,7 +116,7 @@ export async function reissueTeamInviteLink({
   ]);
 
   // Accepted, revoked, or expired between the read and the write.
-  if (batchUpdateMissed(results[0])) {
+  if (batchWriteMissed(results[0])) {
     return jsonError("Invite not found", 404);
   }
 

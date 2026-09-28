@@ -1,3 +1,5 @@
+import { SQLiteAsyncDialect } from "drizzle-orm/sqlite-core";
+import type { SQL } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Invite links must not join anyone on page load: the invite page reads a
@@ -110,6 +112,13 @@ function expectNoWrites() {
   expect(dbMocks.db.insert).not.toHaveBeenCalled();
   expect(dbMocks.db.delete).not.toHaveBeenCalled();
   expect(dbMocks.db.batch).not.toHaveBeenCalled();
+}
+
+/** The SQL of the conditional audit insert (insert ... select ... where <condition>). */
+function conditionalAuditQuery() {
+  expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+  expect(dbMocks.insertChain.select).toHaveBeenCalledTimes(1);
+  return new SQLiteAsyncDialect().sqlToQuery(dbMocks.insertChain.select.mock.calls[0][0] as SQL);
 }
 
 const previewRequest = (token = "invite-token") =>
@@ -244,8 +253,9 @@ describe("Organization invite decline", () => {
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
     dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
+    dbMocks.insertChain.select.mockReturnValue(dbMocks.insertChain);
     dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
-    dbMocks.db.batch.mockResolvedValue([]);
+    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
     sessionMocks.getSessionUserId.mockResolvedValue("user-1");
   });
 
@@ -267,6 +277,36 @@ describe("Organization invite decline", () => {
       expect.objectContaining({ action: "team_invite.declined", actorUserId: "user-1" }),
     );
     expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes the decline audit row only if this request revoked the invite", async () => {
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([inviteRow()])
+      .mockResolvedValueOnce([{ email: "invitee@example.com" }]);
+
+    await handleTeams(declineRequest(), mockEnv);
+
+    // The write comes first; the audit insert checks the row it left behind.
+    expect(dbMocks.db.batch.mock.calls[0][0]).toEqual([dbMocks.updateChain, dbMocks.insertChain]);
+    const revokedAt = dbMocks.updateChain.set.mock.calls[0][0].revoked_at;
+    const query = conditionalAuditQuery();
+    expect(query.sql).toMatch(/exists \(\s*select 1\s+from "team_invites"/);
+    expect(query.sql).toContain('"team_invites"."id" = ?');
+    expect(query.sql).toContain('"team_invites"."revoked_at" = ?');
+    expect(query.params).toEqual(expect.arrayContaining(["invite-1", revokedAt]));
+  });
+
+  it("returns 404, not success, when the invite is accepted in another tab during the decline", async () => {
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([inviteRow()])
+      .mockResolvedValueOnce([{ email: "invitee@example.com" }]);
+    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
+
+    const response = await handleTeams(declineRequest(), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(data.success).toBeUndefined();
   });
 
   it("does not let another account decline the invite", async () => {
@@ -300,8 +340,9 @@ describe("Leaving an Organization", () => {
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
+    dbMocks.insertChain.select.mockReturnValue(dbMocks.insertChain);
     dbMocks.deleteChain.where.mockReturnValue(dbMocks.deleteChain);
-    dbMocks.db.batch.mockResolvedValue([]);
+    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
     sessionMocks.getSessionUserId.mockResolvedValue("user-1");
   });
 
@@ -325,6 +366,40 @@ describe("Leaving an Organization", () => {
       }),
     );
     expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes the leave audit row only if the membership can still be removed", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      { id: "member-1", team_id: "team-1", user_id: "user-1", role: "editor", status: "active" },
+    ]);
+
+    await handleTeams(leaveRequest(), mockEnv);
+
+    // A deleted row leaves nothing to check afterwards, so the audit insert
+    // runs first, in the same transaction, with the delete's own condition.
+    expect(dbMocks.db.batch.mock.calls[0][0]).toEqual([dbMocks.insertChain, dbMocks.deleteChain]);
+    const query = conditionalAuditQuery();
+    expect(query.sql).toMatch(/exists \(\s*select 1\s+from "team_members"/);
+    for (const column of ["id", "team_id", "user_id"]) {
+      expect(query.sql).toContain(`"team_members"."${column}" = ?`);
+    }
+    expect(query.sql).toContain('"team_members"."role" <> ?');
+    expect(query.params).toEqual(expect.arrayContaining(["member-1", "team-1", "user-1", "owner"]));
+  });
+
+  it("returns 409, not success, when the membership changes during the leave", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      { id: "member-1", team_id: "team-1", user_id: "user-1", role: "editor", status: "active" },
+    ]);
+    // Ownership moved to this member (or they left in another tab) after the read.
+    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
+
+    const response = await handleTeams(leaveRequest(), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.code).toBe("membership_changed");
+    expect(data.success).toBeUndefined();
   });
 
   it("asks the owner to transfer ownership first", async () => {

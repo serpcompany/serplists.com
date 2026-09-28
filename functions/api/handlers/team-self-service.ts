@@ -1,7 +1,8 @@
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
+import { batchWriteMissed, insertAuditEventWhen } from "../utils/conditional-audit";
 import { sha256Hex } from "../utils/crypto";
 import { json, jsonError } from "../utils/response";
 import { normalizeTeamRole, type TeamMembership } from "../utils/team-access";
@@ -148,7 +149,7 @@ export async function declineTeamInvite({
   token: string;
   userId: string;
 }): Promise<Response> {
-  const { audit_events, team_invites } = schema;
+  const { team_invites } = schema;
 
   const tokenHash = await sha256Hex(token);
   if (!tokenHash) {
@@ -179,7 +180,7 @@ export async function declineTeamInvite({
     request,
     createdAt: now,
   });
-  await db.batch([
+  const results = await db.batch([
     db
       .update(team_invites)
       .set({ revoked_at: now, updated_at: now })
@@ -190,8 +191,23 @@ export async function declineTeamInvite({
           isNull(team_invites.revoked_at),
         ),
       ),
-    db.insert(audit_events).values(auditEvent),
+    insertAuditEventWhen(
+      db,
+      auditEvent,
+      sql`exists (
+        select 1
+        from ${team_invites}
+        where ${team_invites.id} = ${inviteId}
+          and ${team_invites.revoked_at} = ${now}
+          and ${team_invites.accepted_at} is null
+      )`,
+    ),
   ]);
+
+  // Accepted (in another tab, say) or revoked between the read and the write.
+  if (batchWriteMissed(results[0])) {
+    return inviteNotFound();
+  }
 
   return json({ success: true });
 }
@@ -216,7 +232,7 @@ export async function leaveTeam({
   teamId: string;
   userId: string;
 }): Promise<Response> {
-  const { audit_events, team_members } = schema;
+  const { team_members } = schema;
 
   if (normalizeTeamRole(membership.role) === "owner") {
     return jsonError("Transfer ownership before leaving this Organization", 400, {
@@ -234,19 +250,31 @@ export async function leaveTeam({
     request,
     createdAt: now,
   });
-  await db.batch([
-    db
-      .delete(team_members)
-      .where(
-        and(
-          eq(team_members.id, memberId),
-          eq(team_members.team_id, teamId),
-          eq(team_members.user_id, userId),
-          ne(team_members.role, "owner"),
-        ),
-      ),
-    db.insert(audit_events).values(auditEvent),
+  const leavableMembership = () =>
+    and(
+      eq(team_members.id, memberId),
+      eq(team_members.team_id, teamId),
+      eq(team_members.user_id, userId),
+      ne(team_members.role, "owner"),
+    );
+  // A deleted row leaves nothing to check afterwards, so the audit insert runs
+  // first with the delete's own condition. A batch is one transaction, so both
+  // statements see the same row: the audit row exists only if the delete lands.
+  const results = await db.batch([
+    insertAuditEventWhen(
+      db,
+      auditEvent,
+      sql`exists (select 1 from ${team_members} where ${leavableMembership()})`,
+    ),
+    db.delete(team_members).where(leavableMembership()),
   ]);
+
+  // Ownership moved to this member, or they left in another tab, after the read.
+  if (batchWriteMissed(results[1])) {
+    return jsonError("Your membership changed. Reload the page and try again.", 409, {
+      code: "membership_changed",
+    });
+  }
 
   return json({ success: true });
 }
