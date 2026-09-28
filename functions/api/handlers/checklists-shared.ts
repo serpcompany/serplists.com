@@ -14,6 +14,7 @@ import {
 import { mergeSharedRunState, readStoredRunSections, sharedRunUpdateSchema } from '../utils/shared-run-merge';
 import { activeRunLimitResponse, findActiveRunLimitHit, isReopening } from '../utils/active-run-limit';
 import { canViewRun } from '../utils/run-access';
+import { completionStamps } from '../utils/run-completion';
 
 // /api/checklists/shared/:token needs no login: holding the link is the only credential.
 // Guests may read the run and change completion state and task notes, nothing else.
@@ -90,6 +91,11 @@ export async function handleSharedChecklist(
     return jsonError('Shared run content could not be read', 500);
   }
 
+  const runRecord = existingSharedRun as unknown as Record<string, unknown>;
+  // A signed-in visitor is named only if they already belong to the run's owner context
+  // (see share-link-actors.ts); anonymous saves skip the membership lookup.
+  const actorUserId = userId && (await canViewRun(env, runRecord, userId)) ? userId : null;
+
   const now = new Date().toISOString();
   const updates: Record<string, unknown> = {};
   let nextSections = storedSections;
@@ -106,20 +112,20 @@ export async function handleSharedChecklist(
   }
   if (status === 'completed') {
     updates.share_used_at = now;
-    if (existingSharedRun.status !== 'completed' || !existingSharedRun.completed_at) {
-      updates.completed_at = now;
-    }
-  } else if (status === 'in_progress' && existingSharedRun.status === 'completed') {
-    updates.completed_at = null;
   }
+  // Same rule as the private PUT and MCP: only a real completion stamps the time and the
+  // completer (the attributed actor, or no one for a guest); reopening keeps both.
+  Object.assign(updates, completionStamps({
+    currentStatus: existingSharedRun.status,
+    currentCompletedAt: existingSharedRun.completed_at,
+    nextStatus: status,
+    userId: actorUserId,
+    now,
+  }));
   updates.progress = calculateRunProgress(nextSections);
   updates.revision = currentRevision + 1;
   updates.updated_at = now;
 
-  const runRecord = existingSharedRun as unknown as Record<string, unknown>;
-  // A signed-in visitor is named only if they already belong to the run's owner context
-  // (see share-link-actors.ts); anonymous saves skip the membership lookup.
-  const actorUserId = userId && (await canViewRun(env, runRecord, userId)) ? userId : null;
   const auditEvent = await buildAuditEventValues({
     actorUserId,
     subject: getRunSubject(runRecord, typeof existingSharedRun.user_id === 'string' ? existingSharedRun.user_id : 'unknown'),

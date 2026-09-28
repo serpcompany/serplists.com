@@ -47,6 +47,7 @@ vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
 });
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
+import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 
 const storedSections = [
@@ -222,6 +223,66 @@ describe('shared run updates', () => {
     expect(typeof update.share_used_at).toBe('string');
     // item-1 (and its two sub-items) are still open: 1 of 4 units done.
     expect(update.progress).toBe(25);
+  });
+
+  it('keeps completed_at and the completer when a guest reopens the run', async () => {
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'pro', limits: { maxActiveRuns: null } } as never);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({
+      status: 'completed',
+      completed_at: '2026-02-01T00:00:00.000Z',
+      completed_by_user_id: 'owner-123',
+    })]);
+
+    const { response } = await putShared({ status: 'in_progress', expected_revision: 3 });
+
+    expect(response.status).toBe(200);
+    const update = storedUpdate();
+    expect(update.status).toBe('in_progress');
+    expect(update).not.toHaveProperty('completed_at');
+    expect(update).not.toHaveProperty('completed_by_user_id');
+  });
+
+  it('restamps a reopened run on the next completion and does not keep the previous completer', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({
+      status: 'in_progress',
+      completed_at: '2026-02-01T00:00:00.000Z',
+      completed_by_user_id: 'owner-123',
+    })]);
+
+    const { response } = await putShared({ status: 'completed', expected_revision: 3 });
+
+    expect(response.status).toBe(200);
+    const update = storedUpdate();
+    expect(update.status).toBe('completed');
+    expect(update.completed_at).not.toBe('2026-02-01T00:00:00.000Z');
+    expect(typeof update.completed_at).toBe('string');
+    // An anonymous guest completed it this time, so nobody is named.
+    expect(update).toHaveProperty('completed_by_user_id', null);
+  });
+
+  it('names a signed-in owner who completes the run through its share link', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('owner-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({ completed_by_user_id: 'someone-else' })]);
+
+    const { response } = await putShared({ status: 'completed', expected_revision: 3 });
+
+    expect(response.status).toBe(200);
+    expect(storedUpdate().completed_by_user_id).toBe('owner-123');
+  });
+
+  it('leaves the completion stamps alone on later saves of a completed run', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({
+      status: 'completed',
+      completed_at: '2026-02-01T00:00:00.000Z',
+      completed_by_user_id: 'owner-123',
+    })]);
+
+    const { response } = await putShared({ sections: clientSections(), status: 'completed', expected_revision: 3 });
+
+    expect(response.status).toBe(200);
+    const update = storedUpdate();
+    expect(update).not.toHaveProperty('completed_at');
+    expect(update).not.toHaveProperty('completed_by_user_id');
   });
 
   it('requires expected_revision', async () => {

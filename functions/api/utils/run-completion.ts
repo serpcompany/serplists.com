@@ -1,4 +1,4 @@
-// Completion attribution for checklist runs (web PUT and MCP set_run_status).
+// Completion attribution for checklist runs (web PUT, share-link PUT and MCP set_run_status).
 //
 // The run page sends the run's current status with every save, so a rename, a tick or a
 // note on a completed run arrives as status 'completed' again. Only a real transition into
@@ -12,13 +12,15 @@ export interface CompletionStampInput {
   nextStatus: unknown;
   /** A completion time from the client, honored only when the run becomes completed. */
   requestedCompletedAt?: string | null;
-  userId: string;
+  /** Who completes the run; null for a share-link guest, who is never named. */
+  userId: string | null;
   now: string;
 }
 
 export interface CompletionStamps {
   completed_at?: string;
-  completed_by_user_id?: string;
+  // Null when a guest completes it, so the previous completer of a reopened run is not kept.
+  completed_by_user_id?: string | null;
 }
 
 export function completionStamps(input: CompletionStampInput): CompletionStamps {
