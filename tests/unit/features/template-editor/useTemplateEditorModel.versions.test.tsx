@@ -72,3 +72,35 @@ describe('useTemplateEditorModel versions', () => {
     );
   });
 });
+
+describe('useTemplateEditorModel saved values', () => {
+  it('returns the saved values built from what it sent, not from later edits', async () => {
+    let resolveSave: (value: { success: boolean; errors: []; version: number }) => void = () => {};
+    const saveTemplate = vi.fn(
+      () =>
+        new Promise<{ success: boolean; errors: []; version: number }>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    const model = captureModel('template-1', saveTemplate);
+    const values = buildTemplateEditorFormValues({
+      title: 'Edited',
+      sections: [
+        {
+          id: 'section-1',
+          title: 'Prep',
+          items: [{ id: 'item-1', title: 'Task', description: 'Sent text', contents: [] }],
+        },
+      ],
+    });
+
+    const pending = model.save(values);
+    // react-hook-form's getValues() is a shallow copy: typing changes nested objects in place.
+    values.sections[0].items[0].description = 'Typed while saving';
+    resolveSave({ success: true, errors: [], version: 2 });
+    const result = await pending;
+
+    expect(result.savedValues?.sections[0].items[0].description).toBe('Sent text');
+    expect(result.savedValues?.title).toBe('Edited');
+  });
+});

@@ -73,6 +73,11 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
   tag entry.
 - Preserve `seoTitle`, `seoDescription`, `slug`/`seoUrl`, and `rules` across save
   and reload.
+- A save sends a deep copy taken at click time (`getValues()` is shallow). When an
+  update succeeds, `rebaseTemplateEditorFormAfterSave` makes the saved values the
+  form's baseline and keeps any field edited while the save was in flight, so the
+  form stays dirty and the unsaved-changes guards still warn. A create leaves the
+  page when it finishes, so the editor is locked (a disabled `fieldset`) until then.
 - Adding a content type or editor tab: [template content types](design-docs/template-content-types.md).
 
 ## Rendering user content

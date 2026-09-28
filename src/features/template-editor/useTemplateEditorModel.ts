@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { mapApiTemplateToChecklistTemplate } from "@/features/template-detail/templateDetailMappers";
+import { cloneTemplateEditorFormValues } from "@/features/template-editor/postSaveFormState";
 import {
   type SaveTemplateInput,
   type SaveTemplateResult,
@@ -43,6 +44,11 @@ type SaveTemplateEditorDataOptions = {
 
 type SaveTemplateEditorDependencies = {
   saveTemplate: (input: SaveTemplateInput) => Promise<SaveTemplateResult>;
+};
+
+export type TemplateEditorSaveResult = SaveTemplateResult & {
+  // On success: the normalized values the server stored, the form's new baseline.
+  savedValues?: TemplateEditorFormValues;
 };
 
 export type TemplateEditorLoadResult = {
@@ -260,33 +266,38 @@ export const useTemplateEditorModel = (
     };
   }, [options.id]);
 
+  // Returns the saved values instead of replacing initialValues: the page rebases the
+  // form onto them, keeping any edits typed while the save was in flight.
   const save = async (
     values: TemplateEditorFormValues,
-  ): Promise<SaveTemplateResult> => {
+  ): Promise<TemplateEditorSaveResult> => {
+    // A deep copy, so later typing into the same objects cannot leak into the saved state.
+    const submitted = cloneTemplateEditorFormValues(values);
     const result = await saveTemplateEditorData(
       {
         id: options.id,
         expectedVersion: expectedVersionRef.current,
         storedSlug: templateSlug,
-        values,
+        values: submitted,
       },
       {
         saveTemplate: dependencies?.saveTemplate ?? persistTemplateSave,
       },
     );
 
-    if (result.success) {
-      expectedVersionRef.current = result.version;
-      const savedState = buildTemplateEditorSavedState(values, {
-        storedSlug: templateSlug,
-        savedSlug: result.slug,
-      });
-      setInitialValues(savedState.initialValues);
-      setLoadError(null);
-      setTemplateSlug(savedState.templateSlug || templateSlug);
+    if (!result.success) {
+      return result;
     }
 
-    return result;
+    expectedVersionRef.current = result.version;
+    const savedState = buildTemplateEditorSavedState(submitted, {
+      storedSlug: templateSlug,
+      savedSlug: result.slug,
+    });
+    setLoadError(null);
+    setTemplateSlug(savedState.templateSlug || templateSlug);
+
+    return { ...result, savedValues: savedState.initialValues };
   };
 
   return {

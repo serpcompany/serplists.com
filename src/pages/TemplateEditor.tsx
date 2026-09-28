@@ -27,6 +27,10 @@ import {
 import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
 import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
 import {
+  cloneTemplateEditorFormValues,
+  rebaseTemplateEditorFormAfterSave,
+} from "@/features/template-editor/postSaveFormState";
+import {
   applyTemplateBeforeUnloadWarning,
   confirmTemplateEditorNavigation,
   shouldBlockTemplateEditorNavigation,
@@ -37,6 +41,12 @@ export const shouldNavigateToTemplatesAfterSave = (params: {
   id?: string;
   result: SaveTemplateResult;
 }): boolean => params.result.success && !params.id;
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const shouldLockTemplateEditorWhileSaving = (params: {
+  id?: string;
+  isSaving: boolean;
+}): boolean => params.isSaving && !params.id;
 
 const TemplateEditor = () => {
   const { id } = useParams();
@@ -99,12 +109,24 @@ const TemplateEditor = () => {
 
   const handleSave = async () => {
     // model.save validates first and returns errors that name the field; the alert
-    // below shows them.
-    const result = await model.save(templateForm.getValues());
-    if (shouldNavigateToTemplatesAfterSave({ id, result })) {
-      navigate(buildConsoleTemplatesPath());
-    }
+    // below shows them. The copy is what gets sent; the form stays editable meanwhile.
+    const submitted = cloneTemplateEditorFormValues(templateForm.getValues());
+    const result = await model.save(submitted);
     setErrors(result.errors);
+    if (!result.success || !result.savedValues) {
+      return;
+    }
+
+    if (shouldNavigateToTemplatesAfterSave({ id, result })) {
+      templateForm.reset(result.savedValues);
+      navigate(buildConsoleTemplatesPath());
+      return;
+    }
+
+    rebaseTemplateEditorFormAfterSave(templateForm, {
+      submitted,
+      saved: result.savedValues,
+    });
   };
 
   if (model.loading) {
@@ -161,36 +183,43 @@ const TemplateEditor = () => {
         </div>
       )}
 
-      {!id ? (
-        <GenerateFromClipy
-          onGenerated={(draft) => {
-            templateForm.reset(draft, { keepDefaultValues: true });
-            handleSelectTemplateInfo();
-          }}
-        />
-      ) : null}
-
-      <Form {...templateForm}>
-        <div className="flex min-h-[calc(100vh-3.5rem)]">
-          <OutlineSidebar
-            selectedItemIndex={selectedItemIndex}
-            selectedSectionIndex={selectedSectionIndex}
-            showingSEO={showingSEO}
-            showingTemplateInfo={showingTemplateInfo}
-            onSelectItem={handleSelectItem}
-            onSelectSEO={handleSelectSEO}
-            onSelectSection={handleSelectSection}
-            onSelectTemplateInfo={handleSelectTemplateInfo}
+      {/* A create leaves the page when it finishes, so edits made meanwhile could not
+          be kept: lock the editor until then. An update keeps them (see handleSave). */}
+      <fieldset
+        className="m-0 min-w-0 border-0 p-0"
+        disabled={shouldLockTemplateEditorWhileSaving({ id, isSaving: model.isSaving })}
+      >
+        {!id ? (
+          <GenerateFromClipy
+            onGenerated={(draft) => {
+              templateForm.reset(draft, { keepDefaultValues: true });
+              handleSelectTemplateInfo();
+            }}
           />
+        ) : null}
 
-          <EditorPanels
-            selectedItemIndex={selectedItemIndex}
-            selectedSectionIndex={selectedSectionIndex}
-            showingSEO={showingSEO}
-            showingTemplateInfo={showingTemplateInfo}
-          />
-        </div>
-      </Form>
+        <Form {...templateForm}>
+          <div className="flex min-h-[calc(100vh-3.5rem)]">
+            <OutlineSidebar
+              selectedItemIndex={selectedItemIndex}
+              selectedSectionIndex={selectedSectionIndex}
+              showingSEO={showingSEO}
+              showingTemplateInfo={showingTemplateInfo}
+              onSelectItem={handleSelectItem}
+              onSelectSEO={handleSelectSEO}
+              onSelectSection={handleSelectSection}
+              onSelectTemplateInfo={handleSelectTemplateInfo}
+            />
+
+            <EditorPanels
+              selectedItemIndex={selectedItemIndex}
+              selectedSectionIndex={selectedSectionIndex}
+              showingSEO={showingSEO}
+              showingTemplateInfo={showingTemplateInfo}
+            />
+          </div>
+        </Form>
+      </fieldset>
 
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
         <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">

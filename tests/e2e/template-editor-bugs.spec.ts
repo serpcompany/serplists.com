@@ -53,6 +53,32 @@ async function deleteTemplate(page: Page, templateId: string) {
   }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
 }
 
+async function createTemplateViaApi(page: Page, title: string) {
+  return page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
+    const response = await fetch(`${apiBaseUrl}/templates`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: templateTitle,
+        is_public: false,
+        sections: [
+          {
+            id: "guard-section",
+            title: "Prep",
+            items: [
+              { id: "guard-task-1", title: "First task", description: "" },
+              { id: "guard-task-2", title: "Second task", description: "" },
+            ],
+          },
+        ],
+      }),
+    });
+    if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
+    return ((await response.json()) as { id: string }).id;
+  }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+}
+
 function getTemplateSections(template: Record<string, unknown>) {
   const rawSections = template.sections ?? template.items ?? [];
   const parsedSections =
@@ -521,6 +547,75 @@ test.describe("template editor regressions", () => {
     if (savedTemplate && typeof savedTemplate.id === "string") {
       await deleteTemplate(page, savedTemplate.id);
     }
+  });
+
+  test("keeps edits typed while a save is in flight", async ({ page }) => {
+    await loginAsSeedUser(page);
+    const templateTitle = `QA Save race ${Date.now()}`;
+    const templateId = await createTemplateViaApi(page, templateTitle);
+
+    // Hold the first update until the test releases it.
+    let releaseUpdate: () => void = () => {};
+    const updateHeld = new Promise<void>((resolve) => {
+      releaseUpdate = resolve;
+    });
+    let heldOnce = false;
+    const updateVersions: unknown[] = [];
+    await page.route(`**/api/templates/${templateId}`, async (route) => {
+      if (route.request().method() !== "PUT") {
+        await route.fallback();
+        return;
+      }
+      updateVersions.push((route.request().postDataJSON() as { expected_version?: unknown }).expected_version);
+      if (!heldOnce) {
+        heldOnce = true;
+        await updateHeld;
+      }
+      await route.fallback();
+    });
+
+    await page.goto(`/dashboard/templates/${templateId}/edit`);
+    await page.getByRole("button", { exact: true, name: "First task" }).click();
+    await page.getByLabel("Description (Optional)").fill("Sent with the first save");
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("button", { name: "Saving..." })).toBeVisible();
+    await page.getByLabel("Description (Optional)").fill("Sent with the first save, then more");
+    await page.getByRole("button", { exact: true, name: "Second task" }).click();
+    await page.getByLabel("Description (Optional)").fill("Typed into another task");
+
+    releaseUpdate();
+    await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+    await expect(page.getByLabel("Description (Optional)")).toHaveValue("Typed into another task");
+    await page.getByRole("button", { exact: true, name: "First task" }).click();
+    await expect(page.getByLabel("Description (Optional)")).toHaveValue(
+      "Sent with the first save, then more",
+    );
+
+    // The edits are still unsaved, so leaving asks first.
+    let confirmMessage: string | null = null;
+    page.once("dialog", async (dialog) => {
+      confirmMessage = dialog.message();
+      await dialog.dismiss();
+    });
+    await page.getByRole("button", { name: "Back to templates" }).click();
+    await expect.poll(() => confirmMessage).toContain("unsaved template changes");
+    await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/edit$`));
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+    // The second save sends the version the first one returned, so it gets no conflict.
+    expect(updateVersions).toHaveLength(2);
+    expect(Number(updateVersions[1])).toBeGreaterThan(Number(updateVersions[0]));
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    expect(sections[0]?.items.map((item) => item.description)).toEqual([
+      "Sent with the first save, then more",
+      "Typed into another task",
+    ]);
+
+    await deleteTemplate(page, templateId);
   });
 
   test("adds tags and categories before save and persists them", async ({ page }) => {

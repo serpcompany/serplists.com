@@ -110,4 +110,52 @@ describe('TemplateEditor page', () => {
 
     expect(html).not.toContain('Generate from Clipy');
   });
+
+  const renderSavingEditor = (location: string, path: string): string => {
+    mockUseTemplateEditorModel.mockReturnValue({
+      initialValues: buildTemplateEditorFormValues({ title: 'Draft template' }),
+      isSaving: true,
+      loading: false,
+      loadError: null,
+      save: vi.fn(),
+      templateSlug: undefined,
+    });
+    mockUseTemplateEditorState.mockReturnValue({
+      selectedSectionIndex: 0,
+      selectedItemIndex: null,
+      showingSEO: false,
+      showingTemplateInfo: true,
+      errors: [],
+      setErrors: vi.fn(),
+      handleSelectSection: vi.fn(),
+      handleSelectItem: vi.fn(),
+      handleSelectSEO: vi.fn(),
+      handleSelectTemplateInfo: vi.fn(),
+    });
+
+    return renderToStaticMarkup(
+      <StaticRouter location={location}>
+        <Routes>
+          <Route path={path} element={<TemplateEditor />} />
+        </Routes>
+      </StaticRouter>,
+    );
+  };
+
+  // A create leaves the page when it finishes, so edits made meanwhile could not be kept.
+  it('locks the new-template editor while it is being created', () => {
+    const html = renderSavingEditor('/dashboard/templates/new', '/dashboard/templates/new');
+
+    expect(html).toMatch(/<fieldset[^>]*disabled=""/);
+  });
+
+  // An update stays on the page and keeps edits made during the save.
+  it('keeps an existing template editable while it saves', () => {
+    const html = renderSavingEditor(
+      '/dashboard/templates/template-1/edit',
+      '/dashboard/templates/:id/edit',
+    );
+
+    expect(html).not.toMatch(/<fieldset[^>]*disabled=""/);
+  });
 });
