@@ -1,0 +1,88 @@
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { StaticRouter } from 'react-router-dom/server';
+import { QueryClient } from '@tanstack/react-query';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
+import { createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
+import { getResourcePermissions } from '@/lib/organizationPermissions';
+import { markRunShared } from '@/lib/queryCache';
+import { createShareLinkAndCopy } from '@/lib/shareLink';
+import type { ChecklistRun } from '@/types/checklist';
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
+const staleRun: ChecklistRun = {
+  id: 'run-1',
+  templateId: 'template-1',
+  title: 'Quarterly audit',
+  status: 'completed',
+  progress: 100,
+  sections: [{ id: 's1', title: 'Checklist', items: [{ id: 'i1', title: 'Check', isCompleted: true }] }],
+  startedAt: '2026-01-01T00:00:00.000Z',
+  completedAt: '2026-01-02T00:00:00.000Z',
+  userId: 'user-1',
+  revision: 3,
+  isStale: true,
+  isPublic: false,
+};
+
+const clients: QueryClient[] = [];
+afterEach(() => {
+  clients.splice(0).forEach((client) => client.clear());
+});
+
+const renderRuns = (runs: ChecklistRun[]) =>
+  renderToStaticMarkup(
+    <StaticRouter location="/dashboard/runs">
+      <RunsDashboardView
+        getRunPermissions={() => getResourcePermissions(undefined, () => undefined)}
+        onDeleteRun={vi.fn()}
+        onRevalidateRun={vi.fn()}
+        runs={runs}
+      />
+    </StaticRouter>,
+  );
+
+const refuseCopy = async (): Promise<boolean> => {
+  throw new Error('The request is not allowed by the user agent');
+};
+
+// The API makes a shared run public, and revalidating a public run fails with 409. The runs
+// list is cached for 5 minutes, so it kept offering Revalidate after a share.
+describe('sharing a run from the runs list', () => {
+  it('marks the cached run shared as soon as the link exists, even when the copy fails', async () => {
+    const client = new QueryClient();
+    clients.push(client);
+    const personal = ['runs', 'user-1', 'personal'];
+    client.setQueryData(personal, [staleRun, { ...staleRun, id: 'run-2' }]);
+    expect(renderRuns(client.getQueryData<ChecklistRun[]>(personal) ?? [])).toContain('>Revalidate<');
+    const apiClient = { createChecklistRunShare: vi.fn().mockResolvedValue({ shareToken: 'token-1' }) };
+
+    const result = await createShareLinkAndCopy(
+      () =>
+        createRunsDashboardShareUrl('run-1', 'https://serplists.com', apiClient, (runId) => {
+          void markRunShared(client, runId);
+        }),
+      refuseCopy,
+    );
+
+    expect(result).toEqual({ kind: 'ok', copied: false, shareUrl: 'https://serplists.com/share/token-1' });
+    const cached = client.getQueryData<ChecklistRun[]>(personal) ?? [];
+    expect(cached.map((run) => run.isPublic)).toEqual([true, false]);
+    const html = renderRuns(cached.slice(0, 1));
+    expect(html).toContain('Shared snapshot is out of date');
+    expect(html).not.toContain('>Revalidate<');
+  });
+
+  it('leaves the run private when the share fails', async () => {
+    const onShared = vi.fn();
+    const apiClient = { createChecklistRunShare: vi.fn().mockRejectedValue(new Error('Run not found')) };
+
+    await expect(
+      createRunsDashboardShareUrl('run-1', 'https://serplists.com', apiClient, onShared),
+    ).rejects.toThrow('Run not found');
+    expect(onShared).not.toHaveBeenCalled();
+  });
+});

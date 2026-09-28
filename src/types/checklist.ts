@@ -140,6 +140,8 @@ export interface TemplatesContextProps {
   createRun: (params: { templateId: string; runName?: string; template?: ChecklistTemplate }) => Promise<ChecklistRun | null>;
   updateRun: (run: ChecklistRun) => Promise<ChecklistRun>;
   revalidateRun: (run: ChecklistRun) => Promise<void>;
+  // Marks a run just shared (now public) in the cached runs lists.
+  markRunShared?: (runId: string) => void;
   deleteRun: (id: string) => Promise<void>;
   importTemplates: (templates: ChecklistTemplate[], options?: TemplateImportOptions) => Promise<TemplateImportSummary>;
 }

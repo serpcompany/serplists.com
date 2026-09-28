@@ -95,3 +95,49 @@ test('the runs list shows the share link when the clipboard refuses the copy', a
 
   await deleteRun(page, runId);
 });
+
+// Sharing makes a run public, and the API refuses to revalidate a public run. The runs
+// list is cached for 5 minutes, so it must drop Revalidate as soon as the share exists.
+test('sharing a stale run from the runs list stops offering Revalidate', async ({ page }) => {
+  await refuseClipboardWrites(page);
+  await loginAsAdmin(page);
+  const title = `Stale share QA ${Date.now()}`;
+  const { runId, templateId } = await page.evaluate(async ({ apiBaseUrl, runTitle }) => {
+    const send = async (path: string, method: string, body: unknown) =>
+      (await fetch(`${apiBaseUrl}${path}`, {
+        body: JSON.stringify(body),
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        method,
+      })).json() as Promise<{ id: string }>;
+    const sections = (done: boolean, ids: string[]) =>
+      [{ id: 'stale', title: 'Section', items: ids.map((id) => ({ id, title: id, isCompleted: done })) }];
+
+    const template = await send('/templates', 'POST', { title: runTitle, sections: sections(false, ['stale-a']), is_public: false });
+    const run = await send('/checklists', 'POST', { template_id: template.id, title: runTitle, status: 'in_progress' });
+    // A completed run is frozen when its Template changes, so it goes stale.
+    await send(`/checklists/${run.id}`, 'PUT', { expected_revision: 1, progress: 100, sections: sections(true, ['stale-a']), status: 'completed' });
+    await send(`/templates/${template.id}`, 'PUT', { title: runTitle, sections: sections(false, ['stale-a', 'stale-b']), expected_version: 1 });
+    return { runId: run.id, templateId: template.id };
+  }, { apiBaseUrl: DEV_API_BASE_URL, runTitle: title });
+
+  await page.goto('/dashboard/runs');
+  const actions = page.locator('[data-run-actions="true"]').filter({ has: page.locator(`a[href="/run/${runId}"]`) });
+  const row = actions.locator('..');
+  await expect(row.getByText('Needs revalidation')).toBeVisible();
+  await expect(actions.getByRole('button', { name: 'Revalidate' })).toBeVisible();
+
+  await actions.getByRole('button', { name: 'Run options' }).click();
+  await page.getByRole('menuitem', { name: 'Share Run' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Share run' });
+  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(SHARE_URL);
+  await page.keyboard.press('Escape');
+
+  await expect(actions.getByRole('button', { name: 'Revalidate' })).toHaveCount(0);
+  await expect(row.getByText('Shared snapshot is out of date')).toBeVisible();
+
+  await deleteRun(page, runId);
+  await page.evaluate(async ({ id, apiBaseUrl }) => {
+    await fetch(`${apiBaseUrl}/templates/${id}`, { credentials: 'include', method: 'DELETE' });
+  }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
+});

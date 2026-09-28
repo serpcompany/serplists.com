@@ -74,6 +74,8 @@ interface RunsDashboardViewProps {
   getRunPermissions: (run: ChecklistRun) => ResourcePermissions;
   onDeleteRun: (runId: string) => void | Promise<void>;
   onRevalidateRun?: (run: ChecklistRun) => void | Promise<void>;
+  // Called once a share has made the run public (see createRunsDashboardShareUrl).
+  onRunShared?: (runId: string) => void;
   loading?: boolean;
 }
 
@@ -103,6 +105,7 @@ export function RunsDashboardView({
   getRunPermissions,
   onDeleteRun,
   onRevalidateRun,
+  onRunShared,
   loading = false,
 }: RunsDashboardViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -140,7 +143,7 @@ export function RunsDashboardView({
     sharingRunId.current = runId;
     try {
       const result = await createShareLinkAndCopy(() =>
-        createRunsDashboardShareUrl(runId, window.location.origin),
+        createRunsDashboardShareUrl(runId, window.location.origin, undefined, onRunShared),
       );
       if (result.kind === 'error') {
         toast.error(result.message);

@@ -4,7 +4,7 @@ import { useWorkspace } from "./WorkspaceContext";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { refreshAfterRunRevalidated, refreshAfterTemplateArchived, refreshAfterTemplateSave } from "@/lib/queryCache";
+import { markRunShared, refreshAfterRunRevalidated, refreshAfterTemplateArchived, refreshAfterTemplateSave, refreshRunsAfterConflict } from "@/lib/queryCache";
 import { prepareTemplatesForImport } from "@/lib/utils/templateBackup";
 import { 
   ChecklistTemplate, 
@@ -486,6 +486,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await api.revalidateChecklist(run.id, run.revision);
     },
     onSuccess: (_result, run) => refreshAfterRunRevalidated(queryClient, run.id),
+    onError: (error) => refreshRunsAfterConflict(queryClient, error),
   });
 
   const importTemplatesMutation = useMutation({
@@ -579,6 +580,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     revalidateRun: async (run: ChecklistRun) => {
       await revalidateRunMutation.mutateAsync(run);
     },
+    markRunShared: (runId: string) => void markRunShared(queryClient, runId),
     deleteRun: async (id: string) => {
       await deleteRunMutation.mutateAsync(id);
     },

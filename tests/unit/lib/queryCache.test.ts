@@ -4,12 +4,15 @@ import path from 'node:path';
 import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { createApiError } from '@/lib/api-errors';
 import {
+  markRunShared,
   queryKeys,
   refreshAfterRunRevalidated,
   refreshAfterTemplateArchived,
   refreshAfterTemplateSave,
   refreshRunHistory,
+  refreshRunsAfterConflict,
 } from '@/lib/queryCache';
 
 const clients: QueryClient[] = [];
@@ -89,5 +92,49 @@ describe('refreshing history after a save', () => {
 
     await refreshAfterRunRevalidated(client, 'r1');
     await vi.waitFor(() => expect(history).toHaveBeenCalledTimes(3));
+  });
+});
+
+describe('the runs list after a share', () => {
+  it('marks the run public in every cached runs list and refetches them', async () => {
+    const client = newClient();
+    const personal = ['runs', 'user-1', 'personal'];
+    const organization = ['runs', 'user-1', 'org-1'];
+    client.setQueryData(personal, [{ id: 'run-1', isPublic: false }, { id: 'run-2', isPublic: false }]);
+    client.setQueryData(organization, [{ id: 'run-1', isPublic: false }]);
+
+    await markRunShared(client, 'run-1');
+
+    expect(client.getQueryData(personal)).toEqual([{ id: 'run-1', isPublic: true }, { id: 'run-2', isPublic: false }]);
+    expect(client.getQueryData(organization)).toEqual([{ id: 'run-1', isPublic: true }]);
+    expect(client.getQueryState(personal)?.isInvalidated).toBe(true);
+  });
+});
+
+describe('the runs list after a refused revalidate', () => {
+  const conflict = createApiError(409, {
+    code: 'shared_run_conflict',
+    error: 'Shared runs must be made private before revalidation.',
+  });
+
+  it('reloads the list when the run was shared or changed elsewhere (409)', async () => {
+    const client = newClient();
+    const runs = ['runs', 'user-1', 'personal'];
+    client.setQueryData(runs, []);
+
+    await refreshRunsAfterConflict(client, conflict);
+
+    expect(client.getQueryState(runs)?.isInvalidated).toBe(true);
+  });
+
+  it('leaves the list alone for other failures', async () => {
+    const client = newClient();
+    const runs = ['runs', 'user-1', 'personal'];
+    client.setQueryData(runs, []);
+
+    await refreshRunsAfterConflict(client, new Error('offline'));
+    await refreshRunsAfterConflict(client, createApiError(403, { code: 'limit_reached', error: 'Limit reached' }));
+
+    expect(client.getQueryState(runs)?.isInvalidated).toBe(false);
   });
 });

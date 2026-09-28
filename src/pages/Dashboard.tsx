@@ -56,6 +56,7 @@ const Dashboard = () => {
     runsLoading,
     updateRun,
     revalidateRun,
+    markRunShared,
     deleteRun,
   } = useTemplateLists({ catalog: true, runs: true });
   const { getPermissions } = useWorkspace();
@@ -124,6 +125,7 @@ const Dashboard = () => {
         getRunPermissions={(run) => getPermissions(run.teamId)}
         onDeleteRun={deleteRun}
         onRevalidateRun={revalidateRun}
+        onRunShared={markRunShared}
         loading={runsLoading}
       />
     );

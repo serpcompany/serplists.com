@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
 import { api, type ChecklistRunHistoryResponse } from '@/lib/api';
-import { queryKeys, refreshRunHistory } from '@/lib/queryCache';
+import { markRunShared, queryKeys, refreshRunHistory } from '@/lib/queryCache';
 import { buildSharePath } from '@/lib/routes';
 import { calculateSectionsProgress } from '@/lib/utils/checklistSections';
 import type { ChecklistRun } from '@/types/checklist';
@@ -46,6 +46,8 @@ type UpdateRun = (run: ChecklistRun) => void | Promise<ChecklistRun | void>;
 
 type RunExecutionDependencies = {
   apiClient?: RunExecutionApiClient;
+  // Called once a share has made the run public, so cached runs lists can follow.
+  onShared?: (runId: string) => void;
   origin?: string;
   updateRun: UpdateRun;
 };
@@ -416,12 +418,15 @@ export const createRunExecutionShare = async (
 
   try {
     const result = await apiClient.createChecklistRunShare(params.run.id);
+    dependencies.onShared?.(params.run.id);
     const origin =
       dependencies.origin ??
       (typeof window !== 'undefined' ? window.location.origin : '');
 
     return {
       kind: 'ok',
+      // Public now; the server does not change the revision.
+      run: { ...params.run, isPublic: true },
       shareUrl: `${origin}${buildSharePath(result.shareToken)}`,
     };
   } catch (error) {
@@ -520,13 +525,15 @@ export const useRunExecutionModel = (
   options: UseRunExecutionModelOptions,
 ) => {
   const mode = resolveMode(options);
+  const queryClient = useQueryClient();
   const dependencies = useMemo<RunExecutionDependencies>(
     () => ({
       apiClient: options.dependencies?.apiClient,
+      onShared: (runId) => void markRunShared(queryClient, runId),
       origin: options.dependencies?.origin,
       updateRun: options.updateRun,
     }),
-    [options.dependencies?.apiClient, options.dependencies?.origin, options.updateRun],
+    [options.dependencies?.apiClient, options.dependencies?.origin, options.updateRun, queryClient],
   );
   const [run, setRun] = useState<ChecklistRun | null>(null);
   const [loading, setLoading] = useState(true);
@@ -535,7 +542,6 @@ export const useRunExecutionModel = (
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   // The latest run, updated as soon as a save returns so the next queued save builds on it.
   const latestRun = useRef<ChecklistRun | null>(null);
-  const queryClient = useQueryClient();
   // Every save writes an audit event: refresh the Changelog once the saves settle.
   const [saveRun] = useState(() =>
     createRunSaver(() => {
