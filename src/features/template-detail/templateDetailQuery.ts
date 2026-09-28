@@ -40,4 +40,7 @@ export const buildTemplateDetailQueryOptions = (params: {
     },
     // A failure already says whether to retry; the page offers Try again.
     retry: false,
+    // Invalidations keep it current. Returning to the tab is not a reason to fetch the
+    // template again (the page would reload under an open dialog for nothing).
+    refetchOnWindowFocus: false,
   });

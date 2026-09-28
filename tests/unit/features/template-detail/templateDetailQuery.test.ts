@@ -1,4 +1,4 @@
-import { QueryClient, QueryObserver } from '@tanstack/react-query';
+import { focusManager, QueryClient, QueryObserver } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -93,6 +93,30 @@ describe('template detail query', () => {
     expect(result.data?.version).toBe(4);
     expect(result.data?.isPublic).toBe(false);
     expect(apiClient.getTemplates).not.toHaveBeenCalled();
+  });
+
+  it('does not fetch again when the tab regains focus after the template went stale', async () => {
+    const queryClient = buildQueryClient();
+    queryClient.mount();
+    const apiClient = buildApiClient(vi.fn().mockResolvedValue(serverRow()));
+    const observer = openPage(queryClient, apiClient);
+    const loaded = await settled(observer);
+
+    // The user comes back to the tab two minutes later (past the one-minute staleTime).
+    queryClient.setQueryData(getTemplateDetailQueryKey('template-1', 'user-1'), loaded.data, {
+      updatedAt: Date.now() - 2 * 60 * 1000,
+    });
+    try {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await settled(observer);
+    } finally {
+      focusManager.setFocused(undefined);
+      queryClient.unmount();
+    }
+
+    expect(apiClient.getTemplateById).toHaveBeenCalledTimes(1);
   });
 
   it('resolves a library template from the bundle without a request', async () => {
