@@ -967,15 +967,19 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
     }
 
-    const whereClause = userId
-      ? and(
-          or(
-            eq(templates.is_public, true),
-            and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id)),
-          ),
-          isNull(templates.deleted_at),
-        )
-      : and(eq(templates.is_public, true), isNull(templates.deleted_at));
+    // ?scope=public is the catalog, identical for everyone. ?scope=personal is the user's
+    // own Personal templates (idx_templates_owner). No scope returns public OR mine for
+    // clients loaded before scopes existed (see the D1 cost plan).
+    const scope = url.searchParams.get('scope');
+    if (scope === 'personal' && !userId) return jsonError('Unauthorized', 401);
+    const ownClause = userId
+      ? and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id))
+      : undefined;
+    const publicCatalog = !ownClause || scope === 'public';
+    const whereClause = and(
+      publicCatalog ? eq(templates.is_public, true) : scope === 'personal' ? ownClause : or(eq(templates.is_public, true), ownClause),
+      isNull(templates.deleted_at),
+    );
 
     const listTemplates = async () => {
       const rows = await withRulesColumnFallback((includeRules) =>
@@ -986,9 +990,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
     };
 
-    // Every visitor gets the same public catalog, and building it reads every public
-    // Template, so serve it from the edge for up to 5 minutes (the app's client staleTime).
-    return userId ? listTemplates() : withEdgeCache(request, 5 * 60, listTemplates);
+    // The public catalog reads every public Template, so serve it from the edge for up to
+    // 5 minutes (the app's client staleTime).
+    return publicCatalog ? withEdgeCache(request, 5 * 60, listTemplates) : listTemplates();
   }
 
   if (request.method === 'POST') {

@@ -7,14 +7,14 @@ const clients: QueryClient[] = [];
 
 // Mirrors the provider (passive observers) plus a page that calls useTemplateLists().
 async function requestsFor(params: { ready?: boolean; userId?: string; activeTeamId?: string; catalog?: boolean; page?: boolean }) {
-  const fetched: Array<string | undefined> = [];
+  const fetched: string[] = [];
   const queries = buildTemplateListQueries({
     ready: params.ready ?? true,
     userId: params.userId,
     activeTeamId: params.activeTeamId,
     workspaceScopeId: params.activeTeamId ?? 'personal',
-    fetchList: (teamId) => async () => {
-      fetched.push(teamId);
+    fetchList: (request) => async () => {
+      fetched.push(request.teamId ? `teamId=${request.teamId}` : `scope=${request.scope}`);
       return [];
     },
   });
@@ -32,7 +32,7 @@ async function requestsFor(params: { ready?: boolean; userId?: string; activeTea
   ];
   observers.forEach((observer) => observer.subscribe(() => {}));
   await vi.waitFor(() => expect(client.isFetching()).toBe(0));
-  return fetched;
+  return fetched.sort();
 }
 
 describe('template list queries', () => {
@@ -46,23 +46,30 @@ describe('template list queries', () => {
   });
 
   it('waits for the session and workspace before loading any list', async () => {
-    expect(await requestsFor({ ready: false, page: true, catalog: true })).toEqual([]);
+    expect(await requestsFor({ ready: false, userId: 'user-1', page: true, catalog: true })).toEqual([]);
   });
 
-  it('makes one catalog request for visitors, with no workspace request', async () => {
-    expect(await requestsFor({ page: true, catalog: true })).toEqual([undefined]);
+  it('requests the shared public catalog for visitors, with no workspace list', async () => {
+    expect(await requestsFor({ page: true, catalog: true })).toEqual(['scope=public']);
     expect(await requestsFor({ page: true })).toEqual([]);
   });
 
-  it('shares one request between the catalog and the Personal workspace', async () => {
-    expect(await requestsFor({ userId: 'user-1', page: true, catalog: true })).toEqual([undefined]);
-    expect(await requestsFor({ userId: 'user-1', page: true })).toEqual([undefined]);
+  it('requests only the Personal templates unless the page shows the catalog', async () => {
+    expect(await requestsFor({ userId: 'user-1', page: true })).toEqual(['scope=personal']);
+    expect(await requestsFor({ userId: 'user-1', page: true, catalog: true })).toEqual(['scope=personal', 'scope=public']);
   });
 
-  it('loads the Organization list, and the catalog only when the page asks for it', async () => {
-    expect(await requestsFor({ userId: 'user-1', activeTeamId: 'team-1', page: true })).toEqual(['team-1']);
-    expect((await requestsFor({ userId: 'user-1', activeTeamId: 'team-1', page: true, catalog: true })).sort()).toEqual(
-      ['team-1', undefined].sort(),
+  it('requests the Organization list, and the catalog only when the page asks for it', async () => {
+    expect(await requestsFor({ userId: 'user-1', activeTeamId: 'team-1', page: true })).toEqual(['teamId=team-1']);
+    expect(await requestsFor({ userId: 'user-1', activeTeamId: 'team-1', page: true, catalog: true })).toEqual(
+      ['scope=public', 'teamId=team-1'],
     );
+  });
+
+  it('shares one catalog key across users because the catalog is the same for everyone', () => {
+    const fetchList = () => async () => [];
+    const visitor = buildTemplateListQueries({ ready: true, workspaceScopeId: 'personal', fetchList });
+    const member = buildTemplateListQueries({ ready: true, userId: 'user-1', workspaceScopeId: 'personal', fetchList });
+    expect(member.catalog.queryKey).toEqual(visitor.catalog.queryKey);
   });
 });

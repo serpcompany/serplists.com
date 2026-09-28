@@ -164,7 +164,7 @@ test("@smoke authenticated template API returns the seeded private template", as
 
   expect(signInResponse.status()).toBe(200);
 
-  const templatesResponse = await request.get(`${apiBaseUrl}/templates`);
+  const templatesResponse = await request.get(`${apiBaseUrl}/templates?scope=personal`);
   expect(templatesResponse.status()).toBe(200);
 
   const templates = await templatesResponse.json();
@@ -177,6 +177,13 @@ test("@smoke authenticated template API returns the seeded private template", as
       }),
     ]),
   );
+
+  // The public catalog is edge-cached and shared by every visitor, so it must never
+  // include a private template, even for its owner.
+  const catalogResponse = await request.get(`${apiBaseUrl}/templates?scope=public`);
+  expect(catalogResponse.status()).toBe(200);
+  const catalogIds = ((await catalogResponse.json()) as Array<{ id: string }>).map((template) => template.id);
+  expect(catalogIds).not.toContain("template-4");
 });
 
 test("@smoke sitemap index and every listed shard pass the public XML audit", async ({ request }) => {

@@ -56,7 +56,7 @@ const Dashboard = () => {
     updateRun,
     revalidateRun,
     deleteRun,
-  } = useTemplateLists({ catalog: true });
+  } = useTemplateLists({ catalog: true, runs: true });
   const [searchParams, setSearchParams] = useSearchParams();
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
