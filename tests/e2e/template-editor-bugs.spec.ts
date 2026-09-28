@@ -1501,7 +1501,8 @@ test.describe("template editor regressions", () => {
   test("saves a template whose stored content came from a legacy import", async ({ page }) => {
     await loginAsSeedUser(page);
     const title = `Legacy content ${uniqueSuffix()}`;
-    // The API stores content as given (TD-3), as a lenient JSON import does.
+    // Writes still store ids and nulls as given, as a lenient JSON import did
+    // (src/lib/schemas/storedSections.ts passes them through).
     const templateId = await page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
       const response = await fetch(`${apiBaseUrl}/templates`, {
         method: "POST",
@@ -1521,7 +1522,6 @@ test.describe("template editor regressions", () => {
                   contents: [
                     { id: 1, type: "text", value: "Numeric id" },
                     { type: "file", value: "https://example.com/doc.pdf", fileName: null, fileSize: null },
-                    { id: "c3", type: "link", value: "https://example.com" },
                   ],
                 },
               ],
@@ -1532,6 +1532,17 @@ test.describe("template editor regressions", () => {
       if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
       return ((await response.json()) as { id: string }).id;
     }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+    // Every write now refuses a block of unknown type, but rows stored before that check
+    // still hold them. The editor loads this template with one, as it would load such a row.
+    await page.route(`**/api/templates/${templateId}`, async (route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      const response = await route.fetch();
+      const template = (await response.json()) as {
+        sections: Array<{ items: Array<{ contents: unknown[] }> }>;
+      };
+      template.sections[0].items[0].contents.push({ id: "c3", type: "link", value: "https://example.com" });
+      await route.fulfill({ response, json: template });
+    });
 
     try {
       await page.goto(`/dashboard/templates/${templateId}/edit`);
@@ -1540,8 +1551,9 @@ test.describe("template editor regressions", () => {
 
       await expect(page.getByText("Template saved", { exact: true })).toBeVisible();
       const saved = await findTemplateByTitle(page, `${title} saved`);
-      expect(JSON.stringify(saved?.items)).toContain("https://example.com/doc.pdf");
+      expect(JSON.stringify(saved?.sections)).toContain("https://example.com/doc.pdf");
     } finally {
+      await page.unrouteAll({ behavior: "wait" });
       await deleteTemplate(page, templateId);
     }
   });
