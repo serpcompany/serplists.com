@@ -4,6 +4,7 @@ import { useWorkspace } from "./WorkspaceContext";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { refreshAfterRunRevalidated, refreshAfterTemplateArchived, refreshAfterTemplateSave } from "@/lib/queryCache";
 import { prepareTemplatesForImport } from "@/lib/utils/templateBackup";
 import { 
   ChecklistTemplate, 
@@ -349,9 +350,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (!result) throw new Error('Failed to update template');
       return undefined;
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['templates'] });
-      await queryClient.invalidateQueries({ queryKey: ['runs'] });
+    onSuccess: async (_result, template) => {
+      await refreshAfterTemplateSave(queryClient, template.id);
       toast.success("Template updated. Checklist changes were reconciled into active private runs.");
     },
     onError: (error: Error) => {
@@ -366,9 +366,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await api.deleteTemplate(id);
       return true;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-      queryClient.invalidateQueries({ queryKey: ['runs'] });
+    onSuccess: (_result, id) => {
+      void refreshAfterTemplateArchived(queryClient, id);
     }
   });
 
@@ -486,10 +485,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (!user) throw new Error('User must be logged in to revalidate a run');
       await api.revalidateChecklist(run.id, run.revision);
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['runs'] });
-      await queryClient.refetchQueries({ queryKey: ['runs'] });
-    },
+    onSuccess: (_result, run) => refreshAfterRunRevalidated(queryClient, run.id),
   });
 
   const importTemplatesMutation = useMutation({

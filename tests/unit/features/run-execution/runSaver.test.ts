@@ -404,3 +404,41 @@ describe('a run completed while a toggle waits in the queue', () => {
     expect(page.latest?.status).toBe('completed');
   });
 });
+
+// The run Changelog refreshes once the saves settle, not once per click (each refresh reads
+// D1).
+describe('refreshing after saves', () => {
+  it('reports once when a burst of saves has finished and one of them saved', async () => {
+    const server = createServer(buildRun(5));
+    const { context } = createPage(server, buildRun(5));
+    const onSaved = vi.fn();
+    const saver = createRunSaver(onSaved);
+    const saves = bindRunSaves({ dependencies: { apiClient: server.apiClient, updateRun: server.updateRun }, noteDrafts: () => ({}) });
+
+    await Promise.all([
+      saver(saves.toggleItem('item-1', true), context),
+      saver(saves.toggleItem('item-1', true), context), // a double click, ignored
+      saver(saves.toggleItem('item-2', true), context),
+    ]);
+
+    expect(server.sent).toHaveLength(2);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+
+    await saver(saves.toggleSubItem('item-3', 0, 0, true), context);
+    expect(onSaved).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not report when nothing was saved', async () => {
+    const server = createServer(buildRun(5));
+    const { context } = createPage(server, buildRun(5));
+    server.updateRun.mockRejectedValue(new Error('offline'));
+    const onSaved = vi.fn();
+    const saver = createRunSaver(onSaved);
+    const saves = bindRunSaves({ dependencies: { apiClient: server.apiClient, updateRun: server.updateRun }, noteDrafts: () => ({}) });
+
+    const result = await saver(saves.toggleItem('item-1', true), context);
+
+    expect(result.kind).toBe('error');
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+});

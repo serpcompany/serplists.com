@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAccessFailure } from '@/lib/api-errors';
 import { api, type TemplateHistoryResponse } from '@/lib/api';
 import { getBillingStatusQueryKey } from '@/lib/billing';
+import { queryKeys, refreshTemplateHistory } from '@/lib/queryCache';
 import {
   buildRepoTemplateCreatePayload,
   findPublicTemplateByIdentifier,
@@ -337,12 +338,7 @@ export const useTemplateDetailModel = (
       (Boolean(options.teamId) && template?.teamId === options.teamId));
 
   const history = useQuery({
-    queryKey: [
-      'template-history',
-      template?.id ?? 'none',
-      options.userId ?? 'guest',
-      options.teamId ?? 'personal',
-    ],
+    queryKey: queryKeys.templateHistoryFor(template?.id ?? 'none', options.userId, options.teamId),
     queryFn: () => api.getTemplateHistory(template?.id ?? ''),
     enabled: canLoadTemplateHistory,
     retry: false,
@@ -446,6 +442,7 @@ export const useTemplateDetailModel = (
           is_public: true,
           expected_version: nextTemplate.version,
         });
+        void refreshTemplateHistory(queryClient, nextTemplate.id);
         nextTemplate = {
           ...nextTemplate,
           isPublic: true,

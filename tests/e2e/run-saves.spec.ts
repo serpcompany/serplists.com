@@ -513,3 +513,21 @@ test('a completed run cannot be unticked, privately or through its share link', 
   expect(await readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
   await deleteRun(page, runId);
 });
+
+// Every save writes an audit event; the Changelog used to keep its first fetch for 60s.
+test('the run Changelog shows a save without a reload', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createRun(page, `Changelog QA ${Date.now()}`);
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  const changelog = page.locator('section', { has: page.getByRole('heading', { name: 'Changelog' }) });
+  await expect(changelog.getByText('Created run')).toBeVisible();
+  await expect(changelog.getByText('Updated run')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Mark Complete' }).click();
+  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  await expect(changelog.getByText('Updated run')).toBeVisible();
+
+  await deleteRun(page, runId);
+});

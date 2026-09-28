@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
 import { api, type ChecklistRunHistoryResponse } from '@/lib/api';
+import { queryKeys, refreshRunHistory } from '@/lib/queryCache';
 import { buildSharePath } from '@/lib/routes';
 import { calculateSectionsProgress } from '@/lib/utils/checklistSections';
 import type { ChecklistRun } from '@/types/checklist';
@@ -534,7 +535,13 @@ export const useRunExecutionModel = (
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   // The latest run, updated as soon as a save returns so the next queued save builds on it.
   const latestRun = useRef<ChecklistRun | null>(null);
-  const [saveRun] = useState(createRunSaver);
+  const queryClient = useQueryClient();
+  // Every save writes an audit event: refresh the Changelog once the saves settle.
+  const [saveRun] = useState(() =>
+    createRunSaver(() => {
+      if (latestRun.current) void refreshRunHistory(queryClient, latestRun.current.id);
+    }),
+  );
   // Drafts are read inside queued saves, so the ref always holds the latest value.
   const [noteDrafts, setNoteDrafts] = useState<NoteDrafts>({});
   const latestNoteDrafts = useRef<NoteDrafts>({});
@@ -600,7 +607,7 @@ export const useRunExecutionModel = (
   const selectedData = getSelectedRunItem(run, selectedItemId);
   const canLoadHistory = Boolean(run?.id && mode !== 'shared');
   const history = useQuery({
-    queryKey: ['checklist-run-history', run?.id ?? 'none'],
+    queryKey: queryKeys.runHistory(run?.id ?? 'none'),
     queryFn: () => api.getChecklistHistory(run?.id ?? ''),
     enabled: canLoadHistory,
     retry: false,

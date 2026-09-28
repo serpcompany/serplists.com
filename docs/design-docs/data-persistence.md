@@ -98,6 +98,11 @@ Main server handlers:
 
 `src/contexts/TemplatesContext.tsx` uses TanStack React Query for Templates and Runs. Query keys include ownership context so Personal and Organization data do not bleed together. Context switching invalidates Template and Run queries.
 
+History queries (the run and Template Changelogs) take their keys from `src/lib/queryCache.ts`, which also holds the refreshes that saves run, since every save writes an audit event:
+
+- The run page refreshes the run Changelog once its save queue is idle after a save, not once per click (each refetch reads D1). Revalidating a run refreshes it too.
+- Saving a Template (in the editor, or its visibility on the detail page) and sharing it refresh every cached Changelog of that Template, whatever user or Organization loaded it. Archiving a Template drops its Changelog.
+
 Organization lists are fetched by the legacy-named `WorkspaceContext` and keyed by current User ID.
 
 Billing query keys are also user-scoped. A session change must not reuse another
