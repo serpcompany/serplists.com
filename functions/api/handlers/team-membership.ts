@@ -8,8 +8,12 @@ import { z } from "zod";
 import { schema, type createDb } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
 import { batchWriteMissed, insertAuditEventWhere } from "../utils/guarded-writes";
-import { buildInviteRevocation, selectPendingInvitesForUser } from "../utils/team-invite-revocation";
-import { normalizeTeamRole, type TeamMembership } from "../utils/team-access";
+import {
+  buildInviteRevocation,
+  selectPendingInvitesForUser,
+  selectPendingInvitesFromInviter,
+} from "../utils/team-invite-revocation";
+import { canManageTeam, normalizeTeamRole, type TeamMembership } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
 
 export type TeamRouteContext = {
@@ -283,15 +287,32 @@ export async function updateTeamMember(
   // invite made while they were disabled must not re-enable them after a later disable.
   const statusChanged = typeof parsed.data.status !== "undefined" && parsed.data.status !== targetMember.status;
   const staleInvites = statusChanged ? await selectPendingInvitesForUser(db, teamId, targetMember.user_id, now) : [];
+  // A manager who is disabled or drops below admin can no longer grant access, so the
+  // invites they created are revoked too. Re-enabling or re-promoting does not restore them.
+  const nextStatus = parsed.data.status ?? targetMember.status;
+  const nextRole = normalizeTeamRole(parsed.data.role ?? targetMember.role);
+  const inviterLosesAccess = targetMember.status === "active"
+    && canManageTeam(normalizeTeamRole(targetMember.role))
+    && (nextStatus !== "active" || !canManageTeam(nextRole));
+  const inviterInvites = inviterLosesAccess
+    ? await selectPendingInvitesFromInviter(db, teamId, targetMember.user_id, now)
+    : [];
+  const staleInviteIds = new Set(staleInvites.map((invite) => invite.id));
+  const revocations = [
+    ...staleInvites.map((invite) => ({ invite, reason: "member_status_changed" })),
+    ...inviterInvites
+      .filter((invite) => !staleInviteIds.has(invite.id))
+      .map((invite) => ({ invite, reason: "inviter_access_removed" })),
+  ];
   const inviteRevocations = await Promise.all(
-    staleInvites.map((invite) =>
+    revocations.map(({ invite, reason }) =>
       buildInviteRevocation({
         db,
         invite,
         actorUserId: userId,
         request,
         now,
-        metadata: { reason: "member_status_changed" },
+        metadata: { reason },
         guard: memberUpdatedNow,
       })),
   );

@@ -950,6 +950,9 @@ describe("Teams handler", () => {
       .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
       .mockResolvedValueOnce([{ email: "new@example.com" }])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "admin", status: "active" },
+      ])
       .mockResolvedValueOnce([{ id: "invite-1" }])
       .mockResolvedValueOnce([
         { id: "member-created", team_id: "team-1", user_id: "user-1", role: "editor", status: "active" },
@@ -1008,6 +1011,9 @@ describe("Teams handler", () => {
       .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
       .mockResolvedValueOnce([{ email: "new@example.com" }])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "admin", status: "active" },
+      ])
       .mockResolvedValueOnce([{ id: "invite-1" }])
       .mockResolvedValueOnce([
         { id: "member-created", team_id: "team-1", user_id: "user-1", role: "viewer", status: "active" },
@@ -1052,6 +1058,9 @@ describe("Teams handler", () => {
       .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
       .mockResolvedValueOnce([{ email: "new@example.com" }])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "admin", status: "active" },
+      ])
       .mockResolvedValueOnce([]);
 
     const response = await handleTeams(
@@ -1086,6 +1095,9 @@ describe("Teams handler", () => {
       .mockResolvedValueOnce([
         { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
       ])
+      .mockResolvedValueOnce([
+        { id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "admin", status: "active" },
+      ])
       .mockResolvedValueOnce([{ id: "invite-1" }])
       .mockResolvedValueOnce([
         { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
@@ -1118,6 +1130,38 @@ describe("Teams handler", () => {
         accepted_at: expect.any(String),
       }),
     );
+  });
+
+  it.each([
+    ["no longer an active member", []],
+    ["below admin", [{ id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "editor", status: "active" }]],
+  ])("refuses an invite whose inviter is %s", async (_label, inviterRows) => {
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        {
+          id: "invite-1",
+          team_id: "team-1",
+          email: "new@example.com",
+          role: "admin",
+          invited_by_user_id: "admin-1",
+          expires_at: new Date(Date.now() + 60_000).toISOString(),
+          accepted_at: null,
+          revoked_at: null,
+        },
+      ])
+      .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
+      .mockResolvedValueOnce([{ email: "new@example.com" }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(inviterRows);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams/invites/pending/invite-1/accept", { method: "POST" }),
+      mockEnv,
+    );
+
+    expect(response.status).toBe(404);
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
   });
 
   it("returns success when the same user retries an accepted invite", async () => {

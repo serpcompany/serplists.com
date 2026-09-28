@@ -61,13 +61,13 @@ Organization operations use legacy `/api/teams` route identifiers and require a 
 - `GET /api/teams/:teamId`: read Organization details for a member.
 - `PUT /api/teams/:teamId`: update an Organization name or slug. Requires `owner` or `admin`. A slug another Organization uses returns 409 `team_slug_exists`, including when it is saved between this request's check and its write. A body that names neither field is a 400; values that match the current ones (after trimming) return 200 without a write or audit event. The settings form keeps Save disabled until a field changes and sends only the changed fields; clearing the slug field keeps the current slug.
 - `GET /api/teams/:teamId/members`: list members. Managers can see inactive rows; non-managers see active members.
-- `PUT /api/teams/:teamId/members/:memberId`: update role or status. Requires `owner` or `admin`; owners cannot be changed through this route. A status change also revokes the member's pending invites to that Organization.
+- `PUT /api/teams/:teamId/members/:memberId`: update role or status. Requires `owner` or `admin`; owners cannot be changed through this route. A status change also revokes the member's pending invites to that Organization, and disabling an owner or admin or demoting them below admin revokes the pending invites they created.
 - `PUT /api/teams/:teamId/owner`: transfer the Organization's `owner` role. Requires current `owner`.
 - `GET /api/teams/:teamId/invites`: list pending invites. Requires `owner` or `admin`.
 - `POST /api/teams/:teamId/invites`: create a link invite. Requires `owner` or `admin`.
 - `DELETE /api/teams/:teamId/invites/:inviteId`: revoke a pending invite. Requires `owner` or `admin`. Returns 409 `invite_already_accepted` when the invite was accepted before the revoke was written, and 404 when another request revoked it first; only the request that revokes it records `team_invite.revoked`.
 - `GET /api/teams/:teamId/activity`: read the latest Organization audit events, newest first; `?limit=` takes 1-100 (default 50). Requires `owner` or `admin`. The settings page requests the 10 it shows.
-- `GET /api/teams/invites/pending`: list pending invites for the current user's email.
+- `GET /api/teams/invites/pending`: list pending invites for the current user's email whose inviter is still an active `owner` or `admin`.
 - `POST /api/teams/invites/pending/:inviteId/accept`: accept from the settings page.
 - `POST /api/teams/invites/:token/accept`: accept from a link.
 
@@ -98,6 +98,15 @@ Organization in the same batch, with a `team_invite.revoked` audit event whose m
 is `{ "reason": "member_status_changed" }`. An invite made while a member was disabled
 therefore cannot re-enable them after an admin re-enables and disables them again; to
 re-admit a disabled member, create a new invite after disabling them.
+
+An invite carries its inviter's authority. Disabling an `owner` or `admin`, or changing
+their role below `admin`, revokes the pending invites they created in that Organization
+in the same batch, with metadata `{ "reason": "inviter_access_removed" }`; re-enabling or
+re-promoting them does not restore those invites. Accepting also requires the inviter to
+still be an active `owner` or `admin` (an owner who transfers ownership stays an admin, so
+their invites stay valid): otherwise the accept routes return 404 like a revoked invite,
+and an inviter who loses access between the checks and the write leaves the invite
+unaccepted with 409 `invite_acceptance_conflict`.
 
 The API response already uses a `delivery` object so email can be added later without changing the UI contract. A future email implementation should keep the link accept route and switch delivery from `link` to a queued/sent email mode.
 

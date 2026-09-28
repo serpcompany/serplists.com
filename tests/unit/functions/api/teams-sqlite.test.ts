@@ -287,6 +287,105 @@ describe("Organization membership writes against SQLite", () => {
     });
   });
 
+  describe("invites from a manager who loses access", () => {
+    async function inviteNewUser(inviterUserId = "admin-user", role = "admin") {
+      const created = await asUser(inviterUserId, "POST", "/team-1/invites", { email: "new@example.test", role });
+      expect(created.status).toBe(200);
+      return created.data?.id as string;
+    }
+
+    function inviteState(id: string) {
+      return d1.rows<{ revoked_at: string | null; accepted_at: string | null }>(
+        "SELECT revoked_at, accepted_at FROM team_invites WHERE id = ?",
+        id,
+      )[0];
+    }
+
+    function revokedInviteAudits() {
+      return d1.rows<{ resource_id: string; metadata_json: string | null }>(
+        "SELECT resource_id, metadata_json FROM audit_events WHERE action = 'team_invite.revoked'",
+      );
+    }
+
+    function newUserMembership() {
+      return d1.rows("SELECT role, status FROM team_members WHERE team_id = 'team-1' AND user_id = 'new-user'");
+    }
+
+    it.each([
+      ["disabled", { status: "disabled" }],
+      ["demoted below admin", { role: "editor" }],
+    ])("revokes the pending invites an admin created when the admin is %s", async (_label, body) => {
+      const inviteId = await inviteNewUser();
+
+      expect((await asUser("owner-user", "PUT", "/team-1/members/admin-member", body)).status).toBe(200);
+
+      expect(inviteState(inviteId).revoked_at).not.toBeNull();
+      expect(revokedInviteAudits()).toEqual([
+        { resource_id: inviteId, metadata_json: JSON.stringify({ reason: "inviter_access_removed" }) },
+      ]);
+      expect((await asUser("owner-user", "GET", "/team-1/invites")).data).toEqual([]);
+      expect((await asUser("new-user", "GET", "/invites/pending")).data).toEqual([]);
+      expect((await asUser("new-user", "POST", `/invites/pending/${inviteId}/accept`)).status).toBe(404);
+      expect(newUserMembership()).toEqual([]);
+    });
+
+    it("does not bring the revoked invites back when the admin is re-enabled", async () => {
+      const inviteId = await inviteNewUser();
+      await asUser("owner-user", "PUT", "/team-1/members/admin-member", { status: "disabled" });
+
+      expect((await asUser("owner-user", "PUT", "/team-1/members/admin-member", { status: "active" })).status).toBe(200);
+
+      expect(inviteState(inviteId).revoked_at).not.toBeNull();
+      expect((await asUser("new-user", "POST", `/invites/pending/${inviteId}/accept`)).status).toBe(404);
+    });
+
+    it("keeps invites when a manager stays a manager or a non-manager changes role", async () => {
+      const adminInvite = await inviteNewUser();
+
+      await asUser("owner-user", "PUT", "/team-1/members/admin-member", { role: "admin" });
+      await asUser("owner-user", "PUT", "/team-1/members/member-m", { role: "viewer" });
+      await asUser("owner-user", "PUT", "/team-1/owner", { memberId: "admin-member" });
+
+      expect(inviteState(adminInvite).revoked_at).toBeNull();
+      expect(revokedInviteAudits()).toEqual([]);
+      const accepted = await asUser("new-user", "POST", `/invites/pending/${adminInvite}/accept`);
+      expect(accepted.status).toBe(200);
+      expect(newUserMembership()).toEqual([{ role: "admin", status: "active" }]);
+    });
+
+    it("keeps an owner's invites valid after the owner transfers ownership and becomes an admin", async () => {
+      const inviteId = await inviteNewUser("owner-user", "editor");
+
+      expect((await asUser("owner-user", "PUT", "/team-1/owner", { memberId: "admin-member" })).status).toBe(200);
+
+      expect((await asUser("new-user", "POST", `/invites/pending/${inviteId}/accept`)).status).toBe(200);
+      expect(newUserMembership()).toEqual([{ role: "editor", status: "active" }]);
+    });
+
+    it("refuses and hides an invite whose inviter lost access some other way", async () => {
+      const inviteId = await inviteNewUser();
+      d1.run("UPDATE team_members SET role = 'viewer' WHERE id = 'admin-member'");
+
+      expect((await asUser("new-user", "GET", "/invites/pending")).data).toEqual([]);
+      expect((await asUser("new-user", "POST", `/invites/pending/${inviteId}/accept`)).status).toBe(404);
+      expect(inviteState(inviteId)).toEqual({ revoked_at: null, accepted_at: null });
+      expect(newUserMembership()).toEqual([]);
+    });
+
+    it("does not accept an invite whose inviter is disabled between the checks and the write", async () => {
+      const inviteId = await inviteNewUser();
+      d1.beforeNextBatch(() => d1.run("UPDATE team_members SET status = 'disabled' WHERE id = 'admin-member'"));
+
+      const accepted = await asUser("new-user", "POST", `/invites/pending/${inviteId}/accept`);
+
+      expect(accepted.status).toBe(409);
+      expect(accepted.data?.code).toBe("invite_acceptance_conflict");
+      expect(inviteState(inviteId).accepted_at).toBeNull();
+      expect(newUserMembership()).toEqual([]);
+      expect(auditActions("team_invite.accepted")).toHaveLength(0);
+    });
+  });
+
   describe("invite revocation", () => {
     async function createInvite() {
       const created = await asUser("admin-user", "POST", "/team-1/invites", { email: "new@example.test", role: "viewer" });
@@ -434,6 +533,8 @@ describe("Organization membership writes against SQLite", () => {
       const plan = d1.queryPlan(inviteQuery!).join(" | ");
       expect(plan).toContain("USING INDEX idx_team_invites_email");
       expect(plan).not.toContain("SCAN team_invites");
+      // The inviter check is a lookup on the (team_id, user_id) unique index, not a scan.
+      expect(plan).not.toMatch(/SCAN (team_members|active_manager)\b/);
     });
   });
 });

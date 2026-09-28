@@ -36,6 +36,31 @@ export async function selectPendingInvitesForUser(
   return invites.filter(hasId);
 }
 
+/** Pending (not accepted, revoked, or expired) invites that `inviterUserId` created in the Organization. */
+export async function selectPendingInvitesFromInviter(
+  db: Db,
+  teamId: string,
+  inviterUserId: string,
+  now: string,
+): Promise<TeamInvite[]> {
+  const { team_invites } = schema;
+
+  // Reads one Organization's invites through the (team_id, email) index prefix.
+  const invites = await db
+    .select()
+    .from(team_invites)
+    .where(
+      and(
+        eq(team_invites.team_id, teamId),
+        eq(team_invites.invited_by_user_id, inviterUserId),
+        isNull(team_invites.accepted_at),
+        isNull(team_invites.revoked_at),
+        gt(team_invites.expires_at, now),
+      ),
+    );
+  return invites.filter(hasId);
+}
+
 /**
  * The two batch statements that revoke a pending invite and record `team_invite.revoked`.
  * The revoke applies only while the invite is still pending (and `guard` holds, if given);

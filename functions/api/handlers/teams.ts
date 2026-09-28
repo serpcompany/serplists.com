@@ -7,9 +7,10 @@ import { buildAuditEventValues } from "../utils/audit";
 import { batchWriteMissed, insertAuditEventWhere } from "../utils/guarded-writes";
 import { getSessionUserId } from "../utils/session";
 import { buildTeamInviteDelivery } from "../utils/team-invite-delivery";
-import { buildInviteRevocation } from "../utils/team-invite-revocation";
+import { buildInviteRevocation, type TeamInvite } from "../utils/team-invite-revocation";
 import { isTeamSlugTaken, isTeamSlugUniqueViolation, teamSlugInUseError } from "../utils/team-slug";
 import {
+  activeTeamManagerExists,
   canManageTeam,
   getActiveTeamMembership,
   normalizeTeamRole,
@@ -74,14 +75,16 @@ function isInvitePending(invite: {
   return Date.parse(invite.expires_at) > Date.now();
 }
 
-function pendingInviteWhere(inviteId: string, now: string) {
+function pendingInviteWhere(db: ReturnType<typeof createDb>, invite: TeamInvite, now: string) {
   const { team_invites } = schema;
 
   return and(
-    eq(team_invites.id, inviteId),
+    eq(team_invites.id, invite.id),
     isNull(team_invites.accepted_at),
     isNull(team_invites.revoked_at),
     gt(team_invites.expires_at, now),
+    // An inviter disabled or demoted after the checks below leaves the invite unaccepted.
+    activeTeamManagerExists(db, invite.team_id, invite.invited_by_user_id),
   );
 }
 
@@ -116,6 +119,7 @@ async function acceptTeamInviteRecord({
   if (invite.revoked_at || !invite.id) {
     return jsonError("Invite not found", 404);
   }
+  const pendingInvite: TeamInvite = { ...invite, id: invite.id };
 
   const [team] = await db
     .select({ id: teams.id, name: teams.name, slug: teams.slug })
@@ -158,6 +162,13 @@ async function acceptTeamInviteRecord({
     return jsonError("Invite not found", 404);
   }
 
+  // An invite carries its inviter's authority: once they no longer manage the Organization,
+  // it is treated like a revoked invite.
+  const inviterMembership = await getActiveTeamMembership(env, invite.team_id, invite.invited_by_user_id);
+  if (!inviterMembership || !canManageTeam(normalizeTeamRole(inviterMembership.role))) {
+    return jsonError("Invite not found", 404);
+  }
+
   if (Date.parse(invite.expires_at) <= Date.now()) {
     return jsonError("Invite expired", 410);
   }
@@ -194,12 +205,12 @@ async function acceptTeamInviteRecord({
         createdAt: now,
       });
       await db.batch([
-        db.update(team_invites).set(inviteUpdates).where(pendingInviteWhere(invite.id, now)),
+        db.update(team_invites).set(inviteUpdates).where(pendingInviteWhere(db, pendingInvite, now)),
         insertAuditEventWhere(db, acceptedAuditEvent, acceptedInviteExistsSql(invite.id, userId, now)),
       ]);
     } else {
       await db.batch([
-        db.update(team_invites).set(inviteUpdates).where(pendingInviteWhere(invite.id, now)),
+        db.update(team_invites).set(inviteUpdates).where(pendingInviteWhere(db, pendingInvite, now)),
         db.update(team_members).set({
           role: inviteRole,
           status: "active",
@@ -223,7 +234,7 @@ async function acceptTeamInviteRecord({
     };
 
     await db.batch([
-      db.update(team_invites).set(inviteUpdates).where(pendingInviteWhere(invite.id, now)),
+      db.update(team_invites).set(inviteUpdates).where(pendingInviteWhere(db, pendingInvite, now)),
       db.insert(team_members)
         .select(sql`
           select
@@ -381,6 +392,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
           gt(team_invites.expires_at, now),
           isNotNull(teams.id),
           isNull(teams.archived_at),
+          activeTeamManagerExists(db, team_invites.team_id, team_invites.invited_by_user_id),
         ),
       )
       .orderBy(desc(team_invites.created_at));
