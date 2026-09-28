@@ -55,6 +55,8 @@ vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
 
 import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
+import { calculateSectionsProgress, normalizeSections } from '@/lib/utils/checklistSections';
+import { TICKED_TEMPLATE_SECTIONS, UNTICKED_RUN_SECTIONS } from '../../../fixtures/runStartFixtures';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 
@@ -174,6 +176,36 @@ describe('Checklists Handlers', () => {
     expect(storedItems[0].items[0].subItems[0].isCompleted).toBe(false);
     expect(inserted.template_version).toBe(7);
     expect(inserted.revision).toBe(1);
+  });
+
+  // The web reset skipped Sub-tasks blocks (contents[].subItems) and the legacy `completed`
+  // key, so a template carrying ticked state started web runs part done while MCP
+  // start_run started the same template unticked.
+  it('starts web runs from a template with every task and Sub-task unticked', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([{
+        id: 'template-1',
+        user_id: 'user-123',
+        owner_type: 'user',
+        team_id: null,
+        title: 'Server Template',
+        items: JSON.stringify(TICKED_TEMPLATE_SECTIONS),
+        is_public: false,
+        version: 2,
+      }])
+      .mockResolvedValueOnce([{ count: 0 }]);
+
+    const response = await handleChecklists(new Request('http://localhost/api/checklists', {
+      method: 'POST',
+      body: JSON.stringify({ template_id: 'template-1' }),
+    }), mockEnv);
+
+    expect(response.status).toBe(200);
+    const storedItems = JSON.parse(dbMocks.insertChain.values.mock.calls[0][0].items);
+    expect(storedItems).toEqual(UNTICKED_RUN_SECTIONS);
+    // What the run page shows: nothing done yet.
+    expect(calculateSectionsProgress(normalizeSections(storedItems))).toBe(0);
   });
 
   it('should reject checklist runs from inaccessible private templates', async () => {

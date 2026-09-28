@@ -16,7 +16,7 @@ import {
   type PersonalRunKeyIdentity,
 } from "../utils/personal-run-key";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
-import { calculateRunProgress } from "../utils/template-reconciliation";
+import { calculateRunProgress, resetRunCompletionState } from "../utils/template-reconciliation";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const MAX_REQUEST_BYTES = 1024 * 1024;
@@ -324,18 +324,6 @@ function parseStoredSections(value: unknown): JsonRecord[] {
   return normalized.sections.filter(isRecord);
 }
 
-function resetCompletionState(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(resetCompletionState);
-  if (!isRecord(value)) return value;
-
-  const next: JsonRecord = { ...value };
-  if (Object.prototype.hasOwnProperty.call(next, "isCompleted")) next.isCompleted = false;
-  if (Array.isArray(next.items)) next.items = next.items.map(resetCompletionState);
-  if (Array.isArray(next.subItems)) next.subItems = next.subItems.map(resetCompletionState);
-  if (Array.isArray(next.contents)) next.contents = next.contents.map(resetCompletionState);
-  return next;
-}
-
 function summarizeTemplate(template: JsonRecord): JsonRecord {
   return {
     id: template.id,
@@ -487,7 +475,7 @@ async function startRun(
     team_id: null,
     template_id: template.id,
     title: parsed.data.title ?? template.title,
-    items: JSON.stringify(resetCompletionState(normalized.sections)),
+    items: JSON.stringify(resetRunCompletionState(normalized.sections)),
     status: "in_progress",
     progress: 0,
     started_at: now,

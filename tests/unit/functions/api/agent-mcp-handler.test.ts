@@ -33,6 +33,7 @@ import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
 import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
+import { TICKED_TEMPLATE_SECTIONS, UNTICKED_RUN_SECTIONS } from "../../../fixtures/runStartFixtures";
 
 const identity = { keyId: "key-1", userId: "user-1", name: "Codex" };
 const env = { DB: {} } as any;
@@ -397,6 +398,26 @@ describe("personal run MCP handler", () => {
       action: "checklist_run.created",
       metadata_json: expect.stringContaining('"personalRunKeyId":"key-1"'),
     }));
+  });
+
+  it("starts a run with every task and Sub-task unticked, exactly as a web start stores it", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{
+      id: "template-1",
+      user_id: "user-1",
+      owner_type: "user",
+      team_id: null,
+      deleted_at: null,
+      title: "Release SOP",
+      items: JSON.stringify(TICKED_TEMPLATE_SECTIONS),
+      content_version: 2,
+    }]);
+
+    const response = await handleAgentMcp(callTool("start_run", { templateId: "template-1" }), env);
+    const body = await response.json() as any;
+
+    expect(body.result.isError).toBeUndefined();
+    // Same fixture and expectation as the web create test in checklists-handler.test.ts.
+    expect(JSON.parse(dbMocks.insertChain.values.mock.calls[0][0].items)).toEqual(UNTICKED_RUN_SECTIONS);
   });
 
   it("updates a subtask, synchronizes its parent, and returns the next revision", async () => {

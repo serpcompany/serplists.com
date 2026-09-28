@@ -56,6 +56,46 @@ function preserveRunState(templateValue: JsonRecord, runValue: JsonRecord | unde
   return next;
 }
 
+function freshRunState(value: JsonRecord): JsonRecord {
+  // Clients still read the legacy `completed` key when `isCompleted` is missing.
+  const { completed: _completed, ...next } = preserveRunState(value, undefined);
+  return next;
+}
+
+const resetSubItems = (subItems: unknown[]): unknown[] =>
+  subItems.map((subItem) => (isRecord(subItem) ? freshRunState(subItem) : subItem));
+
+function resetTaskState(item: unknown): unknown {
+  if (!isRecord(item)) return item;
+
+  const next = freshRunState(item);
+  if (Array.isArray(item.subItems)) next.subItems = resetSubItems(item.subItems);
+  if (Array.isArray(item.contents)) {
+    next.contents = item.contents.map((content) => (
+      isRecord(content) && Array.isArray(content.subItems)
+        ? { ...content, subItems: resetSubItems(content.subItems) }
+        : content
+    ));
+  }
+  return next;
+}
+
+/**
+ * Sections for a new run started from a template. Every task and Sub-task (direct
+ * `subItems` and Sub-tasks blocks in `contents`) starts unticked, and run-only state a stored
+ * template may carry (`notes`, the legacy `completed` key) is dropped, as reconciliation
+ * treats it. Sections, other content blocks, and non-record entries are left as they are.
+ * Every path that starts a run from a template (web create, MCP start_run) uses this one
+ * reset, so the same template always starts the same way.
+ */
+export function resetRunCompletionState(sections: unknown[]): unknown[] {
+  return sections.map((section) => (
+    isRecord(section) && Array.isArray(section.items)
+      ? { ...section, items: section.items.map(resetTaskState) }
+      : section
+  ));
+}
+
 function reconcileSubItems(
   templateSubItems: unknown[],
   previousById: Map<string, JsonRecord>,

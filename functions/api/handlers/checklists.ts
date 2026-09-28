@@ -9,7 +9,7 @@ import { redactStoredAuditDiff } from '../utils/audit-compaction';
 import { canRunTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { canDeleteRun, canRestoreRun, canUpdateRun, canViewRun, canViewRunHistory } from '../utils/run-access';
 import { z } from 'zod';
-import { calculateRunProgress, reconcileRunSections } from '../utils/template-reconciliation';
+import { calculateRunProgress, reconcileRunSections, resetRunCompletionState } from '../utils/template-reconciliation';
 import { auditedRunUpdate, batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
 import { canUseTemplateAsRunSource } from '../utils/template-access';
 import {
@@ -41,33 +41,6 @@ function parseOptionalJson(value: unknown): unknown {
   } catch {
     return null;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function resetCompletionState(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(resetCompletionState);
-  }
-
-  if (!isRecord(value)) {
-    return value;
-  }
-
-  const next: Record<string, unknown> = { ...value };
-  if (Object.prototype.hasOwnProperty.call(next, 'isCompleted')) {
-    next.isCompleted = false;
-  }
-  if (Array.isArray(next.items)) {
-    next.items = next.items.map(resetCompletionState);
-  }
-  if (Array.isArray(next.subItems)) {
-    next.subItems = next.subItems.map(resetCompletionState);
-  }
-
-  return next;
 }
 
 async function assertTeamRunAccess(env: Env, teamId: string, userId: string): Promise<Response | null> {
@@ -134,7 +107,7 @@ async function resolveTemplateRunSource(
   return {
     source: {
       effectiveTeamId,
-      sections: resetCompletionState(normalizedSections.sections) as unknown[],
+      sections: resetRunCompletionState(normalizedSections.sections),
       title: sourceTemplate.title || '',
       version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
     },
