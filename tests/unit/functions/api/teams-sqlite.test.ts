@@ -287,6 +287,74 @@ describe("Organization membership writes against SQLite", () => {
     });
   });
 
+  describe("invites for someone who is already an active member", () => {
+    function insertInvite(id: string, email: string, role: string) {
+      // A leftover from before re-enabling revoked invites, or from a race with a re-enable.
+      d1.run(
+        `INSERT INTO team_invites (id, team_id, email, role, token_hash, invited_by_user_id, expires_at, created_at)
+         VALUES (?, 'team-1', ?, ?, ?, 'admin-user', ?, ?)`,
+        id, email, role, `${id}-hash`, new Date(Date.now() + 60_000).toISOString(), createdAt,
+      );
+    }
+
+    function inviteState(id: string) {
+      return d1.rows<{ revoked_at: string | null; accepted_at: string | null }>(
+        "SELECT revoked_at, accepted_at FROM team_invites WHERE id = ?",
+        id,
+      )[0];
+    }
+
+    it("hides the invite, refuses it without changing the role, and revokes it", async () => {
+      insertInvite("stale-invite", "member@example.test", "admin");
+
+      const incoming = await asUser("member-user", "GET", "/invites/pending");
+      const accepted = await asUser("member-user", "POST", "/invites/pending/stale-invite/accept");
+
+      expect(incoming.data).toEqual([]);
+      expect(accepted.status).toBe(409);
+      expect(accepted.data).toEqual(expect.objectContaining({
+        error: "You are already a member of this Organization",
+        code: "team_member_exists",
+      }));
+      expect(member("member-m")).toEqual({ role: "editor", status: "active" });
+      expect(inviteState("stale-invite").accepted_at).toBeNull();
+      expect(inviteState("stale-invite").revoked_at).not.toBeNull();
+      expect(auditActions("team_invite.accepted")).toHaveLength(0);
+      expect(d1.rows("SELECT metadata_json FROM audit_events WHERE action = 'team_invite.revoked'")).toEqual([
+        { metadata_json: JSON.stringify({ reason: "invitee_already_member" }) },
+      ]);
+      expect((await asUser("admin-user", "GET", "/team-1/invites")).data).toEqual([]);
+    });
+
+    it("never changes the owner's role through an invite", async () => {
+      insertInvite("owner-invite", "owner@example.test", "viewer");
+
+      const accepted = await asUser("owner-user", "POST", "/invites/pending/owner-invite/accept");
+
+      expect(accepted.status).toBe(409);
+      expect(member("owner-member")).toEqual({ role: "owner", status: "active" });
+    });
+
+    it("cleans up an invite created while the member was being re-enabled", async () => {
+      await asUser("admin-user", "PUT", "/team-1/members/member-m", { status: "disabled" });
+      let inviteId = "";
+      d1.beforeNextBatch(async () => {
+        const created = await asUser("admin-user", "POST", "/team-1/invites", { email: "member@example.test", role: "admin" });
+        expect(created.status).toBe(200);
+        inviteId = created.data?.id as string;
+      });
+      expect((await asUser("admin-user", "PUT", "/team-1/members/member-m", { status: "active" })).status).toBe(200);
+      expect(inviteState(inviteId).revoked_at).toBeNull();
+
+      expect((await asUser("member-user", "GET", "/invites/pending")).data).toEqual([]);
+      expect((await asUser("member-user", "POST", `/invites/pending/${inviteId}/accept`)).status).toBe(409);
+
+      expect(member("member-m")).toEqual({ role: "editor", status: "active" });
+      expect(inviteState(inviteId).revoked_at).not.toBeNull();
+      expect((await asUser("admin-user", "GET", "/team-1/invites")).data).toEqual([]);
+    });
+  });
+
   describe("invites from a manager who loses access", () => {
     async function inviteNewUser(inviterUserId = "admin-user", role = "admin") {
       const created = await asUser(inviterUserId, "POST", "/team-1/invites", { email: "new@example.test", role });
@@ -551,8 +619,9 @@ describe("Organization membership writes against SQLite", () => {
       const plan = d1.queryPlan(inviteQuery!).join(" | ");
       expect(plan).toContain("USING INDEX idx_team_invites_email");
       expect(plan).not.toContain("SCAN team_invites");
-      // The inviter check is a lookup on the (team_id, user_id) unique index, not a scan.
-      expect(plan).not.toMatch(/SCAN (team_members|active_manager)\b/);
+      // The inviter and existing-member checks are lookups on the (team_id, user_id) unique index.
+      expect(plan).not.toMatch(/SCAN (team_members|active_manager|active_member)\b/);
+      expect(plan.match(/idx_team_members_team_user_unique/g)).toHaveLength(2);
     });
   });
 });

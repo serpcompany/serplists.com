@@ -1076,7 +1076,7 @@ describe("Teams handler", () => {
     expect(dbMocks.insertChain.onConflictDoNothing).toHaveBeenCalled();
   });
 
-  it("accepts an invite without downgrading an already active member", async () => {
+  it("refuses an invite for an already active member without changing their role", async () => {
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([
         {
@@ -1097,10 +1097,6 @@ describe("Teams handler", () => {
       ])
       .mockResolvedValueOnce([
         { id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "admin", status: "active" },
-      ])
-      .mockResolvedValueOnce([{ id: "invite-1" }])
-      .mockResolvedValueOnce([
-        { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
       ]);
 
     const response = await handleTeams(
@@ -1109,27 +1105,21 @@ describe("Teams handler", () => {
     );
     const data = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(data.role).toBe("admin");
-    expect(dbMocks.insertChain.values).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        team_id: "team-1",
-        user_id: "user-1",
-        role: "viewer",
-      }),
-    );
-    expect(dbMocks.updateChain.set).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        role: "viewer",
-        status: "active",
-      }),
-    );
-    expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        accepted_by_user_id: "user-1",
-        accepted_at: expect.any(String),
-      }),
-    );
+    expect(response.status).toBe(409);
+    expect(data).toEqual(expect.objectContaining({
+      code: "team_member_exists",
+      details: { teamId: "team-1", role: "admin" },
+    }));
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalledWith(expect.objectContaining({ role: expect.anything() }));
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalledWith(expect.objectContaining({ accepted_at: expect.any(String) }));
+    expect(dbMocks.updateChain.set).toHaveBeenCalledWith({ revoked_at: expect.any(String), updated_at: expect.any(String) });
+    expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(expect.objectContaining({
+      action: "team_invite.revoked",
+      metadata: { reason: "invitee_already_member" },
+    }));
+    expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalledWith(expect.objectContaining({
+      action: "team_invite.accepted",
+    }));
   });
 
   it.each([

@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, isNull, not, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
@@ -11,6 +11,7 @@ import { buildInviteRevocation, type TeamInvite } from "../utils/team-invite-rev
 import { isTeamSlugTaken, isTeamSlugUniqueViolation, teamSlugInUseError } from "../utils/team-slug";
 import {
   activeTeamManagerExists,
+  activeTeamMemberExists,
   canManageTeam,
   getActiveTeamMembership,
   normalizeTeamRole,
@@ -174,9 +175,29 @@ async function acceptTeamInviteRecord({
   }
 
   const now = new Date().toISOString();
+
+  // An active member has nothing to accept. Applying the invite's role would override the
+  // role an admin last chose, and consuming it would report a role that never applied, so
+  // refuse it and revoke it; it can only be left over from a race or older data.
+  if (existingMembership?.status === "active") {
+    const [revoke, revokeAudit] = await buildInviteRevocation({
+      db,
+      invite: pendingInvite,
+      actorUserId: userId,
+      request,
+      now,
+      metadata: { reason: "invitee_already_member" },
+      guard: activeTeamMemberExists(db, invite.team_id, userId),
+    });
+    await db.batch([revoke, revokeAudit]);
+    return jsonError("You are already a member of this Organization", 409, {
+      code: "team_member_exists",
+      details: { teamId: invite.team_id, role: normalizeTeamRole(existingMembership.role) },
+    });
+  }
+
   const inviteRole = normalizeTeamRole(invite.role, "viewer");
   const memberId = existingMembership?.id ?? crypto.randomUUID();
-  let finalRole = inviteRole;
   const inviteUpdates = {
     accepted_by_user_id: userId,
     accepted_at: now,
@@ -187,39 +208,23 @@ async function acceptTeamInviteRecord({
     subject: { type: "team", id: invite.team_id },
     resource: { type: "team_invite", id: invite.id },
     action: "team_invite.accepted",
-    after: { inviteId: invite.id, memberId, role: finalRole },
+    after: { inviteId: invite.id, memberId, role: inviteRole },
     request,
     createdAt: now,
   });
 
   if (existingMembership) {
-    if (existingMembership.status === "active") {
-      finalRole = normalizeTeamRole(existingMembership.role);
-      const acceptedAuditEvent = await buildAuditEventValues({
-        actorUserId: userId,
-        subject: { type: "team", id: invite.team_id },
-        resource: { type: "team_invite", id: invite.id },
-        action: "team_invite.accepted",
-        after: { inviteId: invite.id, memberId, role: finalRole },
-        request,
-        createdAt: now,
-      });
-      await db.batch([
-        db.update(team_invites).set(inviteUpdates).where(pendingInviteWhere(db, pendingInvite, now)),
-        insertAuditEventWhere(db, acceptedAuditEvent, acceptedInviteExistsSql(invite.id, userId, now)),
-      ]);
-    } else {
-      await db.batch([
-        db.update(team_invites).set(inviteUpdates).where(pendingInviteWhere(db, pendingInvite, now)),
-        db.update(team_members).set({
-          role: inviteRole,
-          status: "active",
-          joined_at: existingMembership.joined_at ?? now,
-          updated_at: now,
-        }).where(and(eq(team_members.id, memberId), acceptedInviteExistsSql(invite.id, userId, now))),
-        insertAuditEventWhere(db, auditEvent, acceptedInviteExistsSql(invite.id, userId, now)),
-      ]);
-    }
+    // A disabled member rejoins with the invite's role.
+    await db.batch([
+      db.update(team_invites).set(inviteUpdates).where(pendingInviteWhere(db, pendingInvite, now)),
+      db.update(team_members).set({
+        role: inviteRole,
+        status: "active",
+        joined_at: existingMembership.joined_at ?? now,
+        updated_at: now,
+      }).where(and(eq(team_members.id, memberId), acceptedInviteExistsSql(invite.id, userId, now))),
+      insertAuditEventWhere(db, auditEvent, acceptedInviteExistsSql(invite.id, userId, now)),
+    ]);
   } else {
     const insertedMembership = {
       id: memberId,
@@ -278,7 +283,7 @@ async function acceptTeamInviteRecord({
     });
   }
 
-  const acceptedRole = normalizeTeamRole(acceptedMembership.role, finalRole);
+  const acceptedRole = normalizeTeamRole(acceptedMembership.role, inviteRole);
   return json({
     teamId: invite.team_id,
     memberId: acceptedMembership.id,
@@ -393,6 +398,8 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
           isNotNull(teams.id),
           isNull(teams.archived_at),
           activeTeamManagerExists(db, team_invites.team_id, team_invites.invited_by_user_id),
+          // Nothing to accept in an Organization the user is already an active member of.
+          not(activeTeamMemberExists(db, team_invites.team_id, userId)),
         ),
       )
       .orderBy(desc(team_invites.created_at));

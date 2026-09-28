@@ -97,23 +97,34 @@ export async function userHasTeamRole(
 }
 
 /**
- * SQL that holds while `userId` is an active owner or admin of `teamId`, for guarding a
- * write in the same statement. Pass values, or columns of the outer query to correlate.
+ * SQL that holds while `userId` is an active member of `teamId` (with one of `roles`, if
+ * given), for guarding or filtering in the same statement. Pass values, or columns of the
+ * outer query to correlate.
  */
+export function activeTeamMemberExists(
+  db: ReturnType<typeof createDb>,
+  teamId: SQLiteColumn | string,
+  userId: SQLiteColumn | string,
+  roles?: readonly TeamRole[],
+) {
+  const member = alias(schema.team_members, roles ? "active_manager" : "active_member");
+  return exists(
+    db.select({ id: member.id }).from(member).where(
+      and(
+        eq(member.team_id, teamId),
+        eq(member.user_id, userId),
+        eq(member.status, "active"),
+        roles ? inArray(member.role, [...roles]) : undefined,
+      ),
+    ),
+  );
+}
+
+/** SQL that holds while `userId` is an active owner or admin of `teamId`. */
 export function activeTeamManagerExists(
   db: ReturnType<typeof createDb>,
   teamId: SQLiteColumn | string,
   userId: SQLiteColumn | string,
 ) {
-  const manager = alias(schema.team_members, "active_manager");
-  return exists(
-    db.select({ id: manager.id }).from(manager).where(
-      and(
-        eq(manager.team_id, teamId),
-        eq(manager.user_id, userId),
-        eq(manager.status, "active"),
-        inArray(manager.role, ["owner", "admin"]),
-      ),
-    ),
-  );
+  return activeTeamMemberExists(db, teamId, userId, ["owner", "admin"]);
 }

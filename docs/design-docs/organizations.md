@@ -67,7 +67,7 @@ Organization operations use legacy `/api/teams` route identifiers and require a 
 - `POST /api/teams/:teamId/invites`: create a link invite. Requires `owner` or `admin`.
 - `DELETE /api/teams/:teamId/invites/:inviteId`: revoke a pending invite. Requires `owner` or `admin`. Returns 409 `invite_already_accepted` when the invite was accepted before the revoke was written, and 404 when another request revoked it first; only the request that revokes it records `team_invite.revoked`.
 - `GET /api/teams/:teamId/activity`: read the latest Organization audit events, newest first; `?limit=` takes 1-100 (default 50). Requires `owner` or `admin`. The settings page requests the 10 it shows.
-- `GET /api/teams/invites/pending`: list pending invites for the current user's email whose inviter is still an active `owner` or `admin`.
+- `GET /api/teams/invites/pending`: list pending invites for the current user's email whose inviter is still an active `owner` or `admin`, leaving out Organizations the user is already an active member of.
 - `POST /api/teams/invites/pending/:inviteId/accept`: accept from the settings page.
 - `POST /api/teams/invites/:token/accept`: accept from a link.
 
@@ -92,7 +92,12 @@ Invites are link-based today:
 3. The response includes `delivery.mode = "link"`, `invitePath`, and `inviteUrl`.
 4. Invitees can accept through the legacy compatibility route `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
 
-Accepting an invite reactivates a disabled membership with the invite's role. Changing a
+Accepting an invite reactivates a disabled membership with the invite's role. An active
+member has nothing to accept: the accept routes return 409 `team_member_exists` (with
+`details.teamId` and their current `details.role`), leave the role unchanged (an owner is
+never changed by an invite), and revoke the invite with metadata
+`{ "reason": "invitee_already_member" }` so it leaves the managers' pending list. Such an
+invite can only be left over from older data or a race with a re-enable. Changing a
 member's status (disable or re-enable) revokes that member's pending invites to the
 Organization in the same batch, with a `team_invite.revoked` audit event whose metadata
 is `{ "reason": "member_status_changed" }`. An invite made while a member was disabled

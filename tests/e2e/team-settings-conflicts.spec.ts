@@ -292,3 +292,40 @@ test('creating an Organization with a taken slug shows the conflict and keeps th
   await expect(page.getByText('Organization created')).toHaveCount(0);
   await expect(page.locator('#team-slug')).toHaveValue('acme-team');
 });
+
+test('accepting an invite to an Organization the user already belongs to shows the conflict and drops it', async ({ page }) => {
+  let incoming: Record<string, unknown>[] = [{
+    id: 'invite-stale',
+    teamId: 'team-1',
+    teamName: 'Acme Team',
+    email: 'owner@example.com',
+    role: 'admin',
+    expiresAt: '2099-01-01T00:00:00.000Z',
+    createdAt: '2026-07-01T00:00:00.000Z',
+    inviterEmail: 'admin@example.com',
+    inviterName: 'Admin User',
+  }];
+  const state: MockState = {
+    members: [ownerMember],
+    invites: [],
+    requests: [],
+    respond: (method, path) => {
+      if (method === 'GET' && path === '/api/teams/invites/pending') return { status: 200, body: incoming };
+      if (method !== 'POST' || path !== '/api/teams/invites/pending/invite-stale/accept') return null;
+      // The API refuses the invite and revokes it, since the user is already a member.
+      incoming = [];
+      return {
+        status: 409,
+        body: { error: 'You are already a member of this Organization', code: 'team_member_exists' },
+      };
+    },
+  };
+  await mockOrganizationApi(page, state);
+  await openOrganizationSettings(page);
+
+  await page.getByRole('button', { name: 'Accept invite to Acme Team' }).click();
+
+  await expect(page.getByText('You are already a member of this Organization')).toBeVisible();
+  await expect(page.getByText('Organization invite accepted')).toHaveCount(0);
+  await expect(page.getByText('Incoming invites')).toHaveCount(0);
+});

@@ -289,6 +289,8 @@ export function TeamSettingsSection() {
       toast.success('Organization invite accepted');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to accept invite');
+      // A refused invite (already a member, revoked, expired) is no longer listed.
+      await reload(incomingInvitesQuery, ['incoming-team-invites']);
     } finally {
       setAcceptingIncomingInviteId(null);
     }
