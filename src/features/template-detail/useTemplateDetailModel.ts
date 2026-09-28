@@ -165,12 +165,10 @@ export const loadTemplateDetailData = async (
     const cachedTemplate = findPublicTemplateByIdentifier(
       options.cachedTemplates,
       options.identifier,
+      options.ownerUsername,
     );
     if (cachedTemplate) {
-      const ownerSlug = resolvePublicTemplateOwnerSlug(cachedTemplate);
-      if (ownerSlug?.toLowerCase() === options.ownerUsername.toLowerCase()) {
-        return { template: cachedTemplate, notFound: false };
-      }
+      return { template: cachedTemplate, notFound: false };
     }
 
     try {

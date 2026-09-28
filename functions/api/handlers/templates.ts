@@ -1,5 +1,6 @@
 import { Env } from '../types';
 import { generateSlug } from '../utils/slug';
+import { isReservedTemplateSlug } from '../utils/reserved-template-slugs';
 import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema } from '../utils/payloads';
@@ -178,11 +179,9 @@ async function generateUniqueSlug(env: Env, title: string, templateId: string): 
   const { templates } = schema;
 
   // Prefer the clean slug if available; otherwise fall back to a deterministic suffix.
-  const [exists] = await db
-    .select({ id: templates.id })
-    .from(templates)
-    .where(eq(templates.slug, base))
-    .limit(1);
+  const [exists] = isReservedTemplateSlug(base)
+    ? [{ id: 'bundled-starter' }]
+    : await db.select({ id: templates.id }).from(templates).where(eq(templates.slug, base)).limit(1);
 
   if (!exists) return base;
 
@@ -1431,7 +1430,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         .where(and(eq(templates.slug, nextSlug), ne(templates.id, templateId)))
         .limit(1);
 
-      if (conflict) {
+      // A slug the Template already holds is kept, even a bundled starter's, so its URL never changes.
+      if (conflict || (nextSlug !== existingTemplate.slug && isReservedTemplateSlug(nextSlug))) {
         nextSlug = `${nextSlug}-${templateId.slice(0, 8)}`;
       }
 

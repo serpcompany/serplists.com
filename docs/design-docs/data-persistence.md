@@ -116,10 +116,16 @@ Template backup and portable import/export are implemented through `src/lib/util
 
 The portable contract is shared by uploaded files and repo-backed public packs.
 Repo packs live in `src/data/public-template-packs/*.json` and are normalized by
-the same validation path as uploaded packs. If a repo pack and D1 template have
-the same public slug, the repo entry wins in the public catalog. Saving a repo
-template creates a private D1 template; starting a run uses its normalized
-sections and does not require a source D1 row.
+the same validation path as uploaded packs. Public URLs are
+`/profile/<owner>/<slug>`, so the public catalog merges a repo entry and a D1
+template only when both the owner and the slug match (an official `serp` copy of a
+starter, where the repo entry wins); another owner's template with the same slug
+stays listed. The API also treats every bundled starter slug as taken
+(`functions/api/utils/reserved-template-slugs.ts`, read from the generated sitemap
+catalog): create, import, clone and a slug change get the `-<id8>` suffix instead,
+while a Template that already holds such a slug keeps it. Saving a repo
+template creates a private D1 template with a slug derived from its title;
+starting a run uses its normalized sections and does not require a source D1 row.
 
 Create and update saves are awaitable end to end. UI success and navigation
 must wait for confirmed persistence, and update flows must preserve existing

@@ -1,10 +1,9 @@
 import type { ChecklistTemplate } from '@/types/checklist';
 
-import {
-  REPO_TEMPLATE_OWNER_SLUG,
-  REPO_TEMPLATE_USER_ID,
-} from '@/lib/repoTemplateCatalog';
+import { resolvePublicTemplateOwnerSlug } from '@/lib/repoTemplateCatalog';
 import { generateSlug } from '@/utils/urlHelpers';
+
+export { resolvePublicTemplateOwnerSlug };
 
 export type AppShell = 'public' | 'console';
 export type PublicRouteTier = 'marketing' | 'core' | 'secondary' | 'minimal';
@@ -238,25 +237,6 @@ export const resolveConsoleSection = (
     normalizedPath.startsWith(LEGACY_CONSOLE_RUNS_PATH)
   ) {
     return 'runs';
-  }
-
-  return null;
-};
-
-export const resolvePublicTemplateOwnerSlug = (
-  template: Pick<ChecklistTemplate, 'id' | 'userId' | 'ownerProfile'>,
-): string | null => {
-  const username = template.ownerProfile?.username?.trim();
-
-  if (username) {
-    return username;
-  }
-
-  if (
-    template.userId === REPO_TEMPLATE_USER_ID ||
-    template.id.startsWith('repo:')
-  ) {
-    return REPO_TEMPLATE_OWNER_SLUG;
   }
 
   return null;

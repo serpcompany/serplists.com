@@ -130,67 +130,76 @@ describe("repo template catalog", () => {
     expect(payload).toMatchObject({
       title: "Portable Checklist",
       type: "checklist",
-      seoUrl: "portable-checklist",
       isPublic: false,
       categories: ["ops"],
       tags: ["portable"],
     });
     expect(payload.sections).toEqual(template.sections);
+    // The starter keeps its slug: the copy gets one from its title, which the server suffixes.
+    expect(payload.seoUrl).toBeUndefined();
   });
 
-  it("prefers repo templates when public slugs collide", () => {
-    const [repoTemplate] = normalizeRepoTemplateSources({
-      "../docs/schema/camping-checklist.json": {
-        default: {
-          version: "1.0.0",
-          exportedAt: "2026-03-22T00:00:00.000Z",
-          templates: [
-            {
-              id: "camping-checklist-001",
-              title: "Ultimate Camping Checklist",
-              userId: "example-user",
-              createdAt: "2026-03-22T00:00:00.000Z",
-              updatedAt: "2026-03-22T00:00:00.000Z",
-              isPublic: true,
-              slug: "shared-slug",
-              sections: [
-                {
-                  id: "section-1",
-                  title: "Shelter",
-                  items: [{ id: "item-1", title: "Pack the tent" }],
-                },
-              ],
-            },
-          ],
-        },
-      },
+  describe("when a D1 template has a bundled starter's slug", () => {
+    const starter: ChecklistTemplate = {
+      id: "repo:camping-checklist-001",
+      title: "Ultimate Camping Checklist",
+      description: "",
+      sections: [],
+      userId: REPO_TEMPLATE_USER_ID,
+      createdAt: "2026-03-22T00:00:00.000Z",
+      updatedAt: "2026-03-22T00:00:00.000Z",
+      isPublic: true,
+      slug: "ultimate-camping-checklist",
+      categories: [],
+      tags: [],
+      version: 1,
+      ownerProfile: { full_name: REPO_TEMPLATE_OWNER_NAME, username: REPO_TEMPLATE_OWNER_SLUG },
+    };
+    const d1Template = (id: string, overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
+      ...starter,
+      id,
+      title: `Template ${id}`,
+      userId: "user-1",
+      ownerProfile: { full_name: "Alice", username: "alice" },
+      ...overrides,
     });
 
-    const merged = mergePublicTemplateCollections([
-      {
-        ...repoTemplate,
-        slug: "shared-slug",
-      },
-    ], [
-      {
-        id: "db-template-1",
-        title: "Database Template",
-        description: "",
-        sections: [],
-        userId: "user-1",
-        createdAt: "2026-03-22T00:00:00.000Z",
-        updatedAt: "2026-03-22T00:00:00.000Z",
-        isPublic: true,
-        slug: "shared-slug",
-        categories: [],
-        tags: [],
-        version: 1,
-      },
-    ]);
+    it("keeps another owner's public template next to the starter", () => {
+      const merged = mergePublicTemplateCollections([starter], [d1Template("alice-camping")]);
 
-    expect(merged).toHaveLength(1);
-    expect(merged[0].title).toBe("Ultimate Camping Checklist");
-    expect(isRepoTemplate(merged[0])).toBe(true);
+      expect(merged.map((template) => template.id)).toEqual([starter.id, "alice-camping"]);
+    });
+
+    it("collapses an official SERP copy into the bundled starter", () => {
+      const officialCopy = d1Template("official-camping", {
+        userId: "serp-user",
+        ownerProfile: { full_name: "SERP Lists", username: "SERP" },
+      });
+
+      const merged = mergePublicTemplateCollections([starter], [officialCopy]);
+
+      expect(merged).toEqual([starter]);
+    });
+
+    it("keeps templates whose owner is unknown, even when their slugs match", () => {
+      const ownerless = { ownerProfile: undefined };
+      const merged = mergePublicTemplateCollections(
+        [],
+        [d1Template("first", ownerless), d1Template("second", ownerless)],
+      );
+
+      expect(merged.map((template) => template.id)).toEqual(["first", "second"]);
+    });
+
+    it("finds the template of the owner the URL names", () => {
+      const merged = mergePublicTemplateCollections([starter], [d1Template("alice-camping")]);
+
+      expect(findPublicTemplateByIdentifier(merged, "ultimate-camping-checklist", "Alice")?.id).toBe(
+        "alice-camping",
+      );
+      expect(findPublicTemplateByIdentifier(merged, "ultimate-camping-checklist", "serp")?.id).toBe(starter.id);
+      expect(findPublicTemplateByIdentifier(merged, "ultimate-camping-checklist", "bob")).toBeUndefined();
+    });
   });
 
   it("finds public templates by slug or id", () => {

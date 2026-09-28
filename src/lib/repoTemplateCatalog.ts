@@ -88,6 +88,36 @@ export const normalizeRepoTemplateSources = (
   );
 };
 
+// The profile that owns a public template's URL: its owner's username, or the SERP library for
+// bundled starters. Null when the owner is unknown.
+export const resolvePublicTemplateOwnerSlug = (
+  template: Pick<ChecklistTemplate, 'id' | 'userId' | 'ownerProfile'>,
+): string | null => {
+  const username = template.ownerProfile?.username?.trim();
+
+  if (username) {
+    return username;
+  }
+
+  if (
+    template.userId === REPO_TEMPLATE_USER_ID ||
+    template.id.startsWith('repo:')
+  ) {
+    return REPO_TEMPLATE_OWNER_SLUG;
+  }
+
+  return null;
+};
+
+// Public URLs are /profile/<owner>/<slug>, so two templates are the same catalog entry only when
+// both owner and slug match (an official SERP copy of a bundled starter). A template with an
+// unknown owner is never merged with another one.
+const publicCatalogKey = (template: ChecklistTemplate): string => {
+  const ownerSlug = resolvePublicTemplateOwnerSlug(template);
+  if (!ownerSlug) return `id:${template.id}`;
+  return `${ownerSlug.toLowerCase()}/${template.slug?.trim() || template.id}`;
+};
+
 export const mergePublicTemplateCollections = (
   repoCollection: ChecklistTemplate[],
   apiCollection: ChecklistTemplate[],
@@ -96,7 +126,7 @@ export const mergePublicTemplateCollections = (
 
   [...repoCollection, ...apiCollection].forEach((template) => {
     if (!template.isPublic) return;
-    const key = template.slug?.trim() || template.id;
+    const key = publicCatalogKey(template);
     if (merged.has(key)) return;
     merged.set(key, template);
   });
@@ -136,14 +166,19 @@ export const mergeAccountTemplateCollections = (
   return Array.from(merged.values());
 };
 
+// With ownerUsername (a /profile/<owner>/<slug> page), only that owner's template matches, since
+// different owners can publish templates with the same slug.
 export const findPublicTemplateByIdentifier = (
   templates: ChecklistTemplate[],
   identifier: string,
+  ownerUsername?: string,
 ): ChecklistTemplate | undefined => {
+  const owner = ownerUsername?.trim().toLowerCase();
   return templates.find(
     (template) =>
       template.isPublic &&
-      (template.slug === identifier || template.id === identifier),
+      (template.slug === identifier || template.id === identifier) &&
+      (!owner || resolvePublicTemplateOwnerSlug(template)?.toLowerCase() === owner),
   );
 };
 
@@ -165,7 +200,7 @@ export const buildRepoTemplateCreatePayload = (
   seoTitle: template.seoTitle || '',
   seoDescription: template.seoDescription || '',
   rules: template.rules,
-  seoUrl: template.slug,
+  // No seoUrl: the starter keeps its slug, and the copy gets one from its title.
   sections: template.sections,
   isPublic: false,
   categories: template.categories || [],
