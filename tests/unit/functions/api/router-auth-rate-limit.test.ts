@@ -128,6 +128,23 @@ describe('API router auth rate limits', { timeout: 30_000 }, () => {
     }
   });
 
+  it('limits an IPv6 client per /64, not per address', async () => {
+    const { send } = await loadRouter();
+    const network = `2001:db8:${ipCounter.toString(16)}:2`;
+
+    for (let index = 1; index <= 30; index += 1) {
+      const response = await send(`${network}::${index.toString(16)}`, 'POST', 'auth/sign-in/email');
+      expect(response.status).toBe(200);
+    }
+
+    const blocked = await send(`${network}:ffff:ffff:ffff:ffff`, 'POST', 'auth/sign-in/email');
+    expect(blocked.status).toBe(429);
+    expect(Number(blocked.headers.get('Retry-After'))).toBeGreaterThan(0);
+
+    const otherNetwork = await send(`2001:db8:${ipCounter.toString(16)}:3::1`, 'POST', 'auth/sign-in/email');
+    expect(otherNetwork.status).toBe(200);
+  });
+
   it('still caps session checks at their own, larger limit', async () => {
     const { send } = await loadRouter();
 

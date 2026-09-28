@@ -1,9 +1,10 @@
 import { checkRateLimit, type RateLimitResult } from './rate-limit';
+import { rateLimitKeyForIp } from './rate-limit-key';
 
 /**
- * Auth routes use two per-IP buckets so that routine session checks can never
- * lock a signed-in user out, and so that sign-in attempts can never be hidden
- * among session checks.
+ * Auth routes use two per-IP buckets (an IPv6 client is counted per /64, see
+ * rate-limit-key.ts) so that routine session checks can never lock a signed-in
+ * user out, and so that sign-in attempts can never be hidden among session checks.
  *
  * - `session`: the read-only checks the app makes on every page load. Only the
  *   exact method + path pairs below qualify.
@@ -54,5 +55,5 @@ export function checkAuthRateLimit(params: {
   const bucket = authRateLimitBucket(params.method, params.path);
   if (!bucket) return null;
   const limit = params.isLocal ? LIMITS[bucket].local : LIMITS[bucket].deployed;
-  return checkRateLimit(`${BUCKET_KEY_PREFIX[bucket]}:${params.ip}`, limit);
+  return checkRateLimit(`${BUCKET_KEY_PREFIX[bucket]}:${rateLimitKeyForIp(params.ip)}`, limit);
 }

@@ -130,7 +130,12 @@ it moves ports. Do not hand-edit only one side.
 
 ## Rate limits
 
-Best-effort, per IP, in `functions/api/[[route]].ts`, before Better Auth dispatch:
+Best-effort, per client IP, in `functions/api/[[route]].ts`, before Better Auth
+dispatch. An IPv4 client is counted per address and an IPv6 client per /64
+(`functions/api/utils/rate-limit-key.ts`), because a home connection, phone or VPS
+normally holds a whole /64 and could otherwise start a fresh bucket with every
+address. An IPv4-mapped address (`::ffff:203.0.113.5`) counts as its IPv4 address.
+Clients that share a /64 (some office or campus networks) share one budget.
 
 - Session checks (exactly `GET /api/auth/get-session` and `GET /api/auth/status`):
   600 requests per 5 minutes, in their own bucket, so page loads from a shared IP

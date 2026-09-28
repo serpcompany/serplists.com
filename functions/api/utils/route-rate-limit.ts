@@ -1,10 +1,12 @@
 import { checkRateLimit, type RateLimitResult } from './rate-limit';
+import { rateLimitKeyForIp } from './rate-limit-key';
 import { jsonError } from './response';
 
 /**
- * Per-IP limits for state-changing API routes outside `auth`, which
- * auth-rate-limit.ts owns. Every route family the router dispatches must either
- * fall in a bucket here or be listed in RATE_LIMIT_EXEMPT_ROUTES with a reason;
+ * Per-IP limits (an IPv6 client is counted per /64, see rate-limit-key.ts) for
+ * state-changing API routes outside `auth`, which auth-rate-limit.ts owns. Every
+ * route family the router dispatches must either fall in a bucket here or be
+ * listed in RATE_LIMIT_EXEMPT_ROUTES with a reason;
  * tests/unit/functions/api/route-rate-limit.test.ts reads the router to enforce it.
  *
  * - `write`: ordinary writes (templates, runs, uploads, Organizations, Run Key management, admin).
@@ -96,5 +98,5 @@ export function checkRouteRateLimit(params: {
   const bucket = routeRateLimitBucket(params.method, params.path);
   if (!bucket) return null;
   const limit = params.isLocal ? LIMITS[bucket].local : LIMITS[bucket].deployed;
-  return { bucket, result: checkRateLimit(`${bucket}:${params.ip}`, limit) };
+  return { bucket, result: checkRateLimit(`${bucket}:${rateLimitKeyForIp(params.ip)}`, limit) };
 }
