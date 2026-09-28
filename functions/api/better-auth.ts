@@ -171,6 +171,12 @@ export function createBetterAuth(env: Env, request: Request) {
       sendResetPassword: async ({ user, url }) => {
         await sendPasswordResetEmail(env, { to: user.email, url });
       },
+      // A reset is how users recover a compromised account, so it must sign out
+      // every existing session (Better Auth deletes the user's session rows).
+      // This is immediate only while sessions are read from D1: enabling
+      // session.cookieCache would keep revoked sessions alive until it expires.
+      revokeSessionsOnPasswordReset: true,
+      // Runs before the sessions are deleted, so it must not throw.
       onPasswordReset: async ({ user }) => {
         log("info", "password_reset_completed", { userId: user.id });
       },

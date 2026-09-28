@@ -36,7 +36,7 @@ interface AuthContextType {
   retrySessionCheck: () => void;
   login: (email: string, password: string) => Promise<AuthActionResult>;
   register: (name: string, email: string, password: string) => Promise<RegisterResult>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -165,11 +165,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
-    authClient.signOut().finally(() => {
+  /** Resolves once the local user is cleared, whether or not the server call succeeded. */
+  const logout = async () => {
+    try {
+      await authClient.signOut();
+    } catch (error) {
+      console.error('Sign out failed:', error);
+    } finally {
       setUser(null);
       setSession(null);
-    });
+    }
   };
 
   const refreshProfile = async () => {

@@ -11,6 +11,12 @@
   [authentication](design-docs/authentication.md).
 - **Email verification is required** before sign-in in production, and
   breached passwords are rejected (`haveIBeenPwned` plugin).
+- **A password reset signs out every session** for the account
+  (`revokeSessionsOnPasswordReset`), so recovering an account removes anyone
+  holding a stolen session. This takes effect immediately only because sessions
+  are read from D1; enabling Better Auth's `session.cookieCache` would let revoked
+  sessions live until the cache expires. Run Keys are separate credentials and are
+  not revoked by a reset.
 - **Production blocks known test-email domains** at sign-up and sign-in.
 - **Agents act through Run Keys**, revocable credentials limited to reading
   Personal templates and listing, starting, reading, and updating Personal runs.

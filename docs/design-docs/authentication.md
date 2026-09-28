@@ -32,6 +32,10 @@ and user-facing failure states when a supporting service is unavailable.
   Callbacks await delivery so provider failures surface in the request.
   `GET /api/auth/status` reports whether email delivery is available.
 - Protected routes preserve the requested destination through login.
+- A password reset revokes every session for the account, including the one in
+  the browser doing the reset; `ResetPassword.tsx` clears that browser's local
+  user before sending it to `/login`. Change password revokes other sessions only
+  when asked (`revokeOtherSessions`, on by default in `SecuritySection.tsx`).
 - Sessions last 7 days and slide: Better Auth extends a session, and resends its
   cookie, at most once a day. Only `GET /api/auth/get-session` may do that, because
   its `Set-Cookie` reaches the browser. API handlers look sessions up read-only

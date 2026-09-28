@@ -72,6 +72,23 @@ describe("createBetterAuth config", () => {
     expect(options.plugins).toEqual([{ id: "username" }]);
   });
 
+  it.each([
+    ["production", buildEnv(), "https://serplists.com/api/auth/reset-password"],
+    [
+      "local",
+      buildEnv({ FRONTEND_URL: undefined, RESEND_API_KEY: undefined }),
+      "http://localhost:8788/api/auth/reset-password",
+    ],
+  ])("revokes every session when a password is reset (%s)", (_label, env, url) => {
+    createBetterAuth(env, new Request(url));
+
+    const options = betterAuthMock.mock.calls[0]?.[0];
+    expect(options.emailAndPassword.revokeSessionsOnPasswordReset).toBe(true);
+    // Revocation is immediate only while sessions are read from the database.
+    expect(options.session?.cookieCache?.enabled).not.toBe(true);
+    expect(options.secondaryStorage).toBeUndefined();
+  });
+
   it("enables breached-password checks when setting production passwords", () => {
     createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/sign-up/email"));
 
