@@ -647,6 +647,8 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
           isNull(team_invites.accepted_at),
           isNull(team_invites.revoked_at),
           gt(team_invites.expires_at, now),
+          // Like accept: an invite whose inviter no longer manages the Organization is gone.
+          activeTeamManagerExists(db, team_invites.team_id, team_invites.invited_by_user_id),
         ),
       )
       .orderBy(desc(team_invites.created_at));
@@ -706,6 +708,8 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
           isNull(team_invites.accepted_at),
           isNull(team_invites.revoked_at),
           gt(team_invites.expires_at, now),
+          // An invite that can no longer be accepted must not block a new one.
+          activeTeamManagerExists(db, team_invites.team_id, team_invites.invited_by_user_id),
         ),
       )
       .limit(1);

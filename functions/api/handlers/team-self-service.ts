@@ -5,7 +5,8 @@ import { buildAuditEventValues } from "../utils/audit";
 import { batchWriteMissed, insertAuditEventWhere } from "../utils/guarded-writes";
 import { sha256Hex } from "../utils/crypto";
 import { json, jsonError } from "../utils/response";
-import { normalizeTeamRole, type TeamMembership } from "../utils/team-access";
+import { activeTeamManagerExists, normalizeTeamRole, type TeamMembership } from "../utils/team-access";
+import { buildInviteRevocation, selectPendingInvitesFromInviter } from "../utils/team-invite-revocation";
 
 // Routes an invitee or member calls for their own membership: preview or
 // decline an invite link before joining, and leave an Organization.
@@ -78,6 +79,7 @@ export async function previewTeamInvite({
       teamArchivedAt: teams.archived_at,
       inviterName: users.name,
       inviterEmail: users.email,
+      inviterCanManage: activeTeamManagerExists(db, team_invites.team_id, team_invites.invited_by_user_id),
     })
     .from(team_invites)
     .leftJoin(teams, eq(teams.id, team_invites.team_id))
@@ -126,6 +128,12 @@ export async function previewTeamInvite({
     return noStore(
       json({ status: "already_member", ...preview, role: normalizeTeamRole(membership.role) }),
     );
+  }
+
+  // Accepting needs the inviter to still manage the Organization, so an invite
+  // whose inviter left or lost access is shown as gone, as accept treats it.
+  if (!invite.inviterCanManage) {
+    return noStore(inviteNotFound());
   }
 
   if (isExpired(invite.expires_at)) {
@@ -215,7 +223,9 @@ export async function declineTeamInvite({
 /**
  * POST /api/teams/:teamId/leave: an active non-owner member removes their own
  * membership. The row is deleted rather than disabled so a manager cannot
- * silently re-activate someone who left; rejoining takes a new invite.
+ * silently re-activate someone who left; rejoining takes a new invite. The
+ * pending invites they created are revoked, since an invite carries its
+ * inviter's authority and rejoining must not bring them back.
  */
 export async function leaveTeam({
   db,
@@ -257,20 +267,31 @@ export async function leaveTeam({
       eq(team_members.user_id, userId),
       ne(team_members.role, "owner"),
     );
-  // A deleted row leaves nothing to check afterwards, so the audit insert runs
-  // first with the delete's own condition. A batch is one transaction, so both
-  // statements see the same row: the audit row exists only if the delete lands.
+  const stillLeavable = () => sql`exists (select 1 from ${team_members} where ${leavableMembership()})`;
+  const inviteRevocations = await Promise.all(
+    (await selectPendingInvitesFromInviter(db, teamId, userId, now)).map((invite) =>
+      buildInviteRevocation({
+        db,
+        invite,
+        actorUserId: userId,
+        request,
+        now,
+        metadata: { reason: "inviter_left" },
+        guard: stillLeavable(),
+      })),
+  );
+  // A deleted row leaves nothing to check afterwards, so the audit insert and
+  // the invite revokes run first with the delete's own condition. A batch is one
+  // transaction, so every statement sees the same row: nothing is recorded or
+  // revoked unless the delete lands.
   const results = await db.batch([
-    insertAuditEventWhere(
-      db,
-      auditEvent,
-      sql`exists (select 1 from ${team_members} where ${leavableMembership()})`,
-    ),
+    insertAuditEventWhere(db, auditEvent, stillLeavable()),
+    ...inviteRevocations.flat(),
     db.delete(team_members).where(leavableMembership()),
   ]);
 
   // Ownership moved to this member, or they left in another tab, after the read.
-  if (batchWriteMissed(results[1])) {
+  if (batchWriteMissed(results[results.length - 1])) {
     return jsonError("Your membership changed. Reload the page and try again.", 409, {
       code: "membership_changed",
     });

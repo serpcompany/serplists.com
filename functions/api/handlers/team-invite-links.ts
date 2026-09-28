@@ -6,6 +6,7 @@ import { buildAuditEventValues } from "../utils/audit";
 import { batchWriteMissed, insertAuditEventWhere } from "../utils/guarded-writes";
 import { createInviteToken, sha256Hex } from "../utils/crypto";
 import { json, jsonError } from "../utils/response";
+import { activeTeamManagerExists } from "../utils/team-access";
 import { buildTeamInviteDelivery } from "../utils/team-invite-delivery";
 
 type Db = ReturnType<typeof createDb>;
@@ -45,7 +46,9 @@ function pendingTeamInviteWhere(teamId: string, inviteId: string, now: string) {
  * token is stored, so a link that was lost before it was copied cannot be
  * shown again. This gives the pending invite a new token (the previous link
  * stops working), restarts its 7-day window, and can change its role. The
- * caller must already be allowed to manage the Organization's invites.
+ * caller must already be allowed to manage the Organization's invites, and
+ * becomes the invite's inviter: an invite carries its inviter's authority, so
+ * this also revives one whose original inviter left or lost access.
  */
 export async function reissueTeamInviteLink({
   db,
@@ -76,6 +79,7 @@ export async function reissueTeamInviteLink({
       email: team_invites.email,
       role: team_invites.role,
       expires_at: team_invites.expires_at,
+      invited_by_user_id: team_invites.invited_by_user_id,
     })
     .from(team_invites)
     .where(pendingTeamInviteWhere(teamId, inviteId, now))
@@ -98,16 +102,24 @@ export async function reissueTeamInviteLink({
     subject: { type: "team", id: teamId },
     resource: { type: "team_invite", id: inviteId },
     action: "team_invite.link_reissued",
-    before: { role: invite.role, expires_at: invite.expires_at },
-    after: { id: inviteId, team_id: teamId, email: invite.email, role, expires_at: expiresAt },
+    before: { role: invite.role, expires_at: invite.expires_at, invited_by_user_id: invite.invited_by_user_id },
+    after: {
+      id: inviteId,
+      team_id: teamId,
+      email: invite.email,
+      role,
+      expires_at: expiresAt,
+      invited_by_user_id: userId,
+    },
     request,
     createdAt: now,
   });
   const results = await db.batch([
     db
       .update(team_invites)
-      .set({ token_hash: tokenHash, role, expires_at: expiresAt, updated_at: now })
-      .where(pendingTeamInviteWhere(teamId, inviteId, now)),
+      .set({ token_hash: tokenHash, role, expires_at: expiresAt, invited_by_user_id: userId, updated_at: now })
+      // The route checked the caller's role before this; they must still manage the Organization.
+      .where(and(pendingTeamInviteWhere(teamId, inviteId, now), activeTeamManagerExists(db, teamId, userId))),
     insertAuditEventWhere(
       db,
       auditEvent,
@@ -115,7 +127,7 @@ export async function reissueTeamInviteLink({
     ),
   ]);
 
-  // Accepted, revoked, or expired between the read and the write.
+  // Accepted, revoked, or expired between the read and the write, or the caller lost access.
   if (batchWriteMissed(results[0])) {
     return jsonError("Invite not found", 404);
   }

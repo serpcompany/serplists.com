@@ -71,15 +71,15 @@ Organization operations use legacy `/api/teams` route identifiers and require a 
 - `GET /api/teams/:teamId/members`: list members. Managers can see inactive rows; non-managers see active members.
 - `PUT /api/teams/:teamId/members/:memberId`: update role or status. Requires `owner` or `admin`; owners cannot be changed through this route. A status change also revokes the member's pending invites to that Organization, and disabling an owner or admin or demoting them below admin revokes the pending invites they created.
 - `PUT /api/teams/:teamId/owner`: transfer the Organization's `owner` role. Requires current `owner`.
-- `POST /api/teams/:teamId/leave`: leave the Organization. Any active member except the `owner` (who gets `400 owner_must_transfer`); deletes the membership row so a manager cannot re-activate it, and records `team_member.left`. If the membership changed after it was read (ownership moved to the member, or they already left in another tab), nothing is deleted or recorded and the route returns `409 membership_changed`.
-- `GET /api/teams/:teamId/invites`: list pending invites. Requires `owner` or `admin`.
-- `POST /api/teams/:teamId/invites`: create a link invite. Requires `owner` or `admin`.
-- `POST /api/teams/:teamId/invites/:inviteId/link`: replace a pending invite's link. Requires `owner` or `admin`. Stores a new `token_hash` (the previous link stops working), restarts the 7-day expiry, optionally sets a new `role`, records `team_invite.link_reissued` (never the token or its hash), and returns the same shape as create. Returns `404` for an invite that is not pending in this Organization, including one accepted or revoked during the write.
+- `POST /api/teams/:teamId/leave`: leave the Organization. Any active member except the `owner` (who gets `400 owner_must_transfer`); deletes the membership row so a manager cannot re-activate it, records `team_member.left`, and revokes the pending invites the member created (metadata `{ "reason": "inviter_left" }`). If the membership changed after it was read (ownership moved to the member, or they already left in another tab), nothing is deleted, revoked, or recorded and the route returns `409 membership_changed`.
+- `GET /api/teams/:teamId/invites`: list pending invites whose inviter is still an active `owner` or `admin`. Requires `owner` or `admin`.
+- `POST /api/teams/:teamId/invites`: create a link invite. Requires `owner` or `admin`. Returns 409 `team_invite_exists` when the email already has a pending invite whose inviter is still an active `owner` or `admin`.
+- `POST /api/teams/:teamId/invites/:inviteId/link`: replace a pending invite's link. Requires `owner` or `admin`. Stores a new `token_hash` (the previous link stops working), restarts the 7-day expiry, optionally sets a new `role`, makes the caller the invite's inviter (so it also revives an invite whose inviter left or lost access), records `team_invite.link_reissued` (never the token or its hash), and returns the same shape as create. Returns `404` for an invite that is not pending in this Organization, including one accepted or revoked during the write.
 - `DELETE /api/teams/:teamId/invites/:inviteId`: revoke a pending invite. Requires `owner` or `admin`. Returns 409 `invite_already_accepted` when the invite was accepted before the revoke was written, and 404 when another request revoked it first; only the request that revokes it records `team_invite.revoked`.
 - `GET /api/teams/:teamId/activity`: read the latest Organization audit events, newest first; `?limit=` takes 1-100 (default 50). Requires `owner` or `admin`. The settings page requests the 10 it shows.
 - `GET /api/teams/invites/pending`: list pending invites for the current user's email whose inviter is still an active `owner` or `admin`, leaving out Organizations the user is already an active member of.
 - `POST /api/teams/invites/pending/:inviteId/accept`: accept from the settings page.
-- `GET /api/teams/invites/:token`: read-only preview of a link invite (Organization, inviter, role, expiry, and `status` `pending` or `already_member`). Only the invited email sees it: another account gets `403 invite_email_mismatch` with no Organization details; revoked, used, or archived invites return `404`, expired ones `410`.
+- `GET /api/teams/invites/:token`: read-only preview of a link invite (Organization, inviter, role, expiry, and `status` `pending` or `already_member`). Only the invited email sees it: another account gets `403 invite_email_mismatch` with no Organization details; revoked, used, or archived invites, and pending ones whose inviter is no longer an active `owner` or `admin`, return `404`, expired ones `410`.
 - `POST /api/teams/invites/:token/accept`: accept from a link. Both accept routes return `403 invite_email_mismatch`, without the invited email, to another account.
 - `POST /api/teams/invites/:token/decline`: the invited email revokes its own pending invite and records `team_invite.declined`. If the invite was accepted or revoked after it was read, nothing is recorded and the route returns `404`.
 
@@ -124,12 +124,16 @@ re-admit a disabled member, create a new invite after disabling them.
 
 An invite carries its inviter's authority. Disabling an `owner` or `admin`, or changing
 their role below `admin`, revokes the pending invites they created in that Organization
-in the same batch, with metadata `{ "reason": "inviter_access_removed" }`; re-enabling or
-re-promoting them does not restore those invites. Accepting also requires the inviter to
+in the same batch, with metadata `{ "reason": "inviter_access_removed" }`, and leaving
+revokes them with `{ "reason": "inviter_left" }`; re-enabling, re-promoting, or rejoining
+does not restore those invites. Accepting also requires the inviter to
 still be an active `owner` or `admin` (an owner who transfers ownership stays an admin, so
 their invites stay valid): otherwise the accept routes return 404 like a revoked invite,
 and an inviter who loses access between the checks and the write leaves the invite
-unaccepted with 409 `invite_acceptance_conflict`.
+unaccepted with 409 `invite_acceptance_conflict`. An invite that was never revoked but
+whose inviter lost access (older data, or one created during the revoking write) is left
+out of every list and preview and does not block a new invite for the same email; a
+manager who reissues its link becomes its inviter.
 
 The API response already uses a `delivery` object so email can be added later without changing the UI contract. A future email implementation should keep the link accept route and switch delivery from `link` to a queued/sent email mode.
 

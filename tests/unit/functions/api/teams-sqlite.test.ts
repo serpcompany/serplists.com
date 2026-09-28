@@ -454,6 +454,112 @@ describe("Organization membership writes against SQLite", () => {
     });
   });
 
+  describe("invites whose inviter left the Organization", () => {
+    async function inviteNewUser(inviterUserId = "admin-user") {
+      const created = await asUser(inviterUserId, "POST", "/team-1/invites", { email: "new@example.test", role: "editor" });
+      expect(created.status).toBe(200);
+      return { id: created.data?.id as string, token: created.data?.inviteToken as string };
+    }
+
+    function inviteRow(id: string) {
+      return d1.rows<{ revoked_at: string | null; invited_by_user_id: string }>(
+        "SELECT revoked_at, invited_by_user_id FROM team_invites WHERE id = ?",
+        id,
+      )[0];
+    }
+
+    function revokedInviteAudits() {
+      return d1.rows<{ resource_id: string; metadata_json: string | null }>(
+        "SELECT resource_id, metadata_json FROM audit_events WHERE action = 'team_invite.revoked'",
+      );
+    }
+
+    function newUserMembership() {
+      return d1.rows("SELECT role, status FROM team_members WHERE team_id = 'team-1' AND user_id = 'new-user'");
+    }
+
+    it("revokes the pending invites an admin created when the admin leaves", async () => {
+      const invite = await inviteNewUser();
+
+      expect((await asUser("admin-user", "POST", "/team-1/leave")).status).toBe(200);
+
+      expect(inviteRow(invite.id).revoked_at).not.toBeNull();
+      expect(revokedInviteAudits()).toEqual([
+        { resource_id: invite.id, metadata_json: JSON.stringify({ reason: "inviter_left" }) },
+      ]);
+      expect((await asUser("owner-user", "GET", "/team-1/invites")).data).toEqual([]);
+      expect((await asUser("new-user", "GET", `/invites/${invite.token}`)).status).toBe(404);
+
+      const again = await asUser("owner-user", "POST", "/team-1/invites", { email: "new@example.test", role: "editor" });
+      expect(again.status).toBe(200);
+      expect((await asUser("new-user", "POST", `/invites/${again.data?.inviteToken}/accept`)).status).toBe(200);
+      expect(newUserMembership()).toEqual([{ role: "editor", status: "active" }]);
+    });
+
+    it("does not bring the invites back when the admin rejoins as an admin", async () => {
+      const invite = await inviteNewUser();
+      await asUser("admin-user", "POST", "/team-1/leave");
+      const rejoin = await asUser("owner-user", "POST", "/team-1/invites", { email: "admin@example.test", role: "admin" });
+      expect((await asUser("admin-user", "POST", `/invites/${rejoin.data?.inviteToken}/accept`)).status).toBe(200);
+
+      expect((await asUser("new-user", "GET", `/invites/${invite.token}`)).status).toBe(404);
+      expect((await asUser("new-user", "POST", `/invites/${invite.token}/accept`)).status).toBe(404);
+      expect(newUserMembership()).toEqual([]);
+    });
+
+    it("revokes nothing when the leave loses a race with an ownership transfer", async () => {
+      const invite = await inviteNewUser();
+      d1.beforeNextBatch(() => {
+        d1.run("UPDATE team_members SET role = 'admin' WHERE id = 'owner-member'");
+        d1.run("UPDATE team_members SET role = 'owner' WHERE id = 'admin-member'");
+      });
+
+      const left = await asUser("admin-user", "POST", "/team-1/leave");
+
+      expect(left.status).toBe(409);
+      expect(left.data?.code).toBe("membership_changed");
+      expect(inviteRow(invite.id).revoked_at).toBeNull();
+      expect(revokedInviteAudits()).toEqual([]);
+    });
+
+    it("hides an invite stranded by an inviter who left some other way and lets it be replaced", async () => {
+      const invite = await inviteNewUser();
+      d1.run("DELETE FROM team_members WHERE id = 'admin-member'");
+
+      expect((await asUser("owner-user", "GET", "/team-1/invites")).data).toEqual([]);
+      expect((await asUser("new-user", "GET", `/invites/${invite.token}`)).status).toBe(404);
+
+      const replaced = await asUser("owner-user", "POST", "/team-1/invites", { email: "new@example.test", role: "viewer" });
+      expect(replaced.status).toBe(200);
+      expect((await asUser("new-user", "POST", `/invites/${replaced.data?.inviteToken}/accept`)).status).toBe(200);
+      expect(newUserMembership()).toEqual([{ role: "viewer", status: "active" }]);
+    });
+
+    it("makes the manager who reissues a stranded invite's link its inviter", async () => {
+      const invite = await inviteNewUser();
+      d1.run("DELETE FROM team_members WHERE id = 'admin-member'");
+
+      const reissued = await asUser("owner-user", "POST", `/team-1/invites/${invite.id}/link`);
+
+      expect(reissued.status).toBe(200);
+      expect(inviteRow(invite.id)).toEqual({ revoked_at: null, invited_by_user_id: "owner-user" });
+      expect((await asUser("new-user", "GET", `/invites/${reissued.data?.inviteToken}`)).data?.status).toBe("pending");
+      expect((await asUser("new-user", "POST", `/invites/${reissued.data?.inviteToken}/accept`)).status).toBe(200);
+      expect(newUserMembership()).toEqual([{ role: "editor", status: "active" }]);
+    });
+
+    it("does not reissue a link for a manager who lost access before the write", async () => {
+      const invite = await inviteNewUser("owner-user");
+      d1.beforeNextBatch(() => d1.run("UPDATE team_members SET role = 'viewer' WHERE id = 'admin-member'"));
+
+      const reissued = await asUser("admin-user", "POST", `/team-1/invites/${invite.id}/link`);
+
+      expect(reissued.status).toBe(404);
+      expect(reissued.data?.inviteToken).toBeUndefined();
+      expect(inviteRow(invite.id).invited_by_user_id).toBe("owner-user");
+    });
+  });
+
   describe("invite revocation", () => {
     async function createInvite() {
       const created = await asUser("admin-user", "POST", "/team-1/invites", { email: "new@example.test", role: "viewer" });

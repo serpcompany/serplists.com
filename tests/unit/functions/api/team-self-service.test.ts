@@ -85,6 +85,7 @@ function previewRow(overrides: Record<string, unknown> = {}) {
     teamArchivedAt: null,
     inviterName: "Owner User",
     inviterEmail: "owner@example.com",
+    inviterCanManage: 1,
     ...overrides,
   };
 }
@@ -201,6 +202,18 @@ describe("Organization invite preview", () => {
     const response = await handleTeams(previewRequest(), mockEnv);
 
     expect(response.status).toBe(404);
+    expectNoWrites();
+  });
+
+  it("returns 404 for a pending invite whose inviter no longer manages the Organization", async () => {
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([previewRow({ inviterCanManage: 0 })])
+      .mockResolvedValueOnce([{ email: "invitee@example.com" }]);
+
+    const response = await handleTeams(previewRequest(), mockEnv);
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     expectNoWrites();
   });
 
@@ -337,7 +350,8 @@ describe("Leaving an Organization", () => {
     vi.clearAllMocks();
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    // The membership lookup chains on; the leaver's pending invites (none) are awaited.
+    dbMocks.selectChain.where.mockReset().mockReturnValueOnce(dbMocks.selectChain).mockResolvedValue([]);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
     dbMocks.insertChain.select.mockReturnValue(dbMocks.insertChain);
