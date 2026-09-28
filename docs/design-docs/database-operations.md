@@ -107,6 +107,11 @@ baseline.
 - Staging: `pnpm run db:seed:official:staging` for official templates only, unless
   there is a deliberate test-data plan.
 - Production: never seed test Users or Organization fixtures.
+- `db/seeds/official-templates.sql` skips rows whose id already exists, so reruns
+  are safe. Any other conflict (another Template with an official slug, or another
+  User with the `serp` email or username) fails with a UNIQUE constraint error
+  instead of silently dropping the row. Test-seed Templates use `sample-` slugs so
+  they never collide with official ones.
 
 ## Release checklists
 

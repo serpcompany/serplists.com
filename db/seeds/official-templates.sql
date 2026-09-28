@@ -1,8 +1,11 @@
 -- Seed a small set of real, public templates owned by an official SERP user.
 -- This is intended for production/remote DBs (idempotent via fixed IDs).
+-- Rows whose id already exists are skipped. Any other conflict, such as another
+-- Template already using one of these slugs, fails the statement with a UNIQUE
+-- constraint error instead of silently dropping the row.
 
 -- Official user (cannot be logged into; password hash is random and not shared).
-INSERT OR IGNORE INTO users (id, email, password_hash, name, username, avatar_url, created_at)
+INSERT INTO users (id, email, password_hash, name, username, avatar_url, created_at)
 VALUES (
   'serp-user',
   'checklists@serp.co',
@@ -11,10 +14,11 @@ VALUES (
   'serp',
   'https://api.dicebear.com/7.x/avataaars/svg?seed=serp',
   datetime('now')
-);
+)
+ON CONFLICT(id) DO NOTHING;
 
 -- Templates (stored in sections format, with descriptions + content payloads).
-INSERT OR IGNORE INTO templates (id, user_id, title, description, items, is_public, category, tags, slug, created_at)
+INSERT INTO templates (id, user_id, title, description, items, is_public, category, tags, slug, created_at)
 VALUES
 (
   'serp-template-technical-seo-audit',
@@ -308,5 +312,6 @@ VALUES
   '["rich-results","snippets","schema"]',
   'serp-features-optimization-checklist',
   datetime('now')
-);
+)
+ON CONFLICT(id) DO NOTHING;
 

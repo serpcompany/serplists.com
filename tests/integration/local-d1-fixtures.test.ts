@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,6 +35,18 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const persistPath = mkdtempSync(path.join(tmpdir(), "serplists-local-fixtures-"));
 const OUTSIDER_ID = "unrelated-test-domain-user";
 const OUTSIDER_ACCOUNT_ID = "unrelated-test-domain-account";
+const OFFICIAL_TEMPLATE_IDS = [
+  ...readFileSync(path.join(repoRoot, "db/seeds/official-templates.sql"), "utf8").matchAll(
+    /^\s*'(serp-template-[a-z0-9-]+)',\s*$/gm,
+  ),
+]
+  .map(([, id]) => id)
+  .sort();
+
+async function officialTemplateIds(db: LocalDb) {
+  const rows = await db.select({ id: templates.id }).from(templates).where(eq(templates.user_id, "serp-user"));
+  return rows.map(({ id }) => id).sort();
+}
 
 function runWrangler(args: string[]) {
   execFileSync("pnpm", ["exec", "wrangler", ...args], {
@@ -169,7 +181,6 @@ describe("local Drizzle fixture commands", () => {
       ]);
       runLocalData("seed-official-login");
 
-      let officialTemplateCount = 0;
       let initialTestAccountIds: string[] = [];
       await withLocalD1(persistPath, async (db) => {
         expect(await fixtureCounts(db)).toEqual([4, 4, 2, 2, 6, 1, 1, 7, 5, 5, 4, 3, 5]);
@@ -199,10 +210,8 @@ describe("local Drizzle fixture commands", () => {
         ).toBe(true);
         initialTestAccountIds = testAccounts.map(({ id }) => id).sort();
 
-        [{ value: officialTemplateCount }] = await db
-          .select({ value: count() })
-          .from(templates)
-          .where(eq(templates.user_id, "serp-user"));
+        expect(OFFICIAL_TEMPLATE_IDS).toHaveLength(5);
+        expect(await officialTemplateIds(db)).toEqual(OFFICIAL_TEMPLATE_IDS);
         expect(await db.select().from(users).where(eq(users.id, OUTSIDER_ID))).toHaveLength(1);
         expect(await db.select().from(account).where(eq(account.id, OUTSIDER_ACCOUNT_ID))).toHaveLength(1);
       });
@@ -211,12 +220,7 @@ describe("local Drizzle fixture commands", () => {
 
       await withLocalD1(persistPath, async (db) => {
         expect(await fixtureCounts(db)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-        const [{ value: officialTemplatesAfterCleanup }] = await db
-          .select({ value: count() })
-          .from(templates)
-          .where(eq(templates.user_id, "serp-user"));
-        expect(officialTemplatesAfterCleanup).toBe(officialTemplateCount);
-        expect(officialTemplatesAfterCleanup).toBeGreaterThan(0);
+        expect(await officialTemplateIds(db)).toEqual(OFFICIAL_TEMPLATE_IDS);
         expect(await db.select().from(users).where(eq(users.id, "serp-user"))).toHaveLength(1);
         expect(
           await db.select().from(account).where(eq(account.id, "account-serp-user-credential")),

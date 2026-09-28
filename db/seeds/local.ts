@@ -555,7 +555,7 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       is_public: true,
       category: json(["SEO", "Technical SEO"]),
       tags: json(["audit", "crawl", "indexation", "cwv"]),
-      slug: "technical-seo-audit-checklist",
+      slug: "sample-technical-seo-audit-checklist",
       created_at: at(0),
     },
     {
@@ -567,7 +567,7 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       is_public: true,
       category: json(["SEO", "Research"]),
       tags: json(["keywords", "intent", "mapping"]),
-      slug: "keyword-research-mapping-checklist",
+      slug: "sample-keyword-research-mapping-checklist",
       created_at: at(0),
     },
     {
@@ -579,7 +579,7 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       is_public: true,
       category: json(["Content", "SEO"]),
       tags: json(["refresh", "update", "on-page"]),
-      slug: "content-refresh-checklist",
+      slug: "sample-content-refresh-checklist",
       created_at: at(0),
     },
     {
@@ -603,7 +603,7 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       is_public: true,
       category: json(["SEO", "Local SEO"]),
       tags: json(["gbp", "local", "maps"]),
-      slug: "local-seo-gbp-checklist",
+      slug: "sample-local-seo-gbp-checklist",
       created_at: at(0),
     },
     {
