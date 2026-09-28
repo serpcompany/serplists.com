@@ -202,3 +202,85 @@ describe('ChecklistRunPage layout', () => {
     expect(html).not.toContain('Changelog');
   });
 });
+
+const twoTaskRun = (completed: [boolean, boolean], status: ChecklistRun['status'] = 'in_progress'): ChecklistRun => ({
+  ...baseRun,
+  status,
+  sections: [
+    {
+      id: 'section-1',
+      title: 'Pre-Launch',
+      items: [
+        { id: 'item-1', title: 'First task', isCompleted: completed[0] },
+        { id: 'item-2', title: 'Last task', isCompleted: completed[1] },
+      ],
+    },
+  ],
+});
+
+const renderRunPage = (run: ChecklistRun, options: { selectedItemId: string; shared?: boolean }) => {
+  const done = run.sections[0].items.filter((item) => item.isCompleted).length;
+  mockUseRunExecutionModel.mockReturnValue({
+    counts: { completed: done, total: 2 },
+    createShare: vi.fn(),
+    history: { data: null, isError: false, isLoading: false },
+    isSharedRun: options.shared === true,
+    loadError: null,
+    loading: false,
+    notFound: false,
+    progress: done * 50,
+    run,
+    saveTitle: vi.fn(),
+    selectedData: null,
+    selectedItemId: options.selectedItemId,
+    setSelectedItemId: vi.fn(),
+    completeRun: vi.fn(),
+    toggleItem: vi.fn(),
+    saveItemNotes: vi.fn(),
+    toggleSubItem: vi.fn(),
+  });
+
+  return renderToStaticMarkup(
+    <StaticRouter location={options.shared ? '/share/abc123' : '/dashboard/runs/run-1'}>
+      <Routes>
+        <Route path="/dashboard/runs/:id" element={<ChecklistRunPage />} />
+        <Route path="/share/:shareToken" element={<ChecklistRunPage />} />
+      </Routes>
+    </StaticRouter>,
+  );
+};
+
+describe('ChecklistRunPage completion', () => {
+  it('offers a working finish action on a fully ticked run that is still in progress', () => {
+    const html = renderRunPage(twoTaskRun([true, true]), { selectedItemId: 'item-2' });
+
+    expect(html).toContain('Finish Run');
+    expect(html).toContain('Complete run');
+    expect(html).toContain('In Progress');
+  });
+
+  it('offers the finish action in the shared run view too', () => {
+    const html = renderRunPage(twoTaskRun([true, true]), { selectedItemId: 'item-1', shared: true });
+
+    expect(html).toContain('Complete run');
+  });
+
+  it('points the last task at the open task instead of a dead "Finish Run"', () => {
+    const html = renderRunPage(twoTaskRun([false, true]), { selectedItemId: 'item-2' });
+
+    expect(html).toContain('Next unfinished task');
+    expect(html).not.toContain('Finish Run');
+    expect(html).not.toContain('Complete run');
+  });
+
+  it('offers no finish action on a completed run', () => {
+    const html = renderRunPage(twoTaskRun([true, true], 'completed'), { selectedItemId: 'item-2' });
+    const sharedHtml = renderRunPage(twoTaskRun([true, true], 'completed'), { selectedItemId: 'item-2', shared: true });
+
+    expect(html).not.toContain('Finish Run');
+    expect(html).not.toContain('Complete run');
+    expect(html).toContain('Run completed');
+    expect(sharedHtml).not.toContain('Complete run');
+  });
+});
+

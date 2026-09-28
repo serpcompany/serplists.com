@@ -457,6 +457,15 @@ export const completeRunExecution = async (
     return { kind: 'not_found' };
   }
 
+  // Checked on the latest run inside the queued save, so an untick queued before this
+  // save wins. Re-sending completion would overwrite completed_at and add an audit event.
+  if (params.run.status === 'completed') {
+    return { kind: 'ok', run: params.run };
+  }
+  if (!areAllRunItemsCompleted(params.run)) {
+    return { kind: 'error', message: 'Finish every task before completing the run.' };
+  }
+
   const completedRun: ChecklistRun = {
     ...params.run,
     completedAt: params.completedAt ?? new Date().toISOString(),

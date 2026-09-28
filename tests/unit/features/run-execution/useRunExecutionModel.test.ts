@@ -4,6 +4,7 @@ import { createApiError } from '@/lib/api-errors';
 import type { ChecklistRun } from '@/types/checklist';
 
 import {
+  completeRunExecution,
   createRunExecutionShare,
   loadRunExecutionData,
   saveRunItemNotes,
@@ -349,5 +350,54 @@ describe('run execution model actions', () => {
 
     expect(result).toEqual({ kind: 'not_found' });
     expect(apiClient.createChecklistRunShare).not.toHaveBeenCalled();
+  });
+});
+
+describe('completing a run', () => {
+  const apiClient = () => ({
+    createChecklistRunShare: vi.fn(),
+    getChecklistById: vi.fn(),
+    getSharedChecklist: vi.fn(),
+    updateSharedChecklist: vi.fn(),
+  });
+  const allDone = (run: ChecklistRun): ChecklistRun => ({
+    ...run,
+    sections: run.sections.map((section) => ({
+      ...section,
+      items: section.items.map((item) => ({ ...item, isCompleted: true })),
+    })),
+  });
+
+  it('completes an in-progress run whose tasks are all done', async () => {
+    const updateRun = vi.fn(async (run: ChecklistRun) => run);
+
+    const result = await completeRunExecution(
+      { run: allDone(buildRun()), completedAt: '2026-05-01T00:00:00.000Z' },
+      { apiClient: apiClient(), updateRun },
+    );
+
+    expect(result.kind).toBe('ok');
+    expect(updateRun).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'completed', completedAt: '2026-05-01T00:00:00.000Z' }),
+    );
+  });
+
+  it('refuses when the latest run still has open tasks (a queued untick landed first)', async () => {
+    const updateRun = vi.fn();
+
+    const result = await completeRunExecution({ run: buildRun() }, { apiClient: apiClient(), updateRun });
+
+    expect(result.kind).toBe('error');
+    expect(updateRun).not.toHaveBeenCalled();
+  });
+
+  it('does not re-send completion for a run that is already completed', async () => {
+    const updateRun = vi.fn();
+    const run = allDone(buildRun({ status: 'completed', completedAt: '2026-04-20T00:00:00.000Z' }));
+
+    const result = await completeRunExecution({ run }, { apiClient: apiClient(), updateRun });
+
+    expect(result).toEqual({ kind: 'ok', run });
+    expect(updateRun).not.toHaveBeenCalled();
   });
 });

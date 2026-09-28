@@ -6,19 +6,26 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistItem, ChecklistSection } from '@/types/checklist';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
+import {
+  getPrimaryTaskButton,
+  type PrimaryTaskAction,
+} from '@/features/run-execution/primaryTaskAction';
 
 interface TaskExecutionPanelProps {
   section: ChecklistSection;
   task: ChecklistItem;
   taskIndex: number;
   totalTasks: number;
+  onFinishRun: () => void;
   onNavigateNext: () => void;
   onNavigatePrev: () => void;
+  onSelectTask: (itemId: string) => void;
   onToggleSubItem: (contentIndex: number, subItemIndex: number) => void;
   onToggleTask: () => void;
   onSaveNotes: (notes: string) => Promise<boolean>;
   hasNext: boolean;
   hasPrev: boolean;
+  primaryAction: PrimaryTaskAction;
 }
 
 export function TaskExecutionPanel({
@@ -26,15 +33,24 @@ export function TaskExecutionPanel({
   task,
   taskIndex,
   totalTasks,
+  onFinishRun,
   onNavigateNext,
   onNavigatePrev,
+  onSelectTask,
   onToggleSubItem,
   onToggleTask,
   onSaveNotes,
   hasNext,
   hasPrev,
+  primaryAction,
 }: TaskExecutionPanelProps) {
   const isTaskComplete = task.isCompleted === true;
+  const primaryButton = getPrimaryTaskButton(primaryAction, {
+    onFinishRun,
+    onNavigateNext,
+    onSelectTask,
+    onToggleTask,
+  });
 
   return (
     <div className="flex h-full min-h-full flex-col">
@@ -115,34 +131,14 @@ export function TaskExecutionPanel({
           </Button>
 
           <Button
-            onClick={() => {
-              if (!isTaskComplete) {
-                onToggleTask();
-                return;
-              }
-
-              if (hasNext) {
-                onNavigateNext();
-              }
-            }}
+            onClick={primaryButton.onClick}
+            disabled={primaryButton.disabled}
             className="gap-2"
             type="button"
           >
-            {isTaskComplete ? (
-              hasNext ? (
-                <>
-                  Next Task
-                  <ChevronRight className="h-4 w-4" />
-                </>
-              ) : (
-                'Finish Run'
-              )
-            ) : (
-              <>
-                <Check className="h-4 w-4" />
-                Mark Complete
-              </>
-            )}
+            {primaryButton.icon === 'check' ? <Check className="h-4 w-4" /> : null}
+            {primaryButton.label}
+            {primaryButton.icon === 'next' ? <ChevronRight className="h-4 w-4" /> : null}
           </Button>
 
           <Button

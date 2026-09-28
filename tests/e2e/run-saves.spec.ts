@@ -12,6 +12,30 @@ async function loginAsAdmin(page: Page) {
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }
 
+async function createRun(page: Page, title: string) {
+  return page.evaluate(async ({ apiBaseUrl, runTitle }) => {
+    const response = await fetch(`${apiBaseUrl}/checklists`, {
+      body: JSON.stringify({
+        title: runTitle,
+        sections: [{ id: 'fin', title: 'Section', items: [
+          { id: 'fin-a', title: 'Task A' },
+          { id: 'fin-b', title: 'Task B' },
+        ] }],
+      }),
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    return ((await response.json()) as { id: string }).id;
+  }, { apiBaseUrl: DEV_API_BASE_URL, runTitle: title });
+}
+
+async function deleteRun(page: Page, runId: string) {
+  await page.evaluate(async ({ id, apiBaseUrl }) => {
+    await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
+  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+}
+
 async function readRun(page: Page, runId: string) {
   return page.evaluate(async ({ id, apiBaseUrl }) => {
     const response = await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include' });
@@ -64,4 +88,55 @@ test('a double click saves once and never reports a conflict', async ({ page }) 
   await page.evaluate(async ({ id, apiBaseUrl }) => {
     await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
   }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+});
+
+test('a dismissed completion dialog can be reopened with Finish Run', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createRun(page, `Finish run QA ${Date.now()}`);
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await page.getByRole('button', { name: 'Mark Complete' }).click();
+  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  await page.getByRole('button', { name: 'Mark Complete' }).click();
+  await expect(page.getByRole('dialog', { name: 'Checklist Completed!' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Finish Run' }).click();
+  await page.getByRole('button', { name: 'Return to Dashboard' }).click();
+  await expect(page).toHaveURL(/\/dashboard\/runs$/);
+  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
+
+  await deleteRun(page, runId);
+});
+
+test('a fully ticked run that is still in progress can be completed after a reload', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createRun(page, `Ticked elsewhere QA ${Date.now()}`);
+  // Tick every task without completing the run, as an MCP client can.
+  await page.evaluate(async ({ id, apiBaseUrl }) => {
+    await fetch(`${apiBaseUrl}/checklists/${id}`, {
+      body: JSON.stringify({
+        expected_revision: 1,
+        progress: 100,
+        sections: [{ id: 'fin', title: 'Section', items: [
+          { id: 'fin-a', title: 'Task A', isCompleted: true },
+          { id: 'fin-b', title: 'Task B', isCompleted: true },
+        ] }],
+        status: 'in_progress',
+      }),
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    });
+  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await page.getByRole('button', { name: 'Complete run' }).click();
+  await page.getByRole('button', { name: 'Return to Dashboard' }).click();
+  await expect(page).toHaveURL(/\/dashboard\/runs$/);
+  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
+
+  await deleteRun(page, runId);
 });
