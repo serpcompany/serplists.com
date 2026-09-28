@@ -28,11 +28,8 @@ export const templates = sqliteTable("templates", {
   content_version: integer("content_version").notNull().default(1),
 }, (table) => [
   primaryKey({ columns: [table.id] }),
-  index("idx_templates_user_id").on(table.user_id),
-  index("idx_templates_public").on(table.is_public),
-  index("idx_templates_category").on(table.category),
-  index("idx_templates_slug").on(table.slug),
   uniqueIndex("idx_templates_slug_unique").on(table.slug),
+  index("idx_templates_public_created_at").on(table.is_public, table.created_at),
   index("idx_templates_owner").on(table.owner_type, table.user_id, table.team_id),
   index("idx_templates_team_id").on(table.team_id),
 ]);

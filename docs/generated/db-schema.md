@@ -52,7 +52,6 @@ Indexes:
 
 Indexes:
 
-- `idx_audit_events_actor` on (actor_user_id, created_at)
 - `idx_audit_events_resource` on (resource_type, resource_id, created_at)
 - `idx_audit_events_subject` on (subject_type, subject_id, created_at)
 
@@ -87,11 +86,9 @@ Indexes:
 
 Indexes:
 
-- `idx_checklist_runs_assigned_to_user_id` on (assigned_to_user_id)
 - `idx_checklist_runs_share_token` on (share_token)
-- `idx_checklist_runs_status` on (status)
 - `idx_checklist_runs_team_id` on (team_id)
-- `idx_checklist_runs_template_id` on (template_id)
+- `idx_checklist_runs_template_owner` on (template_id, team_id, user_id)
 - `idx_checklist_runs_user_id` on (user_id)
 
 ## entitlement_overrides
@@ -316,7 +313,6 @@ Indexes:
 
 Indexes:
 
-- `idx_template_versions_subject` on (subject_type, subject_id, created_at)
 - `idx_template_versions_template_version_unique` unique on (template_id, version)
 
 ## templates
@@ -348,13 +344,10 @@ Indexes:
 
 Indexes:
 
-- `idx_templates_category` on (category)
 - `idx_templates_owner` on (owner_type, user_id, team_id)
-- `idx_templates_public` on (is_public)
-- `idx_templates_slug` on (slug)
+- `idx_templates_public_created_at` on (is_public, created_at)
 - `idx_templates_slug_unique` unique on (slug)
 - `idx_templates_team_id` on (team_id)
-- `idx_templates_user_id` on (user_id)
 
 ## usage_analytics
 

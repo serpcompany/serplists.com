@@ -21,5 +21,4 @@ export const audit_events = sqliteTable("audit_events", {
   primaryKey({ columns: [table.id] }),
   index("idx_audit_events_subject").on(table.subject_type, table.subject_id, table.created_at),
   index("idx_audit_events_resource").on(table.resource_type, table.resource_id, table.created_at),
-  index("idx_audit_events_actor").on(table.actor_user_id, table.created_at),
 ]);

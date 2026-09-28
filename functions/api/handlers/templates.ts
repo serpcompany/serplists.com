@@ -761,7 +761,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
               eq(templates.owner_type, 'user'),
               eq(templates.user_id, targetUserId),
               isNull(templates.team_id),
-              eq(templates.is_public, true),
+              // Unary + stops SQLite using an index for this term, which keeps the planner on
+              // idx_templates_owner instead of scanning every public Template (see the D1 cost doc).
+              sql`+${templates.is_public} = 1`,
               isNull(templates.deleted_at),
             ),
           )
