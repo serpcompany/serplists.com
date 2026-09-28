@@ -340,4 +340,28 @@ describe("Organization membership writes against SQLite", () => {
       expect(revokedAudits()).toHaveLength(1);
     });
   });
+
+  describe("incoming invites", () => {
+    it("finds a signed-in user's invites through the email index, whatever the case of their email", async () => {
+      d1.run("UPDATE users SET email = 'New@Example.TEST' WHERE id = 'new-user'");
+      for (let i = 0; i < 25; i += 1) {
+        d1.run(
+          `INSERT INTO team_invites (id, team_id, email, role, token_hash, invited_by_user_id, expires_at, revoked_at, created_at)
+           VALUES (?, 'team-1', ?, 'viewer', ?, 'admin-user', ?, ?, ?)`,
+          `old-invite-${i}`, `someone${i}@example.test`, `old-hash-${i}`, createdAt, createdAt, createdAt,
+        );
+      }
+      const created = await asUser("admin-user", "POST", "/team-1/invites", { email: "New@Example.test", role: "viewer" });
+      d1.queries.splice(0);
+
+      const pending = await asUser("new-user", "GET", "/invites/pending");
+
+      expect(pending.data).toEqual([expect.objectContaining({ id: created.data?.id, teamId: "team-1" })]);
+      const inviteQuery = d1.queries.find((query) => query.sql.includes('from "team_invites"'));
+      expect(inviteQuery?.params).toContain("new@example.test");
+      const plan = d1.queryPlan(inviteQuery!).join(" | ");
+      expect(plan).toContain("USING INDEX idx_team_invites_email");
+      expect(plan).not.toContain("SCAN team_invites");
+    });
+  });
 });

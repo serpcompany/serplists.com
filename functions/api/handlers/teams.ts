@@ -44,7 +44,8 @@ const updateTeamBodySchema = z
   });
 
 const inviteTeamMemberBodySchema = z.object({
-  email: z.string().trim().email().max(320),
+  // Stored lowercase so invite lookups can use plain equality on the email index.
+  email: z.string().trim().toLowerCase().email().max(320),
   role: z.enum(["admin", "editor", "runner", "viewer"]).default("viewer"),
 });
 
@@ -452,7 +453,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       .leftJoin(users, eq(users.id, team_invites.invited_by_user_id))
       .where(
         and(
-          sql`lower(${team_invites.email}) = ${inviteEmail}`,
+          eq(team_invites.email, inviteEmail),
           isNull(team_invites.accepted_at),
           isNull(team_invites.revoked_at),
           gt(team_invites.expires_at, now),
@@ -706,7 +707,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       return jsonError(parsed.error.issues[0]?.message || "Invalid invite payload", 400);
     }
 
-    const inviteEmail = parsed.data.email.toLowerCase();
+    const inviteEmail = parsed.data.email;
     const now = new Date().toISOString();
     const [existingActiveMember] = await db
       .select({ id: team_members.id })
