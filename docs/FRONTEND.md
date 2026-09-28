@@ -51,7 +51,12 @@ container must reset that element too.
   [tech debt tracker](exec-plans/tech-debt-tracker.md)).
 - Contexts and feature models own server state with React Query. Query keys include
   the user id and the active Ownership Context so Personal and Organization data
-  never mix; switching context invalidates Template and Run queries. Billing keys
+  never mix. Switching context only marks the Template and Run lists stale
+  (`refetchType: 'none'`, catalog excluded, nothing when the context is unchanged): the
+  page's observers are still on the old context's keys at that moment, so a refetch
+  would reload the lists being left. The new context's lists load once when the page
+  moves onto their keys (`markListsStaleForWorkspaceSwitch` in
+  `src/contexts/templateListCache.ts`). Billing keys
   include the user id; never show a Free or Pro label while status is loading.
   Build other private keys (invites, Organization members, Run Keys, archives) with
   `queryKeys` in `src/lib/queryKeys.ts`, and give those queries `enabled: Boolean(userId)`.

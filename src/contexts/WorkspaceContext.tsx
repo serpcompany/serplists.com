@@ -12,6 +12,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { api, type TeamRole, type TeamSummary } from '@/lib/api';
 
+import { markListsStaleForWorkspaceSwitch } from './templateListCache';
 import {
   PERSONAL_WORKSPACE_ID,
   createWorkspaceSelectionMemory,
@@ -241,13 +242,19 @@ export function WorkspaceProvider({
     (workspaceId: string) => {
       const nextWorkspaceId = workspaceId || PERSONAL_WORKSPACE_ID;
 
+      // Recorded and stored even when unchanged: createTeam and invite acceptance rely on
+      // the explicit selection while the teams query catches up.
       recordWorkspaceSelection(selectionMemoryRef.current, nextWorkspaceId);
       setActiveWorkspaceId(nextWorkspaceId);
       writeStoredWorkspaceId(nextWorkspaceId);
-      void queryClient.invalidateQueries({ queryKey: ['templates'] });
-      void queryClient.invalidateQueries({ queryKey: ['runs'] });
+      // Compared with the raw state, which may hold a stored Organization that still resolves
+      // to Personal. Lists are only marked stale (see templateListCache.ts).
+      markListsStaleForWorkspaceSwitch(queryClient, {
+        fromWorkspaceId: activeWorkspaceId,
+        toWorkspaceId: nextWorkspaceId,
+      });
     },
-    [queryClient],
+    [activeWorkspaceId, queryClient],
   );
 
   const rememberTeam = useCallback(
