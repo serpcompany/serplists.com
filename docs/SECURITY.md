@@ -20,6 +20,10 @@
   credential. `PUT /api/checklists/shared/:token` requires `expected_revision` and
   applies only completion, task notes, and status onto the stored run
   (`functions/api/utils/shared-run-merge.ts`); every other field is ignored.
+  Because the token grants write access, run reads (lists, detail, archived,
+  the share page) never return it or its timestamps
+  (`serializeChecklistRun`), and history redacts it. Only the share-creation
+  responses hand out a link, and they require permission to update the run.
 - **Uploads** are written under the uploader's key prefix, and deletes are
   restricted to that prefix.
 - **Invites** store only a token hash, never the raw token.

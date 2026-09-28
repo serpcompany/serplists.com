@@ -5,6 +5,21 @@ import { runSourceTemplateUsableSql } from './template-access';
 
 // Helpers shared by the checklist run handlers (private and share-link routes).
 
+// A share token is a write credential for its run (PUT /api/checklists/shared/:token), so run
+// reads never return it or its timestamps: a read-only Organization viewer could otherwise
+// edit shared runs. Share links come only from the share-creation responses.
+const SHARE_SECRET_COLUMNS = ['share_token', 'share_expires_at', 'share_used_at'] as const;
+
+function runResponseColumns() {
+  const {
+    share_token: _token,
+    share_expires_at: _expires,
+    share_used_at: _used,
+    ...columns
+  } = getTableColumns(schema.checklist_runs);
+  return columns;
+}
+
 /**
  * Run columns plus the source template's current content version, read only when `userId`
  * (null for share-link guests) may still use that template as a run source. Otherwise it is
@@ -13,7 +28,7 @@ import { runSourceTemplateUsableSql } from './template-access';
  */
 export function checklistRunSelectFor(userId: string | null) {
   return {
-    ...getTableColumns(schema.checklist_runs),
+    ...runResponseColumns(),
     current_template_version: sql<number | null>`(
       SELECT content_version FROM templates
       WHERE templates.id = ${schema.checklist_runs.template_id} AND ${runSourceTemplateUsableSql(userId)}
@@ -21,7 +36,10 @@ export function checklistRunSelectFor(userId: string | null) {
   };
 }
 
-export function serializeChecklistRun(run: Record<string, unknown>) {
+/** A run for an API response. Drops the share columns even when a caller selected them. */
+export function serializeChecklistRun(row: Record<string, unknown>) {
+  const run = { ...row };
+  for (const column of SHARE_SECRET_COLUMNS) delete run[column];
   const templateVersion = typeof run.template_version === 'number' ? run.template_version : 1;
   const currentTemplateVersion = typeof run.current_template_version === 'number'
     ? run.current_template_version
