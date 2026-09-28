@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { useTemplates } from "@/contexts/TemplatesContext";
+import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { mapApiTemplateToChecklistTemplate } from "@/features/template-detail/templateDetailMappers";
 import {
   type SaveTemplateInput,
@@ -160,7 +160,7 @@ export const useTemplateEditorModel = (
   options: TemplateEditorModelOptions,
   dependencies?: TemplateEditorModelDependencies,
 ) => {
-  const { getTemplate } = useTemplates();
+  const { getTemplate } = useTemplateLists();
   const {
     saveTemplate: persistTemplateSave,
     isSaving,

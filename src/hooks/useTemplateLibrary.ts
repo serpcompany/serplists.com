@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
-import { useTemplates } from "@/contexts/TemplatesContext";
+import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { buildCategorySlug } from "@/lib/routes";
 import { getPredefinedCategories } from "@/utils/categories";
 
 export const useTemplateLibrary = (category?: string, templateType?: "checklist" | "recipe") => {
-  const { templates: contextTemplates, templatesLoading } = useTemplates();
+  const { templates: contextTemplates, templatesLoading } = useTemplateLists({ catalog: true, workspace: false });
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);

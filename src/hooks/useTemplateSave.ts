@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useTemplates } from "@/contexts/TemplatesContext";
+import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { useTemplateValidation } from "@/hooks/useTemplateValidation";
 import { ChecklistSection, TemplateSavePayload } from "@/types/checklist";
 import { ValidationError } from "@/hooks/useTemplateValidation";
@@ -113,7 +113,7 @@ export const persistTemplateSave = async (
 };
 
 export const useTemplateSave = () => {
-  const { getTemplate, createTemplate, updateTemplate } = useTemplates();
+  const { getTemplate, createTemplate, updateTemplate } = useTemplateLists();
   const { applyDefaults } = useTemplateValidation();
   const [isSaving, setIsSaving] = useState(false);
 

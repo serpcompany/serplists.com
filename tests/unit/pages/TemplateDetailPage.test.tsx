@@ -25,15 +25,16 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   }),
 }));
 
-vi.mock('@/contexts/TemplatesContext', () => ({
-  useTemplates: () => ({
+vi.mock('@/contexts/TemplatesContext', () => {
+  const useTemplates = () => ({
     createRun: vi.fn(),
     createTemplate: vi.fn(),
     deleteTemplate: vi.fn(),
     getTemplate: vi.fn(),
     updateTemplate: vi.fn(),
-  }),
-}));
+  });
+  return { useTemplates, useTemplateLists: useTemplates };
+});
 
 vi.mock('@/contexts/WorkspaceContext', () => ({
   useWorkspace: () => ({
