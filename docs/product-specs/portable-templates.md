@@ -133,6 +133,12 @@ The current import UI derives access from the authenticated entitlement response
 file picker for a User who already has import access. No direct API-post
 workaround is required for an entitled User.
 
+Export and import wait until the active context's Template list has loaded,
+because until then a stored Organization can still read as Personal; the counts
+show a dash meanwhile. The server alone decides whether there is anything to
+export: an empty pack reports "No templates available to export" and downloads
+nothing, so a list request that failed and looks empty never blocks an export.
+
 Each file chosen in the picker replaces the previous preview, even when the new
 file is rejected (wrong type, over 2MB, or invalid), so Confirm Import only ever
 imports the last file chosen. The preview shows that file's name, and the picker

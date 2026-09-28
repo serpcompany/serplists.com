@@ -23,18 +23,14 @@ const defaultExportBackup: ExportBackup = (params) => api.exportTemplateBackup(p
 
 /**
  * Exports the active context's Templates, plus public ones when asked. The server
- * builds the pack, so the page never needs the public catalog: the count it returns
- * decides whether anything was exported. `knownOwnedCount` is null while the
- * context's list is still loading, so the server is asked instead of guessing empty.
+ * builds the pack, so the page never needs the public catalog, and the count it
+ * returns alone decides whether anything was exported: the page's own list may
+ * still be loading, or look empty because its request failed.
  */
 export const exportTemplatePack = async (
-  options: { includePublic: boolean; knownOwnedCount: number | null; teamId?: string },
+  options: { includePublic: boolean; teamId?: string },
   dependencies: ExportTemplatePackDependencies,
 ): Promise<ExportTemplatePackResult> => {
-  if (!options.includePublic && options.knownOwnedCount === 0) {
-    return { kind: 'empty' };
-  }
-
   const exportBackup = dependencies.exportBackup ?? defaultExportBackup;
   const response = await exportBackup({
     includePublic: options.includePublic,

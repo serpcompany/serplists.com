@@ -13,36 +13,31 @@ const buildDependencies = (response: unknown) => ({
 });
 
 describe('exportTemplatePack', () => {
-  it('reports nothing to export without calling the API when the loaded context has no templates', async () => {
-    const dependencies = buildDependencies(pack([]));
-
-    const result = await exportTemplatePack(
-      { includePublic: false, knownOwnedCount: 0 },
-      dependencies,
-    );
-
-    expect(result).toEqual({ kind: 'empty' });
-    expect(dependencies.exportBackup).not.toHaveBeenCalled();
-    expect(dependencies.download).not.toHaveBeenCalled();
-  });
-
-  it('asks the server while the template list is still loading instead of guessing empty', async () => {
+  it('lets the server decide even when the loaded list looks empty', async () => {
+    // A failed list request also looks like an empty list, so the page never guesses.
     const dependencies = buildDependencies(pack([{ title: 'Owned' }]));
 
-    const result = await exportTemplatePack(
-      { includePublic: false, knownOwnedCount: null, teamId: 'team-1' },
-      dependencies,
-    );
+    const result = await exportTemplatePack({ includePublic: false, teamId: 'team-1' }, dependencies);
 
     expect(dependencies.exportBackup).toHaveBeenCalledWith({ includePublic: false, teamId: 'team-1' });
     expect(result).toEqual({ kind: 'exported', count: 1 });
+  });
+
+  it('reports nothing to export without downloading when the server returns no templates', async () => {
+    const dependencies = buildDependencies(pack([]));
+
+    const result = await exportTemplatePack({ includePublic: false }, dependencies);
+
+    expect(dependencies.exportBackup).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ kind: 'empty' });
+    expect(dependencies.download).not.toHaveBeenCalled();
   });
 
   it('does not download an empty pack when public templates were requested', async () => {
     const dependencies = buildDependencies(pack([]));
 
     const result = await exportTemplatePack(
-      { includePublic: true, knownOwnedCount: 0 },
+      { includePublic: true },
       dependencies,
     );
 
@@ -56,7 +51,7 @@ describe('exportTemplatePack', () => {
     const dependencies = buildDependencies(response);
 
     const result = await exportTemplatePack(
-      { includePublic: true, knownOwnedCount: 1 },
+      { includePublic: true },
       dependencies,
     );
 
@@ -68,7 +63,7 @@ describe('exportTemplatePack', () => {
     const dependencies = buildDependencies({ error: 'unexpected' });
 
     await expect(
-      exportTemplatePack({ includePublic: false, knownOwnedCount: 2 }, dependencies),
+      exportTemplatePack({ includePublic: false }, dependencies),
     ).rejects.toThrow();
     expect(dependencies.download).not.toHaveBeenCalled();
   });

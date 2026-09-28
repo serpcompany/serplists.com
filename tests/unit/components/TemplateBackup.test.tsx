@@ -17,6 +17,10 @@ type BillingQueryResult = {
 const mocks = vi.hoisted(() => ({
   billingQuery: null as unknown as BillingQueryResult,
   templateListOptions: [] as unknown[],
+  templateLists: {
+    allTemplates: [] as Array<Record<string, unknown>>,
+    templatesLoading: false,
+  },
   workspace: {
     activeTeamId: undefined as string | undefined,
     activeWorkspace: { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' },
@@ -42,10 +46,10 @@ vi.mock('@/contexts/TemplatesContext', () => ({
   useTemplateLists: (options?: unknown) => {
     mocks.templateListOptions.push(options);
     return {
-      allTemplates: [],
+      allTemplates: mocks.templateLists.allTemplates,
       importTemplates: vi.fn(),
       templates: [],
-      templatesLoading: false,
+      templatesLoading: mocks.templateLists.templatesLoading,
     };
   },
 }));
@@ -82,6 +86,9 @@ const getTag = (html: string, pattern: RegExp): string => html.match(pattern)?.[
 const fileInput = (html: string) => getTag(html, /<input[^>]*id="template-file-input"[^>]*>/);
 const exportButton = (html: string) =>
   getTag(html, /<button(?:(?!<button).)*Export Portable Pack/);
+const includePublicSwitch = (html: string) => getTag(html, /<button[^>]*id="include-public-templates"[^>]*>/);
+const statValues = (html: string) =>
+  Array.from(html.matchAll(/<div class="text-2xl font-bold[^"]*">([^<]*)<\/div>/g), (match) => match[1]);
 const isDisabled = (tag: string) => {
   expect(tag).not.toBe('');
   return /\sdisabled=""/.test(tag);
@@ -153,5 +160,41 @@ describe('TemplateBackup template lists', () => {
     for (const options of mocks.templateListOptions) {
       expect((options as { catalog?: boolean } | undefined)?.catalog).not.toBe(true);
     }
+  });
+});
+
+describe('TemplateBackup while the template list loads', () => {
+  afterEach(() => {
+    mocks.templateLists.allTemplates = [];
+    mocks.templateLists.templatesLoading = false;
+  });
+
+  it('shows no counts and keeps export and import off until the list has loaded', () => {
+    mocks.billingQuery = knownBillingQuery('pro');
+    mocks.templateLists.templatesLoading = true;
+
+    const html = renderToStaticMarkup(<TemplateBackup />);
+
+    expect(statValues(html)).toHaveLength(3);
+    expect(statValues(html)).not.toContain('0');
+    expect(isDisabled(exportButton(html))).toBe(true);
+    expect(isDisabled(includePublicSwitch(html))).toBe(true);
+    expect(isDisabled(fileInput(html))).toBe(true);
+  });
+
+  it('shows the counts and enables export once the list has loaded', () => {
+    mocks.billingQuery = knownBillingQuery('pro');
+    mocks.templateLists.allTemplates = [
+      { id: 't-1', isPublic: true, userId: 'user-1' },
+      { id: 't-2', isPublic: false, userId: 'user-1' },
+      { id: 'other', isPublic: true, userId: 'user-2' },
+    ];
+
+    const html = renderToStaticMarkup(<TemplateBackup />);
+
+    expect(statValues(html)).toEqual(['2', '1', '1']);
+    expect(isDisabled(exportButton(html))).toBe(false);
+    expect(isDisabled(includePublicSwitch(html))).toBe(false);
+    expect(isDisabled(fileInput(html))).toBe(false);
   });
 });

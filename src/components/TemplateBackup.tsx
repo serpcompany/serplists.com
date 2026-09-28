@@ -73,6 +73,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const isKnownFreePlan = billing.status === "known" && !billing.isPaid;
   const hasBackupAccess = billing.status === "error" || (billing.status === "known" && billing.isPaid);
   const workspaceTemplateLabel = isTeamWorkspace ? "Organization Templates" : "My Templates";
+  // Until the list loads, the context may not be restored yet (an Organization reads as
+  // Personal while it loads), so export and import wait and the counts show a dash.
+  const backupControlsOff = !user || templatesLoading || !hasBackupAccess || !canEditTemplates;
+  const formatCount = (count: number) => (templatesLoading ? "–" : count);
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [lastImportSummary, setLastImportSummary] = useState<TemplateImportSummary | null>(null);
@@ -113,6 +117,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   };
 
   const handleExportAll = async () => {
+    if (templatesLoading) return;
     if (!user) {
       toast.error("Log in to export your templates");
       return;
@@ -130,11 +135,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 
     try {
       const result = await exportTemplatePack(
-        {
-          includePublic: includePublicTemplates,
-          knownOwnedCount: templatesLoading ? null : ownedTemplates.length,
-          teamId: activeTeamId,
-        },
+        { includePublic: includePublicTemplates, teamId: activeTeamId },
         { download: (pack) => downloadBackupFile(pack) },
       );
       if (result.kind === "empty") {
@@ -375,17 +376,17 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
           ) : null}
 
           {/* Current Templates Stats */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-4" aria-busy={templatesLoading}>
             <div className="text-center">
-              <div className="text-2xl font-bold">{ownedTemplates.length}</div>
+              <div className="text-2xl font-bold">{formatCount(ownedTemplates.length)}</div>
               <div className="text-sm text-muted-foreground">{workspaceTemplateLabel}</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{publicTemplateCount}</div>
+              <div className="text-2xl font-bold text-green-600">{formatCount(publicTemplateCount)}</div>
               <div className="text-sm text-muted-foreground">Public</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{privateTemplateCount}</div>
+              <div className="text-2xl font-bold text-blue-600">{formatCount(privateTemplateCount)}</div>
               <div className="text-sm text-muted-foreground">Private</div>
             </div>
           </div>
@@ -408,10 +409,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                   id="include-public-templates"
                   checked={includePublicTemplates}
                   onCheckedChange={setIncludePublicTemplates}
-                  disabled={!user || !hasBackupAccess || !canEditTemplates}
+                  disabled={backupControlsOff}
                 />
               </div>
-	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={!user || !hasBackupAccess || !canEditTemplates}>
+	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={backupControlsOff}>
 	              <Download className="h-4 w-4" />
 	              Export Portable Pack
 	            </Button>
@@ -440,7 +441,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
               </div>
 	            <div className="space-y-2">
 	              <Label htmlFor="template-file-input">Select a YAML, JSON, or Markdown template file</Label>
-	              <Input id="template-file-input" type="file" accept=".json,.md,.markdown,.yaml,.yml" onChange={handleFileSelect} disabled={isImporting || !user || !hasBackupAccess || !canEditTemplates} />
+	              <Input id="template-file-input" type="file" accept=".json,.md,.markdown,.yaml,.yml" onChange={handleFileSelect} disabled={isImporting || backupControlsOff} />
 	              <p className="text-sm text-muted-foreground">
 	                Need an example?{" "}
 	                <Button variant="link" className="p-0 h-auto text-primary" onClick={downloadSampleTemplate}>
@@ -537,7 +538,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                   <div className="flex gap-2">
                     <Button
                       onClick={handleConfirmImport}
-                      disabled={isImporting || exceedsTemplateLimit || importOversizeAssets > 0}
+                      disabled={isImporting || templatesLoading || exceedsTemplateLimit || importOversizeAssets > 0}
                       className="flex items-center gap-2"
                     >
                       <Upload className="h-4 w-4" />
