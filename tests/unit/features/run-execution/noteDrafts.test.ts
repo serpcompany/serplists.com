@@ -4,6 +4,7 @@ import {
   applyNoteDrafts,
   applyUnsavedNotesWarning,
   confirmLeaveWithUnsavedNotes,
+  draftedNotesChanged,
   pruneNoteDrafts,
   RUN_NOTES_UNSAVED_MESSAGE,
   updateNoteDraft,
@@ -99,3 +100,20 @@ describe('confirmLeaveWithUnsavedNotes', () => {
   });
 });
 
+
+describe('draftedNotesChanged', () => {
+  const before = buildRun({ a: 'old', b: undefined, c: 'same' });
+
+  it('is true only when a drafted task has different saved notes in the newer run', () => {
+    const after = buildRun({ a: 'teammate', b: 'teammate', c: 'same' });
+    expect(draftedNotesChanged({ a: 'mine' }, before, after)).toBe(true);
+    expect(draftedNotesChanged({ c: 'mine' }, before, after)).toBe(false);
+    expect(draftedNotesChanged({}, before, after)).toBe(false);
+  });
+
+  it('checks only the given tasks when asked', () => {
+    const after = buildRun({ a: 'teammate', b: undefined, c: 'same' });
+    expect(draftedNotesChanged({ a: 'mine', c: 'mine' }, before, after, ['c'])).toBe(false);
+    expect(draftedNotesChanged({ a: 'mine', c: 'mine' }, before, after, ['a'])).toBe(true);
+  });
+});

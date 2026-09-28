@@ -199,12 +199,26 @@ export const setSubItemsCompletion = (
     isCompleted,
   }));
 
+const getItemSubItems = (item: ChecklistItem): ChecklistSubItem[] =>
+  item.contents?.flatMap((content) =>
+    content.type === 'subItems' ? (content.subItems ?? []) : [],
+  ) ?? [];
+
 // A task is done by its sub-tasks only when it has at least one and every one, across
 // all of its Sub-tasks blocks, is ticked. Same rule as the agent API's set_subtask_completed.
 export const areItemSubItemsCompleted = (item: ChecklistItem): boolean => {
-  const subItems =
-    item.contents?.flatMap((content) =>
-      content.type === 'subItems' ? (content.subItems ?? []) : [],
-    ) ?? [];
+  const subItems = getItemSubItems(item);
   return subItems.length > 0 && subItems.every((subItem) => subItem.isCompleted === true);
+};
+
+// The sub-task at a block and row. When its id is given and that row now holds another
+// sub-task (a reloaded run), the sub-task with that id in any block.
+export const findRunSubItem = (
+  item: ChecklistItem,
+  at: { contentIndex: number; subItemId?: string; subItemIndex: number },
+): ChecklistSubItem | undefined => {
+  const content = item.contents?.[at.contentIndex];
+  const candidate = content?.type === 'subItems' ? content.subItems?.[at.subItemIndex] : undefined;
+  if (!at.subItemId || candidate?.id === at.subItemId) return candidate;
+  return getItemSubItems(item).find((subItem) => subItem.id === at.subItemId);
 };

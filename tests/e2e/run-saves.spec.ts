@@ -197,3 +197,64 @@ test('text typed while a notes save is in flight is kept', async ({ page }) => {
   await deleteRun(page, runId);
 });
 
+
+// Another session (a teammate, a second tab, or an MCP agent) saves the run while this
+// page has it open. The page reloads the run on the 409 and retries once
+// (src/features/run-execution/runSaver.ts), so it never gets stuck on a stale revision.
+async function tickElsewhere(page: Page, runId: string, ticked: { a: boolean; b: boolean }) {
+  await page.evaluate(async ({ id, apiBaseUrl, done }) => {
+    await fetch(`${apiBaseUrl}/checklists/${id}`, {
+      body: JSON.stringify({
+        expected_revision: 1,
+        sections: [{ id: 'fin', title: 'Section', items: [
+          { id: 'fin-a', title: 'Task A', isCompleted: done.a },
+          { id: 'fin-b', title: 'Task B', isCompleted: done.b },
+        ] }],
+        status: 'in_progress',
+      }),
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    });
+  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL, done: ticked });
+}
+
+test('a tick saved by another session is kept and this page can still save', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createRun(page, `Conflict QA ${Date.now()}`);
+  const saves: number[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes(`/api/checklists/${runId}`) && response.request().method() === 'PUT') {
+      saves.push(response.status());
+    }
+  });
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await tickElsewhere(page, runId, { a: false, b: true });
+  saves.length = 0;
+
+  await page.getByRole('button', { name: 'Mark Complete' }).click();
+  await expect(page.getByRole('dialog', { name: 'Checklist Completed!' })).toBeVisible();
+  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, true] });
+  expect(saves).toEqual([409, 200]);
+  await expect(page.getByText(/changed (while|since|somewhere)/)).toHaveCount(0);
+
+  await deleteRun(page, runId);
+});
+
+test('ticking a task another session already ticked does not untick it', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createRun(page, `Same tick QA ${Date.now()}`);
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await tickElsewhere(page, runId, { a: true, b: false });
+
+  await page.getByRole('button', { name: 'Mark Complete' }).click();
+  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, false] });
+  await expect(page.getByText(/changed (while|since|somewhere)/)).toHaveCount(0);
+
+  await deleteRun(page, runId);
+});
