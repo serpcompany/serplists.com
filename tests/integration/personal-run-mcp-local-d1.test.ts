@@ -315,6 +315,17 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(history).toHaveLength(3);
     expect(history.every((event) => event.actor_user_id === "user-a")).toBe(true);
     expect(history.every((event) => String(event.metadata_json).includes(`"personalRunKeyId":"${keyId}"`))).toBe(true);
+
+    // Audit rows describe the change; they do not store copies of the run's content.
+    const payloads = await rows<JsonRecord>(`
+      SELECT
+        coalesce(json_extract(before_json, '$.items'), json_extract(after_json, '$.items'),
+          json_extract(diff_json, '$.items'), json_extract(after_json, '$.retired_items')) AS stored_items,
+        length(coalesce(before_json, '')) + length(coalesce(after_json, '')) + length(coalesce(diff_json, '')) AS bytes
+      FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ?
+    `, runId);
+    expect(payloads.map(({ stored_items }) => stored_items)).toEqual([null, null, null]);
+    expect(Math.max(...payloads.map(({ bytes }) => Number(bytes)))).toBeLessThan(2_048);
   });
 
   it("allows exactly one same-revision update and writes exactly one audit event", async () => {

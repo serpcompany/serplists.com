@@ -29,6 +29,8 @@ import {
   selectRunSections,
   serializeRun,
   summarizeRun,
+  summarizeRunForAudit,
+  updateRunAuditDiff,
   updateRunResult,
   utf8ByteLength,
 } from "./agentMcpRuns";
@@ -295,7 +297,7 @@ async function startRun(
     subject: { type: "user", id: identity.userId },
     resource: { type: "checklist_run", id: run.id },
     action: "checklist_run.created",
-    after: run,
+    after: summarizeRunForAudit(run),
     metadata: { source: "mcp", personalRunKeyId: identity.keyId, personalRunKeyName: identity.name },
     request,
     createdAt: now,
@@ -443,29 +445,27 @@ async function updateRun(
     });
   }
 
-  const sections = parseStoredSections(existing.items);
-  const currentBytes = jsonByteLength(sections);
-  applyRunOperation(sections, args);
-  const items = JSON.stringify(sections);
-  // Checked before the write, so an oversized update never commits.
-  assertRunContentFits(utf8ByteLength(items), currentBytes);
   const now = new Date().toISOString();
-  const updates: JsonRecord = {
-    items,
-    progress: calculateRunProgress(sections),
-    revision: currentRevision + 1,
-    updated_at: now,
-  };
-
+  const updates: JsonRecord = { revision: currentRevision + 1, updated_at: now };
+  const sections = parseStoredSections(existing.items);
   if (args.operation === "set_run_status") {
+    // Status only: the run content is unchanged, so it is not rewritten. Match the
+    // checklist status endpoint: progress stays as it is, and reopening does not erase
+    // completion attribution.
     updates.status = args.status;
-    // Match the existing checklist status endpoint: a status-only transition does
-    // not rewrite progress, and reopening does not erase completion attribution.
     updates.progress = typeof existing.progress === "number" ? existing.progress : 0;
     if (args.status === "completed") {
       updates.completed_at = now;
       updates.completed_by_user_id = identity.userId;
     }
+  } else {
+    const currentBytes = jsonByteLength(sections);
+    applyRunOperation(sections, args);
+    const items = JSON.stringify(sections);
+    // Checked before the write, so an oversized update never commits.
+    assertRunContentFits(utf8ByteLength(items), currentBytes);
+    updates.items = items;
+    updates.progress = calculateRunProgress(sections);
   }
 
   const nextRun = { ...existing, ...updates };
@@ -474,9 +474,9 @@ async function updateRun(
     subject: { type: "user", id: identity.userId },
     resource: { type: "checklist_run", id: args.runId },
     action: "checklist_run.updated",
-    before: existing,
-    after: nextRun,
-    diff: updates,
+    before: summarizeRunForAudit(existing),
+    after: summarizeRunForAudit(nextRun),
+    diff: updateRunAuditDiff(args, existing, updates),
     metadata: {
       source: "mcp",
       operation: args.operation,

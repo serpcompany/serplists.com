@@ -62,6 +62,9 @@ columns are stored as text and parsed in handlers.
 - `templates.rules`: template rule metadata.
 - `checklist_runs.items`: sectioned run content with completion state.
 - `audit_events.before_json`, `after_json`, `diff_json`, `metadata_json`: structured audit payloads.
+  Run events written through MCP store scalar run fields in `before`/`after` and an
+  operation summary in `diff` (operation, task/subtask ids, progress and revision
+  from/to, notes length), never copies of `items`, `retired_items`, or the share token.
 - `template_versions.snapshot_json`: full template snapshot.
 
 ## Resource Ownership

@@ -137,6 +137,47 @@ export function updateRunResult(nextRun: JsonRecord, sections: JsonRecord[], ope
   return jsonByteLength(result) <= MAX_RESULT_BYTES ? result : { run, taskOmitted: true };
 }
 
+// Scalar run fields recorded in audit payloads. Content (items, retired_items) is left
+// out: an agent changes one field per call, and a full copy per call multiplies storage
+// and the run history response. The share token is a secret.
+const AUDITED_RUN_FIELDS = [
+  "id",
+  "user_id",
+  "team_id",
+  "template_id",
+  "template_version",
+  "title",
+  "status",
+  "progress",
+  "revision",
+  "started_at",
+  "completed_at",
+  "completed_by_user_id",
+  "updated_at",
+  "deleted_at",
+] as const;
+
+export function summarizeRunForAudit(run: JsonRecord): JsonRecord {
+  return Object.fromEntries(AUDITED_RUN_FIELDS.filter((field) => field in run).map((field) => [field, run[field]]));
+}
+
+/** The audit diff for one update_run call: the operation and what it changed. */
+export function updateRunAuditDiff(args: UpdateRunArgs, existing: JsonRecord, updates: JsonRecord): JsonRecord {
+  const { runId: _runId, expectedRevision: _expectedRevision, ...change } = args;
+  const diff: JsonRecord = {
+    ...change,
+    progress: { from: typeof existing.progress === "number" ? existing.progress : 0, to: updates.progress },
+    revision: { from: typeof existing.revision === "number" ? existing.revision : 1, to: updates.revision },
+  };
+  if (change.operation === "set_task_notes") {
+    // Notes can be 20,000 characters of user content; the run row holds them.
+    delete diff.notes;
+    diff.notesLength = change.notes.length;
+  }
+  if (updates.completed_at !== undefined) diff.completedAt = updates.completed_at;
+  return diff;
+}
+
 /** Narrows a run's sections to one section and/or one task for get_run. */
 export function selectRunSections(
   sections: JsonRecord[],
