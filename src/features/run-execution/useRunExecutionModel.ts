@@ -12,6 +12,7 @@ import {
   cloneRunSections,
   countRunExecutionItems,
   getInitialSelectedItemId,
+  getNextSelectedItemId,
   getSelectedRunItem,
   mapChecklistToRun,
   setSubItemsCompletion,
@@ -624,12 +625,22 @@ export const useRunExecutionModel = (
         return { kind: 'not_found' } as RunExecutionActionResult;
       }
 
-      return applyResult(
+      const result = applyResult(
         await toggleRunItem(
           { itemId, run, shareToken: options.shareToken },
           dependencies,
         ),
       );
+      // Completing the selected task moves on to the next unfinished one.
+      if (
+        result.kind === 'ok' &&
+        result.run &&
+        itemId === selectedItemId &&
+        getSelectedRunItem(result.run, itemId)?.item.isCompleted
+      ) {
+        setSelectedItemId(getNextSelectedItemId(result.run, itemId));
+      }
+      return result;
     },
     toggleSubItem: async (
       itemId: string,
