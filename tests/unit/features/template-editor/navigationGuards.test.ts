@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  EDITOR_SAVE_IN_PROGRESS_MESSAGE,
   EDITOR_UNSAVED_CHANGES_MESSAGE,
   EDITOR_UPLOAD_IN_PROGRESS_MESSAGE,
   applyTemplateBeforeUnloadWarning,
@@ -11,7 +12,7 @@ import {
 } from '@/features/template-editor/navigationGuards';
 
 describe('template editor navigation guards', () => {
-  it('blocks navigation only when there are unsaved changes and no save/load is active', () => {
+  it('blocks navigation when there are unsaved changes and nothing is loading', () => {
     expect(
       shouldBlockTemplateEditorNavigation({
         isDirty: true,
@@ -19,14 +20,6 @@ describe('template editor navigation guards', () => {
         loading: false,
       }),
     ).toBe(true);
-
-    expect(
-      shouldBlockTemplateEditorNavigation({
-        isDirty: true,
-        isSaving: true,
-        loading: false,
-      }),
-    ).toBe(false);
 
     expect(
       shouldBlockTemplateEditorNavigation({
@@ -43,6 +36,44 @@ describe('template editor navigation guards', () => {
         loading: false,
       }),
     ).toBe(false);
+  });
+
+  // A save can still fail (a conflict, a slug rule, a network error, or the unload
+  // aborting it), and the edits exist only in the form until it succeeds.
+  it('never allows leaving unasked while a save is unconfirmed', () => {
+    expect(
+      shouldBlockTemplateEditorNavigation({
+        isDirty: true,
+        isSaving: true,
+        loading: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldBlockTemplateEditorNavigation({
+        isDirty: true,
+        isSaving: true,
+        loading: true,
+      }),
+    ).toBe(false);
+
+    // A save of an unchanged form has nothing to lose.
+    expect(
+      shouldBlockTemplateEditorNavigation({
+        isDirty: false,
+        isSaving: true,
+        loading: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('says the template is still saving when leaving during a save', () => {
+    expect(
+      getTemplateEditorLeaveMessage({ hasPendingUploads: false, isSaving: true }),
+    ).toBe(EDITOR_SAVE_IN_PROGRESS_MESSAGE);
+    expect(
+      getTemplateEditorLeaveMessage({ hasPendingUploads: false, isSaving: false }),
+    ).toBe(EDITOR_UNSAVED_CHANGES_MESSAGE);
   });
 
   // Picking a file does not change the form until the upload finishes, so a clean form

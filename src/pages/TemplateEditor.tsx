@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -62,6 +62,9 @@ const TemplateEditor = () => {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   // The last save was refused because someone saved the template after it loaded.
   const [editConflict, setEditConflict] = useState(false);
+  // False once the user has left: a save that finishes later must not act on the page
+  // (a create's redirect would pull them off the page they went to).
+  const mountedRef = useRef(true);
   
   const {
     selectedSectionIndex,
@@ -93,9 +96,17 @@ const TemplateEditor = () => {
     templateForm.reset(model.initialValues);
   }, [model.initialValues, templateForm]);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Leaving during a save still asks: the save can fail, and the edits are only here.
   const { allowLeave, guardLeave } = useTemplateEditorLeaveGuard(
     shouldBlockNavigation,
-    getTemplateEditorLeaveMessage({ hasPendingUploads }),
+    getTemplateEditorLeaveMessage({ hasPendingUploads, isSaving: model.isSaving }),
   );
   // Plan limits and an ended session: the upgrade or sign-in action, and the kept draft.
   const access = useTemplateEditorAccess({
@@ -115,6 +126,11 @@ const TemplateEditor = () => {
     // below shows them. The copy is what gets sent; the form stays editable meanwhile.
     const submitted = cloneTemplateEditorFormValues(templateForm.getValues());
     const result = await model.save(submitted);
+    if (!mountedRef.current) {
+      // The user chose to leave while it saved.
+      return;
+    }
+
     // A plan gate or an ended session shows as a notice with its action, not as an error.
     setErrors(access.handleSaveResult(result) ? [] : result.errors);
     setEditConflict(Boolean(result.editConflict));

@@ -740,6 +740,105 @@ test.describe("template editor regressions", () => {
     await deleteTemplate(page, templateId);
   });
 
+  test("asks before leaving while a save is in flight, and keeps the edits if it fails", async ({ page }) => {
+    await loginAsSeedUser(page);
+    const templateTitle = `QA Leave during save ${Date.now()}`;
+    const templateId = await createTemplateViaApi(page, templateTitle);
+    const editorUrl = new RegExp(`/dashboard/templates/${templateId}/edit$`);
+    const draft = "Typed before a save that fails";
+
+    // Hold the update, then refuse it as a conflict.
+    let releaseUpdate: () => void = () => {};
+    const updateHeld = new Promise<void>((resolve) => {
+      releaseUpdate = resolve;
+    });
+    await page.route(`**/api/templates/${templateId}`, async (route) => {
+      if (route.request().method() !== "PUT") {
+        await route.fallback();
+        return;
+      }
+      await updateHeld;
+      await route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: "Template changed since it was loaded. Refresh before saving again.",
+          code: "edit_conflict",
+        }),
+      });
+    });
+    const dialogs: string[] = [];
+    page.on("dialog", async (dialog) => {
+      dialogs.push(dialog.message());
+      await dialog.dismiss();
+    });
+
+    await page.goto(`/dashboard/templates/${templateId}/edit`);
+    await page.getByRole("button", { exact: true, name: "First task" }).click();
+    await page.getByLabel("Description (Optional)").fill(draft);
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("button", { name: "Saving..." })).toBeVisible();
+
+    await page.getByRole("button", { name: "Back to templates" }).click();
+    await expect.poll(() => dialogs.length).toBe(1);
+    expect(dialogs[0]).toContain("still saving");
+    await expect(page).toHaveURL(editorUrl);
+    // A reload or tab close is warned about too.
+    const unloadWarned = await page.evaluate(() => {
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    expect(unloadWarned).toBe(true);
+
+    releaseUpdate();
+    await expect(page.getByText("Template changed since it was loaded.").first()).toBeVisible();
+    await expect(page).toHaveURL(editorUrl);
+    await expect(page.getByLabel("Description (Optional)")).toHaveValue(draft);
+
+    await page.unroute(`**/api/templates/${templateId}`);
+    await deleteTemplate(page, templateId);
+  });
+
+  test("stays where the user went when a create finishes after they left", async ({ page }) => {
+    await loginAsSeedUser(page);
+    const templateTitle = `QA Leave during create ${Date.now()}`;
+    let releaseCreate: () => void = () => {};
+    const createHeld = new Promise<void>((resolve) => {
+      releaseCreate = resolve;
+    });
+    let createFinished = false;
+    await page.route("**/api/templates", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.fallback();
+        return;
+      }
+      await createHeld;
+      await route.fallback();
+      createFinished = true;
+    });
+    page.on("dialog", async (dialog) => {
+      await dialog.accept();
+    });
+
+    await page.goto("/dashboard/templates/new");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("button", { name: "Saving..." })).toBeVisible();
+    await page.getByRole("link", { name: "Runs", exact: true }).click();
+    await expect(page).toHaveURL(/\/dashboard\/runs$/);
+
+    releaseCreate();
+    await expect.poll(() => createFinished).toBe(true);
+    await expect.poll(() => findTemplateByTitle(page, templateTitle)).toBeTruthy();
+    await expect(page).toHaveURL(/\/dashboard\/runs$/);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    if (savedTemplate && typeof savedTemplate.id === "string") {
+      await deleteTemplate(page, savedTemplate.id);
+    }
+  });
+
   test("leaves a new template without asking once it is saved", async ({ page }) => {
     await loginAsSeedUser(page);
     const templateTitle = `QA Leave after create ${Date.now()}`;

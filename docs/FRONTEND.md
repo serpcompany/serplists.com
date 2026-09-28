@@ -42,6 +42,11 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   out (which unmounts the page), call `runAfterLeaveConfirmed` from
   `src/lib/navigation/leaveGuard.ts`; the page registers with `registerLeaveGuard`.
 - `beforeunload` covers reloads, tab closes, and external links.
+- A save in flight does not lift the guard: it can still fail (a conflict, a slug
+  rule, a network error, or the unload aborting it), and until it succeeds the edits
+  exist only in the form. Leaving during a save asks with a message that says the
+  template is still saving, and a save that finishes after the user left does nothing
+  on the page (a create does not redirect them).
 - A file still uploading counts as unsaved work even when the form is clean: it
   reaches the form only when the upload finishes. The template editor tracks uploads
   in `pendingUploads.ts`, disables Save ("Uploading...") until they finish, and asks
