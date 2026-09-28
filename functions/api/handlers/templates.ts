@@ -260,8 +260,11 @@ function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
     }
   }
 
+  // The raw items column is sent only as parsed `sections`; resending it would double every
+  // template list and detail response (clients read `sections`).
+  const { items: _items, ...columns } = template;
   return {
-    ...template,
+    ...columns,
     sections,
     rules,
     categories: normalizeStringArray(template.category),
