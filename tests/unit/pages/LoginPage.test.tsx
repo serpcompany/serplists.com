@@ -45,4 +45,26 @@ describe('Login page', () => {
     expect(html).not.toContain('GitHub');
     expect(html).not.toContain('What happens after sign in');
   });
+
+  it('offers a new verification email when the verification link failed', () => {
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/login?verified=1&error=token_expired">
+        <Login />
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('Resend verification email');
+    expect(html).toContain('That verification link has expired.');
+    expect(html).not.toContain('Email verified');
+  });
+
+  it('does not offer a resend after a successful verification', () => {
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/login?verified=1">
+        <Login />
+      </StaticRouter>,
+    );
+
+    expect(html).not.toContain('Resend verification email');
+  });
 });

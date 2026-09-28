@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authClient } from '@/lib/auth-client';
+import { EMAIL_VERIFIED_CALLBACK_URL } from '@/lib/auth/loginNotice';
 
 interface User {
   id: string;
@@ -95,8 +96,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (name: string, email: string, password: string): Promise<RegisterResult> => {
     try {
-      const callbackURL = "/login?verified=1";
-      const result = await authClient.signUp.email({ name, email, password, callbackURL });
+      const result = await authClient.signUp.email({
+        name,
+        email,
+        password,
+        callbackURL: EMAIL_VERIFIED_CALLBACK_URL,
+      });
       if (result?.error) {
         return { ok: false, error: result.error.message ?? "Registration failed", errorCode: "UNKNOWN" };
       }

@@ -28,6 +28,13 @@ and user-facing failure states when a supporting service is unavailable.
 - Email verification is required before sign-in where
   `AUTH_EMAIL_VERIFICATION_REQUIRED=true` (production). Login offers to resend the
   verification email when sign-in is blocked.
+- Verification emails return to `/login?verified=1`. Links expire after Better
+  Auth's default of one hour; a failed link (expired, invalid, or for a deleted
+  account) returns to the same URL with `&error=<code>` appended. Login checks
+  `error` before `verified`, explains the failure, and offers to resend
+  (`src/lib/auth/loginNotice.ts`), then removes the one-shot parameters from the
+  URL. Better Auth puts the callback into the email link unencoded, so it must
+  keep a single query parameter.
 - Verification and reset emails use `RESEND_API_KEY`, then `USESEND_API_KEY`.
   Callbacks await delivery so provider failures surface in the request.
   `GET /api/auth/status` reports whether email delivery is available.

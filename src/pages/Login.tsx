@@ -19,6 +19,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
+import {
+  EMAIL_VERIFIED_CALLBACK_URL,
+  parseLoginSearch,
+  stripLoginNoticeParams,
+} from "@/lib/auth/loginNotice";
+
+function getVerificationFailure(search: string): string | null {
+  const { notice } = parseLoginSearch(search);
+  return notice?.kind === "verification_failed" ? notice.message : null;
+}
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -30,25 +40,42 @@ const Login = () => {
   const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  // Read from the URL during the first render so the resend option shows
+  // immediately; it stays after the one-shot params are removed.
+  const [verificationFailure, setVerificationFailure] = useState<string | null>(() =>
+    getVerificationFailure(location.search),
+  );
   const from = location.state?.from?.pathname || "/account";
+  const showResendVerification = Boolean(unverifiedEmail || verificationFailure);
 
   useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const prefilledEmail = searchParams.get("email");
+    const { notice, email: prefilledEmail } = parseLoginSearch(location.search);
 
     if (prefilledEmail) {
       setEmail(prefilledEmail);
       setUnverifiedEmail(prefilledEmail);
     }
 
-    if (searchParams.get("verify_email") === "1") {
-      toast.info("Verify your email first, then sign in.");
+    // Stable ids keep a StrictMode double effect from stacking duplicate toasts.
+    if (notice?.kind === "verification_failed") {
+      setVerificationFailure(notice.message);
+      toast.error(notice.message, { id: "email-verification-failed" });
+    } else if (notice?.kind === "verified") {
+      toast.success(notice.message, { id: "email-verified" });
+    } else if (notice?.kind === "verify_email") {
+      toast.info(notice.message, { id: "verify-email-first" });
     }
 
-    if (searchParams.get("verified") === "1") {
-      toast.success("Email verified. You can sign in now.");
+    // Drop the one-shot params so a reload or back navigation does not replay
+    // the notice. The rerun that follows finds no params and does nothing.
+    const remainingSearch = stripLoginNoticeParams(location.search);
+    if (remainingSearch !== null) {
+      navigate(
+        { pathname: location.pathname, search: remainingSearch, hash: location.hash },
+        { replace: true, state: location.state },
+      );
     }
-  }, [location.search]);
+  }, [location.hash, location.pathname, location.search, location.state, navigate]);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -102,7 +129,7 @@ const Login = () => {
 
       const result = await authClient.sendVerificationEmail({
         email: targetEmail,
-        callbackURL: "/login?verified=1",
+        callbackURL: EMAIL_VERIFIED_CALLBACK_URL,
       });
 
       if (result?.error) {
@@ -212,9 +239,12 @@ const Login = () => {
             </div>
           ) : null}
 
-          {unverifiedEmail ? (
-            <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
-              Verify your email before signing in.
+          {showResendVerification ? (
+            <div
+              role="status"
+              className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100"
+            >
+              {verificationFailure ?? "Verify your email before signing in."}
             </div>
           ) : null}
 
@@ -273,7 +303,7 @@ const Login = () => {
             </div>
           </div>
 
-          {unverifiedEmail ? (
+          {showResendVerification ? (
             <Button
               type="button"
               variant="outline"
