@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -8,9 +8,11 @@ import { PageHero, PageSection, Surface } from '@/components/layout/page-shell';
 import { Button } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { usePageRestoredFromCache, useRedirectPending } from '@/hooks/useRedirectPending';
 import { api } from '@/lib/api';
 import { isOpenSubscriptionConflictError } from '@/lib/api-errors';
 import {
+  BILLING_STATUS_QUERY_PREFIX,
   getBillingStatusQueryKey,
   getPersonalBillingAction,
   PLAN_MANAGED_BY_SUPPORT_MESSAGE,
@@ -20,15 +22,19 @@ import { buildConsoleSettingsPath } from '@/lib/routes';
 
 const Pricing = () => {
   const { user } = useAuth();
-  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+  // Stays set until the browser leaves for Stripe, and clears when Back restores the page.
+  const [isStartingCheckout, setIsStartingCheckout] = useRedirectPending();
   const billing = useQuery({
     queryKey: getBillingStatusQueryKey(user?.id),
     queryFn: () => api.getBillingStatus(),
     enabled: Boolean(user),
     retry: false,
   });
-
   const queryClient = useQueryClient();
+  // The plan may have changed at Stripe before the user pressed Back.
+  usePageRestoredFromCache(useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: BILLING_STATUS_QUERY_PREFIX });
+  }, [queryClient]));
   const personalAction = getPersonalBillingAction(billing.data);
 
   const handleUpgrade = async () => {

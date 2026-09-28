@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import {
+  BILLING_STATUS_QUERY_PREFIX,
   getBillingPlanLabel,
   getBillingStatusQueryKey,
   getPersonalBillingAction,
@@ -14,6 +15,7 @@ import {
 } from "@/lib/billing";
 import { isOpenSubscriptionConflictError } from "@/lib/api-errors";
 import { fetchPersonalBillingStatus, waitForPersonalPro } from "@/lib/billing-return";
+import { usePageRestoredFromCache, useRedirectPending } from "@/hooks/useRedirectPending";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -21,8 +23,9 @@ import { toast } from "sonner";
 export function BillingSection() {
   const { user } = useAuth();
   const { activeTeamId, isTeamWorkspace } = useWorkspace();
-  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
-  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  // Both stay set until the browser leaves for Stripe, and clear when Back restores the page.
+  const [isStartingCheckout, setIsStartingCheckout] = useRedirectPending();
+  const [isOpeningPortal, setIsOpeningPortal] = useRedirectPending();
   const [searchParams, setSearchParams] = useSearchParams();
   const billingReturn = searchParams.get("billing");
   const billing = useQuery({
@@ -33,6 +36,10 @@ export function BillingSection() {
   });
   const queryClient = useQueryClient();
   const userId = user?.id;
+  // The plan may have changed at Stripe before the user pressed Back.
+  usePageRestoredFromCache(useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: BILLING_STATUS_QUERY_PREFIX });
+  }, [queryClient]));
 
   const plan = billing.data?.plan;
   const planLabel = getBillingPlanLabel(plan);
