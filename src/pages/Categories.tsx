@@ -22,6 +22,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
+import { CATEGORY_INDEX_PAGE_TEXT } from '@/lib/publicPageMeta';
 import { buildPublicCategoryPathForSlug, buildSiteUrl } from '@/lib/routes';
 import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 
@@ -49,7 +50,6 @@ const defaultCategoryMeta = {
   bgColor: 'bg-slate-500/10',
 };
 const CATEGORIES_URL = buildSiteUrl('/categories');
-const SEO_IMAGE_URL = buildSiteUrl('/placeholder.svg');
 
 const getCategoryMeta = (slug: string) =>
   categoryMetadata.find((category) => category.slug === slug) ??
@@ -82,10 +82,9 @@ const Categories = () => {
   return (
     <div className="bg-background">
       <SEOHead
-        title="Browse Template Categories"
-        description="Explore checklist templates organized by category."
+        title={CATEGORY_INDEX_PAGE_TEXT.title}
+        description={CATEGORY_INDEX_PAGE_TEXT.description}
         keywords={['template categories', 'checklist categories', 'workflow templates']}
-        image={SEO_IMAGE_URL}
         url={CATEGORIES_URL}
       />
       <main className="mx-auto max-w-6xl px-4 py-8">

@@ -28,6 +28,7 @@ import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
+import { buildCategoryPageTitle } from '@/lib/publicPageMeta';
 import { buildCategorySlug, buildPublicCategoryPathForSlug, buildSiteUrl } from '@/lib/routes';
 
 type CategorySort = DiscoverySort | 'name';
@@ -42,7 +43,6 @@ const sortLabels: Record<CategorySort, string> = {
 const isCategorySort = (value: string): value is CategorySort =>
   Object.prototype.hasOwnProperty.call(sortLabels, value);
 const CATEGORY_BASE_URL = buildSiteUrl('/categories');
-const SEO_IMAGE_URL = buildSiteUrl('/placeholder.svg');
 
 const backToCategories = (
   <div className="mb-6 flex items-center gap-2 text-sm">
@@ -143,10 +143,9 @@ const CategoryDetail = () => {
   return (
     <div className="bg-background">
       <SEOHead
-        title={`${category.name} Templates`}
+        title={buildCategoryPageTitle(category.name)}
         description={`${categoryTemplateCount} templates for ${category.name}. ${category.description}`}
         keywords={[category.name, 'checklist templates', 'workflow templates']}
-        image={SEO_IMAGE_URL}
         url={`${CATEGORY_BASE_URL}/${encodeURIComponent(slug)}`}
       />
       <main className="mx-auto max-w-6xl px-4 py-8">

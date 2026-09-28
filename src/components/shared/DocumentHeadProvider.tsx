@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Helmet, HelmetProvider } from 'react-helmet-async';
 
 import { APP_BRAND_NAME, SITE_DEFAULT_DESCRIPTION } from '@/lib/brand';
+import { SITE_SOCIAL_IMAGE } from '@/lib/publicPageMeta';
 import { buildSiteUrl } from '@/lib/routes';
 
 interface DocumentHeadProviderProps {
@@ -10,7 +11,7 @@ interface DocumentHeadProviderProps {
   context?: Record<string, unknown>;
 }
 
-const SITE_DEFAULT_IMAGE = buildSiteUrl('/placeholder.svg');
+const SITE_DEFAULT_IMAGE = buildSiteUrl(SITE_SOCIAL_IMAGE.path);
 
 /**
  * HelmetProvider plus the site-wide head defaults. react-helmet-async leaves document.title
@@ -32,6 +33,9 @@ export function DocumentHeadProvider({ children, context }: DocumentHeadProvider
         <meta property="og:description" content={SITE_DEFAULT_DESCRIPTION} />
         <meta property="og:type" content="website" />
         <meta property="og:image" content={SITE_DEFAULT_IMAGE} />
+        <meta property="og:image:width" content={String(SITE_SOCIAL_IMAGE.width)} />
+        <meta property="og:image:height" content={String(SITE_SOCIAL_IMAGE.height)} />
+        <meta property="og:image:alt" content={SITE_SOCIAL_IMAGE.alt} />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:image" content={SITE_DEFAULT_IMAGE} />
       </Helmet>

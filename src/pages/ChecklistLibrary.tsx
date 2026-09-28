@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
+import { TEMPLATE_LIBRARY_PAGE_TEXT } from '@/lib/publicPageMeta';
 import { buildPublicCategoryPathForSlug, buildSiteUrl } from '@/lib/routes';
 
 type ChecklistLibraryProps = {
@@ -33,7 +34,6 @@ type ChecklistLibraryProps = {
 };
 
 const PUBLIC_TEMPLATES_URL = buildSiteUrl('/templates');
-const SEO_IMAGE_URL = buildSiteUrl('/placeholder.svg');
 
 const ChecklistLibrary = ({
   templateType,
@@ -117,13 +117,9 @@ const ChecklistLibrary = ({
   };
   const seoHead = (
     <SEOHead
-      title={title ?? 'Discover Templates'}
-      description={
-        description ??
-        'Browse hundreds of ready-to-use checklist templates created by the community.'
-      }
+      title={title ?? TEMPLATE_LIBRARY_PAGE_TEXT.title}
+      description={description ?? TEMPLATE_LIBRARY_PAGE_TEXT.description}
       keywords={['checklist templates', 'workflow templates', 'SOP templates']}
-      image={SEO_IMAGE_URL}
       url={PUBLIC_TEMPLATES_URL}
     />
   );

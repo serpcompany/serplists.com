@@ -101,6 +101,16 @@ are the defaults in `DocumentHeadProvider`, which puts them back when a page wit
 matching default (`tests/unit/components/documentHeadMeta.test.tsx` checks both). The
 viewport and charset tags are global: they stay in `index.html` only, without `data-rh`.
 
+Every page shares one link-preview image, `public/og-default.png` (1200x630), named by
+its absolute URL on `https://serplists.com` (`SITE_SOCIAL_IMAGE` in
+`src/lib/publicPageMeta.ts`). Social sites ignore SVG images and relative URLs. Link
+previews do not run JavaScript either, so for public template, category, `/categories` and
+`/templates` pages the Pages Functions in `functions/seo/` serve `index.html` with the page's
+title, description, `og:type`, canonical link and `og:url` already filled in (with
+`data-rh`, so `SEOHead` takes them over). The pages and those functions read their text
+from `src/lib/publicPageMeta.ts`; change it there, not in the page, so the preview and the
+page agree. A new public route with its own `SEOHead` text needs a matching function.
+
 Cloudflare Pages serves `index.html` with a 200 for every unknown path, so the 404 page
 (`src/pages/NotFound.tsx`) marks itself `noindex` and declares no canonical URL. Render
 `NotFound` only once a lookup has settled: a page whose data is still loading, or failed

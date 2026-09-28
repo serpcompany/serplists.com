@@ -48,6 +48,8 @@
   "templates": [
     {
       "slug": "complete-wedding-planning-checklist",
+      "title": "Complete Wedding Planning Checklist",
+      "description": "A wedding planning checklist organized around budget, venue, and guest milestones.",
       "categories": [
         "wedding",
         "events",
@@ -58,6 +60,8 @@
     },
     {
       "slug": "full-website-launch-qa-checklist",
+      "title": "Full Website Launch QA Checklist",
+      "description": "A richer launch checklist with markdown instructions, subtasks, video review, image proof, file references, and external QA embeds.",
       "categories": [
         "Tech",
         "Website",
@@ -68,6 +72,8 @@
     },
     {
       "slug": "ultimate-camping-checklist",
+      "title": "Ultimate Camping Checklist",
+      "description": "A practical camping packing checklist for shelter, cooking, and safety essentials.",
       "categories": [
         "outdoor",
         "travel",

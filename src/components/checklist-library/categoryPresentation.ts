@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 
 import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
+import { describeUnlistedCategory } from '@/lib/publicPageMeta';
 
 export interface CategoryPresentation {
   bgColor: string;
@@ -64,7 +65,7 @@ export const resolveCategoryPresentation = (
 
   return {
     ...DEFAULT_CATEGORY_STYLE,
-    description: `Templates filed under ${categoryStats.name}.`,
+    description: describeUnlistedCategory(categoryStats.name),
     name: categoryStats.name,
   };
 };
