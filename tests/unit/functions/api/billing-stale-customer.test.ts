@@ -59,7 +59,8 @@ function calls(): Call[] {
   });
 }
 
-const sessionCalls = () => calls().filter((call) => call.url === "https://api.stripe.com/v1/checkout/sessions");
+const sessionCalls = () =>
+  calls().filter((call) => call.method === "POST" && call.url === "https://api.stripe.com/v1/checkout/sessions");
 const customerCreates = () => calls().filter((call) => call.url === "https://api.stripe.com/v1/customers");
 
 function storedCustomer(): string | undefined {
@@ -89,6 +90,11 @@ beforeEach(() => {
     const url = new URL(String(input));
     const form = new URLSearchParams(String(init?.body ?? ""));
     if ((init?.method ?? "GET") === "GET" && url.pathname === "/v1/subscriptions") {
+      const customer = url.searchParams.get("customer") ?? "";
+      if (customer === "cus_stale" && staleListResponse === "missing") return missingCustomer(customer);
+      return new Response(JSON.stringify({ data: [], has_more: false }));
+    }
+    if ((init?.method ?? "GET") === "GET" && url.pathname === "/v1/checkout/sessions") {
       const customer = url.searchParams.get("customer") ?? "";
       if (customer === "cus_stale" && staleListResponse === "missing") return missingCustomer(customer);
       return new Response(JSON.stringify({ data: [], has_more: false }));

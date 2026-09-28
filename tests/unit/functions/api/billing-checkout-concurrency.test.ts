@@ -22,7 +22,7 @@ let duringCustomerCreate: (() => void) | null;
  */
 let overlapAt: "/v1/customers" | "/v1/checkout/sessions" | null;
 
-type Call = { url: string; form: URLSearchParams; idempotencyKey?: string };
+type Call = { method: string; url: string; form: URLSearchParams; idempotencyKey?: string };
 
 /**
  * Stripe's idempotency rules: a key reused with the same parameters replays the first
@@ -46,13 +46,18 @@ function createStripeMock() {
     const headers = (init?.headers ?? {}) as Record<string, string>;
     const idempotencyKey = headers["Idempotency-Key"];
     const body = String(init?.body ?? "");
-    calls.push({ url: url.pathname, form: new URLSearchParams(body), idempotencyKey });
-    const callsToPath = calls.filter((call) => call.url === url.pathname).length;
-    if (url.pathname === overlapAt && callsToPath === 2) secondCallArrived();
+    const method = init?.method ?? "GET";
+    calls.push({ method, url: url.pathname, form: new URLSearchParams(body), idempotencyKey });
 
-    if ((init?.method ?? "GET") === "GET" && url.pathname === "/v1/subscriptions") {
+    if (method === "GET" && url.pathname === "/v1/subscriptions") {
       return new Response(JSON.stringify({ data: [], has_more: false }));
     }
+    if (method === "GET" && url.pathname === "/v1/checkout/sessions") {
+      // Checkout lists open sessions before it creates one; none are open here.
+      return new Response(JSON.stringify({ data: [], has_more: false }));
+    }
+    const callsToPath = calls.filter((call) => call.method === "POST" && call.url === url.pathname).length;
+    if (url.pathname === overlapAt && callsToPath === 2) secondCallArrived();
 
     const scopedKey = idempotencyKey ? `${url.pathname} ${idempotencyKey}` : null;
     const earlier = scopedKey ? keys.get(scopedKey) : undefined;
@@ -106,7 +111,7 @@ async function checkout(): Promise<{ status: number; body: Record<string, unknow
 }
 
 const customerCreates = () => stripe.calls.filter((call) => call.url === "/v1/customers");
-const sessionCalls = () => stripe.calls.filter((call) => call.url === "/v1/checkout/sessions");
+const sessionCalls = () => stripe.calls.filter((call) => call.method === "POST" && call.url === "/v1/checkout/sessions");
 
 function storedCustomers(): string[] {
   return d1

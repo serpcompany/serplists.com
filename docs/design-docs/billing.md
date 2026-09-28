@@ -158,6 +158,22 @@ Authenticated:
   customer's subscriptions in Stripe (`GET /v1/subscriptions?customer=...`),
   stores them, and applies the same rules. If Stripe cannot answer, checkout
   fails closed with `503 billing_unavailable` and creates no session.
+  Every open Checkout Session stays payable for 24 hours and opens its own
+  subscription, so before that subscription check, checkout lists the
+  customer's open sessions (`GET /v1/checkout/sessions?customer=...&status=open`)
+  and leaves at most one subscription session open. It keeps the newest session
+  that matches this checkout (same user, same `metadata[checkoutParams]` digest
+  of the price and return URLs, and at least an hour left) and expires every
+  other one (`POST /v1/checkout/sessions/{id}/expire`). When no open
+  subscription blocks checkout, it returns the kept session's URL instead of
+  creating a new one, so a tab left on Checkout plus a later Upgrade cannot be
+  paid twice. A session that stops being open while it is being expired (paid,
+  or expired by a concurrent request) returns `409 checkout_in_progress`; the
+  retry then sees the new subscription. A failed, incomplete (`has_more`), or
+  unexpected session list fails closed with `503 billing_unavailable`.
+  Stripe's Checkout setting "Limit customers to one subscription" would add a
+  second safeguard. Nothing in this repository turns it on, and turning it on
+  is a live Stripe change that a human must approve.
   A stored customer that Stripe no longer has (deleted in the Dashboard, or
   created with the other mode's keys) is replaced: when Stripe answers
   `resource_missing` for `customer`, checkout creates a new customer (with an

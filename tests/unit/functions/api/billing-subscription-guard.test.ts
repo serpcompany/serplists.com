@@ -75,6 +75,7 @@ async function billingStatus(query = ""): Promise<Record<string, unknown>> {
   return response.json();
 }
 
+const LIST_OPEN_SESSIONS = "GET https://api.stripe.com/v1/checkout/sessions?customer=cus_1&status=open&limit=100";
 const LIST_SUBSCRIPTIONS = "GET https://api.stripe.com/v1/subscriptions?customer=cus_1&limit=100";
 const CREATE_SESSION = "POST https://api.stripe.com/v1/checkout/sessions";
 
@@ -103,6 +104,9 @@ beforeEach(() => {
         return new Response(JSON.stringify({ error: { type: "api_error" } }), { status: 500 });
       }
       return new Response(JSON.stringify({ object: "list", ...stripeSubscriptions }));
+    }
+    if ((init?.method ?? "GET") === "GET" && url.startsWith("https://api.stripe.com/v1/checkout/sessions?")) {
+      return new Response(JSON.stringify({ object: "list", data: [], has_more: false }));
     }
     if (url === "https://api.stripe.com/v1/customers") return new Response(JSON.stringify({ id: "cus_new" }));
     return new Response(JSON.stringify({ id: "cs_1", url: "https://checkout.stripe.test/cs_1" }));
@@ -171,14 +175,14 @@ describe("POST /api/billing/checkout with an existing Stripe subscription", () =
     const result = await checkout();
 
     expect(result.status).toBe(200);
-    expect(stripeCalls()).toEqual([LIST_SUBSCRIPTIONS, CREATE_SESSION]);
+    expect(stripeCalls()).toEqual([LIST_OPEN_SESSIONS, LIST_SUBSCRIPTIONS, CREATE_SESSION]);
   });
 
   it("allows checkout with no subscription", async () => {
     const result = await checkout();
 
     expect(result.status).toBe(200);
-    expect(stripeCalls()).toEqual([LIST_SUBSCRIPTIONS, CREATE_SESSION]);
+    expect(stripeCalls()).toEqual([LIST_OPEN_SESSIONS, LIST_SUBSCRIPTIONS, CREATE_SESSION]);
   });
 });
 
@@ -192,7 +196,7 @@ describe("POST /api/billing/checkout when Stripe knows a subscription D1 does no
 
     expect(result.status).toBe(409);
     expect(result.body.code).toBe("already_subscribed");
-    expect(stripeCalls()).toEqual([LIST_SUBSCRIPTIONS]);
+    expect(stripeCalls()).toEqual([LIST_OPEN_SESSIONS, LIST_SUBSCRIPTIONS]);
     expect(storedSubscriptionStatuses()).toEqual(["active"]);
     expect((await billingStatus()).plan).toBe("pro");
   });
@@ -227,7 +231,7 @@ describe("POST /api/billing/checkout when Stripe knows a subscription D1 does no
     const result = await checkout();
 
     expect(result.status).toBe(200);
-    expect(stripeCalls()).toEqual([LIST_SUBSCRIPTIONS, CREATE_SESSION]);
+    expect(stripeCalls()).toEqual([LIST_OPEN_SESSIONS, LIST_SUBSCRIPTIONS, CREATE_SESSION]);
   });
 
   it("fails closed with 503 when Stripe cannot list the subscriptions", async () => {
@@ -237,7 +241,7 @@ describe("POST /api/billing/checkout when Stripe knows a subscription D1 does no
 
     expect(result.status).toBe(503);
     expect(result.body.code).toBe("billing_unavailable");
-    expect(stripeCalls()).toEqual([LIST_SUBSCRIPTIONS]);
+    expect(stripeCalls()).toEqual([LIST_OPEN_SESSIONS, LIST_SUBSCRIPTIONS]);
   });
 
   it("fails closed when the list is incomplete and shows nothing open", async () => {
@@ -318,7 +322,7 @@ describe("billing for a user whose plan support manages", () => {
     const result = await checkout();
 
     expect(result.status).toBe(200);
-    expect(stripeCalls()).toEqual([LIST_SUBSCRIPTIONS, CREATE_SESSION]);
+    expect(stripeCalls()).toEqual([LIST_OPEN_SESSIONS, LIST_SUBSCRIPTIONS, CREATE_SESSION]);
   });
 
   it("reports the managed plan and keeps the portal for an existing customer", async () => {

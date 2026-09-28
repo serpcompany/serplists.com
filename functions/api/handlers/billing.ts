@@ -10,6 +10,7 @@ import {
   stripePostForm,
 } from "../utils/stripe";
 import { createStripeCustomer, replaceMissingStripeCustomer, storeFirstStripeCustomer } from "../utils/stripe-customers";
+import { settleOpenCheckoutSessions } from "../utils/stripe-checkout-sessions";
 import { getSessionUserId } from "../utils/session";
 import { getEntitlementsForContext, getEntitlementsForUser } from "../utils/entitlements";
 import { log } from "../utils/logger";
@@ -97,7 +98,13 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
     .where(eq(stripe_customers.user_id, userId))
     .limit(1);
 
+  const successUrl = `${origin}${SETTINGS_PATH}?billing=success`;
+  const cancelUrl = `${origin}${SETTINGS_PATH}?billing=cancel`;
+  const paramsDigest = await shortDigest(`${proPriceId} ${successUrl} ${cancelUrl}`);
+
   let stripeCustomerId: string;
+  // An open Checkout Session for this same checkout, sent back instead of a new one.
+  let reusableSessionUrl: string | null = null;
   // A stored customer can be gone from Stripe (deleted, or from the other mode's keys).
   // It is replaced at most once per request, and only when Stripe says it is missing.
   let canReplaceCustomer = false;
@@ -105,6 +112,24 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
   if (existingCustomer?.stripe_customer_id) {
     stripeCustomerId = existingCustomer.stripe_customer_id;
     canReplaceCustomer = true;
+    // Every open Checkout Session is payable for 24 hours and opens its own subscription.
+    // Expire the others before listing subscriptions, so none can complete unseen after
+    // the check. A session paid in the meantime fails to expire, and the retry sees it.
+    try {
+      const openSessions = await settleOpenCheckoutSessions(secretKey, stripeCustomerId, {
+        userId,
+        paramsDigest,
+        nowSeconds: Math.floor(Date.now() / 1000),
+      });
+      if (openSessions.kind === "changed") return checkoutInProgress();
+      if (openSessions.kind === "reuse") reusableSessionUrl = openSessions.url;
+    } catch (error) {
+      log("error", "stripe_open_checkout_check_failed", {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return billingUnavailable();
+    }
     // D1 learns about subscriptions from webhooks, which can lag or fail, so ask
     // Stripe too. Fail closed: a missed subscription would be billed twice.
     let stripeOpenStatus: string | null = null;
@@ -121,9 +146,11 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
       // A customer Stripe does not have holds no subscription in this mode.
       stripeCustomerId = await replaceMissingStripeCustomer(db, secretKey, userId, stripeCustomerId);
       canReplaceCustomer = false;
+      reusableSessionUrl = null;
     }
     const stripeConflict = openSubscriptionConflict(stripeOpenStatus);
     if (stripeConflict) return stripeConflict;
+    if (reusableSessionUrl) return json({ url: reusableSessionUrl });
   } else {
     // The idempotency key makes concurrent first checkouts share one Stripe customer.
     const createdCustomerId = await createStripeCustomer(db, secretKey, userId, `customer-${userId}`);
@@ -135,10 +162,6 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
       return checkoutInProgress();
     }
   }
-
-  const successUrl = `${origin}${SETTINGS_PATH}?billing=success`;
-  const cancelUrl = `${origin}${SETTINGS_PATH}?billing=cancel`;
-  const paramsDigest = await shortDigest(`${proPriceId} ${successUrl} ${cancelUrl}`);
 
   const createSession = (customerId: string) =>
     stripePostForm<StripeCheckoutSession>(
@@ -153,12 +176,14 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
         success_url: successUrl,
         cancel_url: cancelUrl,
         "metadata[userId]": userId,
+        // Lets a later checkout recognize this session as the same one and reuse it.
+        "metadata[checkoutParams]": paramsDigest,
         "subscription_data[metadata][userId]": userId,
         allow_promotion_codes: true,
       },
       {
-        // Reuse a Checkout Session when a client retries or double-submits in the
-        // same five-minute window. A later attempt can still start a fresh session.
+        // Join concurrent requests (a retry or double submit) in the same five-minute
+        // window to one Checkout Session; later attempts reuse or expire it above.
         // The customer and a digest of the other parameters are part of the key:
         // Stripe rejects a reused key whose parameters changed, as they do after a
         // customer is replaced or when a request comes from another origin.
