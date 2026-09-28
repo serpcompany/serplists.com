@@ -43,8 +43,10 @@ const PublicTemplate = () => {
   const saveInFlight = useRef(false);
   const {
     billingState,
+    loadError,
     loading,
     notFound,
+    reload,
     saveTemplate,
     startRun,
     template,
@@ -169,6 +171,28 @@ const PublicTemplate = () => {
           <p className="mt-4 text-sm text-muted-foreground">
             Loading template…
           </p>
+        </Surface>
+      </PageContainer>
+    );
+  }
+
+  // A failed request is not a missing template: say so and let the visitor retry.
+  if (loadError && !displayTemplate) {
+    return (
+      <PageContainer className="py-16" width="narrow">
+        <Surface className="text-center" padding="xl" tone="glass">
+          <h1 className="text-4xl font-semibold text-foreground">
+            Unable to load template
+          </h1>
+          <p className="mt-4 text-base leading-7 text-muted-foreground">
+            {loadError}
+          </p>
+          <div className="mt-6 flex justify-center gap-2">
+            <Button onClick={reload}>Try again</Button>
+            <Button asChild variant="outline">
+              <Link to={buildPublicTemplatesPath()}>Browse templates</Link>
+            </Button>
+          </div>
         </Surface>
       </PageContainer>
     );

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { loadTemplateDetailData } from '@/features/template-detail/useTemplateDetailModel';
+import {
+  loadTemplateDetailData,
+  type LoadTemplateDetailResult,
+} from '@/features/template-detail/useTemplateDetailModel';
 import { createApiError } from '@/lib/api-errors';
 import { repoTemplates } from '@/lib/repoTemplateCatalog';
 
@@ -17,6 +20,9 @@ const serverRow = (overrides: Record<string, unknown> = {}) => ({
   version: 4,
   ...overrides,
 });
+
+const loadedTemplate = (result: LoadTemplateDetailResult) =>
+  result.kind === 'ok' ? result.template : null;
 
 const buildApiClient = (getTemplateBySlug = vi.fn()) => ({
   clonePublicTemplate: vi.fn(),
@@ -39,10 +45,10 @@ describe('public template detail freshness', () => {
     );
 
     expect(apiClient.getTemplateBySlug).toHaveBeenCalledWith('camping-checklist');
-    expect(result.notFound).toBe(false);
-    expect(result.template?.title).toBe('Camping Checklist B');
-    expect(result.template?.sections[0]?.title).toBe('New section');
-    expect(result.template?.version).toBe(4);
+    expect(result.kind).toBe('ok');
+    expect(loadedTemplate(result)?.title).toBe('Camping Checklist B');
+    expect(loadedTemplate(result)?.sections[0]?.title).toBe('New section');
+    expect(loadedTemplate(result)?.version).toBe(4);
   });
 
   it('shows not found once the server says the template is private', async () => {
@@ -55,7 +61,7 @@ describe('public template detail freshness', () => {
       { apiClient },
     );
 
-    expect(result).toEqual({ notFound: true, template: null });
+    expect(result).toEqual({ kind: 'not_found' });
   });
 
   it('shows not found once the template is archived or its slug changed', async () => {
@@ -68,7 +74,7 @@ describe('public template detail freshness', () => {
       { apiClient },
     );
 
-    expect(result).toEqual({ notFound: true, template: null });
+    expect(result).toEqual({ kind: 'not_found' });
   });
 
   it('resolves a library template from the bundle, which the API cannot serve', async () => {
@@ -83,7 +89,7 @@ describe('public template detail freshness', () => {
       { apiClient },
     );
 
-    expect(result).toEqual({ notFound: false, template: libraryTemplate });
+    expect(result).toEqual({ kind: 'ok', template: libraryTemplate });
     expect(apiClient.getTemplateBySlug).not.toHaveBeenCalled();
     expect(apiClient.getTemplateById).not.toHaveBeenCalled();
   });
@@ -103,7 +109,7 @@ describe('public template detail freshness', () => {
     );
 
     expect(apiClient.getTemplateBySlug).toHaveBeenCalledWith(libraryTemplate?.slug);
-    expect(result.template?.id).toBe('template-1');
+    expect(loadedTemplate(result)?.id).toBe('template-1');
   });
 });
 
@@ -120,7 +126,7 @@ describe('private template detail freshness', () => {
       { apiClient },
     );
 
-    expect(result).toEqual({ notFound: false, template: libraryTemplate });
+    expect(result).toEqual({ kind: 'ok', template: libraryTemplate });
     expect(apiClient.getTemplateById).not.toHaveBeenCalled();
   });
 });

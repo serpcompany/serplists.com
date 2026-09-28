@@ -157,9 +157,11 @@ const TemplateDetail = () => {
   const [shareUrl, setShareUrl] = useState('');
   const {
     billingState,
+    loadError,
     loading,
     notFound,
     permissions,
+    reload,
     saveTemplate,
     setVisibility,
     shareTemplate,
@@ -419,6 +421,26 @@ const TemplateDetail = () => {
       <DashboardContentShell>
         <DashboardScrollArea className="flex items-center justify-center">
           <LoadingSpinner message="Loading template..." />
+        </DashboardScrollArea>
+      </DashboardContentShell>
+    );
+  }
+
+  // A failed request is not a missing template: say so and let the user retry.
+  if (loadError && !displayTemplate) {
+    return (
+      <DashboardContentShell>
+        <DashboardScrollArea className="flex items-center justify-center">
+          <Card className="p-8 text-center">
+            <h2 className="mb-4 text-3xl font-bold">Unable to load template</h2>
+            <p className="mb-6 text-muted-foreground">{loadError}</p>
+            <div className="flex justify-center gap-2">
+              <Button onClick={reload}>Try again</Button>
+              <Button asChild variant="outline">
+                <Link to={buildConsoleTemplatesPath()}>Back to Templates</Link>
+              </Button>
+            </div>
+          </Card>
         </DashboardScrollArea>
       </DashboardContentShell>
     );

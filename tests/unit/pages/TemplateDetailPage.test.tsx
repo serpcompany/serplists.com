@@ -240,6 +240,40 @@ describe('TemplateDetail visibility', () => {
   });
 });
 
+describe('TemplateDetail load failures', () => {
+  it('offers a retry for a failed load instead of saying the template does not exist', () => {
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      loadError: 'HTTP 503',
+      reload: vi.fn(),
+      template: null,
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(html).toContain('Unable to load template');
+    expect(html).toContain('HTTP 503');
+    expect(html).toContain('Try again');
+    expect(html).not.toContain('Template Not Found');
+    expect(html).not.toContain('does not exist');
+  });
+
+  it('keeps the not found message for a template that is really missing', () => {
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      loadError: null,
+      notFound: true,
+      reload: vi.fn(),
+      template: null,
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(html).toContain('Template Not Found');
+    expect(html).not.toContain('Try again');
+  });
+});
+
 describe('TemplateDetail stats', () => {
   // A row shaped like GET /api/templates/:id, mapped the way the model maps it.
   const apiTemplate = () =>

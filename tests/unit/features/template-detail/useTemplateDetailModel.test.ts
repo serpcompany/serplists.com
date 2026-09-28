@@ -10,6 +10,7 @@ import {
 } from '@/features/template-detail/templateDetailMappers';
 import {
   loadTemplateDetailData,
+  type LoadTemplateDetailResult,
   saveTemplateToAccount,
   startTemplateRun,
   type TemplateDetailBillingState,
@@ -32,6 +33,9 @@ const buildTemplate = (
   version: 1,
   ...overrides,
 });
+
+const loadedTemplate = (result: LoadTemplateDetailResult) =>
+  result.kind === 'ok' ? result.template : null;
 
 const buildBillingState = (
   overrides: Partial<TemplateDetailBillingState> = {},
@@ -200,8 +204,8 @@ describe('loadTemplateDetailData', () => {
       { apiClient },
     );
 
-    expect(result.notFound).toBe(false);
-    expect(result.template?.ownerProfile).toEqual({
+    expect(result.kind).toBe('ok');
+    expect(loadedTemplate(result)?.ownerProfile).toEqual({
       username: 'alice',
       full_name: 'Alice Example',
     });
@@ -248,13 +252,13 @@ describe('loadTemplateDetailData', () => {
       { apiClient },
     );
 
-    expect(result.notFound).toBe(false);
-    expect(result.template?.sections).toHaveLength(1);
-    expect(result.template?.sections[0]?.items).toHaveLength(2);
-    expect(countTemplateItems(result.template as ChecklistTemplate)).toBe(2);
+    expect(result.kind).toBe('ok');
+    expect(loadedTemplate(result)?.sections).toHaveLength(1);
+    expect(loadedTemplate(result)?.sections[0]?.items).toHaveLength(2);
+    expect(countTemplateItems(loadedTemplate(result) as ChecklistTemplate)).toBe(2);
   });
 
-  it('returns notFound when the owner segment does not match', async () => {
+  it('returns not_found when the owner segment does not match', async () => {
     const apiClient = {
       getTemplateById: vi.fn(),
       getTemplateBySlug: vi.fn().mockResolvedValue({
@@ -282,7 +286,7 @@ describe('loadTemplateDetailData', () => {
       { apiClient },
     );
 
-    expect(result).toEqual({ notFound: true, template: null });
+    expect(result).toEqual({ kind: 'not_found' });
   });
 
   it('keeps the Organization of a private template that is not in the cached list', async () => {
@@ -313,9 +317,9 @@ describe('loadTemplateDetailData', () => {
       { apiClient },
     );
 
-    expect(result.notFound).toBe(false);
-    expect(result.template?.teamId).toBe('team-1');
-    expect(result.template?.userId).toBe('user-b');
+    expect(result.kind).toBe('ok');
+    expect(loadedTemplate(result)?.teamId).toBe('team-1');
+    expect(loadedTemplate(result)?.userId).toBe('user-b');
   });
 });
 

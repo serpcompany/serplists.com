@@ -561,3 +561,31 @@ describe('PublicTemplate Save', () => {
     expect(saveTemplate).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('PublicTemplate load failures', () => {
+  it('offers a retry for a failed load instead of saying the template is gone', () => {
+    const { html } = renderPublishedRoute(publishedClipyTemplate, {
+      loadError: 'HTTP 503',
+      reload: vi.fn(),
+      template: null,
+    });
+
+    expect(html).toContain('Unable to load template');
+    expect(html).toContain('HTTP 503');
+    expect(html).toContain('Try again');
+    expect(html).not.toContain('Template not found');
+    expect(html).not.toContain('no longer');
+  });
+
+  it('keeps the not found message for a template that is really missing', () => {
+    const { html } = renderPublishedRoute(publishedClipyTemplate, {
+      loadError: null,
+      notFound: true,
+      reload: vi.fn(),
+      template: null,
+    });
+
+    expect(html).toContain('Template not found');
+    expect(html).not.toContain('Try again');
+  });
+});

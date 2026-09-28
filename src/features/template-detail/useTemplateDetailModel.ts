@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api, type TemplateHistoryResponse } from '@/lib/api';
+import { getAccessFailure, isApiError } from '@/lib/api-errors';
 import { getBillingStatusQueryKey } from '@/lib/billing';
 import {
   buildRepoTemplateCreatePayload,
@@ -88,10 +89,11 @@ export type TemplateDetailHistoryState = {
   isLoading: boolean;
 };
 
-type LoadTemplateDetailResult = {
-  notFound: boolean;
-  template: ChecklistTemplate | null;
-};
+// not_found is only for a real answer (404, not public, another owner); anything else can be retried.
+export type LoadTemplateDetailResult =
+  | { kind: 'ok'; template: ChecklistTemplate }
+  | { kind: 'not_found' }
+  | { kind: 'error'; message: string };
 
 type TemplateDetailDependencies = {
   apiClient?: TemplateDetailApiClient;
@@ -106,6 +108,30 @@ const getApiClient = (
   dependencies?: TemplateDetailDependencies,
 ): TemplateDetailApiClient => dependencies?.apiClient ?? api;
 
+const isNotFoundError = (error: unknown): boolean =>
+  isApiError(error) && error.status === 404;
+
+const classifyLoadFailure = (error: unknown): LoadTemplateDetailResult =>
+  isNotFoundError(error)
+    ? { kind: 'not_found' }
+    : { kind: 'error', message: getAccessFailure(error, 'Unable to load template.').message };
+
+// A slug never looks like an id, so only a 404 for another identifier is worth a slug lookup.
+const fetchPrivateTemplate = async (
+  identifier: string,
+  apiClient: TemplateDetailApiClient,
+): Promise<unknown> => {
+  try {
+    return await apiClient.getTemplateById(identifier);
+  } catch (error) {
+    if (isUuidLike(identifier) || !isNotFoundError(error)) {
+      throw error;
+    }
+  }
+
+  return apiClient.getTemplateBySlug(identifier);
+};
+
 export const loadTemplateDetailData = async (
   options: PublicTemplateDetailOptions | PrivateTemplateDetailOptions,
   dependencies?: TemplateDetailDependencies,
@@ -113,12 +139,12 @@ export const loadTemplateDetailData = async (
   const apiClient = getApiClient(dependencies);
 
   if (!options.identifier) {
-    return { template: null, notFound: true };
+    return { kind: 'not_found' };
   }
 
   if (options.mode === 'public') {
     if (!options.ownerUsername) {
-      return { template: null, notFound: true };
+      return { kind: 'not_found' };
     }
 
     // Library templates ship in the bundle (the API cannot serve them) and win on a slug clash.
@@ -131,7 +157,7 @@ export const loadTemplateDetailData = async (
       resolvePublicTemplateOwnerSlug(libraryTemplate)?.toLowerCase() ===
         options.ownerUsername.toLowerCase()
     ) {
-      return { template: libraryTemplate, notFound: false };
+      return { kind: 'ok', template: libraryTemplate };
     }
 
     try {
@@ -151,12 +177,12 @@ export const loadTemplateDetailData = async (
         !mappedTemplate.isPublic ||
         ownerSlug?.toLowerCase() !== options.ownerUsername.toLowerCase()
       ) {
-        return { template: null, notFound: true };
+        return { kind: 'not_found' };
       }
 
-      return { template: mappedTemplate, notFound: false };
-    } catch {
-      return { template: null, notFound: true };
+      return { kind: 'ok', template: mappedTemplate };
+    } catch (error) {
+      return classifyLoadFailure(error);
     }
   }
 
@@ -165,18 +191,11 @@ export const loadTemplateDetailData = async (
     options.getCachedTemplate(identifier) ??
     repoTemplates.find((template) => template.id === identifier);
   if (cachedTemplate) {
-    return { template: cachedTemplate, notFound: false };
+    return { kind: 'ok', template: cachedTemplate };
   }
 
   try {
-    let rawTemplate: unknown;
-
-    try {
-      rawTemplate = await apiClient.getTemplateById(options.identifier);
-    } catch {
-      rawTemplate = await apiClient.getTemplateBySlug(options.identifier);
-    }
-
+    const rawTemplate = await fetchPrivateTemplate(identifier, apiClient);
     const mappedTemplate = await hydrateTemplateOwner(
       mapApiTemplateToChecklistTemplate(
         rawTemplate as Record<string, unknown>,
@@ -185,9 +204,9 @@ export const loadTemplateDetailData = async (
       apiClient,
     );
 
-    return { template: mappedTemplate, notFound: false };
-  } catch {
-    return { template: null, notFound: true };
+    return { kind: 'ok', template: mappedTemplate };
+  } catch (error) {
+    return classifyLoadFailure(error);
   }
 };
 
@@ -280,6 +299,9 @@ export const useTemplateDetailModel = (
   const [template, setTemplate] = useState<ChecklistTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // Bumped by reload(); the only extra effect dependency, so a retry never loops.
+  const [reloadKey, setReloadKey] = useState(0);
   const queryClient = useQueryClient();
   const workspaceTemplates =
     options.mode === 'private' ? options.workspaceTemplates : undefined;
@@ -332,6 +354,7 @@ export const useTemplateDetailModel = (
     const loadTemplate = async () => {
       setLoading(true);
       setNotFound(false);
+      setLoadError(null);
 
       const result = await loadTemplateDetailData(
         options.mode === 'public'
@@ -351,8 +374,9 @@ export const useTemplateDetailModel = (
         return;
       }
 
-      setTemplate(result.template);
-      setNotFound(result.notFound);
+      setTemplate(result.kind === 'ok' ? result.template : null);
+      setNotFound(result.kind === 'not_found');
+      setLoadError(result.kind === 'error' ? result.message : null);
       setLoading(false);
     };
 
@@ -366,7 +390,10 @@ export const useTemplateDetailModel = (
     options.identifier,
     options.mode,
     publicOwnerUsername,
+    reloadKey,
   ]);
+
+  const reload = useCallback(() => setReloadKey((key) => key + 1), []);
 
   const invalidateTemplates = async () => {
     if (!options.userId) {
@@ -429,9 +456,11 @@ export const useTemplateDetailModel = (
       isError: history.isError,
       isLoading: canLoadTemplateHistory && history.isLoading,
     } satisfies TemplateDetailHistoryState,
+    loadError,
     loading,
     notFound,
     permissions,
+    reload,
     saveTemplate,
     setVisibility,
     shareTemplate,
