@@ -171,10 +171,26 @@ billing, keep it disabled by default:
    the user rather than trusting the command response.
 4. Remove the secret, redeploy, and confirm the endpoint returns `401`.
 
+The body is parsed strictly and an invalid one gets `400` with nothing written:
+
+- `userId` or `email` (or both, which must name the same User). An unknown User gets
+  `404`. The email is matched as given and lowercased.
+- `plan`: `"pro"` (the default) or `"free"`.
+- `expiresAt`: whole Unix **seconds**, in the future and at most 5 years away. Omit it
+  or send `null` for an override that never expires. Date strings, milliseconds,
+  fractions and past times are rejected rather than read as "never expires".
+- `note`: optional, at most 500 characters.
+
+A second request for the same User replaces its override. The response echoes the
+stored `expiresAt` and an `expiresAtIso` rendering of it.
+
 ```bash
 curl -X POST "https://serplists.com/api/admin/entitlements/override" \
   -H "Content-Type: application/json" -H "X-Admin-Secret: $ENTITLEMENTS_ADMIN_SECRET" \
   -d '{"email":"user@example.com","plan":"pro"}'          # or "plan":"free" to force Free
+curl -X POST "https://serplists.com/api/admin/entitlements/override" \
+  -H "Content-Type: application/json" -H "X-Admin-Secret: $ENTITLEMENTS_ADMIN_SECRET" \
+  -d "{\"email\":\"user@example.com\",\"plan\":\"pro\",\"expiresAt\":$(( $(date +%s) + 30*86400 ))}"  # 30 days
 curl -X DELETE "https://serplists.com/api/admin/entitlements/override?userId=USER_ID" \
   -H "X-Admin-Secret: $ENTITLEMENTS_ADMIN_SECRET"          # remove the override
 ```
