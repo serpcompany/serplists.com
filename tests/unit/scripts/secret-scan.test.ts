@@ -34,7 +34,8 @@ function runScan(paths: string[]) {
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
-describe('secret scan', () => {
+// Each case starts a Node process, which can take several seconds on a busy machine.
+describe('secret scan', { timeout: 30_000 }, () => {
   it('reports a secret in a Pages Functions catch-all route file', () => {
     const route = writeFixture('leaky/functions/api/[[route]].ts', `export const key = "${fakeGithubToken}";\n`);
 
