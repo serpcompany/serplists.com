@@ -25,6 +25,7 @@ import {
   countOversizedTemplateAssets,
   oversizedTemplateAssetMessage,
 } from '../../../src/lib/schemas/templateAssetLimits';
+import { toPortableSections } from '../../../src/lib/schemas/portableSections';
 import {
   assignMissingStableTemplateIdentities,
   calculateRunProgress,
@@ -525,7 +526,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             seoTitle: template.seoTitle || '',
             seoDescription: template.seoDescription || '',
             rules: template.rules,
-            sections: template.sections || [],
+            sections: toPortableSections(template.sections),
             categories: template.categories || [],
             tags: template.tags || [],
             visibility: template.isPublic ? 'public' : 'private',

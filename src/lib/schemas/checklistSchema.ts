@@ -117,34 +117,51 @@ export const portableChecklistSubItemSchema = z.object({
   title: z.string().min(1),
 });
 
-export const portableChecklistItemContentSchema = z.object({
-  id: z.string().optional(),
-  type: z.enum(["text", "image", "video", "file", "embed", "subItems"]),
-  value: z.string().optional().default(""),
-  uploadType: z.enum(["url", "upload"]).optional(),
-  fileName: z.string().optional(),
-  fileSize: z.number().optional(),
-  subItems: z.array(portableChecklistSubItemSchema).optional(),
-}).superRefine((content, ctx) => {
-  if (content.type === "subItems") {
-    if (!content.subItems || content.subItems.length === 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "subItems content requires at least one sub-item",
-        path: ["subItems"],
-      });
-    }
-    return;
-  }
+// The content rules are part of each block type's shape (not a refinement) so the
+// generated JSON Schema states them too: tools validating against it must accept exactly
+// what import accepts (tests/unit/lib/schemas/portableTemplateJsonSchemaParity.test.ts).
+// Every type keeps the same keys in the same order, so parsed output is unchanged.
+const portableContentShape = <T extends string, V extends z.ZodTypeAny, S extends z.ZodTypeAny>(
+  type: T,
+  value: V,
+  subItems: S,
+) =>
+  z.object({
+    id: z.string().optional(),
+    type: z.literal(type),
+    value,
+    uploadType: z.enum(["url", "upload"]).optional(),
+    fileName: z.string().optional(),
+    fileSize: z.number().optional(),
+    subItems,
+  });
 
-  if ((content.type === "image" || content.type === "video" || content.type === "file" || content.type === "embed") && !content.value.trim()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `${content.type} content requires a value`,
-      path: ["value"],
-    });
-  }
-});
+const optionalContentValue = z.string().optional().default("");
+const optionalSubItems = z.array(portableChecklistSubItemSchema).optional();
+
+// A link, upload URL or embed code: not blank. /\S/ becomes the JSON Schema pattern "\S",
+// which a trim() could not.
+const requiredContentValue = (type: string) => {
+  const message = `${type} content requires a value`;
+  return z.string({ required_error: message }).regex(/\S/, message);
+};
+
+const subItemsRequiredMessage = "subItems content requires at least one sub-item";
+
+export const portableChecklistItemContentSchema = z.discriminatedUnion("type", [
+  portableContentShape("text", optionalContentValue, optionalSubItems),
+  portableContentShape("image", requiredContentValue("image"), optionalSubItems),
+  portableContentShape("video", requiredContentValue("video"), optionalSubItems),
+  portableContentShape("file", requiredContentValue("file"), optionalSubItems),
+  portableContentShape("embed", requiredContentValue("embed"), optionalSubItems),
+  portableContentShape(
+    "subItems",
+    optionalContentValue,
+    z
+      .array(portableChecklistSubItemSchema, { required_error: subItemsRequiredMessage })
+      .min(1, subItemsRequiredMessage),
+  ),
+]);
 
 export const portableChecklistItemSchema = z.object({
   id: z.string().optional(),

@@ -26,7 +26,7 @@ Portable export is the preferred JSON format for sharing, AI generation, repo st
 ```ts
 export const portableTemplatePackSchema = z.object({
   kind: z.literal("serplists-template-pack"),
-  schemaVersion: z.string(),
+  schemaVersion: z.literal("2.0.0"),
   exportedAt: z.string(),
   exportedBy: z.string().optional(),
   templates: z.array(portableChecklistTemplateSchema),
@@ -47,6 +47,18 @@ Portable template fields are intentionally cleaner than app row exports:
 - optional SEO metadata is represented as `seoTitle` / `seoDescription`
 - optional portable rules are represented as `rules`
 - sections/items/content IDs may be present, but import should not depend on them
+- no run state: exports keep only the portable keys of sections (`id`, `title`,
+  `items`), items (`id`, `title`, `description`, `contents`), content blocks (`id`,
+  `type`, `value`, `uploadType`, `fileName`, `fileSize`, `subItems`) and sub-items
+  (`id`, `title`), so `isCompleted`, `completed` and `notes` are left out
+  (`src/lib/schemas/portableSections.ts`, used by both the app and the API export)
+
+Content blocks are a union on `type`: `image`, `video`, `file` and `embed` need a
+`value` that is not blank, `subItems` needs at least one sub-item, and `text` may be
+empty. Import ignores keys it does not know rather than rejecting them. The generated
+JSON Schema states the same rules and allows additional properties, so a pack valid
+against it imports, and a pack it rejects fails import too
+(`tests/unit/lib/schemas/portableTemplateJsonSchemaParity.test.ts` checks both with Ajv).
 
 Portable round-trips must preserve `seoTitle`, `seoDescription`, and `rules`.
 Rules are structurally stored and exported but are not executed or surfaced as

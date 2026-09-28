@@ -11,6 +11,7 @@ import type {
   PortableTemplatePack,
   TemplateBackup
 } from "@/lib/schemas/checklistSchema";
+import { toPortableSections } from "@/lib/schemas/portableSections";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
 import { findInvalidImportSectionEntry } from "@/lib/utils/importSectionEntries";
 import {
@@ -225,7 +226,8 @@ export const exportPortableTemplatesToJSON = (
       visibility: template.isPublic ? "public" : "private",
       categories: normalizeStringList(template.categories),
       tags: normalizeStringList(template.tags),
-      sections: template.sections,
+      // Only portable keys: no run state such as isCompleted.
+      sections: toPortableSections(template.sections) as PortableChecklistTemplate["sections"],
       rules: template.rules,
     })),
     manifest: {

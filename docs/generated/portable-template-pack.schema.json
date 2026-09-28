@@ -92,70 +92,333 @@
                       "contents": {
                         "type": "array",
                         "items": {
-                          "type": "object",
-                          "properties": {
-                            "id": {
-                              "type": "string"
-                            },
-                            "type": {
-                              "type": "string",
-                              "enum": [
-                                "text",
-                                "image",
-                                "video",
-                                "file",
-                                "embed",
-                                "subItems"
-                              ]
-                            },
-                            "value": {
-                              "type": "string",
-                              "default": ""
-                            },
-                            "uploadType": {
-                              "type": "string",
-                              "enum": [
-                                "url",
-                                "upload"
-                              ]
-                            },
-                            "fileName": {
-                              "type": "string"
-                            },
-                            "fileSize": {
-                              "type": "number"
-                            },
-                            "subItems": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string"
-                                  },
-                                  "title": {
-                                    "type": "string",
-                                    "minLength": 1
-                                  }
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
                                 },
-                                "required": [
-                                  "title"
-                                ],
-                                "additionalProperties": false
-                              }
+                                "type": {
+                                  "type": "string",
+                                  "const": "text"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "default": ""
+                                },
+                                "uploadType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "url",
+                                    "upload"
+                                  ]
+                                },
+                                "fileName": {
+                                  "type": "string"
+                                },
+                                "fileSize": {
+                                  "type": "number"
+                                },
+                                "subItems": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "title"
+                                    ],
+                                    "additionalProperties": true
+                                  }
+                                }
+                              },
+                              "required": [
+                                "type"
+                              ],
+                              "additionalProperties": true
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "const": "image"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "\\S"
+                                },
+                                "uploadType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "url",
+                                    "upload"
+                                  ]
+                                },
+                                "fileName": {
+                                  "type": "string"
+                                },
+                                "fileSize": {
+                                  "type": "number"
+                                },
+                                "subItems": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "title"
+                                    ],
+                                    "additionalProperties": true
+                                  }
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "value"
+                              ],
+                              "additionalProperties": true
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "const": "video"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "\\S"
+                                },
+                                "uploadType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "url",
+                                    "upload"
+                                  ]
+                                },
+                                "fileName": {
+                                  "type": "string"
+                                },
+                                "fileSize": {
+                                  "type": "number"
+                                },
+                                "subItems": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "title"
+                                    ],
+                                    "additionalProperties": true
+                                  }
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "value"
+                              ],
+                              "additionalProperties": true
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "const": "file"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "\\S"
+                                },
+                                "uploadType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "url",
+                                    "upload"
+                                  ]
+                                },
+                                "fileName": {
+                                  "type": "string"
+                                },
+                                "fileSize": {
+                                  "type": "number"
+                                },
+                                "subItems": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "title"
+                                    ],
+                                    "additionalProperties": true
+                                  }
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "value"
+                              ],
+                              "additionalProperties": true
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "const": "embed"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "\\S"
+                                },
+                                "uploadType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "url",
+                                    "upload"
+                                  ]
+                                },
+                                "fileName": {
+                                  "type": "string"
+                                },
+                                "fileSize": {
+                                  "type": "number"
+                                },
+                                "subItems": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "title"
+                                    ],
+                                    "additionalProperties": true
+                                  }
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "value"
+                              ],
+                              "additionalProperties": true
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "const": "subItems"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "default": ""
+                                },
+                                "uploadType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "url",
+                                    "upload"
+                                  ]
+                                },
+                                "fileName": {
+                                  "type": "string"
+                                },
+                                "fileSize": {
+                                  "type": "number"
+                                },
+                                "subItems": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "title"
+                                    ],
+                                    "additionalProperties": true
+                                  },
+                                  "minItems": 1
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "subItems"
+                              ],
+                              "additionalProperties": true
                             }
-                          },
-                          "required": [
-                            "type"
-                          ],
-                          "additionalProperties": false
+                          ]
                         }
                       }
                     },
                     "required": [
                       "title"
                     ],
-                    "additionalProperties": false
+                    "additionalProperties": true
                   },
                   "minItems": 1
                 }
@@ -164,7 +427,7 @@
                 "title",
                 "items"
               ],
-              "additionalProperties": false
+              "additionalProperties": true
             },
             "minItems": 1
           },
@@ -197,7 +460,7 @@
                 "type",
                 "path"
               ],
-              "additionalProperties": false
+              "additionalProperties": true
             }
           }
         },
@@ -205,7 +468,7 @@
           "title",
           "sections"
         ],
-        "additionalProperties": false
+        "additionalProperties": true
       }
     },
     "manifest": {
@@ -233,7 +496,7 @@
       "required": [
         "totalTemplates"
       ],
-      "additionalProperties": false
+      "additionalProperties": true
     }
   },
   "required": [
@@ -242,7 +505,7 @@
     "exportedAt",
     "templates"
   ],
-  "additionalProperties": false,
+  "additionalProperties": true,
   "title": "SERP Lists Portable Template Pack v2.0.0",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://serplists.com/schema/portable-template-pack.schema.json",
