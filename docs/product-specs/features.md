@@ -44,7 +44,7 @@ Canonical private routes:
 - Runs that predate stable identities are conservatively marked stale during migration. Their legacy IDs are backfilled deterministically, and their completion/notes remain intact until explicit reconciliation.
 - Task notes belong to the run. Unsaved notes stay with their task while the user moves between tasks, are saved with Mark Complete (in the same save) and when the run is completed, and are never replaced by a save that returns while the user is still typing. Leaving the page with unsaved notes asks for confirmation.
 - Run and template saves use optimistic revision/version markers. A stale editor receives `409 edit_conflict` instead of overwriting newer work.
-- Run-level sharing creates public `/share/:token` links.
+- Run-level sharing creates public `/share/:token` links. The run page and the runs list show the created link in a dialog with a Copy button, so it is never lost when the browser refuses the automatic copy.
 - Guests can open shared runs without logging in and update checklist completion state.
 - Shared runs do not expose owner-only title editing or destructive actions.
 - Current run gating is plan-limit based through active-run limits.

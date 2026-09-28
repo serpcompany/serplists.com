@@ -41,26 +41,18 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { Switch } from '@/components/ui/switch';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import {
   DashboardContentShell,
   DashboardPageHeader,
@@ -308,15 +300,6 @@ const TemplateDetail = () => {
     } finally {
       setIsCreatingShare(false);
     }
-  };
-
-  const handleCopyShareLink = async () => {
-    if (!shareUrl) {
-      return;
-    }
-
-    await navigator.clipboard.writeText(shareUrl);
-    toast.success('Public link copied');
   };
 
   const handleCloneTemplate = async () => {
@@ -897,44 +880,14 @@ const TemplateDetail = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-        <DialogContent className="border-border bg-card">
-          <DialogHeader>
-            <DialogTitle>Share Template</DialogTitle>
-            <DialogDescription>
-              Share this template with others. They can view it and copy it into
-              their library.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="flex items-center gap-2">
-              <Input
-                readOnly
-                value={shareUrl}
-                className="border-border bg-muted"
-              />
-              <Button
-                aria-label="Copy share link"
-                variant="outline"
-                size="icon"
-                onClick={handleCopyShareLink}
-                className="shrink-0 border-border"
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShareDialogOpen(false)}
-              className="border-border"
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ShareLinkDialog
+        copiedMessage="Public link copied"
+        description="Share this template with others. They can view it and copy it into their library."
+        onOpenChange={setShareDialogOpen}
+        open={shareDialogOpen}
+        title="Share Template"
+        url={shareUrl}
+      />
 
       <RunNameDialog
         open={runDialogOpen}

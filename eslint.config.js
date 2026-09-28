@@ -14,11 +14,11 @@ const LEGACY_MAX_LINES = {
   "functions/api/handlers/templates.ts": 1650,
   "functions/api/handlers/checklists.ts": 1200,
   "functions/api/handlers/teams.ts": 1100,
-  "src/pages/TemplateDetail.tsx": 950,
+  "src/pages/TemplateDetail.tsx": 925,
   "functions/api/handlers/agentMcp.ts": 900,
   "src/lib/templates/templateMarkdown.ts": 800,
   "src/components/account/TeamSettingsSection.tsx": 800,
-  "src/pages/ChecklistRun.tsx": 750,
+  "src/pages/ChecklistRun.tsx": 725,
   "src/features/run-execution/useRunExecutionModel.ts": 700,
   "src/lib/api.ts": 650,
   "src/components/template-editor/SectionSidebar.tsx": 650,
@@ -35,6 +35,14 @@ const VOCABULARY_MESSAGE =
 // ("helps teams ship"), but lowercase "workspace" in prose is the retired product term.
 const LEGACY_TERM_CAPITALIZED = "/\\b(Teams?|Workspaces?)\\b/";
 const LEGACY_TERM_IN_PROSE = "/^(?=.*\\s).*\\bworkspaces?\\b/i";
+// A direct clipboard write can reject (Safari after an awaited request, denied permission,
+// lost focus) and lose what it was copying, so all copies go through one helper.
+const CLIPBOARD_RESTRICTION = {
+  selector: "MemberExpression[property.name='clipboard']",
+  message:
+    "Copy with copyTextToClipboard from src/lib/clipboard.ts: it never throws and returns false when the browser " +
+    "refuses. Also show the text (for share links, ShareLinkDialog) so a failed copy never loses it.",
+};
 
 export default tseslint.config(
   {
@@ -107,7 +115,20 @@ export default tseslint.config(
         { selector: `Literal[value=${LEGACY_TERM_IN_PROSE}]`, message: VOCABULARY_MESSAGE },
         { selector: `TemplateElement[value.raw=${LEGACY_TERM_CAPITALIZED}]`, message: VOCABULARY_MESSAGE },
         { selector: `TemplateElement[value.raw=${LEGACY_TERM_IN_PROSE}]`, message: VOCABULARY_MESSAGE },
+        CLIPBOARD_RESTRICTION,
       ],
+    },
+  },
+  {
+    // The rest of src/ (pages, components, and features get CLIPBOARD_RESTRICTION above).
+    files: [
+      "src/*.{ts,tsx}",
+      "src/components/ui/**/*.{ts,tsx}",
+      "src/{contexts,data,hooks,lib,types,utils}/**/*.{ts,tsx}",
+    ],
+    ignores: ["src/lib/clipboard.ts", "**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": ["error", CLIPBOARD_RESTRICTION],
     },
   },
   {

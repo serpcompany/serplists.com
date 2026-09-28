@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import { buildPublicCategoryPath, buildPublicTemplatesPath } from '@/lib/routes';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistItem, ChecklistSection, ChecklistTemplate } from '@/types/checklist';
@@ -71,8 +72,11 @@ export function PublicTemplateView({
       return;
     }
 
-    await navigator.clipboard.writeText(window.location.href);
-    toast.success('Link copied to clipboard');
+    if (await copyTextToClipboard(window.location.href)) {
+      toast.success('Link copied to clipboard');
+      return;
+    }
+    toast.error("Couldn't copy the link. Copy it from the address bar.");
   };
 
   const handleSave = async () => {

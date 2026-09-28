@@ -19,6 +19,7 @@ import {
   DashboardScrollArea,
 } from '@/components/dashboard/DashboardContentShell';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
+import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -42,6 +43,8 @@ import { canFinishRun, getPrimaryTaskAction } from '@/features/run-execution/pri
 import { confirmLeaveWithUnsavedNotes, useUnsavedNotesWarning } from '@/features/run-execution/noteDrafts';
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
 import { cn } from '@/lib/utils';
+import { copyTextToClipboard } from '@/lib/clipboard';
+import { createShareLinkAndCopy } from '@/lib/shareLink';
 import {
   buildConsoleHomePath,
   buildConsoleRunsPath,
@@ -59,6 +62,8 @@ const ChecklistRunPage = () => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [isCreatingShare, setIsCreatingShare] = useState(false);
+  const [shareLink, setShareLink] = useState<{ runId: string; url: string } | null>(null);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
 
   const {
     counts,
@@ -193,43 +198,38 @@ const ChecklistRunPage = () => {
     setEditTitle('');
   };
 
+  // The link is always shown in a dialog and copying is best effort (createShareLinkAndCopy).
+  // Each create replaces the share token, so reopening reuses this run's link.
   const handleCreateShare = async () => {
-    if (!displayRun) {
+    if (!displayRun) return;
+    if (shareLink?.runId === displayRun.id) {
+      setIsShareDialogOpen(true);
       return;
     }
 
     setIsCreatingShare(true);
-
     try {
-      const result = await createShare();
-
-      if (result.kind === 'ok' && result.shareUrl) {
-        await navigator.clipboard.writeText(result.shareUrl);
-        toast.success('Share link copied to clipboard');
-        return;
-      }
-
+      const result = await createShareLinkAndCopy(async () => {
+        const shared = await createShare();
+        if (shared.kind === 'error') throw new Error(shared.message || 'Failed to create share link for this run.');
+        return shared.kind === 'ok' && shared.shareUrl ? shared.shareUrl : null;
+      });
       if (result.kind === 'error') {
-        toast.error(result.message || 'Failed to create share link for this run.');
+        toast.error(result.message);
+      } else if (result.kind === 'ok') {
+        setShareLink({ runId: displayRun.id, url: result.shareUrl });
+        setIsShareDialogOpen(true);
+        if (result.copied) toast.success('Share link copied to clipboard');
       }
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Failed to create share link for this run.';
-      toast.error(message);
     } finally {
       setIsCreatingShare(false);
     }
   };
 
   const handleCopyCurrentLink = async () => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    await navigator.clipboard.writeText(window.location.href);
-    toast.success('Link copied to clipboard');
+    if (typeof window === 'undefined') return;
+    if (await copyTextToClipboard(window.location.href)) toast.success('Link copied to clipboard');
+    else toast.error("Couldn't copy the link. Copy it from the address bar.");
   };
 
   const handleCompleteRun = async () => {
@@ -669,6 +669,15 @@ const ChecklistRunPage = () => {
           </DashboardScrollArea>
         </DashboardContentShell>
       )}
+
+      <ShareLinkDialog
+        copiedMessage="Share link copied to clipboard"
+        description="Anyone with this link can open this run without signing in."
+        onOpenChange={setIsShareDialogOpen}
+        open={isShareDialogOpen && shareLink?.runId === displayRun.id}
+        title="Share run"
+        url={shareLink?.url ?? ''}
+      />
 
       <Dialog open={isCompleteDialogOpen} onOpenChange={setIsCompleteDialogOpen}>
         <DialogContent>

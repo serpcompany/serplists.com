@@ -131,6 +131,14 @@ The public guest URL is `/share/:token`. When sharing fails, distinguish an
 entitlement `limit_reached` response from schema/migration failures before
 changing sharing logic.
 
+Because each share mints a new token, the UI treats creating the link and copying it
+as separate steps (`src/lib/shareLink.ts`). The created link is always shown in a
+dialog (`ShareLinkDialog`), copying is best effort through `copyTextToClipboard`
+(Safari refuses a clipboard write that follows a network request), and an error is
+reported only when the API call fails. Reopening the dialog for the same run reuses
+the link instead of minting another token. ESLint bans direct `navigator.clipboard`
+access outside `src/lib/clipboard.ts`.
+
 ## Seeds
 
 `pnpm run db:seed` seeds local D1 with dev Users, sample Personal data, Organization data and memberships, pending invites, entitlement overrides, and official public Templates. Seed identifiers retain legacy `team` names.

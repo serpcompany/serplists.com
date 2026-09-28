@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -30,6 +30,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import {
   Select,
   SelectContent,
@@ -62,6 +63,7 @@ import {
 } from '@/features/dashboard-runs/runTemplateLookup';
 import { getRunRowActions } from '@/features/dashboard-runs/runRowActions';
 import type { ResourcePermissions } from '@/lib/organizationPermissions';
+import { createShareLinkAndCopy } from '@/lib/shareLink';
 
 interface RunsDashboardViewProps {
   runs: ChecklistRun[];
@@ -108,6 +110,9 @@ export function RunsDashboardView({
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeletingRun, setIsDeletingRun] = useState(false);
   const [revalidatingRunId, setRevalidatingRunId] = useState<string | null>(null);
+  const [sharedLink, setSharedLink] = useState<{ runId: string; url: string } | null>(null);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const sharingRunId = useRef<string | null>(null);
 
   const inProgressCount = runs.filter((run) => run.status === 'in_progress').length;
   const completedCount = runs.filter((run) => run.status === 'completed').length;
@@ -121,16 +126,33 @@ export function RunsDashboardView({
     [runs, searchQuery, statusFilter, templatesById],
   );
 
+  // The link is always shown in a dialog; copying is best effort (see createShareLinkAndCopy).
+  // Each create replaces the run's share token, so a second tap waits and a reopen reuses it.
   const shareRun = async (runId: string) => {
+    if (sharingRunId.current) {
+      return;
+    }
+    if (sharedLink?.runId === runId) {
+      setIsShareDialogOpen(true);
+      return;
+    }
+
+    sharingRunId.current = runId;
     try {
-      const shareUrl = await createRunsDashboardShareUrl(
-        runId,
-        window.location.origin,
+      const result = await createShareLinkAndCopy(() =>
+        createRunsDashboardShareUrl(runId, window.location.origin),
       );
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success('Share link copied');
-    } catch {
-      toast.error('Failed to create share link');
+      if (result.kind === 'error') {
+        toast.error(result.message);
+        return;
+      }
+      if (result.kind === 'ok') {
+        setSharedLink({ runId, url: result.shareUrl });
+        setIsShareDialogOpen(true);
+        if (result.copied) toast.success('Share link copied');
+      }
+    } finally {
+      sharingRunId.current = null;
     }
   };
 
@@ -364,7 +386,7 @@ export function RunsDashboardView({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
                           {actions.canShare ? (
-                            <DropdownMenuItem onClick={() => shareRun(run.id)}>
+                            <DropdownMenuItem onClick={() => void shareRun(run.id)}>
                               <Share2 className="mr-2 h-4 w-4" />
                               Share Run
                             </DropdownMenuItem>
@@ -424,6 +446,14 @@ export function RunsDashboardView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ShareLinkDialog
+        copiedMessage="Share link copied"
+        description="Anyone with this link can open this run without signing in."
+        onOpenChange={setIsShareDialogOpen}
+        open={isShareDialogOpen}
+        title="Share run"
+        url={sharedLink?.url ?? ''}
+      />
     </DashboardContentShell>
   );
 }
