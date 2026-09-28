@@ -37,6 +37,7 @@ import { DashboardSidebar } from '@/components/dashboard/DashboardSidebar';
 import { MobileBottomNav, MobileNav } from '@/components/MobileNav';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { WorkspaceGate } from '@/components/workspace/WorkspaceGate';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
 
 interface LayoutProps {
@@ -290,7 +291,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <div className="w-10" />
             </header>
 
-            <main className="min-w-0 flex-1 pb-20 md:pb-0">{content}</main>
+            <main className="min-w-0 flex-1 pb-20 md:pb-0">
+              <WorkspaceGate>{content}</WorkspaceGate>
+            </main>
           </div>
         </div>
 

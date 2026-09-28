@@ -36,6 +36,7 @@ import {
 import { refreshAfterRunDelete, refreshAfterTemplateDelete, refreshRunLists } from "./templateListCache";
 import { createTemplateListFetcher, fetchRunList, shouldRetryListFetch, type TemplateListRequest } from "./templateListFetchers";
 import { buildRunUpdatePayload, type RunUpdateOptions } from "./runUpdatePayload";
+import { assertWorkspaceReady } from "./workspaceSelection";
 
 
 const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
@@ -162,7 +163,7 @@ export const useTemplateLists = (options: { catalog?: boolean; workspace?: boole
 
 export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const { activeTeamId, isWorkspaceLoading, workspaceScopeId } = useWorkspace();
+  const { activeTeamId, isWorkspaceLoading, workspaceScopeId, workspaceStatus } = useWorkspace();
   const queryClient = useQueryClient();
 
   // These observers read whatever useTemplateLists() has loaded, without fetching.
@@ -207,6 +208,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       
       const finalIsPublic = templateData.isPublic ?? true;
 
+      // Until the stored Organization is confirmed, the active context reads as Personal.
+      if (!templateData.teamId) assertWorkspaceReady(workspaceStatus);
       const teamId = templateData.teamId ?? activeTeamId;
       const result = await api.createTemplate({
         title: templateData.title,
@@ -304,6 +307,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         templateId,
       });
 
+      if (apiPayload.teamId === activeTeamId) assertWorkspaceReady(workspaceStatus);
       const result = await api.createChecklist(apiPayload);
       
       if (!result) throw new Error("Failed to create checklist run");
@@ -368,6 +372,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const importTemplatesMutation = useMutation({
     mutationFn: async ({ templatesData, options }: { templatesData: ChecklistTemplate[]; options?: TemplateImportOptions }): Promise<TemplateImportSummary> => {
       if (!user) throw new Error("User must be logged in to import templates");
+      assertWorkspaceReady(workspaceStatus);
 
       const MAX_TEMPLATES_PER_IMPORT = 5;
       const MAX_ASSET_BYTES = 5 * 1024 * 1024;

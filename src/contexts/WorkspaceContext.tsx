@@ -15,10 +15,13 @@ import { api, type TeamRole, type TeamSummary } from '@/lib/api';
 import {
   PERSONAL_WORKSPACE_ID,
   createWorkspaceSelectionMemory,
+  describeTeamsQuery,
+  getWorkspaceStatus,
   isConfirmedSignOut,
   reconcileWorkspaceSelection,
   recordWorkspaceSelection,
   resetWorkspaceSelection,
+  type WorkspaceStatus,
 } from './workspaceSelection';
 
 const ACTIVE_WORKSPACE_STORAGE_KEY = 'serplists.activeWorkspaceId';
@@ -54,13 +57,20 @@ type WorkspaceContextValue = {
   canRunTemplates: boolean;
   createTeam: (input: CreateTeamInput) => Promise<void>;
   isTeamWorkspace: boolean;
+  // True until the session and the active context are known, including while the stored
+  // Organization is unconfirmed ('loading' or 'error' status). Lists wait for it.
   isWorkspaceLoading: boolean;
   refreshTeams: () => Promise<TeamSummary[]>;
   rememberTeam: (team: TeamSummary) => void;
+  // Retries the teams request after it failed ('error' status).
+  retryWorkspace: () => void;
   selectWorkspace: (workspaceId: string) => void;
   teams: TeamSummary[];
   workspaces: Workspace[];
   workspaceScopeId: string;
+  // 'loading' or 'error' while the stored Organization is not confirmed by the teams query.
+  // The context then falls back to Personal only for display: never write to it.
+  workspaceStatus: WorkspaceStatus;
 };
 
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(
@@ -131,6 +141,7 @@ export function WorkspaceProvider({
   });
 
   const queriedTeams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
+  const { teamsFailed, teamsLoaded, teamsSettled } = describeTeamsQuery(teamsQuery);
 
   const teams = useMemo(() => {
     const mergedTeams = new Map<string, TeamSummary>();
@@ -203,8 +214,8 @@ export function WorkspaceProvider({
       readStoredWorkspaceId,
       userId: user.id,
       teamIds: teams.map((team) => team.id),
-      teamsSettled: !teamsQuery.isLoading && !teamsQuery.isFetching,
-      teamsLoaded: teamsQuery.isSuccess,
+      teamsSettled,
+      teamsLoaded,
     });
     if (nextWorkspaceId !== activeWorkspaceId) {
       setActiveWorkspaceId(nextWorkspaceId);
@@ -214,9 +225,8 @@ export function WorkspaceProvider({
     isAuthLoading,
     sessionStatus,
     teams,
-    teamsQuery.isFetching,
-    teamsQuery.isLoading,
-    teamsQuery.isSuccess,
+    teamsLoaded,
+    teamsSettled,
     user,
   ]);
 
@@ -282,7 +292,17 @@ export function WorkspaceProvider({
     [rememberTeam, refreshTeams, selectWorkspace],
   );
 
-  const isWorkspaceLoading = isAuthLoading || teamsQuery.isLoading;
+  const workspaceStatus = getWorkspaceStatus({
+    hasUser: Boolean(user),
+    activeWorkspaceId,
+    teamIds: teams.map((team) => team.id),
+    teamsFailed,
+  });
+  const isWorkspaceLoading = isAuthLoading || teamsQuery.isLoading || workspaceStatus !== 'ready';
+  const { refetch: refetchTeams } = teamsQuery;
+  const retryWorkspace = useCallback(() => {
+    void refetchTeams();
+  }, [refetchTeams]);
 
   // Memoized so a background teams refetch (isFetching toggles on window focus) does not
   // re-render every consumer.
@@ -301,12 +321,17 @@ export function WorkspaceProvider({
       isWorkspaceLoading,
       refreshTeams,
       rememberTeam,
+      retryWorkspace,
       selectWorkspace,
       teams,
       workspaces,
       workspaceScopeId: activeWorkspace.id,
+      workspaceStatus,
     };
-  }, [activeWorkspace, createTeam, isWorkspaceLoading, refreshTeams, rememberTeam, selectWorkspace, teams, workspaces]);
+  }, [
+    activeWorkspace, createTeam, isWorkspaceLoading, refreshTeams, rememberTeam, retryWorkspace, selectWorkspace, teams,
+    workspaces, workspaceStatus,
+  ]);
 
   return (
     <WorkspaceContext.Provider value={value}>

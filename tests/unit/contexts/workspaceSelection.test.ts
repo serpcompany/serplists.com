@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   PERSONAL_WORKSPACE_ID,
   createWorkspaceSelectionMemory,
+  describeTeamsQuery,
+  getWorkspaceStatus,
   isConfirmedSignOut,
   reconcileWorkspaceSelection,
   recordWorkspaceSelection,
@@ -65,10 +67,34 @@ describe('workspace selection', () => {
     expect(tab.render()).toBe(PERSONAL_WORKSPACE_ID);
   });
 
-  it('restores the stored Organization when the first teams load fails and a later one succeeds', () => {
+  // A failed teams request says nothing about membership. Falling back to Personal made
+  // Organization users create Templates and Runs in Personal, then jump back later.
+  it('keeps the stored Organization when the first teams load fails, until a load succeeds', () => {
     const tab = createTab({ stored: 'acme' });
-    expect(tab.render({ teamIds: [], teamsLoaded: false })).toBe(PERSONAL_WORKSPACE_ID);
+    expect(tab.render({ teamIds: [], teamsLoaded: false })).toBe('acme');
+    expect(tab.render({ teamIds: [], teamsLoaded: false })).toBe('acme');
 
+    expect(tab.render()).toBe('acme');
+  });
+
+  it('keeps the stored Organization while the teams request is paused offline', () => {
+    const tab = createTab({ stored: 'acme' });
+
+    expect(tab.render({ teamIds: [], teamsSettled: false, teamsLoaded: false })).toBe('acme');
+  });
+
+  it('keeps the stored Organization while a refetch runs over a list that lacks it', () => {
+    const tab = createTab({ stored: 'acme' });
+
+    expect(tab.render({ teamIds: [], teamsSettled: false, teamsLoaded: true })).toBe('acme');
+    expect(tab.render({ teamIds: ['acme'] })).toBe('acme');
+  });
+
+  it('starts a tab that signs in from the stored Organization, not from Personal', () => {
+    const tab = createTab({ stored: 'acme' });
+    tab.active = PERSONAL_WORKSPACE_ID;
+
+    expect(tab.render({ teamIds: [], teamsSettled: false, teamsLoaded: false })).toBe('acme');
     expect(tab.render()).toBe('acme');
   });
 
@@ -119,6 +145,52 @@ describe('workspace selection', () => {
       teamsLoaded: true,
     });
     expect(next).toBe('bravo');
+  });
+});
+
+describe('getWorkspaceStatus', () => {
+  const base = { hasUser: true, activeWorkspaceId: 'acme', teamIds: [] as string[], teamsFailed: false };
+
+  it('is ready in Personal, in a listed Organization, and when signed out', () => {
+    expect(getWorkspaceStatus({ ...base, activeWorkspaceId: PERSONAL_WORKSPACE_ID })).toBe('ready');
+    expect(getWorkspaceStatus({ ...base, teamIds: ['acme'] })).toBe('ready');
+    expect(getWorkspaceStatus({ ...base, hasUser: false, teamsFailed: true })).toBe('ready');
+    // A Personal user never waits on, or fails with, the teams request.
+    expect(getWorkspaceStatus({ ...base, activeWorkspaceId: PERSONAL_WORKSPACE_ID, teamsFailed: true })).toBe('ready');
+  });
+
+  it('is loading while the Organization is not confirmed yet', () => {
+    expect(getWorkspaceStatus(base)).toBe('loading');
+  });
+
+  it('is an error when the teams request failed before the Organization was confirmed', () => {
+    expect(getWorkspaceStatus({ ...base, teamsFailed: true })).toBe('error');
+    // A failed background refetch over a list that has it changes nothing.
+    expect(getWorkspaceStatus({ ...base, teamIds: ['acme'], teamsFailed: true })).toBe('ready');
+  });
+});
+
+describe('describeTeamsQuery', () => {
+  it('treats a failed or paused first load as neither loaded nor failed membership', () => {
+    expect(describeTeamsQuery({ data: undefined, fetchStatus: 'idle', isError: true })).toEqual({
+      teamsLoaded: false,
+      teamsSettled: true,
+      teamsFailed: true,
+    });
+    expect(describeTeamsQuery({ data: undefined, fetchStatus: 'paused', isError: false })).toEqual({
+      teamsLoaded: false,
+      teamsSettled: false,
+      teamsFailed: false,
+    });
+  });
+
+  it('is settled only when no request is in flight or paused', () => {
+    expect(describeTeamsQuery({ data: [], fetchStatus: 'idle', isError: false })).toEqual({
+      teamsLoaded: true,
+      teamsSettled: true,
+      teamsFailed: false,
+    });
+    expect(describeTeamsQuery({ data: [], fetchStatus: 'fetching', isError: false }).teamsSettled).toBe(false);
   });
 });
 

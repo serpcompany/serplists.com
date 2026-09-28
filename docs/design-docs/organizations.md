@@ -91,7 +91,8 @@ The API response already uses a `delivery` object so email can be added later wi
 
 - Context state is managed by the legacy-named `src/contexts/WorkspaceContext.tsx`.
 - The remembered context is persisted under the legacy local-storage key `serplists.activeWorkspaceId`.
-- Every tab shares that key, so it only seeds a tab: it is read once per signed-in user, and the stored Organization is restored when the first teams load lists it (or a later one, if that load failed). After that a tab keeps its own selection and never follows a context another tab stored (`src/contexts/workspaceSelection.ts`).
+- Every tab shares that key, so it only seeds a tab: it is read once per signed-in user. After that a tab keeps its own selection and never follows a context another tab stored (`src/contexts/workspaceSelection.ts`).
+- A stored Organization stays selected until a teams list from the server confirms or rules it out. Only a settled, successful list that leaves it out (membership removed, or a stale id) falls back to Personal. While the teams request is loading, paused offline, or failed, `workspaceStatus` is `loading` or `error`: lists stay disabled, the switcher never reads "Personal", and a create, run or import that would go to the active context is refused. On `error`, console pages show "Couldn't load your Organizations" with Retry and Continue in Personal, and the switcher offers Personal and a retry. A Personal context never waits on, or fails with, the teams request.
 - Templates and Runs invalidate React Query caches when the context changes.
 - `/dashboard/settings` currently combines Account, Organization, member, invite, and billing controls; issue #206 tracks their explicit separation.
 - `/account` and `/dashboard/profile` are legacy redirects to `/dashboard/settings`.

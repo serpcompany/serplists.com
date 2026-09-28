@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Settings, User, Users } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, RotateCw, Settings, User, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -10,18 +10,36 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useWorkspace, type Workspace } from '@/contexts/WorkspaceContext';
+import type { WorkspaceStatus } from '@/contexts/workspaceSelection';
 import { buildConsoleSettingsPath } from '@/lib/routes';
 import { cn } from '@/lib/utils';
+
+type SwitcherLabel = { icon: typeof User; label: string };
+
+const getSwitcherLabel = (
+  status: WorkspaceStatus | undefined,
+  activeWorkspace: Workspace,
+): SwitcherLabel => {
+  if (status === 'error') return { icon: AlertTriangle, label: 'Organizations unavailable' };
+  if (status === 'loading') return { icon: Users, label: 'Loading...' };
+  return { icon: activeWorkspace.type === 'team' ? Users : User, label: activeWorkspace.name };
+};
 
 export function WorkspaceSwitcher() {
   const {
     activeWorkspace,
     isWorkspaceLoading,
+    retryWorkspace,
     selectWorkspace,
     workspaces,
+    workspaceStatus,
   } = useWorkspace();
-  const ActiveIcon = activeWorkspace.type === 'team' ? Users : User;
+  // While the stored Organization is unconfirmed the context falls back to Personal only for
+  // display, so never label the tab "Personal" then.
+  const isUnresolved = workspaceStatus === 'loading' || workspaceStatus === 'error';
+  const active = getSwitcherLabel(workspaceStatus, activeWorkspace);
+  const ActiveIcon = active.icon;
 
   return (
     <DropdownMenu>
@@ -34,7 +52,7 @@ export function WorkspaceSwitcher() {
           <ActiveIcon className="h-4 w-4 shrink-0" />
           <span className="min-w-0 flex-1 text-left">
             <span className="block truncate text-sm font-medium">
-              {activeWorkspace.name}
+              {active.label}
             </span>
           </span>
           <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -44,13 +62,14 @@ export function WorkspaceSwitcher() {
         <DropdownMenuLabel>Personal and Organizations</DropdownMenuLabel>
         {workspaces.map((workspace) => {
           const Icon = workspace.type === 'team' ? Users : User;
-          const selected = workspace.id === activeWorkspace.id;
+          const selected = !isUnresolved && workspace.id === activeWorkspace.id;
 
           return (
             <DropdownMenuItem
               key={workspace.id}
               className="gap-3"
-              disabled={isWorkspaceLoading}
+              // After a failed teams load, Personal stays available as a way out.
+              disabled={isWorkspaceLoading && workspaceStatus !== 'error'}
               onClick={() => selectWorkspace(workspace.id)}
             >
               <Icon className="h-4 w-4 text-muted-foreground" />
@@ -71,6 +90,12 @@ export function WorkspaceSwitcher() {
             </DropdownMenuItem>
           );
         })}
+        {workspaceStatus === 'error' ? (
+          <DropdownMenuItem className="gap-3" onClick={retryWorkspace}>
+            <RotateCw className="h-4 w-4 text-muted-foreground" />
+            Retry loading Organizations
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to={buildConsoleSettingsPath()} className="gap-3">
