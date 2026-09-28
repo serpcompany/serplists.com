@@ -8,7 +8,10 @@ import type { ChecklistTemplate } from '@/types/checklist';
 
 const mockUseDashboardTemplatesModel = vi.fn();
 
-vi.mock('@/features/dashboard-templates/useDashboardTemplatesModel', () => ({
+vi.mock('@/features/dashboard-templates/useDashboardTemplatesModel', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@/features/dashboard-templates/useDashboardTemplatesModel')
+  >()),
   useDashboardTemplatesModel: (...args: unknown[]) =>
     mockUseDashboardTemplatesModel(...args),
 }));

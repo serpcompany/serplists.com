@@ -71,8 +71,8 @@ import { useTemplateLists } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import {
+  handleUpgradeRequiredForContext,
   navigateToLoginWithReturnPath,
-  startBillingCheckout,
 } from '@/lib/access-flow';
 import type {
   TemplateHistoryEvent,
@@ -227,12 +227,10 @@ const TemplateDetail = () => {
   }, [displayTemplate?.id]);
 
   const handleUpgradeRequired = async () => {
-    if (isTeamWorkspace) {
-      toast.error('This Organization needs a paid plan before using this feature.');
-      return;
-    }
-
-    await startBillingCheckout(billingState.billingEnabled);
+    await handleUpgradeRequiredForContext({
+      billingEnabled: billingState.billingEnabled,
+      isTeamWorkspace,
+    });
   };
 
   const handleStartRun = async (runName: string) => {

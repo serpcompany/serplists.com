@@ -38,6 +38,27 @@ export const startBillingCheckout = async (billingEnabled: boolean): Promise<boo
   }
 };
 
+export const ORGANIZATION_UPGRADE_MESSAGE =
+  "This Organization needs a paid plan before using this feature.";
+
+/**
+ * Handles a 403 upgrade_required/limit_reached for the active context. An
+ * Organization's limits come from Organization entitlements, which a Personal Pro
+ * checkout cannot lift, so an Organization gets a message instead of checkout.
+ * Resolves true when a checkout redirect has started.
+ */
+export const handleUpgradeRequiredForContext = async (options: {
+  billingEnabled: boolean;
+  isTeamWorkspace: boolean;
+}): Promise<boolean> => {
+  if (options.isTeamWorkspace) {
+    toast.error(ORGANIZATION_UPGRADE_MESSAGE);
+    return false;
+  }
+
+  return startBillingCheckout(options.billingEnabled);
+};
+
 export const handleAccessFailure = async (
   error: unknown,
   options: {

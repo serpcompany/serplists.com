@@ -414,9 +414,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await queryClient.refetchQueries({ queryKey: ['runs'] });
       toast.success("Checklist run created successfully");
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    }
+    // No onError toast: every caller maps the failure (login, the context's
+    // upgrade flow, or one error message), so a toast here would duplicate it.
   });
 
   const updateRunMutation = useMutation({
