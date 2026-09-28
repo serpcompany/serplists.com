@@ -70,6 +70,12 @@ To deploy by hand (rarely needed): `pnpm run build`, then
 - API logs are JSON lines from `log()` in `functions/api/utils/logger.ts`. Every
   request gets a `requestId`, returned as the `X-Request-Id` header. ESLint rejects
   direct `console.*` in `functions/`. Log ids, never emails or tokens.
+- Handlers that catch their own errors must log them: the router's `api_error`
+  line only sees errors that reach it. Log errors with `describeErrorForLog()`,
+  which drops the bound parameters (user content) that Drizzle puts in a failed
+  query's message. The MCP endpoint (`/api/mcp`) answers tool failures with an
+  HTTP 200 JSON-RPC error, so look for its `mcp_tool_error`, `mcp_tool_invariant`,
+  and `mcp_auth_error` lines rather than a 5xx status.
 - Production: Cloudflare runtime logs for the Pages project. There is no external
   log sink, metrics, traces, or alerting yet.
 - Local: `pnpm run dev:all` mirrors output to `tmp/logs/dev-all.log`; search for

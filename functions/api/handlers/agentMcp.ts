@@ -11,6 +11,7 @@ import {
 } from "../utils/active-run-limit";
 import { buildAuditEventValues } from "../utils/audit";
 import { getEntitlementsForUser } from "../utils/entitlements";
+import { describeErrorForLog, log } from "../utils/logger";
 import {
   authenticatePersonalRunKey,
   markPersonalRunKeyUsed,
@@ -377,6 +378,16 @@ async function getRun(
   );
 }
 
+// The router sets X-Request-Id on every API request before dispatch.
+function requestIdOf(request: Request): string | undefined {
+  return request.headers.get("X-Request-Id") ?? undefined;
+}
+
+// params.name comes from the client: log it only when it names a real tool.
+function toolNameForLog(name: string): string {
+  return toolDefinitions.some((tool) => tool.name === name) ? name : "unknown";
+}
+
 function batchChanges(result: unknown): number | null {
   if (!isRecord(result) || !isRecord(result.meta)) return null;
   return typeof result.meta.changes === "number" ? result.meta.changes : null;
@@ -507,6 +518,16 @@ async function updateRun(
     throw new ToolError("Run changed while it was being updated; fetch it again", "edit_conflict");
   }
   if (auditChanges !== 1 || updateChanges !== 1) {
+    // The audit insert and the run update disagree; an orphaned audit row is possible.
+    log("error", "mcp_tool_invariant", {
+      requestId: requestIdOf(request),
+      tool: "update_run",
+      keyId: identity.keyId,
+      userId: identity.userId,
+      runId: args.runId,
+      auditChanges,
+      updateChanges,
+    });
     throw new ToolError("Unable to update the run safely", "internal_invariant");
   }
 
@@ -578,7 +599,9 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
   let identity: PersonalRunKeyIdentity | null;
   try {
     identity = await authenticatePersonalRunKey(request, env);
-  } catch {
+  } catch (error) {
+    // Never log the Authorization header or any part of the Run Key.
+    log("error", "mcp_auth_error", { requestId: requestIdOf(request), ...describeErrorForLog(error) });
     return rpcError(null, -32603, "Internal error", undefined, 500);
   }
   if (!identity) {
@@ -650,8 +673,13 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
       if (isReadOnlyTool(params.name)) assertBoundedResult(data);
       try {
         await markPersonalRunKeyUsed(env, identity);
-      } catch {
+      } catch (error) {
         // Usage telemetry must not turn a committed tool mutation into a retryable failure.
+        log("warn", "mcp_key_usage_error", {
+          requestId: requestIdOf(request),
+          keyId: identity.keyId,
+          ...describeErrorForLog(error),
+        });
       }
       return toolResult(id, data, text);
     } catch (error) {
@@ -668,6 +696,16 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
           ...(error.details ? { details: error.details } : {}),
         }, error.message, true);
       }
+      // Expected ToolErrors above are client outcomes; anything else is a server fault.
+      // Never log the tool arguments: they carry run notes and titles.
+      log("error", "mcp_tool_error", {
+        requestId: requestIdOf(request),
+        tool: toolNameForLog(params.name),
+        keyId: identity.keyId,
+        userId: identity.userId,
+        ...describeErrorForLog(error),
+      });
+      // JSON-RPC errors stay HTTP 200: a 5xx can make MCP clients retry a committed write.
       return rpcError(id, -32603, "Internal error");
     }
   }
