@@ -2,7 +2,8 @@
 // Mechanical checks for the repository knowledge base (AGENTS.md, root docs, docs/**).
 // - the root and docs/ follow the fixed layout (see DOCS_LAYOUT)
 // - relative Markdown links (and #anchors into Markdown files) resolve
-// - backticked repository paths such as `src/lib/api.ts` exist
+// - backticked repository paths such as `src/lib/api.ts` exist, and backticked
+//   directories hold a file git tracks (an emptied folder is missing from a fresh checkout)
 // - every docs/**/*.md page is reachable from AGENTS.md or README.md
 // - design docs and product specs are catalogued in their index.md
 // - AGENTS.md stays a short map rather than an encyclopedia
@@ -10,6 +11,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { directoriesWithoutFiles } from "./lib/repo-files.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ROOT_DOCS = ["AGENTS.md", "ARCHITECTURE.md", "README.md"];
@@ -71,6 +73,7 @@ const linkGraph = new Map();
 let linksChecked = 0;
 let pathsChecked = 0;
 const missingPaths = [];
+const directoryPaths = [];
 
 for (const file of files) {
   const text = stripFencedCode(readFileSync(path.join(repoRoot, file), "utf8"));
@@ -105,10 +108,20 @@ for (const file of files) {
     if (!PATH_PREFIXES.some((prefix) => candidate.startsWith(prefix))) continue;
     if (/[*<>{}\s]|\.\.\./.test(candidate)) continue; // globs, placeholders, commands
     pathsChecked += 1;
+    const where = `${file}:${lineOf(text, match.index)}`;
     if (!existsSync(path.join(repoRoot, candidate))) {
-      missingPaths.push({ candidate, where: `${file}:${lineOf(text, match.index)}` });
+      missingPaths.push({ candidate, where });
+    } else if (statSync(path.join(repoRoot, candidate)).isDirectory()) {
+      directoryPaths.push({ candidate, where });
     }
   }
+}
+
+// A folder with no tracked file (for example one emptied by moving its last file
+// with `mv`) passes existsSync here but is missing from CI and fresh checkouts.
+const untrackedDirectories = directoriesWithoutFiles(repoRoot, [...new Set(directoryPaths.map(({ candidate }) => candidate))]);
+for (const { candidate, where } of directoryPaths) {
+  if (untrackedDirectories.has(candidate)) missingPaths.push({ candidate, where, untracked: true });
 }
 
 // Gitignored paths (test output, logs) are generated at runtime and may legitimately be absent.
@@ -121,10 +134,13 @@ const ignored = new Set(
         input: missingPaths.map(({ candidate }) => candidate).join("\n"),
       }).stdout.split("\n").filter(Boolean),
 );
-for (const { candidate, where } of missingPaths) {
-  if (!ignored.has(candidate)) {
-    errors.push(`${where} references \`${candidate}\`, which does not exist. Update the path or remove the stale reference.`);
-  }
+for (const { candidate, where, untracked } of missingPaths) {
+  if (ignored.has(candidate)) continue;
+  errors.push(
+    untracked
+      ? `${where} references \`${candidate}\`, which holds no file git tracks, so a fresh checkout will not have it. If the folder should stay, commit a .gitkeep in it; otherwise update the reference.`
+      : `${where} references \`${candidate}\`, which does not exist. Update the path or remove the stale reference.`,
+  );
 }
 
 const reachable = new Set();
