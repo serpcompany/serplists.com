@@ -5,7 +5,12 @@ import type { ChecklistRun, ChecklistSection } from '@/types/checklist';
 
 import type { RunExecutionActionResult } from '@/features/run-execution/runExecutionResult';
 import { createRunSaver, RUN_CHANGED_ELSEWHERE_MESSAGE, type RunSaverContext } from '@/features/run-execution/runSaver';
-import { bindRunSaves, loadRunExecutionData, toggleRunItem } from '@/features/run-execution/useRunExecutionModel';
+import {
+  bindRunSaves,
+  loadRunExecutionData,
+  toggleRunItem,
+  toggleRunSubItem,
+} from '@/features/run-execution/useRunExecutionModel';
 
 const CONFLICT = { code: 'edit_conflict', error: 'Checklist run changed since it was loaded. Refresh before saving again.' };
 
@@ -103,7 +108,7 @@ describe('a run page whose run was saved by another session', () => {
     const { context, page, saver, saves } = createPage(server, buildRun(5));
     server.edit((run) => ({ ...run, sections: sections({ 'item-1': true }) })); // U1 ticks task 1 -> revision 6
 
-    const result = await saver('toggle:item-2', saves.toggleItem('item-2'), context);
+    const result = await saver(saves.toggleItem('item-2', true), context);
 
     expect(result).toMatchObject({ kind: 'ok' });
     expect(server.sent.map((run) => run.revision)).toEqual([5, 6]);
@@ -118,8 +123,8 @@ describe('a run page whose run was saved by another session', () => {
     server.edit((run) => ({ ...run, sections: sections({ 'item-1': true }) }));
 
     const [first, second] = await Promise.all([
-      saver('toggle:item-2', saves.toggleItem('item-2'), context),
-      saver('toggle:item-3:0:0', saves.toggleSubItem('item-3', 0, 0), context),
+      saver(saves.toggleItem('item-2', true), context),
+      saver(saves.toggleSubItem('item-3', 0, 0, true), context),
     ]);
 
     expect(first.kind).toBe('ok');
@@ -134,7 +139,7 @@ describe('a run page whose run was saved by another session', () => {
     const { context, page, saver, saves } = createPage(server, buildRun(5));
     server.edit((run) => ({ ...run, sections: sections({ 'item-1': true }) }));
 
-    const result = await saver('toggle:item-1', saves.toggleItem('item-1'), context);
+    const result = await saver(saves.toggleItem('item-1', true), context);
 
     expect(result.kind).toBe('ok');
     expect(server.sent).toHaveLength(1); // the refused save; the task already had the chosen value
@@ -147,7 +152,7 @@ describe('a run page whose run was saved by another session', () => {
     const { context, page, saver, saves } = createPage(server, buildRun(5));
     server.edit((run) => ({ ...run, sections: sections({ 'item-3': true, 'sub-1': true }) }));
 
-    const result = await saver('toggle:item-3:0:0', saves.toggleSubItem('item-3', 0, 0), context);
+    const result = await saver(saves.toggleSubItem('item-3', 0, 0, true), context);
 
     expect(result.kind).toBe('ok');
     expect(server.sent).toHaveLength(1);
@@ -163,7 +168,7 @@ describe('a run page whose run was saved by another session', () => {
       return { id: 'run-1', sections: server.stored().sections, revision: server.stored().revision - 1, status: 'in_progress' };
     });
 
-    const result = await saver('toggle:item-2', saves.toggleItem('item-2'), context);
+    const result = await saver(saves.toggleItem('item-2', true), context);
 
     expect(result).toEqual({ kind: 'error', message: RUN_CHANGED_ELSEWHERE_MESSAGE });
     expect(server.sent).toHaveLength(2);
@@ -176,7 +181,7 @@ describe('a run page whose run was saved by another session', () => {
     server.edit((run) => run);
     server.apiClient.getChecklistById.mockRejectedValue(createApiError(404, { error: 'Not found' }));
 
-    const result = await saver('toggle:item-2', saves.toggleItem('item-2'), context);
+    const result = await saver(saves.toggleItem('item-2', true), context);
 
     expect(result).toEqual({ kind: 'not_found' });
     expect(page.notFound).toBe(true);
@@ -188,7 +193,7 @@ describe('a run page whose run was saved by another session', () => {
     const { context, page, saver, saves } = createPage(server, buildRun(5, {}, { 'item-1': 'old' }));
     server.edit((run) => ({ ...run, sections: sections({}, { 'item-1': 'teammate' }) }));
 
-    const result = await saver('notes:item-1:mine', saves.notes('item-1', 'mine'), context);
+    const result = await saver(saves.notes('item-1', 'mine'), context);
 
     expect(result).toEqual({ kind: 'error', message: RUN_CHANGED_ELSEWHERE_MESSAGE });
     expect(server.sent).toHaveLength(1);
@@ -201,7 +206,7 @@ describe('a run page whose run was saved by another session', () => {
     const { context, saver, saves } = createPage(server, buildRun(5));
     server.edit((run) => ({ ...run, sections: sections({ 'item-2': true }) }));
 
-    const result = await saver('notes:item-1:mine', saves.notes('item-1', 'mine'), context);
+    const result = await saver(saves.notes('item-1', 'mine'), context);
 
     expect(result.kind).toBe('ok');
     expect(server.stored().sections[0]?.items.map((item) => [item.isCompleted, item.notes])).toEqual([
@@ -217,7 +222,7 @@ describe('a run page whose run was saved by another session', () => {
     const { context, page, saver, saves } = createPage(server, buildRun(5, allDone));
     server.edit((run) => ({ ...run, completedAt: '2026-04-20T00:00:00.000Z', status: 'completed' }));
 
-    const result = await saver('complete', saves.complete, context);
+    const result = await saver(saves.complete, context);
 
     expect(result.kind).toBe('ok');
     expect(server.sent).toHaveLength(1);
@@ -229,7 +234,7 @@ describe('a run page whose run was saved by another session', () => {
     const { context, page, saver, saves } = createPage(server, buildRun(5), 'share-token');
     server.edit((run) => ({ ...run, sections: sections({ 'item-1': true }) }));
 
-    const result = await saver('toggle:item-2', saves.toggleItem('item-2'), context);
+    const result = await saver(saves.toggleItem('item-2', true), context);
 
     expect(result.kind).toBe('ok');
     expect(server.apiClient.getSharedChecklist).toHaveBeenCalledWith('share-token');
@@ -245,7 +250,7 @@ describe('run actions keep what the retry needs', () => {
       throw createApiError(409, CONFLICT);
     });
 
-    const result = await toggleRunItem({ itemId: 'item-1', run: buildRun(5) }, { updateRun });
+    const result = await toggleRunItem({ isCompleted: true, itemId: 'item-1', run: buildRun(5) }, { updateRun });
 
     expect(result).toEqual({ kind: 'error', code: 'edit_conflict', message: CONFLICT.error });
   });
@@ -255,6 +260,125 @@ describe('run actions keep what the retry needs', () => {
     const run = buildRun(5, { 'item-1': true });
 
     const result = await toggleRunItem({ isCompleted: true, itemId: 'item-1', run }, { updateRun });
+
+    expect(result).toMatchObject({ kind: 'ok', run });
+    expect(updateRun).not.toHaveBeenCalled();
+  });
+});
+
+describe('toggles queued while an earlier save is in flight', () => {
+  // item-2 has sub-tasks [a, b]; the page shows the run as it was before the first save.
+  const twoSubTasks = (done: Record<string, boolean>): ChecklistRun => ({
+    ...buildRun(1),
+    sections: [
+      {
+        id: 'section-1',
+        title: 'Checklist',
+        items: [
+          { id: 'item-1', title: 'item-1', isCompleted: false, contents: [] },
+          {
+            id: 'item-2',
+            title: 'item-2',
+            isCompleted: done['item-2'] === true,
+            contents: [
+              {
+                type: 'subItems',
+                value: '',
+                subItems: [
+                  { id: 'a', title: 'A', isCompleted: done.a === true },
+                  { id: 'b', title: 'B', isCompleted: done.b === true },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  const task = (page: { latest: ChecklistRun | null }) => {
+    const item = page.latest?.sections[0]?.items[1];
+    return [item?.isCompleted, ...(item?.contents?.[0]?.subItems ?? []).map((sub) => sub.isCompleted)];
+  };
+
+  it('Mark Complete, then ticking a sub-task that still looks unticked, keeps both ticked', async () => {
+    const server = createServer(twoSubTasks({}));
+    const { context, page, saver, saves } = createPage(server, twoSubTasks({}));
+
+    await Promise.all([
+      saver(saves.toggleItem('item-2', true), context),
+      saver(saves.toggleSubItem('item-2', 0, 0, true), context),
+    ]);
+
+    expect(task(page)).toEqual([true, true, true]);
+    expect(server.sent).toHaveLength(1); // the sub-task was already ticked: nothing more to save
+  });
+
+  it('ticking the last sub-task, then Mark Complete before it saves, keeps every sub-task ticked', async () => {
+    const server = createServer(twoSubTasks({ b: true }));
+    const { context, page, saver, saves } = createPage(server, twoSubTasks({ b: true }));
+
+    await Promise.all([
+      saver(saves.toggleSubItem('item-2', 0, 0, true), context),
+      saver(saves.toggleItem('item-2', true), context),
+    ]);
+
+    expect(task(page)).toEqual([true, true, true]);
+    expect(server.stored().sections[0]?.items[1]?.isCompleted).toBe(true);
+    expect(server.sent).toHaveLength(1);
+  });
+
+  it('applies an untick as an untick even when the task changed before it ran', async () => {
+    const server = createServer(twoSubTasks({ 'item-2': true, a: true, b: true }));
+    const { context, page, saver, saves } = createPage(server, twoSubTasks({ 'item-2': true, a: true, b: true }));
+
+    await Promise.all([
+      saver(saves.toggleSubItem('item-2', 0, 1, false), context),
+      saver(saves.toggleItem('item-2', false), context),
+    ]);
+
+    expect(task(page)).toEqual([false, false, false]);
+  });
+});
+
+describe('toggle keys and no-op saves', () => {
+  it('ignores a double click that asks for the same value, but queues a different one', async () => {
+    const server = createServer(buildRun(1));
+    const { context, page, saver, saves } = createPage(server, buildRun(1));
+
+    const [first, repeat] = await Promise.all([
+      saver(saves.toggleItem('item-1', true), context),
+      saver(saves.toggleItem('item-1', true), context),
+    ]);
+    expect(first.kind).toBe('ok');
+    expect(repeat).toEqual({ kind: 'ignored' });
+
+    await Promise.all([
+      saver(saves.toggleSubItem('item-3', 0, 0, true), context),
+      saver(saves.toggleSubItem('item-3', 0, 0, false), context),
+    ]);
+    expect(page.latest?.sections[0]?.items[2]?.contents?.[0]?.subItems?.[0]?.isCompleted).toBe(false);
+    expect(server.sent).toHaveLength(3);
+  });
+
+  it('Mark Complete still saves when the task is done but a sub-task is not', async () => {
+    const updateRun = vi.fn(async (run: ChecklistRun) => run);
+    const run = buildRun(1, { 'item-3': true });
+
+    const result = await toggleRunItem({ isCompleted: true, itemId: 'item-3', run }, { updateRun });
+
+    expect(updateRun).toHaveBeenCalledOnce();
+    if (result.kind !== 'ok' || !result.run) throw new Error('expected ok result');
+    expect(result.run.sections[0]?.items[2]?.contents?.[0]?.subItems?.[0]?.isCompleted).toBe(true);
+  });
+
+  it('sends nothing when a sub-task already has the chosen value', async () => {
+    const updateRun = vi.fn(async (run: ChecklistRun) => run);
+    const run = buildRun(1, { 'item-3': true, 'sub-1': true });
+
+    const result = await toggleRunSubItem(
+      { contentIndex: 0, isCompleted: true, itemId: 'item-3', run, subItemIndex: 0 },
+      { updateRun },
+    );
 
     expect(result).toMatchObject({ kind: 'ok', run });
     expect(updateRun).not.toHaveBeenCalled();

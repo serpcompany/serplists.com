@@ -211,6 +211,12 @@ export const areItemSubItemsCompleted = (item: ChecklistItem): boolean => {
   return subItems.length > 0 && subItems.every((subItem) => subItem.isCompleted === true);
 };
 
+// True when the task and every one of its sub-tasks already have this completion, so
+// setting it changes nothing.
+export const itemHasCompletion = (item: ChecklistItem, isCompleted: boolean): boolean =>
+  (item.isCompleted === true) === isCompleted &&
+  getItemSubItems(item).every((subItem) => (subItem.isCompleted === true) === isCompleted);
+
 // The sub-task at a block and row. When its id is given and that row now holds another
 // sub-task (a reloaded run), the sub-task with that id in any block.
 export const findRunSubItem = (

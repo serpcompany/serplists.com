@@ -74,10 +74,19 @@ describe('canFinishRun', () => {
 
 describe('getPrimaryTaskButton', () => {
   const handlers = () => ({
+    onCompleteTask: vi.fn(),
     onFinishRun: vi.fn(),
     onNavigateNext: vi.fn(),
     onSelectTask: vi.fn(),
-    onToggleTask: vi.fn(),
+  });
+
+  it('marks the task complete from "Mark Complete"', () => {
+    const callbacks = handlers();
+    const button = getPrimaryTaskButton({ kind: 'complete_task' }, callbacks);
+
+    expect(button.label).toBe('Mark Complete');
+    button.onClick?.();
+    expect(callbacks.onCompleteTask).toHaveBeenCalledOnce();
   });
 
   it('calls onFinishRun from "Finish Run"', () => {

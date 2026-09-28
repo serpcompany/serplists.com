@@ -20,8 +20,10 @@ interface TaskExecutionPanelProps {
   onNavigateNext: () => void;
   onNavigatePrev: () => void;
   onSelectTask: (itemId: string) => void;
-  onToggleSubItem: (contentIndex: number, subItemIndex: number) => void;
-  onToggleTask: () => void;
+  // isCompleted is the value the user clicked, so a click queued behind a slow save still
+  // sets what they saw and chose.
+  onToggleSubItem: (contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
+  onToggleTask: (isCompleted: boolean) => void;
   notesDraft?: string;
   onNotesDraftChange: (notes: string) => void;
   onSaveNotes: (notes: string) => Promise<boolean>;
@@ -53,10 +55,10 @@ export function TaskExecutionPanel({
 }: TaskExecutionPanelProps) {
   const isTaskComplete = task.isCompleted === true;
   const primaryButton = getPrimaryTaskButton(primaryAction, {
+    onCompleteTask: () => onToggleTask(true),
     onFinishRun,
     onNavigateNext,
     onSelectTask,
-    onToggleTask,
   });
 
   return (
@@ -74,7 +76,7 @@ export function TaskExecutionPanel({
           <div className="flex items-start gap-4">
             <button
               disabled={readOnly}
-              onClick={onToggleTask}
+              onClick={() => onToggleTask(!isTaskComplete)}
               className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors"
               type="button"
             >

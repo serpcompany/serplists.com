@@ -258,3 +258,90 @@ test('ticking a task another session already ticked does not untick it', async (
 
   await deleteRun(page, runId);
 });
+
+// A click made while an earlier save is still in flight sets the value the user saw and
+// chose; it is not a flip of whatever the earlier save left behind.
+async function createRunWithSubTasks(page: Page, title: string, stepTwoDone: boolean) {
+  return page.evaluate(async ({ apiBaseUrl, runTitle, done }) => {
+    const response = await fetch(`${apiBaseUrl}/checklists`, {
+      body: JSON.stringify({
+        title: runTitle,
+        sections: [{ id: 'st', title: 'Section', items: [
+          { id: 'st-a', title: 'Task A', contents: [{ type: 'subItems', value: '', subItems: [
+            { id: 'st-a-1', title: 'Step one', isCompleted: false },
+            { id: 'st-a-2', title: 'Step two', isCompleted: done },
+          ] }] },
+          { id: 'st-b', title: 'Task B' },
+        ] }],
+      }),
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    return ((await response.json()) as { id: string }).id;
+  }, { apiBaseUrl: DEV_API_BASE_URL, runTitle: title, done: stepTwoDone });
+}
+
+async function readTaskA(page: Page, runId: string) {
+  return page.evaluate(async ({ id, apiBaseUrl }) => {
+    const response = await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include' });
+    const run = (await response.json()) as { items: unknown };
+    type Task = { isCompleted?: boolean; contents?: Array<{ subItems?: Array<{ isCompleted?: boolean }> }> };
+    const sections = (typeof run.items === 'string' ? JSON.parse(run.items) : run.items) as Array<{ items: Task[] }>;
+    const task = sections[0].items[0];
+    return [task.isCompleted === true, ...(task.contents?.[0]?.subItems ?? []).map((sub) => sub.isCompleted === true)];
+  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+}
+
+async function holdFirstSave(page: Page, runId: string) {
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let holding = true;
+  await page.route(`**/api/checklists/${runId}`, async (route) => {
+    if (route.request().method() === 'PUT' && holding) {
+      holding = false;
+      await held;
+    }
+    await route.continue();
+  });
+  return () => release();
+}
+
+const stepCheckbox = (page: Page, title: string) =>
+  page.getByText(title, { exact: true }).locator('..').getByRole('checkbox');
+
+test('ticking the last sub-task, then Mark Complete during the save, keeps every sub-task ticked', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createRunWithSubTasks(page, `Queued set QA ${Date.now()}`, true);
+  const release = await holdFirstSave(page, runId);
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await stepCheckbox(page, 'Step one').click();
+  await page.getByRole('button', { name: 'Mark Complete' }).click();
+  release();
+
+  await expect.poll(() => readTaskA(page, runId)).toEqual([true, true, true]);
+  await page.unroute(`**/api/checklists/${runId}`);
+  await page.reload();
+  await expect.poll(() => readTaskA(page, runId)).toEqual([true, true, true]);
+
+  await deleteRun(page, runId);
+});
+
+test('Mark Complete, then ticking a sub-task that still looks unticked, keeps it ticked', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createRunWithSubTasks(page, `Queued set QA ${Date.now()}`, false);
+  const release = await holdFirstSave(page, runId);
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await page.getByRole('button', { name: 'Mark Complete' }).click();
+  await stepCheckbox(page, 'Step one').click();
+  release();
+
+  await expect.poll(() => readTaskA(page, runId)).toEqual([true, true, true]);
+  await page.unroute(`**/api/checklists/${runId}`);
+
+  await deleteRun(page, runId);
+});

@@ -123,8 +123,9 @@ const ChecklistRunPage = () => {
     if (confirmLeaveWithUnsavedNotes(hasUnsavedNotes)) leaveRun();
   };
 
-  const handleItemToggle = async (itemId: string) => {
-    const result = await toggleItem(itemId);
+  // isCompleted is the value the user clicked on the run they saw (set, not flipped).
+  const handleItemToggle = async (itemId: string, isCompleted: boolean) => {
+    const result = await toggleItem(itemId, isCompleted);
 
     if (result.kind === 'ok') {
       if (result.shouldPromptComplete) {
@@ -142,8 +143,9 @@ const ChecklistRunPage = () => {
     itemId: string,
     contentIndex: number,
     subItemIndex: number,
+    isCompleted: boolean,
   ) => {
-    const result = await toggleSubItem(itemId, contentIndex, subItemIndex);
+    const result = await toggleSubItem(itemId, contentIndex, subItemIndex, isCompleted);
 
     if (result.kind === 'ok') {
       if (result.shouldPromptComplete) {
@@ -513,7 +515,7 @@ const ChecklistRunPage = () => {
                         <div className="flex items-start gap-4 px-4 py-4">
                           <Checkbox
                             checked={item.isCompleted}
-                            onCheckedChange={() => void handleItemToggle(item.id)}
+                            onCheckedChange={(checked) => void handleItemToggle(item.id, checked === true)}
                           />
                           <div className="min-w-0 flex-1">
                             <h3
@@ -537,12 +539,8 @@ const ChecklistRunPage = () => {
                             <ContentRenderer
                               contents={item.contents}
                               disabled={false}
-                              onSubItemToggle={(contentIndex, subItemIndex) =>
-                                void handleSubItemToggle(
-                                  item.id,
-                                  contentIndex,
-                                  subItemIndex,
-                                )
+                              onSubItemToggle={(contentIndex, subItemIndex, isCompleted) =>
+                                void handleSubItemToggle(item.id, contentIndex, subItemIndex, isCompleted)
                               }
                             />
                           </div>
@@ -632,14 +630,10 @@ const ChecklistRunPage = () => {
                       setSelectedItemId(previousEntry.item.id);
                     }
                   }}
-                  onToggleSubItem={(contentIndex, subItemIndex) =>
-                    void handleSubItemToggle(
-                      selectedEntry.item.id,
-                      contentIndex,
-                      subItemIndex,
-                    )
+                  onToggleSubItem={(contentIndex, subItemIndex, isCompleted) =>
+                    void handleSubItemToggle(selectedEntry.item.id, contentIndex, subItemIndex, isCompleted)
                   }
-                  onToggleTask={() => void handleItemToggle(selectedEntry.item.id)}
+                  onToggleTask={(isCompleted) => void handleItemToggle(selectedEntry.item.id, isCompleted)}
                   notesDraft={noteDrafts[selectedEntry.item.id]}
                   onNotesDraftChange={(notes) => setNoteDraft(selectedEntry.item.id, notes)}
                   onSaveNotes={(notes) =>

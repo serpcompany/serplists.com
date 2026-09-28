@@ -24,10 +24,11 @@ export type PrimaryTaskButton = {
 };
 
 type PrimaryTaskHandlers = {
+  // Marks the task complete (a set, not a flip: the button shows only for an open task).
+  onCompleteTask: () => void;
   onFinishRun: () => void;
   onNavigateNext: () => void;
   onSelectTask: (itemId: string) => void;
-  onToggleTask: () => void;
 };
 
 // A run can be finished once every task is done. The server never completes a run on its
@@ -69,7 +70,7 @@ export const getPrimaryTaskButton = (
 ): PrimaryTaskButton => {
   switch (action.kind) {
     case 'complete_task':
-      return { disabled: false, icon: 'check', label: 'Mark Complete', onClick: handlers.onToggleTask };
+      return { disabled: false, icon: 'check', label: 'Mark Complete', onClick: handlers.onCompleteTask };
     case 'next_task':
       return { disabled: false, icon: 'next', label: 'Next Task', onClick: handlers.onNavigateNext };
     case 'next_unfinished':

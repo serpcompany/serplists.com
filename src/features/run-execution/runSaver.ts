@@ -6,12 +6,19 @@ import { createSaveQueue } from './saveQueue';
 export const RUN_CHANGED_ELSEWHERE_MESSAGE =
   'This run was changed somewhere else. The latest version is shown now; check it and try again.';
 
-// One save, bound to the run the user acted on. `save` runs on the latest run, and once
-// more on a reloaded run after an edit conflict, unless `canRetryOn` says the reload
+// One save, bound to the latest run when its turn in the queue comes. `save` runs on that
+// run, and once more on a reloaded run after an edit conflict, unless `canRetryOn` says the reload
 // changed what it would overwrite (someone else's notes or title).
 export type RunSave = {
   canRetryOn?: (fresh: ChecklistRun) => boolean;
   save: (run: ChecklistRun) => Promise<RunExecutionActionResult>;
+};
+
+// A save waiting in the queue. `key` names what the user asked for (a toggle includes the
+// value they chose), so a double click that repeats it is ignored.
+export type QueuedRunSave = {
+  bind: (current: ChecklistRun) => RunSave;
+  key: string;
 };
 
 export type RunSaverContext = {
@@ -33,8 +40,7 @@ export const createRunSaver = () => {
   const queue = createSaveQueue();
 
   return async (
-    key: string,
-    bind: (current: ChecklistRun) => RunSave,
+    { bind, key }: QueuedRunSave,
     context: RunSaverContext,
   ): Promise<RunExecutionActionResult> =>
     (await queue(key, async (): Promise<RunExecutionActionResult> => {

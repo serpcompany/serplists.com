@@ -229,6 +229,7 @@ describe('run execution model actions', () => {
 
     const result = await toggleRunItem(
       {
+        isCompleted: true,
         itemId: 'item-1',
         run: buildRun(),
       },
@@ -272,6 +273,7 @@ describe('run execution model actions', () => {
     const firstToggle = await toggleRunSubItem(
       {
         contentIndex: 0,
+        isCompleted: true,
         itemId: 'item-1',
         run: buildRun(),
         shareToken: 'share-token',
@@ -289,6 +291,7 @@ describe('run execution model actions', () => {
     const secondToggle = await toggleRunSubItem(
       {
         contentIndex: 0,
+        isCompleted: true,
         itemId: 'item-1',
         run: firstToggle.run,
         shareToken: 'share-token',
@@ -415,6 +418,7 @@ describe('unsaved task notes ride along with the save that would lose them', () 
 
     const result = await toggleRunItem(
       {
+        isCompleted: true,
         itemId: 'item-1',
         noteDrafts: { 'item-1': 'Deployed build 42, see link', 'item-2': 'not this one' },
         run: buildRun(),
@@ -486,9 +490,9 @@ describe('a task with several Sub-tasks blocks', () => {
       ],
     });
 
-  const toggle = async (run: ChecklistRun, contentIndex: number, subItemIndex: number) => {
+  const toggle = async (run: ChecklistRun, contentIndex: number, subItemIndex: number, isCompleted: boolean) => {
     const result = await toggleRunSubItem(
-      { contentIndex, itemId: 'item-1', run, subItemIndex },
+      { contentIndex, isCompleted, itemId: 'item-1', run, subItemIndex },
       { updateRun: vi.fn(async (next: ChecklistRun) => next) },
     );
     if (result.kind !== 'ok' || !result.run) {
@@ -498,26 +502,26 @@ describe('a task with several Sub-tasks blocks', () => {
   };
 
   it('stays open until every sub-task in every block is ticked', async () => {
-    const afterC = await toggle(multiBlockRun(), 3, 0);
+    const afterC = await toggle(multiBlockRun(), 3, 0, true);
     expect(afterC.run.sections[0]?.items[0]?.isCompleted).toBe(false);
     expect(afterC.shouldPromptComplete).toBe(false);
 
-    const afterA = await toggle(afterC.run, 0, 0);
+    const afterA = await toggle(afterC.run, 0, 0, true);
     expect(afterA.run.sections[0]?.items[0]?.isCompleted).toBe(false);
     expect(afterA.shouldPromptComplete).toBe(false);
 
-    const afterB = await toggle(afterA.run, 0, 1);
+    const afterB = await toggle(afterA.run, 0, 1, true);
     expect(afterB.run.sections[0]?.items[0]?.isCompleted).toBe(true);
     expect(afterB.shouldPromptComplete).toBe(true);
 
-    const untickA = await toggle(afterB.run, 0, 0);
+    const untickA = await toggle(afterB.run, 0, 0, false);
     expect(untickA.run.sections[0]?.items[0]?.isCompleted).toBe(false);
     expect(untickA.shouldPromptComplete).toBe(false);
   });
 
   it('clears a task completed with Mark Complete when a sub-task in another block is unticked', async () => {
     const marked = await toggleRunItem(
-      { itemId: 'item-1', run: multiBlockRun() },
+      { isCompleted: true, itemId: 'item-1', run: multiBlockRun() },
       { updateRun: vi.fn(async (next: ChecklistRun) => next) },
     );
     if (marked.kind !== 'ok' || !marked.run) {
@@ -527,7 +531,7 @@ describe('a task with several Sub-tasks blocks', () => {
     expect(item?.isCompleted).toBe(true);
     expect(item?.contents?.flatMap((content) => content.subItems ?? []).every((sub) => sub.isCompleted)).toBe(true);
 
-    const untickC = await toggle(marked.run, 3, 0);
+    const untickC = await toggle(marked.run, 3, 0, false);
     expect(untickC.run.sections[0]?.items[0]?.isCompleted).toBe(false);
   });
 });
