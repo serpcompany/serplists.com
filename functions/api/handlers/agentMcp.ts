@@ -1,5 +1,6 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
+import { isLoopbackHostname } from "../../../src/lib/utils/loopbackHostname";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import {
@@ -149,13 +150,7 @@ function requestHostIsSafe(request: Request, env: Env): boolean {
   const requestUrl = new URL(request.url);
   if (host && host.toLowerCase() !== requestUrl.host.toLowerCase()) return false;
 
-  if (
-    requestUrl.hostname === "localhost"
-    || requestUrl.hostname === "127.0.0.1"
-    || requestUrl.hostname === "[::1]"
-  ) {
-    return true;
-  }
+  if (isLoopbackHostname(requestUrl.hostname)) return true;
 
   const allowedHosts = new Set(
     Array.from(configuredOrigins(env), (origin) => new URL(origin).host.toLowerCase()),

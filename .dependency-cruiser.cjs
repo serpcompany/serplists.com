@@ -7,6 +7,7 @@
 const SHARED_FROM_SRC = [
   "^src/lib/schemas/",
   "^src/lib/utils/clipyUrl\\.ts$",
+  "^src/lib/utils/loopbackHostname\\.ts$",
   "^src/data/publicCategories\\.ts$",
 ];
 

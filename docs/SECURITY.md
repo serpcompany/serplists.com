@@ -36,7 +36,7 @@ and `.env.local` are deprecated. Production values are Cloudflare Pages secrets.
 | `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | Optional CORS allowlist |
 | `R2_PUBLIC_BASE_URL` | Optional public file URL base |
 | `ENTITLEMENTS_ADMIN_SECRET` | Optional; enables the admin override endpoint (below) |
-| `PERSONAL_RUN_MCP_ENABLED`, `VITE_PERSONAL_RUN_MCP_ENABLED` | Optional; enable Run Key and MCP routes on a remote host (on by default only for localhost) |
+| `PERSONAL_RUN_MCP_ENABLED`, `VITE_PERSONAL_RUN_MCP_ENABLED` | Optional; enable Run Key and MCP routes on a remote host (on by default only for loopback hosts: `localhost`, `127.0.0.1`, `[::1]`; `false` turns them off there too) |
 
 Rules:
 
