@@ -8,14 +8,15 @@ import {
 import { createDb } from './api/db';
 import type { Env } from './api/types';
 import {
-  buildDurableShardIndex, bundledInventoryLastmod, bundledTemplateEntries, cachedSitemap,
+  buildDurableShardIndex, bundledInventoryLastmod, bundledTemplateEntries,
   catalogPageEntry, isValidTemplateSlug, isValidUsername, loadCategoryEntries,
   mostRecentLastmod, publicTemplateCondition,
   renderSitemapIndex, staticSitemapEntries,
   sitemapImplementationLastmod,
   validTemplateSlugCondition, validUsernameCondition, xmlResponse,
-  type SitemapEntry, type SitemapRevisions,
+  type SitemapEntry,
 } from './sitemap/shared';
+import { cachedSitemap, type SitemapRevisions } from './sitemap/cache';
 
 export const onRequest: PagesFunction<Env> = async (context) =>
   cachedSitemap(context, (request, revisions) => buildSitemapIndex(request, context.env, revisions));

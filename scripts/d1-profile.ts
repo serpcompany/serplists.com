@@ -163,6 +163,8 @@ function scenarios(): Scenario[] {
     { name: "sitemap categories shard", actor: "anon", path: "/sitemaps/categories/1.xml" },
     { name: "sitemap index (repeat)", actor: "anon", path: "/sitemap.xml" },
     { name: "sitemap templates shard (repeat)", actor: "anon", path: "/sitemaps/templates/1.xml" },
+    { name: "sitemap templates shard (unpublished page)", actor: "anon", path: "/sitemaps/templates/999.xml" },
+    { name: "sitemap categories shard (unpublished page)", actor: "anon", path: "/sitemaps/categories/999.xml" },
     { name: "session lookup", actor: "admin", path: "/api/auth/get-session" },
     { name: "billing status", actor: "admin", path: "/api/billing/status" },
     { name: "my Organizations", actor: "admin", path: "/api/teams" },

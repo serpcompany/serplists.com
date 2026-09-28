@@ -1,11 +1,11 @@
 import type { Env } from '../../api/types';
 import {
   bundledInventoryLastmod,
-  cachedSitemap,
   handleInMemoryPagedSitemap,
   loadCategoryEntries,
   mostRecentLastmod,
 } from '../../sitemap/shared';
+import { cachedSitemap } from '../../sitemap/cache';
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { env, params } = context;
@@ -19,5 +19,5 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         bundledInventoryLastmod('categories'),
       ),
     ),
-  ));
+  ), { kind: 'categories', page: params.page });
 };

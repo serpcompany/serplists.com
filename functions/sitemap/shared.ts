@@ -2,7 +2,6 @@ import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import {
   sitemap_category_revisions,
   sitemap_owner_revisions,
-  sitemap_revisions,
   sitemap_shard_revisions,
   templates,
   users,
@@ -14,11 +13,11 @@ import { PUBLIC_CATEGORY_REGISTRY } from '../../src/data/publicCategories';
 
 export const CANONICAL_ORIGIN = 'https://serplists.com';
 export const SITEMAP_PAGE_SIZE = 25_000;
+// A sitemap index lists at most 50,000 sitemaps, so no shard number above it is ever
+// published. Rejecting it early also keeps the page's row offset a safe integer.
+export const SITEMAP_MAX_PAGE = 50_000;
 
-const XML_HEADERS = {
-  'Cache-Control': 'public, max-age=300, s-maxage=86400, stale-while-revalidate=3600',
-  'Content-Type': 'application/xml; charset=utf-8',
-} as const;
+const XML_CACHE_CONTROL = 'public, max-age=300, s-maxage=86400, stale-while-revalidate=3600';
 
 export type SitemapEntry = {
   path: string;
@@ -134,10 +133,15 @@ export function renderSitemapIndex(entries: SitemapEntry[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemaps}\n</sitemapindex>\n`;
 }
 
-export function xmlResponse(request: Request, xml: string, status = 200): Response {
+export function xmlResponse(
+  request: Request,
+  xml: string,
+  status = 200,
+  cacheControl = XML_CACHE_CONTROL,
+): Response {
   return new Response(request.method === 'HEAD' ? null : xml, {
     status,
-    headers: XML_HEADERS,
+    headers: { 'Cache-Control': cacheControl, 'Content-Type': 'application/xml; charset=utf-8' },
   });
 }
 
@@ -152,7 +156,7 @@ export function parsePage(value: string | string[] | undefined): number | null {
   const candidate = Array.isArray(value) ? value[0] : value;
   if (!candidate || !/^\d+$/.test(candidate)) return null;
   const page = Number(candidate);
-  return Number.isSafeInteger(page) && page >= 1 ? page : null;
+  return Number.isSafeInteger(page) && page >= 1 && page <= SITEMAP_MAX_PAGE ? page : null;
 }
 
 export function latestLastmod(entries: SitemapEntry[]): string | null {
@@ -214,50 +218,10 @@ export function buildInMemoryShardIndex(
   });
 }
 
-export type SitemapRevisions = Map<(typeof sitemap_revisions.$inferSelect)['kind'], string>;
-
-export async function loadSitemapRevisions(env: Env): Promise<SitemapRevisions> {
-  const rows = await createDb(env)
-    .select({ kind: sitemap_revisions.kind, revised_at: sitemap_revisions.revised_at })
-    .from(sitemap_revisions);
-  return new Map(rows.map((row) => [row.kind, row.revised_at]));
-}
-
-async function contentHash(value: string): Promise<string> {
+export async function contentHash(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-const bundledCatalogVersion = JSON.stringify(bundledTemplateCatalog);
-
-type SitemapContext = Pick<EventContext<Env, string, unknown>, 'request' | 'env' | 'waitUntil'>;
-
-// Building a database sitemap scans every public Template or User, and D1 bills every
-// row scanned. Cache each response in the data center under a key that changes when the
-// sitemap triggers bump `sitemap_revisions` or a deploy changes the bundled catalog, so a
-// repeat request reads only the revision rows (docs/design-docs/d1-cost.md). The key drops
-// the query string and leading zeros in page numbers, so variants cannot bypass it.
-export async function cachedSitemap(
-  context: SitemapContext,
-  build: (request: Request, revisions: SitemapRevisions) => Promise<Response>,
-): Promise<Response> {
-  const { request } = context;
-  if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
-  const revisions = await loadSitemapRevisions(context.env);
-  const url = new URL(request.url);
-  const version = await contentHash(JSON.stringify([[...revisions].sort(), bundledCatalogVersion]));
-  const path = url.pathname.replace(/\/0+(?=\d)/g, '/');
-  const key = new Request(`${url.origin}${path}?v=${version}`);
-  const cache = typeof caches === 'undefined' ? undefined : caches.default;
-
-  let response = await cache?.match(key);
-  if (!response) {
-    // Always build the GET body so a HEAD request never caches an empty sitemap.
-    response = await build(new Request(request.url), revisions);
-    if (cache) context.waitUntil(cache.put(key, response.clone()));
-  }
-  return request.method === 'HEAD' ? new Response(null, response) : response;
 }
 
 type ExistingShardRevision = {

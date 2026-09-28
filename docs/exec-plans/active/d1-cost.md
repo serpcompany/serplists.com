@@ -1,7 +1,7 @@
 # D1 Cost
 
 - **Status:** active
-- **Last updated:** 2026-09-27
+- **Last updated:** 2026-09-28
 - **Goal:** keep D1 rows read per request bounded by what the request returns, not by
   table size, and cut write amplification. Findings and rules are in
   [D1 cost](../../design-docs/d1-cost.md).
@@ -140,3 +140,9 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   `createRun` now takes the page's loaded template, and the run page always loads its
   own run by id. `tests/e2e/on-demand-lists.spec.ts` covers both; list pages take their
   loading state from their own queries; edge-cache keys name the resource, not the path.
+- 2026-09-28: Refuse sitemap shard pages the index never published before reading the
+  cache. The cache key includes the page number, so each new out-of-range number was a
+  miss that scanned every public row to return 404. Pages above 1 now need a
+  `sitemap_shard_revisions` row (the index writes one for every page it lists before
+  responding), checked by primary key; the 404 is `no-store` so a page added later is
+  served at once. Page 1 is always built because a new database has no shard rows yet.

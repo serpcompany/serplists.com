@@ -292,7 +292,12 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     expect(unchangedPageLocations, childLocation).toEqual(pageLocationsByShard.get(childLocation));
   }
 
-  expect((await request.get(`${pagesOrigin}/sitemaps/profiles/999999.xml`)).status()).toBe(404);
+  // Pages the index never listed are refused before any build, and not cached.
+  for (const unpublished of ["profiles/999999", "templates/2", "templates/999", "categories/2"]) {
+    const unpublishedResponse = await request.get(`${pagesOrigin}/sitemaps/${unpublished}.xml`);
+    expect(unpublishedResponse.status(), unpublished).toBe(404);
+    expect(unpublishedResponse.headers()["cache-control"], unpublished).toBe("no-store");
+  }
   expect((await request.get(`${pagesOrigin}/sitemaps/static.xml`, { maxRedirects: 0 })).status()).toBe(308);
   expect((await request.get(`${pagesOrigin}/categories/sitemap.xml`, { maxRedirects: 0 })).status()).toBe(308);
 });
