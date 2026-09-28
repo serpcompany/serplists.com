@@ -9,7 +9,7 @@ import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
 import { LeaveOrganizationCard } from '@/components/account/LeaveOrganizationCard';
 import { AgentAccessSection } from '@/components/account/AgentAccessSection';
 import { isPersonalRunMcpUiEnabled } from '@/env';
-import { buildAccountUpdatePayload } from './accountProfileUpdates';
+import { planAccountUpdate } from './accountProfileUpdates';
 import {
   DashboardContentShell,
   DashboardPageHeader,
@@ -60,20 +60,15 @@ const Account = () => {
   const handleProfileUpdate = async () => {
     if (!user) return;
 
-    // Validate username
-    if (profileData.username && profileData.username.length < 3) {
-      toast.error('Username must be at least 3 characters long');
+    const plan = planAccountUpdate(profileData, user);
+    if (!plan.ok) {
+      toast.error(plan.error);
       return;
     }
-    if (profileData.username && !/^[a-zA-Z0-9]+$/.test(profileData.username)) {
-      toast.error('Username can only contain letters and numbers');
-      return;
-    }
-    
+    const { updates } = plan;
+
     setLoading(true);
     try {
-      const updates = buildAccountUpdatePayload(profileData, user);
-
       if (Object.keys(updates).length === 0) {
         toast.message('No profile changes to save');
         return;

@@ -16,6 +16,19 @@ export interface AccountUpdatePayload {
   username?: string;
 }
 
+export type AccountUpdatePlan =
+  | { ok: true; updates: AccountUpdatePayload }
+  | { ok: false; error: string };
+
+// Public profile and Template share URLs hang off the username, so a saved
+// username can be changed but not removed.
+export const USERNAME_REQUIRED_MESSAGE = "Username can't be removed. Enter a new username instead.";
+
+/**
+ * The fields that changed. Every returned key has a value: `authClient.updateUser`
+ * sends JSON, which drops undefined keys, so an undefined value would pass the
+ * caller's "no changes" check and then save nothing.
+ */
 export const buildAccountUpdatePayload = (
   profileData: ProfileDataInput,
   user: CurrentUserInput
@@ -30,9 +43,30 @@ export const buildAccountUpdatePayload = (
     updates.image = profileData.avatar_url;
   }
 
-  if (profileData.username !== (user.username || "")) {
-    updates.username = profileData.username || undefined;
+  const username = profileData.username.trim();
+  if (username && username !== (user.username || "")) {
+    updates.username = username;
   }
 
   return updates;
+};
+
+/** Validates the profile form and returns the changes to save, or why it cannot be saved. */
+export const planAccountUpdate = (
+  profileData: ProfileDataInput,
+  user: CurrentUserInput
+): AccountUpdatePlan => {
+  const username = profileData.username.trim();
+
+  if (!username && user.username) {
+    return { ok: false, error: USERNAME_REQUIRED_MESSAGE };
+  }
+  if (username && username.length < 3) {
+    return { ok: false, error: "Username must be at least 3 characters long" };
+  }
+  if (username && !/^[a-zA-Z0-9]+$/.test(username)) {
+    return { ok: false, error: "Username can only contain letters and numbers" };
+  }
+
+  return { ok: true, updates: buildAccountUpdatePayload(profileData, user) };
 };

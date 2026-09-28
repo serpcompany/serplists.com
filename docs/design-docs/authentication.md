@@ -50,6 +50,8 @@ and user-facing failure states when a supporting service is unavailable.
   policy client-side.
 - Profile: `name`, `username`, `avatar_url`; public lookup through
   `GET /api/profiles/by-username?username=...` and `GET /api/profiles/by-id?userId=...`.
+  Public profile and Template share URLs use the username, so Account Settings
+  lets a saved username change but not be cleared (`src/pages/accountProfileUpdates.ts`).
 - Settings live at `/dashboard/settings`; `/account` and `/dashboard/profile`
   redirect there.
 
