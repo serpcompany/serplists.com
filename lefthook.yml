@@ -4,7 +4,7 @@ pre-commit:
   parallel: true
   commands:
     secret-scan:
-      run: pnpm exec secretlint {staged_files}
+      run: node scripts/secret-scan.mjs {staged_files}
     lint:
       glob: "*.{ts,tsx,js,mjs,cjs}"
       run: pnpm exec eslint --no-warn-ignored --pass-on-unpruned-suppressions {staged_files}
