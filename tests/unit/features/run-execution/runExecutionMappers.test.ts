@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getNextSelectedItemId } from '@/features/run-execution/runExecutionMappers';
+import { areAllRunItemsCompleted, getNextSelectedItemId } from '@/features/run-execution/runExecutionMappers';
 import type { ChecklistRun } from '@/types/checklist';
 
 const run = (completed: string[]): ChecklistRun =>
@@ -25,5 +25,27 @@ describe('getNextSelectedItemId', () => {
 
   it('stays on the task when every task is done', () => {
     expect(getNextSelectedItemId(run(['a', 'b', 'c', 'd']), 'd')).toBe('d');
+  });
+});
+
+describe('areAllRunItemsCompleted', () => {
+  const withSubTask = (subTaskDone: boolean): ChecklistRun =>
+    ({
+      id: 'run-1',
+      sections: [{
+        id: 's1',
+        title: 'One',
+        items: [{
+          id: 'a',
+          title: 'a',
+          isCompleted: true,
+          contents: [{ id: 'c1', type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Tagline', isCompleted: subTaskDone }] }],
+        }],
+      }],
+    }) as unknown as ChecklistRun;
+
+  it('is false while a ticked task still has an unfinished Sub-task', () => {
+    expect(areAllRunItemsCompleted(withSubTask(false))).toBe(false);
+    expect(areAllRunItemsCompleted(withSubTask(true))).toBe(true);
   });
 });

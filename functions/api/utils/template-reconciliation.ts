@@ -43,9 +43,13 @@ function getSubItems(item: JsonRecord): JsonRecord[] {
   return [...direct, ...nested];
 }
 
+// Runs saved before isCompleted existed store `completed`; the client reads it the same way.
+const wasCompleted = (runValue: JsonRecord | undefined): boolean =>
+  typeof runValue?.isCompleted === 'boolean' ? runValue.isCompleted : runValue?.completed === true;
+
 function preserveRunState(templateValue: JsonRecord, runValue: JsonRecord | undefined): JsonRecord {
   const next = { ...templateValue };
-  next.isCompleted = runValue?.isCompleted === true;
+  next.isCompleted = wasCompleted(runValue);
 
   if (typeof runValue?.notes === 'string') {
     next.notes = runValue.notes;
@@ -108,6 +112,14 @@ function reconcileItem(
     if (id && !retainedSubItemIds.has(id)) {
       retired.push({ kind: 'subItem', ...context, subItem: previousSubItem });
     }
+  }
+
+  // A task is complete exactly when all its Sub-tasks are, the rule the run page and Run
+  // Keys follow. So a new Sub-task (which arrives incomplete) reopens the task, and removing
+  // the last unfinished one completes it. A task left without Sub-tasks keeps its run state.
+  const reconciledSubItems = getSubItems(next);
+  if (reconciledSubItems.length > 0) {
+    next.isCompleted = reconciledSubItems.every((subItem) => subItem.isCompleted === true);
   }
 
   return next;

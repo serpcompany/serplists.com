@@ -1030,4 +1030,67 @@ describe('Checklists Handlers', () => {
       expect.objectContaining({ id: 'item-2', isCompleted: false }),
     ]);
   });
+
+  it('revalidates a completed run so a task with a new Sub-task is no longer complete', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        {
+          id: 'run-1',
+          user_id: 'user-123',
+          team_id: null,
+          template_id: 'template-1',
+          title: 'Completed run',
+          items: JSON.stringify([
+            {
+              id: 'section-1',
+              title: 'Launch',
+              items: [{
+                id: 'item-1',
+                title: 'Write copy',
+                isCompleted: true,
+                contents: [{ type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Short', isCompleted: true }] }],
+              }],
+            },
+          ]),
+          retired_items: '[]',
+          status: 'completed',
+          template_version: 1,
+          revision: 2,
+          is_public: false,
+          started_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'template-1',
+          version: 3,
+          items: JSON.stringify([
+            {
+              id: 'section-1',
+              title: 'Launch',
+              items: [{
+                id: 'item-1',
+                title: 'Write copy',
+                contents: [{ type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Short' }, { id: 'sub-2', title: 'Tagline' }] }],
+              }],
+            },
+          ]),
+        },
+      ]);
+
+    const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1/revalidate', {
+      method: 'POST',
+      body: JSON.stringify({ expected_revision: 2 }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.progress).toBeLessThan(100);
+    const update = dbMocks.updateChain.set.mock.calls[0][0];
+    expect(update.status).toBe('in_progress');
+    expect(JSON.parse(update.items)[0].items[0]).toEqual(expect.objectContaining({ id: 'item-1', isCompleted: false }));
+  });
 });

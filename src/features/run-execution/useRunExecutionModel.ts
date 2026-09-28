@@ -330,8 +330,11 @@ export const toggleRunSubItem = async (
       }
 
       subItem.isCompleted = !subItem.isCompleted;
-      item.isCompleted = content.subItems.every(
-        (candidate) => candidate.isCompleted,
+      // Complete only when every Sub-task in every block is, as the server reconciles it.
+      item.isCompleted = item.contents.every(
+        (candidateContent) =>
+          candidateContent.type !== 'subItems' ||
+          (candidateContent.subItems ?? []).every((candidate) => candidate.isCompleted),
       );
 
       try {

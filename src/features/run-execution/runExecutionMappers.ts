@@ -182,9 +182,16 @@ export const getSelectedRunItem = (
   return null;
 };
 
+// A ticked task can still hold an unfinished Sub-task (older runs, API writes), so the
+// completion prompt checks Sub-tasks too.
 export const areAllRunItemsCompleted = (run: ChecklistRun): boolean =>
   run.sections.every((section) =>
-    section.items.every((item) => item.isCompleted),
+    section.items.every((item) =>
+      item.isCompleted &&
+      (item.contents ?? []).every((content) =>
+        content.type !== 'subItems' || (content.subItems ?? []).every((subItem) => subItem.isCompleted),
+      ),
+    ),
   );
 
 export const setSubItemsCompletion = (

@@ -351,3 +351,30 @@ describe('run execution model actions', () => {
     expect(apiClient.createChecklistRunShare).not.toHaveBeenCalled();
   });
 });
+
+describe('Sub-tasks in more than one block', () => {
+  it('keeps the task open while another Sub-tasks block has an unfinished Sub-task', async () => {
+    const run = buildRun();
+    run.sections[0].items[0].contents = [
+      { type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Short', isCompleted: false }] },
+      { type: 'subItems', value: '', subItems: [{ id: 'sub-2', title: 'Tagline', isCompleted: false }] },
+    ];
+    const apiClient = {
+      createChecklistRunShare: vi.fn(),
+      getChecklistById: vi.fn(),
+      getSharedChecklist: vi.fn(),
+      updateChecklist: vi.fn(),
+      updateSharedChecklist: vi.fn(),
+    };
+
+    const result = await toggleRunSubItem(
+      { contentIndex: 0, itemId: 'item-1', run, shareToken: 'share-token', subItemIndex: 0 },
+      { apiClient, updateRun: vi.fn() },
+    );
+
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') throw new Error('expected ok result');
+    expect(result.run.sections[0]?.items[0]?.isCompleted).toBe(false);
+    expect(result.shouldPromptComplete).toBe(false);
+  });
+});

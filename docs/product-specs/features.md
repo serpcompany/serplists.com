@@ -28,7 +28,7 @@ Canonical private routes:
 
 - Users can create, edit, archive, restore, import, and export templates.
 - Template detail pages render a read-only preview first. Editing happens on `/dashboard/templates/:id/edit`.
-- Template content updates reconcile into matching active, private runs for the same Resource Owner. Stable section, item, and sub-item IDs preserve run completion and notes across renames and reordering; new work arrives incomplete, and retired work leaves readiness calculations while remaining in run history.
+- Template content updates reconcile into matching active, private runs for the same Resource Owner. Stable section, item, and sub-item IDs preserve run completion and notes across renames and reordering; new work arrives incomplete, and retired work leaves readiness calculations while remaining in run history. A task with Sub-tasks is complete exactly when all of them are (the run page, Run Keys, reconciliation, and revalidation apply the same rule), so a new Sub-task reopens a completed task and removing its last unfinished Sub-task completes it; a task left without Sub-tasks keeps its state. The completion prompt also waits for every Sub-task.
 - Public templates can be shared at `/profile/{username}/{templateSlug}`.
 - Other Users can copy public templates into Personal or an authorized Organization when that ownership context's entitlement allows it.
 - Template history is stored in `template_versions`; related actor/action history is stored in `audit_events`. A save that changes nothing, or only visibility, adds no version.
