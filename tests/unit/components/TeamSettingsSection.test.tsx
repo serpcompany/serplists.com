@@ -176,6 +176,67 @@ describe('TeamSettingsSection', () => {
     expect(html).toContain('Make owner');
   });
 
+  it("names each member's role and status controls after that member", () => {
+    workspaceMocks.activeWorkspace.role = 'owner';
+
+    const html = renderSectionWithMembers([
+      {
+        id: 'member-current',
+        team_id: 'team-1',
+        user_id: 'user-1',
+        role: 'owner',
+        status: 'active',
+        email: 'owner@example.com',
+        name: 'Owner User',
+      },
+      {
+        id: 'member-alice',
+        team_id: 'team-1',
+        user_id: 'user-2',
+        role: 'editor',
+        status: 'active',
+        email: 'alice@example.com',
+        name: 'Alice',
+      },
+      {
+        id: 'member-alice-2',
+        team_id: 'team-1',
+        user_id: 'user-3',
+        role: 'viewer',
+        status: 'active',
+        email: 'alice.two@example.com',
+        name: 'Alice',
+      },
+      {
+        id: 'member-bob',
+        team_id: 'team-1',
+        user_id: 'user-4',
+        role: 'viewer',
+        status: 'disabled',
+        email: 'bob@example.com',
+        name: null,
+      },
+    ]);
+
+    expect(html).not.toContain('aria-label="Member role"');
+    expect(html).not.toContain('aria-label="Member status"');
+    // Disabled rows (the owner, you) are still announced, so they are named too.
+    expect(html).toContain('aria-label="Role for Owner User (owner@example.com)"');
+    expect(html).toContain('aria-label="Role for Alice (alice@example.com)"');
+    expect(html).toContain('aria-label="Status for Alice (alice.two@example.com)"');
+    expect(html).toContain('aria-label="Role for bob@example.com"');
+    expect(html).toContain('aria-label="Status for bob@example.com"');
+    expect(html).toContain('aria-label="Make owner: Alice (alice@example.com)"');
+    expect(html).not.toContain('undefined');
+
+    const controlNames = Array.from(
+      html.matchAll(/aria-label="((?:Role|Status) for [^"]*|Make owner: [^"]*)"/g),
+      (match) => match[1],
+    );
+    expect(controlNames).toHaveLength(10);
+    expect(new Set(controlNames).size).toBe(controlNames.length);
+  });
+
   it('offers a new link for each pending invite, since a lost link cannot be shown again', () => {
     const html = renderSectionWithMembers(
       [],

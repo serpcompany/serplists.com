@@ -21,7 +21,12 @@ import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
 import { runTeamWrite } from '@/features/teams/runTeamWrite';
 import { formatTeamActivityAction } from '@/components/account/teamActivityLabels';
 import { TeamInvitesPanel } from '@/components/account/TeamInvitesPanel';
-import { assignableRoles, formatInviteExpiration, formatRole } from '@/components/account/teamSettingsFormat';
+import {
+  assignableRoles,
+  describeMemberForControls,
+  formatInviteExpiration,
+  formatRole,
+} from '@/components/account/teamSettingsFormat';
 import type { AssignableTeamRole } from '@/features/teams/teamInviteLinks';
 
 const memberStatuses: TeamMemberStatus[] = ['active', 'disabled'];
@@ -448,6 +453,7 @@ export function TeamSettingsSection() {
                     const isCurrentMember = member.id === activeMemberId;
                     const controlsDisabled =
                       isOwner || isCurrentMember || updatingMemberId === member.id;
+                    const memberLabel = describeMemberForControls(member);
 
                     return (
                       <div
@@ -477,7 +483,7 @@ export function TeamSettingsSection() {
                               })
                             }
                           >
-                            <SelectTrigger aria-label="Member role">
+                            <SelectTrigger aria-label={`Role for ${memberLabel}`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -506,7 +512,7 @@ export function TeamSettingsSection() {
                               })
                             }
                           >
-                            <SelectTrigger aria-label="Member status">
+                            <SelectTrigger aria-label={`Status for ${memberLabel}`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -525,6 +531,7 @@ export function TeamSettingsSection() {
                         <div className="flex items-center justify-end">
                           {canTransferOwnership && !isOwner && !isCurrentMember && member.status === 'active' ? (
                             <Button
+                              aria-label={`Make owner: ${memberLabel}`}
                               type="button"
                               variant="outline"
                               size="sm"

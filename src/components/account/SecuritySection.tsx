@@ -129,10 +129,19 @@ export const SecuritySection: React.FC = () => {
 
           <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
             <div>
-              <Label className="text-sm font-medium">Sign out other sessions</Label>
-              <p className="text-xs text-muted-foreground">Keeps you signed in on this device.</p>
+              <Label htmlFor="revoke-other-sessions" className="text-sm font-medium">
+                Sign out other sessions
+              </Label>
+              <p id="revoke-other-sessions-description" className="text-xs text-muted-foreground">
+                Keeps you signed in on this device.
+              </p>
             </div>
-            <Switch checked={revokeOtherSessions} onCheckedChange={setRevokeOtherSessions} />
+            <Switch
+              id="revoke-other-sessions"
+              aria-describedby="revoke-other-sessions-description"
+              checked={revokeOtherSessions}
+              onCheckedChange={setRevokeOtherSessions}
+            />
           </div>
 
           <Button onClick={handleChangePassword} disabled={isSaving}>
