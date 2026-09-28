@@ -1486,7 +1486,7 @@ test.describe("template editor regressions", () => {
 
       await page.getByPlaceholder("Enter template name...").fill(`${title} edited`);
       await page.getByRole("button", { name: "Save", exact: true }).click();
-      await expect(page.getByText(/Template updated/)).toBeVisible();
+      await expect(page.getByText("Template saved", { exact: true })).toBeVisible();
 
       const saved = await findTemplateByTitle(page, `${title} edited`);
       expect(JSON.stringify(saved?.items)).toContain("Added elsewhere");
@@ -1535,7 +1535,7 @@ test.describe("template editor regressions", () => {
       await page.getByPlaceholder("Enter template name...").fill(`${title} saved`);
       await page.getByRole("button", { name: "Save", exact: true }).click();
 
-      await expect(page.getByText(/Template updated/)).toBeVisible();
+      await expect(page.getByText("Template saved", { exact: true })).toBeVisible();
       const saved = await findTemplateByTitle(page, `${title} saved`);
       expect(JSON.stringify(saved?.items)).toContain("https://example.com/doc.pdf");
     } finally {
