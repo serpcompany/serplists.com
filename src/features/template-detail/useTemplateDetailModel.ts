@@ -21,6 +21,7 @@ import {
   mapApiTemplateToChecklistTemplate,
   resolveTemplateOwnerProfile,
 } from './templateDetailMappers';
+import { getTemplateDetailPermissions } from './templatePermissions';
 
 type TemplateDetailApiClient = Pick<
   typeof api,
@@ -60,6 +61,8 @@ type PrivateTemplateDetailOptions = {
 
 // Only the active workspace list, which the page refetches after edits; never the catalog.
 type PrivateTemplateDetailHookOptions = {
+  // The viewer's role in the active context allows editing Templates.
+  canEditTemplates: boolean;
   identifier?: string;
   mode: 'private';
   workspaceTemplates: ChecklistTemplate[] | undefined;
@@ -322,6 +325,8 @@ const SHARE_FAILED_MESSAGE = 'Failed to create a share link for this template.';
 // be shared is never published, and once it is published local state follows.
 export const shareTemplateToPublic = async (params: {
   apiClient?: TemplateDetailApiClient;
+  // From getTemplateDetailPermissions: edit rights, not who created the template.
+  canShare: boolean;
   invalidateTemplates?: () => Promise<void> | void;
   isAuthenticated: boolean;
   isPublic?: boolean;
@@ -337,13 +342,15 @@ export const shareTemplateToPublic = async (params: {
   if (!params.isAuthenticated || !params.userId) {
     return { kind: 'login_required' };
   }
-  if (params.template.userId !== params.userId) {
+  if (!params.canShare) {
     return { kind: 'error', message: 'You can only share templates you own.' };
   }
 
   const apiClient = params.apiClient ?? api;
+  const isCreator = params.template.userId === params.userId;
   let nextTemplate = await hydrateTemplateOwner(params.template, apiClient);
-  if (!nextTemplate.ownerProfile?.username && params.username) {
+  // The link lives under the Creator's username, so only the Creator's own name may stand in.
+  if (!nextTemplate.ownerProfile?.username && params.username && isCreator) {
     nextTemplate = {
       ...nextTemplate,
       ownerProfile: { ...nextTemplate.ownerProfile, username: params.username },
@@ -354,8 +361,9 @@ export const shareTemplateToPublic = async (params: {
   if (!publicPath) {
     return {
       kind: 'error',
-      message:
-        'Set a username on your account before sharing templates with the canonical public URL.',
+      message: isCreator
+        ? 'Set a username on your account before sharing templates with the canonical public URL.'
+        : SHARE_FAILED_MESSAGE,
     };
   }
 
@@ -411,12 +419,14 @@ export const useTemplateDetailModel = (
     isLoading: options.isAuthenticated && billing.isLoading,
     isPro: billing.data?.plan === 'pro' || billing.data?.plan === 'team',
   };
+  const permissions = getTemplateDetailPermissions({
+    activeTeamId: options.teamId,
+    canEditTemplates: options.mode === 'private' && options.canEditTemplates,
+    template: options.mode === 'private' ? template : null,
+    userId: options.userId,
+  });
   const canLoadTemplateHistory =
-    options.mode === 'private' &&
-    options.isAuthenticated &&
-    Boolean(template?.id) &&
-    (template?.userId === options.userId ||
-      (Boolean(options.teamId) && template?.teamId === options.teamId));
+    options.isAuthenticated && permissions.canViewHistory;
 
   const history = useQuery({
     queryKey: [
@@ -505,6 +515,7 @@ export const useTemplateDetailModel = (
     isPublic?: boolean,
   ): Promise<TemplateDetailActionResult> =>
     shareTemplateToPublic({
+      canShare: permissions.canShare,
       invalidateTemplates,
       isAuthenticated: options.isAuthenticated,
       isPublic,
@@ -524,6 +535,7 @@ export const useTemplateDetailModel = (
     } satisfies TemplateDetailHistoryState,
     loading,
     notFound,
+    permissions,
     saveTemplate,
     shareTemplate,
     startRun,

@@ -2,20 +2,45 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Route, Routes } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TemplateDetail from '@/pages/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
 
 const mockUseTemplateDetailModel = vi.fn();
-const { workspaceTemplates } = vi.hoisted(() => ({
+const { workspaceState, workspaceTemplates } = vi.hoisted(() => ({
+  workspaceState: {
+    activeTeamId: undefined as string | undefined,
+    canEditTemplates: true,
+    isTeamWorkspace: false,
+  },
   workspaceTemplates: [] as unknown[],
 }));
 
-vi.mock('@/features/template-detail/useTemplateDetailModel', () => ({
-  useTemplateDetailModel: (...args: unknown[]) =>
-    mockUseTemplateDetailModel(...args),
-}));
+// The real model derives permissions from the options the page passes; so does this mock.
+vi.mock('@/features/template-detail/useTemplateDetailModel', async () => {
+  const { getTemplateDetailPermissions } = await import(
+    '@/features/template-detail/templatePermissions'
+  );
+  return {
+    useTemplateDetailModel: (options: {
+      canEditTemplates: boolean;
+      teamId?: string;
+      userId?: string;
+    }) => {
+      const model = mockUseTemplateDetailModel(options);
+      return {
+        permissions: getTemplateDetailPermissions({
+          activeTeamId: options.teamId,
+          canEditTemplates: options.canEditTemplates,
+          template: model.template,
+          userId: options.userId,
+        }),
+        ...model,
+      };
+    },
+  };
+});
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({
@@ -41,10 +66,7 @@ vi.mock('@/contexts/TemplatesContext', () => {
 });
 
 vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({
-    activeTeamId: undefined,
-    canEditTemplates: true,
-  }),
+  useWorkspace: () => workspaceState,
 }));
 
 vi.mock('@/lib/access-flow', () => ({
@@ -70,6 +92,64 @@ const baseModel = () => ({
   shareTemplate: vi.fn(),
   startRun: vi.fn(),
   template: buildV0DemoPrivateTemplate(),
+});
+
+beforeEach(() => {
+  mockUseTemplateDetailModel.mockReset();
+  workspaceState.activeTeamId = undefined;
+  workspaceState.canEditTemplates = true;
+  workspaceState.isTeamWorkspace = false;
+});
+
+const hasShareButton = (html: string) => /Share<\/button>/.test(html);
+const hasEditLink = (html: string) => html.includes('href="/dashboard/templates/tpl-1/edit"');
+const isVisibilitySwitchDisabled = (html: string) =>
+  /<button[^>]*id="template-visibility"[^>]*>/.exec(html)?.[0].includes('disabled=""') ?? false;
+
+describe('TemplateDetail Organization permissions', () => {
+  beforeEach(() => {
+    workspaceState.activeTeamId = 'team-1';
+    workspaceState.isTeamWorkspace = true;
+  });
+
+  it('gives a Creator whose role no longer allows editing no edit controls', () => {
+    workspaceState.canEditTemplates = false;
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      template: { ...buildV0DemoPrivateTemplate(), teamId: 'team-1', userId: 'user-1' },
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(hasShareButton(html)).toBe(false);
+    expect(hasEditLink(html)).toBe(false);
+    expect(html).not.toContain('aria-haspopup="menu"');
+    expect(isVisibilitySwitchDisabled(html)).toBe(true);
+  });
+
+  it('gives an Organization editor who did not create the template Share and Edit', () => {
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      template: { ...buildV0DemoPrivateTemplate(), teamId: 'team-1', userId: 'someone-else' },
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(hasShareButton(html)).toBe(true);
+    expect(hasEditLink(html)).toBe(true);
+    expect(isVisibilitySwitchDisabled(html)).toBe(false);
+  });
+
+  it('passes the active role to the model, which guards Share and history with it', () => {
+    workspaceState.canEditTemplates = false;
+    mockUseTemplateDetailModel.mockReturnValue(baseModel());
+
+    renderTemplateDetail();
+
+    expect(mockUseTemplateDetailModel).toHaveBeenCalledWith(
+      expect.objectContaining({ canEditTemplates: false, teamId: 'team-1', userId: 'user-1' }),
+    );
+  });
 });
 
 describe('TemplateDetail page', () => {

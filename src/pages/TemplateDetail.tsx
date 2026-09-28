@@ -190,12 +190,14 @@ const TemplateDetail = () => {
     billingState,
     loading,
     notFound,
+    permissions,
     saveTemplate,
     shareTemplate,
     startRun,
     template,
     history,
   } = useTemplateDetailModel({
+    canEditTemplates,
     createRun,
     createTemplate,
     identifier: id,
@@ -208,11 +210,8 @@ const TemplateDetail = () => {
   });
   const displayTemplate = template;
   const metrics = (displayTemplate as (ChecklistTemplate & TemplateMetrics) | null) ?? null;
-  const isOwner = user?.id === displayTemplate?.userId;
-  const isActiveTeamTemplate =
-    Boolean(activeTeamId) && displayTemplate?.teamId === activeTeamId;
-  const canEditTemplate = isOwner || (isActiveTeamTemplate && canEditTemplates);
-  const canViewTemplateHistory = isOwner || isActiveTeamTemplate;
+  // Organization Templates follow the viewer's role, never who created them.
+  const { canEdit: canEditTemplate, canViewHistory: canViewTemplateHistory } = permissions;
   const isPublic = visibilityOverride ?? displayTemplate?.isPublic ?? false;
   const totalTasks = displayTemplate?.sections.reduce(
     (count, section) => count + section.items.length,
@@ -499,7 +498,7 @@ const TemplateDetail = () => {
 
       {canEditTemplate ? (
         <>
-          {isOwner ? (
+          {permissions.canShare ? (
             <Button
               variant="outline"
               size="sm"
@@ -564,10 +563,12 @@ const TemplateDetail = () => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onClick={handleCloneTemplate}>
-              <Copy className="mr-2 h-4 w-4" />
-              Duplicate
-            </DropdownMenuItem>
+            {permissions.canDuplicate ? (
+              <DropdownMenuItem onClick={handleCloneTemplate}>
+                <Copy className="mr-2 h-4 w-4" />
+                Duplicate
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem onClick={handleExport} disabled={billingState.isLoading}>
               <Download className="mr-2 h-4 w-4" />
               {getTemplateExportLabel(billingState)}

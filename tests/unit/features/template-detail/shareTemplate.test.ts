@@ -46,6 +46,7 @@ describe('shareTemplateToPublic', () => {
 
     const result = await shareTemplateToPublic({
       apiClient,
+      canShare: true,
       invalidateTemplates,
       isAuthenticated: true,
       onTemplateChange,
@@ -70,6 +71,7 @@ describe('shareTemplateToPublic', () => {
 
     const result = await shareTemplateToPublic({
       apiClient,
+      canShare: true,
       isAuthenticated: true,
       onTemplateChange: vi.fn(),
       origin: ORIGIN,
@@ -89,6 +91,7 @@ describe('shareTemplateToPublic', () => {
 
     const result = await shareTemplateToPublic({
       apiClient,
+      canShare: true,
       invalidateTemplates,
       isAuthenticated: true,
       onTemplateChange,
@@ -118,6 +121,7 @@ describe('shareTemplateToPublic', () => {
 
     const result = await shareTemplateToPublic({
       apiClient,
+      canShare: true,
       isAuthenticated: true,
       onTemplateChange: vi.fn(),
       origin: ORIGIN,
@@ -139,6 +143,7 @@ describe('shareTemplateToPublic', () => {
 
     const result = await shareTemplateToPublic({
       apiClient,
+      canShare: true,
       invalidateTemplates: vi.fn().mockRejectedValue(new Error('refetch failed')),
       isAuthenticated: true,
       onTemplateChange,
@@ -159,6 +164,7 @@ describe('shareTemplateToPublic', () => {
 
     const result = await shareTemplateToPublic({
       apiClient,
+      canShare: true,
       isAuthenticated: true,
       onTemplateChange: vi.fn(),
       origin: ORIGIN,
@@ -176,6 +182,7 @@ describe('shareTemplateToPublic', () => {
 
     await shareTemplateToPublic({
       apiClient,
+      canShare: true,
       isAuthenticated: true,
       isPublic: false,
       onTemplateChange: vi.fn(),
@@ -193,6 +200,7 @@ describe('shareTemplateToPublic', () => {
 
     const result = await shareTemplateToPublic({
       apiClient,
+      canShare: true,
       isAuthenticated: true,
       onTemplateChange: vi.fn(),
       origin: ORIGIN,
@@ -211,11 +219,12 @@ describe('shareTemplateToPublic', () => {
     });
   });
 
-  it('refuses templates the user does not own and leaves them unchanged', async () => {
+  it('refuses when the viewer may not share the template and leaves it unchanged', async () => {
     const apiClient = buildApiClient({ username: 'alice' });
 
     const result = await shareTemplateToPublic({
       apiClient,
+      canShare: false,
       isAuthenticated: true,
       onTemplateChange: vi.fn(),
       origin: ORIGIN,
@@ -231,6 +240,49 @@ describe('shareTemplateToPublic', () => {
     expect(apiClient.updateTemplate).not.toHaveBeenCalled();
   });
 
+  it('lets an Organization editor share a template someone else created', async () => {
+    const apiClient = buildApiClient({ username: 'alice' });
+
+    const result = await shareTemplateToPublic({
+      apiClient,
+      canShare: true,
+      isAuthenticated: true,
+      onTemplateChange: vi.fn(),
+      origin: ORIGIN,
+      template: buildTemplate({ teamId: 'team-1', userId: 'alice-id' }),
+      userId: 'bob-id',
+      username: 'bob',
+    });
+
+    expect(result).toEqual({
+      kind: 'ok',
+      shareUrl: `${ORIGIN}/profile/alice/camping-checklist`,
+    });
+    expect(apiClient.getProfileById).toHaveBeenCalledWith('alice-id');
+    expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  it("never builds the link from the sharer's username for a template someone else created", async () => {
+    const apiClient = buildApiClient({ username: null });
+
+    const result = await shareTemplateToPublic({
+      apiClient,
+      canShare: true,
+      isAuthenticated: true,
+      onTemplateChange: vi.fn(),
+      origin: ORIGIN,
+      template: buildTemplate({ teamId: 'team-1', userId: 'alice-id' }),
+      userId: 'bob-id',
+      username: 'bob',
+    });
+
+    expect(result).toEqual({
+      kind: 'error',
+      message: 'Failed to create a share link for this template.',
+    });
+    expect(apiClient.updateTemplate).not.toHaveBeenCalled();
+  });
+
   it('keeps local state unchanged when the visibility change is rejected', async () => {
     const apiClient = buildApiClient({ username: 'alice' });
     apiClient.updateTemplate.mockRejectedValue(
@@ -240,6 +292,7 @@ describe('shareTemplateToPublic', () => {
 
     const result = await shareTemplateToPublic({
       apiClient,
+      canShare: true,
       isAuthenticated: true,
       onTemplateChange,
       origin: ORIGIN,
