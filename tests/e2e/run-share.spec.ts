@@ -65,7 +65,9 @@ test('the run page shows the share link when the clipboard refuses the copy', as
 
   // Reopening shows the same link instead of replacing the token.
   const shareUrl = await link.inputValue();
-  await dialog.getByRole('button', { name: 'Close' }).click();
+  // The footer Close button; the dialog's corner X is also named Close.
+  await dialog.getByRole('button', { name: 'Close' }).first().click();
+  await expect(dialog).toHaveCount(0);
   await page.getByRole('button', { name: 'Share' }).click();
   await expect(page.getByRole('textbox', { name: 'Share link' })).toHaveValue(shareUrl);
   expect(shareRequests).toEqual([200]);
