@@ -1,6 +1,29 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
 const API_BASE_URL = process.env.VITE_API_URL ?? 'http://localhost:8788/api';
+const PRODUCTION_ORIGIN = 'https://serplists.com';
+
+/**
+ * SEOHead noindexes every host but serplists.com (src/lib/seo/siteOrigin.ts), so a
+ * page's own robots rule only shows on the production host. This serves the local
+ * wrangler Pages server (the built app, its page functions and the API, all on one
+ * origin like production) as https://serplists.com, and aborts every other request
+ * (analytics, fonts), so nothing reaches the real site or reports a visit to it.
+ * Register page mocks after this, so they answer first.
+ */
+async function serveLocalAppAsProduction(page: Page) {
+  const pagesOrigin = new URL(API_BASE_URL).origin;
+  await page.routeWebSocket(/.*/, (webSocket) => webSocket.close());
+  await page.route(/.*/, async (route) => {
+    const url = new URL(route.request().url());
+    if (url.origin !== PRODUCTION_ORIGIN) {
+      await route.abort();
+      return;
+    }
+    const localUrl = new URL(`${url.pathname}${url.search}`, pagesOrigin).href;
+    await route.fulfill({ response: await route.fetch({ url: localUrl }) });
+  });
+}
 
 async function fulfillJson(route: Route, body: unknown, status = 200) {
   await route.fulfill({
@@ -71,6 +94,12 @@ async function signInAsAdmin(page: Page) {
 }
 
 test.describe('route structure', () => {
+  // serveLocalAppAsProduction answers the page's requests itself; let any still in
+  // flight go when the page closes.
+  test.afterEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  });
+
   test('canonical feature, library, and category detail routes render', async ({
     page,
   }) => {
@@ -180,12 +209,13 @@ test.describe('route structure', () => {
   test('not-found pages are noindexed and real pages are not', async ({ page }) => {
     // Pages answers unknown paths with index.html and a 200, so the robots tag is the
     // only thing that keeps a missing URL out of search results.
+    await serveLocalAppAsProduction(page);
     for (const path of [
       '/definitely-missing',
       '/categories/definitely-missing',
       '/features/definitely-missing',
     ]) {
-      await page.goto(path);
+      await page.goto(`${PRODUCTION_ORIGIN}${path}`);
       await expect(
         page.getByRole('heading', { name: 'That page does not exist' }),
       ).toBeVisible();
@@ -195,15 +225,17 @@ test.describe('route structure', () => {
       );
     }
 
-    for (const [path, heading] of [
-      ['/categories/business', 'Business & Operations'],
-      ['/categories/outdoor', 'outdoor'],
-      ['/features/template-builder', 'Template Builder'],
+    // Each page's own content shows it finished loading before its robots tag is read.
+    for (const [path, heading, content] of [
+      ['/categories/outdoor', 'outdoor', 'Ultimate Camping Checklist'],
+      ['/categories/seo', 'SEO', 'Technical SEO Audit Checklist'],
+      ['/features/template-builder', 'Template Builder', 'Build reusable SOPs with sections and tasks.'],
     ] as const) {
-      await page.goto(path);
+      await page.goto(`${PRODUCTION_ORIGIN}${path}`);
       await expect(
         page.getByRole('heading', { exact: true, name: heading }).first(),
       ).toBeVisible();
+      await expect(page.getByText(content, { exact: true }).first()).toBeVisible();
       await expect(
         page.getByRole('heading', { name: 'That page does not exist' }),
       ).toHaveCount(0);
@@ -211,6 +243,18 @@ test.describe('route structure', () => {
         page.locator('meta[name="robots"][content*="noindex"]'),
       ).toHaveCount(0);
     }
+
+    // A registry category no public Template uses yet is a real page, but it stays out
+    // of the index (and the sitemap) until a Template uses it.
+    await page.goto(`${PRODUCTION_ORIGIN}/categories/business`);
+    await expect(
+      page.getByRole('heading', { exact: true, name: 'Business & Operations' }),
+    ).toBeVisible();
+    await expect(page.getByText('No public templates in this category yet.')).toBeVisible();
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+      'content',
+      'noindex, follow',
+    );
   });
 
   test('shared checklist pages use /share and render noindex,nofollow', async ({
@@ -269,9 +313,13 @@ test.describe('route structure', () => {
       return data.shareToken;
     }, API_BASE_URL);
 
-    await page.goto(`/share/${shareToken}`);
+    await serveLocalAppAsProduction(page);
+    await page.goto(`${PRODUCTION_ORIGIN}/share/${shareToken}`);
 
     await expect(page).toHaveURL(new RegExp(`/share/${shareToken}$`));
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Share Route Verification' }),
+    ).toBeVisible();
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
       'content',
       'noindex, nofollow',
@@ -281,6 +329,7 @@ test.describe('route structure', () => {
   test('missing public profiles and templates render noindex,nofollow', async ({
     page,
   }) => {
+    await serveLocalAppAsProduction(page);
     await page.route('**/api/profiles/by-username**', (route) =>
       fulfillJson(route, { error: 'Profile not found' }, 404),
     );
@@ -288,7 +337,7 @@ test.describe('route structure', () => {
       fulfillJson(route, { error: 'Template not found' }, 404),
     );
 
-    await page.goto('/profile/no-such-user-route-structure');
+    await page.goto(`${PRODUCTION_ORIGIN}/profile/no-such-user-route-structure`);
     await expect(
       page.getByRole('heading', { name: 'User not found' }),
     ).toBeVisible();
@@ -298,7 +347,7 @@ test.describe('route structure', () => {
     );
     await expect(page).toHaveTitle(/Profile not found/);
 
-    await page.goto('/profile/no-such-user-route-structure/no-such-template');
+    await page.goto(`${PRODUCTION_ORIGIN}/profile/no-such-user-route-structure/no-such-template`);
     await expect(
       page.getByRole('heading', { name: 'Template not found' }),
     ).toBeVisible();
@@ -312,17 +361,18 @@ test.describe('route structure', () => {
   test('a public template that fails to load stays indexable', async ({
     page,
   }) => {
+    await serveLocalAppAsProduction(page);
     await page.route('**/api/templates/slug/**', (route) =>
       fulfillJson(route, { error: 'Service unavailable' }, 503),
     );
 
-    await page.goto('/profile/route-structure-owner/some-template');
+    await page.goto(`${PRODUCTION_ORIGIN}/profile/route-structure-owner/some-template`);
     await expect(
       page.getByRole('heading', { name: 'Unable to load template' }),
     ).toBeVisible();
-    await expect(page.locator('meta[name="robots"]')).not.toHaveAttribute(
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
       'content',
-      /noindex/,
+      'index, follow',
     );
   });
 });

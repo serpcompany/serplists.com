@@ -169,7 +169,9 @@ test('library filters follow the URL and clearing the search keeps the page', as
   await expect(searchBox).toBeFocused();
   await expect(campingCard).toBeVisible();
 
-  // A category-only link from elsewhere still goes to the category page.
+  // A category-only link from elsewhere still goes to the category page. Leave first:
+  // opening the URL the tab already shows reloads the library's own entry, marker included.
+  await page.goto('/');
   await page.goto('/templates?category=outdoor');
   await expect(page).toHaveURL(/\/categories\/outdoor$/);
 });

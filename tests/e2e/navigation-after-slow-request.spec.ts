@@ -71,7 +71,7 @@ test('stays on the page the user went Back to when a public Start Run finishes',
   const { created, release } = await holdRunCreation(page);
 
   await page.goto('/templates');
-  await page.goto('/profile/admin/technical-seo-audit-checklist');
+  await page.goto('/profile/admin/sample-technical-seo-audit-checklist');
   await page.getByRole('button', { name: 'Start Run' }).first().click();
   await page.goBack();
   await expect(page).toHaveURL(/\/templates$/);

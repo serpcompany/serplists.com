@@ -5,8 +5,8 @@ import { expect, test, type Page } from '@playwright/test';
 // unmount open dialogs (see src/features/template-detail/useTemplateDetailRecord.ts).
 
 const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
-const PUBLIC_TEMPLATE_PATH = '/profile/admin/technical-seo-audit-checklist';
-const PUBLIC_TEMPLATE_SLUG = 'technical-seo-audit-checklist';
+const PUBLIC_TEMPLATE_PATH = '/profile/admin/sample-technical-seo-audit-checklist';
+const PUBLIC_TEMPLATE_SLUG = 'sample-technical-seo-audit-checklist';
 
 async function login(page: Page, fillButton: 'Fill Admin' | 'Fill John') {
   await page.goto('/login');
