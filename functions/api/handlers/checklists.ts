@@ -24,6 +24,7 @@ import {
 } from '../utils/active-run-limit';
 import { findHiddenShareLinkActors, HIDDEN_ACTOR } from '../utils/share-link-actors';
 import { completionStamps } from '../utils/run-completion';
+import { contentTooLargeResponse } from '../utils/content-limits';
 import { handleSharedChecklist } from './checklists-shared';
 
 function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: URL): string | null {
@@ -392,6 +393,8 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       const previousRetired = parseJsonArray(existingRun.retired_items) ?? [];
       const templateSections = parseJsonArray(sourceTemplate.items) ?? [];
       const reconciled = reconcileRunSections(previousSections, templateSections, previousRetired);
+      const tooLarge = contentTooLargeResponse('run', reconciled.sections, previousSections);
+      if (tooLarge) return tooLarge;
       const now = new Date().toISOString();
       const updates = {
         items: JSON.stringify(reconciled.sections),
@@ -541,6 +544,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     if (normalizedSections.error) {
       return jsonError(normalizedSections.error, 400);
     }
+    // A run its page could never save is never created.
+    const tooLarge = contentTooLargeResponse('run', normalizedSections.sections);
+    if (tooLarge) return tooLarge;
 
     const insertedRun = {
       id: checklistId,
@@ -602,6 +608,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
 
     // Build dynamic update query
     const updates: Record<string, unknown> = {};
+    let nextSections: unknown[] | null = null;
 
     if (title !== undefined) {
       updates.title = title;
@@ -611,7 +618,8 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       if (normalizedSections.error) {
         return jsonError(normalizedSections.error, 400);
       }
-      updates.items = JSON.stringify(normalizedSections.sections);
+      nextSections = normalizedSections.sections;
+      updates.items = JSON.stringify(nextSections);
     }
     if (status !== undefined) {
       updates.status = status;
@@ -645,6 +653,10 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         code: 'edit_conflict',
         details: { expectedRevision: expected_revision, currentRevision },
       });
+    }
+    if (nextSections) {
+      const tooLarge = contentTooLargeResponse('run', nextSections, parseJsonArray(existingRun.items) ?? []);
+      if (tooLarge) return tooLarge;
     }
     // Only a real reopen counts: the run page sends the current status with every save.
     if (isReopening(existingRun.status, status)) {

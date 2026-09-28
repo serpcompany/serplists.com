@@ -360,6 +360,25 @@ describe('portable template import/export API', () => {
     ]);
   });
 
+  // A pack may be up to 2MB, but the editor and a run started from the template resend the
+  // whole content under the 1MB body limit, so one template may not hold more than that.
+  it('fails only the template whose content is too large to be saved again', async () => {
+    const textHeavy = {
+      title: 'Long guide',
+      sections: [{ title: 'Guide', items: [{ title: 'Read it', contents: [{ type: 'text', value: 'x'.repeat(1_200_000) }] }] }],
+    };
+    const response = await importPack([textHeavy, packWithAsset(1024)]);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.imported).toBe(1);
+    expect(data.successes).toEqual([expect.objectContaining({ index: 1 })]);
+    expect(data.failed).toEqual([
+      expect.objectContaining({ index: 0, title: 'Long guide', code: 'content_too_large', reason: expect.stringContaining('KB') }),
+    ]);
+    expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
+  });
+
   // Stored sections carry run state (isCompleted, notes). The portable export must hold
   // only portable keys, validate against the published JSON Schema, and import again.
   it('exports stored templates without run state, valid against the JSON Schema', async () => {

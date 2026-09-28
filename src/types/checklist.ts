@@ -132,7 +132,7 @@ export type TemplateImportFailure = {
   index: number;
   title: string;
   reason: string;
-  code: "invalid_fields" | "invalid_sections" | "oversized_asset" | "insert_failed";
+  code: "invalid_fields" | "invalid_sections" | "oversized_asset" | "content_too_large" | "insert_failed";
 };
 
 export type TemplateImportSuccess = {

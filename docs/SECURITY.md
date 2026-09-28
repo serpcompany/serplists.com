@@ -273,7 +273,9 @@ Request bodies are capped in the router before any handler runs
 (`functions/api/utils/body-limit.ts`), for every `POST`/`PUT`/`PATCH`/`DELETE`
 whatever the `Content-Type`, because handlers parse JSON without checking it: 1MB by
 default, 16KB for `/api/auth/*`, 2MB for Template backups, and 50MB (plus multipart
-overhead) for uploads.
+overhead) for uploads. Template and run content has its own, smaller limit
+(`src/lib/schemas/contentLimits.ts`, `413 content_too_large`), so no write stores content
+too large for its save route to accept again.
 The cap uses `Content-Length`, or counts streamed bytes when it is missing or
 malformed. Uploads are the exception: counting would buffer up to 51MB, and the
 upload handler's form parsing reads the whole body before it can check the file

@@ -220,7 +220,8 @@ Backup and portable imports return a structured summary with `total`,
 `imported`, `successes[]`, and `failed[]`. Successful entries identify their
 input index, title, stored id, slug, and visibility. Failures identify their
 index, title, human-readable reason, and stable code. Current failure codes are
-`invalid_fields`, `invalid_sections`, `oversized_asset`, and `insert_failed`.
+`invalid_fields`, `invalid_sections`, `oversized_asset`, `content_too_large`, and
+`insert_failed`.
 
 `invalid_fields` means a template's fields exceed the bounds every save enforces
 (`src/lib/schemas/templateLimits.ts`): a non-blank title of at most 160 characters,
@@ -374,6 +375,10 @@ JSON exports **do not** include R2 assets. If a template references uploaded fil
 - Guardrails are enforced: at most 5 templates per import, and a template with an
   asset whose recorded `fileSize` is over the 50MB upload limit fails with
   `oversized_asset` while the other templates in the file still import.
+- A file may be up to 2MB, but one template's content may be at most 768KB
+  (`src/lib/schemas/contentLimits.ts`): what its editor save and its runs can send back
+  under the 1MB request limit. A larger template fails with `content_too_large` while the
+  other templates in the file still import.
 - Asset uploads are limited to 50MB each. Import accepts any size an upload can have
   (one shared limit, `src/lib/schemas/templateAssetLimits.ts`), so a template
   exported from the app always imports again; import copies asset URLs, not the files.

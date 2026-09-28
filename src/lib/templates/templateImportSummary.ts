@@ -15,7 +15,7 @@ const templateImportSummarySchema = z.object({
     index: z.number(),
     title: z.string(),
     reason: z.string(),
-    code: z.enum(["invalid_fields", "invalid_sections", "oversized_asset", "insert_failed"]),
+    code: z.enum(["invalid_fields", "invalid_sections", "oversized_asset", "content_too_large", "insert_failed"]),
   })),
   successes: z.array(z.object({
     index: z.number(),

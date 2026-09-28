@@ -51,6 +51,8 @@ import {
   countOversizedTemplateAssets,
   oversizedTemplateAssetMessage,
 } from '../../../src/lib/schemas/templateAssetLimits';
+import { TEMPLATE_CONTENT_TOO_LARGE_MESSAGE } from '../../../src/lib/schemas/contentLimits';
+import { contentFits, contentTooLargeResponse } from '../utils/content-limits';
 import { buildPortableTemplatePack, parsePortableTemplatePackImport } from '../utils/template-portable';
 import {
   assignMissingStableTemplateIdentities,
@@ -377,7 +379,7 @@ const templateBackupImportBodySchema = z.object({
     .optional(),
 });
 
-type TemplateImportFailureCode = 'invalid_fields' | 'invalid_sections' | 'oversized_asset' | 'insert_failed';
+type TemplateImportFailureCode = 'invalid_fields' | 'invalid_sections' | 'oversized_asset' | 'content_too_large' | 'insert_failed';
 
 type TemplateImportFailure = {
   index: number;
@@ -577,6 +579,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             reason: identityError,
             code: 'invalid_sections',
           });
+          continue;
+        }
+
+        // A pack may be up to 2MB, but the editor resends one template under the 1MB limit.
+        if (!contentFits('template', normalizedSections.sections)) {
+          summary.failed.push({ index, title: template.title, reason: TEMPLATE_CONTENT_TOO_LARGE_MESSAGE, code: 'content_too_large' });
           continue;
         }
 
@@ -1033,6 +1041,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       if (!source || !source.is_public) {
         return jsonError('Template not found', 404);
       }
+      const sourceTooLarge = contentTooLargeResponse('template', normalizeSectionsPayload(source.items).sections);
+      if (sourceTooLarge) return sourceTooLarge;
 
       const isPublic = visibility === 'public' ? true : visibility === 'preserve' ? true : false;
 
@@ -1136,6 +1146,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     if (identityError) {
       return jsonError(identityError, 400);
     }
+    const tooLarge = contentTooLargeResponse('template', normalizedSections.sections);
+    if (tooLarge) return tooLarge;
 
     const templateId = crypto.randomUUID();
     const slugSource = typeof requestedSlug === 'string' && requestedSlug.trim() ? requestedSlug.trim() : title || '';
@@ -1295,6 +1307,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       // Clients resend unchanged sections on every save; only a real structure change may
       // bump content_version and reconcile runs.
       if (templateStructureChanged(previousSections, stableSections)) {
+        const tooLarge = contentTooLargeResponse('template', stableSections, previousSections);
+        if (tooLarge) return tooLarge;
         syncedItems = JSON.stringify(stableSections);
         updates.items = syncedItems;
       }
@@ -1431,10 +1445,16 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     );
 
     const nextTemplateSections = syncedItems === null ? [] : (parseJsonArray(syncedItems) ?? []);
-    const reconciledRunUpdates = await Promise.all(activeRuns.map(async (run): Promise<ReconciledRunUpdate> => {
+    const reconciledRunUpdates = (await Promise.all(activeRuns.map(async (run): Promise<ReconciledRunUpdate | null> => {
       const previousSections = parseJsonArray(run.items) ?? [];
       const previousRetired = parseJsonArray(run.retired_items) ?? [];
       const reconciled = reconcileRunSections(previousSections, nextTemplateSections, previousRetired);
+      // A run the change would grow past what its page can save keeps its content and shows
+      // as stale; Revalidate then explains why it cannot take the change.
+      if (!contentFits('run', reconciled.sections, previousSections)) {
+        log('warn', 'run_reconcile_skipped_content_too_large', { templateId, runId: run.id });
+        return null;
+      }
       const revision = typeof run.revision === 'number' ? run.revision : 1;
       const items = JSON.stringify(reconciled.sections);
       const runChanged = reconciled.newlyRetired.length > 0 || items !== JSON.stringify(previousSections);
@@ -1473,7 +1493,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           })
           : undefined,
       };
-    }));
+    }))).filter((update): update is ReconciledRunUpdate => update !== null);
 
     let reconciledRuns = 0;
     try {

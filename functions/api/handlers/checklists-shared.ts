@@ -15,6 +15,7 @@ import { mergeSharedRunState, readStoredRunSections, sharedRunUpdateSchema } fro
 import { activeRunLimitResponse, findActiveRunLimitHit, isReopening } from '../utils/active-run-limit';
 import { canViewRun } from '../utils/run-access';
 import { completionStamps } from '../utils/run-completion';
+import { contentTooLargeResponse } from '../utils/content-limits';
 
 // /api/checklists/shared/:token needs no login: holding the link is the only credential.
 // Guests may read the run and change completion state and task notes, nothing else.
@@ -106,6 +107,8 @@ export async function handleSharedChecklist(
       return jsonError(merged.error, 400);
     }
     nextSections = merged.sections;
+    const tooLarge = contentTooLargeResponse('run', nextSections, storedSections);
+    if (tooLarge) return tooLarge;
     updates.items = JSON.stringify(nextSections);
   }
   if (status !== undefined) {
