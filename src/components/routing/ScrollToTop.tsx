@@ -1,6 +1,10 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useLocation, useNavigationType } from 'react-router-dom';
 import { applyRouteScroll, decideRouteScroll } from './routeScroll';
+
+// Layout effects run before paint in the browser; on the server (tests render App to a string)
+// they only warn, and there is nothing to scroll.
+const useBeforePaintEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 /**
  * Resets the window scroll when a navigation changes the page (see routeScroll.ts for
@@ -13,7 +17,7 @@ export const ScrollToTop = () => {
 
   // Runs before paint, so the old offset never flashes. decideRouteScroll compares the
   // pathname with the last one seen, so search-only or hash-only changes do nothing.
-  useLayoutEffect(() => {
+  useBeforePaintEffect(() => {
     const action = decideRouteScroll({
       previousPathname: previousPathnameRef.current,
       pathname,
