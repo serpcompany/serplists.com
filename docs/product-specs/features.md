@@ -39,12 +39,15 @@ Canonical private routes:
 - Users can start checklist runs from templates.
 - Runs store progress independently from templates.
 - Runs record both the template content version last reconciled and a run revision. API responses expose `is_stale` when the source checklist structure is newer; metadata-only template edits do not stale runs.
-- Completed, archived, and publicly shared runs are frozen when a template changes. A completed private run can be explicitly reconciled and reopened with `POST /api/checklists/:id/revalidate`.
+- Completed, archived, and publicly shared runs are frozen when a template changes. A completed private run can be explicitly reconciled and reopened with `POST /api/checklists/:id/revalidate`; reopening counts toward the active-run limit like starting a run.
+- A run copies template content (at creation and revalidation) only from a source the caller may still use: a public template, the caller's own Personal template, or a template of the run's own Organization. A run whose source is no longer usable (made private by its owner, or archived) is not reported stale for that caller, and revalidating it returns `404`.
 - Runs that predate stable identities are conservatively marked stale during migration. Their legacy IDs are backfilled deterministically, and their completion/notes remain intact until explicit reconciliation.
 - Run and template saves use optimistic revision/version markers. A stale editor receives `409 edit_conflict` instead of overwriting newer work. The template editor guards each save with the version it loaded (advanced by its own saves), not the refreshed template list, and resends visibility only when its own switch changed.
-- Run-level sharing creates public `/share/:token` links.
-- Guests can open shared runs without logging in and update checklist completion state.
-- Shared runs do not expose owner-only title editing or destructive actions.
+- A run records who completed it and when (`completed_by_user_id`, `completed_at`) only when it becomes completed. Later saves of a completed run (a rename, a tick, a note), by anyone, keep the original completer and time, and a client-sent `completed_at` is used only on that transition. Reopening from the run page, a share link, or MCP keeps both; revalidation clears both. A completion through a share link names the visitor only when they belong to the run's owner context, and otherwise no one, so a reopened run never keeps its previous completer. The logic is in `functions/api/utils/run-completion.ts`.
+- Run-level sharing creates public `/share/:token` links (`POST /api/checklists/run/:id/share`). Sharing again mints a new link, and the previous one stops working.
+- Stop sharing (`DELETE /api/checklists/run/:id/share`, in the runs list menu and next to Share on the run page, which also marks a shared run) makes the run private and turns its link off; progress and tasks are kept. Anyone who may update the run can share it or stop sharing it. The runs list marks shared runs, and a shared run that went stale offers "Stop sharing to update", after which it can be revalidated.
+- Guests can open shared runs without logging in and update checklist completion state: task and sub-item completion, task notes (up to 5,000 characters), and the run's status. The server merges only those fields onto the stored run by task id; titles, descriptions, contents, and the task list itself always come from the stored run, and progress and completion time are computed on the server.
+- Shared runs do not expose owner-only title editing or destructive actions, and the guest view does not reveal who owns or worked on the run.
 - Current run gating is plan-limit based through active-run limits.
 
 ## Personal And Organization Contexts

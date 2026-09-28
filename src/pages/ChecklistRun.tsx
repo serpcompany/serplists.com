@@ -9,7 +9,6 @@ import {
   Edit2,
   Loader2,
   ListChecks,
-  Share2,
 } from 'lucide-react';
 
 import { PageContainer, Surface } from '@/components/layout/page-shell';
@@ -36,6 +35,7 @@ import { Badge } from '@/components/ui/badge';
 import { RetiredRunItems } from '@/components/run-execution/RetiredRunItems';
 import { RunChangelog } from '@/components/run-execution/RunChangelog';
 import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar';
+import { RunShareActions } from '@/components/run-execution/RunShareActions';
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
@@ -55,7 +55,6 @@ const ChecklistRunPage = () => {
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
-  const [isCreatingShare, setIsCreatingShare] = useState(false);
 
   const {
     counts,
@@ -72,6 +71,7 @@ const ChecklistRunPage = () => {
     selectedData,
     selectedItemId,
     setSelectedItemId,
+    stopSharing,
     completeRun,
     toggleItem,
     toggleSubItem,
@@ -181,36 +181,6 @@ const ChecklistRunPage = () => {
   const handleTitleCancel = () => {
     setIsEditingTitle(false);
     setEditTitle('');
-  };
-
-  const handleCreateShare = async () => {
-    if (!displayRun) {
-      return;
-    }
-
-    setIsCreatingShare(true);
-
-    try {
-      const result = await createShare();
-
-      if (result.kind === 'ok' && result.shareUrl) {
-        await navigator.clipboard.writeText(result.shareUrl);
-        toast.success('Share link copied to clipboard');
-        return;
-      }
-
-      if (result.kind === 'error') {
-        toast.error(result.message || 'Failed to create share link for this run.');
-      }
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Failed to create share link for this run.';
-      toast.error(message);
-    } finally {
-      setIsCreatingShare(false);
-    }
   };
 
   const handleCopyCurrentLink = async () => {
@@ -359,15 +329,11 @@ const ChecklistRunPage = () => {
         </div>
         <div className="text-right text-sm font-medium">{displayProgress}%</div>
       </div>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={isCreatingShare}
-        onClick={() => void handleCreateShare()}
-      >
-        <Share2 className="mr-2 h-4 w-4" />
-        {isCreatingShare ? 'Creating link...' : 'Share'}
-      </Button>
+      <RunShareActions
+        isPublic={displayRun.isPublic === true}
+        onShare={createShare}
+        onStopSharing={stopSharing}
+      />
     </>
   );
   const privateRunTitle = isEditingTitle ? (

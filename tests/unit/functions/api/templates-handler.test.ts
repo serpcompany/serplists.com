@@ -43,6 +43,16 @@ vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForContext: vi.fn(),
 }));
 
+vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@functions/api/utils/guarded-insert')>();
+  return {
+    ...actual,
+    // Limit-guarded inserts go through the plain insert mock so tests can inspect the row;
+    // the guard itself is covered in tests/integration/plan-limits-concurrency-local-d1.test.ts.
+    insertRowWhere: vi.fn((db: any, table: unknown, values: unknown) => db.insert(table).values(values)),
+  };
+});
+
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
 import { handleTemplates } from '@functions/api/handlers/templates';
@@ -638,7 +648,8 @@ describe('Templates Handlers', () => {
         is_public: false,
       },
     ]);
-    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    // The guarded audit and version inserts and the update all miss: nothing was written.
+    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]);
 
     const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
       method: 'PUT',

@@ -207,8 +207,10 @@ Slugs are unique across all templates, archived ones included
 (`functions/api/utils/template-insert.ts`). Create, copy, and import take the clean
 slug, then a `-<id>` suffix, then a random one; if a concurrent request claims the
 slug before the write, the whole insert (template, first version, audit event) is
-retried with a random suffix, up to 3 attempts, then `409 slug_taken`. An import
-reports that as `insert_failed`. A save that changes the slug to one another template
+retried with a random suffix, up to 3 attempts, then `409 slug_taken`. Every attempt
+of a create or copy keeps the template-limit check inside its write
+([pricing and entitlements](pricing-and-entitlements.md)). An import reports a slug
+that stays taken as `insert_failed`. A save that changes the slug to one another template
 uses gets the `-<id>` suffix or a random one, each checked, and `409 slug_taken`
 (with `details.slug`) when those are taken or another save claims the slug first.
 

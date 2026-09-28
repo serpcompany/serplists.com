@@ -33,6 +33,7 @@ import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
 import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
+import { TICKED_TEMPLATE_SECTIONS, UNTICKED_RUN_SECTIONS } from "../../../fixtures/runStartFixtures";
 
 const identity = { keyId: "key-1", userId: "user-1", name: "Codex" };
 const env = { DB: {} } as any;
@@ -94,6 +95,7 @@ function personalRun(overrides: JsonRecord = {}): JsonRecord {
 describe("personal run MCP handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dbMocks.selectChain.limit.mockReset();
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
@@ -398,6 +400,26 @@ describe("personal run MCP handler", () => {
     }));
   });
 
+  it("starts a run with every task and Sub-task unticked, exactly as a web start stores it", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{
+      id: "template-1",
+      user_id: "user-1",
+      owner_type: "user",
+      team_id: null,
+      deleted_at: null,
+      title: "Release SOP",
+      items: JSON.stringify(TICKED_TEMPLATE_SECTIONS),
+      content_version: 2,
+    }]);
+
+    const response = await handleAgentMcp(callTool("start_run", { templateId: "template-1" }), env);
+    const body = await response.json() as any;
+
+    expect(body.result.isError).toBeUndefined();
+    // Same fixture and expectation as the web create test in checklists-handler.test.ts.
+    expect(JSON.parse(dbMocks.insertChain.values.mock.calls[0][0].items)).toEqual(UNTICKED_RUN_SECTIONS);
+  });
+
   it("updates a subtask, synchronizes its parent, and returns the next revision", async () => {
     const run = personalRun({
       items: JSON.stringify([{
@@ -498,6 +520,86 @@ describe("personal run MCP handler", () => {
     const updates = dbMocks.updateChain.set.mock.calls[0][0];
     expect(updates).not.toHaveProperty("completed_at");
     expect(updates).not.toHaveProperty("completed_by_user_id");
+  });
+
+  it("keeps the original completion stamps when a completed run is marked completed again", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
+      status: "completed",
+      progress: 100,
+      revision: 2,
+      completed_at: "2026-09-19T01:00:00.000Z",
+      completed_by_user_id: "user-1",
+    })]);
+
+    const response = await handleAgentMcp(callTool("update_run", {
+      runId: "run-1",
+      expectedRevision: 2,
+      operation: "set_run_status",
+      status: "completed",
+    }), env);
+    const body = await response.json() as any;
+
+    expect(body.result.isError).toBeUndefined();
+    const updates = dbMocks.updateChain.set.mock.calls[0][0];
+    expect(updates.status).toBe("completed");
+    expect(updates).not.toHaveProperty("completed_at");
+    expect(updates).not.toHaveProperty("completed_by_user_id");
+  });
+
+  it("stamps the completer and time when a run becomes completed", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
+
+    const response = await handleAgentMcp(callTool("update_run", {
+      runId: "run-1",
+      expectedRevision: 2,
+      operation: "set_run_status",
+      status: "completed",
+    }), env);
+    const body = await response.json() as any;
+
+    expect(body.result.isError).toBeUndefined();
+    const updates = dbMocks.updateChain.set.mock.calls[0][0];
+    expect(updates.completed_by_user_id).toBe("user-1");
+    expect(typeof updates.completed_at).toBe("string");
+  });
+
+  it("refuses to reopen a completed run when the Free active-run limit is reached", async () => {
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: "free", limits: { maxTemplates: 1, maxActiveRuns: 3 } });
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([personalRun({ status: "completed", revision: 2 })])
+      .mockResolvedValueOnce([{ count: 3 }]);
+
+    const response = await handleAgentMcp(callTool("update_run", {
+      runId: "run-1",
+      expectedRevision: 2,
+      operation: "set_run_status",
+      status: "in_progress",
+    }), env);
+    const body = await response.json() as any;
+
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent).toEqual(expect.objectContaining({
+      error: "limit_reached",
+      details: { limit: 3, current: 3 },
+    }));
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+  });
+
+  it("does not check the limit for status saves on a run that is already in progress", async () => {
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: "free", limits: { maxTemplates: 1, maxActiveRuns: 3 } });
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
+
+    const response = await handleAgentMcp(callTool("update_run", {
+      runId: "run-1",
+      expectedRevision: 2,
+      operation: "set_run_status",
+      status: "in_progress",
+    }), env);
+    const body = await response.json() as any;
+
+    expect(body.result.isError).toBeUndefined();
+    expect(getEntitlementsForUser).not.toHaveBeenCalled();
   });
 
   it("rejects an impossible atomic batch result as an internal invariant", async () => {

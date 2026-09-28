@@ -113,8 +113,9 @@ JSON fields:
 - `templates.tags` stores a JSON array of tag strings.
 - `templates.rules` stores template rule metadata.
 - `checklist_runs.items` stores the current sectioned run content plus completion state. Every write of `templates.items` or `checklist_runs.items` is checked against `src/lib/schemas/storedSections.ts` (lists are arrays, text is text, content blocks have a known type) and rejected with a 400 naming the path; content copied from a stored Template into a run, and content the app renders, is made safe first by the same module. `retired_items` stores removed sections/items/sub-items for history without counting them toward readiness. It is server-owned (only reconciliation and Revalidate write it), shown read-only on the private run page and in MCP `get_run`, and stripped from shared-run responses.
+- A run started from a template (web or MCP `start_run`) begins with every task and Sub-task unticked and no notes, whatever run state the stored template carries (`resetRunCompletionState` in `functions/api/utils/template-reconciliation.ts`).
 - Template changes reconcile only active private runs by stable section/item/sub-item ID. Completed, archived, and shared runs keep their snapshot and become stale when their `template_version` trails the source template.
-- `audit_events.before_json`, `after_json`, `diff_json`, and `metadata_json` store structured audit payloads.
+- `audit_events.before_json`, `after_json`, `diff_json`, and `metadata_json` store compact, size-capped audit payloads (see [data persistence](data-persistence.md)).
 - `template_versions.snapshot_json` stores a point-in-time template snapshot.
 
 ## Authorization And Entitlements
@@ -131,7 +132,7 @@ Production history is DB-backed:
 
 - Organization create/update/invite/member/owner actions write `audit_events`.
 - Template changes write `template_versions` and `audit_events`.
-- Audit events include actor id, subject, resource, action, optional before/after/diff JSON, request id, hashed IP, user agent, and timestamp.
+- Audit events include actor id, subject, resource, action, optional before/after/diff JSON (compacted: no run or template content, no share tokens), request id, hashed IP, user agent, and timestamp.
 
 Do not use git history for user-generated Template or Organization history. Git only tracks code and migration history.
 

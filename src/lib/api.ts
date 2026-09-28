@@ -390,20 +390,17 @@ class ApiClient {
     });
   }
 
-  async createChecklistShare(templateId: string, runName?: string, params?: { teamId?: string }) {
-    return this.request(`/checklists/${encodeURIComponent(templateId)}/share`, {
-      method: 'POST',
-      body: JSON.stringify({
-        ...(runName ? { runName } : {}),
-        ...(params?.teamId ? { teamId: params.teamId } : {}),
-      }),
-    });
-  }
-
   async createChecklistRunShare(runId: string) {
     return this.request(`/checklists/run/${encodeURIComponent(runId)}/share`, {
       method: 'POST',
       body: JSON.stringify({}),
+    });
+  }
+
+  /** Stops sharing a run: its share link stops working and the run becomes private. */
+  async revokeChecklistRunShare(runId: string): Promise<{ id: string; isPublic: false }> {
+    return this.request(`/checklists/run/${encodeURIComponent(runId)}/share`, {
+      method: 'DELETE',
     });
   }
 

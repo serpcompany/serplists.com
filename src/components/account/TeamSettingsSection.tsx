@@ -44,6 +44,7 @@ const teamActivityActionLabels: Record<string, string> = {
   'checklist_run.deleted': 'Run archived',
   'checklist_run.restored': 'Run restored',
   'checklist_run.share_created': 'Run share created',
+  'checklist_run.share_revoked': 'Run sharing stopped',
   'checklist_run.shared_updated': 'Shared run updated',
   'checklist_run.updated': 'Run updated',
   'team.created': 'Organization created',
@@ -61,8 +62,7 @@ const teamActivityActionLabels: Record<string, string> = {
   'template.updated': 'Template updated',
 };
 
-const formatRole = (role: TeamRole): string =>
-  role.charAt(0).toUpperCase() + role.slice(1);
+const formatRole = (role: TeamRole): string => role.charAt(0).toUpperCase() + role.slice(1);
 
 const formatMemberStatus = (status: TeamMemberStatus): string =>
   status.charAt(0).toUpperCase() + status.slice(1);

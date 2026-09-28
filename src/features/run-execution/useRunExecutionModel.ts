@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
 import { api, type ChecklistRunHistoryResponse } from '@/lib/api';
@@ -24,6 +24,7 @@ type RunExecutionApiClient = Pick<
   | 'createChecklistRunShare'
   | 'getChecklistById'
   | 'getSharedChecklist'
+  | 'revokeChecklistRunShare'
   | 'updateSharedChecklist'
 >;
 
@@ -32,6 +33,8 @@ type UpdateRun = (run: ChecklistRun) => void | Promise<ChecklistRun | void>;
 type RunExecutionDependencies = {
   apiClient?: RunExecutionApiClient;
   origin?: string;
+  // Refreshes the runs list, which shows whether a run is shared (and offers Revalidate).
+  refreshRuns?: () => unknown;
   updateRun: UpdateRun;
 };
 
@@ -442,13 +445,39 @@ export const createRunExecutionShare = async (
     const origin =
       dependencies.origin ??
       (typeof window !== 'undefined' ? window.location.origin : '');
+    void dependencies.refreshRuns?.();
 
     return {
       kind: 'ok',
+      // Sharing does not change the revision, so the page keeps saving on this run.
+      run: { ...params.run, isPublic: true },
       shareUrl: `${origin}${buildSharePath(result.shareToken)}`,
     };
   } catch (error) {
     return toErrorResult(error, 'Failed to create share link for this run.');
+  }
+};
+
+/** Stop sharing: the share link stops working and the run becomes private. */
+export const stopRunExecutionSharing = async (
+  params: RunExecutionMutationParams,
+  dependencies: RunExecutionDependencies,
+): Promise<RunExecutionActionResult> => {
+  if (!params.run) {
+    return { kind: 'not_found' };
+  }
+
+  if (params.shareToken) {
+    return { kind: 'shared_disabled' };
+  }
+
+  try {
+    await getApiClient(dependencies).revokeChecklistRunShare(params.run.id);
+    void dependencies.refreshRuns?.();
+    // No revision bump on the server either, so later saves keep working.
+    return { kind: 'ok', run: { ...params.run, isPublic: false } };
+  } catch (error) {
+    return toErrorResult(error, 'Unable to stop sharing this run.');
   }
 };
 
@@ -483,13 +512,15 @@ export const useRunExecutionModel = (
   options: UseRunExecutionModelOptions,
 ) => {
   const mode = resolveMode(options);
+  const queryClient = useQueryClient();
   const dependencies = useMemo<RunExecutionDependencies>(
     () => ({
       apiClient: options.dependencies?.apiClient,
       origin: options.dependencies?.origin,
+      refreshRuns: () => queryClient.invalidateQueries({ queryKey: ['runs'] }),
       updateRun: options.updateRun,
     }),
-    [options.dependencies?.apiClient, options.dependencies?.origin, options.updateRun],
+    [options.dependencies?.apiClient, options.dependencies?.origin, options.updateRun, queryClient],
   );
   const [run, setRun] = useState<ChecklistRun | null>(null);
   const [loading, setLoading] = useState(true);
@@ -615,6 +646,8 @@ export const useRunExecutionModel = (
     selectedData,
     selectedItemId,
     setSelectedItemId,
+    stopSharing: () =>
+      enqueueSave('stop-sharing', (current) => stopRunExecutionSharing({ run: current, shareToken }, dependencies)),
     completeRun: () =>
       enqueueSave('complete', (current) => completeRunExecution({ run: current, shareToken }, dependencies)),
     toggleItem: async (itemId: string) => {

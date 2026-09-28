@@ -11,7 +11,7 @@ User-facing language follows the [product glossary](../PRODUCT_SENSE.md) and the
 - Every signed-in User always has a Personal ownership context.
 - A User can also belong to one or more Organizations.
 - Templates and Runs are scoped to the selected Personal or Organization context.
-- Personal data stays Personal. Organization Membership does not upgrade or expose a User's Personal Templates, Runs, or limits.
+- Personal data stays Personal. Organization Membership does not upgrade or expose a User's Personal Templates, Runs, or limits. An Organization Run started from a member's Personal Template can be revalidated only by that member, and a private Organization Template never supplies content to a Personal Run (`functions/api/utils/template-access.ts`).
 - Organization entitlements apply only while that Organization context is active. A Free User in a paid Organization can use its paid capabilities, but their Personal context remains Free unless they upgrade their own plan.
 
 ## Roles
@@ -68,7 +68,6 @@ Template and Run routes accept the legacy `teamId` parameter where Organization 
 - `GET /api/checklists?teamId=...`
 - `GET /api/checklists/archived?teamId=...`
 - `POST /api/checklists` with `teamId`
-- `POST /api/checklists/:templateId/share` with `teamId`
 
 ## Invite Flow
 

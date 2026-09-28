@@ -3,7 +3,13 @@ import { z } from "zod";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { buildAuditEventValues } from "../utils/audit";
-import { getEntitlementsForUser } from "../utils/entitlements";
+import {
+  checkActiveRunCapacity,
+  countActiveRuns,
+  isReopening,
+  runInsertStatements,
+  type RunOwnerContext,
+} from "../utils/active-run-limit";
 import {
   authenticatePersonalRunKey,
   markPersonalRunKeyUsed,
@@ -11,7 +17,8 @@ import {
 } from "../utils/personal-run-key";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
 import { sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
-import { calculateRunProgress } from "../utils/template-reconciliation";
+import { completionStamps } from "../utils/run-completion";
+import { calculateRunProgress, resetRunCompletionState } from "../utils/template-reconciliation";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const MAX_REQUEST_BYTES = 1024 * 1024;
@@ -319,18 +326,6 @@ function parseStoredSections(value: unknown): JsonRecord[] {
   return sanitizeStoredSections(normalized.sections);
 }
 
-function resetCompletionState(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(resetCompletionState);
-  if (!isRecord(value)) return value;
-
-  const next: JsonRecord = { ...value };
-  if (Object.prototype.hasOwnProperty.call(next, "isCompleted")) next.isCompleted = false;
-  if (Array.isArray(next.items)) next.items = next.items.map(resetCompletionState);
-  if (Array.isArray(next.subItems)) next.subItems = next.subItems.map(resetCompletionState);
-  if (Array.isArray(next.contents)) next.contents = next.contents.map(resetCompletionState);
-  return next;
-}
-
 function summarizeTemplate(template: JsonRecord): JsonRecord {
   return {
     id: template.id,
@@ -472,26 +467,8 @@ async function startRun(
     throw new ToolError("Template not found", "template_not_found");
   }
 
-  const entitlements = await getEntitlementsForUser(env, identity.userId);
-  if (entitlements.plan === "free" && entitlements.limits.maxActiveRuns) {
-    const [countRow] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(schema.checklist_runs)
-      .where(and(
-        eq(schema.checklist_runs.user_id, identity.userId),
-        isNull(schema.checklist_runs.team_id),
-        eq(schema.checklist_runs.status, "in_progress"),
-        isNull(schema.checklist_runs.deleted_at),
-      ))
-      .limit(1);
-    const currentCount = countRow?.count ?? 0;
-    if (currentCount >= entitlements.limits.maxActiveRuns) {
-      throw new ToolError("Active run limit reached", "limit_reached", {
-        limit: entitlements.limits.maxActiveRuns,
-        current: currentCount,
-      });
-    }
-  }
+  const owner = { userId: identity.userId, teamId: null };
+  const limit = await assertActiveRunCapacity(env, owner);
 
   const normalized = normalizeSectionsPayload(parseJsonArray(template.items) ?? []);
   if (normalized.error) throw new ToolError("Template content is invalid", "invalid_template");
@@ -503,7 +480,7 @@ async function startRun(
     team_id: null,
     template_id: template.id,
     title: parsed.data.title ?? template.title,
-    items: JSON.stringify(resetCompletionState(sanitizeStoredSections(normalized.sections))),
+    items: JSON.stringify(resetRunCompletionState(sanitizeStoredSections(normalized.sections))),
     status: "in_progress",
     progress: 0,
     started_at: now,
@@ -526,12 +503,20 @@ async function startRun(
     request,
     createdAt: now,
   });
-  await db.batch([
-    db.insert(schema.checklist_runs).values(run),
-    db.insert(schema.audit_events).values(auditEvent),
-  ]);
+  // With a limit, the insert re-checks it atomically so parallel start_run calls cannot all pass.
+  const batchResults = await db.batch(runInsertStatements(db, run, auditEvent, owner, limit));
+  if (limit !== null && batchChanges(batchResults[0]) === 0) {
+    throw new ToolError("Active run limit reached", "limit_reached", { limit, current: await countActiveRuns(env, owner) });
+  }
 
   return { run: serializeRun(run) };
+}
+
+/** Throws limit_reached when the context is at its active-run limit; returns the limit. */
+async function assertActiveRunCapacity(env: Env, owner: RunOwnerContext): Promise<number | null> {
+  const { limit, hit } = await checkActiveRunCapacity(env, owner, owner.userId);
+  if (hit) throw new ToolError("Active run limit reached", "limit_reached", { ...hit });
+  return limit;
 }
 
 async function listRuns(
@@ -654,6 +639,10 @@ async function updateRun(
     });
   }
 
+  if (parsed.data.operation === "set_run_status" && isReopening(existing.status, parsed.data.status)) {
+    await assertActiveRunCapacity(env, { userId: identity.userId, teamId: null });
+  }
+
   const sections = parseStoredSections(existing.items);
   applyRunOperation(sections, parsed.data);
   const now = new Date().toISOString();
@@ -667,12 +656,16 @@ async function updateRun(
   if (parsed.data.operation === "set_run_status") {
     updates.status = parsed.data.status;
     // Match the existing checklist status endpoint: a status-only transition does
-    // not rewrite progress, and reopening does not erase completion attribution.
+    // not rewrite progress, reopening does not erase completion attribution, and
+    // marking an already completed run completed again does not restamp it.
     updates.progress = typeof existing.progress === "number" ? existing.progress : 0;
-    if (parsed.data.status === "completed") {
-      updates.completed_at = now;
-      updates.completed_by_user_id = identity.userId;
-    }
+    Object.assign(updates, completionStamps({
+      currentStatus: existing.status,
+      currentCompletedAt: existing.completed_at,
+      nextStatus: parsed.data.status,
+      userId: identity.userId,
+      now,
+    }));
   }
 
   const nextRun = { ...existing, ...updates };

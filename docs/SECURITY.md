@@ -16,6 +16,25 @@
   Personal templates and listing, starting, reading, and updating Personal runs.
   Keys are stored hashed. The MCP routes are off on remote hosts unless
   `PERSONAL_RUN_MCP_ENABLED=true`.
+- **Share links** (`/share/:token`) need no login, so the token is the only
+  credential. `PUT /api/checklists/shared/:token` requires `expected_revision` and
+  applies only completion, task notes, and status onto the stored run
+  (`functions/api/utils/shared-run-merge.ts`); every other field is ignored.
+  Because the token grants write access, run reads (lists, detail, archived,
+  the share page) never return it or its timestamps
+  (`serializeChecklistRun`), and history redacts it. Only the share-creation
+  responses hand out a link, and they require permission to update the run.
+  `GET /api/checklists/shared/:token` selects and returns a fixed field list
+  (`sharedChecklistRunSelect` / `serializeSharedChecklistRun`): title, tasks,
+  status, progress, timestamps, revision, and staleness. It never returns owner,
+  member, Organization, or template ids (user ids resolve to names through
+  `/api/profiles/by-id`) or notes on retired tasks.
+  Link holders are guests: a signed-in visitor's edit is attributed to them only
+  if they already belong to the run's owner context (the Personal owner or an
+  active member of its Organization), and run history and the Organization
+  activity feed hide any other share-link actor, including on older rows. Only the
+  share-link rows are hidden; that person's other events keep their name
+  (`functions/api/utils/share-link-actors.ts`).
 - **Uploads** are written under the uploader's key prefix, and deletes are
   restricted to that prefix.
 - **Invites** store only a token hash, never the raw token.

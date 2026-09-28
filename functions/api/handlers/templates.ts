@@ -30,6 +30,17 @@ import {
   selectTemplateVersionHistory,
   serializeHistoryEvent,
 } from '../utils/history-queries';
+import { insertRowWhere, rowExistsSql } from '../utils/guarded-insert';
+import {
+  countTemplates,
+  isMissingRulesColumnError,
+  omitRulesColumn,
+  templateCapacityAvailableSql,
+  templateLimitResponse,
+  type AuditEventValues,
+  type TemplateInsertValues,
+  type TemplateVersionValues,
+} from '../utils/template-writes';
 import { canEditTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { z } from 'zod';
 import { portableTemplateRuleSchema } from '../../../src/lib/schemas/checklistSchema';
@@ -49,15 +60,10 @@ import {
 import {
   findFreeSuffixedSlug,
   generateUniqueSlug,
-  isMissingRulesColumnError,
   isTemplateSlugUniqueViolation,
   insertTemplateWithUniqueSlug,
-  omitRulesColumn,
-  templateSlugTakenResponse,
-  type AuditEventValues,
+  newTemplateResponse,
   type NewTemplateRows,
-  type TemplateInsertValues,
-  type TemplateVersionValues,
 } from '../utils/template-insert';
 import { isOwnPersonalTemplateRow, toPublicTemplate } from '../utils/template-public';
 
@@ -117,7 +123,8 @@ type ReconciledRunUpdate = {
   revision: number;
   whereClause: SQL | undefined;
   updatedAt: string;
-  // Written only when the reconcile changed the run, guarded by the run update's WHERE clause.
+  // Written only when the reconcile changed the run, guarded by the run update's WHERE clause
+  // and by the template's own audit row, so a save that misses records nothing.
   auditEvent?: AuditEventValues;
 };
 
@@ -128,10 +135,15 @@ async function updateTemplateWithHistoryFallback(
   auditEventValues: AuditEventValues,
   versionValues: TemplateVersionValues,
   reconciledRunUpdates: ReconciledRunUpdate[] = [],
-): Promise<{ templateResult: unknown; runResults: unknown[] }> {
+): Promise<{ updated: boolean; runResults: unknown[] }> {
   const { audit_events, checklist_runs, template_versions, templates } = schema;
+  // The audit row goes first, only while the template still matches whereClause, and every
+  // other statement requires that audit row. A plain INSERT would commit even when the
+  // UPDATE lost a race, leaving history (and reconciled runs) for a change that never happened.
+  const auditWritten = rowExistsSql(audit_events.id, String(auditEventValues.id));
+  const templateUpdateIndex = 2;
   const runResultIndexes: number[] = [];
-  // Run statements follow the template update, version insert, and audit insert.
+  // Run statements follow the audit insert, version insert, and template update.
   let nextIndex = 3;
   for (const runUpdate of reconciledRunUpdates) {
     if (runUpdate.auditEvent) nextIndex += 1;
@@ -141,12 +153,12 @@ async function updateTemplateWithHistoryFallback(
 
   const runBatch = (templateValues: TemplateUpdateValues) => {
     const statements = [
-      db.update(templates).set(templateValues).where(whereClause),
-      db.insert(template_versions).values(versionValues),
-      db.insert(audit_events).values(auditEventValues),
+      insertRowWhere(db, audit_events, auditEventValues, sql`exists (select 1 from ${templates} where ${whereClause})`),
+      insertRowWhere(db, template_versions, versionValues, auditWritten),
+      db.update(templates).set(templateValues).where(and(whereClause, auditWritten)),
       ...reconciledRunUpdates.flatMap((runUpdate) => [
         ...(runUpdate.auditEvent
-          ? [insertAuditEventWhen(db, runUpdate.auditEvent, sql`exists (select 1 from ${checklist_runs} where ${runUpdate.whereClause})`)]
+          ? [insertAuditEventWhen(db, runUpdate.auditEvent, sql`exists (select 1 from ${checklist_runs} where ${runUpdate.whereClause}) and ${auditWritten}`)]
           : []),
         db
           .update(checklist_runs)
@@ -158,7 +170,7 @@ async function updateTemplateWithHistoryFallback(
             revision: runUpdate.revision + 1,
             updated_at: runUpdate.updatedAt,
           })
-          .where(runUpdate.whereClause),
+          .where(and(runUpdate.whereClause, auditWritten)),
       ]),
     ] as const;
 
@@ -175,7 +187,10 @@ async function updateTemplateWithHistoryFallback(
 
     results = await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateUpdateValues);
   }
-  return { templateResult: results[0], runResults: runResultIndexes.map((index) => results[index]) };
+  return {
+    updated: !batchUpdateMissed(results[templateUpdateIndex]),
+    runResults: runResultIndexes.map((index) => results[index]),
+  };
 }
 
 function slugInUseResponse(slug: string): Response {
@@ -602,7 +617,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         const subject: AuditSubject = backupTeamId ? { type: 'team', id: backupTeamId } : { type: 'user', id: userId };
 
         try {
-          const slug = await insertTemplateWithUniqueSlug(db, {
+          const inserted = await insertTemplateWithUniqueSlug(db, {
             title: fields.data.title,
             slug: await generateUniqueSlug(env, fields.data.title, templateId),
             buildRows: async (candidateSlug) => {
@@ -650,7 +665,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
               };
             },
           });
-          if (!slug) throw new Error('templates.slug was taken on every attempt');
+          if (!('slug' in inserted)) throw new Error('templates.slug was taken on every attempt');
+          const { slug } = inserted;
           summary.imported += 1;
           summary.successes.push({
             index,
@@ -921,24 +937,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       const entitlements = teamId
         ? await getEntitlementsForContext(env, { type: 'team', teamId, userId })
         : await getEntitlementsForUser(env, userId);
-      if (entitlements.plan === 'free' && entitlements.limits.maxTemplates) {
-        const [row] = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(templates)
-          .where(
-            teamId
-              ? and(eq(templates.owner_type, 'team'), eq(templates.team_id, teamId), isNull(templates.deleted_at))
-              : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at)),
-          )
-          .limit(1);
-
-        const currentCount = row?.count ?? 0;
-        if (currentCount >= entitlements.limits.maxTemplates) {
-          return jsonError('Template limit reached. Upgrade to Pro to restore more templates.', 403, {
-            code: 'limit_reached',
-            details: { limit: entitlements.limits.maxTemplates, current: currentCount, resource: 'templates' },
-          });
-        }
+      const owner = { userId, teamId };
+      const limit = entitlements.plan === 'free' && entitlements.limits.maxTemplates ? entitlements.limits.maxTemplates : null;
+      if (limit !== null) {
+        const currentCount = await countTemplates(env, owner);
+        if (currentCount >= limit) return templateLimitResponse(owner, 'restore', limit, currentCount);
       }
 
       const now = new Date().toISOString();
@@ -960,16 +963,24 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         request,
         createdAt: now,
       });
-      await db.batch([
-        db.update(templates)
-          .set(restoreUpdates)
-          .where(
-            teamId
-              ? and(eq(templates.id, templateId), eq(templates.team_id, teamId), isNotNull(templates.deleted_at))
-              : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNotNull(templates.deleted_at)),
-          ),
-        db.insert(audit_events).values(auditEvent),
+      const archivedTemplate = teamId
+        ? and(eq(templates.team_id, teamId), isNotNull(templates.deleted_at))
+        : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNotNull(templates.deleted_at));
+      // With a limit, the restore re-checks it in the same statement. The audit row is written
+      // first and only while the restore will apply, so a lost race records nothing.
+      const restoreGuard = limit === null ? archivedTemplate : and(archivedTemplate, templateCapacityAvailableSql({ owner, limit }));
+      const restoreResults = await db.batch([
+        insertRowWhere(db, audit_events, auditEvent, rowExistsSql(templates.id, templateId, restoreGuard)),
+        db.update(templates).set(restoreUpdates).where(and(eq(templates.id, templateId), restoreGuard)),
       ]);
+      if (batchUpdateMissed(restoreResults[1])) {
+        if (limit !== null) {
+          const currentCount = await countTemplates(env, owner);
+          if (currentCount >= limit) return templateLimitResponse(owner, 'restore', limit, currentCount);
+        }
+        // A concurrent request restored it first.
+        return jsonError('Template is not archived', 400);
+      }
 
       return json({ success: true });
     }
@@ -1007,24 +1018,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       if (!cloneTeamId && entitlements.plan !== 'pro') {
         return jsonError('Upgrade to Pro to copy public templates into Personal.', 403, { code: 'upgrade_required' });
       }
-      if (entitlements.limits.maxTemplates !== null) {
-        const [existingCount] = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(templates)
-          .where(
-            cloneTeamId
-              ? and(eq(templates.owner_type, 'team'), eq(templates.team_id, cloneTeamId), isNull(templates.deleted_at))
-              : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at)),
-          )
-          .limit(1);
-
-        const currentCount = existingCount?.count ?? 0;
-        if (currentCount >= entitlements.limits.maxTemplates) {
-          return jsonError("Template limit reached. Upgrade to Pro to save more templates.", 403, {
-            code: 'limit_reached',
-            details: { limit: entitlements.limits.maxTemplates, current: currentCount, resource: 'templates' },
-          });
-        }
+      const cloneCapacity = entitlements.limits.maxTemplates !== null
+        ? { owner: { userId, teamId: cloneTeamId }, limit: entitlements.limits.maxTemplates }
+        : undefined;
+      if (cloneCapacity) {
+        const currentCount = await countTemplates(env, cloneCapacity.owner);
+        if (currentCount >= cloneCapacity.limit) return templateLimitResponse(cloneCapacity.owner, 'save', cloneCapacity.limit, currentCount);
       }
 
       const [source] = await withRulesColumnFallback((includeRules) =>
@@ -1092,9 +1091,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         };
       };
       const title = source.title || '';
-      const slug = await insertTemplateWithUniqueSlug(db, { title, slug: await generateUniqueSlug(env, title, templateId), buildRows });
+      const inserted = await insertTemplateWithUniqueSlug(db, {
+        title, slug: await generateUniqueSlug(env, title, templateId), buildRows, capacity: cloneCapacity,
+      });
 
-      return slug ? json({ id: templateId, slug }) : templateSlugTakenResponse();
+      return newTemplateResponse(env, templateId, inserted, cloneCapacity, 'save');
     }
 
     let body: unknown;
@@ -1118,24 +1119,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     const entitlements = requestedTeamId
       ? await getEntitlementsForContext(env, { type: 'team', teamId: requestedTeamId, userId })
       : await getEntitlementsForUser(env, userId);
-    if (entitlements.limits.maxTemplates) {
-      const [row] = await db
-        .select({ count: sql<number>`count(*)` })
-          .from(templates)
-          .where(
-            requestedTeamId
-              ? and(eq(templates.owner_type, 'team'), eq(templates.team_id, requestedTeamId), isNull(templates.deleted_at))
-              : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at)),
-          )
-          .limit(1);
-
-      const currentCount = row?.count ?? 0;
-      if (currentCount >= entitlements.limits.maxTemplates) {
-        return jsonError('Template limit reached. Upgrade to create more templates.', 403, {
-          code: 'limit_reached',
-          details: { limit: entitlements.limits.maxTemplates, current: currentCount, resource: 'templates' },
-        });
-      }
+    const createCapacity = entitlements.limits.maxTemplates
+      ? { owner: { userId, teamId: requestedTeamId }, limit: entitlements.limits.maxTemplates }
+      : undefined;
+    if (createCapacity) {
+      const currentCount = await countTemplates(env, createCapacity.owner);
+      if (currentCount >= createCapacity.limit) return templateLimitResponse(createCapacity.owner, 'create', createCapacity.limit, currentCount);
     }
 
     const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
@@ -1202,9 +1191,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         }),
       };
     };
-    const slug = await insertTemplateWithUniqueSlug(db, { title: slugSource, slug: await generateUniqueSlug(env, slugSource, templateId), buildRows });
+    const inserted = await insertTemplateWithUniqueSlug(db, {
+      title: slugSource, slug: await generateUniqueSlug(env, slugSource, templateId), buildRows, capacity: createCapacity,
+    });
 
-    return slug ? json({ id: templateId, slug }) : templateSlugTakenResponse();
+    return newTemplateResponse(env, templateId, inserted, createCapacity, 'create');
   }
 
   if (request.method === 'PUT') {
@@ -1364,8 +1355,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     }
 
     const templateUpdateWhere = existingTemplate.owner_type === 'team' && existingTemplate.team_id
-      ? and(eq(templates.id, templateId), eq(templates.team_id, existingTemplate.team_id), eq(templates.version, currentVersion))
-      : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), eq(templates.version, currentVersion));
+      ? and(eq(templates.id, templateId), eq(templates.team_id, existingTemplate.team_id), eq(templates.version, currentVersion), isNull(templates.deleted_at))
+      : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), eq(templates.version, currentVersion), isNull(templates.deleted_at));
 
     const subject = getTemplateSubject(existingTemplate as unknown as Record<string, unknown>, userId);
     const updatedTemplate = {
@@ -1472,7 +1463,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     let reconciledRuns = 0;
     try {
-      const { templateResult, runResults } = await updateTemplateWithHistoryFallback(
+      const { updated, runResults } = await updateTemplateWithHistoryFallback(
         db,
         templateValues as TemplateUpdateValues,
         templateUpdateWhere,
@@ -1480,7 +1471,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         versionValues,
         reconciledRunUpdates,
       );
-      if (batchUpdateMissed(templateResult)) {
+      if (!updated) {
         return jsonError('Template changed while it was being saved. Refresh before saving again.', 409, {
           code: 'edit_conflict',
         });
@@ -1561,16 +1552,18 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       request,
       createdAt: now,
     });
-    await db.batch([
-      db.update(templates)
-        .set(archiveUpdates)
-        .where(
-          existingTemplate.owner_type === 'team' && existingTemplate.team_id
-            ? and(eq(templates.id, templateId), eq(templates.team_id, existingTemplate.team_id), isNull(templates.deleted_at))
-            : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at)),
-        ),
-      db.insert(audit_events).values(auditEvent),
+    const activeTemplate = existingTemplate.owner_type === 'team' && existingTemplate.team_id
+      ? and(eq(templates.team_id, existingTemplate.team_id), isNull(templates.deleted_at))
+      : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at));
+    // The audit row is written first and only while the template is still active.
+    const archiveResults = await db.batch([
+      insertRowWhere(db, audit_events, auditEvent, rowExistsSql(templates.id, templateId, activeTemplate)),
+      db.update(templates).set(archiveUpdates).where(and(eq(templates.id, templateId), activeTemplate)),
     ]);
+    if (batchUpdateMissed(archiveResults[1])) {
+      // A concurrent request archived it first.
+      return jsonError('Template not found or unauthorized', 404);
+    }
 
     return json({ success: true });
   }

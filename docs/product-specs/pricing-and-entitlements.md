@@ -38,6 +38,20 @@ Current Free limits:
 - 1 personal template.
 - 3 active personal runs.
 
+An active run is one in progress, whether or not it is shared. Every way of adding one counts against the limit of the
+run's own context (its Organization, or its owner's Personal context), not the acting
+User's: starting or restoring a run, and reopening a completed run by revalidating it,
+setting its status back to in progress, through a share link, or through an agent's Run
+Key. Saves to a run that is already in progress never check the limit, so a context over
+its limit (for example after a downgrade) can still finish its runs
+(`functions/api/utils/active-run-limit.ts`).
+
+Limits hold under concurrent requests. Starting, restoring, and copying runs and
+Templates check the count once for a clear error, then again inside the write itself
+(`INSERT ... SELECT ... WHERE count < limit`, or the same condition on a restore's
+`UPDATE`), so parallel requests cannot all pass the same count
+(`functions/api/utils/guarded-insert.ts`, `functions/api/utils/template-writes.ts`).
+
 ## Organization Matrix
 
 | Capability | Free Organization | Paid Organization |
@@ -91,7 +105,15 @@ instead of inferring access state from message text:
 
 - `401` means the user must sign in; preserve the requested return path.
 - `403 upgrade_required` means the active context needs a paid entitlement.
-- `403 limit_reached` means the active plan limit has been reached.
+- `403 limit_reached` means the plan limit of the context that owns the Template or
+  Run has been reached. `details` holds `limit`, `current`, `resource`
+  (`active_runs` or `templates`) and `context` (`personal` or `organization`).
+  Only a Personal limit tells the user to upgrade to Pro; an Organization limit
+  says the Organization needs a paid plan, because Personal Pro never lifts it.
+  Clients pick the upgrade path from `details.context`, not from the message:
+  `getAccessFailure` in `src/lib/api-errors.ts` treats an Organization limit as a
+  plain error that shows the server message and never starts Personal Pro checkout.
+  All of these responses come from `functions/api/utils/limit-reached.ts`.
 - `503 billing_unavailable` means checkout cannot currently be started.
 
 Billing status query keys must include the current user id (or an explicit
