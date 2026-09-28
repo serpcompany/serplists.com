@@ -7,6 +7,7 @@ import {
   createRunExecutionShare,
   loadRunExecutionData,
   saveRunItemNotes,
+  stopRunExecutionSharing,
   toggleRunItem,
   toggleRunSubItem,
 } from '@/features/run-execution/useRunExecutionModel';
@@ -349,5 +350,70 @@ describe('run execution model actions', () => {
 
     expect(result).toEqual({ kind: 'not_found' });
     expect(apiClient.createChecklistRunShare).not.toHaveBeenCalled();
+  });
+});
+
+describe('run page sharing', () => {
+  const sharingApiClient = () => ({
+    createChecklistRunShare: vi.fn().mockResolvedValue({ shareToken: 'token-1' }),
+    getChecklistById: vi.fn(),
+    getSharedChecklist: vi.fn(),
+    revokeChecklistRunShare: vi.fn().mockResolvedValue({ id: 'run-1', isPublic: false }),
+    updateSharedChecklist: vi.fn(),
+  });
+
+  it('marks the run shared and refreshes the runs list after sharing', async () => {
+    const apiClient = sharingApiClient();
+    const refreshRuns = vi.fn();
+
+    const result = await createRunExecutionShare(
+      { run: buildRun({ isPublic: false }) },
+      { apiClient, origin: 'https://app.test', refreshRuns, updateRun: vi.fn() },
+    );
+
+    expect(result).toEqual({
+      kind: 'ok',
+      run: expect.objectContaining({ id: 'run-1', isPublic: true }),
+      shareUrl: 'https://app.test/share/token-1',
+    });
+    expect(refreshRuns).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops sharing through the API, marks the run private and refreshes the runs list', async () => {
+    const apiClient = sharingApiClient();
+    const refreshRuns = vi.fn();
+    const run = buildRun({ isPublic: true, revision: 4 });
+
+    const result = await stopRunExecutionSharing({ run }, { apiClient, refreshRuns, updateRun: vi.fn() });
+
+    expect(apiClient.revokeChecklistRunShare).toHaveBeenCalledWith('run-1');
+    // Stopping sharing does not bump the revision, so later saves keep working.
+    expect(result).toEqual({ kind: 'ok', run: { ...run, isPublic: false } });
+    expect(refreshRuns).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the API error and keeps the run shared when stopping fails', async () => {
+    const apiClient = sharingApiClient();
+    apiClient.revokeChecklistRunShare.mockRejectedValue(createApiError(403, { error: 'Forbidden' }));
+    const refreshRuns = vi.fn();
+
+    const result = await stopRunExecutionSharing(
+      { run: buildRun({ isPublic: true }) },
+      { apiClient, refreshRuns, updateRun: vi.fn() },
+    );
+
+    expect(result).toEqual({ kind: 'error', message: 'Forbidden' });
+    expect(refreshRuns).not.toHaveBeenCalled();
+  });
+
+  it('never stops sharing from a share link or without a loaded run', async () => {
+    const apiClient = sharingApiClient();
+
+    expect(await stopRunExecutionSharing(
+      { run: buildRun({ isPublic: true }), shareToken: 'token-1' },
+      { apiClient, updateRun: vi.fn() },
+    )).toEqual({ kind: 'shared_disabled' });
+    expect(await stopRunExecutionSharing({}, { apiClient, updateRun: vi.fn() })).toEqual({ kind: 'not_found' });
+    expect(apiClient.revokeChecklistRunShare).not.toHaveBeenCalled();
   });
 });

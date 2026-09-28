@@ -142,3 +142,49 @@ test('stopping a share from the runs list turns the guest link off', async ({ br
     await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
   }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
 });
+
+test('stopping a share from the run page turns the guest link off', async ({ browser, page }) => {
+  test.setTimeout(120_000);
+  await loginAsAdmin(page);
+
+  const { runId, shareToken } = await page.evaluate(async ({ apiBaseUrl }) => {
+    const created = await fetch(`${apiBaseUrl}/checklists`, {
+      body: JSON.stringify({
+        title: `Run page stop sharing ${Date.now()}`,
+        sections: [{ id: 'page', title: 'Section', items: [{ id: 'page-a', title: 'Task A' }] }],
+      }),
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    const id = ((await created.json()) as { id: string }).id;
+    const shared = await fetch(`${apiBaseUrl}/checklists/run/${id}/share`, {
+      body: '{}',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    return { runId: id, shareToken: ((await shared.json()) as { shareToken: string }).shareToken };
+  }, { apiBaseUrl: DEV_API_BASE_URL });
+
+  const guestContext = await browser.newContext();
+  const guest = await guestContext.newPage();
+  const sharedUrl = `${DEV_API_BASE_URL}/checklists/shared/${shareToken}`;
+  expect((await guest.request.get(sharedUrl)).status()).toBe(200);
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByText('Shared', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Stop sharing' }).click();
+  await expect(page.getByText('Sharing stopped. The old link no longer works.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Stop sharing' })).toHaveCount(0);
+  expect((await guest.request.get(sharedUrl)).status()).toBe(404);
+
+  // The run page keeps saving after stopping sharing (no revision change).
+  await page.getByRole('button', { name: 'Mark Complete' }).click();
+  await expect.poll(async () => (await readOwnerRun(page, runId)).tasks).toEqual(['Task A:true']);
+
+  await guestContext.close();
+  await page.evaluate(async ({ id, apiBaseUrl }) => {
+    await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
+  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+});
