@@ -39,15 +39,36 @@ const collectPackVideoValues = (): string[] => {
   return values;
 };
 
+// Every third-party script origin the production site loads: Google Tag Manager
+// (index.html), the Cloudflare Web Analytics beacon (injected by Cloudflare), and
+// Ahrefs Web Analytics (loaded by a GTM tag).
+const ANALYTICS_SCRIPT_ORIGINS = [
+  'https://www.googletagmanager.com',
+  'https://static.cloudflareinsights.com',
+  'https://analytics.ahrefs.com',
+];
+
 describe('deployment security headers', () => {
   const policy = readContentSecurityPolicy();
   const frameSources = new Set(policy.get('frame-src') ?? []);
+  const scriptSources = new Set(policy.get('script-src') ?? []);
+  const connectSources = new Set(policy.get('connect-src') ?? []);
 
   it('keeps the restrictive defaults', () => {
     expect(policy.get('default-src')).toEqual(["'self'"]);
     expect(policy.get('frame-ancestors')).toEqual(["'none'"]);
     expect(frameSources.has('https:')).toBe(false);
     expect(frameSources.has('*')).toBe(false);
+  });
+
+  it('allows every analytics script origin in script-src, and no wildcard', () => {
+    for (const origin of ANALYTICS_SCRIPT_ORIGINS) {
+      expect(scriptSources.has(origin), `script-src is missing ${origin}`).toBe(true);
+    }
+    expect(scriptSources.has('https:')).toBe(false);
+    expect(scriptSources.has('*')).toBe(false);
+    // The beacons report to their own hosts (cloudflareinsights.com, analytics.ahrefs.com).
+    expect(connectSources.has('https:')).toBe(true);
   });
 
   it('allows every video embed origin in frame-src', () => {

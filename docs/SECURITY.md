@@ -87,6 +87,13 @@ check policy changes on `wrangler pages dev` or a deployed host.
 - To support another provider, add its origin to both places.
   `tests/unit/security/headers.test.ts` fails when they drift, or when a bundled
   public template video would be blocked.
+- `script-src` lists each third-party script origin by name, never `https:`:
+  Google Tag Manager (`index.html`), the Cloudflare Web Analytics beacon
+  (`static.cloudflareinsights.com`, injected by Cloudflare) and Ahrefs Web Analytics
+  (`analytics.ahrefs.com`, loaded by a GTM tag). A tag added in GTM that loads a
+  script from a new origin needs that origin here, and in the list in
+  `tests/unit/security/headers.test.ts`; otherwise the browser blocks it.
+  `connect-src` already allows any `https:` host the beacons report to.
 
 ## Rate limits
 

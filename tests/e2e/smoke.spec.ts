@@ -150,6 +150,8 @@ test("@smoke public document installs the configured Google Tag Manager containe
   );
   expect(csp).toContain("script-src");
   expect(csp).toContain("https://www.googletagmanager.com");
+  expect(csp).toContain("https://static.cloudflareinsights.com");
+  expect(csp).toContain("https://analytics.ahrefs.com");
   expect(csp).toContain("frame-src");
 });
 
