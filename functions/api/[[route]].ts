@@ -48,21 +48,25 @@ function requiresConfiguredAuthEmail(path: string, emailVerificationRequired: bo
   );
 }
 
-export const onRequestGet = handleRequest;
-export const onRequestPost = handleRequest;
-export const onRequestPut = handleRequest;
-export const onRequestDelete = handleRequest;
-export const onRequestOptions = handleCORS;
+// Pages matches a verb export (onRequestGet, ...) on the exact method only and
+// sends any other method, HEAD included, to the static assets, whose SPA fallback
+// answers 200 with index.html. One catch-all keeps every /api/* method on the API.
+export const onRequest = dispatch;
 
-// Default export for module workers (required for tests)
+// Default export for module workers (required for tests). It shares the Pages
+// dispatcher, so tests exercise the routing production uses.
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    if (request.method === 'OPTIONS') {
-      return handleCORS({ request, env });
-    }
-    return handleRequest({ request, env });
+  fetch(request: Request, env: Env): Promise<Response> {
+    return dispatch({ request, env });
   }
 };
+
+function dispatch(context: { request: Request; env: Env }): Promise<Response> {
+  if (context.request.method === 'OPTIONS') {
+    return handleCORS(context);
+  }
+  return handleRequest(context);
+}
 
 async function handleCORS(context: { request: Request; env: Env }): Promise<Response> {
   return buildCorsPreflightResponse(context.request, context.env);
@@ -82,7 +86,10 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
   // Only for the in-memory rate limits: a client IP is personal data, never logged.
   const ip = getClientIp(request);
 
-  const finalize = (resp: Response) => {
+  const finalize = (handlerResponse: Response) => {
+    // HEAD gets the status and headers without a body, whatever the handler built.
+    const resp =
+      request.method === 'HEAD' && handlerResponse.body ? new Response(null, handlerResponse) : handlerResponse;
     resp.headers.set('X-Request-Id', requestId);
     applyCorsHeaders(resp, request, env);
     log('info', 'api_request', {

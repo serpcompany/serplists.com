@@ -73,7 +73,14 @@ Organization scoping applies.
 - Organizations: `GET|POST /api/teams`, `GET|PUT /api/teams/:teamId`, `GET /api/teams/:teamId/members`, `PUT /api/teams/:teamId/members/:memberId`, `PUT /api/teams/:teamId/owner`, invites, and activity (see [organizations](organizations.md))
 - Billing: `POST /api/billing/checkout`, `POST /api/billing/portal`, `GET /api/billing/status`; Stripe webhook `POST /api/stripe/webhook`
 - Uploads: `POST /api/uploads`, `GET|HEAD|DELETE /api/uploads/file?key=...`
-- Health: `GET /api/health`
+- Health: `GET|HEAD /api/health`
+
+`functions/api/[[route]].ts` exports one catch-all `onRequest`, so every method,
+`HEAD` and `PATCH` included, reaches the API. Pages matches a verb export such as
+`onRequestGet` only on its exact method and sends any other method to the static
+assets, which would answer `200` with the SPA's `index.html`. A `HEAD` answer keeps
+the status and headers the route builds and drops the body; routes that only check
+for `GET` answer `HEAD` with their own `404` or `405`.
 
 Run responses include `template_version`, `current_template_version`, `revision`,
 and derived `is_stale`. Send `expected_revision` when updating a run and
