@@ -229,7 +229,10 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
       .limit(1);
 
     if (!existingCustomer?.stripe_customer_id) {
-      return jsonError("No Stripe customer found for user", 400);
+      // Pro granted by support never creates a Stripe customer, so there is nothing to manage.
+      return jsonError("There is no subscription to manage for this account. Contact support.", 409, {
+        code: "no_billing_account",
+      });
     }
 
     const returnUrl = `${origin}${SETTINGS_PATH}`;

@@ -131,6 +131,33 @@ describe('BillingSection', () => {
     expect(html).not.toContain('Upgrade to Pro');
   });
 
+  it('does not offer a portal that cannot open to Pro granted by support', () => {
+    const html = renderBillingSection({
+      billingEnabled: true,
+      plan: 'pro',
+      subscriptionStatus: null,
+      canManageBilling: false,
+      managedBySupport: true,
+    });
+
+    expect(html).toContain('Your plan is managed by support. Contact support to change it.');
+    expect(html).not.toContain('Manage subscription');
+    expect(html).not.toContain('Upgrade to Pro');
+  });
+
+  it('keeps the portal for a Pro subscriber', () => {
+    const html = renderBillingSection({
+      billingEnabled: true,
+      plan: 'pro',
+      subscriptionStatus: 'active',
+      canManageBilling: true,
+      managedBySupport: false,
+    });
+
+    expect(html).toContain('Manage subscription');
+    expect(html).not.toContain('managed by support');
+  });
+
   it('does not show personal checkout actions in a free team workspace', () => {
     const html = renderBillingSection(
       {

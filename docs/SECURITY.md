@@ -111,5 +111,7 @@ returns `409 plan_managed_by_support` and Billing shows that support manages the
 until the override is deleted or expires (a `"pro"` override already returns
 `409 already_subscribed`). A `"free"` override does not cancel an
 existing Stripe subscription, which keeps billing: cancel it in Stripe (the user can
-also still open the Customer Portal). To end a comp, prefer `DELETE`, which returns the
+also still open the Customer Portal). A `"pro"` comp creates no Stripe customer, so
+Billing shows that support manages the plan instead of Manage subscription, and the
+portal returns `409 no_billing_account`. To end a comp, prefer `DELETE`, which returns the
 user to their Stripe state.

@@ -337,4 +337,31 @@ describe("billing for a user whose plan support manages", () => {
 
     expect(data.managedBySupport).toBe(false);
   });
+
+  it("reports no portal for a Pro override without a Stripe customer", async () => {
+    d1.sqlite.exec("DELETE FROM stripe_customers");
+    insertOverride("pro");
+
+    const data = await billingStatus();
+
+    expect(data.plan).toBe("pro");
+    expect(data.managedBySupport).toBe(true);
+    expect(data.canManageBilling).toBe(false);
+  });
+
+  it("refuses the portal with a code the client can explain when there is no Stripe customer", async () => {
+    d1.sqlite.exec("DELETE FROM stripe_customers");
+    insertOverride("pro");
+
+    const response = await handleBilling(
+      new Request("http://localhost/api/billing/portal", { method: "POST", body: "{}" }),
+      env(),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.code).toBe("no_billing_account");
+    expect(body.error).not.toMatch(/Stripe customer/);
+    expect(stripeCalls()).toEqual([]);
+  });
 });

@@ -100,6 +100,8 @@ instead of inferring access state from message text:
   plan, so self-serve checkout is closed.
 - `409 billing_customer_missing` means Stripe no longer has the User's billing
   account, so the Customer Portal cannot open; checkout replaces the account.
+- `409 no_billing_account` means the User has no billing account (for example,
+  Pro granted by support), so there is no Customer Portal to open.
 
 ### Subscription status
 
@@ -118,5 +120,7 @@ Free or Pro label as known while billing status is still loading.
 
 Personal manual overrides take precedence over Stripe-derived state until they
 are removed. While one is active, checkout is refused (a subscription bought under
-a Free override would never grant Pro) and Billing says support manages the plan. Use the [admin override procedure](../SECURITY.md#admin-entitlement-override)
+a Free override would never grant Pro) and Billing says support manages the plan.
+Billing offers Manage subscription only to a User with a Stripe billing account,
+so Pro granted by support shows just that notice. Use the [admin override procedure](../SECURITY.md#admin-entitlement-override)
 for prerequisites, commands, verification, and temporary-secret cleanup.

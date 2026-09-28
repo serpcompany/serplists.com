@@ -156,7 +156,9 @@ Authenticated:
   still holds the missing id, and retries once. Other Stripe errors never
   replace the customer. The Checkout idempotency key includes the customer id.
 - `POST /api/billing/portal` → returns `{ url }` to redirect user to Stripe Customer Portal,
-  or `409 billing_customer_missing` when Stripe no longer has the stored customer
+  `409 no_billing_account` when the user has no Stripe customer (such as Pro
+  granted by an override), or `409 billing_customer_missing` when Stripe no
+  longer has the stored customer
 - Stripe returns the user to `/dashboard/settings?billing=success` or
   `?billing=cancel` after Checkout, and to `/dashboard/settings` from the Portal.
   Billing reads `billing=success` and polls Personal status (whichever context is
@@ -169,8 +171,9 @@ Authenticated:
   (a Stripe customer exists), and `managedBySupport` (a manual override sets the
   plan). Organization context never includes them. Billing shows Manage
   subscription, not Upgrade, whenever `plan` is `pro` or `subscriptionStatus` is
-  set; under a Free override it shows no Upgrade, only Manage subscription for an
-  existing customer.
+  set. Under an override (Free or Pro), or for Pro without a Stripe customer (a
+  local test persona), it says support manages the plan and shows no Upgrade,
+  only Manage subscription for an existing customer.
 
 Webhook:
 - `POST /api/stripe/webhook` (verifies `Stripe-Signature`, idempotent via `stripe_webhook_events`)

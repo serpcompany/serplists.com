@@ -50,6 +50,8 @@ describe("getPersonalBillingAction", () => {
   );
 
   it("manages Pro", () => {
+    expect(getPersonalBillingAction({ plan: "pro", canManageBilling: true })).toBe("manage");
+    // A response from before canManageBilling existed keeps the portal.
     expect(getPersonalBillingAction({ plan: "pro" })).toBe("manage");
   });
 
@@ -57,7 +59,13 @@ describe("getPersonalBillingAction", () => {
     expect(getPersonalBillingAction({ plan: "free", managedBySupport: true })).toBe("support");
     expect(getPersonalBillingAction({ plan: "free", managedBySupport: true, subscriptionStatus: "active" }))
       .toBe("support");
-    expect(getPersonalBillingAction({ plan: "pro", managedBySupport: true })).toBe("manage");
+    expect(getPersonalBillingAction({ plan: "pro", managedBySupport: true, canManageBilling: false })).toBe("support");
+    expect(getPersonalBillingAction({ plan: "pro", managedBySupport: true, canManageBilling: true })).toBe("support");
+  });
+
+  it("never sends Pro without a Stripe customer to a portal that cannot open", () => {
+    // A local test persona gets Pro outside Stripe and has no customer either.
+    expect(getPersonalBillingAction({ plan: "pro", canManageBilling: false })).toBe("support");
   });
 });
 
