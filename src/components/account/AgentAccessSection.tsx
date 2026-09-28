@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { QueryListState } from '@/components/shared/QueryListState';
 import { api, getAgentMcpEndpoint, type AgentKey, type CreatedAgentKey } from '@/lib/api';
 import { copyTextToClipboard } from '@/lib/clipboard';
 
@@ -39,8 +40,9 @@ const formatTimestamp = (value: string | null): string => {
 export type AgentAccessSectionViewProps = {
   createdKey: CreatedAgentKey | null;
   isCreating: boolean;
+  isError: boolean;
   isLoading: boolean;
-  keys: AgentKey[];
+  keys: AgentKey[] | undefined;
   keyName: string;
   mcpEndpoint: string;
   revokingKeyId: string | null;
@@ -49,12 +51,14 @@ export type AgentAccessSectionViewProps = {
   onCreate: (event: FormEvent<HTMLFormElement>) => void;
   onDismissSecret: () => void;
   onKeyNameChange: (name: string) => void;
+  onRetry: () => void;
   onRevoke: (key: AgentKey) => void;
 };
 
 export function AgentAccessSectionView({
   createdKey,
   isCreating,
+  isError,
   isLoading,
   keys,
   keyName,
@@ -65,6 +69,7 @@ export function AgentAccessSectionView({
   onCreate,
   onDismissSecret,
   onKeyNameChange,
+  onRetry,
   onRevoke,
 }: AgentAccessSectionViewProps) {
   return (
@@ -191,15 +196,20 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
             </p>
           </div>
 
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading keys...</p>
-          ) : keys.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              No Run Keys yet.
-            </div>
-          ) : (
+          <QueryListState
+            query={{ data: keys, isError, isLoading }}
+            loadingLabel="Loading keys..."
+            loadErrorLabel="Couldn't load your Run Keys."
+            refreshErrorLabel="Couldn't refresh your Run Keys. Showing the last loaded list."
+            onRetry={onRetry}
+            empty={
+              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                No Run Keys yet.
+              </div>
+            }
+          >
             <div className="divide-y rounded-lg border">
-              {keys.map((key) => {
+              {(keys ?? []).map((key) => {
                 const isActive = key.status === 'active';
                 return (
                   <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between" key={key.id}>
@@ -248,7 +258,7 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
                 );
               })}
             </div>
-          )}
+          </QueryListState>
         </div>
       </CardContent>
     </Card>
@@ -327,8 +337,9 @@ export function AgentAccessSection() {
     <AgentAccessSectionView
       createdKey={createdKey}
       isCreating={isCreating}
+      isError={keysQuery.isError}
       isLoading={keysQuery.isLoading}
-      keys={keysQuery.data ?? []}
+      keys={keysQuery.data}
       keyName={keyName}
       mcpEndpoint={mcpEndpoint}
       revokingKeyId={revokingKeyId}
@@ -337,6 +348,7 @@ export function AgentAccessSection() {
       onCreate={handleCreate}
       onDismissSecret={() => setCreatedKey(null)}
       onKeyNameChange={setKeyName}
+      onRetry={() => void keysQuery.refetch()}
       onRevoke={handleRevoke}
     />
   );

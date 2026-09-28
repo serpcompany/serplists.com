@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 import { BillingSection } from '@/components/account/BillingSection';
+import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
 
 const workspaceMock = vi.hoisted(() => ({
   value: {
@@ -99,6 +100,27 @@ describe('BillingSection', () => {
     );
 
     expect(html).toContain('Paid Organization entitlements apply while this Organization is selected.');
+    expect(html).not.toContain('Upgrade to Pro');
+    expect(html).not.toContain('Manage subscription');
+  });
+
+  it('does not offer an upgrade or keep "Checking..." when billing status failed to load', () => {
+    workspaceMock.value = { activeTeamId: undefined, isTeamWorkspace: false };
+    const queryClient = createTestQueryClient();
+    seedQueryError(queryClient, ['billing', 'status', 'user-1', 'personal']);
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <BillingSection />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Unavailable');
+    expect(html).toContain('Billing status unavailable.');
+    expect(html).toContain('Retry');
+    expect(html).not.toContain('Checking...');
     expect(html).not.toContain('Upgrade to Pro');
     expect(html).not.toContain('Manage subscription');
   });

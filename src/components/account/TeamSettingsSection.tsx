@@ -15,6 +15,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { QueryListState } from '@/components/shared/QueryListState';
+import { TeamActivityList } from '@/components/account/TeamActivityList';
 import { api, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/lib/api';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -39,36 +41,11 @@ const roleDescriptions: Record<TeamRole, string> = {
   viewer: 'Views shared templates and runs.',
 };
 
-const teamActivityActionLabels: Record<string, string> = {
-  'checklist_run.created': 'Run created',
-  'checklist_run.deleted': 'Run archived',
-  'checklist_run.restored': 'Run restored',
-  'checklist_run.share_created': 'Run share created',
-  'checklist_run.shared_updated': 'Shared run updated',
-  'checklist_run.updated': 'Run updated',
-  'team.created': 'Organization created',
-  'team.owner_transferred': 'Owner transferred',
-  'team.updated': 'Organization updated',
-  'team_invite.accepted': 'Invite accepted',
-  'team_invite.created': 'Invite created',
-  'team_invite.revoked': 'Invite revoked',
-  'team_member.updated': 'Member updated',
-  'template.cloned': 'Template cloned',
-  'template.created': 'Template created',
-  'template.deleted': 'Template archived',
-  'template.imported': 'Template imported',
-  'template.restored': 'Template restored',
-  'template.updated': 'Template updated',
-};
-
 const formatRole = (role: TeamRole): string =>
   role.charAt(0).toUpperCase() + role.slice(1);
 
 const formatMemberStatus = (status: TeamMemberStatus): string =>
   status.charAt(0).toUpperCase() + status.slice(1);
-
-const formatTeamActivityAction = (action: string): string =>
-  teamActivityActionLabels[action] ?? action;
 
 const formatInviteExpiration = (value: string): string => {
   const date = new Date(value);
@@ -82,25 +59,6 @@ const formatInviteExpiration = (value: string): string => {
     year: 'numeric',
   })}`;
 };
-
-const formatActivityTime = (value: string): string => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-
-  return date.toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
-};
-
-const getActivityActorName = (actor: {
-  email?: string | null;
-  name?: string | null;
-  username?: string | null;
-  userId?: string | null;
-}): string => actor.name || actor.username || actor.email || actor.userId || 'Unknown user';
 
 const resolveCreatedInviteUrl = (
   invite: Awaited<ReturnType<typeof api.createTeamInvite>>,
@@ -169,8 +127,6 @@ export function TeamSettingsSection() {
     enabled: Boolean(activeTeamId && canManageTeam),
     staleTime: 30 * 1000,
   });
-
-  const activity = activityQuery.data ?? [];
 
   const incomingInvitesQuery = useQuery({
     queryKey: ['incoming-team-invites'],
@@ -607,11 +563,14 @@ export function TeamSettingsSection() {
             {canManageTeam ? (
               <div className="space-y-3">
                 <div className="text-sm font-medium text-foreground">Pending invites</div>
-                {invitesQuery.isLoading ? (
-                  <div className="text-sm text-muted-foreground">Loading invites...</div>
-                ) : invites.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No pending invites.</div>
-                ) : (
+                <QueryListState
+                  query={invitesQuery}
+                  loadingLabel="Loading invites..."
+                  loadErrorLabel="Couldn't load pending invites."
+                  refreshErrorLabel="Couldn't refresh pending invites. Showing the last loaded list."
+                  onRetry={() => void reload(invitesQuery, ['team-invites', activeTeamId])}
+                  empty={<div className="text-sm text-muted-foreground">No pending invites.</div>}
+                >
                   <div className="divide-y rounded-md border border-border">
                     {invites.map((invite) => (
                       <div
@@ -645,17 +604,20 @@ export function TeamSettingsSection() {
                       </div>
                     ))}
                   </div>
-                )}
+                </QueryListState>
               </div>
             ) : null}
 
             <div className="space-y-3">
               <div className="text-sm font-medium text-foreground">Members</div>
-              {membersQuery.isLoading ? (
-                <div className="text-sm text-muted-foreground">Loading members...</div>
-              ) : members.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No members found.</div>
-              ) : (
+              <QueryListState
+                query={membersQuery}
+                loadingLabel="Loading members..."
+                loadErrorLabel="Couldn't load members."
+                refreshErrorLabel="Couldn't refresh members. Showing the last loaded list."
+                onRetry={() => void reload(membersQuery, ['team-members', activeTeamId])}
+                empty={<div className="text-sm text-muted-foreground">No members found.</div>}
+              >
                 <div className="divide-y rounded-md border border-border">
                   {members.map((member) => {
                     const isOwner = member.role === 'owner';
@@ -754,39 +716,14 @@ export function TeamSettingsSection() {
                     );
                   })}
                 </div>
-              )}
+              </QueryListState>
             </div>
 
             {canManageTeam ? (
-              <div className="space-y-3">
-                <div className="text-sm font-medium text-foreground">Activity</div>
-                {activityQuery.isLoading ? (
-                  <div className="text-sm text-muted-foreground">Loading activity...</div>
-                ) : activity.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No Organization activity recorded yet.</div>
-                ) : (
-                  <div className="divide-y rounded-md border border-border">
-                    {activity.slice(0, 10).map((event) => (
-                      <div
-                        key={event.id}
-                        className="grid gap-1 p-3 md:grid-cols-[minmax(0,1fr)_180px]"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-foreground">
-                            {formatTeamActivityAction(event.action)}
-                          </div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {getActivityActorName(event.actor)}
-                          </div>
-                        </div>
-                        <div className="text-sm text-muted-foreground md:text-right">
-                          {formatActivityTime(event.createdAt)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <TeamActivityList
+                query={activityQuery}
+                onRetry={() => void reload(activityQuery, ['team-activity', activeTeamId])}
+              />
             ) : null}
           </div>
         ) : (

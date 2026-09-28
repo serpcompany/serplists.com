@@ -1,12 +1,15 @@
 import React from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  AgentAccessSection,
   AgentAccessSectionView,
   type AgentAccessSectionViewProps,
 } from '@/components/account/AgentAccessSection';
 import type { AgentKey } from '@/lib/api';
+import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
 
 const activeKey: AgentKey = {
   id: 'key-1',
@@ -21,6 +24,7 @@ const activeKey: AgentKey = {
 const defaultProps: AgentAccessSectionViewProps = {
   createdKey: null,
   isCreating: false,
+  isError: false,
   isLoading: false,
   keys: [],
   keyName: '',
@@ -31,6 +35,7 @@ const defaultProps: AgentAccessSectionViewProps = {
   onCreate: vi.fn(),
   onDismissSecret: vi.fn(),
   onKeyNameChange: vi.fn(),
+  onRetry: vi.fn(),
   onRevoke: vi.fn(),
 };
 
@@ -96,5 +101,42 @@ describe('AgentAccessSectionView', () => {
     expect(html).toContain('Revoked');
     expect(html).toContain('slrk_demo12...');
     expect(html).not.toContain('slrk_secret_visible_once');
+  });
+
+  it('shows a load error with Retry instead of an empty key list when the keys failed to load', () => {
+    const html = renderView({ isError: true, keys: undefined });
+
+    expect(html).toContain('load your Run Keys');
+    expect(html).toContain('Retry');
+    expect(html).not.toContain('No Run Keys yet.');
+    expect(html).not.toContain('Loading keys...');
+    expect(html).toContain('Create Run Key');
+  });
+
+  it('keeps the loaded keys revocable when a later refresh fails', () => {
+    const html = renderView({ isError: true, keys: [activeKey] });
+
+    expect(html).toContain('Codex SOP Runner');
+    expect(html).toContain('Revoke');
+    expect(html).toContain('refresh your Run Keys');
+    expect(html).toContain('Retry');
+    expect(html).not.toContain('No Run Keys yet.');
+  });
+});
+
+describe('AgentAccessSection', () => {
+  it('does not report "No Run Keys yet." when loading the keys failed', () => {
+    const queryClient = createTestQueryClient();
+    seedQueryError(queryClient, ['agent-keys']);
+
+    const html = renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <AgentAccessSection />
+      </QueryClientProvider>,
+    );
+
+    expect(html).toContain('load your Run Keys');
+    expect(html).toContain('Retry');
+    expect(html).not.toContain('No Run Keys yet.');
   });
 });

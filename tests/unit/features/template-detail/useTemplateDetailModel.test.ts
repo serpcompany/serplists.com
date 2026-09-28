@@ -38,6 +38,7 @@ const buildBillingState = (
   billingEnabled: true,
   isLoading: false,
   isPro: true,
+  isUnknown: false,
   ...overrides,
 });
 
@@ -318,6 +319,32 @@ describe('template detail actions', () => {
     );
 
     expect(result).toEqual({ kind: 'upgrade_required' });
+    expect(apiClient.clonePublicTemplate).not.toHaveBeenCalled();
+  });
+
+  it('does not send a user whose plan failed to load to checkout', async () => {
+    const apiClient = {
+      getTemplateById: vi.fn(),
+      getTemplateBySlug: vi.fn(),
+      getProfileById: vi.fn(),
+      clonePublicTemplate: vi.fn(),
+      updateTemplate: vi.fn(),
+    };
+
+    const result = await saveTemplateToAccount({
+      apiClient,
+      billingState: buildBillingState({ isPro: false, isUnknown: true }),
+      createTemplate: vi.fn(),
+      invalidateTemplates: vi.fn(),
+      isAuthenticated: true,
+      template: buildTemplate(),
+      userId: 'user-1',
+    });
+
+    expect(result).toEqual({
+      kind: 'error',
+      message: "Couldn't check your plan. Try again.",
+    });
     expect(apiClient.clonePublicTemplate).not.toHaveBeenCalled();
   });
 

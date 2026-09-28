@@ -36,7 +36,13 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
 - Contexts and feature models own server state with React Query. Query keys include
   the user id and the active Ownership Context so Personal and Organization data
   never mix; switching context invalidates Template and Run queries. Billing keys
-  include the user id; never show a Free or Pro label while status is loading.
+  include the user id; never show a Free or Pro label while status is loading, and
+  treat a failed status as unknown, never Free (`getBillingPlanStatus`).
+- React Query v5 reports a failed first load as `isLoading: false` with no data, so
+  a list that only checks `isLoading` shows its empty state for an error. Render
+  query-backed lists with `QueryListState` (`src/components/shared/QueryListState.tsx`):
+  loading, a load error with Retry, the empty state only for a loaded empty list,
+  and the last loaded list (with a Retry notice) when a refresh fails.
 - Template and run lists load on demand. `TemplatesProvider` wraps every route but
   never fetches them. A page that reads `templates` (the public catalog) calls
   `useTemplateLists({ catalog: true, workspace: false })`, one that reads `allTemplates`

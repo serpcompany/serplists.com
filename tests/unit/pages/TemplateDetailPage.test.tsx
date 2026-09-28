@@ -115,4 +115,36 @@ describe('TemplateDetail page', () => {
     expect(html).not.toContain('Import Template');
     expect(html).not.toContain('PublicTemplateContent');
   });
+
+  it('does not ask a user to upgrade when their plan failed to load', () => {
+    mockUseTemplateDetailModel.mockReturnValue({
+      billingState: {
+        billingEnabled: true,
+        isLoading: false,
+        isPro: false,
+        isUnknown: true,
+      },
+      loading: false,
+      notFound: false,
+      history: { data: null, isError: false, isLoading: false },
+      saveTemplate: vi.fn(),
+      shareTemplate: vi.fn(),
+      startRun: vi.fn(),
+      template: { ...buildV0DemoPrivateTemplate(), userId: 'someone-else' },
+    });
+
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/dashboard/templates/tpl-1">
+        <Routes>
+          <Route
+            path="/dashboard/templates/:id"
+            element={<TemplateDetail />}
+          />
+        </Routes>
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('Copy to My Templates');
+    expect(html).not.toContain('Upgrade to copy template');
+  });
 });

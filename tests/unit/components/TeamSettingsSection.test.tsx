@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
 
 const workspaceMocks = vi.hoisted(() => ({
   activeWorkspace: {
@@ -204,5 +205,72 @@ describe('TeamSettingsSection', () => {
     expect(html).not.toContain('Pending invites');
     expect(html).not.toContain('Activity');
     expect(html).not.toContain('role="combobox"');
+  });
+
+  it('shows load errors with Retry instead of empty members, invites, and activity', () => {
+    const queryClient = createTestQueryClient();
+    seedQueryError(queryClient, ['team-members', 'team-1']);
+    seedQueryError(queryClient, ['team-invites', 'team-1']);
+    seedQueryError(queryClient, ['team-activity', 'team-1']);
+
+    const html = renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <TeamSettingsSection />
+      </QueryClientProvider>,
+    );
+
+    expect(html).toContain('load members');
+    expect(html).toContain('load pending invites');
+    expect(html).toContain('load Organization activity');
+    expect(html.match(/>Retry</g)).toHaveLength(3);
+    expect(html).not.toContain('No members found.');
+    expect(html).not.toContain('No pending invites.');
+    expect(html).not.toContain('No Organization activity recorded yet.');
+  });
+
+  it('keeps loaded members visible when a later refresh fails', () => {
+    const queryClient = createTestQueryClient();
+    seedQueryError(queryClient, ['team-members', 'team-1'], [
+      {
+        id: 'member-other',
+        team_id: 'team-1',
+        user_id: 'user-2',
+        role: 'viewer',
+        status: 'active',
+        email: 'viewer@example.com',
+        name: 'Viewer User',
+      },
+    ]);
+    queryClient.setQueryData(['team-invites', 'team-1'], []);
+    queryClient.setQueryData(['team-activity', 'team-1'], []);
+
+    const html = renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <TeamSettingsSection />
+      </QueryClientProvider>,
+    );
+
+    expect(html).toContain('Viewer User');
+    expect(html).toContain('refresh members');
+    expect(html).toContain('No pending invites.');
+    expect(html).not.toContain('load members');
+  });
+
+  it('shows no load error for invites and activity when the member cannot manage the Organization', () => {
+    workspaceMocks.activeWorkspace.role = 'viewer';
+    workspaceMocks.canManageTeam = false;
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(['team-members', 'team-1'], []);
+
+    const html = renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <TeamSettingsSection />
+      </QueryClientProvider>,
+    );
+
+    expect(html).toContain('No members found.');
+    expect(html).not.toContain('Retry');
+    expect(html).not.toContain('Loading invites...');
+    expect(html).not.toContain('Loading activity...');
   });
 });
