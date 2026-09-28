@@ -93,6 +93,13 @@ Pages set their title and social tags with `SEOHead`
 `SEOHead` never keeps the previous page's title. Do not add a `titleTemplate`: `SEOHead`
 already adds the suffix.
 
+Cloudflare Pages serves `index.html` with a 200 for every unknown path, so the 404 page
+(`src/pages/NotFound.tsx`) marks itself `noindex` and declares no canonical URL. Render
+`NotFound` only once a lookup has settled: a page whose data is still loading, or failed
+to load, shows a loading or retry state instead, so a real page never sends `noindex`.
+Never render `NotFound` next to an `SEOHead`. Do not add a top-level `404.html`; it turns
+off the single-page app fallback.
+
 ## Verifying UI changes
 
 Show the change working in the real app before opening a PR:

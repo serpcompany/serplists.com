@@ -175,8 +175,8 @@ const CategoryDetail = () => {
     [allCategories, templates],
   );
   const categoryStats = categories.find((item) => item.slug === slug);
-  const isKnownCategory = Boolean(categoryStats || categoryData[slug]);
   const canonicalCategory = PUBLIC_CATEGORY_REGISTRY.find((item) => item.slug === slug);
+  const isKnownCategory = Boolean(canonicalCategory || categoryStats || categoryData[slug]);
   const category = canonicalCategory ? {
     ...categoryData[slug],
     ...canonicalCategory,

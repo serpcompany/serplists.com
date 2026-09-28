@@ -1,5 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { HelmetProvider } from 'react-helmet-async';
 import { Route, Routes } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -36,6 +37,21 @@ vi.mock('@/components/shared/SEOHead', () => ({
     return <div data-seo-head={String(props.url)}>{String(props.title)}</div>;
   },
 }));
+
+// NotFound writes its robots tag through Helmet; SEOHead is mocked above.
+const renderCategoryPage = (location: string) => {
+  const context: { helmet?: { meta: { toString(): string } } } = {};
+  const markup = renderToStaticMarkup(
+    <HelmetProvider context={context}>
+      <StaticRouter location={location}>
+        <Routes>
+          <Route path="/categories/:categorySlug" element={<CategoryDetail />} />
+        </Routes>
+      </StaticRouter>
+    </HelmetProvider>,
+  );
+  return { markup, robots: context.helmet!.meta.toString() };
+};
 
 const baseTemplate: ChecklistTemplate = {
   id: 'template-1',
@@ -238,17 +254,12 @@ describe('ChecklistLibrary route behavior', () => {
       allCategories: ['Business & Operations'],
     });
 
-    const markup = renderToStaticMarkup(
-      <StaticRouter location="/categories/not-a-real-category">
-        <Routes>
-          <Route path="/categories/:categorySlug" element={<CategoryDetail />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    const { markup, robots } = renderCategoryPage('/categories/not-a-real-category');
 
     expect(markup).toContain('That page does not exist');
     expect(markup).toContain('/categories/not-a-real-category');
     expect(markup).not.toContain('0 templates');
+    expect(robots).toMatch(/name="robots" content="noindex/);
   });
 });
 
@@ -277,14 +288,7 @@ describe('Discovery pages while the catalog loads', () => {
     allCategories: ['moving', 'outdoor'],
     ...overrides,
   });
-  const renderCategory = (location: string) =>
-    renderToStaticMarkup(
-      <StaticRouter location={location}>
-        <Routes>
-          <Route path="/categories/:categorySlug" element={<CategoryDetail />} />
-        </Routes>
-      </StaticRouter>,
-    );
+  const renderCategory = (location: string) => renderCategoryPage(location).markup;
   const renderLibrary = (location: string) =>
     renderToStaticMarkup(
       <StaticRouter location={location}>
@@ -295,10 +299,13 @@ describe('Discovery pages while the catalog loads', () => {
   it('shows a loading category page, not the 404 page, for a database-only category', () => {
     mockUseTemplateLibrary.mockReturnValue(libraryState({ loading: true }));
 
-    const markup = renderCategory('/categories/moving');
+    const { markup, robots } = renderCategoryPage('/categories/moving');
 
     expect(markup).not.toContain('That page does not exist');
     expect(markup).toContain('aria-busy="true"');
+    // The category is in the sitemap: a crawler that snapshots the loading page must not
+    // see noindex.
+    expect(robots).not.toContain('noindex');
   });
 
   it('renders the category once the catalog brings its templates', () => {
@@ -316,9 +323,10 @@ describe('Discovery pages while the catalog loads', () => {
   it('shows a retry state, not the 404 page, when the catalog failed to load', () => {
     mockUseTemplateLibrary.mockReturnValue(libraryState({ catalogError: true }));
 
-    const markup = renderCategory('/categories/moving');
+    const { markup, robots } = renderCategoryPage('/categories/moving');
 
     expect(markup).not.toContain('That page does not exist');
+    expect(robots).not.toContain('noindex');
     expect(markup).toContain('Could not load templates');
     expect(markup).toContain('Try again');
   });

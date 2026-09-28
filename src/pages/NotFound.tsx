@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Link, useLocation } from 'react-router-dom';
 
 import { PageHero, PageSection, Surface } from '@/components/layout/page-shell';
 import { Button } from '@/components/ui/button';
+import { buildPageTitle } from '@/lib/brand';
 
 const NotFound = () => {
   const location = useLocation();
@@ -20,6 +22,13 @@ const NotFound = () => {
       spacing="spacious"
       width="narrow"
     >
+      {/* Pages serves index.html with a 200 for every unknown path, so this tag is what
+          keeps a missing URL out of search results. No canonical: the address is not a page.
+          Render NotFound only once a lookup has settled, never while it is loading. */}
+      <Helmet>
+        <title>{buildPageTitle('Page not found')}</title>
+        <meta name="robots" content="noindex, follow" />
+      </Helmet>
       <Surface className="mx-auto w-full text-center" padding="xl" tone="glass">
         <PageHero
           align="center"
