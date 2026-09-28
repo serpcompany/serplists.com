@@ -63,6 +63,9 @@
     <meta name="twitter:image" content="https://serplists.com/og-default.png" data-rh="true" />
 
     <script>
+      // Before the first paint: the same key and values as src/lib/theme.ts, light unless
+      // 'dark' is stored. The boot splash below follows the class
+      // (tests/unit/boot/bootSplashTheme.test.ts).
       (function () {
         try {
           var storedTheme = window.localStorage.getItem('serplists-theme');
@@ -110,6 +113,21 @@
       #boot-text {
         font-size: 14px;
         letter-spacing: 0.2px;
+      }
+      /* The dark theme's --background and --foreground (src/index.css .dark), as hex: the
+         app stylesheet and its variables may not have loaded yet. Keyed on the class the
+         script above sets, never on the OS color setting: the app has no system theme. */
+      html.dark {
+        color-scheme: dark;
+        background: #030303;
+      }
+      html.dark #boot-splash {
+        color: #fafafa;
+        background: #030303;
+      }
+      html.dark #boot-spinner {
+        border-color: rgba(250, 250, 250, 0.18);
+        border-top-color: rgba(250, 250, 250, 0.75);
       }
     </style>
   </head>
