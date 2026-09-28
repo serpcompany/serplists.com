@@ -96,7 +96,7 @@ const PublicTemplate = () => {
       }
 
       if (result.runId) {
-        toast.success('Template run started!');
+        toast.success('Checklist run created');
         navigate(buildConsoleRunPath(result.runId));
       }
     } finally {

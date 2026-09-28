@@ -120,6 +120,7 @@ const Templates = () => {
       return;
     }
 
+    toast.success('Checklist run created');
     setRunName('');
   };
 

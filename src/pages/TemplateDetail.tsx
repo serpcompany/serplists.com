@@ -321,6 +321,7 @@ const TemplateDetail = () => {
       try {
         const duplicatedTemplate = await createTemplate(buildTemplateCopyPayload(displayTemplate, activeTeamId));
 
+        toast.success('Template duplicated');
         navigate(buildConsoleTemplatePath(duplicatedTemplate.id));
       } catch (error) {
         toast.error(

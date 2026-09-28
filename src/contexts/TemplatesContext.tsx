@@ -1,7 +1,6 @@
 import React, { createContext, useCallback, useContext, useMemo } from "react";
 import { useAuth } from "./CloudflareAuthContext";
 import { useWorkspace } from "./WorkspaceContext";
-import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { prepareTemplatesForImport } from "@/lib/utils/templateBackup";
@@ -200,7 +199,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   );
   const templatesLoading = catalogTemplatesLoading || workspaceTemplatesLoading;
 
-  // Mutations
+  // Mutations only do cache work and reject on failure. The page that calls one shows the
+  // result, so never toast here: it would duplicate (or contradict) the page's feedback.
   const createTemplateMutation = useMutation({
     mutationFn: async (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => {
       if (!user) throw new Error("User must be logged in to create a template");
@@ -246,10 +246,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
-      toast.success("Template created successfully");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
     }
   });
 
@@ -278,10 +274,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['templates'] });
       await queryClient.invalidateQueries({ queryKey: ['runs'] });
-      toast.success("Template updated. Checklist changes were reconciled into active private runs.");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
     }
   });
 
@@ -334,10 +326,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     },
     onSuccess: async () => {
       await refreshRunLists(queryClient);
-      toast.success("Checklist run created successfully");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
     }
   });
 

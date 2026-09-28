@@ -5,7 +5,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Loader2 } from "lucide-react";
-import { useTemplateEditorModel } from "@/features/template-editor/useTemplateEditorModel";
+import { toast } from "sonner";
+import {
+  getTemplateSaveSuccessMessage,
+  useTemplateEditorModel,
+} from "@/features/template-editor/useTemplateEditorModel";
 import { useTemplateEditorState } from "@/hooks/useTemplateEditorState";
 import { TemplateHeader } from "@/components/template-editor/TemplateHeader";
 import { OutlineSidebar } from "@/components/template-editor/OutlineSidebar";
@@ -104,6 +108,10 @@ const TemplateEditor = () => {
     }
 
     const result = await model.save(templateForm.getValues());
+    const successMessage = getTemplateSaveSuccessMessage({ id, result });
+    if (successMessage) {
+      toast.success(successMessage);
+    }
     if (shouldNavigateToTemplatesAfterSave({ id, result })) {
       navigate(buildConsoleTemplatesPath());
     }

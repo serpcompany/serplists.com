@@ -79,6 +79,18 @@ export const shouldNavigateToTemplatesAfterSave = (params: {
   result: SaveTemplateResult;
 }): boolean => params.result.success && !params.id;
 
+// The editor shows save failures inline, so only a successful save gets a toast. The shared
+// template mutations never toast (see TemplatesContext), so this is the only one.
+export const getTemplateSaveSuccessMessage = (params: {
+  id?: string;
+  result: SaveTemplateResult;
+}): string | null => {
+  if (!params.result.success) {
+    return null;
+  }
+  return params.id ? "Template saved" : "Template created";
+};
+
 const buildLoadResult = (
   template?: Partial<ChecklistTemplate>,
 ): TemplateEditorLoadResult => ({

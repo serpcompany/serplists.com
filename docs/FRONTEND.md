@@ -81,6 +81,11 @@ container must reset that element too.
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.
+- The page that starts an action owns its feedback. Shared mutations in contexts
+  (`createTemplate`, `updateTemplate`, `createRun`, ...) only update the cache and
+  reject on failure; they never toast, or every action would show two messages. A
+  page shows one toast per outcome, or none when it redirects (sign-in, checkout)
+  or shows the error inline (the template editor).
 - Send only the fields a save changes. Private run saves (ticks, notes, completion)
   leave the title out and only a rename sends it (`src/contexts/runUpdatePayload.ts`):
   a stored title can be longer than the API's 160-character limit, and resending it
