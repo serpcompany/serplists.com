@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Route, Routes } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { templatePayloadSchema } from '../../../functions/api/utils/payloads';
 import { mapApiTemplateToChecklistTemplate } from '@/features/template-detail/templateDetailMappers';
@@ -426,6 +426,55 @@ describe('TemplateDetail load failures', () => {
 
     expect(html).toContain('Template Not Found');
     expect(html).not.toContain('Try again');
+  });
+});
+
+describe('TemplateDetail dates', () => {
+  // Node reads a bare 'YYYY-MM-DD HH:MM:SS' as local time; a zone far from UTC exposes that.
+  const originalTz = process.env.TZ;
+  beforeEach(() => {
+    process.env.TZ = 'Asia/Tokyo';
+  });
+  afterEach(() => {
+    process.env.TZ = originalTz;
+  });
+
+  it('reads zoneless timestamps as UTC and never shows Invalid Date', () => {
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      history: {
+        data: {
+          events: [],
+          subject: { id: 'user-1', type: 'user' },
+          templateId: 'tpl-1',
+          versions: [
+            {
+              action: 'template.created',
+              actor: { name: 'John Example' },
+              createdAt: '2026-07-05 20:30:00',
+              id: 'version-1',
+              version: 1,
+            },
+          ],
+        },
+        isError: false,
+        isLoading: false,
+      },
+      template: {
+        ...buildV0DemoPrivateTemplate(),
+        createdAt: '2026-07-05 20:30:00',
+        updatedAt: 'not a timestamp',
+      },
+    });
+
+    // Some ICU versions put a narrow no-break space before AM/PM.
+    const html = renderTemplateDetail().replace(/\u202f/g, ' ');
+
+    // 20:30 UTC on July 5 is 05:30 on July 6 in Tokyo.
+    expect(html).toContain('7/6/2026');
+    expect(html).toContain('Jul 6, 2026, 5:30 AM');
+    expect(html).not.toContain('7/5/2026');
+    expect(html).not.toContain('Invalid Date');
   });
 });
 

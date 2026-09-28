@@ -85,3 +85,14 @@ export const formatMonthYear = (value: unknown): string | null =>
     timeZone: 'UTC',
     year: 'numeric',
   }) ?? null;
+
+// '7/6/2026' in the viewer's zone; '' when unreadable, so a page never shows 'Invalid Date'.
+export const formatLocalDate = (value: unknown): string =>
+  parseDbTimestamp(value)?.toLocaleDateString('en-US') ?? '';
+
+// 'Jul 6, 2026, 5:30 AM' in the viewer's zone; '' when unreadable.
+export const formatLocalDateTime = (value: unknown): string =>
+  parseDbTimestamp(value)?.toLocaleString('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }) ?? '';

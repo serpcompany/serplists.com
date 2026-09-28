@@ -86,26 +86,8 @@ import {
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
 import { buildDuplicateTemplateTitle } from '@/lib/templates/duplicateTemplateTitle';
+import { formatLocalDate, formatLocalDateTime } from '@/lib/utils/dbTimestamp';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
-
-const formatDate = (value?: string): string => {
-  if (!value) {
-    return '';
-  }
-
-  return new Date(value).toLocaleDateString('en-US');
-};
-
-const formatDateTime = (value?: string): string => {
-  if (!value) {
-    return '';
-  }
-
-  return new Date(value).toLocaleString('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
-};
 
 const TemplateDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -166,8 +148,9 @@ const TemplateDetail = () => {
     (count, section) => count + section.items.length,
     0,
   ) ?? 0;
-  const createdDate = formatDate(displayTemplate?.createdAt);
-  const updatedDate = formatDate(displayTemplate?.updatedAt ?? displayTemplate?.createdAt);
+  // Parsed as database timestamps (UTC when zoneless); unreadable ones show nothing.
+  const createdDate = formatLocalDate(displayTemplate?.createdAt);
+  const updatedDate = formatLocalDate(displayTemplate?.updatedAt ?? displayTemplate?.createdAt);
   // Versions and the events no version records (archive, restore, Share), newest first.
   const historyEntries = buildTemplateHistoryTimeline(history?.data);
 
@@ -780,7 +763,7 @@ const TemplateDetail = () => {
                           </p>
                         </div>
                         <time className="text-xs text-muted-foreground">
-                          {formatDateTime(entry.createdAt)}
+                          {formatLocalDateTime(entry.createdAt)}
                         </time>
                       </div>
                     ))}

@@ -59,10 +59,13 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
 - Surface API failures by their structured code, not message text: `401` means sign
   in (keep the return path), `403 upgrade_required` and `403 limit_reached` mean a
   plan gate, `503 billing_unavailable` means checkout is down.
-- Parse timestamps from the API with `parseDbTimestamp` or `formatMonthYear` in
+- Parse timestamps from the API with `parseDbTimestamp`, or format them with
+  `formatMonthYear`, `formatLocalDate` or `formatLocalDateTime`, all in
   `src/lib/utils/dbTimestamp.ts`, not `new Date(value)`. Columns that default to D1's
   `CURRENT_TIMESTAMP` (such as `users.created_at`) hold UTC as `YYYY-MM-DD HH:MM:SS`,
-  which Safari cannot parse and other browsers read as local time.
+  which Safari cannot parse and other browsers read as local time. The formatters
+  return nothing (`''` or `null`) for a value they cannot read; render nothing then,
+  never "Invalid Date".
 
 ## Template editor forms
 
