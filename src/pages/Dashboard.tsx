@@ -35,6 +35,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplateLists, type ChecklistRun } from '@/contexts/TemplatesContext';
+import { useRunSharing } from '@/features/dashboard-runs/useRunSharing';
 import {
   resolveConsoleSection,
   buildConsoleRunPath,
@@ -57,6 +58,7 @@ const Dashboard = () => {
     revalidateRun,
     deleteRun,
   } = useTemplateLists({ catalog: true, runs: true });
+  const runSharing = useRunSharing();
   const [searchParams, setSearchParams] = useSearchParams();
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -120,6 +122,8 @@ const Dashboard = () => {
         templates={templates}
         onDeleteRun={deleteRun}
         onRevalidateRun={revalidateRun}
+        onShareRun={(runId) => runSharing.shareRun(runId, window.location.origin)}
+        onStopSharingRun={runSharing.stopSharingRun}
         loading={runsLoading}
       />
     );

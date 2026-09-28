@@ -452,7 +452,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         return jsonError('Forbidden', 403);
       }
       if (existingRun.is_public) {
-        return jsonError('Shared runs must be made private before revalidation.', 409, { code: 'shared_run_conflict' });
+        return jsonError('Stop sharing this run before revalidating it.', 409, { code: 'shared_run_conflict' });
       }
       if (!existingRun.template_id) {
         return jsonError('Checklist run is not linked to a template.', 400);
@@ -975,6 +975,55 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     }
 
     return json({ success: true, revision: currentRevision + 1 });
+  }
+
+  // DELETE /api/checklists/run/:id/share: stop sharing. The old link stops working at once.
+  if (request.method === 'DELETE' && checklistsSubpath.length === 3 && checklistsSubpath[0] === 'run' && checklistsSubpath[2] === 'share') {
+    const runId = checklistsSubpath[1];
+    const [run] = await db
+      .select()
+      .from(checklist_runs)
+      .where(and(eq(checklist_runs.id, runId), isNull(checklist_runs.deleted_at)))
+      .limit(1);
+    const runRecord = run as unknown as Record<string, unknown>;
+
+    if (!run || !(await canViewRun(env, runRecord, userId))) {
+      return jsonError('Checklist run not found', 404);
+    }
+    if (!(await canUpdateRun(env, runRecord, userId))) {
+      return jsonError('Forbidden', 403);
+    }
+    // Already private (or a concurrent request got there first): nothing to write.
+    if (!run.is_public) {
+      return json({ id: runId, isPublic: false });
+    }
+
+    const now = new Date().toISOString();
+    // No revision bump: share state is not run content, so open run pages keep saving.
+    const revokeUpdates = { is_public: false, share_token: null, share_expires_at: null, share_used_at: null, updated_at: now };
+    const sharedRun = and(
+      run.team_id ? eq(checklist_runs.team_id, run.team_id) : eq(checklist_runs.user_id, userId),
+      eq(checklist_runs.is_public, true),
+      isNull(checklist_runs.deleted_at),
+    );
+    const auditEvent = await buildAuditEventValues({
+      actorUserId: userId,
+      subject: getRunSubject(runRecord, userId),
+      resource: { type: 'checklist_run', id: runId },
+      action: 'checklist_run.share_revoked',
+      before: runRecord,
+      after: { ...runRecord, ...revokeUpdates },
+      diff: revokeUpdates,
+      request,
+      createdAt: now,
+    });
+    // The audit row is written first, and only while the run is still shared.
+    await db.batch([
+      insertRowWhere(db, audit_events, auditEvent, rowExistsSql(checklist_runs.id, runId, sharedRun)),
+      db.update(checklist_runs).set(revokeUpdates).where(and(eq(checklist_runs.id, runId), sharedRun)),
+    ]);
+
+    return json({ id: runId, isPublic: false });
   }
 
   if (request.method === 'DELETE') {

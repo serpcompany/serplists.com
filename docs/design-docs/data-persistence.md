@@ -125,9 +125,13 @@ round-trip, and structured import-result contracts.
 
 ## Shared-run links
 
-Sharing is run-scoped. Each share action mints a fresh token for the current
-run and deactivates any previously active shared run for the same user/template
-so older guest links do not remain active or count toward active-run limits.
+Sharing is run-scoped. Each share action (`POST /api/checklists/run/:id/share`)
+mints a fresh token for the run and replaces its previous one, so the older guest
+link stops working. `DELETE /api/checklists/run/:id/share` stops sharing: one
+guarded update clears `is_public` and every share field, and the
+`checklist_run.share_revoked` audit row is written only if the run was still
+shared. It leaves the run's revision, tasks, and progress unchanged, so open run
+pages keep saving. Archiving and restoring a run also clear its share fields.
 The public guest URL is `/share/:token`. Guest saves never replace the run's
 structure: the server copies only completion and notes from the payload onto the
 stored sections, matched by the ids the share page uses. When sharing fails, distinguish an

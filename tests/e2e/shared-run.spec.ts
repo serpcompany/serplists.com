@@ -97,3 +97,48 @@ test('a share-link guest can tick tasks but cannot rewrite or wipe the run', asy
     await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
   }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
 });
+
+test('stopping a share from the runs list turns the guest link off', async ({ browser, page }) => {
+  test.setTimeout(120_000);
+  await loginAsAdmin(page);
+
+  const title = `Stop sharing ${Date.now()}`;
+  const { runId, shareToken } = await page.evaluate(async ({ apiBaseUrl, runTitle }) => {
+    const created = await fetch(`${apiBaseUrl}/checklists`, {
+      body: JSON.stringify({ title: runTitle, sections: [{ id: 'stop', title: 'Section', items: [{ id: 'stop-a', title: 'Task A' }] }] }),
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    const id = ((await created.json()) as { id: string }).id;
+    const shared = await fetch(`${apiBaseUrl}/checklists/run/${id}/share`, {
+      body: '{}',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    return { runId: id, shareToken: ((await shared.json()) as { shareToken: string }).shareToken };
+  }, { apiBaseUrl: DEV_API_BASE_URL, runTitle: title });
+
+  const guestContext = await browser.newContext();
+  const guest = await guestContext.newPage();
+  const sharedUrl = `${DEV_API_BASE_URL}/checklists/shared/${shareToken}`;
+  expect((await guest.request.get(sharedUrl)).status()).toBe(200);
+
+  await page.goto('/dashboard/runs');
+  const row = page.locator('div.group', { hasText: title });
+  await expect(row.getByText('Shared', { exact: true })).toBeVisible();
+  await row.getByRole('button', { name: 'Run options' }).click();
+  await page.getByRole('menuitem', { name: 'Stop sharing' }).click();
+  await expect(page.getByText('Sharing stopped. The old link no longer works.')).toBeVisible();
+  await expect(row.getByText('Shared', { exact: true })).toHaveCount(0);
+
+  expect((await guest.request.get(sharedUrl)).status()).toBe(404);
+  const guestSave = await guest.request.put(sharedUrl, { data: { status: 'completed', expected_revision: 1 } });
+  expect(guestSave.status()).toBe(404);
+
+  await guestContext.close();
+  await page.evaluate(async ({ id, apiBaseUrl }) => {
+    await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
+  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+});

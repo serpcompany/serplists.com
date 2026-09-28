@@ -2,10 +2,11 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Route, Routes } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Dashboard from '@/pages/Dashboard';
-import { createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
+import { createRunSharingActions, createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
 const mockUseAuth = vi.fn();
@@ -152,6 +153,17 @@ const templates: ChecklistTemplate[] = [
   },
 ];
 
+const renderRunsPage = () =>
+  renderToStaticMarkup(
+    <QueryClientProvider client={new QueryClient()}>
+      <StaticRouter location="/dashboard/runs">
+        <Routes>
+          <Route path="*" element={<Dashboard />} />
+        </Routes>
+      </StaticRouter>
+    </QueryClientProvider>,
+  );
+
 describe('/dashboard/runs presentation', () => {
   beforeEach(() => {
     mockUseAuth.mockReset();
@@ -173,13 +185,7 @@ describe('/dashboard/runs presentation', () => {
       deleteRun: vi.fn(),
     });
 
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/runs">
-        <Routes>
-          <Route path="*" element={<Dashboard />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    const html = renderRunsPage();
 
     expect(html).toContain('My Runs');
     expect(html).toContain('data-dashboard-content-shell="true"');
@@ -220,13 +226,7 @@ describe('/dashboard/runs presentation', () => {
       deleteRun: vi.fn(),
     });
 
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/runs">
-        <Routes>
-          <Route path="*" element={<Dashboard />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    const html = renderRunsPage();
 
     expect(html).toContain('My Runs');
     expect(html).toContain('data-dashboard-content-shell="true"');
@@ -251,16 +251,61 @@ describe('/dashboard/runs presentation', () => {
       deleteRun: vi.fn(),
     });
 
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/runs">
-        <Routes>
-          <Route path="*" element={<Dashboard />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    const html = renderRunsPage();
 
     expect(html).toContain('Shared snapshot is out of date');
     expect(html).not.toContain('>Revalidate<');
+    // Stopping the share is the way out: the run becomes private and can be revalidated.
+    expect(html).toContain('Stop sharing to update');
+  });
+
+  it('marks shared runs so owners can see which links are live', () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
+      logout: vi.fn(),
+    });
+    mockUseTemplates.mockReturnValue({
+      templates,
+      templatesLoading: false,
+      runs: [{ ...runs[0], isPublic: true }, runs[1]],
+      runsLoading: false,
+      updateRun: vi.fn(),
+      revalidateRun: vi.fn(),
+      deleteRun: vi.fn(),
+    });
+
+    const html = renderRunsPage();
+
+    expect(html.match(/>Shared</g)).toHaveLength(1);
+    expect(html).not.toContain('Stop sharing to update');
+  });
+
+  it('stops sharing through the API and refreshes the runs list', async () => {
+    const apiClient = {
+      createChecklistRunShare: vi.fn().mockResolvedValue({ shareToken: 'share-token-1' }),
+      revokeChecklistRunShare: vi.fn().mockResolvedValue({ id: 'run-5', isPublic: false }),
+    };
+    const queryClient = { invalidateQueries: vi.fn().mockResolvedValue(undefined) };
+    const actions = createRunSharingActions(queryClient, apiClient);
+
+    await actions.stopSharingRun('run-5');
+    expect(apiClient.revokeChecklistRunShare).toHaveBeenCalledWith('run-5');
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['runs'] });
+
+    queryClient.invalidateQueries.mockClear();
+    await expect(actions.shareRun('run-5', 'https://serplists.com')).resolves.toBe('https://serplists.com/share/share-token-1');
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['runs'] });
+  });
+
+  it('does not refresh the runs list when stopping sharing fails', async () => {
+    const apiClient = {
+      createChecklistRunShare: vi.fn(),
+      revokeChecklistRunShare: vi.fn().mockRejectedValue(new Error('Forbidden')),
+    };
+    const queryClient = { invalidateQueries: vi.fn() };
+
+    await expect(createRunSharingActions(queryClient, apiClient).stopSharingRun('run-5')).rejects.toThrow('Forbidden');
+    expect(queryClient.invalidateQueries).not.toHaveBeenCalled();
   });
 
   it('creates real shared run URLs instead of exposing protected run URLs', async () => {

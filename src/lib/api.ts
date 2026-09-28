@@ -395,6 +395,13 @@ class ApiClient {
     });
   }
 
+  /** Stops sharing a run: its share link stops working and the run becomes private. */
+  async revokeChecklistRunShare(runId: string): Promise<{ id: string; isPublic: false }> {
+    return this.request(`/checklists/run/${encodeURIComponent(runId)}/share`, {
+      method: 'DELETE',
+    });
+  }
+
   async getSharedChecklist(shareToken: string) {
     return this.request(`/checklists/shared/${encodeURIComponent(shareToken)}`);
   }
