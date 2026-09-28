@@ -51,6 +51,7 @@ describe('parseUiSnapArgs', () => {
       routePath: '/',
       slug: 'home',
       outPath: path.join('tmp', 'snapshots', 'home.png'),
+      ariaPath: path.join('tmp', 'snapshots', 'home.aria.yml'),
       mobile: false,
       login: undefined,
       password: undefined,
@@ -70,5 +71,38 @@ describe('parseUiSnapArgs', () => {
   it('rejects a flag with no value', () => {
     expect(() => parseUiSnapArgs(['dashboard', '--login'])).toThrow(/--login/);
     expect(() => parseUiSnapArgs(['dashboard', '--login', '--mobile'])).toThrow(/--login/);
+  });
+});
+
+describe('ui:snap output paths', () => {
+  const ariaFor = (out: string) => parseUiSnapArgs(['dashboard', '--out', out]).ariaPath;
+
+  it('writes the accessibility YAML beside the default screenshot', () => {
+    expect(parseUiSnapArgs(['dashboard'])).toMatchObject({
+      outPath: path.join('tmp', 'snapshots', 'dashboard.png'),
+      ariaPath: path.join('tmp', 'snapshots', 'dashboard.aria.yml'),
+    });
+  });
+
+  // Playwright saves .jpg, .jpeg and .jpe paths as JPEG; the YAML must not replace them.
+  for (const extension of ['png', 'jpg', 'jpeg', 'jpe']) {
+    it(`never writes the YAML over a .${extension} screenshot`, () => {
+      const out = path.join('tmp', 'snapshots', `dash.${extension}`);
+      const { outPath, ariaPath } = parseUiSnapArgs(['dashboard', '--out', out]);
+      expect(outPath).toBe(out);
+      expect(ariaPath).toBe(path.join('tmp', 'snapshots', 'dash.aria.yml'));
+      expect(path.resolve(ariaPath)).not.toBe(path.resolve(outPath));
+    });
+  }
+
+  it('keeps dots in the directory and the file name', () => {
+    expect(ariaFor(path.join('tmp', 'v1.2', 'shot.jpg'))).toBe(path.join('tmp', 'v1.2', 'shot.aria.yml'));
+    expect(ariaFor('dash.v2.png')).toBe('dash.v2.aria.yml');
+  });
+
+  it('rejects an --out that Playwright cannot save as an image', () => {
+    for (const out of ['tmp/x.gif', 'tmp/x', 'tmp/x.PNG', 'tmp/x.JPG', 'tmp/x.aria.yml', 'tmp/x.webp']) {
+      expect(() => parseUiSnapArgs(['dashboard', '--out', out]), out).toThrow(/--out/);
+    }
   });
 });

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Look at a page of the running app without a browser integration.
 //   pnpm run ui:snap -- dashboard/templates --login john@test.com [--mobile] [--out tmp/snapshots/x.png]
-// Flags may come before or after the route. Saves a full-page screenshot and prints the
-// accessibility tree (readable text), console errors, and failed requests. Start the app
-// first with `pnpm run dev:all`.
+// Flags may come before or after the route. Saves a full-page screenshot (.png, or JPEG
+// for .jpg/.jpeg) with the accessibility tree beside it as <name>.aria.yml, and prints
+// the tree (readable text), console errors, and failed requests. Start the app first
+// with `pnpm run dev:all`.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { chromium, devices } from "@playwright/test";
@@ -16,7 +17,7 @@ try {
   console.error(`${error instanceof Error ? error.message : String(error)}\n${UI_SNAP_USAGE}`);
   process.exit(2);
 }
-const { routePath, outPath } = options;
+const { routePath, outPath, ariaPath } = options;
 
 let ports = { frontendPort: 8080, apiPort: 8788 };
 try {
@@ -56,11 +57,12 @@ try {
   mkdirSync(path.dirname(outPath), { recursive: true });
   await page.screenshot({ path: outPath, fullPage: true });
   const aria = await page.locator("body").ariaSnapshot();
-  writeFileSync(outPath.replace(/\.png$/, ".aria.yml"), aria);
+  writeFileSync(ariaPath, aria);
 
   console.log(`URL:        ${page.url()}`);
   console.log(`Title:      ${await page.title()}`);
   console.log(`Screenshot: ${outPath}`);
+  console.log(`Aria YAML:  ${ariaPath}`);
   console.log(`Console errors (${consoleErrors.length}):${consoleErrors.map((line) => `\n  ${line}`).join("")}`);
   console.log(`Failed requests (${failedRequests.length}):${failedRequests.map((line) => `\n  ${line}`).join("")}`);
   console.log(`\nAccessibility tree:\n${aria}`);

@@ -5,7 +5,7 @@ import { parseArgs } from "node:util";
 
 export const UI_SNAP_USAGE =
   "Usage: pnpm run ui:snap -- [route] [--login <email>] [--password <password>] [--mobile] " +
-  "[--out <file.png>] [--base <frontend url>] [--api <api url>]\n" +
+  "[--out <file.png|file.jpg>] [--base <frontend url>] [--api <api url>]\n" +
   "Flags may come before or after the route. Write the route without a leading slash (dashboard/templates).";
 
 const OPTIONS = {
@@ -17,9 +17,31 @@ const OPTIONS = {
   api: { type: "string" },
 };
 
+// Extensions Playwright saves as an image. Its lookup is case-sensitive, so .PNG fails.
+const SCREENSHOT_EXTENSIONS = [".png", ".jpg", ".jpeg", ".jpe"];
+
+/**
+ * The screenshot path and the accessibility YAML beside it (`dash.jpg` gives
+ * `dash.aria.yml`). Throws for an extension Playwright cannot save, and never
+ * returns a YAML path that would overwrite the screenshot.
+ */
+export function resolveSnapshotPaths(outArg, slug) {
+  const outPath = outArg ?? path.join("tmp", "snapshots", `${slug}.png`);
+  const { dir, name, ext } = path.parse(outPath);
+  if (!SCREENSHOT_EXTENSIONS.includes(ext)) {
+    throw new Error(`--out must end in ${SCREENSHOT_EXTENSIONS.join(", ")} (lowercase), got "${outPath}".`);
+  }
+  const ariaPath = path.join(dir, `${name}.aria.yml`);
+  if (path.resolve(ariaPath) === path.resolve(outPath)) {
+    throw new Error(`--out "${outPath}" would be overwritten by the accessibility YAML.`);
+  }
+  return { outPath, ariaPath };
+}
+
 /**
  * Reads ui:snap arguments in any order. Throws on an unknown flag, a flag with no
- * value, or more than one route, instead of quietly snapshotting another page.
+ * value, more than one route, or an --out that is not a .png or .jpg file, instead
+ * of quietly snapshotting another page or losing the screenshot.
  */
 export function parseUiSnapArgs(argv) {
   let parsed;
@@ -51,7 +73,7 @@ export function parseUiSnapArgs(argv) {
   return {
     routePath,
     slug,
-    outPath: values.out ?? path.join("tmp", "snapshots", `${slug}.png`),
+    ...resolveSnapshotPaths(values.out, slug),
     mobile: values.mobile,
     login: values.login,
     password: values.password,
