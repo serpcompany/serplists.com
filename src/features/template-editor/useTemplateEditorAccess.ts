@@ -10,6 +10,7 @@ import {
   clearTemplateDraft,
   readTemplateDraft,
   saveTemplateDraft,
+  settleTemplateDraftAfterSave,
   type StoredTemplateDraft,
 } from "@/features/template-editor/templateDraftStore";
 import {
@@ -85,22 +86,29 @@ export const useTemplateEditorAccess = ({
       ? saveTemplateDraft(owner, cloneTemplateEditorFormValues(getValues()))
       : false;
 
-  // Returns true when the failure is shown as a notice instead of the error list.
-  const handleSaveResult = (result: SaveTemplateResult): boolean => {
-    if (result.success) {
-      if (isCreate && owner) {
-        clearTemplateDraft(owner);
-      }
-      setSaveNotice(null);
-      return false;
+  // The stored draft after a save finishes. The page runs this even when the user left
+  // while it saved, so a saved create never leaves a draft to restore (and save twice).
+  // A plan gate or ended session keeps the values sent, so a draft survives however the
+  // user leaves to upgrade or sign in (a new template is locked while it saves).
+  const settleDraft = (result: SaveTemplateResult, submitted: TemplateEditorFormValues): void => {
+    if (!isCreate || !owner) {
+      return;
     }
 
-    const notice = resolveTemplateSaveFailureNotice(result.failure, context);
+    settleTemplateDraftAfterSave(owner, {
+      saved: result.success,
+      keepDraft: Boolean(resolveTemplateSaveFailureNotice(result.failure, context)),
+      values: submitted,
+    });
+  };
+
+  // The notice for a finished save, while the user is still on the page. Returns true
+  // when the failure is shown as a notice instead of the error list.
+  const handleSaveResult = (result: SaveTemplateResult): boolean => {
+    const notice = result.success
+      ? null
+      : resolveTemplateSaveFailureNotice(result.failure, context);
     setSaveNotice(notice);
-    if (notice) {
-      // Kept now, so a draft survives however the user leaves to upgrade or sign in.
-      keepDraft();
-    }
     return Boolean(notice);
   };
 
@@ -145,6 +153,7 @@ export const useTemplateEditorAccess = ({
     isStartingCheckout,
     notice: saveNotice ?? resolveTemplateLimitNotice(limitReached, context),
     restoreDraft,
+    settleDraft,
     signIn,
     startUpgrade,
   };

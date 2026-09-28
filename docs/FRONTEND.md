@@ -166,8 +166,8 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   (Upgrade to Pro, or Sign in) instead of plain error text. The new template's draft
   is kept in `sessionStorage` (`templateDraftStore.ts`, keyed by user and context)
   before any checkout or sign-in redirect, offered back on the new-template editor
-  and from the billing section, and cleared only when a save succeeds or the user
-  discards it.
+  and from the billing section, and cleared only when a save succeeds (even one that
+  finishes after the user left the editor) or the user discards it.
 - Adding a content type or editor tab: [template content types](design-docs/template-content-types.md).
 
 ## Rendering user content

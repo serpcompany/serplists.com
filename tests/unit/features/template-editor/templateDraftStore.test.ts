@@ -5,6 +5,7 @@ import {
   getTemplateDraftKey,
   readTemplateDraft,
   saveTemplateDraft,
+  settleTemplateDraftAfterSave,
   type TemplateDraftStorage,
 } from "@/features/template-editor/templateDraftStore";
 import { buildTemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
@@ -90,5 +91,48 @@ describe("template draft store", () => {
     expect(readTemplateDraft({ userId: "u1" }, throwingStorage)).toBeNull();
     expect(() => clearTemplateDraft({ userId: "u1" }, throwingStorage)).not.toThrow();
     expect(saveTemplateDraft({ userId: "u1" }, draftValues, null)).toBe(false);
+  });
+});
+
+describe("settling the draft after a new template's save", () => {
+  const owner = { userId: "u1" };
+
+  it("clears the kept draft once the template is saved", () => {
+    const storage = createStorage();
+    saveTemplateDraft(owner, draftValues, storage);
+
+    settleTemplateDraftAfterSave(
+      owner,
+      { saved: true, keepDraft: false, values: draftValues },
+      storage,
+    );
+
+    expect(readTemplateDraft(owner, storage)).toBeNull();
+  });
+
+  it("keeps the values that were sent when the save needs an upgrade or sign-in", () => {
+    const storage = createStorage();
+
+    settleTemplateDraftAfterSave(
+      owner,
+      { saved: false, keepDraft: true, values: draftValues },
+      storage,
+    );
+
+    expect(readTemplateDraft(owner, storage)?.values).toEqual(draftValues);
+  });
+
+  it("leaves a kept draft alone after any other failure", () => {
+    const storage = createStorage();
+    saveTemplateDraft(owner, draftValues, storage);
+    const otherValues = { ...draftValues, title: "Something else" };
+
+    settleTemplateDraftAfterSave(
+      owner,
+      { saved: false, keepDraft: false, values: otherValues },
+      storage,
+    );
+
+    expect(readTemplateDraft(owner, storage)?.values).toEqual(draftValues);
   });
 });

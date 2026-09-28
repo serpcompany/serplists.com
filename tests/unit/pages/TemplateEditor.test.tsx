@@ -20,6 +20,7 @@ const buildAccess = (overrides: Record<string, unknown> = {}) => ({
   isStartingCheckout: false,
   notice: null,
   restoreDraft: vi.fn(),
+  settleDraft: vi.fn(),
   signIn: vi.fn(),
   startUpgrade: vi.fn(),
   ...overrides,

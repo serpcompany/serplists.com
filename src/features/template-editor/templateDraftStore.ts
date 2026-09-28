@@ -103,3 +103,19 @@ export const clearTemplateDraft = (
     // Storage is blocked; there is nothing else to clear.
   }
 };
+
+// A new template's save has finished, whether or not the editor is still open (the
+// user can leave while it saves). A saved template clears its draft: restoring it
+// would create a duplicate. A save refused for a reason the user fixes elsewhere
+// (upgrade, sign in) keeps the values it sent. Any other failure leaves storage alone.
+export const settleTemplateDraftAfterSave = (
+  owner: TemplateDraftOwner,
+  outcome: { saved: boolean; keepDraft: boolean; values: TemplateEditorFormValues },
+  storage: TemplateDraftStorage | null = getSessionDraftStorage(),
+): void => {
+  if (outcome.saved) {
+    clearTemplateDraft(owner, storage);
+  } else if (outcome.keepDraft) {
+    saveTemplateDraft(owner, outcome.values, storage);
+  }
+};

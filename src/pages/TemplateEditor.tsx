@@ -45,6 +45,7 @@ import {
 } from "@/features/template-editor/pendingUploads";
 import { useTemplateEditorLeaveGuard } from "@/features/template-editor/useTemplateEditorLeaveGuard";
 import { useTemplateEditorAccess } from "@/features/template-editor/useTemplateEditorAccess";
+import { saveTemplateForVisit } from "@/features/template-editor/saveForVisit";
 import { TemplateEditorAccessNotices } from "@/components/template-editor/TemplateEditorAccessNotices";
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -134,10 +135,14 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
     // model.save validates first and returns errors that name the field; the alert
     // below shows them. The copy is what gets sent; the form stays editable meanwhile.
     const submitted = cloneTemplateEditorFormValues(templateForm.getValues());
-    const visit = beginVisit();
-    const result = await model.save(submitted);
-    if (!visit.isCurrent()) {
-      // The user chose to leave while it saved.
+    // The kept draft is settled even when the user chose to leave while it saved; the
+    // rest (errors, notices, the redirect) happens only while they are still here.
+    const result = await saveTemplateForVisit({
+      visit: beginVisit(),
+      save: () => model.save(submitted),
+      settle: (finished) => access.settleDraft(finished, submitted),
+    });
+    if (!result) {
       return;
     }
 
