@@ -21,9 +21,26 @@ export function jsonByteLength(value: unknown): number {
   return utf8ByteLength(JSON.stringify(value));
 }
 
+// A UTF-16 surrogate half without its partner. JSON.stringify writes one as a "\ud83d"
+// escape, and strict JSON parsers (serde_json in Codex's MCP client) reject the whole
+// response. Stored text can already hold one: JSON request bodies accept them.
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+// String.prototype.toWellFormed (ES2024) without the newer lib typings.
+export function toWellFormedText(text: string): string {
+  return text.replace(LONE_SURROGATE, "�");
+}
+
+const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
+
+// At most `maximum` UTF-16 units, cut on a character boundary.
 export function boundedText(value: unknown, maximum = 160): string {
-  const text = typeof value === "string" ? value : "Untitled";
-  return text.length <= maximum ? text : `${text.slice(0, maximum - 1)}…`;
+  const text = toWellFormedText(typeof value === "string" ? value : "Untitled");
+  if (text.length <= maximum) return text;
+  let end = maximum - 1;
+  // Never keep the first half of a surrogate pair (an emoji, for example).
+  if (end > 0 && isHighSurrogate(text.charCodeAt(end - 1))) end -= 1;
+  return `${text.slice(0, end)}…`;
 }
 
 export function parseStoredSections(value: unknown): JsonRecord[] {

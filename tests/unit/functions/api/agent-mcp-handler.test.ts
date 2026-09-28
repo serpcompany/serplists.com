@@ -1043,6 +1043,62 @@ describe("personal run MCP handler", () => {
     expect(body.result.structuredContent.error).toBe("run_not_found");
   });
 
+  describe("strict JSON clients", () => {
+    // JSON.stringify writes a paired surrogate (an emoji) as the character itself and
+    // escapes only a lone surrogate, which serde_json (the Codex client) rejects. Any
+    // surrogate escape in a response body therefore breaks the whole response.
+    const LONE_SURROGATE_ESCAPE = /\\ud[89a-f][0-9a-f]{2}/i;
+
+    const ownedTemplateRow = (overrides: JsonRecord) => ({
+      id: "template-1",
+      user_id: "user-1",
+      owner_type: "user",
+      team_id: null,
+      deleted_at: null,
+      title: "Launch SOP",
+      description: null,
+      items: "[]",
+      ...overrides,
+    });
+
+    it("keeps list_templates parseable when a description is cut at an emoji", async () => {
+      dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+        ownedTemplateRow({ description: `${"a".repeat(498)}\u{1F680}${"b".repeat(60)}` }),
+      ]);
+
+      const raw = await (await handleAgentMcp(callTool("list_templates"), env)).text();
+
+      expect(raw).not.toMatch(LONE_SURROGATE_ESCAPE);
+      const description = JSON.parse(raw).result.structuredContent.templates[0].description as string;
+      expect(description.length).toBeLessThanOrEqual(500);
+      expect(description.endsWith("…")).toBe(true);
+    });
+
+    it("keeps get_run parseable when a long run title is cut at an emoji", async () => {
+      dbMocks.selectChain.limit.mockResolvedValueOnce([
+        personalRun({ title: `${"R".repeat(158)}\u{1F680}${"x".repeat(40)}` }),
+      ]);
+
+      const raw = await (await handleAgentMcp(callTool("get_run", { runId: "run-1" }), env)).text();
+
+      expect(raw).not.toMatch(LONE_SURROGATE_ESCAPE);
+      expect(JSON.parse(raw).result.structuredContent.run.title).toBe(`${"R".repeat(158)}\u{1F680}${"x".repeat(40)}`);
+    });
+
+    it("replaces lone surrogates already stored in template text", async () => {
+      dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+        ownedTemplateRow({ title: "Broken \uD83D title", description: "Half \uDE80 emoji" }),
+      ]);
+
+      const raw = await (await handleAgentMcp(callTool("list_templates"), env)).text();
+
+      expect(raw).not.toMatch(LONE_SURROGATE_ESCAPE);
+      const [template] = JSON.parse(raw).result.structuredContent.templates;
+      expect(template.title).toBe("Broken � title");
+      expect(template.description).toBe("Half � emoji");
+    });
+  });
+
   describe("error logging", () => {
     type LogLine = Record<string, unknown>;
 

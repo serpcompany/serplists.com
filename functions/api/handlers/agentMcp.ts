@@ -32,6 +32,7 @@ import {
   serializeRun,
   summarizeRun,
   summarizeRunForAudit,
+  toWellFormedText,
   updateRunAuditDiff,
   updateRunResult,
   utf8ByteLength,
@@ -72,8 +73,13 @@ const initializeArgs = z.object({
   }).passthrough(),
 }).passthrough();
 
+// Replaces lone surrogates in every string, so stored text can never make a response
+// that strict JSON parsers (Codex's serde_json) reject.
+const wellFormedStrings = (_key: string, value: unknown) =>
+  typeof value === "string" ? toWellFormedText(value) : value;
+
 function jsonResponse(value: unknown, status = 200): Response {
-  return new Response(JSON.stringify(value), {
+  return new Response(JSON.stringify(value, wellFormedStrings), {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
@@ -95,7 +101,7 @@ function rpcError(id: JsonRpcId, code: number, message: string, data?: unknown, 
 }
 
 function toolResult(id: JsonRpcId, structuredContent: JsonRecord, text: string, isError = false): Response {
-  const textContent = `${text}\n\n${JSON.stringify(structuredContent)}`;
+  const textContent = `${text}\n\n${JSON.stringify(structuredContent, wellFormedStrings)}`;
   return rpcResult(id, {
     content: [{ type: "text", text: textContent }],
     structuredContent,
