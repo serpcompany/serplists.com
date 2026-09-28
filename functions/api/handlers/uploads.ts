@@ -1,5 +1,6 @@
 import type { Env } from '../types';
 import { getSessionUserId } from '../utils/session';
+import { serveR2Object } from '../utils/r2-file-response';
 
 type UploadBucket = 'avatars' | 'template-images' | 'template-videos' | 'template-files';
 
@@ -61,17 +62,8 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
     const key = url.searchParams.get('key');
     if (!key) return json({ error: 'key required' }, 400);
 
-    const object = await env.R2_UPLOADS.get(key);
-    if (!object) return json({ error: 'Not Found' }, 404);
-
-    const headers = new Headers();
-    object.writeHttpMetadata(headers);
-    headers.set('etag', object.httpEtag);
-    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-
-    if (request.method === 'HEAD') return new Response(null, { status: 200, headers });
-
-    return new Response(object.body, { status: 200, headers });
+    // Keys contain a UUID, so objects never change once uploaded.
+    return serveR2Object(request, env.R2_UPLOADS, key, 'public, max-age=31536000, immutable');
   }
 
   // Delete: DELETE /api/uploads/file?key=...
