@@ -174,7 +174,10 @@ Clients that share a /64 (some office or campus networks) share one budget.
 
 The limiter is an in-memory map (`functions/api/utils/rate-limit.ts`), so it is not
 consistent across Cloudflare edges, and it is skipped when `CF-Connecting-IP` is
-missing. A `429` during intensive local QA means the limit, not broken credentials.
+missing. Each isolate keeps at most 10,000 keys: when a new key arrives at a full
+map, expired windows are dropped first, then the oldest ones, keeping clients that
+are currently blocked while any other can go. An evicted client starts a new window
+(fail open), so a flood of new addresses cannot exhaust the isolate's memory. A `429` during intensive local QA means the limit, not broken credentials.
 
 ## Request size limits
 
