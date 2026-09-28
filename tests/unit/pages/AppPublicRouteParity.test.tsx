@@ -1,27 +1,10 @@
 import React from 'react';
 import { readFileSync } from 'node:fs';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-let currentPath = '/';
+import { renderDataRoutes } from '../../fixtures/renderDataRoutes';
 
 const mockUseTemplateLibrary = vi.fn();
-
-vi.mock('react-router-dom', async () => {
-  const actual =
-    await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
-  const { StaticRouter } =
-    await vi.importActual<typeof import('react-router-dom/server')>(
-      'react-router-dom/server',
-    );
-
-  return {
-    ...actual,
-    BrowserRouter: ({ children }: { children: React.ReactNode }) => (
-      <StaticRouter location={currentPath}>{children}</StaticRouter>
-    ),
-  };
-});
 
 vi.mock('@/hooks/useTemplateLibrary', () => ({
   useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
@@ -108,7 +91,8 @@ vi.mock('@/lib/analytics', () => ({
   },
 }));
 
-import App from '@/App';
+import { AppProviders } from '@/App';
+import { appRoutes } from '@/appRoutes';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 const discoveryTemplate: ChecklistTemplate = {
@@ -143,20 +127,22 @@ const discoveryTemplate: ChecklistTemplate = {
   ownerProfile: { full_name: 'Design Ops', username: 'designops' },
 };
 
-const renderAppAt = (pathname: string) => {
-  currentPath = pathname;
+// The app's providers and routes under a data router, as App renders them in the browser.
+const renderAppAt = (pathname: string): Promise<string> => {
   mockUseTemplateLibrary.mockReturnValue({
     templates: [discoveryTemplate],
     loading: false,
     allCategories: ['Business & Operations', 'Launch', 'Web Development'],
   });
 
-  return renderToStaticMarkup(<App />);
+  return renderDataRoutes(appRoutes, pathname, (router) => (
+    <AppProviders>{router}</AppProviders>
+  ));
 };
 
 describe('App public route parity', () => {
-  it('renders / inside the public marketing shell with the product workflow homepage', () => {
-    const html = renderAppAt('/');
+  it('renders / inside the public marketing shell with the product workflow homepage', async () => {
+    const html = await renderAppAt('/');
 
     expect(html).toContain('Build the checklist once. Run it every time.');
     expect(html).toContain('Template library');
@@ -169,8 +155,8 @@ describe('App public route parity', () => {
     expect(html).not.toContain('Checklist Product Prototype');
   });
 
-  it('treats the removed /docs prototype as a missing route', () => {
-    const html = renderAppAt('/docs');
+  it('treats the removed /docs prototype as a missing route', async () => {
+    const html = await renderAppAt('/docs');
 
     expect(html).toContain('That page does not exist');
     expect(html).toContain('The route /docs could not be found.');
@@ -180,8 +166,8 @@ describe('App public route parity', () => {
     expect((html.match(/<header/g) ?? []).length).toBe(1);
   });
 
-  it('renders /templates inside the shared public shell with detail-card href semantics', () => {
-    const html = renderAppAt('/templates');
+  it('renders /templates inside the shared public shell with detail-card href semantics', async () => {
+    const html = await renderAppAt('/templates');
 
     expect(html).toContain('Discover Templates');
     expect(html).toContain('Browse by Category');
@@ -195,8 +181,8 @@ describe('App public route parity', () => {
     expect((html.match(/<header/g) ?? []).length).toBe(1);
   });
 
-  it('renders /categories inside the shared public shell with one global header and footer', () => {
-    const html = renderAppAt('/categories');
+  it('renders /categories inside the shared public shell with one global header and footer', async () => {
+    const html = await renderAppAt('/categories');
 
     expect(html).toContain('Browse Categories');
     expect(html).toContain('Popular Categories');
@@ -206,8 +192,8 @@ describe('App public route parity', () => {
     expect((html.match(/<header/g) ?? []).length).toBe(1);
   });
 
-  it('renders /categories/business inside the shared public shell with one global header and footer', () => {
-    const html = renderAppAt('/categories/business');
+  it('renders /categories/business inside the shared public shell with one global header and footer', async () => {
+    const html = await renderAppAt('/categories/business');
 
     expect(html).toContain('Business &amp; Operations');
     expect(html).toContain('All Categories');
@@ -219,7 +205,7 @@ describe('App public route parity', () => {
 
   it('keeps private /run/:id in the authenticated dashboard layout and shared runs public', () => {
     const appSource = readFileSync(
-      new URL('../../../src/App.tsx', import.meta.url),
+      new URL('../../../src/appRoutes.tsx', import.meta.url),
       'utf8',
     );
     const publicLayoutBranch = appSource.match(

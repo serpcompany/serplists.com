@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { X } from "lucide-react";
 
@@ -12,6 +12,7 @@ import { Tags } from "@/components/ui/tags";
 import { Textarea } from "@/components/ui/textarea";
 import { PREDEFINED_CATEGORIES } from "@/utils/categories";
 import type { TemplateEditorDetailsFormValues } from "@/lib/forms/templateEditorDetailsForm";
+import { TEMPLATE_FIELD_LIMITS } from "@/lib/schemas/templateFields";
 
 interface TemplateBasicInfoProps {
   showIntro?: boolean;
@@ -22,6 +23,17 @@ export const TemplateBasicInfo = ({
 }: TemplateBasicInfoProps): JSX.Element => {
   const { setValue, watch } = useFormContext<TemplateEditorDetailsFormValues>();
   const [tagInput, setTagInput] = useState("");
+  // One id per control, unique for each mounted panel, so every label names its control.
+  const fieldId = useId();
+  const ids = {
+    title: `${fieldId}-title`,
+    description: `${fieldId}-description`,
+    templateType: `${fieldId}-type`,
+    categories: `${fieldId}-categories`,
+    tags: `${fieldId}-tags`,
+    isPublic: `${fieldId}-public`,
+    isPublicHint: `${fieldId}-public-hint`,
+  };
   const title = watch("title");
   const description = watch("description");
   const templateType = watch("templateType");
@@ -66,9 +78,11 @@ export const TemplateBasicInfo = ({
 
       <FieldGroup>
         <Field>
-          <FieldLabel>Template Name</FieldLabel>
+          <FieldLabel htmlFor={ids.title}>Template Name</FieldLabel>
           <Input
+            id={ids.title}
             value={title}
+            maxLength={TEMPLATE_FIELD_LIMITS.title}
             onChange={(event) =>
               setValue("title", event.target.value, { shouldDirty: true })
             }
@@ -78,9 +92,11 @@ export const TemplateBasicInfo = ({
         </Field>
 
         <Field>
-          <FieldLabel>Goal / Summary</FieldLabel>
+          <FieldLabel htmlFor={ids.description}>Goal / Summary</FieldLabel>
           <Textarea
+            id={ids.description}
             value={description}
+            maxLength={TEMPLATE_FIELD_LIMITS.description}
             onChange={(event) =>
               setValue("description", event.target.value, { shouldDirty: true })
             }
@@ -91,14 +107,14 @@ export const TemplateBasicInfo = ({
         </Field>
 
         <Field>
-          <FieldLabel>Template Type</FieldLabel>
+          <FieldLabel htmlFor={ids.templateType}>Template Type</FieldLabel>
           <Select
             value={templateType}
             onValueChange={(value: "checklist" | "recipe") =>
               setValue("templateType", value, { shouldDirty: true })
             }
           >
-            <SelectTrigger className="bg-input">
+            <SelectTrigger className="bg-input" id={ids.templateType}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -109,8 +125,9 @@ export const TemplateBasicInfo = ({
         </Field>
 
         <Field>
-          <FieldLabel>Categories</FieldLabel>
+          <FieldLabel htmlFor={ids.categories}>Categories</FieldLabel>
           <Tags
+            id={ids.categories}
             options={categoryOptions}
             selected={categories || []}
             onSelectionChange={(nextCategories) =>
@@ -123,7 +140,7 @@ export const TemplateBasicInfo = ({
         </Field>
 
         <Field>
-          <FieldLabel>Tags</FieldLabel>
+          <FieldLabel htmlFor={ids.tags}>Tags</FieldLabel>
           <div className="mb-2 flex flex-wrap gap-2">
             {(tags || []).map((tag) => (
               <Badge key={tag} variant="outline" className="gap-1 pr-1">
@@ -132,6 +149,7 @@ export const TemplateBasicInfo = ({
                   type="button"
                   onClick={() => removeTag(tag)}
                   className="ml-1 rounded-full p-0.5 hover:bg-background/50"
+                  aria-label={`Remove tag ${tag}`}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -140,7 +158,9 @@ export const TemplateBasicInfo = ({
           </div>
           <div className="flex gap-2">
             <Input
+              id={ids.tags}
               value={tagInput}
+              maxLength={TEMPLATE_FIELD_LIMITS.listItemLength}
               onChange={(event) => setTagInput(event.target.value)}
               placeholder="Add tag..."
               onKeyDown={(event) => {
@@ -160,12 +180,16 @@ export const TemplateBasicInfo = ({
         <Field>
           <div className="flex items-center justify-between">
             <div>
-              <FieldLabel className="mb-0">Public Template</FieldLabel>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <FieldLabel className="mb-0" htmlFor={ids.isPublic}>
+                Public Template
+              </FieldLabel>
+              <p className="mt-1 text-xs text-muted-foreground" id={ids.isPublicHint}>
                 Make this template visible in the public library
               </p>
             </div>
             <Switch
+              id={ids.isPublic}
+              aria-describedby={ids.isPublicHint}
               checked={isPublic}
               onCheckedChange={(checked) =>
                 setValue("isPublic", checked, { shouldDirty: true })

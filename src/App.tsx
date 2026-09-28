@@ -1,61 +1,13 @@
-import {
-  BrowserRouter as Router,
-  Navigate,
-  Route,
-  Routes,
-} from 'react-router-dom';
-import { useEffect } from 'react';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { type ReactNode, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider } from './contexts/CloudflareAuthContext';
 import { TemplatesProvider } from './contexts/TemplatesContext';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
-import { Layout } from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { RouteErrorBoundary } from './components/RouteErrorBoundary';
-import { ScrollToTop } from './components/routing/ScrollToTop';
-import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { DevLoginBar } from './components/DevLoginBar';
-import RequireAuth from '@/components/RequireAuth';
-import Index from './pages/Index';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
-import Dashboard from './pages/Dashboard';
-import Archive from './pages/Archive';
-import Templates from './pages/Templates';
-import TemplateImportExport from './pages/TemplateImportExport';
-import DashboardSettings from './pages/DashboardSettings';
-import TemplateEditorRoute from './pages/TemplateEditorRoute';
-import TemplateDetail from './pages/TemplateDetail';
-import ChecklistRun from './pages/ChecklistRun';
-import PublicTemplate from './pages/PublicTemplate';
-import ChecklistLibrary from './pages/ChecklistLibrary';
-import Categories from './pages/Categories';
-import CategoryDetail from './pages/CategoryDetail';
-import TeamInviteAccept from './pages/TeamInviteAccept';
-import UserProfile from './pages/UserProfile';
-import Features from './pages/Features';
-import Pricing from './pages/Pricing';
-import About from './pages/About';
-import Contact from './pages/Contact';
-import NotFound from './pages/NotFound';
-import {
-  LEGACY_CONSOLE_HOME_PATH,
-  LEGACY_ACCOUNT_PATH,
-  LEGACY_CONSOLE_PROFILE_PATH,
-  LEGACY_PUBLIC_LIBRARY_PATH,
-  buildConsoleArchivePath,
-  buildConsoleHomePath,
-  buildConsoleRunsPath,
-  buildConsoleSettingsPath,
-  buildConsoleTemplateCreatePath,
-  buildConsoleTemplateImportPath,
-  buildConsoleTemplatesPath,
-  buildPublicTemplatesPath,
-} from './lib/routes';
+import { appRoutes } from './appRoutes';
 import { applyStoredTheme } from './lib/theme';
 
 const queryClient = new QueryClient({
@@ -75,197 +27,51 @@ const RootThemeSync = () => {
   return null;
 };
 
-const App = () => {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <HelmetProvider>
-        <ErrorBoundary resetOnHistoryChange>
-          <TooltipProvider>
-            <AuthProvider>
-              <WorkspaceProvider>
-                <TemplatesProvider>
-                  <RootThemeSync />
-                  <Router
-                    future={{
-                      v7_relativeSplatPath: true,
-                    }}
-                  >
-                  <ScrollToTop />
-                  <Routes>
-                    {/* Public Routes */}
+type AppRouter = ReturnType<typeof createBrowserRouter>;
 
-                    {/* Canonical Public Content Routes */}
-                    <Route
-                      path={LEGACY_PUBLIC_LIBRARY_PATH}
-                      element={
-                        <Navigate replace to={buildPublicTemplatesPath()} />
-                      }
-                    />
-                    <Route
-                      path="/share/:shareToken"
-                      element={<RouteErrorBoundary><ChecklistRun /></RouteErrorBoundary>}
-                    />
-                    {/* Canonical Private Routes */}
-                    <Route
-                      path={LEGACY_CONSOLE_HOME_PATH}
-                      element={<Navigate replace to={buildConsoleHomePath()} />}
-                    />
-                    <Route
-                      path={buildConsoleHomePath()}
-                      element={
-                        <RequireAuth>
-                          <Navigate replace to={buildConsoleTemplatesPath()} />
-                        </RequireAuth>
-                      }
-                    />
-                    <Route element={<Layout />}>
-                      <Route path="/login" element={<Login />} />
-                      <Route path="/register" element={<Register />} />
-                      <Route
-                        path="/forgot-password"
-                        element={<ForgotPassword />}
-                      />
-                      <Route path="/reset-password" element={<ResetPassword />} />
-                      <Route
-                        path="/"
-                        element={<Index />}
-                      />
-                      <Route
-                        path="/features"
-                        element={<Features />}
-                      />
-                      <Route
-                        path="/features/:featureSlug"
-                        element={<Features />}
-                      />
-                      <Route
-                        path="/pricing"
-                        element={<Pricing />}
-                      />
-                      <Route
-                        path="/about"
-                        element={<About />}
-                      />
-                      <Route
-                        path="/contact"
-                        element={<Contact />}
-                      />
-                      <Route
-                        path="/team-invites/:token"
-                        element={<TeamInviteAccept />}
-                      />
-                      <Route
-                        path={buildPublicTemplatesPath()}
-                        element={<ChecklistLibrary />}
-                      />
-                      <Route
-                        path="/categories"
-                        element={<Categories />}
-                      />
-                      <Route
-                        path="/categories/:categorySlug"
-                        element={<CategoryDetail />}
-                      />
-                      <Route
-                        path="/profile/:username/:templateSlug"
-                        element={<PublicTemplate />}
-                      />
-                      <Route
-                        path="/profile/:username"
-                        element={<UserProfile />}
-                      />
-                    </Route>
-
-                    <Route
-                      element={
-                        <RequireAuth>
-                          <Layout />
-                        </RequireAuth>
-                      }
-                    >
-                      <Route
-                        path={buildConsoleRunsPath()}
-                        element={<Dashboard />}
-                      />
-                      <Route
-                        path={buildConsoleSettingsPath()}
-                        element={<DashboardSettings />}
-                      />
-                      <Route
-                        path={buildConsoleArchivePath()}
-                        element={<Archive />}
-                      />
-                      <Route
-                        path={buildConsoleTemplatesPath()}
-                        element={<Templates />}
-                      />
-                      <Route
-                        path={buildConsoleTemplateImportPath()}
-                        element={<TemplateImportExport />}
-                      />
-                      <Route
-                        path={buildConsoleTemplateCreatePath()}
-                        element={<TemplateEditorRoute />}
-                      />
-                      <Route
-                        path="/dashboard/templates/:id"
-                        element={<TemplateDetail />}
-                      />
-                      <Route
-                        path="/dashboard/templates/:id/edit"
-                        element={<TemplateEditorRoute />}
-                      />
-                      <Route
-                        path="/dashboard/runs/:id"
-                        element={<ChecklistRun />}
-                      />
-                      <Route
-                        path="/run/:id"
-                        element={<ChecklistRun />}
-                      />
-
-                      {/* Legacy Private Route Aliases */}
-                      <Route
-                        path="/console/templates/:id"
-                        element={<TemplateDetail />}
-                      />
-                      <Route
-                        path="/console/templates/:id/edit"
-                        element={<TemplateEditorRoute />}
-                      />
-                      <Route
-                        path="/console/runs/:id"
-                        element={<ChecklistRun />}
-                      />
-                      <Route
-                        path={LEGACY_CONSOLE_PROFILE_PATH}
-                        element={<Navigate replace to={buildConsoleSettingsPath()} />}
-                      />
-                      <Route
-                        path={LEGACY_ACCOUNT_PATH}
-                        element={<Navigate replace to={buildConsoleSettingsPath()} />}
-                      />
-                    </Route>
-                    <Route
-                      path="*"
-                      element={
-                        <Layout>
-                          <NotFound />
-                        </Layout>
-                      }
-                    />
-                  </Routes>
-                  <DevLoginBar />
-                  <Toaster />
-                  </Router>
-                </TemplatesProvider>
-              </WorkspaceProvider>
-            </AuthProvider>
-          </TooltipProvider>
-        </ErrorBoundary>
-      </HelmetProvider>
-    </QueryClientProvider>
-  );
+// A data router, not BrowserRouter: useBlocker (the template editor's unsaved-changes
+// guard for links and browser Back) only works under one. Created once, on first render.
+let browserRouter: AppRouter | undefined;
+const getBrowserRouter = (): AppRouter => {
+  browserRouter ??= createBrowserRouter(appRoutes, {
+    // The app uses no loaders, actions, or fetchers, so the flags for those only
+    // silence the v7 upgrade warnings.
+    future: {
+      v7_fetcherPersist: true,
+      v7_normalizeFormMethod: true,
+      v7_partialHydration: true,
+      v7_relativeSplatPath: true,
+      v7_skipActionErrorRevalidation: true,
+    },
+  });
+  return browserRouter;
 };
+
+// Everything around the router. Tests render the routes inside it with a static
+// data router, since createBrowserRouter needs a browser.
+export const AppProviders = ({ children }: { children: ReactNode }) => (
+  <QueryClientProvider client={queryClient}>
+    <HelmetProvider>
+      <ErrorBoundary resetOnHistoryChange>
+        <TooltipProvider>
+          <AuthProvider>
+            <WorkspaceProvider>
+              <TemplatesProvider>
+                <RootThemeSync />
+                {children}
+              </TemplatesProvider>
+            </WorkspaceProvider>
+          </AuthProvider>
+        </TooltipProvider>
+      </ErrorBoundary>
+    </HelmetProvider>
+  </QueryClientProvider>
+);
+
+const App = () => (
+  <AppProviders>
+    <RouterProvider router={getBrowserRouter()} />
+  </AppProviders>
+);
 
 export default App;

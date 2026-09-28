@@ -39,6 +39,13 @@ import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPane
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
 import { selectRunHistoryPreview } from '@/features/run-execution/runHistory';
+import { usePageVisit } from '@/hooks/usePageVisit';
+import {
+  formatRunHistoryAction,
+  formatRunHistoryTime,
+  getRunHistoryActorName,
+} from '@/features/run-execution/runHistoryFormat';
+import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
 import { cn } from '@/lib/utils';
 import {
   buildConsoleHomePath,
@@ -46,51 +53,13 @@ import {
   buildPublicTemplatesPath,
 } from '@/lib/routes';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
-import type { TemplateHistoryEvent } from '@/lib/api';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
-
-const runHistoryActionLabels: Record<string, string> = {
-  'checklist_run.created': 'Created run',
-  'checklist_run.updated': 'Updated run',
-  'checklist_run.deleted': 'Archived run',
-};
-
-const formatRunHistoryAction = (action: string): string =>
-  runHistoryActionLabels[action] ?? action;
-
-const formatRunHistoryTime = (value?: string): string => {
-  if (!value) {
-    return '';
-  }
-
-  return new Date(value).toLocaleString('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const getRunHistoryActorName = (entry: TemplateHistoryEvent): string => {
-  const humanName = entry.actor?.name || entry.actor?.username || entry.actor?.email || 'Unknown user';
-  const metadata = entry.metadata;
-
-  if (
-    isRecord(metadata)
-    && metadata.source === 'mcp'
-    && typeof metadata.personalRunKeyName === 'string'
-    && metadata.personalRunKeyName.trim()
-  ) {
-    return `${metadata.personalRunKeyName.trim()} via MCP · authorized by ${humanName}`;
-  }
-
-  return humanName;
-};
 
 const ChecklistRunPage = () => {
   const { id, shareToken } = useParams<{ id?: string; shareToken?: string }>();
   const navigate = useNavigate();
+  // Completing awaits the save; it leaves for the list only if the user is still here.
+  const beginVisit = usePageVisit();
   const { updateRun } = useTemplates();
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -263,12 +232,16 @@ const ChecklistRunPage = () => {
   };
 
   const handleCompleteRun = async () => {
+    const visit = beginVisit();
     const result = await completeRun();
 
     if (result.kind === 'ok') {
       setIsCompleteDialogOpen(false);
       toast.success('Checklist completed! 🎉');
-      handleBack();
+      // Only from this run: after Back or another run, it must not pull the user away.
+      if (visit.isCurrent()) {
+        handleBack();
+      }
       return;
     }
 
@@ -332,11 +305,12 @@ const ChecklistRunPage = () => {
   }
 
   const activeItemId = selectedItemId ?? displayRun.sections[0]?.items[0]?.id ?? null;
-  const flatItems = displayRun.sections.flatMap((section) =>
+  const flatItems = displayRun.sections.flatMap((section, sectionIndex) =>
     section.items.map((item, itemIndex) => ({
       item,
       itemIndex,
       section,
+      sectionIndex,
       totalItemsInSection: section.items.length,
     })),
   );
@@ -506,7 +480,7 @@ const ChecklistRunPage = () => {
               </Surface>
 
               <div className="space-y-6">
-              {sectionProgress.map(({ completed, section, total }) => (
+              {sectionProgress.map(({ completed, index, section, total }) => (
                 <Surface
                   as="section"
                   key={section.id}
@@ -515,7 +489,7 @@ const ChecklistRunPage = () => {
                 >
                   <div className="flex items-center justify-between border-b border-border p-4">
                     <h2 className="text-base font-semibold text-foreground">
-                      {section.title}
+                      {getSectionDisplayTitle(section, index)}
                     </h2>
                     <span className="rounded-full bg-secondary px-3 py-1 text-sm text-secondary-foreground">
                       {completed === total ? 'Complete' : `${completed}/${total}`}
@@ -634,6 +608,7 @@ const ChecklistRunPage = () => {
               {selectedEntry ? (
                 <TaskExecutionPanel
                   section={selectedEntry.section}
+                  sectionIndex={selectedEntry.sectionIndex}
                   task={selectedEntry.item}
                   taskIndex={selectedEntry.itemIndex}
                   totalTasks={selectedEntry.totalItemsInSection}

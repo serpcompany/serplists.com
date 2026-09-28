@@ -26,7 +26,7 @@ Portable export is the preferred JSON format for sharing, AI generation, repo st
 ```ts
 export const portableTemplatePackSchema = z.object({
   kind: z.literal("serplists-template-pack"),
-  schemaVersion: z.string(),
+  schemaVersion: z.literal("2.0.0"),
   exportedAt: z.string(),
   exportedBy: z.string().optional(),
   templates: z.array(portableChecklistTemplateSchema),
@@ -47,6 +47,25 @@ Portable template fields are intentionally cleaner than app row exports:
 - optional SEO metadata is represented as `seoTitle` / `seoDescription`
 - optional portable rules are represented as `rules`
 - sections/items/content IDs may be present, but import should not depend on them
+- no run state: exports keep only the portable keys of sections (`id`, `title`,
+  `items`), items (`id`, `title`, `description`, `contents`), content blocks (`id`,
+  `type`, `value`, `uploadType`, `fileName`, `fileSize`, `subItems`) and sub-items
+  (`id`, `title`), so `isCompleted`, `completed` and `notes` are left out
+  (`src/lib/schemas/portableSections.ts`, used by both the app and the API export)
+
+Content blocks are a union on `type`: `image`, `video`, `file` and `embed` need a
+`value` that is not blank, `subItems` needs at least one sub-item, and `text` may be
+empty. Import ignores keys it does not know rather than rejecting them. The generated
+JSON Schema states the same rules and allows additional properties, so a pack valid
+against it imports, and a pack it rejects fails import too
+(`tests/unit/lib/schemas/portableTemplateJsonSchemaParity.test.ts` checks both with Ajv).
+
+An `image`, `video` or `file` block that links to a file outside the app shows its
+`fileName` and `fileSize` only with `uploadType: "url"`. Without it they are treated as
+left over from an earlier upload and are not shown. Import fills in
+`uploadType: "url"` for a named link that has none (JSON, Markdown and YAML), so packs
+written without it keep their names (`withImportedLinkSource` in
+`src/lib/utils/mediaSource.ts`).
 
 Portable round-trips must preserve `seoTitle`, `seoDescription`, and `rules`.
 Rules are structurally stored and exported but are not executed or surfaced as
@@ -197,6 +216,12 @@ Minimal template fields:
 
 Missing fields are auto-filled during import (ids, timestamps, userId).
 
+In these lenient JSON formats a task or sub-task can be written as its title in text
+(`"items": ["Milk", "Eggs"]`); it imports as a task with that title. Any other section,
+task, content block or sub-task that is not an object (null, a number, a nested array,
+empty text) fails the import with a message naming the template and where the entry
+is, and `POST /api/templates/backup` refuses such a template with `invalid_sections`.
+
 ## Strict Markdown template format
 
 The strict Markdown dialect is still supported for compatibility and lintable round-trips, but it is no longer the recommended primary authoring format.
@@ -216,7 +241,16 @@ Rules:
   - ```` ```serplists:embed ````
   - ```` ```serplists:subItems ````
 - `subItems` blocks must contain a YAML array
+- `text` and `embed` values may themselves contain headings and code fences. A
+  block's fence is longer than any run of backticks that starts a line of its value
+  (four backticks around a value with a 3-backtick code fence), and a block closes
+  only on a line with exactly its opening number of backticks. Plain values keep
+  3-backtick fences. Headings are recognized only outside blocks.
+- a description line that would read as a `##`/`###` heading or a `serplists:` fence
+  is written with one extra leading backslash (`\## Notes`); import removes it
 - JSON and Markdown siblings named `template.json` and `template.md` can be checked for drift with `pnpm templates:check`
+- `pnpm templates:check` also parses each template's generated Markdown back and
+  reports `markdown-roundtrip` when it would not import as the same template
 
 The example assets in `docs/product-specs/portable-templates/examples/` are the intended copy/paste starting point.
 
@@ -248,8 +282,12 @@ JSON exports **do not** include R2 assets. If a template references uploaded fil
 - Template import/export is a **Pro** feature.
 - Export defaults to the portable template pack format.
 - Backup export is still available for compatibility.
-- Guardrails are enforced (max 5 templates/import; block assets > 5MB).
-- Asset uploads should be <= 5MB each (compress before publishing).
+- Guardrails are enforced: at most 5 templates per import, and a template with an
+  asset whose recorded `fileSize` is over the 50MB upload limit fails with
+  `oversized_asset` while the other templates in the file still import.
+- Asset uploads are limited to 50MB each. Import accepts any size an upload can have
+  (one shared limit, `src/lib/schemas/templateAssetLimits.ts`), so a template
+  exported from the app always imports again; import copies asset URLs, not the files.
 - For live public-library publishing today, the imported template should be owned by the intended public publisher account before import, because author username is resolved from DB ownership, not from the portable JSON file.
 
 `seoUrl` is represented by the stored `slug` field and mapped back into the editor's `Custom URL Slug` input.
@@ -289,5 +327,8 @@ Supported types:
 - `image`
 - `video`
 - `file`
-- `embed` (URL or raw text)
+- `embed` (URL, iframe embed code, or raw text). Nothing renders the value as HTML:
+  the app and `preview.html` link to an absolute http(s) URL, or to the `src` of
+  iframe code, and show any other value (script tags, plain text) as text
+  (`src/lib/utils/embedLink.ts`).
 - `subItems` (nested checklist)

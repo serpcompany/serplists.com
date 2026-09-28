@@ -8,6 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 interface EditorPanelsProps {
+  // The template owner's public profile slug, for the Search & SEO preview URL.
+  publicOwnerSlug: string | null;
   selectedSectionIndex: number;
   selectedItemIndex: number | null;
   showingSEO: boolean;
@@ -57,6 +59,7 @@ function getPanelDescription(
 }
 
 export function EditorPanels({
+  publicOwnerSlug,
   selectedSectionIndex,
   selectedItemIndex,
   showingSEO,
@@ -96,7 +99,7 @@ export function EditorPanels({
           {showingTemplateInfo ? (
             <TemplateBasicInfo showIntro={false} />
           ) : showingSEO ? (
-            <SEOMetaEditor showIntro={false} />
+            <SEOMetaEditor ownerSlug={publicOwnerSlug} showIntro={false} />
           ) : selectedSection ? (
             <div className="space-y-6">
               {selectedItemIndex === null ? (

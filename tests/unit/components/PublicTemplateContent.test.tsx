@@ -61,3 +61,43 @@ describe('PublicTemplateContent', () => {
   });
 
 });
+
+describe('PublicTemplateContent embed blocks', () => {
+  const renderEmbed = (value: string) =>
+    renderToStaticMarkup(
+      <PublicTemplateContent
+        initialExpandedItems={{ '0-0': true }}
+        sections={[{
+          id: 'steps',
+          title: 'Steps',
+          items: [{
+            id: 'step-1',
+            title: 'Watch the walkthrough',
+            description: '',
+            contents: [{ id: 'embed-1', type: 'embed', value }],
+          }],
+        }]}
+      />,
+    );
+  const hrefs = (html: string) => Array.from(html.matchAll(/href="([^"]*)"/g), (match) => match[1]);
+
+  it('links the src of pasted iframe code, not the markup', () => {
+    const html = renderEmbed(`<iframe src='https://www.youtube.com/embed/abc'></iframe>`);
+
+    expect(hrefs(html)).toEqual(['https://www.youtube.com/embed/abc']);
+    expect(html).toContain('>https://www.youtube.com/embed/abc</a>');
+    expect(html).not.toContain('<iframe');
+  });
+
+  it.each([
+    '<script src="https://example.com/widget.js"></script>',
+    'See the staging dashboard',
+  ])('shows %j as text with no link', (value) => {
+    const html = renderEmbed(value);
+
+    expect(hrefs(html)).toEqual([]);
+    expect(html).not.toContain('Invalid link');
+    expect(html).not.toContain('<script');
+    expect(html).toContain(value.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'));
+  });
+});

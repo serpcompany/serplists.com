@@ -5,20 +5,57 @@ import { Textarea } from './textarea';
 import { Label } from './label';
 import { X, File, Image, Video } from 'lucide-react';
 import {
+  uploadAcceptTypesForBlock,
   uploadFile,
   validateFile,
   UploadResult,
 } from '@/lib/utils/fileUpload';
+import { formatAssetSizeLimit } from '@/lib/schemas/templateAssetLimits';
+import { imagePreviewSrc, isUploadedAssetUrl } from '@/lib/utils/mediaSource';
+import { UPLOAD_MAX_BYTES } from '@/lib/schemas/uploadTypes';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
+
+// An upload or a clear, reported as one change so the URL and the file details are
+// never written separately (a second write could restore a stale URL).
+export type FileUploadChange = {
+  value: string;
+  fileName?: string;
+  fileSize?: number;
+};
+
+// The preview of one image address (null: nothing loadable yet). FileUpload keys it by
+// the value, so every new value gets a fresh <img> and a fresh failed state: a URL that
+// failed to load (as a URL does while it is typed) cannot hide a later one. A failure
+// is React state, never a style set on the element, which React would keep.
+export const ImagePreview = ({ src }: { src: string | null }): JSX.Element => {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return <p className="py-2 text-center text-xs text-muted-foreground">Preview unavailable</p>;
+  }
+
+  return (
+    <img
+      src={src}
+      alt="Preview"
+      className="max-h-32 mx-auto rounded"
+      onError={() => setFailed(true)}
+    />
+  );
+};
 
 interface FileUploadProps {
   type: 'image' | 'video' | 'file';
   value: string;
   fileName?: string;
+  // Typing or pasting in the URL field.
   onValueChange: (value: string) => void;
-  onFileInfoChange: (fileName?: string, fileSize?: number) => void;
+  onFileChange: (change: FileUploadChange) => void;
+  // Receives each upload as it starts, so the page can wait for it: the file reaches
+  // the form only when the upload finishes, and this field may unmount before then.
+  onUploadStart?: (upload: Promise<UploadResult>) => void;
   className?: string;
 }
 
@@ -27,7 +64,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   value,
   fileName,
   onValueChange,
-  onFileInfoChange,
+  onFileChange,
+  onUploadStart,
   className = ''
 }) => {
   const [isUploading, setIsUploading] = useState(false);
@@ -52,14 +90,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     }
   };
 
-  const getAcceptTypes = () => {
-    switch (type) {
-      case 'image': return 'image/*';
-      case 'video': return 'video/*';
-      case 'file': return '*/*';
-    }
-  };
-
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !user) return;
@@ -78,13 +108,14 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     setIsUploading(true);
 
     try {
-      const result: UploadResult = await uploadFile(file, getBucketName(), user.id);
+      const upload = uploadFile(file, getBucketName(), user.id);
+      onUploadStart?.(upload);
+      const result: UploadResult = await upload;
 
       // The previous upload is never deleted here: the saved template, its runs,
       // versions, and copies may still reference it, and this change is unsaved.
       if (result.success && result.url) {
-        onValueChange(result.url);
-        onFileInfoChange(result.fileName, result.fileSize);
+        onFileChange({ value: result.url, fileName: result.fileName, fileSize: result.fileSize });
         toast({
           title: "Upload successful",
           description: `${file.name} has been uploaded.`
@@ -113,9 +144,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   // Clearing only changes the form. The stored object stays, because the saved
   // template, its runs, versions, and copies may still reference it.
   const handleClear = () => {
-    onValueChange('');
-    onFileInfoChange(undefined, undefined);
+    onFileChange({ value: '', fileName: undefined, fileSize: undefined });
   };
+
+  // The uploaded-file row (and its Remove button, which clears the value) only while
+  // the value is that upload: a name next to a typed URL is not an upload to remove.
+  const uploadedFileName = fileName && isUploadedAssetUrl(value) ? fileName : undefined;
 
   return (
     <div className={`space-y-4 ${className}`}>
@@ -152,12 +186,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         </Label>
         
         <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-2">
-          {fileName ? (
+          {uploadedFileName ? (
             <div className="flex items-center justify-between p-2 bg-muted rounded">
               <div className="flex items-center gap-2">
                 {getIcon()}
                 <span className="text-sm font-medium">
-                  {fileName}
+                  {uploadedFileName}
                 </span>
               </div>
               <Button
@@ -176,7 +210,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept={getAcceptTypes()}
+                accept={uploadAcceptTypesForBlock(type)}
                 onChange={handleFileSelect}
                 disabled={isUploading}
                 className="hidden"
@@ -201,7 +235,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                 )}
               </Button>
               <p className="text-xs text-muted-foreground mt-1">
-                Max file size: 50MB
+                Max file size: {formatAssetSizeLimit(UPLOAD_MAX_BYTES)}
               </p>
             </div>
           )}
@@ -209,16 +243,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       </div>
 
       {/* Preview for images */}
-      {value && type === 'image' && (
+      {value && value.trim() && type === 'image' && (
         <div className="border rounded-lg p-2">
-          <img 
-            src={value} 
-            alt="Preview" 
-            className="max-h-32 mx-auto rounded"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
+          <ImagePreview key={value} src={imagePreviewSrc(value)} />
         </div>
       )}
       

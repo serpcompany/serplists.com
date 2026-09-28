@@ -70,8 +70,9 @@ import {
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplateLists } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { followTemplateActionResult } from '@/features/template-detail/templateActionOutcome';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
-import { buildTemplateCopyPayload } from '@/features/template-detail/templateDetailMappers';
+import { usePageVisit } from '@/hooks/usePageVisit';
 import {
   navigateToLoginWithReturnPath,
   startBillingCheckout,
@@ -87,6 +88,7 @@ import {
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
 import { getRunStartedMessage, getTemplateDuplicatedMessage, nameOtherTemplateDestination } from '@/lib/templateDestination';
+import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistTemplate, TemplateSavePayload } from '@/types/checklist';
 
@@ -164,6 +166,8 @@ const TemplateDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  // Actions below await a request; they move the user only if they are still here.
+  const beginVisit = usePageVisit();
   const { user, isAuthenticated } = useAuth();
   const { activeTeamId, canEditTemplates, isTeamWorkspace, teams } = useWorkspace();
   const {
@@ -187,6 +191,7 @@ const TemplateDetail = () => {
   );
   const {
     billingState,
+    duplicateTemplate,
     loading,
     notFound,
     recordTemplateSave,
@@ -242,31 +247,27 @@ const TemplateDetail = () => {
     await startBillingCheckout(billingState.billingEnabled);
   };
 
+  const goToLogin = () => navigateToLoginWithReturnPath(navigate, location);
+
   const handleStartRun = async (runName: string) => {
+    const visit = beginVisit();
     setIsCreatingRun(true);
     try {
       const result = await startRun(runName);
-
-      if (result.kind === 'login_required') {
-        navigateToLoginWithReturnPath(navigate, location);
-        return;
-      }
-
-      if (result.kind === 'upgrade_required') {
-        await handleUpgradeRequired();
-        return;
-      }
-
-      if (result.kind === 'error') {
-        toast.error(result.message);
-        return;
-      }
-
-      if (result.runId) {
-        toast.success(getRunStartedMessage(otherDestination));
+      if (result.kind === 'ok' && result.runId) {
+        // The run exists, whether or not the user is still here to open it.
         setRunDialogOpen(false);
-        navigate(buildConsoleRunPath(result.runId));
       }
+      await followTemplateActionResult(result, visit, {
+        loginRequired: goToLogin,
+        upgradeRequired: handleUpgradeRequired,
+        succeeded: ({ runId }) => {
+          if (runId) {
+            toast.success(getRunStartedMessage(otherDestination));
+            navigate(buildConsoleRunPath(runId));
+          }
+        },
+      });
     } finally {
       setIsCreatingRun(false);
     }
@@ -277,32 +278,22 @@ const TemplateDetail = () => {
       return;
     }
 
+    const visit = beginVisit();
     setIsCreatingShare(true);
     try {
-      const result = await shareTemplate();
+      await followTemplateActionResult(await shareTemplate(), visit, {
+        loginRequired: goToLogin,
+        upgradeRequired: handleUpgradeRequired,
+        succeeded: (result) => {
+          if (!result.shareUrl) {
+            toast.error('Failed to create a share link for this template.');
+            return;
+          }
 
-      if (result.kind === 'login_required') {
-        navigateToLoginWithReturnPath(navigate, location);
-        return;
-      }
-
-      if (result.kind === 'upgrade_required') {
-        await handleUpgradeRequired();
-        return;
-      }
-
-      if (result.kind === 'error') {
-        toast.error(result.message);
-        return;
-      }
-
-      if (!result.shareUrl) {
-        toast.error('Failed to create a share link for this template.');
-        return;
-      }
-
-      setShareUrl(result.shareUrl);
-      setShareDialogOpen(true);
+          setShareUrl(result.shareUrl);
+          setShareDialogOpen(true);
+        },
+      });
     } finally {
       setIsCreatingShare(false);
     }
@@ -317,55 +308,31 @@ const TemplateDetail = () => {
     toast.success('Public link copied');
   };
 
+  // Duplicate (a template the user can edit) and copy (someone else's) both create a
+  // template, so both can hit the plan's template limit and must offer the upgrade.
   const handleCloneTemplate = async () => {
     if (!displayTemplate) {
       return;
     }
 
-    if (canEditTemplate) {
-      setIsCloningTemplate(true);
-      try {
-        const duplicatedTemplate = await createTemplate(buildTemplateCopyPayload(displayTemplate, activeTeamId));
-
-        toast.success(getTemplateDuplicatedMessage(otherDestination));
-        navigate(buildConsoleTemplatePath(duplicatedTemplate.id));
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : 'Failed to duplicate template',
-        );
-      } finally {
-        setIsCloningTemplate(false);
-      }
-
-      return;
-    }
-
+    const visit = beginVisit();
     setIsCloningTemplate(true);
     try {
-      const result = await saveTemplate();
-
-      if (result.kind === 'login_required') {
-        navigateToLoginWithReturnPath(navigate, location);
-        return;
-      }
-
-      if (result.kind === 'upgrade_required') {
-        await handleUpgradeRequired();
-        return;
-      }
-
-      if (result.kind === 'error') {
-        toast.error(result.message);
-        return;
-      }
-
-      toast.success('Template copied to your account');
-      if (result.templateId) {
-        navigate(buildConsoleTemplatePath(result.templateId));
-        return;
-      }
-
-      navigate(buildConsoleTemplatesPath());
+      const result = canEditTemplate ? await duplicateTemplate() : await saveTemplate();
+      await followTemplateActionResult(result, visit, {
+        loginRequired: goToLogin,
+        upgradeRequired: handleUpgradeRequired,
+        succeeded: ({ templateId }) => {
+          toast.success(
+            canEditTemplate
+              ? getTemplateDuplicatedMessage(otherDestination)
+              : 'Template copied to your account',
+          );
+          navigate(
+            templateId ? buildConsoleTemplatePath(templateId) : buildConsoleTemplatesPath(),
+          );
+        },
+      });
     } finally {
       setIsCloningTemplate(false);
     }
@@ -417,11 +384,17 @@ const TemplateDetail = () => {
   const handleDelete = async () => {
     if (!displayTemplate) return;
 
+    const visit = beginVisit();
     setIsDeleting(true);
     try {
       await deleteTemplate(displayTemplate.id);
       toast.success('Template deleted');
-      navigate(buildConsoleTemplatesPath());
+      if (visit.isCurrent()) {
+        navigate(buildConsoleTemplatesPath());
+      } else {
+        // The user moved on (another template can keep this page mounted).
+        setIsDeleting(false);
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to archive template';
@@ -550,6 +523,7 @@ const TemplateDetail = () => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
+              aria-label="Template actions"
               variant="ghost"
               size="icon"
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
@@ -679,7 +653,7 @@ const TemplateDetail = () => {
                     {sectionIndex + 1}
                   </div>
                   <span className="font-medium text-foreground">
-                    {section.title}
+                    {getSectionDisplayTitle(section, sectionIndex)}
                   </span>
                   <Badge variant="secondary" className="ml-auto">
                     {section.items.length} tasks

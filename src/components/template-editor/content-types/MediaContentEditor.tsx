@@ -1,5 +1,6 @@
 import { Label } from "@/components/ui/label";
-import { FileUpload } from "@/components/ui/file-upload";
+import { FileUpload, type FileUploadChange } from "@/components/ui/file-upload";
+import type { UploadResult } from "@/lib/utils/fileUpload";
 import { Image, Video, File } from "lucide-react";
 
 interface MediaContentEditorProps {
@@ -7,7 +8,8 @@ interface MediaContentEditorProps {
   value: string;
   fileName?: string;
   onValueChange: (value: string) => void;
-  onFileInfoChange: (fileName?: string, fileSize?: number) => void;
+  onFileChange: (change: FileUploadChange) => void;
+  onUploadStart?: (upload: Promise<UploadResult>) => void;
 }
 
 export const MediaContentEditor = ({ 
@@ -15,7 +17,8 @@ export const MediaContentEditor = ({
   value, 
   fileName, 
   onValueChange, 
-  onFileInfoChange 
+  onFileChange,
+  onUploadStart,
 }: MediaContentEditorProps) => {
   const getIcon = () => {
     switch (type) {
@@ -40,7 +43,8 @@ export const MediaContentEditor = ({
         value={value}
         fileName={fileName}
         onValueChange={onValueChange}
-        onFileInfoChange={onFileInfoChange}
+        onFileChange={onFileChange}
+        onUploadStart={onUploadStart}
       />
     </div>
   );

@@ -67,7 +67,7 @@ describe('Layout route contracts', () => {
 
   it('keeps public content routes in the shared public Layout branch', () => {
     const appSource = readFileSync(
-      new URL('../../../src/App.tsx', import.meta.url),
+      new URL('../../../src/appRoutes.tsx', import.meta.url),
       'utf8',
     );
     const publicLayoutBranch = appSource.match(

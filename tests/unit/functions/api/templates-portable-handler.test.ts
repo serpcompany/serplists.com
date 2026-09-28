@@ -33,6 +33,9 @@ vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForContext: vi.fn(),
 }));
 
+import Ajv from 'ajv';
+
+import { buildPortableTemplatePackJsonSchema } from '@/lib/schemas/portableTemplateJsonSchema';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
@@ -252,5 +255,126 @@ describe('portable template import/export API', () => {
 
     expect(response.status).toBe(400);
     expect(data.code).toBe('unsupported_portable_schema_version');
+  });
+
+  const packWithAsset = (fileSize: number) => ({
+    title: `Template with a ${fileSize} byte asset`,
+    sections: [
+      {
+        title: 'Docs',
+        items: [
+          {
+            title: 'Read the brief',
+            contents: [
+              {
+                type: 'file',
+                value: '/api/uploads/file?key=template-files%2Fuser-123%2Fbrief.pdf',
+                fileName: 'brief.pdf',
+                fileSize,
+                uploadType: 'upload',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  const importPack = (templates: unknown[]) =>
+    handleTemplates(
+      new Request('http://localhost/api/templates/backup', {
+        method: 'POST',
+        body: JSON.stringify({
+          kind: 'serplists-template-pack',
+          schemaVersion: '2.0.0',
+          exportedAt: '2026-03-21T00:00:00.000Z',
+          templates,
+        }),
+      }),
+      mockEnv as never,
+    );
+
+  // The uploader accepts up to 50MB, so an export holding such an asset must import again.
+  it('imports assets up to the upload limit', async () => {
+    const response = await importPack([packWithAsset(8 * 1024 * 1024), packWithAsset(50 * 1024 * 1024)]);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.imported).toBe(2);
+    expect(data.failed).toEqual([]);
+  });
+
+  it('fails only the template whose asset is over the upload limit', async () => {
+    const response = await importPack([packWithAsset(50 * 1024 * 1024 + 1), packWithAsset(1024)]);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.imported).toBe(1);
+    expect(data.failed).toEqual([
+      expect.objectContaining({ index: 0, code: 'oversized_asset', reason: expect.stringContaining('50MB') }),
+    ]);
+  });
+
+  // Stored sections carry run state (isCompleted, notes). The portable export must hold
+  // only portable keys, validate against the published JSON Schema, and import again.
+  it('exports stored templates without run state, valid against the JSON Schema', async () => {
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        title: 'Template',
+        description: '',
+        items: JSON.stringify([
+          {
+            id: 's-1',
+            title: 'Checklist',
+            items: [
+              {
+                id: 'i-1',
+                title: 'Item',
+                isCompleted: false,
+                notes: 'run note',
+                contents: [
+                  { id: 'c-1', type: 'text', value: 'Read me' },
+                  { id: 'c-2', type: 'subItems', value: '', subItems: [{ id: 'si-1', title: 'Sub', isCompleted: true }] },
+                ],
+              },
+            ],
+          },
+        ]),
+        rules: null,
+        category: '[]',
+        tags: '[]',
+        user_id: 'user-123',
+        is_public: 0,
+        slug: 'template',
+        seo_title: '',
+        seo_description: '',
+        created_at: new Date().toISOString(),
+        updated_at: null,
+        version: 1,
+      },
+    ]);
+
+    const response = await handleTemplates(
+      new Request('http://localhost/api/templates/backup', { method: 'GET' }),
+      mockEnv as never,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(JSON.stringify(data.templates[0].sections)).not.toMatch(/"(isCompleted|completed|notes)"/);
+    expect(data.templates[0].sections[0].items[0]).toEqual({
+      id: 'i-1',
+      title: 'Item',
+      contents: [
+        { id: 'c-1', type: 'text', value: 'Read me' },
+        { id: 'c-2', type: 'subItems', value: '', subItems: [{ id: 'si-1', title: 'Sub' }] },
+      ],
+    });
+    const validate = new Ajv({ strict: false }).compile(buildPortableTemplatePackJsonSchema());
+    expect(validate(data), JSON.stringify(validate.errors)).toBe(true);
+
+    const reimport = await importPack(data.templates);
+    expect((await reimport.json()).imported).toBe(1);
   });
 });

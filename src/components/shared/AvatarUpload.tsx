@@ -6,6 +6,8 @@ import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { isAllowedUpload, uploadAcceptAttribute } from "@/lib/schemas/uploadTypes";
 import { deleteUploadedAsset } from "@/lib/utils/fileUpload";
 
 interface AvatarUploadProps {
@@ -37,12 +39,15 @@ export const AvatarUpload = ({
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const input = event.target;
+    const file = input.files?.[0];
+    // A file input fires no change event when the same file is picked again, so it is
+    // cleared at once (the File is already held) and every attempt below can be retried.
+    input.value = "";
     if (!file || !user) return;
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error("Please select an image file");
+    if (!isAllowedUpload("avatars", file)) {
+      toast.error("Please select a PNG, JPEG, WebP, or GIF image");
       return;
     }
 
@@ -56,16 +61,27 @@ export const AvatarUpload = ({
 
     try {
       const upload = await api.uploadToR2({ bucket: 'avatars', file });
-      await authClient.updateUser({ image: upload.url });
-      await refreshProfile();
+      // authClient resolves with { error } on HTTP failures (429, 5xx) rather than throwing.
+      const result = await authClient.updateUser({ image: upload.url });
+      if (result?.error) {
+        // The account still uses the current avatar: keep it, and drop the new file.
+        await deleteUploadedAsset(upload.url);
+        toast.error(result.error.message || "Failed to update avatar. Please try again.");
+        return;
+      }
+
+      // Only now does nothing use the old file.
       if (currentAvatarUrl && currentAvatarUrl !== upload.url) {
         await deleteUploadedAsset(currentAvatarUrl);
       }
+      await refreshProfile();
       toast.success("Avatar updated successfully!");
       onAvatarUpdate?.(upload.url);
     } catch (error) {
+      // A thrown update (network failure) may still have been applied, so no file is
+      // deleted here: never the current avatar, and not the new upload either.
       console.error('Error uploading avatar:', error);
-      toast.error("Failed to upload avatar");
+      toast.error(getApiErrorMessage(error, "Failed to upload avatar"));
     } finally {
       setIsUploading(false);
     }
@@ -77,7 +93,12 @@ export const AvatarUpload = ({
     setIsRemoving(true);
 
     try {
-      await authClient.updateUser({ image: null });
+      const result = await authClient.updateUser({ image: null });
+      if (result?.error) {
+        toast.error(result.error.message || "Failed to remove avatar. Please try again.");
+        return;
+      }
+
       await deleteUploadedAsset(currentAvatarUrl);
       await refreshProfile();
       toast.success("Avatar removed successfully!");
@@ -136,7 +157,7 @@ export const AvatarUpload = ({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept={uploadAcceptAttribute("avatars")}
             onChange={handleFileUpload}
             disabled={isUploading || isRemoving}
             className="hidden"

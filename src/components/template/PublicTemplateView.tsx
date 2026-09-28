@@ -19,6 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { buildPublicCategoryPath, buildPublicTemplatesPath } from '@/lib/routes';
+import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistItem, ChecklistSection, ChecklistTemplate } from '@/types/checklist';
 
@@ -304,7 +305,7 @@ function SectionPreview({
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-medium text-muted-foreground">
             {index + 1}
           </span>
-          <span className="truncate font-medium text-foreground">{section.title}</span>
+          <span className="truncate font-medium text-foreground">{getSectionDisplayTitle(section, index)}</span>
           <span className="shrink-0 text-xs text-muted-foreground">
             {section.items.length} tasks
           </span>

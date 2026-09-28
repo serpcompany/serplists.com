@@ -1,20 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { getAccessFailure } from '@/lib/api-errors';
 import { getTemplateChangeErrorMessage, isStaleRecordError } from '@/lib/editConflicts';
 import { api, type TemplateHistoryResponse } from '@/lib/api';
 import { getBillingStatusQueryKey } from '@/lib/billing';
-import {
-  buildRepoTemplateCreatePayload,
-  findPublicTemplateByIdentifier,
-  isRepoTemplate,
-} from '@/lib/repoTemplateCatalog';
+import { findPublicTemplateByIdentifier } from '@/lib/repoTemplateCatalog';
 import {
   buildCanonicalPublicTemplatePath,
   resolvePublicTemplateOwnerSlug,
 } from '@/lib/routes';
-import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
+import type { ChecklistTemplate } from '@/types/checklist';
 
 import {
   countTemplateItems,
@@ -27,6 +22,24 @@ import {
   type TemplateDetailViewState,
 } from './templateDetailLoader';
 import { createTemplateDetailRefresh } from './templateDetailRefresh';
+import {
+  type CreateRun,
+  type CreateTemplate,
+  duplicateOwnedTemplate,
+  mapActionFailure,
+  saveTemplateToAccount,
+  startTemplateRun,
+  type TemplateDetailActionResult,
+  type TemplateDetailBillingState,
+} from './templateActionOutcome';
+
+export {
+  duplicateOwnedTemplate,
+  saveTemplateToAccount,
+  startTemplateRun,
+  type TemplateDetailActionResult,
+  type TemplateDetailBillingState,
+};
 
 type TemplateDetailApiClient = Pick<
   typeof api,
@@ -37,19 +50,6 @@ type TemplateDetailApiClient = Pick<
   | 'getTemplateBySlug'
   | 'updateTemplate'
 >;
-
-type CreateTemplate = (
-  templateData: Omit<
-    ChecklistTemplate,
-    'id' | 'userId' | 'createdAt' | 'updatedAt' | 'slug'
-  >,
-) => Promise<ChecklistTemplate>;
-
-type CreateRun = (params: {
-  runName?: string;
-  template?: ChecklistTemplate;
-  templateId: string;
-}) => Promise<ChecklistRun | null>;
 
 type PublicTemplateDetailOptions = {
   cachedTemplates: ChecklistTemplate[];
@@ -76,18 +76,6 @@ type TemplateDetailCommonOptions = {
 export type UseTemplateDetailModelOptions = TemplateDetailCommonOptions &
   (PublicTemplateDetailOptions | PrivateTemplateDetailOptions);
 
-export type TemplateDetailActionResult =
-  | { kind: 'ok'; runId?: string; shareUrl?: string; templateId?: string }
-  | { kind: 'login_required' }
-  | { kind: 'upgrade_required' }
-  | { kind: 'error'; message: string };
-
-export type TemplateDetailBillingState = {
-  billingEnabled: boolean;
-  isLoading: boolean;
-  isPro: boolean;
-};
-
 export type TemplateDetailHistoryState = {
   data: TemplateHistoryResponse | null;
   isError: boolean;
@@ -111,23 +99,6 @@ const isUuidLike = (value: string): boolean => UUID_PATTERN.test(value);
 const getApiClient = (
   dependencies?: TemplateDetailDependencies,
 ): TemplateDetailApiClient => dependencies?.apiClient ?? api;
-
-const mapActionFailure = (
-  error: unknown,
-  fallbackMessage: string,
-): TemplateDetailActionResult => {
-  const failure = getAccessFailure(error, fallbackMessage);
-
-  if (failure.kind === 'auth_required') {
-    return { kind: 'login_required' };
-  }
-
-  if (failure.kind === 'upgrade_required') {
-    return { kind: 'upgrade_required' };
-  }
-
-  return { kind: 'error', message: failure.message };
-};
 
 const hydrateTemplateOwner = async (
   template: ChecklistTemplate,
@@ -227,86 +198,6 @@ export const loadTemplateDetailData = async (
   }
 };
 
-export const startTemplateRun = async (params: {
-  createRun: CreateRun;
-  isAuthenticated: boolean;
-  runName?: string;
-  template: ChecklistTemplate | null;
-}): Promise<TemplateDetailActionResult> => {
-  if (!params.template) {
-    return { kind: 'error', message: 'Template not found.' };
-  }
-
-  if (!params.isAuthenticated) {
-    return { kind: 'login_required' };
-  }
-
-  try {
-    const run = await params.createRun({
-      templateId: params.template.id,
-      runName: params.runName,
-      template: params.template,
-    });
-
-    if (!run?.id) {
-      return { kind: 'error', message: 'Failed to start template run' };
-    }
-
-    return { kind: 'ok', runId: run.id };
-  } catch (error) {
-    return mapActionFailure(error, 'Failed to start template run');
-  }
-};
-
-export const saveTemplateToAccount = async (params: {
-  apiClient?: TemplateDetailApiClient;
-  billingState: TemplateDetailBillingState;
-  createTemplate: CreateTemplate;
-  invalidateTemplates?: () => Promise<void> | void;
-  isAuthenticated: boolean;
-  teamId?: string;
-  template: ChecklistTemplate | null;
-  userId?: string;
-}): Promise<TemplateDetailActionResult> => {
-  if (!params.template) {
-    return { kind: 'error', message: 'Template not found.' };
-  }
-
-  if (!params.isAuthenticated || !params.userId) {
-    return { kind: 'login_required' };
-  }
-
-  if (params.billingState.isLoading) {
-    return { kind: 'error', message: 'Checking your plan. Try again in a moment.' };
-  }
-
-  if (!params.billingState.isPro) {
-    return { kind: 'upgrade_required' };
-  }
-
-  const apiClient = params.apiClient ?? api;
-
-  try {
-    if (isRepoTemplate(params.template)) {
-      const createdTemplate = await params.createTemplate(
-        buildRepoTemplateCreatePayload(params.template),
-      );
-      return { kind: 'ok', templateId: createdTemplate.id };
-    }
-
-    const clonedTemplate = await apiClient.clonePublicTemplate(params.template.id, {
-      teamId: params.teamId,
-      visibility: 'private',
-    });
-
-    await params.invalidateTemplates?.();
-
-    return { kind: 'ok', templateId: clonedTemplate.id };
-  } catch (error) {
-    return mapActionFailure(error, 'Failed to save template');
-  }
-};
-
 export const useTemplateDetailModel = (
   options: UseTemplateDetailModelOptions,
 ) => {
@@ -395,6 +286,15 @@ export const useTemplateDetailModel = (
       userId: options.userId,
     });
 
+  const duplicateTemplate = async (): Promise<TemplateDetailActionResult> =>
+    template
+      ? duplicateOwnedTemplate({
+          activeTeamId: options.teamId,
+          createTemplate: options.createTemplate,
+          template,
+        })
+      : { kind: 'error', message: 'Template not found.' };
+
   const shareTemplate = async (): Promise<TemplateDetailActionResult> => {
     if (!template) {
       return { kind: 'error', message: 'Template not found.' };
@@ -468,6 +368,7 @@ export const useTemplateDetailModel = (
 
   return {
     billingState,
+    duplicateTemplate,
     history: {
       data: history.data ?? null,
       isError: history.isError,

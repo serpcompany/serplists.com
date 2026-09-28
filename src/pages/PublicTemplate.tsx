@@ -9,7 +9,9 @@ import { PublicTemplateView } from '@/components/template/PublicTemplateView';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
+import { followTemplateActionResult } from '@/features/template-detail/templateActionOutcome';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
+import { usePageVisit } from '@/hooks/usePageVisit';
 import { analytics } from '@/lib/analytics';
 import {
   navigateToLoginWithReturnPath,
@@ -32,6 +34,8 @@ const PublicTemplate = () => {
   }>();
   const navigate = useNavigate();
   const location = useLocation();
+  // Start Run and Save await a request; they move the user only if they are still here.
+  const beginVisit = usePageVisit();
   const { user, isAuthenticated } = useAuth();
   const { createRun, createTemplate, templates } = useTemplates();
   const [isCreatingRun, setIsCreatingRun] = useState(false);
@@ -71,34 +75,31 @@ const PublicTemplate = () => {
     analytics.trackTemplateView(displayTemplate.id, displayTemplate.title);
   }, [displayTemplate]);
 
+  const followResult = {
+    loginRequired: () => navigateToLoginWithReturnPath(navigate, location),
+    upgradeRequired: async () => {
+      await startBillingCheckout(billingState.billingEnabled);
+    },
+  };
+
   const handleStartRun = async () => {
     if (!template) return;
 
+    const visit = beginVisit();
     setIsCreatingRun(true);
     try {
       const result = await startRun(
         `${template.title} - ${new Date().toLocaleDateString()}`,
       );
-
-      if (result.kind === 'login_required') {
-        navigateToLoginWithReturnPath(navigate, location);
-        return;
-      }
-
-      if (result.kind === 'upgrade_required') {
-        await startBillingCheckout(billingState.billingEnabled);
-        return;
-      }
-
-      if (result.kind === 'error') {
-        toast.error(result.message);
-        return;
-      }
-
-      if (result.runId) {
-        toast.success('Checklist run created');
-        navigate(buildConsoleRunPath(result.runId));
-      }
+      await followTemplateActionResult(result, visit, {
+        ...followResult,
+        succeeded: ({ runId }) => {
+          if (runId) {
+            toast.success('Checklist run created');
+            navigate(buildConsoleRunPath(runId));
+          }
+        },
+      });
     } finally {
       setIsCreatingRun(false);
     }
@@ -107,32 +108,20 @@ const PublicTemplate = () => {
   const handleSaveTemplate = async () => {
     if (!template) return;
 
+    const visit = beginVisit();
     setIsSaving(true);
     try {
-      const result = await saveTemplate();
-
-      if (result.kind === 'login_required') {
-        navigateToLoginWithReturnPath(navigate, location);
-        return;
-      }
-
-      if (result.kind === 'upgrade_required') {
-        await startBillingCheckout(billingState.billingEnabled);
-        return;
-      }
-
-      if (result.kind === 'error') {
-        toast.error(result.message);
-        return;
-      }
-
-      toast.success('Template saved to your account');
-      if (isRepoTemplate(template) && result.templateId) {
-        navigate(buildConsoleTemplatePath(result.templateId));
-        return;
-      }
-
-      navigate(buildConsoleTemplatesPath());
+      await followTemplateActionResult(await saveTemplate(), visit, {
+        ...followResult,
+        succeeded: ({ templateId }) => {
+          toast.success('Template saved to your account');
+          navigate(
+            isRepoTemplate(template) && templateId
+              ? buildConsoleTemplatePath(templateId)
+              : buildConsoleTemplatesPath(),
+          );
+        },
+      });
     } finally {
       setIsSaving(false);
     }

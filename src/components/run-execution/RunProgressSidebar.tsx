@@ -1,6 +1,7 @@
 import { Check, ChevronRight, Circle } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
 import type { ChecklistSection, ChecklistItem } from '@/types/checklist';
 
 interface RunProgressPanelProps {
@@ -80,7 +81,7 @@ export function RunProgressPanel({
                       isSectionActive ? 'font-medium text-foreground' : 'text-muted-foreground',
                     )}
                   >
-                    {section.title}
+                    {getSectionDisplayTitle(section, sectionIndex)}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {progress.completed}/{progress.total}

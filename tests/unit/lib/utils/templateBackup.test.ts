@@ -2,12 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   exportTemplatesToJSON,
   parseBackupFile,
+  parseTemplatesFromData,
   parseTemplatesFromFile,
   parseTemplatesFromJSON,
   generateUniqueIds,
   prepareTemplatesForImport
 } from '@/lib/utils/templateBackup';
 import { ChecklistTemplate, TemplateBackup } from '@/lib/schemas/checklistSchema';
+import { renderTemplateMarkdown } from '@/lib/templates/templateMarkdown';
 
 // Mock DOM methods
 const mockCreateElement = vi.fn();
@@ -332,6 +334,27 @@ describe('Template Backup Utilities', () => {
       expect(result.templates[0].sections[0].items[0].contents).toHaveLength(2);
     });
 
+    it('imports a Markdown file whose text block holds a heading and a code fence', async () => {
+      const value = ['### Tips', 'Run:', '```bash', 'npm i', '```'].join('\n');
+      const markdown = renderTemplateMarkdown({
+        title: 'Setup Guide',
+        sections: [
+          {
+            title: 'Install',
+            items: [{ title: 'Run the installer', description: 'Do X', contents: [{ type: 'text', value }] }],
+          },
+        ],
+      });
+
+      const result = await parseTemplatesFromFile(
+        new File([markdown], 'template.md', { type: 'text/markdown' }),
+      );
+
+      const item = result.templates[0].sections[0].items[0];
+      expect(item.description).toBe('Do X');
+      expect(item.contents?.map((content) => content.value)).toEqual([value]);
+    });
+
     it('should parse single-template YAML files', async () => {
       const source = [
         'title: YAML Template',
@@ -355,6 +378,80 @@ describe('Template Backup Utilities', () => {
       expect(result.templates).toHaveLength(1);
       expect(result.templates[0].title).toBe('YAML Template');
       expect(result.templates[0].isPublic).toBe(false);
+    });
+  });
+
+  describe('parseTemplatesFromData with tasks written as text', () => {
+    const itemsOf = (result: ReturnType<typeof parseTemplatesFromData>) =>
+      result.templates.flatMap((template) => template.sections.flatMap((section) => section.items));
+    const expectCleanItems = (result: ReturnType<typeof parseTemplatesFromData>) => {
+      for (const item of itemsOf(result)) {
+        expect(item.title.trim()).not.toBe('');
+        expect(Object.keys(item).filter((key) => /^\d+$/.test(key))).toEqual([]);
+      }
+    };
+
+    it('imports text tasks in sections as titled tasks', () => {
+      const result = parseTemplatesFromData([
+        { title: 'Groceries', sections: [{ title: 'Shop', items: ['Milk', ' Eggs '] }] },
+      ]);
+
+      expect(itemsOf(result).map((item) => item.title)).toEqual(['Milk', 'Eggs']);
+      expectCleanItems(result);
+    });
+
+    it('imports the flat items form and a stringified array the same way', () => {
+      const flat = parseTemplatesFromData([{ title: 'Groceries', items: ['Milk', { title: 'Eggs' }] }]);
+      expect(flat.templates[0].sections.map((section) => section.title)).toEqual(['Checklist']);
+      expect(itemsOf(flat).map((item) => item.title)).toEqual(['Milk', 'Eggs']);
+      expectCleanItems(flat);
+
+      const stringified = parseTemplatesFromData([{ title: 'Groceries', items: JSON.stringify(['Milk']) }]);
+      expect(itemsOf(stringified).map((item) => item.title)).toEqual(['Milk']);
+      expectCleanItems(stringified);
+    });
+
+    it('imports text sub-tasks as titled sub-tasks', () => {
+      const result = parseTemplatesFromData({
+        templates: [
+          {
+            title: 'Groceries',
+            sections: [
+              {
+                title: 'Shop',
+                items: [{ title: 'Dairy', contents: [{ type: 'subItems', value: '', subItems: ['Milk', 'Cheese'] }] }],
+              },
+            ],
+          },
+        ],
+      });
+
+      const subItems = itemsOf(result)[0].contents?.[0].subItems ?? [];
+      expect(subItems.map((subItem) => subItem.title)).toEqual(['Milk', 'Cheese']);
+      for (const subItem of subItems) {
+        expect(Object.keys(subItem).filter((key) => /^\d+$/.test(key))).toEqual([]);
+      }
+    });
+
+    it.each([
+      ['a null task', [{ title: 'Groceries', sections: [{ title: 'Shop', items: ['Milk', null] }] }], /task 2 in section "Shop"/],
+      ['a number task', [{ title: 'Groceries', items: [5] }], /task 1 in section "Checklist"/],
+      ['a nested array task', [{ title: 'Groceries', items: [['Milk']] }], /task 1 in section "Checklist"/],
+      ['an empty text task', [{ title: 'Groceries', items: ['Milk', '  '] }], /task 2 in section "Checklist" is empty/],
+      ['a section that is not an object', [{ title: 'Groceries', sections: [{ title: 'Shop', items: [] }, 'Bakery'] }], /section 2/],
+      [
+        'a sub-task that is not text or an object',
+        [{ title: 'Groceries', items: [{ title: 'Dairy', contents: [{ type: 'subItems', value: '', subItems: [3] }] }] }],
+        /sub-task 1 of task "Dairy"/,
+      ],
+      [
+        'a content block that is not an object',
+        [{ title: 'Groceries', items: [{ title: 'Dairy', contents: ['note'] }] }],
+        /content block 1 of task "Dairy"/,
+      ],
+    ])('rejects %s with a message that names the template and the entry', (_label, data, message) => {
+      expect(() => parseTemplatesFromData(data)).toThrow(/Template validation failed: Template "Groceries": /);
+      expect(() => parseTemplatesFromData(data)).toThrow(message);
     });
   });
 

@@ -12,6 +12,10 @@ export const buildPortableTemplatePackJsonSchema = () => {
     $refStrategy: "none",
     name: "SERPListsPortableTemplatePack",
     nameStrategy: "title",
+    // Import drops unknown keys (Zod's default strip) rather than rejecting them, and
+    // SERP Lists' own older exports carry keys such as isCompleted, so the schema allows
+    // additional properties wherever Zod does.
+    removeAdditionalStrategy: "strict",
   });
 
   return {

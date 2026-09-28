@@ -3,7 +3,7 @@ import { generateSlug } from '../utils/slug';
 import { isReservedTemplateSlug } from '../utils/reserved-template-slugs';
 import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
-import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema } from '../utils/payloads';
+import { describePayloadError, normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
 import { withEdgeCache } from '../utils/edge-cache';
 import { log } from '../utils/logger';
@@ -21,9 +21,16 @@ import {
   portableTemplatePackEnvelopeSchema,
   portableTemplateRuleSchema,
 } from '../../../src/lib/schemas/checklistSchema';
+import { appendTemplateSlugSuffix, capTemplateSlug } from '../../../src/lib/schemas/templateFields';
+import {
+  countOversizedTemplateAssets,
+  oversizedTemplateAssetMessage,
+} from '../../../src/lib/schemas/templateAssetLimits';
+import { toPortableSections } from '../../../src/lib/schemas/portableSections';
 import {
   assignMissingStableTemplateIdentities,
   calculateRunProgress,
+  findNonObjectTemplateEntry,
   reconcileRunSections,
   validateStableTemplateIdentities,
 } from '../utils/template-reconciliation';
@@ -174,7 +181,8 @@ function batchUpdateMissed(result: unknown): boolean {
 }
 
 async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
-  const base = generateSlug(title || 'template') || 'template';
+  // Titles from imports are not length-limited, so cap the slug like any other.
+  const base = capTemplateSlug(generateSlug(title || 'template')) || 'template';
   const db = createDb(env);
   const { templates } = schema;
 
@@ -185,7 +193,7 @@ async function generateUniqueSlug(env: Env, title: string, templateId: string): 
 
   if (!exists) return base;
 
-  const suffixed = `${base}-${templateId.slice(0, 8)}`;
+  const suffixed = appendTemplateSlugSuffix(base, templateId.slice(0, 8));
   const [existsSuffixed] = await db
     .select({ id: templates.id })
     .from(templates)
@@ -195,7 +203,7 @@ async function generateUniqueSlug(env: Env, title: string, templateId: string): 
   if (!existsSuffixed) return suffixed;
 
   // Extremely unlikely collision; use random suffix.
-  return `${base}-${crypto.randomUUID().slice(0, 8)}`;
+  return appendTemplateSlugSuffix(base, crypto.randomUUID().slice(0, 8));
 }
 
 function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
@@ -404,27 +412,6 @@ type TemplateImportSummary = {
   successes: TemplateImportSuccess[];
 };
 
-function hasOversizedAssets(sections: unknown[], maxAssetBytes: number): boolean {
-  for (const section of sections) {
-    if (!isRecord(section)) continue;
-    const items = section.items;
-    if (!Array.isArray(items)) continue;
-    for (const item of items) {
-      if (!isRecord(item)) continue;
-      const contents = item.contents;
-      if (!Array.isArray(contents)) continue;
-      for (const content of contents) {
-        if (!isRecord(content)) continue;
-        const type = content.type;
-        if (type !== 'image' && type !== 'video' && type !== 'file') continue;
-        const fileSize = content.fileSize;
-        if (typeof fileSize === 'number' && fileSize > maxAssetBytes) return true;
-      }
-    }
-  }
-  return false;
-}
-
 function countReferencedUploads(sections: unknown[]): number {
   let count = 0;
 
@@ -538,7 +525,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             seoTitle: template.seoTitle || '',
             seoDescription: template.seoDescription || '',
             rules: template.rules,
-            sections: template.sections || [],
+            sections: toPortableSections(template.sections),
             categories: template.categories || [],
             tags: template.tags || [],
             visibility: template.isPublic ? 'public' : 'private',
@@ -569,7 +556,6 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     if (request.method === 'POST') {
       const MAX_TEMPLATES_PER_IMPORT = 5;
-      const MAX_ASSET_BYTES = 5 * 1024 * 1024;
 
       let body: unknown;
       try {
@@ -620,11 +606,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
       for (const [index, template] of incomingTemplates.entries()) {
         const normalizedSections = normalizeSectionsPayload(template.sections ?? template.items);
-        if (normalizedSections.error) {
+        const sectionsError = normalizedSections.error ?? findNonObjectTemplateEntry(normalizedSections.sections);
+        if (sectionsError) {
           summary.failed.push({
             index,
             title: template.title,
-            reason: normalizedSections.error,
+            reason: sectionsError,
             code: 'invalid_sections',
           });
           continue;
@@ -641,11 +628,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           continue;
         }
 
-        if (hasOversizedAssets(normalizedSections.sections, MAX_ASSET_BYTES)) {
+        // The upload limit: an asset the uploader accepted always imports again.
+        if (countOversizedTemplateAssets(normalizedSections.sections) > 0) {
           summary.failed.push({
             index,
             title: template.title,
-            reason: 'Import blocked: one or more assets are over 5MB',
+            reason: oversizedTemplateAssetMessage(),
             code: 'oversized_asset',
           });
           continue;
@@ -1206,7 +1194,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     const parsed = templatePayloadSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
+      const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
+      return jsonError(message, 400, { details });
     }
 
     const requestedTeamId = getRequestedTeamId(parsed.data, url);
@@ -1329,7 +1318,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     const parsed = templatePayloadSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
+      const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
+      return jsonError(message, 400, { details });
     }
 
     const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems, expected_version } = parsed.data;
@@ -1414,7 +1404,10 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       syncedItems = JSON.stringify(stableSections);
       updates.items = syncedItems;
     }
-    if (typeof expected_version === 'number' && expected_version !== existingTemplate.version) {
+    // A content edit must say which version it was based on; without one the check
+    // would be skipped and a stale editor would overwrite newer work.
+    const versionRequired = shouldCreateTemplateVersion(rawBody, requestedSlugValue);
+    if (typeof expected_version === 'number' ? expected_version !== existingTemplate.version : versionRequired) {
       return jsonError('Template changed since it was loaded. Refresh before saving again.', 409, {
         code: 'edit_conflict',
         details: { expectedVersion: expected_version, currentVersion: existingTemplate.version },
@@ -1432,7 +1425,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
       // A slug the Template already holds is kept, even a bundled starter's, so its URL never changes.
       if (conflict || (nextSlug !== existingTemplate.slug && isReservedTemplateSlug(nextSlug))) {
-        nextSlug = `${nextSlug}-${templateId.slice(0, 8)}`;
+        nextSlug = appendTemplateSlugSuffix(nextSlug, templateId.slice(0, 8));
       }
 
       updates.slug = nextSlug;
@@ -1568,8 +1561,17 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       throw error;
     }
 
-    // The next save sends this version as expected_version; the slug may carry a -<id8> suffix.
-    return json({ success: true, id: templateId, version: nextVersion, slug: nextSlug ?? existingTemplate.slug ?? undefined });
+    // The next save sends this version as expected_version. The slug is the one the template
+    // has after the write, requested (it may carry a -<id8> suffix) or kept, so the editor
+    // never guesses.
+    const savedSlug = typeof updates.slug === 'string' ? updates.slug : existingTemplate.slug ?? undefined;
+    return json({
+      success: true,
+      id: templateId,
+      slug: savedSlug,
+      version: nextVersion,
+      content_version: nextContentVersion,
+    });
   }
 
   if (request.method === 'DELETE') {

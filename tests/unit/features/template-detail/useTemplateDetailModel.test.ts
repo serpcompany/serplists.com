@@ -8,6 +8,7 @@ import {
   mapApiTemplateToChecklistTemplate,
 } from '@/features/template-detail/templateDetailMappers';
 import {
+  duplicateOwnedTemplate,
   loadTemplateDetailData,
   saveTemplateToAccount,
   startTemplateRun,
@@ -337,5 +338,55 @@ describe('template detail actions', () => {
     });
 
     expect(result).toEqual({ kind: 'upgrade_required' });
+  });
+
+  // Free Personal allows one template, so Duplicate is a plan gate like Start Run.
+  it('maps a plan limit on Duplicate to upgrade_required', async () => {
+    const createTemplate = vi.fn().mockRejectedValue(
+      createApiError(403, {
+        code: 'limit_reached',
+        error: 'Template limit reached. Upgrade to create more templates.',
+      }),
+    );
+
+    const result = await duplicateOwnedTemplate({
+      createTemplate,
+      template: buildTemplate({ rules: [], seoTitle: 'SEO', seoDescription: 'Desc' }),
+    });
+
+    expect(result).toEqual({ kind: 'upgrade_required' });
+  });
+
+  it('duplicates a template as a copy with a fresh slug', async () => {
+    const createTemplate = vi.fn().mockResolvedValue(buildTemplate({ id: 'copy-1' }));
+
+    const result = await duplicateOwnedTemplate({
+      createTemplate,
+      template: buildTemplate(),
+    });
+
+    expect(result).toEqual({ kind: 'ok', templateId: 'copy-1' });
+    expect(createTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Camping Checklist Copy', seoUrl: '' }),
+    );
+  });
+
+  // Opened from Organization A, a private template of Organization B is copied into B.
+  it("duplicates another Organization's private template into that Organization", async () => {
+    const createTemplate = vi.fn().mockResolvedValue(buildTemplate({ id: 'copy-2' }));
+
+    await duplicateOwnedTemplate({
+      activeTeamId: 'team-a',
+      createTemplate,
+      template: buildTemplate({ isPublic: false, teamId: 'team-b' }),
+    });
+    await duplicateOwnedTemplate({
+      activeTeamId: 'team-a',
+      createTemplate,
+      template: buildTemplate({ isPublic: true, teamId: 'team-b' }),
+    });
+
+    expect(createTemplate.mock.calls[0][0]).toMatchObject({ teamId: 'team-b' });
+    expect(createTemplate.mock.calls[1][0]).toMatchObject({ teamId: 'team-a' });
   });
 });

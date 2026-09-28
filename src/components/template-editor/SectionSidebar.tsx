@@ -1,15 +1,15 @@
-import { useState, type DragEvent, type KeyboardEvent } from "react";
+import { useId, useState, type DragEvent, type KeyboardEvent } from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
-import {
-  ChevronDown,
-  ChevronRight,
-  FileText,
-  GripVertical,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { ReorderHandle, ReorderHint } from "@/components/template-editor/ReorderHandle";
+import {
+  dropIndicatorClass,
+  moveArrayEntry,
+  remapIndexAfterMove,
+  ROW_ACTIONS_REVEAL_CLASS,
+} from "@/components/template-editor/reorder";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -19,6 +19,7 @@ import {
   type TemplateEditorFormValues,
 } from "@/lib/forms/templateEditorForm";
 import { cn } from "@/lib/utils";
+import { getSectionDisplayTitle } from "@/lib/utils/checklistSections";
 
 type EditingItemState = {
   itemIndex: number;
@@ -40,31 +41,12 @@ type OutlineDropTarget =
 
 const OUTLINE_DRAG_TYPE = "application/x-serplists-outline";
 
-function remapIndexAfterMove(index: number, fromIndex: number, toIndex: number): number {
-  if (index === fromIndex) return toIndex;
-  if (fromIndex < toIndex && index > fromIndex && index <= toIndex) return index - 1;
-  if (toIndex < fromIndex && index >= toIndex && index < fromIndex) return index + 1;
-  return index;
-}
-
-function moveArrayEntry<T>(items: T[], fromIndex: number, toIndex: number): T[] {
-  const nextItems = [...items];
-  const [movedItem] = nextItems.splice(fromIndex, 1);
-  if (movedItem === undefined) return items;
-  nextItems.splice(toIndex, 0, movedItem);
-  return nextItems;
-}
-
 interface SectionSidebarProps {
   outlineSelectionActive: boolean;
   selectedSectionIndex: number;
   selectedItemIndex: number | null;
   onSelectSection: (sectionIndex: number) => void;
   onSelectItem: (sectionIndex: number, itemIndex: number) => void;
-}
-
-function buildSectionFallbackLabel(sectionIndex: number): string {
-  return `Section ${sectionIndex + 1}`;
 }
 
 function buildItemFallbackLabel(itemIndex: number): string {
@@ -98,18 +80,42 @@ export function SectionSidebar({
     useState<OutlineDragState | null>(null);
   const [outlineDropTarget, setOutlineDropTarget] =
     useState<OutlineDropTarget | null>(null);
-  const [expandedSections, setExpandedSections] = useState<Set<number>>(
-    new Set(sectionsFieldArray.fields.map((_, index) => index)),
+  // Sections the user collapsed, by section id; every other section is expanded. The
+  // outline can mount before the template loads (a reset then replaces every section),
+  // and a Clipy draft or a save resets the form too, so expansion must not be seeded
+  // from the sections present at mount. Keyed by id, a collapsed section stays
+  // collapsed when it moves or the form is reset to the saved values.
+  const [collapsedSectionIds, setCollapsedSectionIds] = useState<Set<string>>(
+    () => new Set(),
   );
+  // Where the last keyboard move put an entry, for screen readers.
+  const [moveAnnouncement, setMoveAnnouncement] = useState("");
+  const reorderHintId = useId();
 
-  function toggleSection(sectionIndex: number): void {
-    setExpandedSections((current) => {
+  function toggleSection(sectionId: string): void {
+    setCollapsedSectionIds((current) => {
       const next = new Set(current);
-      if (next.has(sectionIndex)) {
-        next.delete(sectionIndex);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
       } else {
-        next.add(sectionIndex);
+        next.add(sectionId);
       }
+      return next;
+    });
+  }
+
+  function expandSection(sectionId: string | undefined): void {
+    if (!sectionId) {
+      return;
+    }
+
+    setCollapsedSectionIds((current) => {
+      if (!current.has(sectionId)) {
+        return current;
+      }
+
+      const next = new Set(current);
+      next.delete(sectionId);
       return next;
     });
   }
@@ -122,12 +128,8 @@ export function SectionSidebar({
 
   function handleAddSection(): void {
     const nextIndex = sectionsFieldArray.fields.length;
+    // A new section has a new id, so it starts expanded.
     sectionsFieldArray.append(createTemplateEditorSection());
-    setExpandedSections((current) => {
-      const next = new Set(current);
-      next.add(nextIndex);
-      return next;
-    });
     onSelectSection(nextIndex);
   }
 
@@ -138,17 +140,6 @@ export function SectionSidebar({
     }
 
     sectionsFieldArray.remove(sectionIndex);
-    setExpandedSections((current) => {
-      const next = new Set<number>();
-      for (const index of current) {
-        if (index === sectionIndex) {
-          continue;
-        }
-
-        next.add(index > sectionIndex ? index - 1 : index);
-      }
-      return next;
-    });
     onSelectSection(Math.max(0, sectionIndex - 1));
   }
 
@@ -159,7 +150,7 @@ export function SectionSidebar({
       [...currentItems, createTemplateEditorItem()],
       { shouldDirty: true, shouldTouch: true, shouldValidate: true },
     );
-    setExpandedSections((current) => new Set(current).add(sectionIndex));
+    expandSection(getValues(`sections.${sectionIndex}.id`));
     onSelectItem(sectionIndex, currentItems.length);
   }
 
@@ -291,21 +282,9 @@ export function SectionSidebar({
     );
   }
 
-  function handleSectionDrop(event: DragEvent<HTMLElement>, toIndex: number): void {
-    event.preventDefault();
-    const drag = draggedOutlineItem;
-    if (!drag || drag.kind !== "section" || drag.sectionIndex === toIndex) {
-      finishDrag();
-      return;
-    }
-
-    const fromIndex = drag.sectionIndex;
+  // Drops and arrow keys both move through these, so the selection follows the move.
+  function moveSection(fromIndex: number, toIndex: number): void {
     sectionsFieldArray.move(fromIndex, toIndex);
-    setExpandedSections((current) =>
-      new Set(
-        [...current].map((index) => remapIndexAfterMove(index, fromIndex, toIndex)),
-      ),
-    );
 
     const nextSelectedSection = remapIndexAfterMove(
       selectedSectionIndex,
@@ -317,6 +296,33 @@ export function SectionSidebar({
     } else {
       onSelectItem(nextSelectedSection, selectedItemIndex);
     }
+  }
+
+  function moveTask(sectionIndex: number, fromIndex: number, toIndex: number): void {
+    const currentItems = getValues(`sections.${sectionIndex}.items`) ?? [];
+    setValue(
+      `sections.${sectionIndex}.items`,
+      moveArrayEntry(currentItems, fromIndex, toIndex),
+      { shouldDirty: true, shouldTouch: true, shouldValidate: true },
+    );
+
+    if (selectedSectionIndex === sectionIndex && selectedItemIndex !== null) {
+      onSelectItem(
+        sectionIndex,
+        remapIndexAfterMove(selectedItemIndex, fromIndex, toIndex),
+      );
+    }
+  }
+
+  function handleSectionDrop(event: DragEvent<HTMLElement>, toIndex: number): void {
+    event.preventDefault();
+    const drag = draggedOutlineItem;
+    if (!drag || drag.kind !== "section" || drag.sectionIndex === toIndex) {
+      finishDrag();
+      return;
+    }
+
+    moveSection(drag.sectionIndex, toIndex);
     finishDrag();
   }
 
@@ -338,24 +344,13 @@ export function SectionSidebar({
       return;
     }
 
-    const currentItems = getValues(`sections.${sectionIndex}.items`) ?? [];
-    setValue(
-      `sections.${sectionIndex}.items`,
-      moveArrayEntry(currentItems, drag.itemIndex, toIndex),
-      { shouldDirty: true, shouldTouch: true, shouldValidate: true },
-    );
-
-    if (selectedSectionIndex === sectionIndex && selectedItemIndex !== null) {
-      onSelectItem(
-        sectionIndex,
-        remapIndexAfterMove(selectedItemIndex, drag.itemIndex, toIndex),
-      );
-    }
+    moveTask(sectionIndex, drag.itemIndex, toIndex);
     finishDrag();
   }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <ReorderHint announcement={moveAnnouncement} id={reorderHintId} />
       <div className="flex items-center justify-between border-b border-sidebar-border px-3 py-2">
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Sections
@@ -376,11 +371,13 @@ export function SectionSidebar({
         <div className="overflow-hidden p-2">
           {sectionsFieldArray.fields.map((sectionField, sectionIndex) => {
             const section = sections?.[sectionIndex];
+            // A save stores this label for an untitled section, so the outline shows it.
+            const sectionLabel = getSectionDisplayTitle(section ?? { title: "" }, sectionIndex);
             const sectionSelected =
               outlineSelectionActive &&
               selectedSectionIndex === sectionIndex &&
               selectedItemIndex === null;
-            const isExpanded = expandedSections.has(sectionIndex);
+            const isExpanded = !collapsedSectionIds.has(sectionField.id);
             const sectionDropEdge =
               outlineDropTarget?.kind === "section" &&
               outlineDropTarget.sectionIndex === sectionIndex
@@ -394,10 +391,7 @@ export function SectionSidebar({
                   draggedOutlineItem?.kind === "section" &&
                     draggedOutlineItem.sectionIndex === sectionIndex &&
                     "opacity-50",
-                  sectionDropEdge === "before" &&
-                    "before:absolute before:inset-x-1 before:-top-0.5 before:z-20 before:h-0.5 before:rounded-full before:bg-primary before:content-['']",
-                  sectionDropEdge === "after" &&
-                    "after:absolute after:inset-x-1 after:-bottom-0.5 after:z-20 after:h-0.5 after:rounded-full after:bg-primary after:content-['']",
+                  dropIndicatorClass(sectionDropEdge),
                 )}
                 data-drop-indicator={
                   sectionDropEdge ? `section-${sectionDropEdge}` : undefined
@@ -414,26 +408,27 @@ export function SectionSidebar({
                       : "hover:bg-sidebar-accent/50",
                   )}
                 >
-                  <button
-                    aria-label={`Drag ${section?.title || buildSectionFallbackLabel(sectionIndex)}`}
-                    draggable
+                  <ReorderHandle
+                    count={sectionsFieldArray.fields.length}
+                    handleId={`section:${sectionField.id}`}
+                    hintId={reorderHintId}
+                    index={sectionIndex}
+                    label={sectionLabel}
                     onDragEnd={finishDrag}
                     onDragStart={(event) =>
                       startDrag(event, { kind: "section", sectionIndex })
                     }
-                    type="button"
-                    className="flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:opacity-100 active:cursor-grabbing"
-                  >
-                    <GripVertical className="h-4 w-4 text-muted-foreground" />
-                  </button>
+                    onMove={moveSection}
+                    onMoved={setMoveAnnouncement}
+                  />
 
                   <button
                     aria-label={
                       isExpanded
-                        ? `Collapse ${section?.title || buildSectionFallbackLabel(sectionIndex)}`
-                        : `Expand ${section?.title || buildSectionFallbackLabel(sectionIndex)}`
+                        ? `Collapse ${sectionLabel}`
+                        : `Expand ${sectionLabel}`
                     }
-                    onClick={() => toggleSection(sectionIndex)}
+                    onClick={() => toggleSection(sectionField.id)}
                     className="flex h-7 w-6 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
                     type="button"
                   >
@@ -464,19 +459,24 @@ export function SectionSidebar({
                       onDoubleClick={() =>
                         handleStartEditingSection(
                           sectionIndex,
-                          section?.title || buildSectionFallbackLabel(sectionIndex),
+                          sectionLabel,
                         )
                       }
                       className="flex-1 truncate py-1.5 text-left text-sm text-sidebar-foreground"
                       type="button"
                     >
-                      {section?.title || buildSectionFallbackLabel(sectionIndex)}
+                      {sectionLabel}
                     </button>
                   )}
 
-                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div
+                    className={cn(
+                      "flex shrink-0 items-center gap-1",
+                      sectionSelected ? "opacity-100" : ROW_ACTIONS_REVEAL_CLASS,
+                    )}
+                  >
                     <Button
-                      aria-label={`Add task to ${section?.title || buildSectionFallbackLabel(sectionIndex)}`}
+                      aria-label={`Add task to ${sectionLabel}`}
                       variant="ghost"
                       size="icon"
                       onClick={() => handleAddTask(sectionIndex)}
@@ -486,7 +486,7 @@ export function SectionSidebar({
                       <Plus className="h-3 w-3" />
                     </Button>
                     <Button
-                      aria-label={`Remove ${section?.title || buildSectionFallbackLabel(sectionIndex)}`}
+                      aria-label={`Remove ${sectionLabel}`}
                       variant="ghost"
                       size="icon"
                       onClick={() => handleRemoveSection(sectionIndex)}
@@ -501,6 +501,7 @@ export function SectionSidebar({
                 {isExpanded ? (
                   <div className="ml-4 mt-0.5 border-l border-sidebar-border pl-2">
                     {section?.items.map((item, itemIndex) => {
+                      const itemLabel = item.title || buildItemFallbackLabel(itemIndex);
                       const itemSelected =
                         outlineSelectionActive &&
                         selectedSectionIndex === sectionIndex &&
@@ -524,10 +525,7 @@ export function SectionSidebar({
                               ? "bg-sidebar-accent"
                               : "hover:bg-sidebar-accent/50",
                             taskDropEdge && "bg-primary/10",
-                            taskDropEdge === "before" &&
-                              "before:absolute before:inset-x-1 before:-top-0.5 before:z-20 before:h-0.5 before:rounded-full before:bg-primary before:content-['']",
-                            taskDropEdge === "after" &&
-                              "after:absolute after:inset-x-1 after:-bottom-0.5 after:z-20 after:h-0.5 after:rounded-full after:bg-primary after:content-['']",
+                            dropIndicatorClass(taskDropEdge),
                           )}
                           data-drop-indicator={
                             taskDropEdge ? `task-${taskDropEdge}` : undefined
@@ -539,9 +537,12 @@ export function SectionSidebar({
                             handleTaskDrop(event, sectionIndex, itemIndex)
                           }
                         >
-                          <button
-                            aria-label={`Drag ${item.title || buildItemFallbackLabel(itemIndex)}`}
-                            draggable
+                          <ReorderHandle
+                            count={section.items.length}
+                            handleId={`task:${item.id}`}
+                            hintId={reorderHintId}
+                            index={itemIndex}
+                            label={itemLabel}
                             onDragEnd={finishDrag}
                             onDragStart={(event) =>
                               startDrag(event, {
@@ -550,11 +551,9 @@ export function SectionSidebar({
                                 sectionIndex,
                               })
                             }
-                            type="button"
-                            className="flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:opacity-100 active:cursor-grabbing"
-                          >
-                            <GripVertical className="h-4 w-4 text-muted-foreground" />
-                          </button>
+                            onMove={(fromIndex, toIndex) => moveTask(sectionIndex, fromIndex, toIndex)}
+                            onMoved={setMoveAnnouncement}
+                          />
                           <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 
                           {editingCurrentItem ? (
@@ -576,25 +575,24 @@ export function SectionSidebar({
                             <button
                               onClick={() => onSelectItem(sectionIndex, itemIndex)}
                               onDoubleClick={() =>
-                                handleStartEditingItem(
-                                  sectionIndex,
-                                  itemIndex,
-                                  item.title || buildItemFallbackLabel(itemIndex),
-                                )
+                                handleStartEditingItem(sectionIndex, itemIndex, itemLabel)
                               }
                               className="flex-1 truncate text-left text-sm text-sidebar-foreground"
                               type="button"
                             >
-                              {item.title || buildItemFallbackLabel(itemIndex)}
+                              {itemLabel}
                             </button>
                           )}
 
                           <Button
-                            aria-label={`Remove ${item.title || buildItemFallbackLabel(itemIndex)}`}
+                            aria-label={`Remove ${itemLabel}`}
                             variant="ghost"
                             size="icon"
                             onClick={() => handleRemoveTask(sectionIndex, itemIndex)}
-                            className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                            className={cn(
+                              "h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive",
+                              itemSelected ? "opacity-100" : ROW_ACTIONS_REVEAL_CLASS,
+                            )}
                             type="button"
                           >
                             <Trash2 className="h-3 w-3" />

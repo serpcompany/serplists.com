@@ -148,13 +148,29 @@ npx wrangler d1 execute serp-checklists-db-restored --remote --file=./tmp/backup
 ## R2 uploads
 
 Bucket `serp-checklists-uploads` (binding `R2_UPLOADS`). `POST /api/uploads`
-enforces a per-bucket MIME allowlist (`functions/api/handlers/uploads.ts`) and
-writes keys under per-user prefixes:
+enforces a per-bucket type list and writes keys under per-user prefixes:
 
 - `avatars/<userId>/<uuid>.<ext>`
 - `template-images/<userId>/<uuid>.<ext>`
 - `template-videos/<userId>/<uuid>.<ext>`
 - `template-files/<userId>/<uuid>.<ext>`
+
+The type list lives in `src/lib/schemas/uploadTypes.ts`, which the API and the
+upload pickers share (the pickers' `accept` and checks come from it). A file is
+accepted by its type, including the aliases browsers report (Windows sends `.zip`
+as `application/x-zip-compressed`), or, when the browser sends no type, by its
+extension, and is then stored under the kind's usual type. Files take PDF, ZIP,
+CSV, Word, Excel, PowerPoint (including the older `.doc`, `.xls`, `.ppt`), JSON,
+Markdown, text, and images; videos take MP4, WebM, and MOV; images and avatars take
+PNG, JPEG, WebP, and GIF. A refused file gets 415 `unsupported_file_type` with a
+message that names the accepted types.
+
+Before an Image block upload, the browser shrinks the image
+(`src/lib/imageOptimization.ts`) without changing what it shows: GIFs are sent
+untouched (a canvas keeps one frame), PNG and WebP stay PNG and WebP (JPEG has no
+transparency), other decodable types become PNG, a small image within 1920x1080 is
+sent as it is, and the original is kept when re-encoding does not make it smaller.
+Files attached to File blocks are never re-encoded.
 
 Uploads are not reference-counted. A template upload's URL is copied into the
 saved template, its `template_versions` snapshots, every run started from it, and

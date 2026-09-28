@@ -26,6 +26,12 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
   useWorkspace: () => workspaceMock.value,
 }));
 
+const draftMock = vi.hoisted(() => ({
+  readTemplateDraft: vi.fn(() => null as unknown),
+}));
+
+vi.mock('@/features/template-editor/templateDraftStore', () => draftMock);
+
 vi.mock('@/lib/api', () => ({
   api: {
     createBillingCheckout: vi.fn(),
@@ -101,5 +107,25 @@ describe('BillingSection', () => {
     expect(html).toContain('Paid Organization entitlements apply while this Organization is selected.');
     expect(html).not.toContain('Upgrade to Pro');
     expect(html).not.toContain('Manage subscription');
+  });
+
+  // Checkout returns here, not to the editor: the draft kept for it must be reachable.
+  it('links back to a template draft kept while the user upgraded', () => {
+    draftMock.readTemplateDraft.mockReturnValueOnce({
+      savedAt: '2026-09-28T10:00:00.000Z',
+      values: { title: 'Launch checklist' },
+    });
+
+    const html = renderBillingSection({ billingEnabled: true, plan: 'pro' });
+
+    expect(draftMock.readTemplateDraft).toHaveBeenCalledWith({ userId: 'user-1', teamId: undefined });
+    expect(html).toContain('Resume template draft');
+    expect(html).toContain('href="/dashboard/templates/new"');
+  });
+
+  it('shows no draft link when nothing was kept', () => {
+    const html = renderBillingSection({ billingEnabled: true, plan: 'pro' });
+
+    expect(html).not.toContain('Resume template draft');
   });
 });

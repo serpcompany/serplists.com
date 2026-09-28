@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { handleUploads } from '@functions/api/handlers/uploads';
+import { AVATAR_MIME_TYPES } from '@/lib/schemas/uploadTypes';
 
 vi.mock('@functions/api/utils/session', () => ({
   getSessionUserId: vi.fn(),
@@ -29,8 +30,77 @@ describe('Uploads Handler', () => {
     const data = await response.json();
 
     expect(response.status).toBe(415);
-    expect(data.error).toBe('Unsupported file type for bucket');
+    expect(data.code).toBe('unsupported_file_type');
+    expect(data.error).toBe("This file type can't be uploaded here. Use PNG, JPEG, WebP, or GIF images.");
     expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
+  });
+});
+
+describe('Uploads Handler file types', () => {
+  const buildEnv = (): any => ({
+    BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
+    R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
+  });
+
+  const upload = (bucket: string, file: File): Request => {
+    const form = new FormData();
+    form.set('bucket', bucket);
+    form.set('file', file);
+    return new Request('http://localhost/api/uploads', { method: 'POST', body: form });
+  };
+
+  // The same browser-reported cases as the shared list's test, through the handler.
+  it.each([
+    ['template-files', 'report.zip', 'application/x-zip-compressed', 'application/x-zip-compressed'],
+    ['template-files', 'data.csv', 'text/csv', 'text/csv'],
+    ['template-files', 'data.csv', 'application/vnd.ms-excel', 'application/vnd.ms-excel'],
+    ['template-files', 'letter.doc', 'application/msword', 'application/msword'],
+    ['template-files', 'shot.png', 'image/png', 'image/png'],
+    ['template-files', 'notes.md', 'application/octet-stream', 'text/markdown'],
+  ])('stores %s %s sent as %s', async (bucket, name, type, stored) => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env = buildEnv();
+
+    const response = await handleUploads(upload(bucket, new File(['x'], name, { type })), env);
+
+    expect(response.status).toBe(200);
+    expect(env.R2_UPLOADS.put).toHaveBeenCalledWith(
+      expect.stringMatching(new RegExp(`^${bucket}/user-123/`)),
+      expect.anything(),
+      expect.objectContaining({ httpMetadata: expect.objectContaining({ contentType: stored }) }),
+    );
+  });
+
+  it.each([
+    ['template-images', 'page.html', 'text/html'],
+    ['template-images', 'x.svg', 'image/svg+xml'],
+    ['template-files', 'x.svg', 'image/svg+xml'],
+    ['template-files', 'mystery', ''],
+    ['template-videos', 'movie.mkv', 'video/x-matroska'],
+  ])('refuses %s %s sent as "%s"', async (bucket, name, type) => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env = buildEnv();
+
+    const response = await handleUploads(upload(bucket, new File(['x'], name, { type })), env);
+
+    expect(response.status).toBe(415);
+    expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
+  });
+
+  it('tells browsers not to guess the type of a stored file', async () => {
+    const env = buildEnv();
+    env.R2_UPLOADS.get.mockResolvedValue({
+      body: 'x',
+      httpEtag: '"etag"',
+      writeHttpMetadata: (headers: Headers) => headers.set('content-type', 'image/png'),
+    });
+
+    const response = await handleUploads(
+      new Request('http://localhost/api/uploads/file?key=template-images/u/a.png'),
+      env,
+    );
+
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
   });
 });
 
@@ -88,5 +158,42 @@ describe('Uploads Handler DELETE', () => {
 
     expect(response.status).toBeGreaterThanOrEqual(400);
     expect(env.R2_UPLOADS.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('Uploads Handler avatar types', () => {
+  function uploadRequest(file: File): Request {
+    const form = new FormData();
+    form.set('bucket', 'avatars');
+    form.set('file', file);
+    return new Request('http://localhost/api/uploads', { method: 'POST', body: form });
+  }
+
+  it.each([...AVATAR_MIME_TYPES])('stores %s avatars, which the avatar picker offers', async (type) => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env: any = {
+      BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
+      R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
+    };
+
+    const response = await handleUploads(uploadRequest(new File(['x'], 'a', { type })), env);
+
+    expect(response.status).toBe(200);
+  });
+
+  it('refuses SVG avatars, which the avatar picker does not offer', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env: any = {
+      BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
+      R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
+    };
+
+    const response = await handleUploads(
+      uploadRequest(new File(['<svg/>'], 'a.svg', { type: 'image/svg+xml' })),
+      env,
+    );
+
+    expect(response.status).toBe(415);
+    expect(AVATAR_MIME_TYPES).not.toContain('image/svg+xml');
   });
 });

@@ -70,6 +70,23 @@ export const parseSingleTemplateSource = (source: string, extension: SupportedTe
   return buildTemplateSourceDetails(extension, parseTemplateJson(source));
 };
 
+// The generated Markdown must import back as the same template. Text blocks hold
+// Markdown, so a fence or heading inside one must not break the format.
+const checkMarkdownRoundTrip = (details: TemplateSourceDetails, filePath: string): TemplateLintIssue[] => {
+  const issue = (message: string): TemplateLintIssue[] => [{ filePath, code: "markdown-roundtrip", message }];
+
+  try {
+    const reparsed = normalizePortableTemplate(parseTemplateMarkdown(details.canonicalMarkdown));
+    return normalizeJson(reparsed) === details.canonicalJson
+      ? []
+      : issue("Generated Markdown imports as a different template");
+  } catch (error) {
+    return issue(
+      `Generated Markdown does not import: ${error instanceof Error ? error.message : "unknown parse error"}`,
+    );
+  }
+};
+
 const validateTemplateRules = (template: PortableChecklistTemplate, filePath: string): TemplateLintIssue[] => {
   const issues: TemplateLintIssue[] = [];
 
@@ -137,7 +154,10 @@ export const lintSingleTemplateSource = async (filePath: string): Promise<Templa
   try {
     const source = await readFile(filePath, "utf8");
     const details = parseSingleTemplateSource(source, extension);
-    const issues = validateTemplateRules(details.normalizedTemplate, filePath);
+    const issues = [
+      ...validateTemplateRules(details.normalizedTemplate, filePath),
+      ...checkMarkdownRoundTrip(details, filePath),
+    ];
 
     if (extension === ".json" && source !== details.canonicalJson) {
       issues.push({
@@ -179,6 +199,7 @@ export const lintTemplatePair = async (jsonPath: string, markdownPath: string): 
 
     issues.push(...validateTemplateRules(jsonDetails.normalizedTemplate, jsonPath));
     issues.push(...validateTemplateRules(markdownDetails.normalizedTemplate, markdownPath));
+    issues.push(...checkMarkdownRoundTrip(jsonDetails, markdownPath));
 
     if (jsonDetails.canonicalJson !== normalizeJson(markdownDetails.normalizedTemplate)) {
       issues.push({
@@ -230,6 +251,7 @@ export const lintYamlTemplateBundle = async (
     const yamlDetails = parseSingleTemplateSource(yamlSource, path.extname(yamlPath).toLowerCase() as SupportedTemplateSourceExtension);
 
     issues.push(...validateTemplateRules(yamlDetails.normalizedTemplate, yamlPath));
+    issues.push(...checkMarkdownRoundTrip(yamlDetails, paths.markdownPath ?? yamlPath));
 
     if (paths.jsonPath) {
       const jsonSource = await readFile(paths.jsonPath, "utf8");

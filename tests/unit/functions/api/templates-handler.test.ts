@@ -296,6 +296,94 @@ describe('Templates Handlers', () => {
     expect(inserted.rules).toContain('required-field');
   });
 
+  it('names the invalid field in template payload errors', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({ seoDescription: 'x'.repeat(321), expected_version: 1 }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain('seoDescription');
+    expect(data.details).toEqual(expect.objectContaining({ field: 'seoDescription' }));
+  });
+
+  it('keeps a suffixed slug within the slug limit when the title slug is taken', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([]) // template count
+      .mockResolvedValueOnce([{ id: 'other-template' }]) // base slug taken
+      .mockResolvedValueOnce([]); // suffixed slug free
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'a'.repeat(160), sections: [] }),
+    }), mockEnv);
+
+    expect(response.status).toBe(200);
+    const inserted = dbMocks.insertChain.values.mock.calls[0][0];
+    expect(inserted.slug.length).toBeLessThanOrEqual(160);
+    expect(inserted.slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+  });
+
+  it('keeps a conflict-suffixed slug within the slug limit on update', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        { id: 'template-1', user_id: 'user-123', owner_type: 'user', team_id: null, items: '[]', version: 1, is_public: false },
+      ])
+      .mockResolvedValueOnce([{ id: 'other-template' }]);
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({ slug: 'b'.repeat(160), expected_version: 1 }),
+    }), mockEnv);
+
+    expect(response.status).toBe(200);
+    const storedSlug = dbMocks.updateChain.set.mock.calls[0][0].slug;
+    expect(storedSlug.length).toBeLessThanOrEqual(160);
+    expect(storedSlug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+  });
+
+  // The editor shows the slug the template has after a save; it must not guess.
+  it('returns the suffixed slug it stored when the requested slug is taken', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        { id: '1a2b3c4d-template', user_id: 'user-123', owner_type: 'user', team_id: null, items: '[]', version: 1, is_public: false, slug: 'old-slug' },
+      ])
+      .mockResolvedValueOnce([{ id: 'other-template' }]);
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/1a2b3c4d-template', {
+      method: 'PUT',
+      body: JSON.stringify({ slug: 'moving-checklist', expected_version: 1 }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.slug).toBe('moving-checklist-1a2b3c4d');
+    expect(dbMocks.updateChain.set.mock.calls[0][0].slug).toBe(data.slug);
+  });
+
+  it('returns the slug the template keeps when a save requests none', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      { id: 'template-1', user_id: 'user-123', owner_type: 'user', team_id: null, items: '[]', version: 1, is_public: false, slug: 'existing-template' },
+    ]);
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({ title: 'Edited', expected_version: 1 }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.slug).toBe('existing-template');
+    expect(dbMocks.updateChain.set.mock.calls[0][0]).not.toHaveProperty('slug');
+  });
+
   it('should enforce free plan template limit', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 1 }]);
@@ -364,6 +452,7 @@ describe('Templates Handlers', () => {
           },
         ],
         slug: 'updated-template-slug',
+        expected_version: 1,
       }),
     });
 
@@ -488,6 +577,7 @@ describe('Templates Handlers', () => {
             }],
           },
         ],
+        expected_version: 1,
       }),
     });
 
@@ -557,6 +647,89 @@ describe('Templates Handlers', () => {
     expect(response.status).toBe(409);
     expect(data.code).toBe('edit_conflict');
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+  });
+
+  it('requires expected_version for a template content update instead of skipping the check', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        user_id: 'user-123',
+        owner_type: 'user',
+        team_id: null,
+        title: 'Current template',
+        items: '[]',
+        version: 6,
+        is_public: false,
+      },
+    ]);
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: 'Edit from a tab that never learned the version',
+        sections: [{ id: 'section-1', title: 'Checklist', items: [] }],
+      }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.code).toBe('edit_conflict');
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+  });
+
+  it('still allows a visibility-only update without expected_version', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        user_id: 'user-123',
+        owner_type: 'user',
+        team_id: null,
+        title: 'Current template',
+        items: '[]',
+        version: 6,
+        is_public: false,
+      },
+    ]);
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({ is_public: true }),
+    }), mockEnv);
+
+    expect(response.status).toBe(200);
+  });
+
+  it('returns the saved version so the editor can send it on its next save', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        user_id: 'user-123',
+        owner_type: 'user',
+        team_id: null,
+        title: 'Current template',
+        items: '[]',
+        version: 3,
+        content_version: 2,
+        is_public: false,
+      },
+    ]);
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: 'Edited',
+        sections: [{ id: 'section-1', title: 'Checklist', items: [] }],
+        expected_version: 3,
+      }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toEqual(expect.objectContaining({ success: true, version: 4, content_version: 3 }));
   });
 
   it('reports a conflict when a template changes between the read and conditional write', async () => {
@@ -996,6 +1169,50 @@ describe('Templates Handlers', () => {
         code: 'invalid_sections',
       }),
     ]);
+  });
+
+  it('should reject imported templates whose sections, tasks or sub-tasks are not objects', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({
+      plan: 'pro',
+      limits: { maxTemplates: null, maxActiveRuns: null },
+    });
+    dbMocks.selectChain.limit.mockResolvedValue([]);
+
+    const request = new Request('http://localhost/api/templates/backup', {
+      method: 'POST',
+      body: JSON.stringify({
+        templates: [
+          { title: 'Text tasks', sections: [{ id: 's-1', title: 'Shop', items: ['Milk', 'Eggs'] }] },
+          { title: 'Flat text tasks', items: ['Milk'] },
+          { title: 'Null task', sections: [{ id: 's-1', title: 'Shop', items: [{ id: 'i-1', title: 'Milk' }, null] }] },
+          { title: 'Text section', sections: [{ id: 's-1', title: 'Shop', items: [] }, 'Bakery'] },
+          {
+            title: 'Text sub-task',
+            sections: [{
+              id: 's-1',
+              title: 'Shop',
+              items: [{ id: 'i-1', title: 'Dairy', contents: [{ id: 'c-1', type: 'subItems', value: '', subItems: ['Milk'] }] }],
+            }],
+          },
+        ],
+      }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.code).toBe('template_import_failed');
+    expect(data.details.imported).toBe(0);
+    expect(data.details.failed).toEqual([
+      expect.objectContaining({ index: 0, code: 'invalid_sections', reason: expect.stringMatching(/task 1 in section 1/i) }),
+      expect.objectContaining({ index: 1, code: 'invalid_sections', reason: expect.stringMatching(/task 1 in section 1/i) }),
+      expect.objectContaining({ index: 2, code: 'invalid_sections', reason: expect.stringMatching(/task 2 in section 1/i) }),
+      expect.objectContaining({ index: 3, code: 'invalid_sections', reason: expect.stringMatching(/section 2/i) }),
+      expect.objectContaining({ index: 4, code: 'invalid_sections', reason: expect.stringMatching(/sub-task 1 of task 1 in section 1/i) }),
+    ]);
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
   });
 
   it('should return structured failure details when all imported templates fail', async () => {

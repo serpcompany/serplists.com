@@ -5,8 +5,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { VideoEmbed } from './VideoEmbed';
 import { File, Code, ListCheck } from 'lucide-react';
 import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
+import { getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
+import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
+import { hasCurrentFileInfo } from '@/lib/utils/mediaSource';
 import { normalizeMarkdownDisplayText } from '@/lib/utils/markdownDisplay';
 import { safeUrl } from '@/lib/utils/safeUrl';
+
+// A file's name, unless it was left over from an upload the value no longer points to.
+const fileLabel = (content: ChecklistItemContent): string | undefined =>
+  hasCurrentFileInfo(content) ? content.fileName : undefined;
 
 interface ContentRendererProps {
   contents: ChecklistItemContent[];
@@ -64,12 +71,12 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
               <div className="flex items-center gap-3">
                 <File className="h-8 w-8 text-muted-foreground" />
                 <div>
-                  <p className="font-medium">{content.fileName || "File"}</p>
+                  <p className="font-medium">{fileLabel(content) || "File"}</p>
                   <a 
                     href={safeUrl(content.value)} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    aria-label={`Download ${content.fileName || "file"}`}
+                    aria-label={`Download ${fileLabel(content) || "file"}`}
                     className="text-sm text-primary hover:underline"
                   >
                     Download File
@@ -81,9 +88,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
           
           {content.type === "embed" && content.value && (
             <div className="border rounded-lg p-4 bg-muted/20">
-              {safeUrl(content.value) ? (
+              {getEmbedLinkUrl(content.value) ? (
                 <a 
-                  href={safeUrl(content.value)} 
+                  href={getEmbedLinkUrl(content.value)} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   aria-label="Open embedded content"
@@ -117,7 +124,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
                         onSubItemToggle?.(contentIndex, subItemIndex, !subItem.isCompleted)
                       }
                     />
-                    <span className={subItem.isCompleted ? "line-through text-muted-foreground" : ""}>{subItem.title}</span>
+                    <span className={subItem.isCompleted ? "line-through text-muted-foreground" : ""}>{getSubItemDisplayTitle(subItem, subItemIndex)}</span>
                   </div>
                 ))}
               </div>

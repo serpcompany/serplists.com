@@ -11,7 +11,10 @@ import type {
   PortableTemplatePack,
   TemplateBackup
 } from "@/lib/schemas/checklistSchema";
+import { toPortableSections } from "@/lib/schemas/portableSections";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
+import { findInvalidImportSectionEntry } from "@/lib/utils/importSectionEntries";
+import { withImportedLinkSource } from "@/lib/utils/mediaSource";
 import {
   detectTemplateSourceExtension,
   isMarkdownTemplateExtension,
@@ -66,20 +69,23 @@ const normalizeStringList = (value: unknown): string[] => {
   return [];
 };
 
-const coerceSections = (input: unknown): ChecklistSection[] | null => {
+// A flat list of tasks (the legacy `items` form) goes into one "Checklist" section.
+const coerceSections = (input: unknown, templateTitle: string): ChecklistSection[] | null => {
   const parsed = parseJsonArray(input);
   if (!parsed) return null;
   if (parsed.length === 0) return [];
-  if (isSectionsShape(parsed)) {
-    return normalizeSections(parsed);
+  const sections = isSectionsShape(parsed) ? parsed : [{ id: "1", title: "Checklist", items: parsed }];
+  const invalidEntry = findInvalidImportSectionEntry(sections);
+  if (invalidEntry) {
+    throw new Error(`Template "${templateTitle}": ${invalidEntry}`);
   }
-  return normalizeSections([
-    {
-      id: "1",
-      title: "Checklist",
-      items: parsed,
-    },
-  ]);
+  // A linked file named without uploadType keeps its name in the editor and in runs.
+  return normalizeSections(sections).map((section) => ({
+    ...section,
+    items: section.items.map((item) =>
+      item.contents ? { ...item, contents: item.contents.map(withImportedLinkSource) } : item,
+    ),
+  }));
 };
 
 const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTemplate => {
@@ -89,7 +95,7 @@ const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTe
     throw new Error(`Template "${template.title}" is missing sections/items`);
   }
 
-  const sections = coerceSections(template.sections ?? template.items);
+  const sections = coerceSections(template.sections ?? template.items, template.title);
   if (!sections) {
     throw new Error(`Template "${template.title}" has invalid sections/items`);
   }
@@ -116,7 +122,7 @@ const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTe
 
 const normalizePortableTemplate = (template: PortableChecklistTemplate): ChecklistTemplate => {
   const now = new Date().toISOString();
-  const sections = coerceSections(template.sections);
+  const sections = coerceSections(template.sections, template.title);
   if (!sections) {
     throw new Error(`Template "${template.title}" has invalid sections`);
   }
@@ -227,7 +233,8 @@ export const exportPortableTemplatesToJSON = (
       visibility: template.isPublic ? "public" : "private",
       categories: normalizeStringList(template.categories),
       tags: normalizeStringList(template.tags),
-      sections: template.sections,
+      // Only portable keys: no run state such as isCompleted.
+      sections: toPortableSections(template.sections) as PortableChecklistTemplate["sections"],
       rules: template.rules,
     })),
     manifest: {

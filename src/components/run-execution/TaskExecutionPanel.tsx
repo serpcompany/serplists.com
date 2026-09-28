@@ -3,12 +3,14 @@ import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistItem, ChecklistSection } from '@/types/checklist';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
 
 interface TaskExecutionPanelProps {
   section: ChecklistSection;
+  sectionIndex: number;
   task: ChecklistItem;
   taskIndex: number;
   totalTasks: number;
@@ -23,6 +25,7 @@ interface TaskExecutionPanelProps {
 
 export function TaskExecutionPanel({
   section,
+  sectionIndex,
   task,
   taskIndex,
   totalTasks,
@@ -41,7 +44,7 @@ export function TaskExecutionPanel({
       <div className="border-b border-border bg-card px-8 py-6">
         <div className="mx-auto max-w-2xl">
           <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
-            <span>{section.title}</span>
+            <span>{getSectionDisplayTitle(section, sectionIndex)}</span>
             <span>/</span>
             <span>
               Task {taskIndex + 1} of {totalTasks}

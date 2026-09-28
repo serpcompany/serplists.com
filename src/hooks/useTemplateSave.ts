@@ -1,20 +1,36 @@
 import { useState } from "react";
 import { useTemplates } from "@/contexts/TemplatesContext";
 import { useTemplateValidation } from "@/hooks/useTemplateValidation";
+import { type AccessFailure, getAccessFailure, isEditConflictError } from "@/lib/api-errors";
 import type { TemplateUpdateResult } from "@/lib/templateUpdateResult";
-import { ChecklistSection, TemplateRule, TemplateSavePayload } from "@/types/checklist";
+import { ChecklistSection, TemplateSavePayload } from "@/types/checklist";
 import { ValidationError } from "@/hooks/useTemplateValidation";
 
 export type SaveTemplateResult = {
   success: boolean;
   errors: ValidationError[];
-  // An update's stored version and slug, which the editor keeps for its next save.
-  saved?: TemplateUpdateResult;
+  // The template's version after a successful update; the next save sends it.
+  version?: number;
+  // The slug the template has after an update: the one sent (it may carry a suffix)
+  // or, when none was sent, the one it kept.
+  slug?: string;
+  // On success: the title and sections as sent, after defaults were applied (a title,
+  // a placeholder task in an empty section, "Task N" titles). That is what was stored,
+  // so the editor rebuilds its form from it.
+  saved?: { title: string; sections: ChecklistSection[] };
+  // Why the API refused the save, kept by kind (sign in, plan gate, billing down) so the
+  // editor can offer the way forward instead of only showing the message.
+  failure?: AccessFailure;
+  // Someone saved the template after this editor loaded it; the editor offers to load
+  // the latest version.
+  editConflict?: boolean;
 };
 
+// Never read the version from the template lists: they refetch in the background and
+// would report another editor's newer save as the version this form was built from.
 type SaveTemplateDependencies = {
   createTemplate: (template: Omit<TemplateSavePayload, "id">) => Promise<unknown>;
-  updateTemplate: (template: TemplateSavePayload) => Promise<TemplateUpdateResult>;
+  updateTemplate: (template: TemplateSavePayload) => Promise<TemplateUpdateResult | void>;
   applyDefaults: (
     title: string,
     sections: ChecklistSection[],
@@ -33,11 +49,15 @@ export type SaveTemplateInput = {
   categories: string[];
   tags: string[];
   isPublic: boolean;
-  // From the template the editor loaded by id (or its last save): sent as expected_version,
-  // and rules are kept as they are. Undefined rules leave the key out, so nothing is cleared.
-  version?: number;
-  rules?: TemplateRule[];
+  // The version the editor loaded (or last saved). Required for updates.
+  expectedVersion?: number;
+  // The slug the template has now. An unchanged slug is not resent, so a stored slug
+  // that predates today's slug rules never blocks a save or moves the URL.
+  storedSlug?: string;
 };
+
+const MISSING_VERSION_MESSAGE =
+  "This template's saved version is unknown. Reload the editor before saving so newer changes are not overwritten.";
 
 export const persistTemplateSave = async (
   dependencies: SaveTemplateDependencies,
@@ -60,14 +80,22 @@ export const persistTemplateSave = async (
     categories,
     tags,
     isPublic,
-    version,
-    rules,
+    expectedVersion,
+    storedSlug,
   } = input;
 
   const { title: finalTitle, sections: finalSections } = applyDefaults(title, sections);
+  const saved = { title: finalTitle, sections: finalSections };
 
   try {
     if (id) {
+      if (typeof expectedVersion !== "number") {
+        return { success: false, errors: [{ type: "save", message: MISSING_VERSION_MESSAGE }] };
+      }
+
+      // Rules are not edited here; leaving them out keeps the stored rules. Likewise an
+      // empty or unchanged slug is left out and the stored slug is kept.
+      const changedSlug = seoUrl && seoUrl !== storedSlug ? seoUrl : undefined;
       const updatePayload: TemplateSavePayload = {
         id,
         title: finalTitle,
@@ -75,18 +103,17 @@ export const persistTemplateSave = async (
         sections: finalSections,
         seoTitle,
         seoDescription,
-        seoUrl,
-        slug: seoUrl,
+        seoUrl: changedSlug,
+        slug: changedSlug,
         type: templateType,
         categories,
         tags,
         isPublic,
-        rules,
-        version,
+        version: expectedVersion,
       };
 
-      const saved = await updateTemplate(updatePayload);
-      return { success: true, errors: [], saved };
+      const updated = await updateTemplate(updatePayload);
+      return { success: true, errors: [], version: updated?.version, slug: updated?.slug, saved };
     }
 
     await createTemplate({
@@ -102,18 +129,15 @@ export const persistTemplateSave = async (
       isPublic,
     });
 
-    return { success: true, errors: [] };
+    return { success: true, errors: [], saved };
   } catch (error) {
     console.error("Error saving template:", error);
+    const failure = getAccessFailure(error, "Failed to save template");
     return {
       success: false,
-      errors: [
-        {
-          type: "save",
-          message:
-            error instanceof Error ? error.message : "Failed to save template",
-        },
-      ],
+      errors: [{ type: "save", message: failure.message }],
+      failure,
+      ...(isEditConflictError(error) ? { editConflict: true } : {}),
     };
   }
 };

@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  TEMPLATE_FIELD_LIMITS,
+  TEMPLATE_SLUG_PATTERN,
+  TEMPLATE_SLUG_PATTERN_MESSAGE,
+} from "../../../src/lib/schemas/templateFields";
 
 const boundedOptionalString = (max: number) => z.string().trim().max(max).optional();
 const boundedRequiredString = (max: number) => z.string().trim().min(1).max(max);
@@ -17,27 +22,30 @@ const templateRuleSchema = z.object({
   severity: z.enum(["error", "warning"]).optional(),
 });
 
+// Limits come from src/lib/schemas/templateFields.ts, which the template editor also uses.
+const limits = TEMPLATE_FIELD_LIMITS;
+
 export const templatePayloadSchema = z.object({
   teamId: z.string().trim().min(1).optional(),
   team_id: z.string().trim().min(1).optional(),
-  title: boundedRequiredString(160).optional(),
-  description: boundedOptionalString(5000),
+  title: boundedRequiredString(limits.title).optional(),
+  description: boundedOptionalString(limits.description),
   type: z.enum(["checklist", "recipe"]).optional(),
-  seoTitle: boundedOptionalString(160),
-  seoDescription: boundedOptionalString(320),
+  seoTitle: boundedOptionalString(limits.seoTitle),
+  seoDescription: boundedOptionalString(limits.seoDescription),
   rules: z.array(templateRuleSchema).optional(),
   is_public: z.boolean().optional(),
-  categories: stringListField(20, 80),
-  category: boundedOptionalString(80),
-  tags: stringListField(20, 80),
+  categories: stringListField(limits.listItems, limits.listItemLength),
+  category: boundedOptionalString(limits.listItemLength),
+  tags: stringListField(limits.listItems, limits.listItemLength),
   sections: z.unknown().optional(),
   items: z.unknown().optional(),
   slug: z
     .string()
     .trim()
     .min(1)
-    .max(160)
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, numbers, and hyphens only")
+    .max(limits.slug)
+    .regex(TEMPLATE_SLUG_PATTERN, TEMPLATE_SLUG_PATTERN_MESSAGE)
     .optional(),
   expected_version: z.number().int().positive().optional(),
 });
@@ -54,6 +62,19 @@ export const checklistPayloadSchema = z.object({
   completed_at: z.string().datetime().nullable().optional(),
   expected_revision: z.number().int().positive().optional(),
 });
+
+// A payload validation error that says which field failed, e.g.
+// "seoDescription: String must contain at most 320 character(s)", plus the field for clients.
+export function describePayloadError(
+  error: z.ZodError,
+  fallback: string,
+): { message: string; details: { field?: string } } {
+  const issue = error.issues[0];
+  if (!issue) return { message: fallback, details: {} };
+  const field = issue.path.length > 0 ? String(issue.path[0]) : undefined;
+  const message = field && !issue.message.startsWith(field) ? `${field}: ${issue.message}` : issue.message;
+  return { message, details: { field } };
+}
 
 export function parseJsonArray(value: unknown): unknown[] | null {
   if (Array.isArray(value)) return value;

@@ -30,8 +30,10 @@ Canonical private routes:
 - Users can create, edit, archive, restore, import, and export templates.
 - Deleting a template or run archives it (the API sets `deleted_at`). `/dashboard/archive` lists the active context's archived templates and runs and restores them. Restoring respects plan limits and Organization roles, and shows the API's reason when it refuses.
 - Template detail pages render a read-only preview first. Editing happens on `/dashboard/templates/:id/edit`.
+- In the editor, sections, tasks and a task's content blocks reorder by dragging their handle, or with the Up and Down arrow keys on the focused handle. Blocks keep their ids when they move, and runs and public pages show blocks in the saved order.
 - Template content updates reconcile into matching active, private runs for the same Resource Owner. Stable section, item, and sub-item IDs preserve run completion and notes across renames and reordering; new work arrives incomplete, and retired work leaves readiness calculations while remaining in run history.
 - Public templates can be shared at `/profile/{username}/{templateSlug}`.
+- The editor's Search & SEO panel previews that URL: the username is the template's creator (also for an Organization's template), and the slug is the one a save stores (a blank slug keeps the saved one, or for a new template comes from its name). It says when the creator has no username or the template is private, and notes that a slug another template already uses gets a short suffix.
 - Other Users can copy public templates into Personal or an authorized Organization when that ownership context's entitlement allows it.
 - Template history is stored in `template_versions`; related actor/action history is stored in `audit_events`.
 
@@ -42,7 +44,7 @@ Canonical private routes:
 - Runs record both the template content version last reconciled and a run revision. API responses expose `is_stale` when the source checklist structure is newer; metadata-only template edits do not stale runs.
 - Completed, archived, and publicly shared runs are frozen when a template changes. A completed private run can be explicitly reconciled and reopened with `POST /api/checklists/:id/revalidate`.
 - Runs that predate stable identities are conservatively marked stale during migration. Their legacy IDs are backfilled deterministically, and their completion/notes remain intact until explicit reconciliation.
-- Run and template saves use optimistic revision/version markers. A stale editor receives `409 edit_conflict` instead of overwriting newer work. Where the page can reload the record without losing the user's input, it does so before the control re-enables: Revalidate on the runs list reloads the list (also on `409 shared_run_conflict` or a `404`), and the template page's visibility switch and share action reload the template, so the next click sends the current revision or version. The template editor keeps the user's draft and only reports the conflict.
+- Run and template saves use optimistic revision/version markers. A stale editor receives `409 edit_conflict` instead of overwriting newer work. Where the page can reload the record without losing the user's input, it does so before the control re-enables: Revalidate on the runs list reloads the list (also on `409 shared_run_conflict` or a `404`), and the template page's visibility switch and share action reload the template, so the next click sends the current revision or version. The template editor loads the template by id when it opens, never from the cached template lists, and checks against the version it loaded (then the version its last save returned), so a background list refresh cannot hide another editor's save. After a conflict it keeps the user's draft and offers to load the latest version, replacing the unsaved changes only once the user confirms.
 - Run-level sharing creates public `/share/:token` links.
 - Guests can open shared runs without logging in and update checklist completion state.
 - Shared runs do not expose owner-only title editing or destructive actions.
@@ -93,6 +95,7 @@ Password for all seeded users: `password123`.
 - `403 Forbidden`: the user is signed in but lacks the required role or permission.
 - `503 billing_unavailable`: paid action cannot be started because billing config is unavailable.
 - `503 auth_email_unavailable`: auth email delivery is unavailable for flows that require outbound email.
-- `409 edit_conflict`: a template or run changed after the editor loaded it; refresh before retrying (the runs list and the template page refresh by themselves, see `src/lib/editConflicts.ts`).
+- `409 edit_conflict`: a template or run changed after the editor loaded it; load the latest version before retrying (the runs list and the template page refresh by themselves, see `src/lib/editConflicts.ts`; the template editor offers Load latest version).
+- `400` on a template create or update payload: the message starts with the failing field (for example `seoDescription: ...`) and `details.field` names it.
 
 The client preserves API `status`, `code`, and `details` so UI behavior does not depend on string matching generic error messages.

@@ -12,6 +12,7 @@ import {
   buildDashboardTemplatesState,
   createDashboardTemplateRun,
   deleteDashboardTemplate,
+  finishDashboardTemplateRun,
   getDashboardSelectedTemplate,
   getInitialDashboardTemplateId,
   openDashboardCreateTemplate,
@@ -336,5 +337,46 @@ describe('createDashboardTemplateRun', () => {
       kind: 'error',
       message: 'Mutation failed',
     });
+  });
+});
+
+// The run launcher awaited the run and then navigated to it, even when the user had
+// pressed Back meanwhile, pulling them to the new run.
+describe('finishDashboardTemplateRun', () => {
+  const run = { kind: 'ok' as const, runId: 'run-9' };
+
+  it('opens the new run while the user is still on the page', () => {
+    const closeLauncher = vi.fn();
+    const navigate = vi.fn();
+
+    finishDashboardTemplateRun(run, { isCurrent: () => true }, { closeLauncher, navigate });
+
+    expect(closeLauncher).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith('/dashboard/runs/run-9');
+  });
+
+  it('does not navigate once the user has left the page', () => {
+    const closeLauncher = vi.fn();
+    const navigate = vi.fn();
+
+    finishDashboardTemplateRun(run, { isCurrent: () => false }, { closeLauncher, navigate });
+
+    expect(navigate).not.toHaveBeenCalled();
+    // The run exists: the launcher is done either way.
+    expect(closeLauncher).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing for a failed run', () => {
+    const closeLauncher = vi.fn();
+    const navigate = vi.fn();
+
+    finishDashboardTemplateRun(
+      { kind: 'error', message: 'Failed' },
+      { isCurrent: () => true },
+      { closeLauncher, navigate },
+    );
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(closeLauncher).not.toHaveBeenCalled();
   });
 });
