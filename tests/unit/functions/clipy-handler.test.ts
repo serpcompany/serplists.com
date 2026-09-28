@@ -348,6 +348,9 @@ describe('Clipy draft categories and tags', () => {
     ['Moving Day Checklist', 'Everything to do before the movers arrive.', ['moving']],
     ['Moving House: Change Your Address', 'Update your address everywhere after moving house.', ['moving']],
     ['Move-Out Cleaning Checklist', 'Get your deposit back.', ['moving']],
+    ['Apartment Move-In Inspection', 'Photograph every room on day one.', ['moving']],
+    ['Move in Day Checklist', 'Set up utilities before the keys arrive.', ['moving']],
+    ['Moving Out Checklist', 'Return the keys and forward your mail.', ['moving']],
     ['Camping Trip Packing List', 'What to bring to the campsite.', ['camping', 'packing']],
     ['Vacation Packing List', 'Fit a week of clothes into one suitcase.', ['packing']],
     ['Wedding Day Timeline', 'Keep the ceremony on schedule.', ['wedding']],
@@ -381,6 +384,12 @@ describe('Clipy draft categories and tags', () => {
     'Install the icon pack',
     'Relocate the file',
     'Move the card to Done',
+    'Keep the release moving in the right direction',
+    'Watch the cards move in order',
+    'Moving out of beta: launch steps',
+    'Items move in and out of the queue',
+    'Moving in circles on the roadmap',
+    'Move out the old config',
   ])('files nothing under a category for "%s"', (phrase) => {
     expect(classifyClipySummary({ title: phrase, tldr: phrase }).categories).toEqual([]);
   });

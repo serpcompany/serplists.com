@@ -125,7 +125,9 @@ const CATEGORY_RULES: Array<{ label: string; pattern: RegExp }> = [
   { label: 'wedding', pattern: /\bwedding\b/i },
   {
     label: 'moving',
-    pattern: /\b(moving (house|home|day|out|in|checklist)|move[- ](out|in)|house move|relocation checklist|relocating to a new (city|country|state|home|house))\b/i,
+    // "moving in/out" and "move in/out" are also plain verbs ("items move in and out of
+    // the queue"), so they count only as the noun "move-in"/"move-out" or before a noun.
+    pattern: /\b(moving (house|home|day|checklist)|move-(in|out)|(move|moving) (in|out) (day|date|checklist|inspection|cleaning)|house move|relocation checklist|relocating to a new (city|country|state|home|house))\b/i,
   },
   { label: 'camping', pattern: /\b(camping|campsite|campground)\b/i },
   {
