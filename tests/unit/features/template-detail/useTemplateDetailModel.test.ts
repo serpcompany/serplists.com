@@ -136,6 +136,37 @@ describe('template detail mappers', () => {
     ]);
     expect(countTemplateItems(mapped)).toBe(2);
   });
+
+  const teamRow = {
+    id: 'template-t',
+    title: 'Organization Checklist',
+    sections: [],
+    user_id: 'user-b',
+    owner_type: 'team',
+    team_id: 'team-1',
+    created_at: '2026-04-18T00:00:00.000Z',
+    is_public: false,
+  };
+
+  it('keeps the Organization that owns a template', () => {
+    expect(mapApiTemplateToChecklistTemplate(teamRow, 'fallback').teamId).toBe('team-1');
+    expect(
+      mapApiTemplateToChecklistTemplate(
+        { ...teamRow, owner_type: undefined, team_id: undefined, teamId: 'team-2' },
+        'fallback',
+      ).teamId,
+    ).toBe('team-2');
+  });
+
+  it('leaves Personal templates without an Organization', () => {
+    for (const row of [
+      { ...teamRow, owner_type: 'user', team_id: null },
+      { ...teamRow, owner_type: 'user', team_id: 'team-1' },
+      { ...teamRow, team_id: '' },
+    ]) {
+      expect(mapApiTemplateToChecklistTemplate(row, 'fallback').teamId).toBeUndefined();
+    }
+  });
 });
 
 describe('loadTemplateDetailData', () => {
@@ -282,6 +313,39 @@ describe('loadTemplateDetailData', () => {
     );
 
     expect(result).toEqual({ notFound: true, template: null });
+  });
+
+  it('keeps the Organization of a private template that is not in the cached list', async () => {
+    const apiClient = {
+      getTemplateById: vi.fn().mockResolvedValue({
+        id: 'template-t',
+        title: 'Organization Checklist',
+        sections: [],
+        user_id: 'user-b',
+        owner_type: 'team',
+        team_id: 'team-1',
+        owner_username: 'bob',
+        created_at: '2026-04-18T00:00:00.000Z',
+        is_public: false,
+      }),
+      getTemplateBySlug: vi.fn(),
+      getProfileById: vi.fn(),
+      clonePublicTemplate: vi.fn(),
+      updateTemplate: vi.fn(),
+    };
+
+    const result = await loadTemplateDetailData(
+      {
+        mode: 'private',
+        identifier: 'template-t',
+        getCachedTemplate: () => undefined,
+      },
+      { apiClient },
+    );
+
+    expect(result.notFound).toBe(false);
+    expect(result.template?.teamId).toBe('team-1');
+    expect(result.template?.userId).toBe('user-b');
   });
 });
 

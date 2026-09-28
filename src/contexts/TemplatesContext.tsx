@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { prepareTemplatesForImport } from "@/lib/utils/templateBackup";
+import { readApiTemplateTeamId } from "@/lib/templates/apiTemplateOwner";
 import { 
   ChecklistTemplate, 
   ChecklistRun, 
@@ -180,12 +181,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     isPublic: Boolean(template.is_public),
     slug: typeof template.slug === 'string' ? template.slug : '',
     version: typeof template.version === 'number' ? template.version : 1,
-    teamId:
-      typeof template.team_id === 'string'
-        ? template.team_id
-        : typeof template.teamId === 'string'
-          ? template.teamId
-          : undefined,
+    teamId: readApiTemplateTeamId(template),
     ownerProfile:
       typeof template.owner_username === "string" || typeof template.owner_full_name === "string"
         ? {

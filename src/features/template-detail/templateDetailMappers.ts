@@ -1,4 +1,5 @@
 import { resolvePublicTemplateOwnerSlug } from '@/lib/routes';
+import { readApiTemplateTeamId } from '@/lib/templates/apiTemplateOwner';
 import {
   isSectionsShape,
   normalizeSections as normalizeChecklistSections,
@@ -76,6 +77,7 @@ export const mapApiTemplateToChecklistTemplate = (
     categories,
     tags: asStringArray(foundTemplate.tags) ?? [],
     userId: String(foundTemplate.user_id || ''),
+    teamId: readApiTemplateTeamId(foundTemplate),
     createdAt: String(foundTemplate.created_at || ''),
     updatedAt: String(foundTemplate.updated_at || foundTemplate.created_at || ''),
     isPublic: Boolean(foundTemplate.is_public),
