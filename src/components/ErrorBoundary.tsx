@@ -11,8 +11,9 @@ interface Props {
   // A change clears a caught error, so leaving a page that crashed recovers. It never
   // remounts a page that did not crash.
   resetKey?: unknown;
-  // For the last-resort boundary above the Router: while it shows its fallback the Router is
-  // unmounted and ignores history changes, so browser Back or Forward clears the error here.
+  // For the last-resort boundary above the router: while it shows its fallback no page is
+  // mounted to react to history changes, so browser Back or Forward clears the error here and
+  // the router renders the new location.
   resetOnHistoryChange?: boolean;
 }
 

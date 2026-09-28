@@ -22,7 +22,7 @@ describe("template editor route identity", () => {
   });
 
   it("renders every editor route through the keyed route wrapper", () => {
-    const app = readFileSync(path.resolve(__dirname, "../../../../src/App.tsx"), "utf8");
+    const app = readFileSync(path.resolve(__dirname, "../../../../src/appRoutes.tsx"), "utf8");
     const editorRoutes = [
       "path={buildConsoleTemplateCreatePath()}",
       'path="/dashboard/templates/:id/edit"',
