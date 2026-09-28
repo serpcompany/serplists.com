@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { toast } from 'sonner';
 import { ProfileSection } from '@/components/account/ProfileSection';
@@ -9,53 +9,43 @@ import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
 import { LeaveOrganizationCard } from '@/components/account/LeaveOrganizationCard';
 import { AgentAccessSection } from '@/components/account/AgentAccessSection';
 import { isPersonalRunMcpUiEnabled } from '@/env';
-import { planAccountUpdate } from './accountProfileUpdates';
+import {
+  planAccountUpdate,
+  profileFormFromUser,
+  syncProfileForm,
+  type ProfileFormValues,
+} from './accountProfileUpdates';
 import {
   DashboardContentShell,
   DashboardPageHeader,
   DashboardScrollArea,
 } from '@/components/dashboard/DashboardContentShell';
 
-interface ProfileData {
-  email: string;
-  fullName: string;
-  username: string;
-  avatar_url: string;
-}
-
 const Account = () => {
   const { user, refreshProfile } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [profileData, setProfileData] = useState<ProfileData>({
-    email: user?.email || '',
-    fullName: user?.name || '',
-    username: user?.username || '',
-    avatar_url: user?.image || ''
-  });
+  const [profileData, setProfileData] = useState<ProfileFormValues>(() =>
+    profileFormFromUser(user ?? {}),
+  );
+  // The server values the form last loaded or saved for this user. Fields that
+  // differ from it are unsaved edits, which a session refresh (for example
+  // after an avatar upload) must not overwrite.
+  const baselineRef = useRef<{ userId: string; values: ProfileFormValues } | null>(
+    user ? { userId: user.id, values: profileFormFromUser(user) } : null,
+  );
 
   useEffect(() => {
-    if (user) {
-      loadProfile();
+    if (!user) {
+      return;
     }
-  }, [user]);
 
-  const loadProfile = async () => {
-    try {
-      const session = await authClient.getSession();
-      const data = session?.data?.user;
-      if (data) {
-        setProfileData(prev => ({
-          ...prev,
-          email: data.email || prev.email,
-          fullName: data.name || '',
-          username: (data as unknown as { username?: string }).username || '',
-          avatar_url: (data as unknown as { image?: string | null }).image || ''
-        }));
-      }
-    } catch (error) {
-      console.error('Error loading profile:', error);
-    }
-  };
+    const server = profileFormFromUser(user);
+    const previous = baselineRef.current;
+    // A different account starts from scratch.
+    const baseline = previous?.userId === user.id ? previous.values : null;
+    baselineRef.current = { userId: user.id, values: server };
+    setProfileData((current) => syncProfileForm(current, baseline, server));
+  }, [user]);
 
   const handleProfileUpdate = async () => {
     if (!user) return;
@@ -80,8 +70,19 @@ const Account = () => {
         return;
       }
 
+      // The saved values become the baseline, so the refreshed user replaces
+      // them with the server's (possibly normalized) values.
+      if (baselineRef.current) {
+        baselineRef.current = {
+          userId: baselineRef.current.userId,
+          values: {
+            ...baselineRef.current.values,
+            fullName: profileData.fullName,
+            username: profileData.username,
+          },
+        };
+      }
       await refreshProfile();
-      await loadProfile();
       toast.success('Profile updated successfully');
     } catch (error) {
       console.error('Error updating profile:', error);

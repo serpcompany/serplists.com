@@ -70,3 +70,41 @@ export const planAccountUpdate = (
 
   return { ok: true, updates: buildAccountUpdatePayload(profileData, user) };
 };
+
+export interface ProfileFormValues {
+  email: string;
+  fullName: string;
+  username: string;
+  avatar_url: string;
+}
+
+export const profileFormFromUser = (
+  user: CurrentUserInput & { email?: string }
+): ProfileFormValues => ({
+  email: user.email || "",
+  fullName: user.name || "",
+  username: user.username || "",
+  avatar_url: user.image || "",
+});
+
+/**
+ * Merges a refreshed session user into the profile form. Full Name and
+ * Username keep what the user typed if it differs from `baseline` (the server
+ * values the form last loaded or saved); every other field follows the server.
+ * The avatar saves immediately, so it always comes from the server.
+ */
+export const syncProfileForm = (
+  current: ProfileFormValues,
+  baseline: ProfileFormValues | null,
+  server: ProfileFormValues
+): ProfileFormValues => {
+  if (!baseline) {
+    return server;
+  }
+
+  return {
+    ...server,
+    fullName: current.fullName !== baseline.fullName ? current.fullName : server.fullName,
+    username: current.username !== baseline.username ? current.username : server.username,
+  };
+};
