@@ -2,6 +2,12 @@ import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { json, jsonError } from "../utils/response";
 import { assertStripeWebhookConfigured, verifyStripeWebhookSignature } from "../utils/stripe";
+import {
+  loadCurrentSubscription,
+  parseSubscriptionSnapshot,
+  upsertStripeCustomer,
+  upsertStripeSubscription,
+} from "../utils/stripe-subscriptions";
 import { eq } from "drizzle-orm";
 
 type StripeEvent = {
@@ -21,28 +27,6 @@ function getEventUserIdFallback(obj: Record<string, unknown> | null): string | n
   const fromMetadata = metadata?.userId;
   if (typeof fromMetadata === "string" && fromMetadata.length > 0) return fromMetadata;
   return null;
-}
-
-function getFirstSubscriptionItem(obj: Record<string, unknown> | null): Record<string, unknown> | null {
-  if (!obj) return null;
-  const items = isRecord(obj.items) ? obj.items : null;
-  const data = items && Array.isArray(items.data) ? items.data : null;
-  return data && data.length > 0 && isRecord(data[0]) ? data[0] : null;
-}
-
-function getSubscriptionPriceId(obj: Record<string, unknown> | null): string | null {
-  const first = getFirstSubscriptionItem(obj);
-  const price = first && isRecord(first.price) ? first.price : null;
-  const priceId = price?.id;
-  return typeof priceId === "string" ? priceId : null;
-}
-
-function getSubscriptionCurrentPeriodEnd(obj: Record<string, unknown> | null): number | null {
-  const legacyPeriodEnd = obj?.current_period_end;
-  if (typeof legacyPeriodEnd === "number") return legacyPeriodEnd;
-
-  const itemPeriodEnd = getFirstSubscriptionItem(obj)?.current_period_end;
-  return typeof itemPeriodEnd === "number" ? itemPeriodEnd : null;
 }
 
 export async function handleStripe(request: Request, env: Env): Promise<Response> {
@@ -77,7 +61,7 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
     }
 
     const db = createDb(env);
-    const { stripe_webhook_events, stripe_customers, stripe_subscriptions } = schema;
+    const { stripe_webhook_events, stripe_customers } = schema;
     const nowIso = new Date().toISOString();
     let shouldRefreshProcessedEvent = false;
 
@@ -114,19 +98,7 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
           : getEventUserIdFallback(object);
         const stripeCustomerId = typeof object?.customer === "string" ? object.customer : null;
         if (userId && stripeCustomerId) {
-          try {
-            await db.insert(stripe_customers).values({
-              user_id: userId,
-              stripe_customer_id: stripeCustomerId,
-              created_at: nowIso,
-              updated_at: nowIso,
-            });
-          } catch {
-            await db
-              .update(stripe_customers)
-              .set({ stripe_customer_id: stripeCustomerId, updated_at: nowIso })
-              .where(eq(stripe_customers.user_id, userId));
-          }
+          await upsertStripeCustomer(db, userId, stripeCustomerId, nowIso);
         }
       }
 
@@ -135,71 +107,24 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
         event.type === "customer.subscription.updated" ||
         event.type === "customer.subscription.deleted"
       ) {
-        const stripeSubscriptionId = typeof object?.id === "string" ? object.id : null;
-        const stripeCustomerId = typeof object?.customer === "string" ? object.customer : null;
-        const status = typeof object?.status === "string" ? object.status : null;
-        const priceId = getSubscriptionPriceId(object);
-        const currentPeriodEnd = getSubscriptionCurrentPeriodEnd(object);
-        const cancelAtPeriodEnd = Boolean(object?.cancel_at_period_end);
-        const canceledAt = typeof object?.canceled_at === "number" ? object.canceled_at : null;
-        const trialEnd = typeof object?.trial_end === "number" ? object.trial_end : null;
+        const eventSnapshot = parseSubscriptionSnapshot(object);
 
         let userId: string | null = null;
-        if (stripeCustomerId) {
+        if (eventSnapshot) {
           const [row] = await db
             .select({ user_id: stripe_customers.user_id })
             .from(stripe_customers)
-            .where(eq(stripe_customers.stripe_customer_id, stripeCustomerId))
+            .where(eq(stripe_customers.stripe_customer_id, eventSnapshot.customerId))
             .limit(1);
-          userId = row?.user_id ?? null;
+          userId = row?.user_id ?? eventSnapshot.metadataUserId;
         }
-        userId = userId ?? getEventUserIdFallback(object);
 
-        if (userId && stripeSubscriptionId && stripeCustomerId && status && priceId) {
-          try {
-            await db.insert(stripe_customers).values({
-              user_id: userId,
-              stripe_customer_id: stripeCustomerId,
-              created_at: nowIso,
-              updated_at: nowIso,
-            });
-          } catch {
-            await db
-              .update(stripe_customers)
-              .set({ stripe_customer_id: stripeCustomerId, updated_at: nowIso })
-              .where(eq(stripe_customers.user_id, userId));
-          }
-
-          try {
-            await db.insert(stripe_subscriptions).values({
-              stripe_subscription_id: stripeSubscriptionId,
-              user_id: userId,
-              stripe_customer_id: stripeCustomerId,
-              price_id: priceId,
-              status,
-              current_period_end: currentPeriodEnd,
-              cancel_at_period_end: cancelAtPeriodEnd,
-              canceled_at: canceledAt,
-              trial_end: trialEnd,
-              created_at: nowIso,
-              updated_at: nowIso,
-            });
-          } catch {
-            await db
-              .update(stripe_subscriptions)
-              .set({
-                user_id: userId,
-                stripe_customer_id: stripeCustomerId,
-                price_id: priceId,
-                status,
-                current_period_end: currentPeriodEnd,
-                cancel_at_period_end: cancelAtPeriodEnd,
-                canceled_at: canceledAt,
-                trial_end: trialEnd,
-                updated_at: nowIso,
-              })
-              .where(eq(stripe_subscriptions.stripe_subscription_id, stripeSubscriptionId));
-          }
+        // The event snapshot may be older than state already stored, so write what
+        // Stripe reports now (see loadCurrentSubscription).
+        const subscription = eventSnapshot && userId ? await loadCurrentSubscription(env, eventSnapshot) : null;
+        if (subscription && userId) {
+          await upsertStripeCustomer(db, userId, subscription.customerId, nowIso);
+          await upsertStripeSubscription(db, userId, subscription, nowIso);
         }
       }
 

@@ -19,7 +19,8 @@ Checkout capability requires `STRIPE_SECRET_KEY` and `STRIPE_PRO_PRICE_ID`.
 Webhook verification separately requires `STRIPE_WEBHOOK_SECRET`. Billing
 status, checkout, portal, and subscription lookup must not be disabled solely
 because the webhook secret is absent; only the webhook endpoint depends on
-webhook configuration.
+webhook configuration. The webhook also uses `STRIPE_SECRET_KEY`, when set, to
+read a subscription's current state (see the implementation note).
 
 ## Bootstrap (create Product + Prices)
 If you want to create Stripe resources programmatically, use:
@@ -126,6 +127,18 @@ be retried, and processing failures return `500` so Stripe will deliver the
 event again. Subscription events upsert their customer mapping before writing
 subscription state; checkout completion may use `metadata.userId` when
 `client_reference_id` is absent.
+
+Stripe does not deliver events in order, and a retried event carries its original,
+possibly stale, snapshot. So `customer.subscription.*` events are only a trigger:
+the webhook reads the subscription's current state with
+`GET /v1/subscriptions/{id}` (using `STRIPE_SECRET_KEY`) and stores that
+(`functions/api/utils/stripe-subscriptions.ts`). A snapshot that is already
+`canceled` or `incomplete_expired` is final and is stored without the read. If the
+read fails, the event returns `500` and Stripe retries it; if Stripe reports the
+subscription does not exist, the event is acknowledged without a write. The upsert
+also refuses transitions Stripe never makes: a `canceled` or `incomplete_expired`
+row is never overwritten, and no row returns to `incomplete`. Without
+`STRIPE_SECRET_KEY` the webhook stores the event snapshot under that same guard.
 
 ## Production verification
 

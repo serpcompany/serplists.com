@@ -70,6 +70,34 @@ function encodeForm(body: Record<string, string | number | boolean | undefined |
   return params.toString();
 }
 
+/** A non-2xx response from the Stripe API. `status` is the HTTP status code. */
+export class StripeApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, body: string) {
+    super(`Stripe API error (${status}): ${body}`);
+    this.name = "StripeApiError";
+    this.status = status;
+  }
+}
+
+async function readStripeResponse(resp: Response): Promise<unknown> {
+  const text = await resp.text();
+  if (!resp.ok) {
+    throw new StripeApiError(resp.status, text);
+  }
+  return JSON.parse(text) as unknown;
+}
+
+/** GET a Stripe API resource. Callers parse the returned JSON with Zod. */
+export async function stripeGet(secretKey: string, path: string): Promise<unknown> {
+  const resp = await fetch(`https://api.stripe.com${path}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${secretKey}` },
+  });
+  return readStripeResponse(resp);
+}
+
 export async function stripePostForm<T>(
   secretKey: string,
   path: string,
@@ -86,11 +114,7 @@ export async function stripePostForm<T>(
     body: encodeForm(body),
   });
 
-  const text = await resp.text();
-  if (!resp.ok) {
-    throw new Error(`Stripe API error (${resp.status}): ${text}`);
-  }
-  return JSON.parse(text) as T;
+  return (await readStripeResponse(resp)) as T;
 }
 
 function parseStripeSignatureHeader(header: string): { timestamp: number; v1: string[] } | null {
