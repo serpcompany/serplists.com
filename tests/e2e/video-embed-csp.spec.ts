@@ -32,7 +32,8 @@ test('bundled public template frames its YouTube video without a CSP violation',
   });
 
   await page.goto(`${pagesOrigin}/profile/serp/full-website-launch-qa-checklist`);
-  await page.getByRole('button', { name: 'Review launch walkthrough video' }).first().click();
+  // The preview opens every section, so the task's video frames without a click.
+  await expect(page.getByText('Review launch walkthrough video', { exact: true })).toBeVisible();
 
   const player = page.locator('iframe[src^="https://www.youtube.com/embed/aqz-KE-bpKQ"]');
   await expect(player).toBeAttached();
