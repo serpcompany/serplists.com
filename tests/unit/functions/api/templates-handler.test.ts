@@ -347,6 +347,43 @@ describe('Templates Handlers', () => {
     expect(storedSlug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
   });
 
+  // The editor shows the slug the template has after a save; it must not guess.
+  it('returns the suffixed slug it stored when the requested slug is taken', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        { id: '1a2b3c4d-template', user_id: 'user-123', owner_type: 'user', team_id: null, items: '[]', version: 1, is_public: false, slug: 'old-slug' },
+      ])
+      .mockResolvedValueOnce([{ id: 'other-template' }]);
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/1a2b3c4d-template', {
+      method: 'PUT',
+      body: JSON.stringify({ slug: 'moving-checklist', expected_version: 1 }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.slug).toBe('moving-checklist-1a2b3c4d');
+    expect(dbMocks.updateChain.set.mock.calls[0][0].slug).toBe(data.slug);
+  });
+
+  it('returns the slug the template keeps when a save requests none', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      { id: 'template-1', user_id: 'user-123', owner_type: 'user', team_id: null, items: '[]', version: 1, is_public: false, slug: 'existing-template' },
+    ]);
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({ title: 'Edited', expected_version: 1 }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.slug).toBe('existing-template');
+    expect(dbMocks.updateChain.set.mock.calls[0][0]).not.toHaveProperty('slug');
+  });
+
   it('should enforce free plan template limit', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 1 }]);

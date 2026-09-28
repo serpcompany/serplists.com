@@ -1558,7 +1558,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       throw error;
     }
 
-    return json({ success: true, slug: typeof updates.slug === 'string' ? updates.slug : undefined, version: nextVersion, content_version: nextContentVersion });
+    // The slug the template has after the write, requested or not, so the editor never guesses.
+    const savedSlug = typeof updates.slug === 'string' ? updates.slug : existingTemplate.slug ?? undefined;
+    return json({ success: true, slug: savedSlug, version: nextVersion, content_version: nextContentVersion });
   }
 
   if (request.method === 'DELETE') {

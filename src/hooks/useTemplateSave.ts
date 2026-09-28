@@ -10,7 +10,8 @@ export type SaveTemplateResult = {
   errors: ValidationError[];
   // The template's version after a successful update; the next save sends it.
   version?: number;
-  // The slug the API stored, when a slug was sent (it may carry a suffix).
+  // The slug the template has after an update: the one sent (it may carry a suffix)
+  // or, when none was sent, the one it kept.
   slug?: string;
   // On success: the title and sections as sent, after defaults were applied (a title,
   // a placeholder task in an empty section, "Task N" titles). That is what was stored,

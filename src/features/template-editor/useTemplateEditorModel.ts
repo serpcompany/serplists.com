@@ -69,7 +69,9 @@ export const buildTemplateEditorSavedState = (
   stored?: SaveTemplateResult["saved"],
 ): TemplateEditorLoadResult => {
   const normalizedForm = normalizeTemplateEditorFormForSave(values, slugs);
-  const slug = slugs.savedSlug ?? normalizedForm.seoUrl;
+  // Without a slug from the API, an empty field means none was sent, so the template
+  // kept the slug it had.
+  const slug = slugs.savedSlug ?? (normalizedForm.seoUrl || slugs.storedSlug || "");
 
   return {
     initialValues: buildTemplateEditorFormValues({

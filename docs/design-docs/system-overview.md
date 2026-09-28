@@ -80,7 +80,9 @@ and derived `is_stale`. Send `expected_revision` when updating a run and
 `expected_version` when updating a template; `POST /api/checklists/:id/revalidate`
 reconciles and reopens a completed private run. A template update that changes
 content (anything but visibility) without `expected_version` gets `409 edit_conflict`,
-and `PUT /api/templates/:id` returns the new `version` and `content_version`. The
+and `PUT /api/templates/:id` returns the new `version` and `content_version`, and the
+`slug` the template has after the save (the requested one, suffixed if it was taken,
+or the one it kept when none was requested). The
 template editor loads the template by id (`GET /api/templates/:id`) when it opens and
 sends the version it loaded, then the version each save returns, never the content or
 version in the cached template lists.

@@ -103,7 +103,9 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   inside the outline name the section, task, and content block.
 - Omit an empty slug from create and update payloads rather than sending `""`, and
   omit an update's slug when it is the one already stored, so a stored slug that
-  predates today's rules never blocks a save or moves the URL.
+  predates today's rules never blocks a save or moves the URL. After a save the URL
+  Slug field shows the slug the API returned (suffixed when the requested one was
+  taken, or the kept slug when the field was left empty).
 - Field limits and slug rules live in `src/lib/schemas/templateFields.ts`, shared
   with the API payload schema. The editor schema applies them with messages that
   name the field, and saves are validated before the API call. The URL slug is

@@ -78,8 +78,9 @@ export type TemplateSavePayload = {
   version?: number;
 };
 
-// What PUT /api/templates/:id reports back: the slug it stored (when one was sent) and
-// the template's version after the save, which the next save must send as expected_version.
+// What PUT /api/templates/:id reports back: the slug the template has after the save
+// (the requested one, possibly suffixed, or the one it kept) and the template's version
+// after the save, which the next save must send as expected_version.
 export type TemplateUpdateResult = {
   slug?: string;
   version?: number;

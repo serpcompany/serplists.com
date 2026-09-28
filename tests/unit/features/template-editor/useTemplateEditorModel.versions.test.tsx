@@ -2,7 +2,10 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { useTemplateEditorModel } from '@/features/template-editor/useTemplateEditorModel';
+import {
+  buildTemplateEditorSavedState,
+  useTemplateEditorModel,
+} from '@/features/template-editor/useTemplateEditorModel';
 import { persistTemplateSave, type SaveTemplateInput } from '@/hooks/useTemplateSave';
 import { applyTemplateSaveDefaults } from '@/hooks/useTemplateValidation';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
@@ -158,6 +161,39 @@ describe('useTemplateEditorModel saved values after defaults', () => {
       expect(itemIds(sent[1])).toEqual(itemIds(sent[0]));
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+describe('useTemplateEditorModel saved slug', () => {
+  // A taken slug is stored with a suffix; the SEO panel must show that, not the request.
+  it('shows the slug the server stored, suffix included', async () => {
+    const saveTemplate = vi.fn().mockResolvedValue({
+      success: true,
+      errors: [],
+      version: 2,
+      slug: 'moving-checklist-1a2b3c4d',
+    });
+    const model = captureModel('template-1', saveTemplate);
+
+    const result = await model.save(
+      buildTemplateEditorFormValues({ title: 'Moving', seoUrl: 'Moving Checklist' }),
+    );
+
+    expect(saveTemplate).toHaveBeenCalledWith(expect.objectContaining({ seoUrl: 'moving-checklist' }));
+    expect(result.savedValues?.seoUrl).toBe('moving-checklist-1a2b3c4d');
+  });
+
+  // A cleared (or all-symbol) slug field sends no slug, and the template keeps its slug.
+  it('shows the slug the template kept when the field was cleared', () => {
+    for (const typed of ['', '!!!']) {
+      const saved = buildTemplateEditorSavedState(
+        buildTemplateEditorFormValues({ title: 'Moving', seoUrl: typed }),
+        { storedSlug: 'moving-checklist' },
+      );
+
+      expect(saved.initialValues.seoUrl).toBe('moving-checklist');
+      expect(saved.templateSlug).toBe('moving-checklist');
     }
   });
 });

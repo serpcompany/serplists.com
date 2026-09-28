@@ -165,6 +165,19 @@ describe("persistTemplateSave", () => {
     expect(result.saved).toEqual({ title: sent.title, sections: sent.sections });
   });
 
+  it("returns the slug the server stored, which may carry a suffix", async () => {
+    const dependencies = buildDependencies({
+      updateTemplate: vi.fn().mockResolvedValue({ slug: "moving-checklist-1a2b3c4d", version: 6 }),
+    });
+
+    const result = await persistTemplateSave(
+      dependencies,
+      buildInput({ id: "template-1", expectedVersion: 5, seoUrl: "moving-checklist" }),
+    );
+
+    expect(result.slug).toBe("moving-checklist-1a2b3c4d");
+  });
+
   it("refuses to update without a loaded version instead of skipping the conflict check", async () => {
     const dependencies = buildDependencies();
 
