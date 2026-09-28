@@ -120,12 +120,19 @@ describe("getPersonalBillingAction", () => {
     expect(getPersonalBillingAction(undefined)).toBe("upgrade");
   });
 
-  it.each(["active", "trialing", "past_due", "unpaid", "paused", "incomplete"])(
+  it.each(["active", "trialing", "past_due", "unpaid", "paused"])(
     "manages an open %s subscription instead of starting a second one",
     (subscriptionStatus) => {
       expect(getPersonalBillingAction({ plan: "free", subscriptionStatus })).toBe("manage");
     },
   );
+
+  it("offers checkout again when the first payment did not go through", () => {
+    // Checkout sends the buyer back to the session that can still pay it; the Customer
+    // Portal cannot.
+    expect(getPersonalBillingAction({ plan: "free", subscriptionStatus: "incomplete", canManageBilling: true }))
+      .toBe("upgrade");
+  });
 
   it("manages Pro", () => {
     expect(getPersonalBillingAction({ plan: "pro", canManageBilling: true })).toBe("manage");

@@ -31,6 +31,8 @@ type StripeSession = {
   created: number;
   expires_at: number;
   metadata: Record<string, string>;
+  /** The subscription Stripe created when the buyer submitted payment, if any. */
+  subscription: string | null;
 };
 
 let d1: SqliteD1;
@@ -72,6 +74,7 @@ function addSession(overrides: Partial<StripeSession> = {}): StripeSession {
     created: nowSeconds(),
     expires_at: nowSeconds() + DAY_SECONDS,
     metadata: { userId: USER_ID },
+    subscription: null,
     ...overrides,
   };
   sessions.push(session);
@@ -105,6 +108,10 @@ function stripeMock(input: RequestInfo | URL, init?: RequestInit): Response {
     }
     session.status = "expired";
     session.url = null;
+    // Expiring a session cancels the incomplete subscription it opened.
+    stripeSubscriptions = stripeSubscriptions.filter(
+      (subscription) => (subscription as { id: string }).id !== session.subscription,
+    );
     return jsonResponse(session);
   }
   if (method === "POST" && url.pathname === "/v1/checkout/sessions") {
@@ -140,6 +147,33 @@ function stripeCalls(): string[] {
     const url = new URL(String(input));
     return `${(init as RequestInit | undefined)?.method ?? "GET"} ${url.pathname}`;
   });
+}
+
+function stripeSubscription(id: string, status: string) {
+  return {
+    id,
+    object: "subscription",
+    customer: CUSTOMER_ID,
+    status,
+    metadata: { userId: USER_ID },
+    items: { data: [{ current_period_end: 1_900_000_000, price: { id: "price_pro" } }] },
+  };
+}
+
+/** A row the customer.subscription.created webhook stored. */
+function storeSubscription(id: string, status: string) {
+  d1.sqlite.prepare(`
+    INSERT INTO stripe_subscriptions (
+      stripe_subscription_id, user_id, stripe_customer_id, price_id, status, created_at, updated_at
+    ) VALUES (?, ?, ?, 'price_pro', ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
+  `).run(id, USER_ID, CUSTOMER_ID, status);
+}
+
+/** The buyer's card is declined in `session`: Stripe leaves its subscription incomplete. */
+function declinePayment(session: StripeSession, subscriptionId: string, { stored = true } = {}) {
+  session.subscription = subscriptionId;
+  stripeSubscriptions.push(stripeSubscription(subscriptionId, "incomplete"));
+  if (stored) storeSubscription(subscriptionId, "incomplete");
 }
 
 const openSessions = () => sessions.filter((session) => session.status === "open");
@@ -324,5 +358,96 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
     expect((await checkout()).status).toBe(503);
 
     expect(sessionCreates()).toEqual([]);
+  });
+});
+
+describe("POST /api/billing/checkout after a first payment did not go through", () => {
+  // Checkout creates the subscription when the buyer submits payment. A declined card or
+  // an abandoned 3DS step leaves it incomplete while its session stays open, and only a
+  // retry in that session can pay it: the Customer Portal cannot.
+
+  it("sends the buyer back to the session that holds the incomplete subscription", async () => {
+    const first = await checkout();
+    declinePayment(sessions[0], "sub_1");
+    advanceMinutes(10);
+    fetchMock.mockClear();
+
+    const retry = await checkout();
+
+    expect(retry.status).toBe(200);
+    expect(retry.body.url).toBe(first.body.url);
+    expect(sessionCreates()).toEqual([]);
+    expect(stripeCalls().some((call) => call.endsWith("/expire"))).toBe(false);
+    expect(openSessions()).toHaveLength(1);
+  });
+
+  it("does the same before the webhook has stored the subscription", async () => {
+    const first = await checkout();
+    declinePayment(sessions[0], "sub_1", { stored: false });
+    advanceMinutes(10);
+
+    const retry = await checkout();
+
+    expect(retry.status).toBe(200);
+    expect(retry.body.url).toBe(first.body.url);
+  });
+
+  it("replaces a session about to expire once expiring it has canceled its subscription", async () => {
+    await checkout();
+    const [declined] = sessions;
+    declinePayment(declined, "sub_1");
+    advanceMinutes(24 * 60 - 30);
+
+    const retry = await checkout();
+
+    expect(retry.status).toBe(200);
+    expect(declined.status).toBe("expired");
+    expect(retry.body.url).not.toBe(`https://checkout.stripe.test/${declined.id}`);
+    expect(openSessions()).toHaveLength(1);
+  });
+
+  it("refuses without the Customer Portal while an incomplete subscription has no open session", async () => {
+    // A first payment still processing, for example.
+    stripeSubscriptions = [stripeSubscription("sub_1", "incomplete")];
+    storeSubscription("sub_1", "incomplete");
+
+    const result = await checkout();
+
+    expect(result.status).toBe(409);
+    expect(result.body.code).toBe("checkout_incomplete");
+    expect(sessionCreates()).toEqual([]);
+  });
+
+  it("does not reuse the session when another subscription is paid", async () => {
+    await checkout();
+    declinePayment(sessions[0], "sub_1");
+    stripeSubscriptions.push(stripeSubscription("sub_paid", "active"));
+
+    const result = await checkout();
+
+    expect(result.status).toBe(409);
+    expect(result.body.code).toBe("already_subscribed");
+  });
+
+  it("keeps sending a failed renewal to the Customer Portal even with a session open", async () => {
+    await checkout();
+    declinePayment(sessions[0], "sub_1");
+    stripeSubscriptions.push(stripeSubscription("sub_old", "past_due"));
+
+    const result = await checkout();
+
+    expect(result.status).toBe(409);
+    expect(result.body.code).toBe("subscription_needs_attention");
+  });
+
+  it("refuses without a Stripe customer to check", async () => {
+    d1.sqlite.exec("DELETE FROM stripe_customers");
+    storeSubscription("sub_1", "incomplete");
+
+    const result = await checkout();
+
+    expect(result.status).toBe(409);
+    expect(result.body.code).toBe("checkout_incomplete");
+    expect(stripeCalls()).toEqual([]);
   });
 });

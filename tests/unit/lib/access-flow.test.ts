@@ -71,6 +71,18 @@ describe('startBillingCheckout', () => {
     expect(toastMocks.message).toHaveBeenCalledWith('Your Pro subscription needs attention.');
   });
 
+  it('explains an unfinished earlier checkout without opening the Customer Portal', async () => {
+    apiMocks.createBillingCheckout.mockRejectedValueOnce(createApiError(409, {
+      error: 'Your previous checkout has not finished yet. Try again later.',
+      code: 'checkout_incomplete',
+    }));
+
+    await expect(startBillingCheckout(true)).resolves.toBe(false);
+
+    expect(apiMocks.createBillingPortal).not.toHaveBeenCalled();
+    expect(toastMocks.error).toHaveBeenCalledWith('Your previous checkout has not finished yet. Try again later.');
+  });
+
   it('shows the error when the Customer Portal cannot open', async () => {
     apiMocks.createBillingCheckout.mockRejectedValueOnce(createApiError(409, {
       error: 'Your Pro subscription needs attention.',

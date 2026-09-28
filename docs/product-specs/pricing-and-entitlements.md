@@ -116,8 +116,13 @@ instead of inferring access state from message text:
   All of these responses come from `functions/api/utils/limit-reached.ts`.
 - `503 billing_unavailable` means checkout cannot currently be started.
 - `409 already_subscribed` means the User already has Pro or a paid subscription.
-- `409 subscription_needs_attention` means an open subscription is not paid up;
-  the client opens the Customer Portal instead of a second Checkout.
+- `409 subscription_needs_attention` means an open subscription is not paid up
+  (`past_due`, `unpaid`, `paused`); the client opens the Customer Portal instead of
+  a second Checkout.
+- `409 checkout_incomplete` means an earlier checkout's first payment has not gone
+  through and its Checkout Session can no longer be offered (for example, the
+  payment is still processing); the client shows the message and never opens the
+  Customer Portal.
 - `409 plan_managed_by_support` means a manual Free override sets the Personal
   plan, so self-serve checkout is closed.
 - `409 billing_customer_missing` means Stripe no longer has the User's billing
@@ -130,9 +135,12 @@ instead of inferring access state from message text:
 ### Subscription status
 
 Only `active` and `trialing` Stripe subscriptions grant Pro. A `past_due`,
-`unpaid`, `paused`, or `incomplete` subscription resolves to Free, but it still
-blocks a new Checkout, and Billing shows a notice with Manage subscription so the
-User can fix the payment in the Customer Portal. Whether `past_due` should keep
+`unpaid`, `paused`, or `incomplete` subscription resolves to Free. The first three
+block a new Checkout, and Billing shows a notice with Manage subscription so the
+User can fix the payment in the Customer Portal. An `incomplete` subscription is a
+first payment that did not go through in Checkout (a declined card or an abandoned
+3DS step), which the Customer Portal cannot pay: Billing and Pricing keep offering
+Upgrade, and checkout sends the User back to the Checkout Session that holds it. Whether `past_due` should keep
 Pro during Stripe's retry window is an open product decision; change it here
 first if it is made.
 

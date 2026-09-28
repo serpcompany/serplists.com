@@ -126,7 +126,7 @@ afterEach(() => {
 });
 
 describe("POST /api/billing/checkout with an existing Stripe subscription", () => {
-  it.each(["past_due", "unpaid", "paused", "incomplete"])(
+  it.each(["past_due", "unpaid", "paused"])(
     "returns 409 subscription_needs_attention for a %s subscription and never calls Stripe",
     async (status) => {
       insertSubscription("sub_1", status);
@@ -138,6 +138,16 @@ describe("POST /api/billing/checkout with an existing Stripe subscription", () =
       expect(stripeCalls()).toEqual([]);
     },
   );
+
+  it("asks Stripe about a stored incomplete subscription, whose first payment only Checkout can finish", async () => {
+    // Expiring its Checkout Session canceled it; the webhook has not arrived yet.
+    insertSubscription("sub_1", "incomplete");
+
+    const result = await checkout();
+
+    expect(result.status).toBe(200);
+    expect(stripeCalls()).toEqual([LIST_OPEN_SESSIONS, LIST_SUBSCRIPTIONS, CREATE_SESSION]);
+  });
 
   it("returns 409 already_subscribed for an active subscription on a listed legacy price", async () => {
     insertSubscription("sub_1", "active", "price_old");
@@ -217,7 +227,18 @@ describe("POST /api/billing/checkout when Stripe knows a subscription D1 does no
     expect(stripeCalls()).not.toContain(CREATE_SESSION);
   });
 
-  it.each(["past_due", "unpaid", "paused", "incomplete"])(
+  it("returns 409 checkout_incomplete, not the Customer Portal, for an incomplete subscription no session holds", async () => {
+    stripeSubscriptions = { data: [stripeSubscription("sub_open", "incomplete")], has_more: false };
+
+    const result = await checkout();
+
+    expect(result.status).toBe(409);
+    expect(result.body.code).toBe("checkout_incomplete");
+    expect(stripeCalls()).not.toContain(CREATE_SESSION);
+    expect((await billingStatus()).subscriptionStatus).toBe("incomplete");
+  });
+
+  it.each(["past_due", "unpaid", "paused"])(
     "returns 409 subscription_needs_attention for a %s subscription",
     async (status) => {
       stripeSubscriptions = { data: [stripeSubscription("sub_open", status)], has_more: false };
@@ -252,6 +273,15 @@ describe("POST /api/billing/checkout when Stripe knows a subscription D1 does no
 
   it("fails closed when the list is incomplete and shows nothing open", async () => {
     stripeSubscriptions = { data: [stripeSubscription("sub_expired", "incomplete_expired")], has_more: true };
+
+    const result = await checkout();
+
+    expect(result.status).toBe(503);
+    expect(stripeCalls()).not.toContain(CREATE_SESSION);
+  });
+
+  it("fails closed when the list is incomplete and shows only an unfinished first payment", async () => {
+    stripeSubscriptions = { data: [stripeSubscription("sub_open", "incomplete")], has_more: true };
 
     const result = await checkout();
 

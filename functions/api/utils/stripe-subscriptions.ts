@@ -166,17 +166,17 @@ export async function retrieveSubscription(
 }
 
 /**
- * Asks Stripe for a customer's subscriptions, stores them, and returns the most urgent
- * open status. D1 only learns about subscriptions from webhooks, which can lag or fail,
- * so Checkout checks here before selling a second subscription. Throws when Stripe
- * cannot answer, or when the list is incomplete and shows nothing open.
+ * Asks Stripe for a customer's subscriptions, stores them, and returns the open ones.
+ * D1 only learns about subscriptions from webhooks, which can lag or fail, so Checkout
+ * checks here before selling a second subscription. Throws when Stripe cannot answer,
+ * or when the list is incomplete and shows nothing open that blocks Checkout.
  */
 export async function syncCustomerSubscriptions(
   env: Env,
   secretKey: string,
   userId: string,
   stripeCustomerId: string,
-): Promise<string | null> {
+): Promise<SubscriptionSnapshot[]> {
   // Stripe's default filter leaves out canceled subscriptions, so the list stays short.
   const body = await stripeGet(
     secretKey,
@@ -189,8 +189,12 @@ export async function syncCustomerSubscriptions(
   }
   const found = subscriptions.filter((subscription): subscription is SubscriptionSnapshot => subscription !== null);
 
-  const openStatus = mostUrgentOpenStatus(found.map((subscription) => subscription.status));
-  if (!openStatus && list.has_more) {
+  // An `incomplete` subscription may not block Checkout on its own (its session can be
+  // reused), so a partial list must show something else open.
+  const blocking = found.filter(
+    (subscription) => !isTerminalSubscriptionStatus(subscription.status) && subscription.status !== "incomplete",
+  );
+  if (blocking.length === 0 && list.has_more) {
     throw new Error("Stripe returned an incomplete subscription list");
   }
 
@@ -203,7 +207,7 @@ export async function syncCustomerSubscriptions(
       ...rest.map((subscription) => upsertStripeSubscription(db, userId, subscription, nowIso)),
     ]);
   }
-  return openStatus;
+  return found.filter((subscription) => !isTerminalSubscriptionStatus(subscription.status));
 }
 
 /**

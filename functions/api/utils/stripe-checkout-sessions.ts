@@ -13,6 +13,12 @@ const checkoutSessionSchema = z
     url: z.string().nullish(),
     expires_at: z.number(),
     metadata: z.record(z.unknown()).nullish(),
+    // The subscription Stripe created when the buyer submitted payment: an id, or the
+    // object when expanded.
+    subscription: z
+      .union([z.string().min(1), z.object({ id: z.string().min(1) }).passthrough()])
+      .nullish()
+      .transform((value) => (typeof value === "object" && value !== null ? value.id : value ?? null)),
   })
   .passthrough();
 
@@ -31,8 +37,11 @@ export type CheckoutSessionMatch = {
 };
 
 export type OpenCheckoutSessions =
-  /** One open session matches this checkout; every other one was expired. */
-  | { kind: "reuse"; url: string }
+  /**
+   * One open session matches this checkout; every other one was expired. subscriptionId
+   * is the incomplete subscription a declined or abandoned payment in it left, if any.
+   */
+  | { kind: "reuse"; url: string; subscriptionId: string | null }
   /** No session is open any more: start a new one. */
   | { kind: "none" }
   /** A session left the open state while it was being expired (paid, or expired by a concurrent request). */
@@ -90,5 +99,5 @@ export async function settleOpenCheckoutSessions(
     log("info", "stripe_checkout_session_expired", { stripeCheckoutSessionId: session.id });
   }
 
-  return reusable?.url ? { kind: "reuse", url: reusable.url } : { kind: "none" };
+  return reusable?.url ? { kind: "reuse", url: reusable.url, subscriptionId: reusable.subscription } : { kind: "none" };
 }

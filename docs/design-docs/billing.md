@@ -147,11 +147,24 @@ Authenticated:
 - `POST /api/billing/checkout` → returns `{ url }` to redirect user to Stripe Checkout.
   It returns `409 already_subscribed` when the user has Pro or an `active` or
   `trialing` subscription on any price, and `409 subscription_needs_attention`
-  when an open subscription is not paid up (`past_due`, `unpaid`, `paused`,
-  `incomplete`). Only `canceled` and `incomplete_expired` subscriptions allow a
+  when an open subscription is not paid up (`past_due`, `unpaid`, `paused`).
+  Only `canceled` and `incomplete_expired` subscriptions allow a
   new Checkout, because Stripe would bill both subscriptions. The client opens the
   Customer Portal on `subscription_needs_attention`, and Billing and Pricing
-  refetch billing status on either `409`. An active manual override
+  refetch billing status on either `409`.
+  An `incomplete` subscription is different: Checkout creates the subscription
+  when the buyer submits payment, and a declined card or an abandoned 3DS step
+  leaves it `incomplete` while its session stays open. Only a retry in that
+  session can pay its first invoice (the Customer Portal cannot), and expiring
+  the session cancels it. So a stored `incomplete` status does not refuse
+  checkout on its own: checkout settles the open sessions and asks Stripe as
+  below, and when every open subscription is `incomplete` and held by the
+  session it keeps for reuse (`subscription` on the session), it returns that
+  session's URL. An `incomplete` subscription no kept session holds (a payment
+  still processing, or a cancel Stripe has not applied yet) returns
+  `409 checkout_incomplete`, which the client shows without opening the portal;
+  so does a stored `incomplete` status with no Stripe customer to ask. Billing and
+  Pricing keep offering Upgrade for an `incomplete` status. An active manual override
   returns `409 plan_managed_by_support` before any Stripe call.
   Stored rows come from webhooks, which can lag or fail, so when D1 shows no
   open subscription and the user has a Stripe customer, checkout also lists the

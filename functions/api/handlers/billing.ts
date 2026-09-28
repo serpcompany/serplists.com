@@ -19,7 +19,9 @@ import { log } from "../utils/logger";
 import {
   getPersonalSubscriptionSummary,
   isPaidSubscriptionStatus,
+  mostUrgentOpenStatus,
   syncCustomerSubscriptions,
+  type SubscriptionSnapshot,
 } from "../utils/stripe-subscriptions";
 import { canViewTeam, getActiveTeamMembership, normalizeTeamRole } from "../utils/team-access";
 
@@ -63,6 +65,12 @@ function billingUnavailable(): Response {
   });
 }
 
+function checkoutIncomplete(): Response {
+  return jsonError("Your previous checkout has not finished yet. Try again later.", 409, {
+    code: "checkout_incomplete",
+  });
+}
+
 /**
  * A subscription on any price, paid or not, blocks a second one: Stripe would bill
  * both, and a failed payment is fixed in the Customer Portal instead.
@@ -75,6 +83,25 @@ function openSubscriptionConflict(openStatus: string | null): Response | null {
     409,
     { code: "subscription_needs_attention" },
   );
+}
+
+/**
+ * The checkout decision from the subscriptions Stripe lists as open. An `incomplete` one
+ * is a Checkout first payment that did not go through (a declined card or an abandoned
+ * 3DS step). The Customer Portal cannot pay it, but a retry in its own open session
+ * activates that same subscription, so that session is reused. Expiring a session
+ * cancels its incomplete subscription; one no reusable session holds still blocks.
+ */
+function stripeSubscriptionConflict(
+  open: SubscriptionSnapshot[],
+  reusableSubscriptionId: string | null,
+): Response | null {
+  const unfinished = open.filter((subscription) => subscription.status === "incomplete");
+  const others = open.filter((subscription) => subscription.status !== "incomplete");
+  const conflict = openSubscriptionConflict(mostUrgentOpenStatus(others.map((subscription) => subscription.status)));
+  if (conflict) return conflict;
+  const resumable = unfinished.every((subscription) => subscription.id === reusableSubscriptionId);
+  return resumable ? null : checkoutIncomplete();
 }
 
 /** Starts a Personal Pro Checkout Session, or explains why the user cannot buy one. */
@@ -93,7 +120,9 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
   }
 
   const { openStatus } = await getPersonalSubscriptionSummary(env, userId);
-  const storedConflict = openSubscriptionConflict(openStatus);
+  // Stripe decides below whether an unfinished first payment can be resumed.
+  const storedIncomplete = openStatus === "incomplete";
+  const storedConflict = storedIncomplete ? null : openSubscriptionConflict(openStatus);
   if (storedConflict) return storedConflict;
 
   const db = createDb(env);
@@ -112,6 +141,8 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
   let stripeCustomerId: string;
   // An open Checkout Session for this same checkout, sent back instead of a new one.
   let reusableSessionUrl: string | null = null;
+  // The incomplete subscription a declined payment in that session left, if any.
+  let reusableSubscriptionId: string | null = null;
   // A stored customer can be gone from Stripe (deleted, or from the other mode's keys).
   // It is replaced at most once per request, and only when Stripe says it is missing.
   let canReplaceCustomer = false;
@@ -129,7 +160,10 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
         nowSeconds: Math.floor(Date.now() / 1000),
       });
       if (openSessions.kind === "changed") return checkoutInProgress();
-      if (openSessions.kind === "reuse") reusableSessionUrl = openSessions.url;
+      if (openSessions.kind === "reuse") {
+        reusableSessionUrl = openSessions.url;
+        reusableSubscriptionId = openSessions.subscriptionId;
+      }
     } catch (error) {
       log("error", "stripe_open_checkout_check_failed", {
         userId,
@@ -139,9 +173,9 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
     }
     // D1 learns about subscriptions from webhooks, which can lag or fail, so ask
     // Stripe too. Fail closed: a missed subscription would be billed twice.
-    let stripeOpenStatus: string | null = null;
+    let stripeOpenSubscriptions: SubscriptionSnapshot[] = [];
     try {
-      stripeOpenStatus = await syncCustomerSubscriptions(env, secretKey, userId, stripeCustomerId);
+      stripeOpenSubscriptions = await syncCustomerSubscriptions(env, secretKey, userId, stripeCustomerId);
     } catch (error) {
       if (!isMissingStripeCustomer(error)) {
         log("error", "stripe_subscription_check_failed", {
@@ -154,10 +188,15 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
       stripeCustomerId = await replaceMissingStripeCustomer(db, secretKey, userId, stripeCustomerId);
       canReplaceCustomer = false;
       reusableSessionUrl = null;
+      reusableSubscriptionId = null;
     }
-    const stripeConflict = openSubscriptionConflict(stripeOpenStatus);
+    const stripeConflict = stripeSubscriptionConflict(stripeOpenSubscriptions, reusableSubscriptionId);
     if (stripeConflict) return stripeConflict;
     if (reusableSessionUrl) return json({ url: reusableSessionUrl });
+  } else if (storedIncomplete) {
+    // Webhooks store the customer with the subscription, so this should not happen:
+    // with no customer to ask Stripe about, refuse rather than risk a second one.
+    return checkoutIncomplete();
   } else {
     // The idempotency key makes concurrent first checkouts share one Stripe customer.
     const createdCustomerId = await createStripeCustomer(db, secretKey, userId, `customer-${userId}`);

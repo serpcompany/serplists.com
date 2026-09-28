@@ -110,6 +110,19 @@ describe('BillingSection', () => {
     expect(html).not.toContain('Upgrade to Pro');
   });
 
+  it('offers Upgrade again after a first payment did not go through in Checkout', () => {
+    const html = renderBillingSection({
+      billingEnabled: true,
+      plan: 'free',
+      subscriptionStatus: 'incomplete',
+      canManageBilling: true,
+    });
+
+    expect(html).toContain('Upgrade to Pro — $9/month');
+    expect(html).not.toContain('needs attention');
+    expect(html).not.toContain('Manage subscription');
+  });
+
   it('does not offer checkout when support manages the plan', () => {
     const html = renderBillingSection({
       billingEnabled: true,

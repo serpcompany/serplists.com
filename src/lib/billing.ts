@@ -109,12 +109,14 @@ const FAILED_PAYMENT_SUBSCRIPTION_STATUSES = new Set(["past_due", "unpaid"]);
  * When support manages the plan there is no self-serve action, except the portal for
  * an existing Stripe customer so a subscription can still be canceled. Pro without a
  * Stripe customer has no portal to open, so it is left to support too. A status
- * without canManageBilling keeps the portal.
+ * without canManageBilling keeps the portal. An `incomplete` subscription is a first
+ * payment that did not go through in Checkout: the portal cannot pay it, and checkout
+ * sends the user back to the Checkout Session that can.
  */
 export const getPersonalBillingAction = (status?: BillingStatus | null): "manage" | "upgrade" | "support" => {
   if (status?.managedBySupport) return "support";
   if (status?.plan === "pro") return status.canManageBilling === false ? "support" : "manage";
-  return status?.subscriptionStatus ? "manage" : "upgrade";
+  return status?.subscriptionStatus && status.subscriptionStatus !== "incomplete" ? "manage" : "upgrade";
 };
 
 /** Explains an open subscription that is not paid up, or returns null. */
