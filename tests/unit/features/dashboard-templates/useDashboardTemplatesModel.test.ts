@@ -6,6 +6,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 
 import { Layout } from '@/components/Layout';
 import { BILLING_UNAVAILABLE_MESSAGE, createApiError } from '@/lib/api-errors';
+import { buildDefaultRunName } from '@/lib/runName';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import {
@@ -280,6 +281,7 @@ describe('createDashboardTemplateRun', () => {
       {
         runName: 'Audit sprint',
         templateId: 'template-1',
+        templateTitle: 'Content Audit',
       },
       { createRun },
     );
@@ -294,12 +296,43 @@ describe('createDashboardTemplateRun', () => {
     });
   });
 
+  it('names a run left blank after the template and start time, as the dialog shows', async () => {
+    const createRun = vi.fn().mockResolvedValue({ id: 'run-10' });
+    const now = new Date('2026-09-28T10:15:00.000Z');
+
+    for (const runName of [undefined, '', '   ']) {
+      createRun.mockClear();
+      await createDashboardTemplateRun(
+        { now, runName, templateId: 'template-1', templateTitle: 'Moving Checklist' },
+        { createRun },
+      );
+
+      expect(createRun).toHaveBeenCalledWith({
+        templateId: 'template-1',
+        runName: buildDefaultRunName('Moving Checklist', now),
+      });
+    }
+    expect(buildDefaultRunName('Moving Checklist', now)).toMatch(/^Moving Checklist - /);
+  });
+
+  it('trims a typed run name', async () => {
+    const createRun = vi.fn().mockResolvedValue({ id: 'run-11' });
+
+    await createDashboardTemplateRun(
+      { runName: '  Spring move  ', templateId: 'template-1', templateTitle: 'Moving Checklist' },
+      { createRun },
+    );
+
+    expect(createRun).toHaveBeenCalledWith({ templateId: 'template-1', runName: 'Spring move' });
+  });
+
   it('returns an error when the run mutation resolves without an id', async () => {
     const createRun = vi.fn().mockResolvedValue(null);
 
     const result = await createDashboardTemplateRun(
       {
         templateId: 'template-1',
+        templateTitle: 'Content Audit',
       },
       { createRun },
     );
@@ -316,6 +349,7 @@ describe('createDashboardTemplateRun', () => {
     const result = await createDashboardTemplateRun(
       {
         templateId: 'template-1',
+        templateTitle: 'Content Audit',
       },
       { createRun },
     );
@@ -333,7 +367,7 @@ describe('createDashboardTemplateRun access failures', () => {
 
   const runWithFailure = (error: unknown) =>
     createDashboardTemplateRun(
-      { templateId: 'template-1' },
+      { templateId: 'template-1', templateTitle: 'Content Audit' },
       { createRun: vi.fn().mockRejectedValue(error) },
     );
 

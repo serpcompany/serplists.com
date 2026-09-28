@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { buildDefaultRunName, resolveRunName } from "@/lib/runName";
 
 interface RunNameDialogProps {
   open: boolean;
@@ -28,12 +29,11 @@ export const RunNameDialog: React.FC<RunNameDialogProps> = ({
 }) => {
   const [runName, setRunName] = useState("");
   
-  const defaultName = `${templateTitle} - ${new Date().toLocaleString()}`;
+  const defaultName = buildDefaultRunName(templateTitle);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalName = runName.trim() || defaultName;
-    onConfirm(finalName);
+    onConfirm(resolveRunName(runName, templateTitle));
     setRunName("");
   };
 

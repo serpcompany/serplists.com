@@ -40,6 +40,7 @@ import {
   useDashboardTemplatesModel,
 } from '@/features/dashboard-templates/useDashboardTemplatesModel';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
+import { MAX_RUN_TITLE_LENGTH, buildDefaultRunName } from '@/lib/runName';
 import { compareTemplatesByRecent } from '@/lib/templates/templateRecency';
 import {
   handleUpgradeRequiredForContext,
@@ -67,8 +68,9 @@ const Templates = () => {
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
   const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
 
+  // A blank name submits this same default (see resolveRunName).
   const defaultRunName = model.selectedTemplate
-    ? `${model.selectedTemplate.title} - ${new Date().toLocaleString()}`
+    ? buildDefaultRunName(model.selectedTemplate.title)
     : '';
 
   const filteredTemplates = useMemo(() => {
@@ -142,7 +144,7 @@ const Templates = () => {
       return;
     }
 
-    const result = await model.createRunFromTemplate(runName.trim() || undefined);
+    const result = await model.createRunFromTemplate(runName);
 
     if (result.kind === 'ok') {
       setRunName('');
@@ -340,6 +342,7 @@ const Templates = () => {
                 value={runName}
                 onChange={(event) => setRunName(event.target.value)}
                 placeholder={defaultRunName}
+                maxLength={MAX_RUN_TITLE_LENGTH}
                 className="rounded-md"
               />
             </div>

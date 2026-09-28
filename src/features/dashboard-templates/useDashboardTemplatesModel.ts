@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplateLists } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { getAccessFailure } from '@/lib/api-errors';
+import { resolveRunName } from '@/lib/runName';
 import {
   buildConsoleRunPath,
   buildConsoleTemplateCreatePath,
@@ -29,8 +30,11 @@ type DashboardTemplatesStateOptions = {
 };
 
 type DashboardTemplateRunOptions = {
+  now?: Date;
+  /** What the user typed; blank means the default name the dialog shows. */
   runName?: string;
   templateId: string;
+  templateTitle: string;
 };
 
 type DashboardTemplateRunDependencies = {
@@ -140,7 +144,7 @@ export const createDashboardTemplateRun = async (
   try {
     const run = await dependencies.createRun({
       templateId: options.templateId,
-      runName: options.runName,
+      runName: resolveRunName(options.runName, options.templateTitle, options.now),
     });
 
     if (!run?.id) {
@@ -271,7 +275,7 @@ export const useDashboardTemplatesModel = (
   const createRunFromTemplate = async (
     runName?: string,
   ): Promise<DashboardTemplateRunResult> => {
-    if (!selectedTemplateId) {
+    if (!selectedTemplate) {
       return {
         kind: 'error',
         message: 'Select a template before starting a run.',
@@ -280,9 +284,11 @@ export const useDashboardTemplatesModel = (
 
     setIsCreatingRun(true);
     try {
+      // Name the run from the template selected at submit time.
       const result = await createDashboardTemplateRun(
         {
-          templateId: selectedTemplateId,
+          templateId: selectedTemplate.id,
+          templateTitle: selectedTemplate.title,
           runName,
         },
         { createRun },
