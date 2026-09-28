@@ -281,27 +281,31 @@ export function WorkspaceProvider({
     [rememberTeam, refreshTeams, selectWorkspace],
   );
 
-  const isTeamWorkspace = activeWorkspace.type === 'team';
-  const activeTeamId = isTeamWorkspace ? activeWorkspace.teamId : undefined;
-  const teamRole = isTeamWorkspace ? activeWorkspace.role : undefined;
+  const isWorkspaceLoading = isAuthLoading || teamsQuery.isLoading;
 
-  const value: WorkspaceContextValue = {
-    activeTeamId,
-    activeWorkspace,
-    activeWorkspaceId: activeWorkspace.id,
-    canEditTemplates: teamRole ? canRoleEditTemplates(teamRole) : true,
-    canManageTeam: teamRole ? canRoleManageTeam(teamRole) : false,
-    canRunTemplates: teamRole ? canRoleRunTemplates(teamRole) : true,
-    createTeam,
-    isTeamWorkspace,
-    isWorkspaceLoading: isAuthLoading || teamsQuery.isLoading,
-    refreshTeams,
-    rememberTeam,
-    selectWorkspace,
-    teams,
-    workspaces,
-    workspaceScopeId: activeWorkspace.id,
-  };
+  // Memoized so a background teams refetch (isFetching toggles on window focus) does not
+  // re-render every consumer.
+  const value = useMemo<WorkspaceContextValue>(() => {
+    const isTeamWorkspace = activeWorkspace.type === 'team';
+    const teamRole = isTeamWorkspace ? activeWorkspace.role : undefined;
+    return {
+      activeTeamId: isTeamWorkspace ? activeWorkspace.teamId : undefined,
+      activeWorkspace,
+      activeWorkspaceId: activeWorkspace.id,
+      canEditTemplates: teamRole ? canRoleEditTemplates(teamRole) : true,
+      canManageTeam: teamRole ? canRoleManageTeam(teamRole) : false,
+      canRunTemplates: teamRole ? canRoleRunTemplates(teamRole) : true,
+      createTeam,
+      isTeamWorkspace,
+      isWorkspaceLoading,
+      refreshTeams,
+      rememberTeam,
+      selectWorkspace,
+      teams,
+      workspaces,
+      workspaceScopeId: activeWorkspace.id,
+    };
+  }, [activeWorkspace, createTeam, isWorkspaceLoading, refreshTeams, rememberTeam, selectWorkspace, teams, workspaces]);
 
   return (
     <WorkspaceContext.Provider value={value}>

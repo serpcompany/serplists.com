@@ -55,6 +55,11 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
   the user's own list; once that list has loaded it is the source of truth for the
   user's Personal templates, so a cached catalog copy it lacks (deleted, made private,
   or moved to an Organization) is dropped.
+- Context values and helpers (`getTemplate`, the lists) keep their identity until their
+  data changes, but never key a fetch on them: providers still re-render for unrelated
+  reasons. Template detail pages load through `templateDetailLoader`, which fetches
+  again only for a different template or viewer, shows the page spinner only for a
+  different template, and takes newer versions from the list cache in place.
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.

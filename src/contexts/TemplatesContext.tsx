@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo } from "react";
+import React, { createContext, useCallback, useContext, useMemo } from "react";
 import { useAuth } from "./CloudflareAuthContext";
 import { useWorkspace } from "./WorkspaceContext";
 import { toast } from "sonner";
@@ -39,6 +39,9 @@ import { createTemplateListFetcher, fetchRunList, shouldRetryListFetch, type Tem
 
 const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
 const fetchTemplateList = createTemplateListFetcher(api);
+// Shared empty lists keep `templates`, `allTemplates` and `runs` stable before a list loads.
+const EMPTY_TEMPLATES: ChecklistTemplate[] = [];
+const EMPTY_RUNS: ChecklistRun[] = [];
 
 type TemplateListQuery = UseQueryOptions<ChecklistTemplate[]>;
 type TemplateListQueries = { catalog: TemplateListQuery; workspace: TemplateListQuery; ready: boolean };
@@ -161,20 +164,23 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const queryClient = useQueryClient();
 
   // These observers read whatever useTemplateLists() has loaded, without fetching.
-  const listQueries = buildTemplateListQueries({ ready: !isWorkspaceLoading, userId: user?.id, activeTeamId, workspaceScopeId, fetchList: fetchTemplateList });
-  const { data: catalogApiTemplates = [], isLoading: catalogTemplatesLoading } = useQuery({ ...listQueries.catalog, enabled: false });
-  const { data: loadedWorkspaceTemplates, isLoading: workspaceTemplatesLoading } = useQuery({ ...listQueries.workspace, enabled: false });
-  const workspaceTemplates = useMemo(() => loadedWorkspaceTemplates ?? [], [loadedWorkspaceTemplates]);
-
-  // Runs load on demand too: useTemplateLists({ runs: true }) on the runs page only.
-  const runsQuery: UseQueryOptions<ChecklistRun[]> = {
-    queryKey: ['runs', user?.id, workspaceScopeId],
-    queryFn: async (): Promise<ChecklistRun[]> => (user ? fetchRunList(api, activeTeamId) : []),
-    enabled: listQueries.ready && !!user,
-    staleTime: 5 * 60 * 1000,
-    retry: shouldRetryListFetch,
-  };
-  const { data: runs = [], isLoading: runsLoading } = useQuery({ ...runsQuery, enabled: false });
+  const ready = !isWorkspaceLoading;
+  const listQueryContext = useMemo(() => {
+    const lists = buildTemplateListQueries({ ready, userId: user?.id, activeTeamId, workspaceScopeId, fetchList: fetchTemplateList });
+    // Runs load on demand too: useTemplateLists({ runs: true }) on the runs page only.
+    const runs: UseQueryOptions<ChecklistRun[]> = {
+      queryKey: ['runs', user?.id, workspaceScopeId],
+      queryFn: async (): Promise<ChecklistRun[]> => (user ? fetchRunList(api, activeTeamId) : []),
+      enabled: ready && !!user,
+      staleTime: 5 * 60 * 1000,
+      retry: shouldRetryListFetch,
+    };
+    return { ...lists, runs };
+  }, [activeTeamId, ready, user, workspaceScopeId]);
+  const { data: catalogApiTemplates = EMPTY_TEMPLATES, isLoading: catalogTemplatesLoading } = useQuery({ ...listQueryContext.catalog, enabled: false });
+  const { data: loadedWorkspaceTemplates, isLoading: workspaceTemplatesLoading } = useQuery({ ...listQueryContext.workspace, enabled: false });
+  const workspaceTemplates = loadedWorkspaceTemplates ?? EMPTY_TEMPLATES;
+  const { data: runs = EMPTY_RUNS, isLoading: runsLoading } = useQuery({ ...listQueryContext.runs, enabled: false });
 
   const publicTemplates = useMemo(
     () => mergePublicTemplateCollections(repoTemplates, catalogApiTemplates),
@@ -453,32 +459,25 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   });
 
-  // Helper functions
-  const getTemplate = (id: string): ChecklistTemplate | undefined => {
-    return allTemplates.find((template: { id: unknown }) => template.id === id);
-  };
+  // Helpers and the context value keep their identity until the data they read changes, so
+  // consumers do not re-render (or reload, see templateDetailLoader) on unrelated renders.
+  const getTemplate = useCallback((id: string) => allTemplates.find((template) => template.id === id), [allTemplates]);
+  const getTemplateBySlug = useCallback((slug: string) => allTemplates.find((template) => template.slug === slug), [allTemplates]);
+  const getRun = useCallback((id: string) => runs.find((run) => run.id === id), [runs]);
+  const getRunsForTemplate = useCallback((templateId: string) => runs.filter((run) => run.templateId === templateId), [runs]);
+  const getAllPublicTemplates = useCallback(() => publicTemplates, [publicTemplates]);
 
-  const getRun = (id: string): ChecklistRun | undefined => {
-    return runs.find((run: { id: unknown }) => run.id === id);
-  };
+  // mutateAsync keeps its identity for the life of the provider.
+  const { mutateAsync: createTemplate } = createTemplateMutation;
+  const { mutateAsync: updateTemplate } = updateTemplateMutation;
+  const { mutateAsync: deleteTemplateAsync } = deleteTemplateMutation;
+  const { mutateAsync: createRun } = createRunMutation;
+  const { mutateAsync: updateRun } = updateRunMutation;
+  const { mutateAsync: revalidateRunAsync } = revalidateRunMutation;
+  const { mutateAsync: deleteRunAsync } = deleteRunMutation;
+  const { mutateAsync: importTemplatesAsync } = importTemplatesMutation;
 
-  const getRunsForTemplate = (templateId: string): ChecklistRun[] => {
-    return runs.filter(run => run.templateId === templateId);
-  };
-
-  const getAllPublicTemplates = (): ChecklistTemplate[] => {
-    return publicTemplates;
-  };
-
-  const getTemplateBySlug = (slug: string): ChecklistTemplate | undefined => {
-    return allTemplates.find(template => template.slug === slug);
-  };
-
-  const importTemplatesWrapper = async (templatesData: ChecklistTemplate[], options?: TemplateImportOptions): Promise<TemplateImportSummary> => {
-    return importTemplatesMutation.mutateAsync({ templatesData, options });
-  };
-
-  const value: TemplatesContextProps = {
+  const value = useMemo<TemplatesContextProps>(() => ({
     templates: publicTemplates,
     allTemplates,
     templatesLoading,
@@ -489,25 +488,30 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     getRun,
     getRunsForTemplate,
     getAllPublicTemplates,
-    createTemplate: createTemplateMutation.mutateAsync,
-    updateTemplate: updateTemplateMutation.mutateAsync,
+    createTemplate,
+    updateTemplate,
     deleteTemplate: async (id: string) => {
-      await deleteTemplateMutation.mutateAsync(id);
+      await deleteTemplateAsync(id);
     },
-    createRun: createRunMutation.mutateAsync,
-    updateRun: updateRunMutation.mutateAsync,
+    createRun,
+    updateRun,
     revalidateRun: async (run: ChecklistRun) => {
-      await revalidateRunMutation.mutateAsync(run);
+      await revalidateRunAsync(run);
     },
     deleteRun: async (id: string) => {
-      await deleteRunMutation.mutateAsync(id);
+      await deleteRunAsync(id);
     },
-    importTemplates: importTemplatesWrapper,
-  };
+    importTemplates: (templatesData: ChecklistTemplate[], options?: TemplateImportOptions): Promise<TemplateImportSummary> =>
+      importTemplatesAsync({ templatesData, options }),
+  }), [
+    allTemplates, createRun, createTemplate, deleteRunAsync, deleteTemplateAsync, getAllPublicTemplates, getRun,
+    getRunsForTemplate, getTemplate, getTemplateBySlug, importTemplatesAsync, publicTemplates, revalidateRunAsync,
+    runs, runsLoading, templatesLoading, updateRun, updateTemplate,
+  ]);
 
   return (
     <TemplatesContext.Provider value={value}>
-      <TemplateListQueriesContext.Provider value={{ ...listQueries, runs: runsQuery }}>
+      <TemplateListQueriesContext.Provider value={listQueryContext}>
         {children}
       </TemplateListQueriesContext.Provider>
     </TemplatesContext.Provider>

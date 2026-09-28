@@ -23,9 +23,8 @@ const LEGACY_MAX_LINES = {
   "src/lib/api.ts": 650,
   "src/components/template-editor/SectionSidebar.tsx": 650,
   "src/components/TemplateBackup.tsx": 650,
-  "src/contexts/TemplatesContext.tsx": 600,
+  "src/contexts/TemplatesContext.tsx": 530,
   "src/pages/UserProfile.tsx": 550,
-  "src/features/template-detail/useTemplateDetailModel.ts": 550,
 };
 
 const VOCABULARY_MESSAGE =

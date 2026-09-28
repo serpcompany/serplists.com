@@ -20,6 +20,11 @@ import {
   mapApiTemplateToChecklistTemplate,
   resolveTemplateOwnerProfile,
 } from './templateDetailMappers';
+import {
+  createTemplateDetailLoader,
+  initialTemplateDetailViewState,
+  type TemplateDetailViewState,
+} from './templateDetailLoader';
 
 type TemplateDetailApiClient = Pick<
   typeof api,
@@ -305,16 +310,32 @@ export const saveTemplateToAccount = async (params: {
 export const useTemplateDetailModel = (
   options: UseTemplateDetailModelOptions,
 ) => {
-  const [template, setTemplate] = useState<ChecklistTemplate | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
+  const [view, setView] = useState<TemplateDetailViewState>(initialTemplateDetailViewState);
+  const [loader] = useState(() =>
+    createTemplateDetailLoader({ load: (source) => loadTemplateDetailData(source), onChange: setView }),
+  );
+  const { loading, notFound, template } = view;
   const queryClient = useQueryClient();
-  const cachedTemplates =
-    options.mode === 'public' ? options.cachedTemplates : null;
-  const getCachedTemplate =
-    options.mode === 'private' ? options.getCachedTemplate : null;
-  const publicOwnerUsername =
-    options.mode === 'public' ? options.ownerUsername : undefined;
+
+  // Runs after every render with the latest list data; the loader decides whether to load.
+  useEffect(() => {
+    loader.sync(
+      options.mode === 'public'
+        ? {
+            cachedTemplates: options.cachedTemplates,
+            identifier: options.identifier,
+            mode: 'public',
+            ownerUsername: options.ownerUsername,
+          }
+        : {
+            getCachedTemplate: options.getCachedTemplate,
+            identifier: options.identifier,
+            mode: 'private',
+          },
+      options.userId,
+    );
+  });
+  useEffect(() => () => loader.cancel(), [loader]);
 
   const billing = useQuery({
     queryKey: getBillingStatusQueryKey(options.userId, options.teamId),
@@ -347,51 +368,6 @@ export const useTemplateDetailModel = (
     enabled: canLoadTemplateHistory,
     retry: false,
   });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadTemplate = async () => {
-      setLoading(true);
-      setNotFound(false);
-
-      const result = await loadTemplateDetailData(
-        options.mode === 'public'
-          ? {
-              cachedTemplates: cachedTemplates ?? [],
-              identifier: options.identifier,
-              mode: 'public',
-              ownerUsername: publicOwnerUsername,
-            }
-          : {
-              getCachedTemplate:
-                getCachedTemplate ?? (() => undefined),
-              identifier: options.identifier,
-              mode: 'private',
-            },
-      );
-
-      if (cancelled) {
-        return;
-      }
-
-      setTemplate(result.template);
-      setNotFound(result.notFound);
-      setLoading(false);
-    };
-
-    void loadTemplate();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    cachedTemplates,
-    getCachedTemplate,
-    options.identifier,
-    options.mode,
-    publicOwnerUsername,
-  ]);
 
   const invalidateTemplates = async () => {
     if (!options.userId) {
@@ -474,7 +450,7 @@ export const useTemplateDetailModel = (
         };
       }
 
-      setTemplate(nextTemplate);
+      loader.setTemplate(nextTemplate);
       await invalidateTemplates();
 
       return {
