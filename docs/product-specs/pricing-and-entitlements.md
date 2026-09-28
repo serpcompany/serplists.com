@@ -38,7 +38,7 @@ Current Free limits:
 - 1 personal template.
 - 3 active personal runs.
 
-An active run is one in progress. Every way of adding one counts against the limit of the
+An active run is one in progress, whether or not it is shared. Every way of adding one counts against the limit of the
 run's own context (its Organization, or its owner's Personal context), not the acting
 User's: starting or restoring a run, and reopening a completed run by revalidating it,
 setting its status back to in progress, through a share link, or through an agent's Run

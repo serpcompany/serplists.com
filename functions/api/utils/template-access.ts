@@ -1,8 +1,8 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { schema } from '../db';
 
-// Which templates may supply content to a run. Run creation, template sharing, revalidation,
-// and the run staleness flag all use this one rule, so Personal and private Organization
+// Which templates may supply content to a run. Run creation, revalidation, and the run
+// staleness flag all use this one rule, so Personal and private Organization
 // content never reaches a run its owner did not allow:
 //   - archived templates never;
 //   - public templates always;

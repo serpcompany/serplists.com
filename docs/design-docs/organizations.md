@@ -68,7 +68,6 @@ Template and Run routes accept the legacy `teamId` parameter where Organization 
 - `GET /api/checklists?teamId=...`
 - `GET /api/checklists/archived?teamId=...`
 - `POST /api/checklists` with `teamId`
-- `POST /api/checklists/:templateId/share` with `teamId`
 
 ## Invite Flow
 

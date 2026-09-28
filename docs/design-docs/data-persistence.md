@@ -132,6 +132,9 @@ guarded update clears `is_public` and every share field, and the
 `checklist_run.share_revoked` audit row is written only if the run was still
 shared. It leaves the run's revision, tasks, and progress unchanged, so open run
 pages keep saving. Archiving and restoring a run also clear its share fields.
+Sharing never creates a run, and a shared run in progress counts toward the
+active-run limit like any other (the old `POST /api/checklists/:templateId/share`
+route, which created public runs outside that count, is gone and returns `404`).
 The public guest URL is `/share/:token`. Guest saves never replace the run's
 structure: the server copies only completion and notes from the payload onto the
 stored sections, matched by the ids the share page uses. When sharing fails, distinguish an

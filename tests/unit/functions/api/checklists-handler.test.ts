@@ -554,140 +554,38 @@ describe('Checklists Handlers', () => {
     );
   });
 
-  it('should create a public shared checklist run', async () => {
+  // The legacy template-share route created public runs its active-run count ignored, so a
+  // Free user could hold unlimited active runs. Runs are shared with /run/:id/share instead.
+  it.each([
+    ['a Personal run', { runName: 'Shared Run' }],
+    ['an Organization run', { teamId: 'team-1' }],
+  ])('no longer creates %s from a template share link', async (_label, body) => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([{ id: 'template-2', title: 'Template 2', items: '[{"id":"item-1","title":"Item 1"}]', is_public: 1, user_id: 'user-123' }])
-      .mockResolvedValueOnce([{ count: 0 }]);
+    dbMocks.selectChain.limit.mockResolvedValue([
+      { id: 'template-2', title: 'Template 2', items: '[]', is_public: 1, user_id: 'user-123', count: 0, role: 'owner', status: 'active' },
+    ]);
 
-    const request = new Request('http://localhost/api/checklists/template-2/share', {
+    const response = await handleChecklists(new Request('http://localhost/api/checklists/template-2/share', {
       method: 'POST',
-      body: JSON.stringify({ runName: 'Named Shared Run' }),
-    });
+      body: JSON.stringify(body),
+    }), mockEnv);
 
-    const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(typeof data.id).toBe('string');
-    expect(typeof data.shareToken).toBe('string');
-    expect(data.sharePath).toMatch(/^\/share\//);
-
-    const inserted = dbMocks.insertChain.values.mock.calls[0][0];
-    expect(inserted.title).toBe('Named Shared Run');
-    expect(inserted.team_id).toBeNull();
-    expect(inserted.is_public).toBe(true);
-    expect(typeof inserted.share_token).toBe('string');
-    expect(dbMocks.insertChain.values).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'checklist_run.share_created',
-        subject_type: 'user',
-        subject_id: 'user-123',
-        resource_id: inserted.id,
-      }),
-    );
-  });
-
-  it('should deactivate any existing shared runs before creating a new shared run', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([{ id: 'template-2', title: 'Template 2', items: '[{"id":"item-1","title":"Item 1"}]', is_public: 1, user_id: 'user-123' }])
-      .mockResolvedValueOnce([{ count: 0 }]);
-
-    const request = new Request('http://localhost/api/checklists/template-2/share', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-
-    const response = await handleChecklists(request, mockEnv);
-
-    expect(response.status).toBe(200);
-    expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        is_public: false,
-        share_expires_at: expect.any(String),
-        status: 'completed',
-      })
-    );
-    expect(dbMocks.updateChain.where).toHaveBeenCalled();
-  });
-
-  it('should create audited shared runs from private team templates for team runners', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    vi.mocked(getEntitlementsForContext).mockResolvedValue({
-      plan: 'team',
-      limits: { maxTemplates: null, maxActiveRuns: null },
-    });
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        {
-          id: 'template-team',
-          user_id: 'creator-1',
-          owner_type: 'team',
-          team_id: 'team-1',
-          title: 'Team Template',
-          items: '[{"id":"item-1","title":"Item 1"}]',
-          is_public: false,
-        },
-      ])
-      .mockResolvedValueOnce([
-        { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'runner', status: 'active' },
-      ]);
-
-    const request = new Request('http://localhost/api/checklists/template-team/share', {
-      method: 'POST',
-      body: JSON.stringify({ runName: 'Team Shared Run' }),
-    });
-    const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(data.sharePath).toMatch(/^\/share\//);
-    const inserted = dbMocks.insertChain.values.mock.calls[0][0];
-    expect(inserted).toEqual(
-      expect.objectContaining({
-        team_id: 'team-1',
-        title: 'Team Shared Run',
-        is_public: true,
-      }),
-    );
-    expect(dbMocks.insertChain.values).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'checklist_run.share_created',
-        subject_type: 'team',
-        subject_id: 'team-1',
-        resource_id: inserted.id,
-      }),
-    );
-  });
-
-  it('should reject shared runs from private team templates for viewers', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        {
-          id: 'template-team',
-          user_id: 'creator-1',
-          owner_type: 'team',
-          team_id: 'team-1',
-          title: 'Team Template',
-          items: '[{"id":"item-1","title":"Item 1"}]',
-          is_public: false,
-        },
-      ])
-      .mockResolvedValueOnce([
-        { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'viewer', status: 'active' },
-      ]);
-
-    const request = new Request('http://localhost/api/checklists/template-team/share', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-    const response = await handleChecklists(request, mockEnv);
-
-    expect(response.status).toBe(403);
-    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+    expect(response.status).toBe(404);
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
     expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+  });
+
+  it('does not create a run from an unknown POST path', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+
+    const response = await handleChecklists(new Request('http://localhost/api/checklists/anything/else', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Run', sections: [] }),
+    }), mockEnv);
+
+    expect(response.status).toBe(404);
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
   });
 
   it('should create share links for personal checklist run owners', async () => {

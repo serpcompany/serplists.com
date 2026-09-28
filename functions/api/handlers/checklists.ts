@@ -1,11 +1,10 @@
 import { Env } from '../types';
-import { and, desc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { checklistPayloadSchema, normalizeSectionsPayload, parseJsonArray } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
-import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
-import { buildAuditEventValues, type AuditSubject } from '../utils/audit';
+import { buildAuditEventValues } from '../utils/audit';
 import { redactStoredAuditDiff } from '../utils/audit-compaction';
 import { canManageTeam, canRunTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { z } from 'zod';
@@ -540,196 +539,6 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       });
     }
 
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return jsonError('Invalid JSON payload', 400);
-    }
-
-    const parsed = checklistPayloadSchema.safeParse(body);
-    if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
-    }
-
-    const isTemplateShareRequest = checklistsSubpath.length === 2 && checklistsSubpath[1] === 'share' && checklistsSubpath[0] !== 'run';
-    if (isTemplateShareRequest) {
-      const templateId = checklistsSubpath[0];
-      if (!templateId || templateId === 'checklists') {
-        return jsonError('Template ID required', 400);
-      }
-
-      const shareBody = z.object({
-        runName: z.string().trim().max(160).optional(),
-        teamId: z.string().trim().min(1).optional(),
-        team_id: z.string().trim().min(1).optional(),
-      }).safeParse(body);
-      if (!shareBody.success) {
-        return jsonError(shareBody.error.issues[0]?.message || 'Invalid share payload', 400);
-      }
-
-      const [sourceTemplate] = await db
-        .select({
-          id: templates.id,
-          user_id: templates.user_id,
-          owner_type: templates.owner_type,
-          team_id: templates.team_id,
-          title: templates.title,
-          items: templates.items,
-          is_public: templates.is_public,
-          version: templates.content_version,
-        })
-        .from(templates)
-        .where(and(eq(templates.id, templateId), isNull(templates.deleted_at)))
-        .limit(1);
-
-      if (!sourceTemplate) {
-        return jsonError('Template not found', 404);
-      }
-
-      const requestedTeamId = getRequestedTeamId(shareBody.data, url);
-      const sourceTeamId = typeof sourceTemplate.team_id === 'string' && sourceTemplate.team_id
-        ? sourceTemplate.team_id
-        : null;
-      const sourceIsPublic = Boolean(sourceTemplate.is_public);
-      const sourceIsPrivateTeamTemplate = sourceTemplate.owner_type === 'team' && sourceTeamId && !sourceIsPublic;
-      let effectiveTeamId: string | null = null;
-
-      if (sourceIsPrivateTeamTemplate) {
-        if (requestedTeamId && requestedTeamId !== sourceTeamId) {
-          return jsonError('Template not found', 404);
-        }
-
-        const accessError = await assertTeamRunAccess(env, sourceTeamId, userId);
-        if (accessError) return accessError;
-        effectiveTeamId = sourceTeamId;
-      } else {
-        if (!canUseTemplateAsRunSource(sourceTemplate, { userId, runTeamId: requestedTeamId })) {
-          return jsonError('Template not found', 404);
-        }
-
-        if (requestedTeamId) {
-          const accessError = await assertTeamRunAccess(env, requestedTeamId, userId);
-          if (accessError) return accessError;
-          effectiveTeamId = requestedTeamId;
-        }
-      }
-
-      const now = new Date().toISOString();
-
-      const entitlements = effectiveTeamId
-        ? await getEntitlementsForContext(env, { type: 'team', teamId: effectiveTeamId, userId })
-        : await getEntitlementsForUser(env, userId);
-      if (entitlements.plan === 'free' && entitlements.limits.maxActiveRuns) {
-        const [row] = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(checklist_runs)
-          .where(
-            effectiveTeamId
-              ? and(
-                  eq(checklist_runs.team_id, effectiveTeamId),
-                  eq(checklist_runs.status, 'in_progress'),
-                  or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
-                  isNull(checklist_runs.deleted_at),
-                )
-              : and(
-                  eq(checklist_runs.user_id, userId),
-                  isNull(checklist_runs.team_id),
-                  eq(checklist_runs.status, 'in_progress'),
-                  or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
-                  isNull(checklist_runs.deleted_at),
-                )
-          )
-          .limit(1);
-
-        const currentCount = row?.count ?? 0;
-        if (currentCount >= entitlements.limits.maxActiveRuns) {
-          return jsonError('Active run limit reached. Upgrade to Pro to create more checklist runs.', 403, {
-            code: 'limit_reached',
-            details: { limit: entitlements.limits.maxActiveRuns, current: currentCount, resource: 'active_runs' },
-          });
-        }
-      }
-
-      const sourceItems = parseJsonArray(sourceTemplate.items) ?? [];
-      const normalizedSections = normalizeSectionsPayload(sourceItems);
-      if (normalizedSections.error) {
-        return jsonError(normalizedSections.error, 400);
-      }
-
-      const shareToken = crypto.randomUUID();
-      const checklistId = crypto.randomUUID();
-      const runName = shareBody.data.runName?.trim() || sourceTemplate.title;
-
-      const insertedRun = {
-        id: checklistId,
-        user_id: userId,
-        team_id: effectiveTeamId,
-        template_id: templateId,
-        title: runName,
-        items: JSON.stringify(normalizedSections.sections),
-        status: 'in_progress',
-        started_at: now,
-        created_by_user_id: userId,
-        started_by_user_id: userId,
-        created_at: now,
-        is_public: true,
-        share_token: shareToken,
-        template_version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
-        revision: 1,
-        retired_items: '[]',
-      };
-      const subject: AuditSubject = effectiveTeamId
-        ? { type: 'team', id: effectiveTeamId }
-        : { type: 'user', id: userId };
-
-      const auditEvent = await buildAuditEventValues({
-        actorUserId: userId,
-        subject,
-        resource: { type: 'checklist_run', id: checklistId },
-        action: 'checklist_run.share_created',
-        after: insertedRun,
-        metadata: { source: 'template_share', templateId },
-        request,
-        createdAt: now,
-      });
-      await db.batch([
-        db
-          .update(checklist_runs)
-          .set({
-            status: 'completed',
-            completed_at: now,
-            is_public: false,
-            share_expires_at: now,
-            share_used_at: now,
-          })
-          .where(
-            effectiveTeamId
-              ? and(
-                  eq(checklist_runs.team_id, effectiveTeamId),
-                  eq(checklist_runs.template_id, templateId),
-                  eq(checklist_runs.is_public, true),
-                  isNull(checklist_runs.deleted_at),
-                )
-              : and(
-                  eq(checklist_runs.user_id, userId),
-                  isNull(checklist_runs.team_id),
-                  eq(checklist_runs.template_id, templateId),
-                  eq(checklist_runs.is_public, true),
-                  isNull(checklist_runs.deleted_at),
-                )
-          ),
-        db.insert(checklist_runs).values(insertedRun),
-        db.insert(audit_events).values(auditEvent),
-      ]);
-
-      return json({
-        id: checklistId,
-        shareToken,
-        sharePath: `/share/${shareToken}`,
-      });
-    }
-
     const isRunShareRequest = checklistsSubpath.length === 3 && checklistsSubpath[0] === 'run' && checklistsSubpath[2] === 'share';
     if (isRunShareRequest) {
       const runId = checklistsSubpath[1];
@@ -796,6 +605,24 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         shareToken,
         sharePath: `/share/${shareToken}`,
       });
+    }
+
+    // Only POST /api/checklists creates a run. Anything else (including the removed
+    // /:templateId/share route) must not fall through to it.
+    if (checklistsSubpath.length > 0) {
+      return jsonError('Not found', 404);
+    }
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return jsonError('Invalid JSON payload', 400);
+    }
+
+    const parsed = checklistPayloadSchema.safeParse(body);
+    if (!parsed.success) {
+      return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
     }
 
     const { template_id, title, items, sections, status, teamId: payloadTeamId, team_id: payloadTeamIdSnake } = parsed.data;
