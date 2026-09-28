@@ -4,7 +4,7 @@ import { Toaster as Sonner, toast } from "sonner"
 import {
   applyStoredTheme,
   getStoredTheme,
-  THEME_CHANGE_EVENT,
+  subscribeToThemeChanges,
   type SerpListsTheme,
 } from "@/lib/theme"
 
@@ -15,22 +15,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
 
   useEffect(() => {
     setTheme(applyStoredTheme())
-
-    const handleThemeChange = (event: Event) => {
-      const nextTheme =
-        event instanceof CustomEvent && event.detail
-          ? event.detail
-          : getStoredTheme()
-      setTheme(nextTheme)
-    }
-
-    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange)
-    window.addEventListener("storage", handleThemeChange)
-
-    return () => {
-      window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange)
-      window.removeEventListener("storage", handleThemeChange)
-    }
+    return subscribeToThemeChanges(setTheme)
   }, [])
 
   return (

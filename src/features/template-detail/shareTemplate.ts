@@ -4,8 +4,8 @@ import type { ChecklistTemplate } from '@/types/checklist';
 
 import {
   applyTemplateSaveResult,
-  hydrateTemplateOwner,
   mapTemplateChangeFailure,
+  resolveShareOwnerTemplate,
   type TemplateDetailActionResult,
   type TemplateDetailApiClient,
 } from './templateDetailApi';
@@ -40,14 +40,13 @@ export const shareTemplateToPublic = async (params: {
 
   const apiClient = params.apiClient ?? api;
   const isCreator = params.template.userId === params.userId;
-  let nextTemplate = await hydrateTemplateOwner(params.template, apiClient);
-  // The link lives under the Creator's username, so only the Creator's own name may stand in.
-  if (!nextTemplate.ownerProfile?.username && params.username && isCreator) {
-    nextTemplate = {
-      ...nextTemplate,
-      ownerProfile: { ...nextTemplate.ownerProfile, username: params.username },
-    };
-  }
+  // The link lives under the Creator's username, so only the Creator's own (current) name
+  // may stand in for the one a cached copy carries.
+  let nextTemplate = await resolveShareOwnerTemplate(
+    params.template,
+    { userId: params.userId, username: params.username },
+    apiClient,
+  );
 
   const publicPath = buildCanonicalPublicTemplatePath(nextTemplate);
   if (!publicPath) {

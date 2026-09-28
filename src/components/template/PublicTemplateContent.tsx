@@ -6,16 +6,10 @@ import {
   Link2,
   ListTodo,
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { buildPublicTemplateSectionId } from '@/components/template/publicTemplateSectionId';
 import { cn } from '@/lib/utils';
-import {
-  normalizeDisplayText,
-  normalizeMarkdownDisplayText,
-} from '@/lib/utils/markdownDisplay';
 import { getSectionDisplayTitle, getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
 import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
 import { safeUrl } from '@/lib/utils/safeUrl';
@@ -24,6 +18,7 @@ import type {
   ChecklistItemContent,
   ChecklistSection,
 } from '@/types/checklist';
+import { MarkdownBlock } from '@/components/shared/MarkdownBlock';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
 
 interface PublicTemplateContentProps {
@@ -51,15 +46,7 @@ export function PublicTemplateContent({
       case 'text':
         return content.value ? (
           <div className="mt-3 border-l-2 border-border/70 pl-4">
-            <div className="prose prose-sm max-w-none whitespace-pre-line">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                skipHtml
-                urlTransform={safeUrl}
-              >
-                {normalizeMarkdownDisplayText(content.value)}
-              </ReactMarkdown>
-            </div>
+            <MarkdownBlock value={content.value} />
           </div>
         ) : null;
 
@@ -213,7 +200,7 @@ export function PublicTemplateContent({
                   <div className="mt-3 space-y-3">
                     {hasDescription ? (
                       <p className="whitespace-pre-line text-sm leading-7 text-muted-foreground">
-                        {normalizeDisplayText(description)}
+                        {description}
                       </p>
                     ) : null}
 

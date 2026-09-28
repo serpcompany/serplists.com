@@ -4,18 +4,13 @@ import { Input } from './input';
 import { Textarea } from './textarea';
 import { Label } from './label';
 import { X, File, Image, Video } from 'lucide-react';
-import {
-  uploadAcceptTypesForBlock,
-  uploadFile,
-  validateFile,
-  UploadResult,
-} from '@/lib/utils/fileUpload';
+import { uploadAcceptTypesForBlock, type UploadResult } from '@/lib/utils/fileUpload';
 import { formatAssetSizeLimit } from '@/lib/schemas/templateAssetLimits';
 import { imagePreviewSrc, isUploadedAssetUrl } from '@/lib/utils/mediaSource';
 import { UPLOAD_MAX_BYTES } from '@/lib/schemas/uploadTypes';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
-import { useToast } from '@/hooks/use-toast';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
+import { uploadSelectedFile, type FileUploadType } from './file-upload-flow';
 
 // An upload or a clear, reported as one change so the URL and the file details are
 // never written separately (a second write could restore a stale URL).
@@ -47,7 +42,7 @@ export const ImagePreview = ({ src }: { src: string | null }): JSX.Element => {
 };
 
 interface FileUploadProps {
-  type: 'image' | 'video' | 'file';
+  type: FileUploadType;
   value: string;
   fileName?: string;
   // Typing or pasting in the URL field.
@@ -72,15 +67,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const sourceInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
-  const { toast } = useToast();
-
-  const getBucketName = () => {
-    switch (type) {
-      case 'image': return 'template-images';
-      case 'video': return 'template-videos';
-      case 'file': return 'template-files';
-    }
-  };
 
   const getIcon = () => {
     switch (type) {
@@ -94,44 +80,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     const file = event.target.files?.[0];
     if (!file || !user) return;
 
-    // Validate file
-    const validation = validateFile(file, type);
-    if (!validation.valid) {
-      toast({
-        title: "Invalid file",
-        description: validation.error,
-        variant: "destructive"
-      });
-      return;
-    }
-
     setIsUploading(true);
 
     try {
-      const upload = uploadFile(file, getBucketName(), user.id);
-      onUploadStart?.(upload);
-      const result: UploadResult = await upload;
-
-      // The previous upload is never deleted here: the saved template, its runs,
-      // versions, and copies may still reference it, and this change is unsaved.
-      if (result.success && result.url) {
-        onFileChange({ value: result.url, fileName: result.fileName, fileSize: result.fileSize });
-        toast({
-          title: "Upload successful",
-          description: `${file.name} has been uploaded.`
-        });
-      } else {
-        toast({
-          title: "Upload failed",
-          description: result.error || "Unknown error occurred",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Upload failed",
-        description: "An unexpected error occurred",
-        variant: "destructive"
+      await uploadSelectedFile({
+        file,
+        type,
+        userId: user.id,
+        onUploadStart,
+        onUploaded: (uploaded) => {
+          onFileChange({ value: uploaded.url, fileName: uploaded.fileName, fileSize: uploaded.fileSize });
+        },
       });
     } finally {
       setIsUploading(false);

@@ -9,6 +9,11 @@ import type { PageVisit } from '@/lib/navigation/pageVisit';
 import { getAccessFailure } from '@/lib/api-errors';
 import { resolveRunName } from '@/lib/runs/runName';
 import {
+  getOrganizationPermissions,
+  PERSONAL_PERMISSIONS,
+  type OrganizationRole,
+} from '@/lib/organizationPermissions';
+import {
   buildConsoleRunPath,
   buildConsoleTemplateCreatePath,
   buildConsoleTemplateEditPath,
@@ -26,6 +31,8 @@ type Navigate = (path: string) => void;
 
 type DashboardTemplatesStateOptions = {
   allTemplates: ChecklistTemplate[];
+  // The user's role in the active Organization; ignored in Personal (no teamId).
+  role?: OrganizationRole;
   templatesLoading?: boolean;
   teamId?: string;
   userId?: string;
@@ -113,6 +120,7 @@ export const openDashboardPublicLibrary = (navigate: Navigate): void => {
 
 export const buildDashboardTemplatesState = ({
   allTemplates,
+  role,
   teamId,
   templatesLoading = false,
   userId,
@@ -128,13 +136,16 @@ export const buildDashboardTemplatesState = ({
   );
   const loading = Boolean(templatesLoading);
   const isEmpty = !loading && templates.length === 0;
+  const permissions = teamId ? getOrganizationPermissions(role) : PERSONAL_PERMISSIONS;
 
   return {
     templates,
     loading,
     isEmpty,
-    canCreateTemplate: true,
-    canCreateRun: templates.length > 0,
+    canCreateTemplate: permissions.canEditTemplates,
+    canCreateRun: templates.length > 0 && permissions.canRun,
+    canEditTemplate: permissions.canEditTemplates,
+    canRunTemplate: permissions.canRun,
     totalTemplateItems,
   };
 };
@@ -237,12 +248,13 @@ export const useDashboardTemplatesModel = (
   const navigate = useNavigate();
   const beginVisit = usePageVisit();
   const { user } = useAuth();
-  const { activeTeamId, isTeamWorkspace } = useWorkspace();
+  const { activeTeamId, activeWorkspace, isTeamWorkspace } = useWorkspace();
   const templateContext = useTemplateLists();
   const model = buildDashboardTemplatesState({
     allTemplates: dependencies?.allTemplates ?? templateContext.allTemplates,
     templatesLoading:
       dependencies?.templatesLoading ?? templateContext.templatesLoading,
+    role: activeWorkspace.type === 'team' ? activeWorkspace.role : undefined,
     teamId: activeTeamId,
     userId: dependencies?.userId ?? user?.id,
   });

@@ -1,9 +1,12 @@
 import {
   calculateSectionsProgress,
+  countRunTasks,
   isSectionsShape,
   normalizeSections,
+  type RunTaskCounts,
 } from '@/lib/utils/checklistSections';
 import type {
+  ChecklistItem,
   ChecklistRun,
   ChecklistSection,
   ChecklistSubItem,
@@ -69,6 +72,8 @@ export const mapChecklistToRun = (
       new Date().toISOString(),
     completedAt: asString(checklist.completed_at),
     userId: asString(checklist.user_id) ?? '',
+    // The owning Organization decides what the viewer may do with the run.
+    teamId: asString(checklist.team_id) || undefined,
     templateVersion:
       typeof checklist.template_version === 'number'
         ? checklist.template_version
@@ -115,47 +120,26 @@ export const getNextSelectedItemId = (
   return next?.id ?? completedItemId;
 };
 
+// The selection once a task toggle's save lands. Completing a task moves on from it only
+// if it is still the selected task; a task the user opened while the save was in flight
+// (Next, Previous, the task list) is kept. Pass the selection at the moment the save lands
+// (a state updater's argument), never the one captured when the task was clicked.
+export const getSelectionAfterToggle = (
+  run: ChecklistRun,
+  toggledItemId: string,
+  currentSelectedItemId: string | null,
+): string | null => {
+  if (currentSelectedItemId !== toggledItemId) return currentSelectedItemId;
+  const toggled = run.sections.flatMap((section) => section.items).find((item) => item.id === toggledItemId);
+  return toggled?.isCompleted ? getNextSelectedItemId(run, toggledItemId) : currentSelectedItemId;
+};
+
+// Tasks and sub-tasks of the run, counted apart, with the overall progress that weights both.
 export const countRunExecutionItems = (
   run: ChecklistRun | null,
-): {
-  completed: number;
-  progress: number;
-  total: number;
-} => {
-  if (!run) {
-    return { completed: 0, progress: 0, total: 0 };
-  }
-
-  let completed = 0;
-  let total = 0;
-
-  run.sections.forEach((section) => {
-    section.items.forEach((item) => {
-      total += 1;
-      if (item.isCompleted) {
-        completed += 1;
-      }
-
-      item.contents?.forEach((content) => {
-        if (content.type !== 'subItems' || !content.subItems) {
-          return;
-        }
-
-        content.subItems.forEach((subItem) => {
-          total += 1;
-          if (subItem.isCompleted) {
-            completed += 1;
-          }
-        });
-      });
-    });
-  });
-
-  return {
-    completed,
-    progress: total > 0 ? Math.round((completed / total) * 100) : 0,
-    total,
-  };
+): RunTaskCounts & { progress: number } => {
+  const sections = run?.sections ?? [];
+  return { ...countRunTasks(sections), progress: calculateSectionsProgress(sections) };
 };
 
 export const getSelectedRunItem = (
@@ -195,3 +179,33 @@ export const setSubItemsCompletion = (
     ...subItem,
     isCompleted,
   }));
+
+const getItemSubItems = (item: ChecklistItem): ChecklistSubItem[] =>
+  item.contents?.flatMap((content) =>
+    content.type === 'subItems' ? (content.subItems ?? []) : [],
+  ) ?? [];
+
+// A task is done by its sub-tasks only when it has at least one and every one, across
+// all of its Sub-tasks blocks, is ticked. Same rule as the agent API's set_subtask_completed.
+export const areItemSubItemsCompleted = (item: ChecklistItem): boolean => {
+  const subItems = getItemSubItems(item);
+  return subItems.length > 0 && subItems.every((subItem) => subItem.isCompleted === true);
+};
+
+// True when the task and every one of its sub-tasks already have this completion, so
+// setting it changes nothing.
+export const itemHasCompletion = (item: ChecklistItem, isCompleted: boolean): boolean =>
+  (item.isCompleted === true) === isCompleted &&
+  getItemSubItems(item).every((subItem) => (subItem.isCompleted === true) === isCompleted);
+
+// The sub-task at a block and row. When its id is given and that row now holds another
+// sub-task (a reloaded run), the sub-task with that id in any block.
+export const findRunSubItem = (
+  item: ChecklistItem,
+  at: { contentIndex: number; subItemId?: string; subItemIndex: number },
+): ChecklistSubItem | undefined => {
+  const content = item.contents?.[at.contentIndex];
+  const candidate = content?.type === 'subItems' ? content.subItems?.[at.subItemIndex] : undefined;
+  if (!at.subItemId || candidate?.id === at.subItemId) return candidate;
+  return getItemSubItems(item).find((subItem) => subItem.id === at.subItemId);
+};

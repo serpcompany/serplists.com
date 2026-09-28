@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useState, useEffect, use
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
+import { EMAIL_VERIFIED_CALLBACK_URL } from '@/lib/auth/loginNotice';
 import { isUserSwitch, removeSignedOutUserQueries } from '@/lib/queryKeys';
 import {
   applySessionCheck,
@@ -32,7 +33,12 @@ interface AuthContextType {
   sessionStatus: SessionStatus;
   retrySession: () => void;
   login: (email: string, password: string) => Promise<AuthActionResult>;
-  register: (name: string, email: string, password: string) => Promise<RegisterResult>;
+  register: (
+    name: string,
+    email: string,
+    password: string,
+    callbackURL?: string,
+  ) => Promise<RegisterResult>;
   // Resolves { ok: false, error } and keeps the user signed in when the server did not sign
   // them out (rate limit, server error, network). Navigate away only on { ok: true }.
   logout: () => Promise<AuthActionResult>;
@@ -160,9 +166,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const register = async (name: string, email: string, password: string): Promise<RegisterResult> => {
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    callbackURL: string = EMAIL_VERIFIED_CALLBACK_URL,
+  ): Promise<RegisterResult> => {
     try {
-      const callbackURL = "/login?verified=1";
       const result = await authClient.signUp.email({ name, email, password, callbackURL });
       if (result?.error) {
         return { ok: false, error: result.error.message ?? "Registration failed", errorCode: "UNKNOWN" };

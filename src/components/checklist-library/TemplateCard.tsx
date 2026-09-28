@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import {
   buildCanonicalPublicTemplatePath,
   buildPublicProfilePath,
-  buildPublicTemplatesPath,
 } from '@/lib/routes';
+import { uniqueCategoryNames } from '@/lib/categorySlug';
 import { cn } from '@/lib/utils';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { generateSlug } from '@/utils/urlHelpers';
@@ -42,14 +42,28 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
   const itemCount = getTemplateItemCount(template);
   const ownerLabel = getTemplateOwnerLabel(template);
   const ownerHandle = template.ownerProfile?.username;
-  const categories = template.categories ?? [];
-  const templatePath =
-    buildCanonicalPublicTemplatePath({
-      ...template,
-      slug: template.slug ?? generateSlug(template.title),
-    }) ?? buildPublicTemplatesPath();
+  // Imported or API-written lists can repeat a category ('SEO', 'seo'); show each once.
+  const categories = uniqueCategoryNames(template.categories ?? []);
+  // Discovery lists only templates with a public URL; if one slips through, render it
+  // without links rather than pointing them back at the library.
+  const templatePath = buildCanonicalPublicTemplatePath({
+    ...template,
+    slug: template.slug ?? generateSlug(template.title),
+  });
   const isHorizontal = layout === 'horizontal';
   const ownerInitial = ownerLabel.charAt(0).toUpperCase() || 'U';
+  const summary = (
+    <>
+      <h3 className="mb-1 line-clamp-1 text-sm font-medium text-foreground transition-colors group-hover:text-primary">
+        {template.title}
+      </h3>
+      {template.description ? (
+        <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
+          {template.description}
+        </p>
+      ) : null}
+    </>
+  );
 
   return (
     <div
@@ -74,14 +88,16 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             {getTemplateIcon(template)}
           </div>
 
-          <div className="absolute inset-0 flex items-center justify-center bg-background/80 opacity-0 transition-opacity group-hover:opacity-100">
-            <Button asChild>
-              <Link to={templatePath}>
-                <Eye className="mr-2 h-4 w-4" />
-                View Template
-              </Link>
-            </Button>
-          </div>
+          {templatePath ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/80 opacity-0 transition-opacity group-hover:opacity-100">
+              <Button asChild>
+                <Link to={templatePath}>
+                  <Eye className="mr-2 h-4 w-4" />
+                  View Template
+                </Link>
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex flex-1 flex-col p-4">
@@ -98,16 +114,13 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             </div>
           ) : null}
 
-          <Link to={templatePath} className="block">
-            <h3 className="mb-1 line-clamp-1 text-sm font-medium text-foreground transition-colors group-hover:text-primary">
-              {template.title}
-            </h3>
-            {template.description ? (
-              <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
-                {template.description}
-              </p>
-            ) : null}
-          </Link>
+          {templatePath ? (
+            <Link to={templatePath} className="block">
+              {summary}
+            </Link>
+          ) : (
+            <div>{summary}</div>
+          )}
 
           <div className="mt-auto flex items-center gap-3 text-xs text-muted-foreground">
             <span>{sectionCount} sections</span>
@@ -146,12 +159,14 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
               </div>
             )}
 
-            <Button asChild className="h-7 px-2 text-xs" size="sm" variant="ghost">
-              <Link to={templatePath}>
-                <Play className="mr-1 h-3 w-3" />
-                Start
-              </Link>
-            </Button>
+            {templatePath ? (
+              <Button asChild className="h-7 px-2 text-xs" size="sm" variant="ghost">
+                <Link to={templatePath}>
+                  <Play className="mr-1 h-3 w-3" />
+                  Start
+                </Link>
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>

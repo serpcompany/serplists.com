@@ -2,8 +2,16 @@ import { env } from "@/env";
 import { createApiError } from "@/lib/api-errors";
 import { reportUnauthorizedResponse } from "@/lib/unauthorizedResponses";
 import { parseTemplateUpdateResponse, type TemplateUpdateResult } from "@/lib/templateUpdateResult";
+import type { BillingStatus } from "@/lib/billing";
 import type { TemplateImportSummary } from "@/types/checklist";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
+import {
+  createdTeamInviteSchema,
+  teamInvitePreviewSchema,
+  type CreatedTeamInvite,
+  type TeamInvitePreview,
+  type TeamInviteDelivery,
+} from "@/lib/schemas/teamInvite";
 
 const DEV_API_BASE_URL = env.VITE_API_URL ?? 'http://localhost:8788/api';
 const API_BASE_URL = import.meta.env.DEV
@@ -52,30 +60,7 @@ export type TeamInvite = {
   inviterName?: string | null;
 };
 
-export type TeamInviteDelivery =
-  | {
-      mode: 'link';
-      status: 'ready';
-      invitePath: string;
-      inviteUrl: string;
-    }
-  | {
-      mode: 'email';
-      status: 'queued' | 'sent';
-      invitePath: string;
-      inviteUrl: string;
-    };
-
-export type CreatedTeamInvite = {
-  id: string;
-  email: string;
-  role: Exclude<TeamRole, 'owner'>;
-  expiresAt: string;
-  inviteToken: string;
-  invitePath: string;
-  inviteUrl?: string;
-  delivery?: TeamInviteDelivery;
-};
+export type { CreatedTeamInvite, TeamInviteDelivery };
 
 export type AcceptedTeamInvite = {
   memberId: string;
@@ -525,14 +510,47 @@ class ApiClient {
     teamId: string,
     payload: { email: string; role?: Exclude<TeamRole, 'owner'> },
   ): Promise<CreatedTeamInvite> {
-    return this.request(`/teams/${encodeURIComponent(teamId)}/invites`, {
+    const invite = await this.request(`/teams/${encodeURIComponent(teamId)}/invites`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+    return createdTeamInviteSchema.parse(invite);
+  }
+
+  /** Replaces a pending invite's link; the previous link stops working. */
+  async reissueTeamInviteLink(
+    teamId: string,
+    inviteId: string,
+    payload: { role?: Exclude<TeamRole, 'owner'> } = {},
+  ): Promise<CreatedTeamInvite> {
+    const invite = await this.request(
+      `/teams/${encodeURIComponent(teamId)}/invites/${encodeURIComponent(inviteId)}/link`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    );
+    return createdTeamInviteSchema.parse(invite);
   }
 
   async acceptTeamInvite(inviteToken: string): Promise<AcceptedTeamInvite> {
     return this.request(`/teams/invites/${encodeURIComponent(inviteToken)}/accept`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  async getTeamInvitePreview(inviteToken: string): Promise<TeamInvitePreview> {
+    const preview = await this.request(`/teams/invites/${encodeURIComponent(inviteToken)}`);
+    return teamInvitePreviewSchema.parse(preview);
+  }
+
+  async declineTeamInvite(inviteToken: string): Promise<{ success: true }> {
+    return this.request(`/teams/invites/${encodeURIComponent(inviteToken)}/decline`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  async leaveTeam(teamId: string): Promise<{ success: true }> {
+    return this.request(`/teams/${encodeURIComponent(teamId)}/leave`, {
       method: 'POST',
       body: JSON.stringify({}),
     });
@@ -594,11 +612,7 @@ class ApiClient {
   }
 
   // Billing (Stripe)
-  async getBillingStatus(params?: { teamId?: string }): Promise<{
-    plan: 'free' | 'pro' | 'team';
-    limits?: { maxTemplates: number | null; maxActiveRuns: number | null };
-    billingEnabled?: boolean;
-  }> {
+  async getBillingStatus(params?: { teamId?: string }): Promise<BillingStatus> {
     const search = new URLSearchParams();
     if (params?.teamId) search.set('teamId', params.teamId);
     const query = search.toString();

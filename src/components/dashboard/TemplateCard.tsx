@@ -22,19 +22,23 @@ import {
 import { buildConsoleTemplateEditPath, buildConsoleTemplatePath } from '@/lib/routes';
 import type { ChecklistTemplate } from '@/types/checklist';
 
+// Actions follow the member role: omit a handler, or pass canEdit={false}, to hide one.
 interface TemplateCardProps {
   template: ChecklistTemplate;
-  onDelete: (id: string) => void;
+  canEdit?: boolean;
+  onDelete?: (id: string) => void;
   onDuplicate?: (id: string) => void;
-  onStartRun: (id: string) => void;
+  onStartRun?: (id: string) => void;
 }
 
 export function TemplateCard({
   template,
+  canEdit = true,
   onDelete,
   onDuplicate,
   onStartRun,
 }: TemplateCardProps) {
+  const hasMenuActions = canEdit || Boolean(onStartRun || onDuplicate || onDelete);
   const sectionCount = template.sections.length;
   const taskCount = template.sections.reduce(
     (total, section) => total + section.items.length,
@@ -71,44 +75,54 @@ export function TemplateCard({
             ) : null}
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                aria-label={actionsLabel}
-                className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100"
-                size="icon"
-                variant="ghost"
-              >
-                <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem asChild>
-                <Link to={buildConsoleTemplateEditPath(template.id)}>
-                  <Edit3 className="mr-2 h-4 w-4" />
-                  Edit
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onStartRun(template.id)}>
-                <Play className="mr-2 h-4 w-4" />
-                Start Run
-              </DropdownMenuItem>
-              {onDuplicate ? (
-                <DropdownMenuItem onClick={() => onDuplicate(template.id)}>
-                  <Copy className="mr-2 h-4 w-4" />
-                  Duplicate
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive"
-                onClick={() => onDelete(template.id)}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {hasMenuActions ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  aria-label={actionsLabel}
+                  className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100"
+                  size="icon"
+                  variant="ghost"
+                >
+                  <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                {canEdit ? (
+                  <DropdownMenuItem asChild>
+                    <Link to={buildConsoleTemplateEditPath(template.id)}>
+                      <Edit3 className="mr-2 h-4 w-4" />
+                      Edit
+                    </Link>
+                  </DropdownMenuItem>
+                ) : null}
+                {onStartRun ? (
+                  <DropdownMenuItem onClick={() => onStartRun(template.id)}>
+                    <Play className="mr-2 h-4 w-4" />
+                    Start Run
+                  </DropdownMenuItem>
+                ) : null}
+                {onDuplicate ? (
+                  <DropdownMenuItem onClick={() => onDuplicate(template.id)}>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Duplicate
+                  </DropdownMenuItem>
+                ) : null}
+                {onDelete ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive"
+                      onClick={() => onDelete(template.id)}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
 
         {template.categories?.length ? (
@@ -152,20 +166,22 @@ export function TemplateCard({
 
       {/* A pointer shortcut only: keyboard and screen reader users start runs from the
           actions menu, so this hidden, clipped copy never takes focus. */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-card to-transparent p-4 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100"
-      >
-        <Button
-          className="w-full"
-          onClick={() => onStartRun(template.id)}
-          size="sm"
-          tabIndex={-1}
+      {onStartRun ? (
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-card to-transparent p-4 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100"
         >
-          <Play className="mr-2 h-3.5 w-3.5" />
-          Start Run
-        </Button>
-      </div>
+          <Button
+            className="w-full"
+            onClick={() => onStartRun(template.id)}
+            size="sm"
+            tabIndex={-1}
+          >
+            <Play className="mr-2 h-3.5 w-3.5" />
+            Start Run
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

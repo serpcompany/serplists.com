@@ -44,6 +44,12 @@ export const getApiErrorMessage = (error: unknown, fallbackMessage: string): str
   return error instanceof Error && error.message ? error.message : fallbackMessage;
 };
 
+// A settled "does not exist" answer: the API returns 404 for a missing, deleted or private
+// resource. Anything else (network failure, 5xx, rate limit) may be transient.
+export const isNotFoundError = (error: unknown): error is ApiError => {
+  return isApiError(error) && error.status === 404;
+};
+
 export const isAuthRequiredError = (error: unknown): error is ApiError => {
   return isApiError(error) && error.status === 401;
 };
@@ -63,10 +69,26 @@ export const isBillingUnavailableError = (error: unknown): error is ApiError => 
   return isApiError(error) && error.code === "billing_unavailable";
 };
 
+/** Checkout refused because an open subscription must be fixed in the Customer Portal. */
+export const isSubscriptionNeedsAttentionError = (error: unknown): error is ApiError => {
+  return isApiError(error) && error.status === 409 && error.code === "subscription_needs_attention";
+};
+
+/**
+ * Checkout refused because the user already has a subscription. Checkout also asks
+ * Stripe, so it can find one the displayed billing status does not show yet.
+ */
+export const isOpenSubscriptionConflictError = (error: unknown): error is ApiError => {
+  return isApiError(error)
+    && error.status === 409
+    && (error.code === "already_subscribed" || error.code === "subscription_needs_attention");
+};
+
 export type AccessFailure =
   | { kind: "auth_required"; message: string }
   | { kind: "upgrade_required"; message: string }
   | { kind: "billing_unavailable"; message: string }
+  | { kind: "subscription_needs_attention"; message: string }
   | { kind: "error"; message: string };
 
 export const getAccessFailure = (error: unknown, fallbackMessage: string): AccessFailure => {
@@ -83,6 +105,13 @@ export const getAccessFailure = (error: unknown, fallbackMessage: string): Acces
 
   if (isBillingUnavailableError(error)) {
     return { kind: "billing_unavailable", message: BILLING_UNAVAILABLE_MESSAGE };
+  }
+
+  if (isSubscriptionNeedsAttentionError(error)) {
+    return {
+      kind: "subscription_needs_attention",
+      message: getApiErrorMessage(error, "Your Pro subscription needs attention."),
+    };
   }
 
   return { kind: "error", message: getApiErrorMessage(error, fallbackMessage) };

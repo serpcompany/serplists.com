@@ -1,54 +1,50 @@
 import { Check, ChevronRight, Circle } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
+import { countRunTasks, getSectionDisplayTitle } from '@/lib/utils/checklistSections';
 import type { ChecklistSection, ChecklistItem } from '@/types/checklist';
 
 interface RunProgressPanelProps {
+  // The run's overall progress (tasks and sub-tasks), the same percentage as the header.
+  progress: number;
   sections: ChecklistSection[];
   currentSectionId: string | null;
   currentTaskId: string | null;
   onSelectTask: (sectionId: string, taskId: string) => void;
 }
 
-const getSectionProgress = (section: ChecklistSection) => {
-  const total = section.items.length;
-  const completed = section.items.filter((item) => item.isCompleted).length;
+interface RunTaskListProps extends RunProgressPanelProps {
+  // Names the task list landmark (the desktop panel and the mobile sheet each have one).
+  label: string;
+}
 
-  return {
-    completed,
-    percentage: total > 0 ? (completed / total) * 100 : 0,
-    total,
-  };
+const getSectionProgress = (section: ChecklistSection) => {
+  const { tasksCompleted, tasksTotal } = countRunTasks([section]);
+  return { completed: tasksCompleted, total: tasksTotal };
 };
 
 const isTaskCompleted = (item: ChecklistItem) => item.isCompleted === true;
 
-export function RunProgressPanel({
+// Every task of the run, grouped by section, with overall progress. It has no visibility
+// classes: the desktop panel shows it as a column and, below xl, the run page shows it in
+// a sheet (MobileRunProgress), so both widths can jump to any task.
+export function RunTaskList({
   sections,
   currentSectionId,
   currentTaskId,
+  label,
   onSelectTask,
-}: RunProgressPanelProps) {
-  const completedTasks = sections.reduce(
-    (total, section) => total + section.items.filter((item) => item.isCompleted).length,
-    0,
-  );
-  const totalTasks = sections.reduce((total, section) => total + section.items.length, 0);
-  const overallPercentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+  progress,
+}: RunTaskListProps) {
+  // Counts tasks only, like "Task N of M"; the bar shows the overall progress.
+  const { tasksCompleted: completedTasks, tasksTotal: totalTasks } = countRunTasks(sections);
 
   return (
-    <section
-      className="hidden h-full min-h-full w-full flex-col border-l border-border bg-card xl:flex"
-      data-run-progress-panel="true"
-    >
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Progress
-        </h2>
-      </div>
-
-      <nav className="flex-1 overflow-y-auto p-2">
+    <>
+      <nav aria-label={label} className="flex-1 overflow-y-auto p-2">
+        {totalTasks === 0 ? (
+          <p className="px-2 py-4 text-sm text-muted-foreground">This run has no tasks.</p>
+        ) : null}
         <ul className="space-y-1">
           {sections.map((section, sectionIndex) => {
             const progress = getSectionProgress(section);
@@ -96,6 +92,7 @@ export function RunProgressPanel({
                     return (
                       <li key={item.id}>
                         <button
+                          aria-current={isActive ? 'step' : undefined}
                           onClick={() => onSelectTask(section.id, item.id)}
                           className={cn(
                             'group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
@@ -135,6 +132,7 @@ export function RunProgressPanel({
                           >
                             {item.title}
                           </span>
+                          {isComplete ? <span className="sr-only">(completed)</span> : null}
                           {isActive ? (
                             <ChevronRight className="h-3 w-3 text-primary-foreground/70" />
                           ) : null}
@@ -159,10 +157,27 @@ export function RunProgressPanel({
         <div className="h-2 overflow-hidden rounded-full bg-secondary">
           <div
             className="h-full bg-success transition-all duration-300"
-            style={{ width: `${overallPercentage}%` }}
+            style={{ width: `${progress}%` }}
           />
         </div>
       </div>
+    </>
+  );
+}
+
+// The run page's right-hand column at xl and wider.
+export function RunProgressPanel(props: RunProgressPanelProps) {
+  return (
+    <section
+      className="hidden h-full min-h-full w-full flex-col border-l border-border bg-card xl:flex"
+      data-run-progress-panel="true"
+    >
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Progress
+        </h2>
+      </div>
+      <RunTaskList {...props} label="Run tasks" />
     </section>
   );
 }

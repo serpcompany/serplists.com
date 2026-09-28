@@ -159,17 +159,18 @@ export const isImageFile = (file: File): boolean => {
 export const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
 
     img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
       resolve({ width: img.width, height: img.height });
-      URL.revokeObjectURL(img.src);
     };
 
     img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
       reject(new Error('Failed to load image'));
-      URL.revokeObjectURL(img.src);
     };
 
-    img.src = URL.createObjectURL(file);
+    img.src = objectUrl;
   });
 };

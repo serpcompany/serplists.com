@@ -1,5 +1,5 @@
 import { api } from '@/lib/api';
-import { getAccessFailure, isApiError } from '@/lib/api-errors';
+import { getAccessFailure, isNotFoundError } from '@/lib/api-errors';
 import {
   findPublicTemplateByIdentifier,
   repoTemplates,
@@ -40,9 +40,6 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const isUuidLike = (value: string): boolean => UUID_PATTERN.test(value);
-
-const isNotFoundError = (error: unknown): boolean =>
-  isApiError(error) && error.status === 404;
 
 const classifyLoadFailure = (error: unknown): LoadTemplateDetailResult =>
   isNotFoundError(error)

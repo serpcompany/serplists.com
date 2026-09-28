@@ -28,6 +28,7 @@ const {
     activeTeamId: undefined as string | undefined,
     canEditTemplates: true,
     isTeamWorkspace: false,
+    roles: {} as Record<string, 'viewer' | 'runner' | 'editor'>,
   },
 }));
 
@@ -94,9 +95,22 @@ vi.mock('@/contexts/TemplatesContext', () => {
   return { useTemplates, useTemplateLists };
 });
 
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => workspaceState,
-}));
+vi.mock('@/contexts/WorkspaceContext', async () => {
+  const { getResourcePermissions } = await import('@/lib/organizationPermissions');
+  return {
+    useWorkspace: () => ({
+      ...workspaceState,
+      // A role set by a test, else the one the active context's canEditTemplates implies.
+      getPermissions: (teamId?: string) =>
+        getResourcePermissions(teamId, (id) =>
+          workspaceState.roles[id] ??
+          (id === workspaceState.activeTeamId
+            ? workspaceState.canEditTemplates ? 'editor' : 'runner'
+            : undefined),
+        ),
+    }),
+  };
+});
 
 // Captures the visibility switch's props so a test can flip it.
 vi.mock('@/components/ui/switch', async () => {
@@ -164,6 +178,7 @@ beforeEach(() => {
   workspaceState.activeTeamId = undefined;
   workspaceState.canEditTemplates = true;
   workspaceState.isTeamWorkspace = false;
+  workspaceState.roles = {};
 });
 
 const hasShareButton = (html: string) => /Share<\/button>/.test(html);
@@ -268,6 +283,8 @@ describe('TemplateDetail copy of a private Organization template', () => {
   });
 
   it('offers no copy to a member viewing it from Personal', () => {
+    // A runner there: Start Run follows the role in the template's own Organization.
+    workspaceState.roles = { 'team-1': 'runner' };
     mockUseTemplateDetailModel.mockReturnValue({
       ...baseModel(),
       template: privateOrganizationTemplate(),
@@ -723,4 +740,54 @@ describe('TemplateDetail page', () => {
     expect(html).not.toContain('Upgrade to copy template');
     expect(html).toContain('Copy to My Templates');
   });
+
+  const renderAs = (role: 'viewer' | 'runner' | 'editor', templateOverrides: Record<string, unknown>) => {
+    workspaceState.activeTeamId = 'acme';
+    workspaceState.canEditTemplates = role === 'editor';
+    workspaceState.isTeamWorkspace = true;
+    workspaceState.roles = { acme: role };
+    mockUseTemplateDetailModel.mockReturnValue({
+      billingState: { billingEnabled: false, isLoading: false, isPro: true },
+      loading: false,
+      notFound: false,
+      history: { data: null, isError: false, isLoading: false },
+      saveTemplate: vi.fn(),
+      shareTemplate: vi.fn(),
+      startRun: vi.fn(),
+      template: { ...buildV0DemoPrivateTemplate(), ...templateOverrides },
+    });
+
+    return renderToStaticMarkup(
+      <StaticRouter location="/dashboard/templates/tpl-1">
+        <Routes>
+          <Route path="/dashboard/templates/:id" element={<TemplateDetail />} />
+        </Routes>
+      </StaticRouter>,
+    );
+  };
+
+  it('offers an Organization viewer no Start Run, Copy or Edit on a private Organization Template', () => {
+    const html = renderAs('viewer', { isPublic: false, teamId: 'acme', userId: 'someone-else' });
+
+    expect(html).toContain('Product Launch Checklist');
+    expect(html).not.toContain('Start Run');
+    expect(html).not.toContain('Copy to My Templates');
+    expect(html).not.toContain('/edit"');
+  });
+
+  it('takes Edit and Share away from a creator demoted to runner, but keeps Start Run', () => {
+    const html = renderAs('runner', { isPublic: false, teamId: 'acme', userId: 'user-1' });
+
+    expect(html).toContain('Start Run');
+    expect(html).not.toContain('/edit"');
+    expect(html).not.toMatch(/>Share</);
+  });
+
+  it('lets an Organization editor edit the Organization Template', () => {
+    const html = renderAs('editor', { isPublic: false, teamId: 'acme', userId: 'someone-else' });
+
+    expect(html).toContain('Start Run');
+    expect(html).toContain('/edit"');
+  });
 });
+

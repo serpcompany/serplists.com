@@ -1,12 +1,50 @@
 import { withSerpListsClipyRef } from '@/lib/utils/clipyUrl';
 
+const YOUTUBE_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+// Path prefixes followed by the video id: /embed/ID, /shorts/ID, /live/ID and the legacy /v/ID, /e/ID.
+const YOUTUBE_ID_PATH_PREFIXES = new Set(['embed', 'shorts', 'live', 'v', 'e']);
+
+const normalizeHostname = (hostname: string) => hostname.toLowerCase().replace(/\.$/, '');
+
+const isHostOrSubdomain = (hostname: string, domain: string) =>
+  hostname === domain || hostname.endsWith(`.${domain}`);
+
+/** youtu.be, youtube.com and its subdomains (www, m, music), and youtube-nocookie.com. */
+export const isYoutubeHostname = (hostname: string): boolean => {
+  const host = normalizeHostname(hostname);
+  return (
+    host === 'youtu.be' ||
+    isHostOrSubdomain(host, 'youtube.com') ||
+    isHostOrSubdomain(host, 'youtube-nocookie.com')
+  );
+};
+
 /**
- * Extracts YouTube video ID from various YouTube URL formats
+ * The video id of a YouTube watch, share, Shorts, live or embed URL, or null when the URL
+ * is not a YouTube video (a channel, a playlist, another host).
  */
-export const getYoutubeVideoId = (url: string): string | null => {
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[2].length === 11) ? match[2] : null;
+export const getYoutubeVideoId = (url: string | URL): string | null => {
+  let parsed: URL;
+  try {
+    parsed = typeof url === 'string' ? new URL(url) : url;
+  } catch {
+    return null;
+  }
+  if (!isYoutubeHostname(parsed.hostname)) return null;
+
+  const segments = parsed.pathname.split('/').filter(Boolean);
+  const prefix = segments[0]?.toLowerCase();
+  let candidate: string | null | undefined;
+  if (normalizeHostname(parsed.hostname) === 'youtu.be') {
+    candidate = segments[0];
+  } else if (prefix === 'watch') {
+    candidate = parsed.searchParams.get('v');
+  } else if (prefix && YOUTUBE_ID_PATH_PREFIXES.has(prefix)) {
+    candidate = segments[1];
+  }
+
+  // "videoseries" (a playlist embed) happens to be 11 characters long.
+  return candidate && candidate !== 'videoseries' && YOUTUBE_VIDEO_ID.test(candidate) ? candidate : null;
 };
 
 export type VideoEmbedSource = {
@@ -36,15 +74,10 @@ export const getVideoEmbedSource = (value: string): VideoEmbedSource | null => {
     return null;
   }
 
-  const isYoutubeHost =
-    parsed.hostname === 'youtu.be' ||
-    parsed.hostname === 'youtube.com' ||
-    parsed.hostname === 'www.youtube.com';
-  if (isYoutubeHost) {
-    const youtubeId = getYoutubeVideoId(candidate);
-    if (youtubeId) {
-      return { kind: 'iframe', url: `https://www.youtube.com/embed/${youtubeId}` };
-    }
+  if (isYoutubeHostname(parsed.hostname)) {
+    // A YouTube page is never a playable file: embed the video or report the link as invalid.
+    const youtubeId = getYoutubeVideoId(parsed);
+    return youtubeId ? { kind: 'iframe', url: `https://www.youtube.com/embed/${youtubeId}` } : null;
   }
 
   const isClipyHost =

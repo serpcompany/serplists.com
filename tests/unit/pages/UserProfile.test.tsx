@@ -57,6 +57,8 @@ describe('UserProfile search engine tags', () => {
     });
 
     expect(html).toContain('Unable to load profile');
+    expect(html).toContain('Try again');
+    expect(html).not.toContain('User not found');
     expect(meta).not.toContain('noindex');
     expect(title).toContain('Unable to load profile');
     expect(title).not.toContain('not found');

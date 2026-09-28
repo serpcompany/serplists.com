@@ -42,13 +42,10 @@ export const publicSiteLinks: readonly PublicSiteLink[] = [
     label: 'Contact',
     placements: ['footer'],
   },
-  {
-    external: true,
-    footerGroup: 'Network',
-    href: 'https://serp.dr',
-    label: 'SERP DR',
-    placements: ['footer'],
-  },
+  // The Network column is empty, so the footer leaves it out. Its 'SERP DR' link pointed
+  // at https://serp.dr, which cannot resolve (.dr is not a top-level domain). Add it back
+  // as an external https link once the intended URL is confirmed, and add its domain to
+  // the allowlist in tests/unit/components/publicSiteLinks.test.ts.
 ];
 
 const publicFooterGroupOrder: readonly PublicSiteLinkFooterGroup[] = [

@@ -93,6 +93,26 @@ instead of inferring access state from message text:
 - `403 upgrade_required` means the active context needs a paid entitlement.
 - `403 limit_reached` means the active plan limit has been reached.
 - `503 billing_unavailable` means checkout cannot currently be started.
+- `409 already_subscribed` means the User already has Pro or a paid subscription.
+- `409 subscription_needs_attention` means an open subscription is not paid up;
+  the client opens the Customer Portal instead of a second Checkout.
+- `409 plan_managed_by_support` means a manual Free override sets the Personal
+  plan, so self-serve checkout is closed.
+- `409 billing_customer_missing` means Stripe no longer has the User's billing
+  account, so the Customer Portal cannot open; checkout replaces the account.
+- `409 no_billing_account` means the User has no billing account (for example,
+  Pro granted by support), so there is no Customer Portal to open.
+- `409 checkout_in_progress` means another checkout for the User is still
+  starting (a double click or a second tab); trying again shortly succeeds.
+
+### Subscription status
+
+Only `active` and `trialing` Stripe subscriptions grant Pro. A `past_due`,
+`unpaid`, `paused`, or `incomplete` subscription resolves to Free, but it still
+blocks a new Checkout, and Billing shows a notice with Manage subscription so the
+User can fix the payment in the Customer Portal. Whether `past_due` should keep
+Pro during Stripe's retry window is an open product decision; change it here
+first if it is made.
 
 Route `upgrade_required` and `limit_reached` through
 `handleUpgradeRequiredForContext` in `src/lib/access-flow.ts` so every page
@@ -120,5 +140,8 @@ decide, while copying a public Template and exporting one from its detail page
 ### Manual personal-plan overrides
 
 Personal manual overrides take precedence over Stripe-derived state until they
-are removed. Use the [admin override procedure](../SECURITY.md#admin-entitlement-override)
+are removed. While one is active, checkout is refused (a subscription bought under
+a Free override would never grant Pro) and Billing says support manages the plan.
+Billing offers Manage subscription only to a User with a Stripe billing account,
+so Pro granted by support shows just that notice. Use the [admin override procedure](../SECURITY.md#admin-entitlement-override)
 for prerequisites, commands, verification, and temporary-secret cleanup.

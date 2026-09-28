@@ -1,8 +1,9 @@
-import { Navigate, Route, createRoutesFromElements } from 'react-router-dom';
+import { Route, createRoutesFromElements } from 'react-router-dom';
 import { AppShell, RethrowRouteError } from './components/AppShell';
 import { Layout } from './components/Layout';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 import RequireAuth from '@/components/RequireAuth';
+import { LegacyRedirect } from '@/components/LegacyRedirect';
 import Index from './pages/Index';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -52,7 +53,7 @@ export const appRoutes = createRoutesFromElements(
     <Route
       path={LEGACY_PUBLIC_LIBRARY_PATH}
       element={
-        <Navigate replace to={buildPublicTemplatesPath()} />
+        <LegacyRedirect to={buildPublicTemplatesPath()} />
       }
     />
     <Route
@@ -62,13 +63,13 @@ export const appRoutes = createRoutesFromElements(
     {/* Canonical Private Routes */}
     <Route
       path={LEGACY_CONSOLE_HOME_PATH}
-      element={<Navigate replace to={buildConsoleHomePath()} />}
+      element={<LegacyRedirect to={buildConsoleHomePath()} />}
     />
     <Route
       path={buildConsoleHomePath()}
       element={
         <RequireAuth>
-          <Navigate replace to={buildConsoleTemplatesPath()} />
+          <LegacyRedirect to={buildConsoleTemplatesPath()} />
         </RequireAuth>
       }
     />
@@ -193,11 +194,11 @@ export const appRoutes = createRoutesFromElements(
       />
       <Route
         path={LEGACY_CONSOLE_PROFILE_PATH}
-        element={<Navigate replace to={buildConsoleSettingsPath()} />}
+        element={<LegacyRedirect to={buildConsoleSettingsPath()} />}
       />
       <Route
         path={LEGACY_ACCOUNT_PATH}
-        element={<Navigate replace to={buildConsoleSettingsPath()} />}
+        element={<LegacyRedirect to={buildConsoleSettingsPath()} />}
       />
     </Route>
     <Route

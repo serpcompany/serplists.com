@@ -10,6 +10,7 @@ if (env.STRIPE_SECRET_KEY?.startsWith("sk_live_")) {
   for (const key of [
     "STRIPE_SECRET_KEY",
     "STRIPE_PRO_PRICE_ID",
+    "STRIPE_PRO_LEGACY_PRICE_IDS",
     "STRIPE_WEBHOOK_SECRET",
     "STRIPE_PORTAL_CONFIGURATION_ID",
   ]) keys.add(key);

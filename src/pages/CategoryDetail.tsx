@@ -1,31 +1,21 @@
-import { useMemo, useState, type ElementType } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import {
-  ArrowLeft,
-  Briefcase,
-  Code,
-  FileText,
-  Grid3X3,
-  Heart,
-  Layers,
-  List,
-  Paintbrush,
-  Search,
-  TrendingUp,
-  Users,
-  Zap,
-} from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Link, Navigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Grid3X3, List, Search } from 'lucide-react';
 
+import { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
 import { CategoryNavigation } from '@/components/checklist-library/CategoryNavigation';
+import { resolveCategoryPresentation } from '@/components/checklist-library/categoryPresentation';
 import { SearchAndFilters } from '@/components/checklist-library/SearchAndFilters';
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import {
   buildDiscoveryCategories,
   filterAndSortTemplates,
+  findCategoryByLegacySlug,
   type DiscoverySort,
 } from '@/components/checklist-library/discovery-utils';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import NotFound from '@/pages/NotFound';
 import {
   Select,
@@ -38,87 +28,8 @@ import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
-import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
-
-const categoryData: Record<
-  string,
-  {
-    name: string;
-    description: string;
-    icon: ElementType;
-    color: string;
-    bgColor: string;
-  }
-> = {
-  business: {
-    name: 'Business & Operations',
-    description: 'Templates for business processes, operations, and management',
-    icon: Briefcase,
-    color: 'text-blue-400',
-    bgColor: 'bg-blue-500/10',
-  },
-  engineering: {
-    name: 'Engineering & Development',
-    description:
-      'Checklists for code reviews, deployments, and development workflows',
-    icon: Code,
-    color: 'text-emerald-400',
-    bgColor: 'bg-emerald-500/10',
-  },
-  design: {
-    name: 'Design & Creative',
-    description:
-      'Templates for design processes, brand guidelines, and creative projects',
-    icon: Paintbrush,
-    color: 'text-pink-400',
-    bgColor: 'bg-pink-500/10',
-  },
-  marketing: {
-    name: 'Marketing & Growth',
-    description: 'Launch checklists, campaign templates, and growth strategies',
-    icon: TrendingUp,
-    color: 'text-orange-400',
-    bgColor: 'bg-orange-500/10',
-  },
-  hr: {
-    name: 'HR & People',
-    description: 'Onboarding, offboarding, and people management templates',
-    icon: Users,
-    color: 'text-cyan-400',
-    bgColor: 'bg-cyan-500/10',
-  },
-  personal: {
-    name: 'Personal & Lifestyle',
-    description:
-      'Personal productivity, wellness, and life management checklists',
-    icon: Heart,
-    color: 'text-rose-400',
-    bgColor: 'bg-rose-500/10',
-  },
-  productivity: {
-    name: 'Productivity',
-    description: 'Task management, time tracking, and workflow optimization',
-    icon: Zap,
-    color: 'text-yellow-400',
-    bgColor: 'bg-yellow-500/10',
-  },
-  'project-management': {
-    name: 'Project Management',
-    description:
-      'Project planning, milestones, and team coordination templates',
-    icon: Layers,
-    color: 'text-indigo-400',
-    bgColor: 'bg-indigo-500/10',
-  },
-  compliance: {
-    name: 'Compliance & Legal',
-    description:
-      'Regulatory compliance, audits, and legal process checklists',
-    icon: FileText,
-    color: 'text-slate-400',
-    bgColor: 'bg-slate-500/10',
-  },
-};
+import { buildCategoryPageTitle } from '@/lib/publicPageMeta';
+import { buildCategorySlug, buildPublicCategoryPathForSlug, buildSiteUrl } from '@/lib/routes';
 
 type CategorySort = DiscoverySort | 'name';
 
@@ -131,8 +42,27 @@ const sortLabels: Record<CategorySort, string> = {
 
 const isCategorySort = (value: string): value is CategorySort =>
   Object.prototype.hasOwnProperty.call(sortLabels, value);
-const CATEGORY_BASE_URL = 'https://serplists.com/categories';
-const SEO_IMAGE_URL = 'https://serplists.com/placeholder.svg';
+const CATEGORY_BASE_URL = buildSiteUrl('/categories');
+
+const backToCategories = (
+  <div className="mb-6 flex items-center gap-2 text-sm">
+    <Link
+      className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
+      to="/categories"
+    >
+      <ArrowLeft className="h-4 w-4" />
+      All Categories
+    </Link>
+  </div>
+);
+
+const templateGridSkeleton = (
+  <div aria-busy="true" className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    {Array.from({ length: 6 }).map((_, index) => (
+      <Skeleton key={index} className="h-[220px] rounded-lg" />
+    ))}
+  </div>
+);
 
 const CategoryDetail = () => {
   const { categorySlug } = useParams<{ categorySlug: string }>();
@@ -143,29 +73,17 @@ const CategoryDetail = () => {
     surface: 'category-templates',
     userId: user?.id,
   });
-  const { allCategories, templates } = useTemplateLibrary();
+  const { allCategories, templates, loading, catalogError, retryCatalog } =
+    useTemplateLibrary();
 
-  const slug = categorySlug ?? 'business';
+  // The param is decoded but may differ in case or Unicode normal form from the slug.
+  const slug = buildCategorySlug(categorySlug ?? 'business');
   const categories = useMemo(
     () => buildDiscoveryCategories(templates, allCategories),
     [allCategories, templates],
   );
   const categoryStats = categories.find((item) => item.slug === slug);
-  const isKnownCategory = Boolean(categoryStats || categoryData[slug]);
-  const canonicalCategory = PUBLIC_CATEGORY_REGISTRY.find((item) => item.slug === slug);
-  const category = canonicalCategory ? {
-    ...categoryData[slug],
-    ...canonicalCategory,
-  } : categoryData[slug] ?? {
-    name: categoryStats?.name ?? 'Category',
-    description: categoryStats
-      ? `Templates filed under ${categoryStats.name}.`
-      : 'Templates for this workflow area.',
-    icon: FileText,
-    color: 'text-slate-400',
-    bgColor: 'bg-slate-500/10',
-  };
-  const Icon = category.icon;
+  const category = resolveCategoryPresentation(slug, categoryStats);
   const categoryTemplateCount = categoryStats?.count ?? 0;
 
   const filteredTemplates = useMemo(() => {
@@ -187,29 +105,51 @@ const CategoryDetail = () => {
       : base;
   }, [searchQuery, slug, sortBy, templates]);
 
-  if (!isKnownCategory) {
+  // Categories that exist only in database templates are unknown until the catalog loads,
+  // so the 404 page waits for a successful load.
+  if (!category) {
+    if (loading || catalogError) {
+      return (
+        <div className="bg-background">
+          <main className="mx-auto max-w-6xl px-4 py-8">
+            {backToCategories}
+            {catalogError ? (
+              <CatalogLoadError onRetry={retryCatalog} />
+            ) : (
+              <>
+                <div aria-busy="true" className="mb-8 flex items-start gap-6">
+                  <Skeleton className="h-16 w-16 shrink-0 rounded-2xl" />
+                  <div className="flex-1 space-y-3">
+                    <Skeleton className="h-8 w-64 max-w-full" />
+                    <Skeleton className="h-5 w-96 max-w-full" />
+                  </div>
+                </div>
+                {templateGridSkeleton}
+              </>
+            )}
+          </main>
+        </div>
+      );
+    }
+    const legacyCategory = findCategoryByLegacySlug(categories, slug);
+    if (legacyCategory) {
+      return <Navigate replace to={buildPublicCategoryPathForSlug(legacyCategory.slug)} />;
+    }
     return <NotFound />;
   }
+
+  const Icon = category.icon;
 
   return (
     <div className="bg-background">
       <SEOHead
-        title={`${category.name} Templates`}
+        title={buildCategoryPageTitle(category.name)}
         description={`${categoryTemplateCount} templates for ${category.name}. ${category.description}`}
         keywords={[category.name, 'checklist templates', 'workflow templates']}
-        image={SEO_IMAGE_URL}
         url={`${CATEGORY_BASE_URL}/${encodeURIComponent(slug)}`}
       />
       <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-6 flex items-center gap-2 text-sm">
-          <Link
-            className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-            to="/categories"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            All Categories
-          </Link>
-        </div>
+        {backToCategories}
 
         <div className="mb-8 flex items-start gap-6">
           <div
@@ -222,9 +162,13 @@ const CategoryDetail = () => {
               {category.name}
             </h1>
             <p className="mt-1 text-muted-foreground">{category.description}</p>
-            <Badge className="mt-3" variant="secondary">
-              {categoryTemplateCount} templates
-            </Badge>
+            {loading ? (
+              <Skeleton className="mt-3 h-5 w-24" />
+            ) : (
+              <Badge className="mt-3" variant="secondary">
+                {categoryTemplateCount} templates
+              </Badge>
+            )}
           </div>
         </div>
 
@@ -288,7 +232,12 @@ const CategoryDetail = () => {
           }
         />
 
-        {filteredTemplates.length > 0 ? (
+        {catalogError ? (
+          <CatalogLoadError className="mt-6" onRetry={retryCatalog} />
+        ) : null}
+        {loading ? (
+          templateGridSkeleton
+        ) : filteredTemplates.length > 0 ? (
           <div
             className={
               viewMode === 'grid'
@@ -304,7 +253,7 @@ const CategoryDetail = () => {
               />
             ))}
           </div>
-        ) : (
+        ) : catalogError ? null : (
           <div className="mt-6 rounded-xl border border-border bg-card p-12 text-center">
             <p className="text-muted-foreground">
               No templates found matching your search.

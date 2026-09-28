@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { api } from '@/lib/api';
-import { isApiError } from '@/lib/api-errors';
+import { isNotFoundError } from '@/lib/api-errors';
 import {
   REPO_TEMPLATE_OWNER_NAME,
   REPO_TEMPLATE_OWNER_SLUG,
@@ -170,7 +170,7 @@ const fetchProfile = async (
       full_name: parsed.data.full_name ?? null,
     };
   } catch (error) {
-    return isApiError(error) && error.status === 404 ? 'not_found' : null;
+    return isNotFoundError(error) ? 'not_found' : null;
   }
 };
 

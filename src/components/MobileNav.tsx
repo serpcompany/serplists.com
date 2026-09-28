@@ -24,6 +24,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { cn } from '@/lib/utils';
 import {
   buildConsoleArchivePath,
@@ -77,6 +78,7 @@ export function MobileNav() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const { user } = useAuth();
+  const { canEditTemplates } = useWorkspace();
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -93,17 +95,19 @@ export function MobileNav() {
 
         <div className="border-b border-border p-4">
           <div className="flex gap-2">
-            <Button
-              asChild
-              className="flex-1"
-              size="sm"
-              onClick={() => setOpen(false)}
-            >
-              <Link to={buildConsoleTemplateCreatePath()}>
-                <Plus className="mr-2 h-4 w-4" />
-                New Template
-              </Link>
-            </Button>
+            {canEditTemplates ? (
+              <Button
+                asChild
+                className="flex-1"
+                size="sm"
+                onClick={() => setOpen(false)}
+              >
+                <Link to={buildConsoleTemplateCreatePath()}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Template
+                </Link>
+              </Button>
+            ) : null}
             <Button
               asChild
               onClick={() => setOpen(false)}
@@ -167,6 +171,7 @@ export function MobileNav() {
 export function MobileBottomNav() {
   const location = useLocation();
   const pathname = location.pathname;
+  const { canEditTemplates } = useWorkspace();
 
   if (pathname.includes('/edit') || pathname.includes('/new')) {
     return null;
@@ -179,7 +184,7 @@ export function MobileBottomNav() {
       data-mobile-bottom-nav="true"
     >
       <div className="flex h-16 items-center justify-around px-2">
-        {bottomNavItems.map((item) => {
+        {bottomNavItems.filter((item) => canEditTemplates || !item.primary).map((item) => {
           const active = isActivePath(pathname, item.href);
 
           if (item.primary) {

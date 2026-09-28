@@ -1,5 +1,7 @@
 export interface Env {
   DB: D1Database;
+  // Cloudflare Pages binds the static site to every Function (functions/seo/ serves index.html).
+  ASSETS: Fetcher;
   D1_PROFILE?: string;
   JWT_SECRET?: string;
   BETTER_AUTH_SECRET?: string;
@@ -12,6 +14,7 @@ export interface Env {
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRO_PRICE_ID?: string;
+  STRIPE_PRO_LEGACY_PRICE_IDS?: string;
   STRIPE_PORTAL_CONFIGURATION_ID?: string;
   ENTITLEMENTS_ADMIN_SECRET?: string;
   RESEND_API_KEY?: string;

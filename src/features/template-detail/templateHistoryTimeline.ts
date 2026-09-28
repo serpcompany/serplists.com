@@ -6,6 +6,8 @@ import type {
   TemplateHistoryResponse,
   TemplateHistoryVersion,
 } from '@/lib/api';
+import { formatAuditAction, TEMPLATE_HISTORY_LABELS } from '@/lib/auditLabels';
+import { queryKeys } from '@/lib/queryCache';
 import { parseDbTimestamp } from '@/lib/utils/dbTimestamp';
 
 export const TEMPLATE_HISTORY_DISPLAY_LIMIT = 8;
@@ -23,24 +25,7 @@ export const getTemplateHistoryQueryKey = (
   templateId: string | undefined,
   userId: string | undefined,
   teamId: string | undefined,
-) =>
-  [
-    'templates',
-    'history',
-    templateId ?? 'none',
-    userId ?? 'guest',
-    teamId ?? 'personal',
-  ] as const;
-
-const historyActionLabels: Record<string, string> = {
-  'template.cloned': 'Copied template',
-  'template.created': 'Created template',
-  'template.deleted': 'Archived template',
-  'template.imported': 'Imported template',
-  'template.restored': 'Restored template',
-  'template.updated': 'Updated template',
-  'template.versioned': 'Saved template version',
-};
+) => queryKeys.templateHistoryFor(templateId ?? 'none', userId, teamId);
 
 // Share and the visibility switch send only is_public, which creates no version.
 const visibilityOnlyDiffSchema = z
@@ -51,7 +36,7 @@ const getActorName = (actor?: TemplateHistoryActor): string =>
   actor?.name || actor?.username || actor?.email || 'Unknown user';
 
 const getVersionLabel = (version: TemplateHistoryVersion): string =>
-  `${historyActionLabels[version.action] ?? version.action} v${version.version}`;
+  `${formatAuditAction(TEMPLATE_HISTORY_LABELS, version.action)} v${version.version}`;
 
 const getEventLabel = (event: TemplateHistoryEvent): string => {
   if (event.action === 'template.updated') {
@@ -61,7 +46,7 @@ const getEventLabel = (event: TemplateHistoryEvent): string => {
     }
   }
 
-  return historyActionLabels[event.action] ?? event.action;
+  return formatAuditAction(TEMPLATE_HISTORY_LABELS, event.action);
 };
 
 // Every versioned write also records an audit event with the same action and time.

@@ -28,10 +28,24 @@ and user-facing failure states when a supporting service is unavailable.
 - Email verification is required before sign-in where
   `AUTH_EMAIL_VERIFICATION_REQUIRED=true` (production). Login offers to resend the
   verification email when sign-in is blocked.
+- Verification emails return to `/login?verified=1`. Links expire after Better
+  Auth's default of one hour; a failed link (expired, invalid, or for a deleted
+  account) returns to the same URL with `&error=<code>` appended. Login checks
+  `error` before `verified`, explains the failure, and offers to resend
+  (`src/lib/auth/loginNotice.ts`), then removes the one-shot parameters from the
+  URL. Better Auth puts the callback into the email link unencoded, so it must
+  not contain a raw `&`; `buildEmailVerifiedCallbackURL` encodes an extra `next`
+  parameter one more time so it survives the link.
 - Verification and reset emails use `RESEND_API_KEY`, then `USESEND_API_KEY`.
   Callbacks await delivery so provider failures surface in the request.
   `GET /api/auth/status` reports whether email delivery is available.
-- Protected routes preserve the requested destination through login.
+- Protected routes preserve the requested destination (path, query, and hash)
+  through login and sign-up (`src/lib/auth/returnPath.ts`), so a signed-out
+  return from Stripe keeps `?billing=success`. It travels as router state `from`
+  and as a `next` query parameter, which Login, Register, and the verification
+  callback carry forward so a new account returns to the page that sent it, such
+  as an Organization invite. Only same-origin, non-auth paths are accepted (one
+  leading `/`, not `//`); without one, Login goes to `/dashboard/settings`.
 - A session check that fails (`5xx`, `429`, or a network error) is not a sign-out:
   only a successful answer with no session, or a `401`, is. `AuthProvider` retries the
   first check twice, then reports `sessionStatus: 'unavailable'`, and `RequireAuth`
@@ -48,7 +62,10 @@ and user-facing failure states when a supporting service is unavailable.
   the local session only when the server confirms it, or answers that there is no
   session (`400 FAILED_TO_GET_SESSION`, `401`). On a `429`, `403`, `5xx`, or network
   failure the session cookie is still valid, so the user stays signed in and the menu
-  shows the error. Callers navigate away only on `{ ok: true }`.
+  shows the error. Callers navigate away only on `{ ok: true }`, and a page that sends
+  the user to `/login` after signing out must wait for it (`signOutAndReturn` in
+  `src/features/auth/signOut.ts`): Login redirects a signed-in visitor straight to
+  the return path.
 - Tabs share one session cookie, so every tab follows a sign-in or sign-out made in
   another (`src/contexts/sessionSync.ts`). A tab that signs in, signs out, or loads
   the session announces its user id on a `BroadcastChannel` (a `localStorage`
@@ -71,6 +88,11 @@ and user-facing failure states when a supporting service is unavailable.
   policy client-side.
 - Profile: `name`, `username`, `avatar_url`; public lookup through
   `GET /api/profiles/by-username?username=...` and `GET /api/profiles/by-id?userId=...`.
+  Public profile and Template share URLs use the username, so Account Settings
+  lets a saved username change but not be cleared (`src/pages/accountProfileUpdates.ts`).
+  Saving a new username or name refreshes the cached Template lists, which embed
+  the owner's username, and Share always builds the link from the signed-in owner's
+  current username. Links shared under an old username stop working after a rename.
 - Settings live at `/dashboard/settings`; `/account` and `/dashboard/profile`
   redirect there.
 

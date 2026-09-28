@@ -14,6 +14,7 @@ import type {
 } from "@/lib/schemas/checklistSchema";
 import { toPortableSections } from "@/lib/schemas/portableSections";
 import { formatValidationError } from "@/lib/schemas/formatValidationError";
+import { uniqueCategoryNames } from "@/lib/categorySlug";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
 import { findInvalidImportSectionEntry } from "@/lib/utils/importSectionEntries";
 import { withImportedLinkSource } from "@/lib/utils/mediaSource";
@@ -76,6 +77,10 @@ const normalizeStringList = (value: unknown): string[] => {
   return [];
 };
 
+// Categories repeat nothing that shares a slug ('SEO', 'seo'), so a template counts once
+// toward each category page.
+const normalizeCategoryList = (value: unknown): string[] => uniqueCategoryNames(normalizeStringList(value));
+
 // A flat list of tasks (the legacy `items` form) goes into one "Checklist" section.
 const coerceSections = (input: unknown, templateTitle: string): ChecklistSection[] | null => {
   const parsed = parseJsonArray(input);
@@ -124,7 +129,7 @@ const normalizeImportTemplate = (
     seoTitle: template.seoTitle || "",
     seoDescription: template.seoDescription || "",
     rules: template.rules,
-    categories: normalizeStringList(template.categories ?? template.category),
+    categories: normalizeCategoryList(template.categories ?? template.category),
     tags: normalizeStringList(template.tags),
   };
 };
@@ -153,7 +158,7 @@ const normalizePortableTemplate = (
     seoTitle: template.seoTitle || "",
     seoDescription: template.seoDescription || "",
     rules: template.rules,
-    categories: normalizeStringList(template.categories),
+    categories: normalizeCategoryList(template.categories),
     tags: normalizeStringList(template.tags),
   };
 };
@@ -242,7 +247,7 @@ export const exportPortableTemplatesToJSON = (
       seoTitle: template.seoTitle || undefined,
       seoDescription: template.seoDescription || undefined,
       visibility: template.isPublic ? "public" : "private",
-      categories: normalizeStringList(template.categories),
+      categories: normalizeCategoryList(template.categories),
       tags: normalizeStringList(template.tags),
       // Only portable keys: no run state such as isCompleted.
       sections: toPortableSections(template.sections) as PortableChecklistTemplate["sections"],

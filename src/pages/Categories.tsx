@@ -22,7 +22,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
-import { buildPublicCategoryPath } from '@/lib/routes';
+import { CATEGORY_INDEX_PAGE_TEXT } from '@/lib/publicPageMeta';
+import { buildPublicCategoryPathForSlug, buildSiteUrl } from '@/lib/routes';
 import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 
 const categoryStyles = {
@@ -48,8 +49,7 @@ const defaultCategoryMeta = {
   color: 'text-slate-400',
   bgColor: 'bg-slate-500/10',
 };
-const CATEGORIES_URL = 'https://serplists.com/categories';
-const SEO_IMAGE_URL = 'https://serplists.com/placeholder.svg';
+const CATEGORIES_URL = buildSiteUrl('/categories');
 
 const getCategoryMeta = (slug: string) =>
   categoryMetadata.find((category) => category.slug === slug) ??
@@ -82,10 +82,9 @@ const Categories = () => {
   return (
     <div className="bg-background">
       <SEOHead
-        title="Browse Template Categories"
-        description="Explore checklist templates organized by category."
+        title={CATEGORY_INDEX_PAGE_TEXT.title}
+        description={CATEGORY_INDEX_PAGE_TEXT.description}
         keywords={['template categories', 'checklist categories', 'workflow templates']}
-        image={SEO_IMAGE_URL}
         url={CATEGORIES_URL}
       />
       <main className="mx-auto max-w-6xl px-4 py-8">
@@ -122,7 +121,7 @@ const Categories = () => {
               const meta = getCategoryMeta(category.slug);
               const Icon = meta.icon;
               return (
-                <Link key={category.slug} to={buildPublicCategoryPath(category.name)}>
+                <Link key={category.slug} to={buildPublicCategoryPathForSlug(category.slug)}>
                   <Card className="group h-full border-border bg-card transition-all hover:border-muted-foreground/50 hover:bg-card/80">
                     <CardContent className="p-6">
                       <div
@@ -153,7 +152,7 @@ const Categories = () => {
               const meta = getCategoryMeta(category.slug);
               const Icon = meta.icon;
               return (
-                <Link key={category.slug} to={buildPublicCategoryPath(category.name)}>
+                <Link key={category.slug} to={buildPublicCategoryPathForSlug(category.slug)}>
                   <Card className="group border-border bg-card transition-all hover:border-muted-foreground/50 hover:bg-card/80">
                     <CardContent className="flex items-center gap-4 p-4">
                       <div

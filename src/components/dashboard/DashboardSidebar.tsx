@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { cn } from '@/lib/utils';
 import {
   buildConsoleArchivePath,
@@ -62,6 +63,7 @@ const isActivePath = (pathname: string, href: string) =>
 
 export function DashboardSidebar() {
   const location = useLocation();
+  const { canEditTemplates } = useWorkspace();
   const importTemplatesPath = buildConsoleTemplateImportPath();
   const importTemplatesActive = isActivePath(location.pathname, importTemplatesPath);
 
@@ -74,14 +76,16 @@ export function DashboardSidebar() {
         </span>
       </div>
 
-      <div className="p-3">
-        <Button asChild className="w-full justify-start gap-2">
-          <Link to={buildConsoleTemplateCreatePath()}>
-            <PlusCircle className="h-4 w-4" />
-            New Template
-          </Link>
-        </Button>
-      </div>
+      {canEditTemplates ? (
+        <div className="p-3">
+          <Button asChild className="w-full justify-start gap-2">
+            <Link to={buildConsoleTemplateCreatePath()}>
+              <PlusCircle className="h-4 w-4" />
+              New Template
+            </Link>
+          </Button>
+        </div>
+      ) : null}
 
       <nav className="flex-1 px-3">
         <ul className="space-y-1">

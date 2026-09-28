@@ -6,6 +6,11 @@ import { promisify } from 'node:util';
 
 type SitemapTemplate = {
   slug: string;
+  // Page text for link previews (functions/seo/public-page-meta.ts).
+  title: string;
+  description?: string;
+  seoTitle?: string;
+  seoDescription?: string;
   categories: string[];
   contentHash: string;
   lastmod: string;
@@ -49,6 +54,9 @@ const staticPageSources = [
   { path: '/templates', sources: ['src/pages/ChecklistLibrary.tsx'] },
   { path: '/categories', sources: ['src/pages/Categories.tsx'] },
 ] as const;
+
+const optionalText = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim() ? value : undefined;
 
 const normalizeDate = (value: unknown): string | null => {
   if (typeof value !== 'string' || !value.trim()) return null;
@@ -111,8 +119,15 @@ for (const fileName of files) {
       : packGitLastmod ?? packFallbackLastmod;
     if (!lastmod) throw new Error(`Unable to determine lastmod for ${slug}`);
 
+    const title = optionalText(template.title);
+    if (!title) throw new Error(`Public template ${slug} has no title`);
+
     templates.push({
       slug,
+      title,
+      description: optionalText(template.description),
+      seoTitle: optionalText(template.seoTitle),
+      seoDescription: optionalText(template.seoDescription),
       categories: Array.isArray(template.categories)
         ? template.categories.filter((value): value is string => typeof value === 'string')
         : [],

@@ -2,11 +2,16 @@ import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
-import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
+import { onSingleClick } from '@/lib/utils/repeatClick';
 import type { ChecklistItem, ChecklistSection } from '@/types/checklist';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
+import { TaskHeaderReveal } from '@/components/run-execution/TaskHeaderReveal';
+import {
+  getPrimaryTaskButton,
+  type PrimaryTaskAction,
+} from '@/features/run-execution/primaryTaskAction';
+import { getTaskCheckboxLabel } from '@/features/run-execution/taskCheckboxLabel';
 
 interface TaskExecutionPanelProps {
   section: ChecklistSection;
@@ -14,13 +19,25 @@ interface TaskExecutionPanelProps {
   task: ChecklistItem;
   taskIndex: number;
   totalTasks: number;
+  onFinishRun: () => void;
   onNavigateNext: () => void;
   onNavigatePrev: () => void;
-  onToggleSubItem: (contentIndex: number, subItemIndex: number) => void;
-  onToggleTask: () => void;
+  onSelectTask: (itemId: string) => void;
+  // isCompleted is the value the user clicked, so a click queued behind a slow save still
+  // sets what they saw and chose.
+  onToggleSubItem: (contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
+  onToggleTask: (isCompleted: boolean) => void;
+  notesDraft?: string;
+  onNotesDraftChange: (notes: string) => void;
   onSaveNotes: (notes: string) => Promise<boolean>;
   hasNext: boolean;
   hasPrev: boolean;
+  primaryAction: PrimaryTaskAction;
+  // Organization members whose role cannot update the run can only read it.
+  readOnly?: boolean;
+  // A completed run is frozen: its tasks and sub-tasks cannot be ticked or unticked.
+  // Notes stay editable, as they do not change completion.
+  runCompleted?: boolean;
 }
 
 export function TaskExecutionPanel({
@@ -29,19 +46,35 @@ export function TaskExecutionPanel({
   task,
   taskIndex,
   totalTasks,
+  onFinishRun,
   onNavigateNext,
   onNavigatePrev,
+  onSelectTask,
   onToggleSubItem,
   onToggleTask,
+  notesDraft,
+  onNotesDraftChange,
   onSaveNotes,
   hasNext,
   hasPrev,
+  primaryAction,
+  readOnly = false,
+  runCompleted = false,
 }: TaskExecutionPanelProps) {
   const isTaskComplete = task.isCompleted === true;
+  const canTick = !readOnly && !runCompleted;
+  const primaryButton = getPrimaryTaskButton(primaryAction, {
+    onCompleteTask: () => onToggleTask(true),
+    onFinishRun,
+    onNavigateNext,
+    onSelectTask,
+  });
 
   return (
     <div className="flex h-full min-h-full flex-col">
-      <div className="border-b border-border bg-card px-8 py-6">
+      {/* This panel stays mounted while the task inside it changes, and the window is what
+          scrolls: moving to another task scrolls its header into view and focuses the title. */}
+      <TaskHeaderReveal className="border-b border-border bg-card px-8 py-6" taskId={task.id}>
         <div className="mx-auto max-w-2xl">
           <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
             <span>{getSectionDisplayTitle(section, sectionIndex)}</span>
@@ -52,54 +85,69 @@ export function TaskExecutionPanel({
           </div>
 
           <div className="flex items-start gap-4">
+            {/* Completing the task moves on to the next one, so a double click would
+                also toggle that task: the second click is ignored. Once the task is done
+                the footer button moves on, so this is the only way to untick it: it is a
+                named checkbox with its checked state. */}
             <button
-              onClick={onToggleTask}
-              className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors"
+              aria-checked={isTaskComplete}
+              aria-label={getTaskCheckboxLabel(task.title, taskIndex + 1)}
+              disabled={!canTick}
+              onClick={onSingleClick(() => onToggleTask(!isTaskComplete))}
+              className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              role="checkbox"
               type="button"
             >
               {isTaskComplete ? (
-                <span className="flex h-6 w-6 items-center justify-center rounded-md border-success bg-success text-success-foreground">
+                <span
+                  aria-hidden="true"
+                  className="flex h-6 w-6 items-center justify-center rounded-md border-success bg-success text-success-foreground"
+                >
                   <Check className="h-4 w-4" />
                 </span>
               ) : (
-                <span className="h-6 w-6 rounded-md border-2 border-muted-foreground/30" />
+                <span aria-hidden="true" className="h-6 w-6 rounded-md border-2 border-muted-foreground/30" />
               )}
             </button>
             <div className="flex-1">
-              <h2 className="text-xl font-semibold text-foreground">
+              <h2 className="text-xl font-semibold text-foreground focus:outline-none" tabIndex={-1}>
                 {task.title}
               </h2>
               {task.description ? (
                 <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
-                  {normalizeDisplayText(task.description)}
+                  {task.description}
                 </p>
               ) : null}
             </div>
           </div>
         </div>
-      </div>
+      </TaskHeaderReveal>
 
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div className="mx-auto max-w-2xl space-y-4">
           {task.contents?.length ? (
             <ContentRenderer
               contents={task.contents}
-              disabled={false}
+              disabled={!canTick}
               onSubItemToggle={onToggleSubItem}
             />
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Checkbox checked={false} disabled className="mb-3 h-5 w-5" />
+              {/* Decorative: an empty box, not a control. */}
+              <span aria-hidden="true" className="mb-3 h-5 w-5 shrink-0 rounded-sm border border-primary opacity-50" />
               <p className="text-sm text-muted-foreground">
                 No additional content for this task
               </p>
             </div>
           )}
           <RunNotesEditor
-            initialValue={task.notes}
+            draft={notesDraft}
             key={task.id}
             label="Task notes"
+            onDraftChange={onNotesDraftChange}
             onSave={onSaveNotes}
+            readOnly={readOnly}
+            savedValue={task.notes}
           />
         </div>
       </div>
@@ -117,35 +165,18 @@ export function TaskExecutionPanel({
             Previous
           </Button>
 
+          {/* The action changes under the pointer (Next Task shows the next, open task,
+              whose button reads Mark Complete), so the second click of a double click is
+              ignored. */}
           <Button
-            onClick={() => {
-              if (!isTaskComplete) {
-                onToggleTask();
-                return;
-              }
-
-              if (hasNext) {
-                onNavigateNext();
-              }
-            }}
+            onClick={primaryButton.onClick && onSingleClick(primaryButton.onClick)}
+            disabled={primaryButton.disabled}
             className="gap-2"
             type="button"
           >
-            {isTaskComplete ? (
-              hasNext ? (
-                <>
-                  Next Task
-                  <ChevronRight className="h-4 w-4" />
-                </>
-              ) : (
-                'Finish Run'
-              )
-            ) : (
-              <>
-                <Check className="h-4 w-4" />
-                Mark Complete
-              </>
-            )}
+            {primaryButton.icon === 'check' ? <Check className="h-4 w-4" /> : null}
+            {primaryButton.label}
+            {primaryButton.icon === 'next' ? <ChevronRight className="h-4 w-4" /> : null}
           </Button>
 
           <Button

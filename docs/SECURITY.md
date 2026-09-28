@@ -35,6 +35,7 @@ and `.env.local` are deprecated. Production values are Cloudflare Pages secrets.
 | `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID` | Required for Checkout |
 | `STRIPE_WEBHOOK_SECRET` | Required only by the webhook endpoint |
 | `STRIPE_PORTAL_CONFIGURATION_ID` | Required for self-serve subscription management |
+| `STRIPE_PRO_LEGACY_PRICE_IDS` | Optional, comma-separated; earlier Pro prices that still grant Pro after a price change |
 | `RESEND_API_KEY` or `USESEND_API_KEY` | At least one, for verification and reset emails; otherwise auth-email actions return `503 auth_email_unavailable` |
 | `EMAIL_FROM` | Optional sender override (default `noreply@mail.auth.serp.co`) |
 | `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | Optional CORS allowlist |
@@ -75,6 +76,27 @@ Applied in `functions/api/[[route]].ts` through `functions/api/utils/cors.ts`:
 Locally, the dev launcher keeps the frontend origin and the allowlist in sync when
 it moves ports. Do not hand-edit only one side.
 
+## Secrets in URLs and third-party tags
+
+`index.html` loads the Google Tag Manager container, and its tags read the full page
+URL (GA4 sends it as `page_location`). So:
+
+- The bootstrap in `index.html` skips the container for any document that opens on
+  `/share/*`, `/team-invites/*` or `/reset-password`, or whose query has a `token`,
+  `email`, `code` or `state` parameter, or a `next` return path
+  (`src/lib/auth/returnPath.ts`) that points at one of those. The verification email
+  returns a new invitee to `/login?verified=1&next=%2Fteam-invites%2F<token>`. The rule
+  lives in `src/lib/analyticsUrl.ts`; `index.html` inlines a copy, and
+  `tests/unit/security/gtmBootstrap.test.ts` checks that both agree.
+- The app never puts an email address into a URL it navigates to, and puts a secret
+  there only inside a `next` return path, which the rule above covers. Sign-up
+  passes the new account's email to `/login` in router state; the reset page reads its
+  token once and removes it from the address bar (a reload offers a new link). When
+  sign-in returns to an invite link in a document where the tags run, it loads the
+  invite as a new page instead of navigating client-side.
+- GA4 data redaction for email and the `token`/`email` query parameters is a useful
+  second layer in the GA admin, but it cannot remove tokens in a path.
+
 ## Rate limits
 
 Best-effort, per IP, in `functions/api/[[route]].ts`, before Better Auth dispatch:
@@ -108,3 +130,13 @@ curl -X POST "https://serplists.com/api/admin/entitlements/override" \
 curl -X DELETE "https://serplists.com/api/admin/entitlements/override?userId=USER_ID" \
   -H "X-Admin-Secret: $ENTITLEMENTS_ADMIN_SECRET"          # remove the override
 ```
+
+An active `"free"` override closes self-serve checkout: `POST /api/billing/checkout`
+returns `409 plan_managed_by_support` and Billing shows that support manages the plan,
+until the override is deleted or expires (a `"pro"` override already returns
+`409 already_subscribed`). A `"free"` override does not cancel an
+existing Stripe subscription, which keeps billing: cancel it in Stripe (the user can
+also still open the Customer Portal). A `"pro"` comp creates no Stripe customer, so
+Billing shows that support manages the plan instead of Manage subscription, and the
+portal returns `409 no_billing_account`. To end a comp, prefer `DELETE`, which returns the
+user to their Stripe state.

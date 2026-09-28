@@ -1,4 +1,5 @@
 import type { api, ChecklistRunHistoryResponse, TemplateHistoryEvent } from '@/lib/api';
+import { queryKeys } from '@/lib/queryCache';
 
 // The run page shows the latest few events. Every progress save writes an audit event, so
 // without a limit the API reads its default of 50 audit rows (plus their users) per view.
@@ -12,7 +13,8 @@ export const buildRunHistoryQuery = (params: {
   client: RunHistoryClient;
 }) => ({
   // The limit is part of the key, so a longer history view never reuses the preview entry.
-  queryKey: ['checklist-run-history', params.runId ?? 'none', { limit: RUN_HISTORY_PREVIEW_LIMIT }],
+  // The key starts with queryKeys.runHistory, so a save's refreshRunHistory reaches it.
+  queryKey: [...queryKeys.runHistory(params.runId ?? 'none'), { limit: RUN_HISTORY_PREVIEW_LIMIT }],
   queryFn: (): Promise<ChecklistRunHistoryResponse> =>
     params.client.getChecklistHistory(params.runId ?? '', { limit: RUN_HISTORY_PREVIEW_LIMIT }),
   // Shared runs (share links) never load history.

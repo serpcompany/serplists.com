@@ -117,7 +117,7 @@ High-value first targets:
 - `src/pages/ChecklistRun.tsx`
 - `src/pages/TemplateDetail.tsx`
 - `src/pages/TemplateEditor.tsx`
-- `src/pages/UserProfile.tsx`
+- `src/pages/UserProfile.tsx` (done 2026-09-28: loads through `src/features/profile/loadUserProfile.ts`)
 
 Expected result:
 

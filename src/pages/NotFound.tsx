@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import { PageHero, PageSection, Surface } from '@/components/layout/page-shell';
+import { NotFoundHead } from '@/components/shared/NotFoundHead';
 import { Button } from '@/components/ui/button';
 
 const NotFound = () => {
@@ -20,6 +21,8 @@ const NotFound = () => {
       spacing="spacious"
       width="narrow"
     >
+      {/* Render NotFound only once a lookup has settled, never while it is loading. */}
+      <NotFoundHead title="Page not found" />
       <Surface className="mx-auto w-full text-center" padding="xl" tone="glass">
         <PageHero
           align="center"

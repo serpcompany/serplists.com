@@ -120,6 +120,37 @@ test.describe('route structure', () => {
     await expect(page).toHaveURL(/\/dashboard\/settings$/);
   });
 
+  test('legacy redirects keep the query string and hash', async ({ page }) => {
+    await mockAuthenticatedRouteApi(page);
+
+    await page.goto('/dashboard/profile?foo=1#top');
+    await expect(page).toHaveURL(/\/dashboard\/settings\?foo=1#top$/);
+
+    await page.goto('/account?billing=cancel');
+    await expect(page.getByText('Upgrade canceled.')).toBeVisible();
+    await expect(page).toHaveURL(/\/dashboard\/settings$/);
+  });
+
+  test('returning from Checkout through /account confirms Pro once it activates', async ({ page }) => {
+    await mockAuthenticatedRouteApi(page);
+    let statusReads = 0;
+    // Registered last, so it answers before the generic mock: Free first, then Pro.
+    await page.route('**/api/billing/status**', async (route) => {
+      statusReads += 1;
+      await fulfillJson(route, {
+        billingEnabled: true,
+        plan: statusReads >= 2 ? 'pro' : 'free',
+        subscriptionStatus: statusReads >= 2 ? 'active' : null,
+        canManageBilling: true,
+        managedBySupport: false,
+      });
+    });
+
+    await page.goto('/account?billing=success');
+    await expect(page.getByText('Welcome to Pro!')).toBeVisible({ timeout: 20_000 });
+    await expect(page).toHaveURL(/\/dashboard\/settings$/);
+  });
+
   test('canonical dashboard resolves to the templates dashboard surface', async ({
     page,
   }) => {
@@ -144,6 +175,42 @@ test.describe('route structure', () => {
     await expect(
       page.getByRole('heading', { name: 'That page does not exist' }),
     ).toBeVisible();
+  });
+
+  test('not-found pages are noindexed and real pages are not', async ({ page }) => {
+    // Pages answers unknown paths with index.html and a 200, so the robots tag is the
+    // only thing that keeps a missing URL out of search results.
+    for (const path of [
+      '/definitely-missing',
+      '/categories/definitely-missing',
+      '/features/definitely-missing',
+    ]) {
+      await page.goto(path);
+      await expect(
+        page.getByRole('heading', { name: 'That page does not exist' }),
+      ).toBeVisible();
+      await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+        'content',
+        /noindex/,
+      );
+    }
+
+    for (const [path, heading] of [
+      ['/categories/business', 'Business & Operations'],
+      ['/categories/outdoor', 'outdoor'],
+      ['/features/template-builder', 'Template Builder'],
+    ] as const) {
+      await page.goto(path);
+      await expect(
+        page.getByRole('heading', { exact: true, name: heading }).first(),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'That page does not exist' }),
+      ).toHaveCount(0);
+      await expect(
+        page.locator('meta[name="robots"][content*="noindex"]'),
+      ).toHaveCount(0);
+    }
   });
 
   test('shared checklist pages use /share and render noindex,nofollow', async ({

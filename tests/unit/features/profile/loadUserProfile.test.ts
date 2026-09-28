@@ -70,11 +70,13 @@ describe('loadUserProfile', () => {
     });
 
     await expect(loadUserProfile('ghost', { apiClient })).resolves.toEqual({ kind: 'not_found' });
+    expect(apiClient.getPublicTemplatesForUser).not.toHaveBeenCalled();
     await expect(loadUserProfile(undefined, { apiClient })).resolves.toEqual({ kind: 'not_found' });
   });
 
   it.each([
     ['a server error', createApiError(503, { error: 'Service unavailable' })],
+    ['a rate limit', createApiError(429, { error: 'Too many requests' })],
     ['a network failure', new TypeError('Failed to fetch')],
   ])('reports %s as a failed load, not a missing user', async (_label, error) => {
     const apiClient = buildApiClient({ getProfileByUsername: vi.fn().mockRejectedValue(error) });

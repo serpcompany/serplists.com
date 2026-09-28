@@ -1,45 +1,46 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
 import { api, type ChecklistRunHistoryResponse } from '@/lib/api';
+import { markRunShared, refreshRunHistory } from '@/lib/queryCache';
+import { getRunTitleError } from '@/lib/schemas/nameLimits';
 import { buildSharePath } from '@/lib/routes';
-import { calculateSectionsProgress } from '@/lib/utils/checklistSections';
 import type { ChecklistRun } from '@/types/checklist';
 
 import {
   areAllRunItemsCompleted,
+  areItemSubItemsCompleted,
   cloneRunSections,
   countRunExecutionItems,
+  findRunSubItem,
   getInitialSelectedItemId,
-  getNextSelectedItemId,
   getSelectedRunItem,
+  getSelectionAfterToggle,
+  itemHasCompletion,
   mapChecklistToRun,
   setSubItemsCompletion,
 } from './runExecutionMappers';
+import { applyNoteDrafts, draftedNotesChanged, hasNoteDraftFor, pruneNoteDrafts, updateNoteDraft, type NoteDrafts } from './noteDrafts';
+import {
+  COMPLETED_RUN_FROZEN_MESSAGE,
+  toErrorResult,
+  type RunExecutionActionResult,
+  type RunExecutionLoadResult,
+  type RunExecutionMode,
+} from './runExecutionResult';
 import { buildRunHistoryQuery } from './runHistory';
-import { createSaveQueue } from './saveQueue';
+import { createRunSaver, type QueuedRunSave, type RunSave } from './runSaver';
+import {
+  getApiClient,
+  persistRun,
+  type RunExecutionDependencies,
+  type RunExecutionMutationParams,
+  type UpdateRun,
+} from './runPersistence';
+import { isRunTitleChange } from './runTitle';
 
-type RunExecutionApiClient = Pick<
-  typeof api,
-  | 'createChecklistRunShare'
-  | 'getChecklistById'
-  | 'getSharedChecklist'
-  | 'updateSharedChecklist'
->;
-
-// Private run saves. Only a rename passes { includeTitle: true }: a stored title can predate
-// the 160-character limit, and resending it would fail every tick, note and completion.
-type UpdateRun = (
-  run: ChecklistRun,
-  options?: { includeTitle?: boolean },
-) => void | Promise<ChecklistRun | void>;
-
-type RunExecutionDependencies = {
-  apiClient?: RunExecutionApiClient;
-  origin?: string;
-  updateRun: UpdateRun;
-};
+export type { RunExecutionActionResult, RunExecutionLoadResult, RunExecutionMode } from './runExecutionResult';
 
 type RunExecutionLoadOptions = {
   getCachedRun?: (id: string) => ChecklistRun | undefined;
@@ -47,18 +48,22 @@ type RunExecutionLoadOptions = {
   shareToken?: string;
 };
 
-type RunExecutionMutationParams = {
-  run?: ChecklistRun | null;
-  shareToken?: string;
-};
-
+// isCompleted is the value the user clicked, set rather than flipped: a save queued behind
+// another, or retried on a reloaded run, never inverts it or undoes the same change made
+// elsewhere.
 type ToggleRunItemParams = RunExecutionMutationParams & {
+  isCompleted: boolean;
   itemId: string;
+  // Unsaved notes; the toggled task's draft is saved with the toggle (one PUT).
+  noteDrafts?: NoteDrafts;
 };
 
 type ToggleRunSubItemParams = RunExecutionMutationParams & {
   contentIndex: number;
+  isCompleted: boolean;
   itemId: string;
+  // Finds the sub-task by id when a reloaded run moved it to another row.
+  subItemId?: string;
   subItemIndex: number;
 };
 
@@ -73,48 +78,9 @@ type SaveRunTitleParams = RunExecutionMutationParams & {
 
 type CompleteRunExecutionParams = RunExecutionMutationParams & {
   completedAt?: string;
+  // Unsaved notes for any task, saved with the completion before the page leaves.
+  noteDrafts?: NoteDrafts;
 };
-
-export type RunExecutionMode = 'private' | 'shared';
-
-export type RunExecutionLoadResult =
-  | {
-      kind: 'ok';
-      mode: RunExecutionMode;
-      run: ChecklistRun;
-      selectedItemId: string | null;
-    }
-  | {
-      kind: 'error';
-      message: string;
-      mode: RunExecutionMode;
-    }
-  | {
-      kind: 'not_found';
-      mode: RunExecutionMode;
-    };
-
-export type RunExecutionActionResult =
-  | {
-      kind: 'ok';
-      run?: ChecklistRun;
-      shareUrl?: string;
-      shouldPromptComplete?: boolean;
-    }
-  | {
-      // The same action was already pending (a double click); nothing was sent.
-      kind: 'ignored';
-    }
-  | {
-      kind: 'shared_disabled';
-    }
-  | {
-      kind: 'not_found';
-    }
-  | {
-      kind: 'error';
-      message: string;
-    };
 
 export type RunExecutionHistoryState = {
   data: ChecklistRunHistoryResponse | null;
@@ -127,58 +93,11 @@ export type UseRunExecutionModelOptions = RunExecutionLoadOptions & {
   dependencies?: Omit<RunExecutionDependencies, 'updateRun'>;
 };
 
-const getApiClient = (
-  dependencies: RunExecutionDependencies,
-): RunExecutionApiClient => dependencies.apiClient ?? api;
-
 const resolveMode = ({
   shareToken,
 }: {
   shareToken?: string;
 }): RunExecutionMode => (shareToken ? 'shared' : 'private');
-
-const toErrorResult = (
-  error: unknown,
-  fallbackMessage: string,
-): RunExecutionActionResult => ({
-  kind: 'error',
-  message: error instanceof Error ? error.message : fallbackMessage,
-});
-
-const persistRun = async (
-  params: RunExecutionMutationParams & { includeTitle?: boolean },
-  dependencies: RunExecutionDependencies,
-): Promise<ChecklistRun> => {
-  if (!params.run) {
-    throw new Error('Run not found.');
-  }
-
-  const apiClient = getApiClient(dependencies);
-  const progress = calculateSectionsProgress(params.run.sections);
-  const nextRun = { ...params.run, progress };
-
-  if (params.shareToken) {
-    const result = await apiClient.updateSharedChecklist(params.shareToken, {
-      completed_at: nextRun.completedAt,
-      expected_revision: nextRun.revision,
-      progress,
-      sections: nextRun.sections,
-      status: nextRun.status,
-    });
-    return {
-      ...nextRun,
-      revision:
-        typeof (result as { revision?: unknown })?.revision === 'number'
-          ? (result as { revision: number }).revision
-          : nextRun.revision,
-    };
-  }
-
-  const persisted = params.includeTitle
-    ? await dependencies.updateRun(nextRun, { includeTitle: true })
-    : await dependencies.updateRun(nextRun);
-  return persisted ?? nextRun;
-};
 
 const withClonedRun = (run: ChecklistRun): ChecklistRun => ({
   ...run,
@@ -260,6 +179,26 @@ export const loadRunExecutionData = async (
   }
 };
 
+// Saves a toggled run. A run the toggle left unchanged (it already had the chosen value)
+// is not sent.
+const saveToggledRun = async (
+  run: ChecklistRun,
+  changed: boolean,
+  shareToken: string | undefined,
+  dependencies: RunExecutionDependencies,
+): Promise<RunExecutionActionResult> => {
+  try {
+    const saved = changed ? await persistRun({ run, shareToken }, dependencies) : run;
+    return {
+      kind: 'ok',
+      run: saved,
+      shouldPromptComplete: saved.status !== 'completed' && areAllRunItemsCompleted(saved),
+    };
+  } catch (error) {
+    return toErrorResult(error, 'Unable to save your progress.');
+  }
+};
+
 export const toggleRunItem = async (
   params: ToggleRunItemParams,
   dependencies: RunExecutionDependencies,
@@ -267,8 +206,14 @@ export const toggleRunItem = async (
   if (!params.run) {
     return { kind: 'not_found' };
   }
+  // Checked on the latest run in the queue, so a toggle queued behind completion is refused.
+  if (params.run.status === 'completed') {
+    return { kind: 'error', message: COMPLETED_RUN_FROZEN_MESSAGE };
+  }
 
-  const nextRun = withClonedRun(params.run);
+  const nextRun = withClonedRun(
+    applyNoteDrafts(params.run, params.noteDrafts ?? {}, [params.itemId]),
+  );
 
   for (const section of nextRun.sections) {
     for (const item of section.items) {
@@ -276,7 +221,13 @@ export const toggleRunItem = async (
         continue;
       }
 
-      const isCompleted = !item.isCompleted;
+      const { isCompleted } = params;
+      if (itemHasCompletion(item, isCompleted)) {
+        // Completed elsewhere or by a queued save: still save the task's draft notes, since
+        // the page moves on after Mark Complete.
+        const notesChanged = hasNoteDraftFor(params.noteDrafts ?? {}, params.run, params.itemId);
+        return saveToggledRun(notesChanged ? nextRun : params.run, notesChanged, params.shareToken, dependencies);
+      }
       item.isCompleted = isCompleted;
       item.contents = item.contents?.map((content) => {
         if (content.type !== 'subItems') {
@@ -289,22 +240,7 @@ export const toggleRunItem = async (
         };
       });
 
-      try {
-        const persistedRun = await persistRun(
-          { run: nextRun, shareToken: params.shareToken },
-          dependencies,
-        );
-
-        return {
-          kind: 'ok',
-          run: persistedRun,
-          shouldPromptComplete:
-            persistedRun.status !== 'completed' &&
-            areAllRunItemsCompleted(persistedRun),
-        };
-      } catch (error) {
-        return toErrorResult(error, 'Unable to save your progress.');
-      }
+      return saveToggledRun(nextRun, true, params.shareToken, dependencies);
     }
   }
 
@@ -318,6 +254,9 @@ export const toggleRunSubItem = async (
   if (!params.run) {
     return { kind: 'not_found' };
   }
+  if (params.run.status === 'completed') {
+    return { kind: 'error', message: COMPLETED_RUN_FROZEN_MESSAGE };
+  }
 
   const nextRun = withClonedRun(params.run);
 
@@ -327,37 +266,19 @@ export const toggleRunSubItem = async (
         continue;
       }
 
-      const content = item.contents[params.contentIndex];
-      if (content?.type !== 'subItems' || !content.subItems) {
-        return { kind: 'not_found' };
-      }
-
-      const subItem = content.subItems[params.subItemIndex];
+      const subItem = findRunSubItem(item, params);
       if (!subItem) {
         return { kind: 'not_found' };
       }
 
-      subItem.isCompleted = !subItem.isCompleted;
-      item.isCompleted = content.subItems.every(
-        (candidate) => candidate.isCompleted,
-      );
-
-      try {
-        const persistedRun = await persistRun(
-          { run: nextRun, shareToken: params.shareToken },
-          dependencies,
-        );
-
-        return {
-          kind: 'ok',
-          run: persistedRun,
-          shouldPromptComplete:
-            persistedRun.status !== 'completed' &&
-            areAllRunItemsCompleted(persistedRun),
-        };
-      } catch (error) {
-        return toErrorResult(error, 'Unable to save your progress.');
+      if ((subItem.isCompleted === true) === params.isCompleted) {
+        return saveToggledRun(params.run, false, params.shareToken, dependencies);
       }
+      subItem.isCompleted = params.isCompleted;
+      // Every Sub-tasks block counts, not only the one that was clicked.
+      item.isCompleted = areItemSubItemsCompleted(item);
+
+      return saveToggledRun(nextRun, true, params.shareToken, dependencies);
     }
   }
 
@@ -407,8 +328,12 @@ export const saveRunExecutionTitle = async (
   }
 
   const title = params.title.trim();
-  if (!title) {
-    return { kind: 'error', message: 'Run title cannot be empty.' };
+  // Empty or over the API's limit: say so rather than send it and show a raw schema error.
+  const titleError = getRunTitleError(title);
+  if (titleError) return { kind: 'error', message: titleError };
+  // Compared with the latest run in the queue: an unchanged title sends nothing.
+  if (!isRunTitleChange(title, params.run.title)) {
+    return { kind: 'ok', run: params.run };
   }
 
   try {
@@ -445,12 +370,15 @@ export const createRunExecutionShare = async (
 
   try {
     const result = await apiClient.createChecklistRunShare(params.run.id);
+    dependencies.onShared?.(params.run.id);
     const origin =
       dependencies.origin ??
       (typeof window !== 'undefined' ? window.location.origin : '');
 
     return {
       kind: 'ok',
+      // Public now; the server does not change the revision.
+      run: { ...params.run, isPublic: true },
       shareUrl: `${origin}${buildSharePath(result.shareToken)}`,
     };
   } catch (error) {
@@ -466,8 +394,17 @@ export const completeRunExecution = async (
     return { kind: 'not_found' };
   }
 
+  // Checked on the latest run inside the queued save, so an untick queued before this
+  // save wins. Re-sending completion would overwrite completed_at and add an audit event.
+  if (params.run.status === 'completed') {
+    return { kind: 'ok', run: params.run };
+  }
+  if (!areAllRunItemsCompleted(params.run)) {
+    return { kind: 'error', message: 'Finish every task before completing the run.' };
+  }
+
   const completedRun: ChecklistRun = {
-    ...params.run,
+    ...applyNoteDrafts(params.run, params.noteDrafts ?? {}),
     completedAt: params.completedAt ?? new Date().toISOString(),
     progress: 100,
     status: 'completed',
@@ -485,17 +422,70 @@ export const completeRunExecution = async (
   }
 };
 
+// The page's saves, each bound to the run it runs on (see runSaver.ts). A toggle sets the
+// value the user clicked; notes, a title, and completion are not retried over notes or a
+// title someone else changed.
+export const bindRunSaves = ({ dependencies, noteDrafts, shareToken }: {
+  dependencies: RunExecutionDependencies;
+  noteDrafts: () => NoteDrafts;
+  shareToken?: string;
+}) => ({
+  complete: {
+    bind: (current: ChecklistRun): RunSave => ({
+      canRetryOn: (fresh) => !draftedNotesChanged(noteDrafts(), current, fresh),
+      save: (run) => completeRunExecution({ noteDrafts: noteDrafts(), run, shareToken }, dependencies),
+    }),
+    key: 'complete',
+  } satisfies QueuedRunSave,
+  notes: (itemId: string, notes: string): QueuedRunSave => ({
+    bind: (current) => ({
+      canRetryOn: (fresh) => !draftedNotesChanged({ [itemId]: notes }, current, fresh),
+      save: (run) => saveRunItemNotes({ itemId, notes, run, shareToken }, dependencies),
+    }),
+    key: `notes:${itemId}:${notes}`,
+  }),
+  share: {
+    bind: (): RunSave => ({ save: (run) => createRunExecutionShare({ run, shareToken }, dependencies) }),
+    key: 'share',
+  } satisfies QueuedRunSave,
+  title: (title: string): QueuedRunSave => ({
+    bind: (current) => ({
+      canRetryOn: (fresh) => fresh.title === current.title,
+      save: (run) => saveRunExecutionTitle({ run, shareToken, title }, dependencies),
+    }),
+    key: `title:${title}`,
+  }),
+  toggleItem: (itemId: string, isCompleted: boolean): QueuedRunSave => ({
+    bind: (current) => ({
+      canRetryOn: (fresh) => !draftedNotesChanged(noteDrafts(), current, fresh, [itemId]),
+      save: (run) => toggleRunItem({ isCompleted, itemId, noteDrafts: noteDrafts(), run, shareToken }, dependencies),
+    }),
+    key: `toggle:${itemId}:${isCompleted}`,
+  }),
+  toggleSubItem: (itemId: string, contentIndex: number, subItemIndex: number, isCompleted: boolean): QueuedRunSave => ({
+    bind: (current) => {
+      const item = getSelectedRunItem(current, itemId)?.item;
+      const subItemId = item && findRunSubItem(item, { contentIndex, subItemIndex })?.id;
+      const target = { contentIndex, isCompleted, itemId, subItemId, subItemIndex };
+      return { save: (run) => toggleRunSubItem({ ...target, run, shareToken }, dependencies) };
+    },
+    key: `toggle:${itemId}:${contentIndex}:${subItemIndex}:${isCompleted}`,
+  }),
+});
+
 export const useRunExecutionModel = (
   options: UseRunExecutionModelOptions,
 ) => {
   const mode = resolveMode(options);
+  const queryClient = useQueryClient();
   const dependencies = useMemo<RunExecutionDependencies>(
     () => ({
       apiClient: options.dependencies?.apiClient,
+      onShared: (runId) => void markRunShared(queryClient, runId),
       origin: options.dependencies?.origin,
       updateRun: options.updateRun,
     }),
-    [options.dependencies?.apiClient, options.dependencies?.origin, options.updateRun],
+    [options.dependencies?.apiClient, options.dependencies?.origin, options.updateRun, queryClient],
   );
   const [run, setRun] = useState<ChecklistRun | null>(null);
   const [loading, setLoading] = useState(true);
@@ -504,7 +494,19 @@ export const useRunExecutionModel = (
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   // The latest run, updated as soon as a save returns so the next queued save builds on it.
   const latestRun = useRef<ChecklistRun | null>(null);
-  const [saveQueue] = useState(createSaveQueue);
+  // Every save writes an audit event: refresh the Changelog once the saves settle.
+  const [saveRun] = useState(() =>
+    createRunSaver(() => {
+      if (latestRun.current) void refreshRunHistory(queryClient, latestRun.current.id);
+    }),
+  );
+  // Drafts are read inside queued saves, so the ref always holds the latest value.
+  const [noteDrafts, setNoteDrafts] = useState<NoteDrafts>({});
+  const latestNoteDrafts = useRef<NoteDrafts>({});
+  const commitNoteDrafts = (next: NoteDrafts) => {
+    latestNoteDrafts.current = next;
+    setNoteDrafts(next);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -513,6 +515,8 @@ export const useRunExecutionModel = (
       setLoading(true);
       setNotFound(false);
       setLoadError(null);
+      latestNoteDrafts.current = {};
+      setNoteDrafts({});
 
       const result = await loadRunExecutionData(
         {
@@ -567,6 +571,7 @@ export const useRunExecutionModel = (
     if (result.kind === 'ok' && result.run) {
       latestRun.current = result.run;
       setRun(result.run);
+      commitNoteDrafts(pruneNoteDrafts(latestNoteDrafts.current, result.run));
       setSelectedItemId((currentSelectedItemId) => {
         if (!currentSelectedItemId) {
           return getInitialSelectedItemId(result.run ?? null);
@@ -582,20 +587,27 @@ export const useRunExecutionModel = (
     return result;
   };
 
-  // Saves go through one queue and build on the latest run (see saveQueue.ts).
-  const enqueueSave = async (
-    key: string,
-    save: (current: ChecklistRun) => Promise<RunExecutionActionResult>,
-  ): Promise<RunExecutionActionResult> =>
-    (await saveQueue(key, async () =>
-      applyResult(latestRun.current ? await save(latestRun.current) : { kind: 'not_found' }),
-    )) ?? { kind: 'ignored' };
   const shareToken = options.shareToken;
+  // Saves run one at a time on the latest run, and recover from an edit conflict by
+  // reloading the run (never from a cache) and retrying once (see runSaver.ts).
+  const enqueueSave = (save: QueuedRunSave) =>
+    saveRun(save, {
+      apply: applyResult,
+      latest: () => latestRun.current,
+      onNotFound: () => setNotFound(true),
+      reload: () => loadRunExecutionData({ runId: options.runId, shareToken }, dependencies),
+    });
+  const saves = bindRunSaves({ dependencies, noteDrafts: () => latestNoteDrafts.current, shareToken });
 
   return {
     counts,
-    createShare: () =>
-      enqueueSave('share', (current) => createRunExecutionShare({ run: current, shareToken }, dependencies)),
+    hasUnsavedNotes: Object.keys(noteDrafts).length > 0,
+    noteDrafts,
+    setNoteDraft: (itemId: string, value: string) =>
+      commitNoteDrafts(
+        updateNoteDraft(latestNoteDrafts.current, itemId, value, getSelectedRunItem(latestRun.current, itemId)?.item.notes),
+      ),
+    createShare: () => enqueueSave(saves.share),
     history: {
       data: history.data ?? null,
       isError: history.isError,
@@ -608,35 +620,22 @@ export const useRunExecutionModel = (
     notFound,
     progress: counts.progress,
     run,
-    saveTitle: (title: string) =>
-      enqueueSave(`title:${title}`, (current) => saveRunExecutionTitle({ run: current, shareToken, title }, dependencies)),
-    saveItemNotes: (itemId: string, notes: string) =>
-      enqueueSave(`notes:${itemId}:${notes}`, (current) =>
-        saveRunItemNotes({ itemId, notes, run: current, shareToken }, dependencies),
-      ),
+    saveTitle: (title: string) => enqueueSave(saves.title(title)),
+    saveItemNotes: (itemId: string, notes: string) => enqueueSave(saves.notes(itemId, notes)),
     selectedData,
     selectedItemId,
     setSelectedItemId,
-    completeRun: () =>
-      enqueueSave('complete', (current) => completeRunExecution({ run: current, shareToken }, dependencies)),
-    toggleItem: async (itemId: string) => {
-      const result = await enqueueSave(`toggle:${itemId}`, (current) =>
-        toggleRunItem({ itemId, run: current, shareToken }, dependencies),
-      );
-      // Completing the selected task moves on to the next unfinished one.
-      if (
-        result.kind === 'ok' &&
-        result.run &&
-        itemId === selectedItemId &&
-        getSelectedRunItem(result.run, itemId)?.item.isCompleted
-      ) {
-        setSelectedItemId(getNextSelectedItemId(result.run, itemId));
-      }
+    completeRun: () => enqueueSave(saves.complete),
+    // isCompleted is the value the user clicked on the run they saw.
+    toggleItem: async (itemId: string, isCompleted: boolean) => {
+      const result = await enqueueSave(saves.toggleItem(itemId, isCompleted));
+      // Completing the selected task moves on to the next unfinished one, judged on the
+      // selection when the save lands (an updater), not the one captured at the click.
+      const saved = result.kind === 'ok' ? result.run : undefined;
+      if (saved) setSelectedItemId((current) => getSelectionAfterToggle(saved, itemId, current));
       return result;
     },
-    toggleSubItem: (itemId: string, contentIndex: number, subItemIndex: number) =>
-      enqueueSave(`toggle:${itemId}:${contentIndex}:${subItemIndex}`, (current) =>
-        toggleRunSubItem({ contentIndex, itemId, run: current, shareToken, subItemIndex }, dependencies),
-      ),
+    toggleSubItem: (itemId: string, contentIndex: number, subItemIndex: number, isCompleted: boolean) =>
+      enqueueSave(saves.toggleSubItem(itemId, contentIndex, subItemIndex, isCompleted)),
   };
 };

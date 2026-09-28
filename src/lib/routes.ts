@@ -1,7 +1,7 @@
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { resolvePublicTemplateOwnerSlug } from '@/lib/repoTemplateCatalog';
-import { generateSlug } from '@/utils/urlHelpers';
+import { categorySlug } from '@/lib/categorySlug';
 
 export { resolvePublicTemplateOwnerSlug };
 
@@ -16,6 +16,13 @@ export const LEGACY_CONSOLE_PROFILE_PATH = '/dashboard/profile';
 export const LEGACY_CONSOLE_TEMPLATES_PATH = '/console/templates';
 export const LEGACY_CONSOLE_RUNS_PATH = '/console/runs';
 
+// Canonical URLs (rel=canonical, og:url) always name the production site, also on staging
+// and preview hosts. The sitemaps use the same origin (CANONICAL_ORIGIN in
+// functions/sitemap/shared.ts).
+export const SITE_ORIGIN = 'https://serplists.com';
+
+export const buildSiteUrl = (path: string): string => new URL(path, SITE_ORIGIN).toString();
+
 export const buildPublicTemplatesPath = (): string => '/templates';
 
 export const isPublicTemplatesDiscoveryPath = (pathname: string): boolean => {
@@ -27,14 +34,17 @@ export const isPublicTemplatesDiscoveryPath = (pathname: string): boolean => {
   );
 };
 
+// Unicode-aware and shared with the sitemap; see src/lib/categorySlug.ts.
 export const buildCategorySlug = (categoryName: string): string =>
-  generateSlug(categoryName.trim());
+  categorySlug(categoryName);
 
+// The slug may come from a URL, so it is normalized the same way as the names.
 export const findCategoryNameBySlug = (
   categories: string[],
-  categorySlug: string,
+  slug: string,
 ): string | null => {
-  const normalizedSlug = categorySlug.trim().toLowerCase();
+  const normalizedSlug = buildCategorySlug(slug);
+  if (!normalizedSlug) return null;
   return (
     categories.find(
       (category) => buildCategorySlug(category) === normalizedSlug,
@@ -44,8 +54,14 @@ export const findCategoryNameBySlug = (
 
 export const buildPublicCategoriesPath = (): string => '/categories';
 
-export const buildPublicCategoryPath = (categoryName: string): string =>
-  `/categories/${encodeURIComponent(buildCategorySlug(categoryName) || categoryName.trim().toLowerCase())}`;
+export const buildPublicCategoryPathForSlug = (slug: string): string =>
+  `/categories/${encodeURIComponent(slug)}`;
+
+// Null for a name with no letters or digits ('!!!', emoji only): it has no category page.
+export const buildPublicCategoryPath = (categoryName: string): string | null => {
+  const slug = buildCategorySlug(categoryName);
+  return slug ? buildPublicCategoryPathForSlug(slug) : null;
+};
 
 export const resolveLegacyTemplatesCategoryRedirectPath = (
   searchParams: URLSearchParams,
@@ -91,6 +107,12 @@ export const buildCanonicalPublicTemplatePath = (
 
   return buildPublicTemplatePath(ownerSlug, templateSlug);
 };
+
+// The only public template route is /profile/:username/:templateSlug, so a template whose
+// owner has no username has no public URL. Public discovery lists only templates that have one.
+export const hasCanonicalPublicTemplatePath = (
+  template: Pick<ChecklistTemplate, 'id' | 'slug' | 'userId' | 'ownerProfile'>,
+): boolean => buildCanonicalPublicTemplatePath(template) !== null;
 
 export const buildConsoleHomePath = (): string => '/dashboard';
 

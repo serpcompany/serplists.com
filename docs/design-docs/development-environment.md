@@ -52,15 +52,17 @@ Seeded users share the password `password123`:
 
 | User | Plan | Notes |
 | --- | --- | --- |
-| `admin@test.com` | Pro | |
-| `jane@test.com` | Pro | |
+| `admin@test.com` | Pro | Pro from a seeded `entitlement_overrides` row |
+| `jane@test.com` | Pro | Pro from a seeded `entitlement_overrides` row |
 | `john@test.com` | Free | Member of seeded Organizations |
 | `bob@test.com` | Free | |
 | `checklists@serp.co` | Pro | Official `serp` publisher that owns the official Templates |
 
 In development, `/login` has quick-fill buttons and `DevLoginBar` sits at the
 bottom of the app. `pnpm run db:reset:test-user-passwords` restores changed
-passwords. If sign-in fails, check the API is running, local D1 is seeded, and the
+passwords. Admin and Jane are Pro only through their seeded overrides, never by
+email address, so a local D1 seeded before those rows existed shows them as Free
+until `pnpm run db:seed`. If sign-in fails, check the API is running, local D1 is seeded, and the
 browser calls the intended API URL. A `429` means the local auth rate limit (300
 per hour), not bad credentials.
 
@@ -113,9 +115,9 @@ Testing conventions are in [RELIABILITY.md](../RELIABILITY.md#testing-convention
 1. Sign in as `admin@test.com` and create an Organization at `/dashboard/settings`.
 2. Create a link invite for another seeded or newly registered email.
 3. In a separate browser context, sign in as the invitee.
-4. Accept through `/team-invites/:token` (legacy route) or the incoming invites on
-   `/dashboard/settings`.
-5. Confirm the context switcher shows the Organization and Personal data stays separate.
+4. Open `/team-invites/:token` (legacy route) and click **Accept invite**, or accept from
+   the incoming invites on `/dashboard/settings`.
+5. Switch to the Organization and confirm Personal data stays separate.
 
 ## All scripts
 

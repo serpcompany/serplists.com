@@ -98,6 +98,12 @@ Main server handlers:
 
 `src/contexts/TemplatesContext.tsx` uses TanStack React Query for Templates and Runs. Query keys include ownership context so Personal and Organization data do not bleed together. Context switching invalidates Template and Run queries.
 
+History queries (the run and Template Changelogs) take their keys from `src/lib/queryCache.ts`, which also holds the history refreshes; the list refreshes that call them after each save are in `src/contexts/templateListCache.ts`. Every save writes an audit event:
+
+- The run page refreshes the run Changelog once its save queue is idle after a save, not once per click (each refetch reads D1). Revalidating a run refreshes it too.
+- A Template Changelog key sits under `['templates']`, so every Template list invalidation (Share, visibility, archive, restore, a context switch) refreshes it. Saving a Template in the editor also refreshes every cached Changelog of that Template, whatever user or Organization loaded it. Archiving a Template drops its Changelog.
+- Sharing a run (from the runs list or the run page) marks it public in every cached runs list as soon as the API returns, before the link is copied, then reloads the lists. A shared run cannot be revalidated, so its row stops offering Revalidate. A revalidate refused because the cached copy is stale (`409 edit_conflict` or `shared_run_conflict`, or a `404`) reloads the runs lists too.
+
 Organization lists are fetched by the legacy-named `WorkspaceContext` and keyed by current User ID.
 
 Billing query keys are also user-scoped. A session change must not reuse another
@@ -145,6 +151,14 @@ so older guest links do not remain active or count toward active-run limits.
 The public guest URL is `/share/:token`. When sharing fails, distinguish an
 entitlement `limit_reached` response from schema/migration failures before
 changing sharing logic.
+
+Because each share mints a new token, the UI treats creating the link and copying it
+as separate steps (`src/lib/shareLink.ts`). The created link is always shown in a
+dialog (`ShareLinkDialog`), copying is best effort through `copyTextToClipboard`
+(Safari refuses a clipboard write that follows a network request), and an error is
+reported only when the API call fails. Reopening the dialog for the same run reuses
+the link instead of minting another token. ESLint bans direct `navigator.clipboard`
+access outside `src/lib/clipboard.ts`.
 
 ## Seeds
 

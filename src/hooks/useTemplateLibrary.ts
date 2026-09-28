@@ -1,40 +1,42 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useTemplateLists } from "@/contexts/TemplatesContext";
-import { buildCategorySlug } from "@/lib/routes";
+import { buildCategorySlug, hasCanonicalPublicTemplatePath } from "@/lib/routes";
 import { getPredefinedCategories } from "@/utils/categories";
 
 export const useTemplateLibrary = (category?: string, templateType?: "checklist" | "recipe") => {
-  const { templates: contextTemplates, templatesLoading } = useTemplateLists({ catalog: true, workspace: false });
+  const {
+    templates: contextTemplates,
+    catalogPending,
+    catalogError,
+    refetchCatalog,
+  } = useTemplateLists({ catalog: true, workspace: false });
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [allCategories, setAllCategories] = useState<string[]>([]);
 
-  // Filter to only public templates
+  // Only public templates with a public URL: a card for a template whose owner has no
+  // username would have nowhere to link, yet still count toward categories.
   const templates = useMemo(() => {
-    const publicTemplates = contextTemplates.filter(t => t.isPublic === true);
+    const publicTemplates = contextTemplates.filter(
+      (t) => t.isPublic === true && hasCanonicalPublicTemplatePath(t),
+    );
     if (!templateType) return publicTemplates;
     return publicTemplates.filter(t => t.type === templateType);
   }, [contextTemplates, templateType]);
 
-  const loading = (templatesLoading ?? false) && templates.length === 0;
+  // The bundled repo templates are always listed, so loading comes from the catalog query
+  // itself. Pages must not treat a category or search as empty until it has loaded.
+  const loading = catalogPending;
+  const retryCatalog = () => {
+    void refetchCatalog();
+  };
 
-  useEffect(() => {
-    // Extract all unique categories and combine with predefined ones
-    const categories = new Set<string>();
-    const predefinedCategories = getPredefinedCategories();
-    
-    // Add predefined categories first
-    predefinedCategories.forEach(cat => categories.add(cat));
-    
-    // Add categories from templates
-    templates.forEach(template => {
-      if (template.categories) {
-        template.categories.forEach(cat => categories.add(cat));
-      }
+  // Predefined categories plus every template category, ready on the first render.
+  const allCategories = useMemo(() => {
+    const categories = new Set<string>(getPredefinedCategories());
+    templates.forEach((template) => {
+      template.categories?.forEach((category) => categories.add(category));
     });
-    
-    const allCategoriesArray = Array.from(categories).sort();
-    setAllCategories(allCategoriesArray);
+    return Array.from(categories).sort();
   }, [templates]);
 
   const fetchTemplates = async () => {
@@ -76,6 +78,8 @@ export const useTemplateLibrary = (category?: string, templateType?: "checklist"
     templates,
     filteredTemplates,
     loading,
+    catalogError,
+    retryCatalog,
     searchQuery,
     setSearchQuery,
     selectedCategories,

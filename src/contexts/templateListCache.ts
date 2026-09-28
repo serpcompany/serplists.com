@@ -1,5 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { isStaleRecordError } from '@/lib/editConflicts';
+import { dropTemplateHistory, refreshRunHistory, refreshTemplateHistory } from '@/lib/queryCache';
 import { queryKindPrefix } from '@/lib/queryKeys';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -39,8 +41,10 @@ export const dropTemplateFromCatalog = (queryClient: QueryClient, templateId: st
 
 // Deleting a Template or Run archives it, so it moves from its list to the archive page.
 // Mark both stale for every user and context: the item may not belong to the active one.
+// An archived Template's Changelog cannot be loaded, so it is dropped.
 export const refreshAfterTemplateDelete = (queryClient: QueryClient, templateId: string): void => {
   dropTemplateFromCatalog(queryClient, templateId);
+  dropTemplateHistory(queryClient, templateId);
   void queryClient.invalidateQueries({ queryKey: ['templates'] });
   void refreshRunLists(queryClient);
   void queryClient.invalidateQueries({ queryKey: queryKindPrefix('archivedTemplates') });
@@ -49,10 +53,23 @@ export const refreshAfterTemplateDelete = (queryClient: QueryClient, templateId:
 // The PUT answer carries the version the next save needs, so a template save never waits for
 // (or causes) a reload of the whole list: the Template lists are only marked stale and load
 // when a page that shows them mounts. Run lists refresh because in-progress Runs of the
-// template were reconciled.
-export const refreshAfterTemplateSave = (queryClient: QueryClient): void => {
+// template were reconciled, and the Template's open Changelogs because the save added a version.
+export const refreshAfterTemplateSave = (queryClient: QueryClient, templateId: string): void => {
   void queryClient.invalidateQueries({ queryKey: ['templates'], refetchType: 'none' });
   void refreshRunLists(queryClient);
+  void refreshTemplateHistory(queryClient, templateId);
+};
+
+// Revalidating writes an audit event, so the run's Changelog refreshes with the lists.
+export const refreshAfterRunRevalidated = async (queryClient: QueryClient, runId: string): Promise<void> => {
+  await Promise.all([refreshRunLists(queryClient), refreshRunHistory(queryClient, runId)]);
+};
+
+// A stale-record answer on revalidate means the cached list is out of date (the run was
+// shared, changed, or archived elsewhere): reload it before the error reaches the page, so the
+// button re-enables on the current revision (or disappears) instead of repeating the conflict.
+export const refreshRunsAfterConflict = async (queryClient: QueryClient, error: unknown): Promise<void> => {
+  if (isStaleRecordError(error)) await refreshRunLists(queryClient);
 };
 
 export const refreshAfterRunDelete = (queryClient: QueryClient): void => {

@@ -1,14 +1,13 @@
 import React from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { Checkbox } from '@/components/ui/checkbox';
+import { MarkdownBlock } from './MarkdownBlock';
+import { TaskImage } from './TaskImage';
 import { VideoEmbed } from './VideoEmbed';
 import { File, Code, ListCheck } from 'lucide-react';
 import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
 import { getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
 import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
 import { hasCurrentFileInfo } from '@/lib/utils/mediaSource';
-import { normalizeMarkdownDisplayText } from '@/lib/utils/markdownDisplay';
 import { safeUrl } from '@/lib/utils/safeUrl';
 
 // A file's name, unless it was left over from an upload the value no longer points to.
@@ -40,23 +39,12 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       {contents.map((content, contentIndex: number) => (
         <div key={contentIndex} className="space-y-3">
           {content.type === "text" && content.value && (
-            <div className="prose prose-sm max-w-none whitespace-pre-line">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeUrl}>
-                {normalizeMarkdownDisplayText(content.value)}
-              </ReactMarkdown>
-            </div>
+            <MarkdownBlock value={content.value} />
           )}
           
           {content.type === "image" && content.value && (
             <div className="rounded-lg border overflow-hidden">
-              <img 
-                src={safeUrl(content.value) || "https://placehold.co/400x200?text=Invalid+Image"} 
-                alt="Task content" 
-                className="w-full max-h-96 object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "https://placehold.co/400x200?text=Invalid+Image";
-                }}
-              />
+              <TaskImage url={content.value} />
             </div>
           )}
           
@@ -117,6 +105,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
                 {content.subItems.map((subItem: ChecklistSubItem, subItemIndex: number) => (
                   <div key={subItem.id} className="flex items-center gap-3 rounded-md border border-border/70 p-3">
                     <Checkbox
+                      aria-label={getSubItemDisplayTitle(subItem, subItemIndex)}
                       checked={!!subItem.isCompleted}
                       disabled={disabled || !onSubItemToggle}
                       className={disabled || !onSubItemToggle ? "opacity-50" : ""}

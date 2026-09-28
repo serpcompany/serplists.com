@@ -4,15 +4,15 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 
-// The lists on the Organization settings card. Keys carry the signed-in user, so someone who
-// signs in on the same tab never sees another person's cached invites or member rows.
+// The lists on the Organization settings card (pending invites live in useTeamInvites). Keys
+// carry the signed-in user, so someone who signs in on the same tab never sees another
+// person's cached invites or member rows.
 export function useTeamSettingsQueries({ activeTeamId, canManageTeam }: { activeTeamId?: string; canManageTeam: boolean }) {
   const userId = useAuth().user?.id;
   const queryClient = useQueryClient();
   const signedIn = Boolean(userId);
   const keys = {
     members: queryKeys.teamMembers(userId, activeTeamId),
-    invites: queryKeys.teamInvites(userId, activeTeamId),
     activity: queryKeys.teamActivity(userId, activeTeamId),
     incomingInvites: queryKeys.incomingTeamInvites(userId),
   };
@@ -22,12 +22,6 @@ export function useTeamSettingsQueries({ activeTeamId, canManageTeam }: { active
     queryFn: () => api.getTeamMembers(activeTeamId as string),
     enabled: signedIn && Boolean(activeTeamId),
     staleTime: 60 * 1000,
-  });
-  const invitesQuery = useQuery({
-    queryKey: keys.invites,
-    queryFn: () => api.getTeamInvites(activeTeamId as string),
-    enabled: signedIn && Boolean(activeTeamId && canManageTeam),
-    staleTime: 30 * 1000,
   });
   const activityQuery = useQuery({
     queryKey: keys.activity,
@@ -50,12 +44,10 @@ export function useTeamSettingsQueries({ activeTeamId, canManageTeam }: { active
 
   return {
     membersQuery,
-    invitesQuery,
     activityQuery,
     incomingInvitesQuery,
     reload: {
       members: reloadWith(membersQuery, keys.members),
-      invites: reloadWith(invitesQuery, keys.invites),
       activity: reloadWith(activityQuery, keys.activity),
       incomingInvites: reloadWith(incomingInvitesQuery, keys.incomingInvites),
     },

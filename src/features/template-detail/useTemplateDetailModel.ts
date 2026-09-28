@@ -30,6 +30,7 @@ export {
   loadTemplateDetailData,
   type LoadTemplateDetailResult,
 } from './loadTemplateDetail';
+export { resolveShareOwnerTemplate } from './templateDetailApi';
 
 type PublicTemplateDetailHookOptions = {
   identifier?: string;

@@ -34,6 +34,7 @@ import {
   resolveRouteShell,
 } from '@/lib/routes';
 import { PageContainer } from '@/components/layout/page-shell';
+import { PublicMobileNav } from '@/components/layout/PublicMobileNav';
 import { DashboardSidebar } from '@/components/dashboard/DashboardSidebar';
 import { MobileBottomNav, MobileNav } from '@/components/MobileNav';
 import { APP_BRAND_NAME } from '@/lib/brand';
@@ -258,7 +259,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </nav>
 
         <div className="flex items-center gap-2">
-          <ThemeToggle />
+          {/* Below md the public shell moves the theme switch into its menu, so brand,
+              Get started and the menu button fit a 320px screen. */}
+          <ThemeToggle
+            className={shell === 'console' ? undefined : 'hidden md:inline-flex'}
+          />
           {user ? (
             accountMenu
           ) : (
@@ -275,6 +280,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               </Button>
             </>
           )}
+          {shell === 'console' ? null : <PublicMobileNav />}
         </div>
       </PageContainer>
     </header>

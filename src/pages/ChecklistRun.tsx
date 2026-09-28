@@ -3,11 +3,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
-  Check,
   CheckCircle,
   Copy,
   Edit2,
-  History,
   Loader2,
   ListChecks,
   Share2,
@@ -20,39 +18,37 @@ import {
   DashboardScrollArea,
 } from '@/components/dashboard/DashboardContentShell';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
+import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { RunCompleteDialog } from '@/components/run-execution/RunCompleteDialog';
+import { RunHistorySection } from '@/components/run-execution/RunHistorySection';
+import { MobileRunProgress } from '@/components/run-execution/MobileRunProgress';
 import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar';
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
 import { useTemplates } from '@/contexts/TemplatesContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { canFinishRun, getPrimaryTaskAction } from '@/features/run-execution/primaryTaskAction';
+import { confirmLeaveWithUnsavedNotes, useUnsavedNotesWarning } from '@/features/run-execution/noteDrafts';
+import { getTaskCheckboxLabel } from '@/features/run-execution/taskCheckboxLabel';
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
-import { selectRunHistoryPreview } from '@/features/run-execution/runHistory';
 import { usePageVisit } from '@/hooks/usePageVisit';
-import {
-  formatRunHistoryAction,
-  formatRunHistoryTime,
-  getRunHistoryActorName,
-} from '@/features/run-execution/runHistoryFormat';
-import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
+import { isRunTitleChange } from '@/features/run-execution/runTitle';
 import { cn } from '@/lib/utils';
+import { copyTextToClipboard } from '@/lib/clipboard';
+import { createShareLinkAndCopy } from '@/lib/shareLink';
 import {
   buildConsoleHomePath,
   buildConsoleRunsPath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
-import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
+import { RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
+import { countRunTasks, getSectionDisplayTitle } from '@/lib/utils/checklistSections';
+import { onSingleClick } from '@/lib/utils/repeatClick';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
 
 const ChecklistRunPage = () => {
@@ -61,22 +57,28 @@ const ChecklistRunPage = () => {
   // Completing awaits the save; it leaves for the list only if the user is still here.
   const beginVisit = usePageVisit();
   const { updateRun } = useTemplates();
+  const { getPermissions } = useWorkspace();
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [isCreatingShare, setIsCreatingShare] = useState(false);
+  const [shareLink, setShareLink] = useState<{ runId: string; url: string } | null>(null);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
 
   const {
     counts,
     createShare,
+    hasUnsavedNotes,
     history,
     isSharedRun,
     loadError,
     loading,
     notFound,
+    noteDrafts,
     progress,
     run,
     saveItemNotes,
+    setNoteDraft,
     saveTitle,
     selectedData,
     selectedItemId,
@@ -93,6 +95,7 @@ const ChecklistRunPage = () => {
   });
   const displayRun = run;
   const displayProgress = displayRun?.progress ?? progress;
+  useUnsavedNotesWarning(hasUnsavedNotes);
 
   useEffect(() => {
     if (!notFound || loading) {
@@ -114,11 +117,15 @@ const ChecklistRunPage = () => {
     toast.error(loadError);
   }, [loadError]);
 
-  const handleBack = () =>
+  const leaveRun = () =>
     navigate(isSharedRun ? buildPublicTemplatesPath() : buildConsoleRunsPath());
+  const handleBack = () => {
+    if (confirmLeaveWithUnsavedNotes(hasUnsavedNotes)) leaveRun();
+  };
 
-  const handleItemToggle = async (itemId: string) => {
-    const result = await toggleItem(itemId);
+  // isCompleted is the value the user clicked on the run they saw (set, not flipped).
+  const handleItemToggle = async (itemId: string, isCompleted: boolean) => {
+    const result = await toggleItem(itemId, isCompleted);
 
     if (result.kind === 'ok') {
       if (result.shouldPromptComplete) {
@@ -136,8 +143,9 @@ const ChecklistRunPage = () => {
     itemId: string,
     contentIndex: number,
     subItemIndex: number,
+    isCompleted: boolean,
   ) => {
-    const result = await toggleSubItem(itemId, contentIndex, subItemIndex);
+    const result = await toggleSubItem(itemId, contentIndex, subItemIndex, isCompleted);
 
     if (result.kind === 'ok') {
       if (result.shouldPromptComplete) {
@@ -172,6 +180,11 @@ const ChecklistRunPage = () => {
     if (isSharedRun || !run) {
       return;
     }
+    // Enter on an untouched title closes the editor without a save or a toast.
+    if (editTitle.trim() === run.title) {
+      handleTitleCancel();
+      return;
+    }
 
     const result = await saveTitle(editTitle);
 
@@ -192,43 +205,38 @@ const ChecklistRunPage = () => {
     setEditTitle('');
   };
 
+  // The link is always shown in a dialog and copying is best effort (createShareLinkAndCopy).
+  // Each create replaces the share token, so reopening reuses this run's link.
   const handleCreateShare = async () => {
-    if (!displayRun) {
+    if (!displayRun) return;
+    if (shareLink?.runId === displayRun.id) {
+      setIsShareDialogOpen(true);
       return;
     }
 
     setIsCreatingShare(true);
-
     try {
-      const result = await createShare();
-
-      if (result.kind === 'ok' && result.shareUrl) {
-        await navigator.clipboard.writeText(result.shareUrl);
-        toast.success('Share link copied to clipboard');
-        return;
-      }
-
+      const result = await createShareLinkAndCopy(async () => {
+        const shared = await createShare();
+        if (shared.kind === 'error') throw new Error(shared.message || 'Failed to create share link for this run.');
+        return shared.kind === 'ok' && shared.shareUrl ? shared.shareUrl : null;
+      });
       if (result.kind === 'error') {
-        toast.error(result.message || 'Failed to create share link for this run.');
+        toast.error(result.message);
+      } else if (result.kind === 'ok') {
+        setShareLink({ runId: displayRun.id, url: result.shareUrl });
+        setIsShareDialogOpen(true);
+        if (result.copied) toast.success('Share link copied to clipboard');
       }
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Failed to create share link for this run.';
-      toast.error(message);
     } finally {
       setIsCreatingShare(false);
     }
   };
 
   const handleCopyCurrentLink = async () => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    await navigator.clipboard.writeText(window.location.href);
-    toast.success('Link copied to clipboard');
+    if (typeof window === 'undefined') return;
+    if (await copyTextToClipboard(window.location.href)) toast.success('Link copied to clipboard');
+    else toast.error("Couldn't copy the link. Copy it from the address bar.");
   };
 
   const handleCompleteRun = async () => {
@@ -239,8 +247,9 @@ const ChecklistRunPage = () => {
       setIsCompleteDialogOpen(false);
       toast.success('Checklist completed! 🎉');
       // Only from this run: after Back or another run, it must not pull the user away.
+      // Completion saved every note draft, so leaving needs no confirmation.
       if (visit.isCurrent()) {
-        handleBack();
+        leaveRun();
       }
       return;
     }
@@ -304,6 +313,10 @@ const ChecklistRunPage = () => {
     );
   }
 
+  // Share links govern shared runs; private runs follow the role in the run's Organization.
+  const canUpdateRun = isSharedRun || getPermissions(displayRun.teamId).canRun;
+  // Completed runs are frozen: their tasks can no longer be ticked or unticked.
+  const isRunCompleted = displayRun.status === 'completed';
   const activeItemId = selectedItemId ?? displayRun.sections[0]?.items[0]?.id ?? null;
   const flatItems = displayRun.sections.flatMap((section, sectionIndex) =>
     section.items.map((item, itemIndex) => ({
@@ -318,6 +331,7 @@ const ChecklistRunPage = () => {
     (entry) => entry.item.id === activeItemId,
   );
   const selectedEntry = selectedIndex >= 0 ? flatItems[selectedIndex] : null;
+  const currentSectionId = selectedEntry?.section.id ?? selectedData?.section.id ?? null;
   const previousEntry = selectedIndex > 0 ? flatItems[selectedIndex - 1] : null;
   const nextEntry =
     selectedIndex >= 0 && selectedIndex < flatItems.length - 1
@@ -325,36 +339,44 @@ const ChecklistRunPage = () => {
       : null;
 
   const sectionProgress = displayRun.sections.map((section, index) => {
-    const completed = section.items.filter((item) => item.isCompleted).length;
-    return {
-      completed,
-      index,
-      total: section.items.length,
-      section,
-    };
+    const { tasksCompleted, tasksTotal } = countRunTasks([section]);
+    return { completed: tasksCompleted, index, total: tasksTotal, section };
   });
+  // Stays available after the completion dialog is dismissed, a reload, or MCP ticks.
+  const finishRunButton = canUpdateRun && canFinishRun(displayRun) ? (
+    <Button size="sm" onClick={() => setIsCompleteDialogOpen(true)}>
+      <CheckCircle className="mr-2 h-4 w-4" />
+      Complete run
+    </Button>
+  ) : null;
   const privateRunHeaderActions = (
     <>
       <Button variant="ghost" size="sm" onClick={handleBack}>
         <ArrowLeft className="mr-2 h-4 w-4" />
         Runs
       </Button>
-      {!isEditingTitle ? (
+      {/* Save title and Cancel take Rename's place, so the second click of a double
+          click on any of them is ignored. */}
+      {!canUpdateRun ? null : !isEditingTitle ? (
         <Button
           size="sm"
           variant="ghost"
           className="text-muted-foreground"
-          onClick={handleTitleEdit}
+          onClick={onSingleClick(handleTitleEdit)}
         >
           <Edit2 className="mr-2 h-4 w-4" />
           Rename
         </Button>
       ) : (
         <>
-          <Button size="sm" onClick={() => void handleTitleSave()}>
+          <Button
+            size="sm"
+            disabled={!isRunTitleChange(editTitle, displayRun.title)}
+            onClick={onSingleClick(() => void handleTitleSave())}
+          >
             Save title
           </Button>
-          <Button size="sm" variant="outline" onClick={handleTitleCancel}>
+          <Button size="sm" variant="outline" onClick={onSingleClick(handleTitleCancel)}>
             Cancel
           </Button>
         </>
@@ -364,6 +386,8 @@ const ChecklistRunPage = () => {
       >
         {displayRun.status === 'completed' ? 'Completed' : 'In Progress'}
       </Badge>
+      {canUpdateRun ? null : <Badge variant="secondary">View only</Badge>}
+      {finishRunButton}
       <div className="hidden min-w-[120px] xl:block">
         <div className="mb-2 h-2 overflow-hidden rounded-full bg-secondary">
           <div
@@ -373,19 +397,23 @@ const ChecklistRunPage = () => {
         </div>
         <div className="text-right text-sm font-medium">{displayProgress}%</div>
       </div>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={isCreatingShare}
-        onClick={() => void handleCreateShare()}
-      >
-        <Share2 className="mr-2 h-4 w-4" />
-        {isCreatingShare ? 'Creating link...' : 'Share'}
-      </Button>
+      {canUpdateRun ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isCreatingShare}
+          onClick={() => void handleCreateShare()}
+        >
+          <Share2 className="mr-2 h-4 w-4" />
+          {isCreatingShare ? 'Creating link...' : 'Share'}
+        </Button>
+      ) : null}
     </>
   );
   const privateRunTitle = isEditingTitle ? (
     <Input
+      aria-label="Run title"
+      maxLength={RUN_TITLE_MAX}
       value={editTitle}
       onChange={(event) => setEditTitle(event.target.value)}
       onKeyDown={(event) => {
@@ -402,8 +430,8 @@ const ChecklistRunPage = () => {
   ) : (
     displayRun.title
   );
-  const privateRunDescription = `${counts.completed} of ${counts.total} tasks finished`;
-  const runHistoryEntries = selectRunHistoryPreview(history?.data);
+  // Tasks only, like the task list and "Task N of M"; the percentage also weights sub-tasks.
+  const privateRunDescription = `${counts.tasksCompleted} of ${counts.tasksTotal} tasks finished`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -472,11 +500,12 @@ const ChecklistRunPage = () => {
                       {progress}%
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {counts.completed} of {counts.total} tasks
+                      {counts.tasksCompleted} of {counts.tasksTotal} tasks
                     </p>
                   </div>
                 </div>
                 <Progress value={progress} className="mt-5 h-2" />
+                {finishRunButton ? <div className="mt-5">{finishRunButton}</div> : null}
               </Surface>
 
               <div className="space-y-6">
@@ -496,15 +525,17 @@ const ChecklistRunPage = () => {
                     </span>
                   </div>
                   <div className="space-y-3 p-4">
-                    {section.items.map((item) => (
+                    {section.items.map((item, itemIndex) => (
                       <div
                         key={item.id}
                         className="rounded-[var(--layout-card-radius)] border border-border bg-background"
                       >
                         <div className="flex items-start gap-4 px-4 py-4">
                           <Checkbox
+                            aria-label={getTaskCheckboxLabel(item.title, itemIndex + 1)}
                             checked={item.isCompleted}
-                            onCheckedChange={() => void handleItemToggle(item.id)}
+                            disabled={isRunCompleted}
+                            onCheckedChange={(checked) => void handleItemToggle(item.id, checked === true)}
                           />
                           <div className="min-w-0 flex-1">
                             <h3
@@ -518,7 +549,7 @@ const ChecklistRunPage = () => {
                             </h3>
                             {item.description ? (
                               <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
-                                {normalizeDisplayText(item.description)}
+                                {item.description}
                               </p>
                             ) : null}
                           </div>
@@ -527,22 +558,20 @@ const ChecklistRunPage = () => {
                           <div className="border-t border-border px-4 py-4">
                             <ContentRenderer
                               contents={item.contents}
-                              disabled={false}
-                              onSubItemToggle={(contentIndex, subItemIndex) =>
-                                void handleSubItemToggle(
-                                  item.id,
-                                  contentIndex,
-                                  subItemIndex,
-                                )
+                              disabled={isRunCompleted}
+                              onSubItemToggle={(contentIndex, subItemIndex, isCompleted) =>
+                                void handleSubItemToggle(item.id, contentIndex, subItemIndex, isCompleted)
                               }
                             />
                           </div>
                         ) : null}
                         <div className="border-t border-border px-4 py-4">
                           <RunNotesEditor
-                            initialValue={item.notes}
+                            draft={noteDrafts[item.id]}
                             label="Task notes"
+                            onDraftChange={(notes) => setNoteDraft(item.id, notes)}
                             onSave={(notes) => handleItemNotesSave(item.id, notes)}
+                            savedValue={item.notes}
                           />
                         </div>
                       </div>
@@ -578,27 +607,16 @@ const ChecklistRunPage = () => {
             actions={privateRunHeaderActions}
           />
           <DashboardScrollArea className="p-0">
-          <section
-            className="border-b border-border bg-card px-4 py-4 sm:px-6 xl:hidden"
-            data-mobile-run-progress="true"
-          >
-            <div className="mb-3 flex items-center justify-between gap-3 text-sm">
-              <div>
-                <p className="font-medium text-foreground">
-                  {displayProgress}% complete
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {counts.completed} of {counts.total} tasks finished
-                </p>
-              </div>
-              {selectedEntry ? (
-                <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
-                  Task {selectedIndex + 1} of {flatItems.length}
-                </span>
-              ) : null}
-            </div>
-            <Progress value={displayProgress} className="h-2" />
-          </section>
+          <MobileRunProgress
+            completedTasks={counts.tasksCompleted}
+            currentSectionId={currentSectionId}
+            currentTaskId={activeItemId}
+            onSelectTask={(_, taskId) => setSelectedItemId(taskId)}
+            position={selectedEntry ? { index: selectedIndex, total: flatItems.length } : null}
+            progress={displayProgress}
+            sections={displayRun.sections}
+            totalTasks={counts.tasksTotal}
+          />
 
           <div
             className="grid min-h-[calc(100dvh-3.5rem)] grid-cols-1 gap-0 xl:grid-cols-[minmax(0,1fr)_320px]"
@@ -622,73 +640,34 @@ const ChecklistRunPage = () => {
                       setSelectedItemId(previousEntry.item.id);
                     }
                   }}
-                  onToggleSubItem={(contentIndex, subItemIndex) =>
-                    void handleSubItemToggle(
-                      selectedEntry.item.id,
-                      contentIndex,
-                      subItemIndex,
-                    )
+                  onToggleSubItem={(contentIndex, subItemIndex, isCompleted) =>
+                    void handleSubItemToggle(selectedEntry.item.id, contentIndex, subItemIndex, isCompleted)
                   }
-                  onToggleTask={() => void handleItemToggle(selectedEntry.item.id)}
+                  onToggleTask={(isCompleted) => void handleItemToggle(selectedEntry.item.id, isCompleted)}
+                  notesDraft={noteDrafts[selectedEntry.item.id]}
+                  onNotesDraftChange={(notes) => setNoteDraft(selectedEntry.item.id, notes)}
                   onSaveNotes={(notes) =>
                     handleItemNotesSave(selectedEntry.item.id, notes)
                   }
                   hasNext={Boolean(nextEntry)}
                   hasPrev={Boolean(previousEntry)}
+                  primaryAction={getPrimaryTaskAction(displayRun, selectedEntry.item.id, Boolean(nextEntry), canUpdateRun)}
+                  readOnly={!canUpdateRun}
+                  runCompleted={isRunCompleted}
+                  onFinishRun={() => setIsCompleteDialogOpen(true)}
+                  onSelectTask={setSelectedItemId}
                 />
               ) : (
                 <div className="py-16 text-center text-muted-foreground">
                   Select a task to continue.
                 </div>
               )}
-              <section className="border-t border-border bg-background px-4 py-5 sm:px-6">
-                <div className="mx-auto max-w-3xl">
-                  <div className="mb-4 flex items-center gap-2">
-                    <History className="h-4 w-4 text-muted-foreground" />
-                    <h2 className="text-sm font-semibold text-foreground">
-                      Changelog
-                    </h2>
-                  </div>
-                  {history?.isLoading ? (
-                    <p className="text-sm text-muted-foreground">
-                      Loading run history...
-                    </p>
-                  ) : history?.isError ? (
-                    <p className="text-sm text-muted-foreground">
-                      Run history is unavailable right now.
-                    </p>
-                  ) : runHistoryEntries.length > 0 ? (
-                    <div className="divide-y divide-border rounded-lg border border-border bg-card">
-                      {runHistoryEntries.map((entry) => (
-                        <div
-                          key={entry.id}
-                          className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-foreground">
-                              {formatRunHistoryAction(entry.action)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {getRunHistoryActorName(entry)}
-                            </p>
-                          </div>
-                          <time className="text-xs text-muted-foreground">
-                            {formatRunHistoryTime(entry.createdAt)}
-                          </time>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No run history has been recorded yet.
-                    </p>
-                  )}
-                </div>
-              </section>
+              <RunHistorySection history={history} />
             </main>
             <RunProgressPanel
+              progress={displayProgress}
               sections={displayRun.sections}
-              currentSectionId={selectedEntry?.section.id ?? selectedData?.section.id ?? null}
+              currentSectionId={currentSectionId}
               currentTaskId={activeItemId}
               onSelectTask={(_, taskId) => setSelectedItemId(taskId)}
             />
@@ -697,27 +676,21 @@ const ChecklistRunPage = () => {
         </DashboardContentShell>
       )}
 
-      <Dialog open={isCompleteDialogOpen} onOpenChange={setIsCompleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Checklist Completed!</DialogTitle>
-            <DialogDescription>
-              Congratulations! You have completed all items in this checklist.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="my-4 flex justify-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-50">
-              <CheckCircle className="h-10 w-10 text-green-500" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={() => void handleCompleteRun()}>
-              <Check className="mr-2 h-4 w-4" />
-              {isSharedRun ? 'Return to Public Runs' : 'Return to Dashboard'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ShareLinkDialog
+        copiedMessage="Share link copied to clipboard"
+        description="Anyone with this link can open this run without signing in."
+        onOpenChange={setIsShareDialogOpen}
+        open={isShareDialogOpen && shareLink?.runId === displayRun.id}
+        title="Share run"
+        url={shareLink?.url ?? ''}
+      />
+
+      <RunCompleteDialog
+        isSharedRun={isSharedRun}
+        onComplete={() => void handleCompleteRun()}
+        onOpenChange={setIsCompleteDialogOpen}
+        open={isCompleteDialogOpen}
+      />
     </div>
   );
 };

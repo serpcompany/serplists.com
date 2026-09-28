@@ -1,8 +1,10 @@
+import { RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
 import { truncateToLength } from '@/lib/utils/truncateText';
 
 // POST /api/checklists rejects a run title longer than this (checklistPayloadSchema in
-// functions/api/utils/payloads.ts); a unit test keeps the two in step.
-export const RUN_TITLE_MAX_LENGTH = 160;
+// functions/api/utils/payloads.ts); src/lib/schemas/nameLimits.ts holds the number and a
+// unit test keeps the two in step.
+export const RUN_TITLE_MAX_LENGTH = RUN_TITLE_MAX;
 
 const SEPARATOR = ' - ';
 const ELLIPSIS = '…';

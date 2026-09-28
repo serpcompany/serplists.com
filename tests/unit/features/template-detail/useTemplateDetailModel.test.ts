@@ -8,10 +8,12 @@ import {
   countTemplateItems,
   mapApiTemplateToChecklistTemplate,
 } from '@/features/template-detail/templateDetailMappers';
+import { buildCanonicalPublicTemplatePath } from '@/lib/routes';
 import {
   duplicateOwnedTemplate,
   loadTemplateDetailData,
   type LoadTemplateDetailResult,
+  resolveShareOwnerTemplate,
   saveTemplateToAccount,
   startTemplateRun,
   type TemplateDetailBillingState,
@@ -322,6 +324,59 @@ describe('loadTemplateDetailData', () => {
     expect(loadedTemplate(result)?.teamId).toBe('team-1');
     expect(loadedTemplate(result)?.userId).toBe('user-b');
   });
+
+  // Only a settled 404 may render the noindex "Template not found" state. A failure that can
+  // be transient must not tell crawlers that a real public template is gone.
+  const failingLookup = (error: unknown) => ({
+    getTemplateById: vi.fn().mockRejectedValue(error),
+    getTemplateBySlug: vi.fn().mockRejectedValue(error),
+    getProfileById: vi.fn(),
+    clonePublicTemplate: vi.fn(),
+    updateTemplate: vi.fn(),
+  });
+  const loadPublic = (identifier: string, error: unknown) =>
+    loadTemplateDetailData(
+      { mode: 'public', identifier, ownerUsername: 'alice' },
+      { apiClient: failingLookup(error) },
+    );
+
+  it('treats a 404 from the API as a settled not-found', async () => {
+    const missing = createApiError(404, { error: 'Template not found' });
+
+    expect(await loadPublic('camping-checklist', missing)).toEqual({ kind: 'not_found' });
+    expect(await loadPublic('0b8f8f3e-6f1a-4b7e-9d8e-1f2a3b4c5d6e', missing)).toEqual({
+      kind: 'not_found',
+    });
+  });
+
+  it('reports server, rate-limit and network failures as a load error, not a missing template', async () => {
+    for (const error of [
+      createApiError(500, { error: 'Internal error' }),
+      createApiError(503),
+      createApiError(429, { error: 'Too many requests' }),
+      new TypeError('Failed to fetch'),
+    ]) {
+      expect((await loadPublic('camping-checklist', error)).kind).toBe('error');
+    }
+  });
+
+  it('keeps a missing identifier or owner as a settled not-found', async () => {
+    const apiClient = failingLookup(new TypeError('Failed to fetch'));
+
+    expect(
+      await loadTemplateDetailData(
+        { mode: 'public', identifier: undefined, ownerUsername: 'alice' },
+        { apiClient },
+      ),
+    ).toEqual({ kind: 'not_found' });
+    expect(
+      await loadTemplateDetailData(
+        { mode: 'public', identifier: 'camping-checklist', ownerUsername: undefined },
+        { apiClient },
+      ),
+    ).toEqual({ kind: 'not_found' });
+    expect(apiClient.getTemplateBySlug).not.toHaveBeenCalled();
+  });
 });
 
 describe('template detail actions', () => {
@@ -533,5 +588,48 @@ describe('template detail actions', () => {
 
     expect(createTemplate.mock.calls[0][0]).toMatchObject({ teamId: 'team-b' });
     expect(createTemplate.mock.calls[1][0]).toMatchObject({ teamId: 'team-a' });
+  });
+});
+
+describe('resolveShareOwnerTemplate', () => {
+  // Cached template lists carry the owner's username from when they were
+  // fetched; after a rename, Share must not build a link with the old one.
+  const renamedOwner = { userId: 'user-1', username: 'alicejones' };
+
+  it("uses the signed-in owner's current username over a cached one", async () => {
+    const apiClient = { getProfileById: vi.fn() };
+    const template = buildTemplate({
+      slug: 'seo-audit',
+      ownerProfile: { username: 'alice', full_name: 'Alice' },
+    });
+
+    const shared = await resolveShareOwnerTemplate(template, renamedOwner, apiClient);
+
+    expect(buildCanonicalPublicTemplatePath(shared)).toBe('/profile/alicejones/seo-audit');
+    expect(shared.ownerProfile?.full_name).toBe('Alice');
+    expect(apiClient.getProfileById).not.toHaveBeenCalled();
+  });
+
+  it('looks the owner up when the session has no username', async () => {
+    const apiClient = { getProfileById: vi.fn().mockResolvedValue({ username: 'alicejones' }) };
+    const template = buildTemplate({ slug: 'seo-audit', ownerProfile: undefined });
+
+    const shared = await resolveShareOwnerTemplate(template, { userId: 'user-1' }, apiClient);
+
+    expect(apiClient.getProfileById).toHaveBeenCalledWith('user-1');
+    expect(buildCanonicalPublicTemplatePath(shared)).toBe('/profile/alicejones/seo-audit');
+  });
+
+  it("never puts the signed-in user's name on someone else's template", async () => {
+    const apiClient = { getProfileById: vi.fn() };
+    const template = buildTemplate({
+      slug: 'seo-audit',
+      userId: 'user-2',
+      ownerProfile: { username: 'bob' },
+    });
+
+    const shared = await resolveShareOwnerTemplate(template, renamedOwner, apiClient);
+
+    expect(buildCanonicalPublicTemplatePath(shared)).toBe('/profile/bob/seo-audit');
   });
 });

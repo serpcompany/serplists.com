@@ -80,7 +80,7 @@ export const applyTemplateSaveResult = (
 // Fills in the owner's username when the loaded row lacks it; the public URL needs it.
 export const hydrateTemplateOwner = async (
   template: ChecklistTemplate,
-  apiClient: TemplateDetailApiClient,
+  apiClient: Pick<TemplateDetailApiClient, 'getProfileById'>,
 ): Promise<ChecklistTemplate> => {
   const { ownerSlug } = resolveTemplateOwnerProfile(template);
 
@@ -96,4 +96,22 @@ export const hydrateTemplateOwner = async (
   } catch {
     return template;
   }
+};
+
+/**
+ * The template with the owner name its share link should use. Cached lists carry the
+ * username from when they were fetched, which is stale after a rename, so the signed-in
+ * Creator's current username wins. Anyone else's template keeps (or looks up) its own.
+ */
+export const resolveShareOwnerTemplate = async (
+  template: ChecklistTemplate,
+  owner: { userId?: string; username?: string },
+  apiClient: Pick<TemplateDetailApiClient, 'getProfileById'>,
+): Promise<ChecklistTemplate> => {
+  const username = owner.username?.trim();
+  if (username && owner.userId && template.userId === owner.userId) {
+    return { ...template, ownerProfile: { ...template.ownerProfile, username } };
+  }
+
+  return hydrateTemplateOwner(template, apiClient);
 };

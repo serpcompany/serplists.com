@@ -130,6 +130,34 @@ describe('template run reconciliation', () => {
     expect(calculateRunProgress(result.sections)).toBe(100);
   });
 
+  it('never reports 100% while a task or sub-task is left, however large the run', () => {
+    // 40 tasks with 4 sub-tasks each is 200 units; 199 of 200 is 99.5%, which used to round to 100.
+    const sections = [
+      {
+        id: 'section-1',
+        title: 'Launch',
+        items: Array.from({ length: 40 }, (_, itemIndex) => ({
+          id: `item-${itemIndex}`,
+          title: `Task ${itemIndex}`,
+          isCompleted: true,
+          contents: [
+            {
+              type: 'subItems',
+              value: '',
+              subItems: Array.from({ length: 4 }, (_, subIndex) => ({
+                id: `sub-${itemIndex}-${subIndex}`,
+                title: `Step ${subIndex}`,
+                isCompleted: !(itemIndex === 0 && subIndex === 0),
+              })),
+            },
+          ],
+        })),
+      },
+    ];
+
+    expect(calculateRunProgress(sections)).toBe(99);
+  });
+
   it('rejects missing or duplicate identities at every template level', () => {
     expect(validateStableTemplateIdentities([{ title: 'No id', items: [] }])).toMatch(/section/i);
     expect(validateStableTemplateIdentities([

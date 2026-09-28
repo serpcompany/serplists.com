@@ -1,3 +1,5 @@
+import { toProgressPercent } from '../../../src/lib/progress';
+
 type JsonRecord = Record<string, unknown>;
 
 export type RetiredRunEntry =
@@ -193,7 +195,7 @@ export function calculateRunProgress(sections: unknown[]): number {
     }
   }
 
-  return total > 0 ? Math.round((completed / total) * 100) : 0;
+  return toProgressPercent(completed, total);
 }
 
 // Import refuses a section, task, content block or sub-task that is not an object. The

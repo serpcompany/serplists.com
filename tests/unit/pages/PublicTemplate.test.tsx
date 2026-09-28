@@ -14,8 +14,11 @@ import {
 import {
   buildConsoleTemplatePath,
   resolvePublicTemplateOwnerSlug,
+  SITE_ORIGIN,
 } from '@/lib/routes';
 import { buildDefaultRunName, RUN_TITLE_MAX_LENGTH } from '@/lib/runs/runName';
+
+import { CANONICAL_ORIGIN } from '../../../functions/sitemap/shared';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 const {
@@ -272,9 +275,22 @@ const publishedClipyTemplate: ChecklistTemplate = {
   tags: ['Clipy'],
 };
 
+interface RouteVisit {
+  path: string;
+  origin: string;
+  search?: string;
+  hash?: string;
+}
+
+const CLEAN_VISIT: RouteVisit = {
+  path: '/profile/alice/reviewed-clipy-checklist',
+  origin: 'https://serplists.com',
+};
+
 function renderPublishedRoute(
   template: ChecklistTemplate,
   modelOverrides: Record<string, unknown> = {},
+  visit: RouteVisit = CLEAN_VISIT,
 ) {
   mockUseTemplateDetailModel.mockReturnValue({
     billingState: { billingEnabled: true, isLoading: false, isPro: false },
@@ -286,14 +302,24 @@ function renderPublishedRoute(
     totalItems: 0,
     ...modelOverrides,
   });
+  const search = visit.search ?? '';
+  const hash = visit.hash ?? '';
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
-    value: { location: { href: 'https://serplists.com/profile/alice/reviewed-clipy-checklist', origin: 'https://serplists.com' } },
+    value: {
+      location: {
+        href: `${visit.origin}${visit.path}${search}${hash}`,
+        origin: visit.origin,
+        pathname: visit.path,
+        search,
+        hash,
+      },
+    },
   });
   const helmetContext: Record<string, unknown> = {};
   const html = renderToStaticMarkup(
     <HelmetProvider context={helmetContext}>
-      <StaticRouter location="/profile/alice/reviewed-clipy-checklist">
+      <StaticRouter location={`${visit.path}${search}${hash}`}>
         <Routes>
           <Route path="/profile/:username/:templateSlug" element={<PublicTemplate />} />
         </Routes>
@@ -301,7 +327,15 @@ function renderPublishedRoute(
     </HelmetProvider>,
   );
 
-  return { helmet: helmetContext.helmet as { meta: { toString(): string }; title: { toString(): string } }, html };
+  return {
+    helmet: helmetContext.helmet as {
+      link: { toString(): string };
+      meta: { toString(): string };
+      script: { toString(): string };
+      title: { toString(): string };
+    },
+    html,
+  };
 }
 
 describe('PublicTemplate rendered route', () => {
@@ -762,5 +796,81 @@ describe('PublicTemplate default run name', () => {
     expect(startRun.mock.calls[0]?.[0]).toBe(
       `${publishedClipyTemplate.title} - ${now.toLocaleString()}`,
     );
+  });
+});
+
+describe('PublicTemplate canonical URL', () => {
+  const expectCanonical = (
+    helmet: ReturnType<typeof renderPublishedRoute>['helmet'],
+    expected: string,
+  ) => {
+    expect(helmet.link.toString()).toContain(`rel="canonical" href="${expected}"`);
+    expect(helmet.meta.toString()).toContain(`property="og:url" content="${expected}"`);
+    expect(helmet.script.toString()).toContain(`"url":"${expected}"`);
+    for (const output of [helmet.link, helmet.meta, helmet.script]) {
+      expect(output.toString()).not.toMatch(/utm_source=twitter|fbclid|#frag/);
+    }
+  };
+
+  it('ignores tracking parameters, the hash and the owner casing of the visited URL', () => {
+    const { helmet } = renderPublishedRoute(publishedClipyTemplate, {}, {
+      path: '/profile/ALICE/reviewed-clipy-checklist',
+      origin: 'https://serplists.com',
+      search: '?utm_source=twitter',
+      hash: '#frag',
+    });
+
+    expectCanonical(helmet, 'https://serplists.com/profile/alice/reviewed-clipy-checklist');
+  });
+
+  it('points a visit by template id at the slug URL', () => {
+    const { helmet } = renderPublishedRoute(publishedClipyTemplate, {}, {
+      path: '/profile/alice/clipy-template-1',
+      origin: 'https://serplists.com',
+      search: '?fbclid=1',
+    });
+
+    expectCanonical(helmet, 'https://serplists.com/profile/alice/reviewed-clipy-checklist');
+  });
+
+  it('names the production site on staging and preview hosts, as the sitemap does', () => {
+    const { helmet } = renderPublishedRoute(publishedClipyTemplate, {}, {
+      path: '/profile/alice/reviewed-clipy-checklist',
+      origin: 'https://staging.serplists.pages.dev',
+    });
+
+    expectCanonical(helmet, `${CANONICAL_ORIGIN}/profile/alice/reviewed-clipy-checklist`);
+  });
+
+  it('uses the template id for a template without a slug', () => {
+    const { helmet } = renderPublishedRoute({ ...publishedClipyTemplate, slug: undefined });
+
+    expectCanonical(helmet, 'https://serplists.com/profile/alice/clipy-template-1');
+  });
+
+  it('uses the official owner for repo templates', () => {
+    const { helmet } = renderPublishedRoute(
+      {
+        ...publishedClipyTemplate,
+        id: 'repo:ultimate-camping-checklist',
+        slug: 'ultimate-camping-checklist',
+        userId: REPO_TEMPLATE_USER_ID,
+        ownerProfile: undefined,
+      },
+      {},
+      {
+        path: `/profile/${REPO_TEMPLATE_OWNER_SLUG}/ultimate-camping-checklist`,
+        origin: 'https://serplists.com',
+      },
+    );
+
+    expectCanonical(
+      helmet,
+      `https://serplists.com/profile/${REPO_TEMPLATE_OWNER_SLUG}/ultimate-camping-checklist`,
+    );
+  });
+
+  it('shares its origin with the sitemap', () => {
+    expect(SITE_ORIGIN).toBe(CANONICAL_ORIGIN);
   });
 });

@@ -17,14 +17,22 @@ const LEGACY_MAX_LINES = {
   "src/pages/TemplateDetail.tsx": 900,
   "functions/api/handlers/agentMcp.ts": 900,
   "src/lib/templates/templateMarkdown.ts": 750,
-  "src/components/account/TeamSettingsSection.tsx": 800,
-  "src/pages/ChecklistRun.tsx": 750,
+  "src/components/account/TeamSettingsSection.tsx": 600,
+  "src/pages/ChecklistRun.tsx": 725,
   "src/features/run-execution/useRunExecutionModel.ts": 700,
   "src/lib/api.ts": 650,
   "src/components/template-editor/SectionSidebar.tsx": 650,
   "src/components/TemplateBackup.tsx": 530,
   "src/contexts/TemplatesContext.tsx": 530,
 };
+
+const TOAST_MESSAGE =
+  "The app shell (src/components/AppShell.tsx) mounts only the sonner Toaster, so toasts from any other toast store are never shown. " +
+  "Import { toast } from 'sonner' instead.";
+
+const STORAGE_MESSAGE =
+  "Reading window.localStorage throws when a browser blocks site data, which crashes the app. " +
+  "Use safeLocalStorage or getLocalStorage() from src/lib/browserStorage.ts, the only module allowed to touch it.";
 
 const VOCABULARY_MESSAGE =
   "User-visible text must use docs/PRODUCT_SENSE.md terms: 'Organization' (not Team/Workspace) and 'Personal' " +
@@ -33,6 +41,14 @@ const VOCABULARY_MESSAGE =
 // ("helps teams ship"), but lowercase "workspace" in prose is the retired product term.
 const LEGACY_TERM_CAPITALIZED = "/\\b(Teams?|Workspaces?)\\b/";
 const LEGACY_TERM_IN_PROSE = "/^(?=.*\\s).*\\bworkspaces?\\b/i";
+// A direct clipboard write can reject (Safari after an awaited request, denied permission,
+// lost focus) and lose what it was copying, so all copies go through one helper.
+const CLIPBOARD_RESTRICTION = {
+  selector: "MemberExpression[property.name='clipboard']",
+  message:
+    "Copy with copyTextToClipboard from src/lib/clipboard.ts: it never throws and returns false when the browser " +
+    "refuses. Also show the text (for share links, ShareLinkDialog) so a failed copy never loses it.",
+};
 
 export default tseslint.config(
   {
@@ -80,6 +96,35 @@ export default tseslint.config(
     rules: { "max-lines": ["error", { max }] },
   })),
   {
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [{ name: "@radix-ui/react-toast", message: TOAST_MESSAGE }],
+          patterns: [{ group: ["**/use-toast", "**/ui/toast", "**/ui/toaster"], message: TOAST_MESSAGE }],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/lib/browserStorage.ts"],
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        { object: "window", property: "localStorage", message: STORAGE_MESSAGE },
+        { object: "window", property: "sessionStorage", message: STORAGE_MESSAGE },
+        { object: "globalThis", property: "localStorage", message: STORAGE_MESSAGE },
+      ],
+      "no-restricted-globals": [
+        "error",
+        { name: "localStorage", message: STORAGE_MESSAGE },
+        { name: "sessionStorage", message: STORAGE_MESSAGE },
+      ],
+    },
+  },
+  {
     files: ["functions/**/*.ts"],
     ignores: ["functions/api/utils/logger.ts"],
     rules: {
@@ -105,7 +150,20 @@ export default tseslint.config(
         { selector: `Literal[value=${LEGACY_TERM_IN_PROSE}]`, message: VOCABULARY_MESSAGE },
         { selector: `TemplateElement[value.raw=${LEGACY_TERM_CAPITALIZED}]`, message: VOCABULARY_MESSAGE },
         { selector: `TemplateElement[value.raw=${LEGACY_TERM_IN_PROSE}]`, message: VOCABULARY_MESSAGE },
+        CLIPBOARD_RESTRICTION,
       ],
+    },
+  },
+  {
+    // The rest of src/ (pages, components, and features get CLIPBOARD_RESTRICTION above).
+    files: [
+      "src/*.{ts,tsx}",
+      "src/components/ui/**/*.{ts,tsx}",
+      "src/{contexts,data,hooks,lib,types,utils}/**/*.{ts,tsx}",
+    ],
+    ignores: ["src/lib/clipboard.ts", "**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": ["error", CLIPBOARD_RESTRICTION],
     },
   },
   {

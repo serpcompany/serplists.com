@@ -125,13 +125,14 @@ describe('buildTemplateHistoryTimeline', () => {
     expect(timeline.map((entry) => entry.label)).toEqual(['Imported template', 'Created template']);
   });
 
-  it('is empty for no history and tolerates unreadable diffs', () => {
+  // An action this app version has no label for reads as words, never a dotted id.
+  it('is empty for no history and tolerates unreadable diffs and unknown actions', () => {
     expect(buildTemplateHistoryTimeline(null)).toEqual([]);
     expect(
       buildTemplateHistoryTimeline(
         history([], [event('e1', 'template.updated', 1, 'not json'), event('e2', 'template.custom', 2)]),
       ).map((entry) => entry.label),
-    ).toEqual(['template.custom', 'Updated template']);
+    ).toEqual(['Custom', 'Updated template']);
   });
 });
 

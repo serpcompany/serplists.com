@@ -1,4 +1,5 @@
 import { loadLocalEnv, parseEnvFile, updateEnvFile } from "./_env.mjs";
+import { describePriceMismatch, PRO_CURRENCY, PRO_MONTHLY_CENTS } from "./_price.mjs";
 
 const localEnv = parseEnvFile(".dev.vars");
 const env = loadLocalEnv();
@@ -30,8 +31,19 @@ async function stripeGet(path) {
 
 const prices = await stripeGet("/v1/prices?lookup_keys[]=serp-checklists_pro_monthly&active=true&limit=1");
 const price = prices.data[0];
-if (!price?.id || price.unit_amount !== 900 || price.currency !== "usd" || price.recurring?.interval !== "month") {
+if (!price?.id) {
   throw new Error("Expected an active $9 USD monthly test price. Run the Stripe bootstrap first.");
+}
+const priceMismatch = describePriceMismatch(price, {
+  unitAmount: PRO_MONTHLY_CENTS,
+  currency: PRO_CURRENCY,
+  interval: "month",
+});
+if (priceMismatch) {
+  throw new Error(
+    `Test price ${price.id} has ${priceMismatch}. Stripe prices cannot change, so a bootstrap rerun ` +
+      "will not fix it: archive the price or move its lookup key in the Stripe Dashboard first.",
+  );
 }
 
 const configurations = await stripeGet("/v1/billing_portal/configurations?active=true&limit=100");

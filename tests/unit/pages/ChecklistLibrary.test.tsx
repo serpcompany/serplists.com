@@ -1,5 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { HelmetProvider } from 'react-helmet-async';
 import { Route, Routes } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import ChecklistLibrary from '@/pages/ChecklistLibrary';
 import Categories from '@/pages/Categories';
 import CategoryDetail from '@/pages/CategoryDetail';
+import { LIBRARY_FILTER_UPDATE_STATE } from '@/components/checklist-library/libraryFilters';
 import {
   REPO_TEMPLATE_OWNER_SLUG,
   REPO_TEMPLATE_USER_ID,
@@ -15,6 +17,7 @@ import {
   buildCanonicalPublicTemplatePath,
   buildPublicCategoryPath,
   buildPublicTemplatesPath,
+  hasCanonicalPublicTemplatePath,
 } from '@/lib/routes';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -35,6 +38,21 @@ vi.mock('@/components/shared/SEOHead', () => ({
     return <div data-seo-head={String(props.url)}>{String(props.title)}</div>;
   },
 }));
+
+// NotFound writes its robots tag through Helmet; SEOHead is mocked above.
+const renderCategoryPage = (location: string) => {
+  const context: { helmet?: { meta: { toString(): string } } } = {};
+  const markup = renderToStaticMarkup(
+    <HelmetProvider context={context}>
+      <StaticRouter location={location}>
+        <Routes>
+          <Route path="/categories/:categorySlug" element={<CategoryDetail />} />
+        </Routes>
+      </StaticRouter>
+    </HelmetProvider>,
+  );
+  return { markup, robots: context.helmet!.meta.toString() };
+};
 
 const baseTemplate: ChecklistTemplate = {
   id: 'template-1',
@@ -130,17 +148,15 @@ describe('ChecklistLibrary route behavior', () => {
     );
   });
 
-  it('falls back to the public library when a template cannot produce a canonical owner URL', () => {
-    const mockNavigate = vi.fn();
+  it('gives a template whose owner has no username no public URL, so discovery leaves it out', () => {
     const template: ChecklistTemplate = {
       ...baseTemplate,
       slug: 'missing-owner',
+      ownerProfile: { full_name: 'Email Signup' },
     };
 
-    const path = buildCanonicalPublicTemplatePath(template);
-    mockNavigate(path ?? buildPublicTemplatesPath());
-
-    expect(mockNavigate).toHaveBeenCalledWith('/templates');
+    expect(buildCanonicalPublicTemplatePath(template)).toBeNull();
+    expect(hasCanonicalPublicTemplatePath(template)).toBe(false);
   });
 
   it('builds category filters as category detail routes', () => {
@@ -239,16 +255,143 @@ describe('ChecklistLibrary route behavior', () => {
       allCategories: ['Business & Operations'],
     });
 
-    const markup = renderToStaticMarkup(
-      <StaticRouter location="/categories/not-a-real-category">
-        <Routes>
-          <Route path="/categories/:categorySlug" element={<CategoryDetail />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    const { markup, robots } = renderCategoryPage('/categories/not-a-real-category');
 
     expect(markup).toContain('That page does not exist');
     expect(markup).toContain('/categories/not-a-real-category');
     expect(markup).not.toContain('0 templates');
+    expect(robots).toMatch(/name="robots" content="noindex/);
+  });
+});
+
+describe('Discovery pages while the catalog loads', () => {
+  const bundledTemplate: ChecklistTemplate = {
+    ...baseTemplate,
+    id: 'repo:camping',
+    slug: 'camping',
+    title: 'Camping Checklist',
+    categories: ['outdoor'],
+    userId: REPO_TEMPLATE_USER_ID,
+  };
+  const movingTemplate: ChecklistTemplate = {
+    ...baseTemplate,
+    id: 'db-moving',
+    slug: 'moving-day',
+    title: 'Moving Day',
+    categories: ['moving'],
+    ownerProfile: { username: 'alice' },
+  };
+  const libraryState = (overrides: Record<string, unknown>) => ({
+    templates: [bundledTemplate],
+    loading: false,
+    catalogError: false,
+    retryCatalog: vi.fn(),
+    allCategories: ['moving', 'outdoor'],
+    ...overrides,
+  });
+  const renderCategory = (location: string) => renderCategoryPage(location).markup;
+  const renderLibrary = (location: string) =>
+    renderToStaticMarkup(
+      <StaticRouter location={location}>
+        <ChecklistLibrary />
+      </StaticRouter>,
+    );
+
+  it('shows a loading category page, not the 404 page, for a database-only category', () => {
+    mockUseTemplateLibrary.mockReturnValue(libraryState({ loading: true }));
+
+    const { markup, robots } = renderCategoryPage('/categories/moving');
+
+    expect(markup).not.toContain('That page does not exist');
+    expect(markup).toContain('aria-busy="true"');
+    // The category is in the sitemap: a crawler that snapshots the loading page must not
+    // see noindex.
+    expect(robots).not.toContain('noindex');
+  });
+
+  it('renders the category once the catalog brings its templates', () => {
+    mockUseTemplateLibrary.mockReturnValue(
+      libraryState({ templates: [bundledTemplate, movingTemplate] }),
+    );
+
+    const markup = renderCategory('/categories/moving');
+
+    expect(markup).not.toContain('That page does not exist');
+    expect(markup).toContain('Moving Day');
+    expect(markup).toContain('1 templates');
+  });
+
+  it('shows a retry state, not the 404 page, when the catalog failed to load', () => {
+    mockUseTemplateLibrary.mockReturnValue(libraryState({ catalogError: true }));
+
+    const { markup, robots } = renderCategoryPage('/categories/moving');
+
+    expect(markup).not.toContain('That page does not exist');
+    expect(robots).not.toContain('noindex');
+    expect(markup).toContain('Could not load templates');
+    expect(markup).toContain('Try again');
+  });
+
+  it('renders known categories at once and keeps the empty message back while loading', () => {
+    mockUseTemplateLibrary.mockReturnValue(libraryState({ loading: true }));
+
+    const bundled = renderCategory('/categories/outdoor');
+    expect(bundled).not.toContain('That page does not exist');
+    expect(bundled).toContain('<h1');
+    expect(bundled).toContain('aria-busy="true"');
+
+    const registry = renderCategory('/categories/business');
+    expect(registry).toContain('Business &amp; Operations');
+    expect(registry).not.toContain('No templates found matching your search.');
+    expect(registry).toContain('aria-busy="true"');
+  });
+
+  it('stays on the library when its own edit leaves only a category in the URL', () => {
+    mockUseTemplateLibrary.mockReturnValue(
+      libraryState({ templates: [bundledTemplate, movingTemplate] }),
+    );
+
+    // Clearing the search on ?category=moving&search=box writes ?category=moving.
+    const selfWritten = renderToStaticMarkup(
+      <StaticRouter
+        location={{
+          pathname: '/templates',
+          search: '?category=moving',
+          state: LIBRARY_FILTER_UPDATE_STATE,
+        }}
+      >
+        <ChecklistLibrary />
+      </StaticRouter>,
+    );
+    expect(selfWritten).toContain('Discover Templates');
+    expect(selfWritten).toContain('Moving Day');
+    expect(selfWritten).not.toContain('Camping Checklist');
+
+    // A link from elsewhere still lands on the category page.
+    const incoming = renderLibrary('/templates?category=moving');
+    expect(incoming).not.toContain('Discover Templates');
+  });
+
+  it('shows the search from the URL in the search box and filters by it', () => {
+    mockUseTemplateLibrary.mockReturnValue(
+      libraryState({ templates: [bundledTemplate, movingTemplate] }),
+    );
+
+    const markup = renderLibrary('/templates?search=%20moving%20&sort=recent');
+
+    expect(markup).toContain('value="moving"');
+    expect(markup).toContain('Moving Day');
+    expect(markup).not.toContain('Camping Checklist');
+  });
+
+  it('never tells a library search that nothing matched before the catalog has loaded', () => {
+    mockUseTemplateLibrary.mockReturnValue(libraryState({ loading: true }));
+    expect(renderLibrary('/templates?search=moving')).not.toContain('No templates found');
+
+    mockUseTemplateLibrary.mockReturnValue(libraryState({ catalogError: true }));
+    const failed = renderLibrary('/templates?search=moving');
+    expect(failed).not.toContain('No templates found');
+    expect(failed).toContain('Could not load templates');
+    expect(failed).toContain('Try again');
   });
 });

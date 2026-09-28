@@ -8,13 +8,16 @@ import {
 } from '@/lib/routes';
 import type { ChecklistTemplate } from '@/types/checklist';
 
+// Actions follow the member role: omit a handler, or pass canEdit={false}, to hide one.
 type TemplateListItemProps = {
-  onDelete: (id: string) => void;
-  onStartRun: (id: string) => void;
+  canEdit?: boolean;
+  onDelete?: (id: string) => void;
+  onStartRun?: (id: string) => void;
   template: ChecklistTemplate;
 };
 
 export function TemplateListItem({
+  canEdit = true,
   onDelete,
   onStartRun,
   template,
@@ -56,26 +59,32 @@ export function TemplateListItem({
       </div>
 
       <div className="flex items-center gap-2 md:opacity-0 md:transition-opacity md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onStartRun(template.id)}
-        >
-          <Play className="mr-2 h-4 w-4" />
-          Start Run
-        </Button>
-        <Button variant="ghost" size="sm" asChild>
-          <Link to={buildConsoleTemplateEditPath(template.id)}>Edit</Link>
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onDelete(template.id)}
-          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete
-        </Button>
+        {onStartRun ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onStartRun(template.id)}
+          >
+            <Play className="mr-2 h-4 w-4" />
+            Start Run
+          </Button>
+        ) : null}
+        {canEdit ? (
+          <Button variant="ghost" size="sm" asChild>
+            <Link to={buildConsoleTemplateEditPath(template.id)}>Edit</Link>
+          </Button>
+        ) : null}
+        {onDelete ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDelete(template.id)}
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
+          </Button>
+        ) : null}
       </div>
     </div>
   );

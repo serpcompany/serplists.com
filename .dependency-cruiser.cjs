@@ -8,10 +8,15 @@ const SHARED_FROM_SRC = [
   "^src/lib/schemas/",
   "^src/lib/utils/clipyUrl\\.ts$",
   "^src/data/publicCategories\\.ts$",
+  "^src/lib/categorySlug\\.ts$",
+  "^src/lib/brand\\.ts$",
+  "^src/lib/publicPageMeta\\.ts$",
+  "^src/lib/progress\\.ts$",
 ];
 
 // Pages Functions entry points (file-based routes).
-const PAGES_ROUTES = "^functions/(api/\\[\\[route\\]\\]\\.ts$|sitemap\\.xml\\.ts$|sitemaps/|categories/)";
+const PAGES_ROUTES =
+  "^functions/(api/\\[\\[route\\]\\]\\.ts$|sitemap\\.xml\\.ts$|sitemaps/|categories/|profile/|templates/)";
 
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
@@ -60,7 +65,7 @@ module.exports = {
         "src/components/ui/ holds design-system primitives. They must not depend on app state, features, pages, " +
         "or the API client. Compose them in a feature component instead.",
       from: { path: "^src/components/ui/" },
-      to: { path: "^src/(contexts|features|pages|hooks/use(?!-mobile|-toast))|^src/lib/api\\.ts$" },
+      to: { path: "^src/(contexts|features|pages|hooks/use(?!-mobile))|^src/lib/api\\.ts$" },
     },
     {
       name: "api-utils-do-not-import-handlers",

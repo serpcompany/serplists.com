@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -31,6 +31,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import {
   Select,
   SelectContent,
@@ -51,18 +52,33 @@ import {
   buildRunPath,
 } from '@/lib/routes';
 import { cn } from '@/lib/utils';
-import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
+import { countRunTasks } from '@/lib/utils/checklistSections';
+import type { ChecklistRun } from '@/types/checklist';
 import { toast } from 'sonner';
 import { getRevalidateRunErrorMessage } from '@/lib/editConflicts';
 import { createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
-
-type StatusFilter = 'all' | 'in_progress' | 'completed';
+import {
+  buildRunTemplateLookup,
+  filterDashboardRuns,
+  findRunTemplate,
+  type RunSourceTemplate,
+  type RunStatusFilter as StatusFilter,
+} from '@/features/dashboard-runs/runTemplateLookup';
+import { getRunRowActions } from '@/features/dashboard-runs/runRowActions';
+import type { ResourcePermissions } from '@/lib/organizationPermissions';
+import { createShareLinkAndCopy } from '@/lib/shareLink';
 
 interface RunsDashboardViewProps {
   runs: ChecklistRun[];
-  templates?: Pick<ChecklistTemplate, 'id' | 'ownerProfile' | 'title'>[];
+  // The public catalog and the active workspace's own list; see buildRunTemplateLookup.
+  templates?: RunSourceTemplate[];
+  workspaceTemplates?: RunSourceTemplate[];
+  // The viewer's permissions on a run: its Organization role, or full for Personal runs.
+  getRunPermissions: (run: ChecklistRun) => ResourcePermissions;
   onDeleteRun: (runId: string) => void | Promise<void>;
   onRevalidateRun?: (run: ChecklistRun) => void | Promise<void>;
+  // Called once a share has made the run public (see createRunsDashboardShareUrl).
+  onRunShared?: (runId: string) => void;
   loading?: boolean;
   loadError?: unknown;
   onRetryLoad?: () => void;
@@ -75,23 +91,20 @@ const formatDate = (dateString: string) =>
     year: 'numeric',
   });
 
-const getTaskCounts = (run: ChecklistRun) =>
-  run.sections.reduce(
-    (acc, section) => {
-      const completed = section.items.filter((item) => item.isCompleted).length;
-      return {
-        completed: acc.completed + completed,
-        total: acc.total + section.items.length,
-      };
-    },
-    { completed: 0, total: 0 },
-  );
+// Tasks only, as on the run page; the bar shows the run's overall progress.
+const getTaskCounts = (run: ChecklistRun) => {
+  const { tasksCompleted, tasksTotal } = countRunTasks(run.sections);
+  return { completed: tasksCompleted, total: tasksTotal };
+};
 
 export function RunsDashboardView({
   runs,
   templates = [],
+  workspaceTemplates,
+  getRunPermissions,
   onDeleteRun,
   onRevalidateRun,
+  onRunShared,
   loading = false,
   loadError,
   onRetryLoad = () => undefined,
@@ -101,51 +114,49 @@ export function RunsDashboardView({
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeletingRun, setIsDeletingRun] = useState(false);
   const [revalidatingRunId, setRevalidatingRunId] = useState<string | null>(null);
+  const [sharedLink, setSharedLink] = useState<{ runId: string; url: string } | null>(null);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const sharingRunId = useRef<string | null>(null);
 
   const inProgressCount = runs.filter((run) => run.status === 'in_progress').length;
   const completedCount = runs.filter((run) => run.status === 'completed').length;
   const templatesById = useMemo(
-    () => new Map(templates.map((template) => [template.id, template])),
-    [templates],
+    () => buildRunTemplateLookup(templates, workspaceTemplates),
+    [templates, workspaceTemplates],
   );
 
-  const filteredRuns = useMemo(() => {
-    const lowerSearch = searchQuery.toLowerCase();
+  const filteredRuns = useMemo(
+    () => filterDashboardRuns(runs, templatesById, searchQuery, statusFilter),
+    [runs, searchQuery, statusFilter, templatesById],
+  );
 
-    return runs
-      .filter((run) => {
-        const template = templatesById.get(run.templateId);
-        const matchesSearch = [
-          run.title,
-          run.status,
-          template?.title ?? '',
-          template?.ownerProfile?.username ?? '',
-          template?.ownerProfile?.full_name ?? '',
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(lowerSearch);
-        const matchesStatus =
-          statusFilter === 'all' || run.status === statusFilter;
-
-        return matchesSearch && matchesStatus;
-      })
-      .sort(
-        (left, right) =>
-          new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime(),
-      );
-  }, [runs, searchQuery, statusFilter, templatesById]);
-
+  // The link is always shown in a dialog; copying is best effort (see createShareLinkAndCopy).
+  // Each create replaces the run's share token, so a second tap waits and a reopen reuses it.
   const shareRun = async (runId: string) => {
+    if (sharingRunId.current) {
+      return;
+    }
+    if (sharedLink?.runId === runId) {
+      setIsShareDialogOpen(true);
+      return;
+    }
+
+    sharingRunId.current = runId;
     try {
-      const shareUrl = await createRunsDashboardShareUrl(
-        runId,
-        window.location.origin,
+      const result = await createShareLinkAndCopy(() =>
+        createRunsDashboardShareUrl(runId, window.location.origin, undefined, onRunShared),
       );
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success('Share link copied');
-    } catch {
-      toast.error('Failed to create share link');
+      if (result.kind === 'error') {
+        toast.error(result.message);
+        return;
+      }
+      if (result.kind === 'ok') {
+        setSharedLink({ runId, url: result.shareUrl });
+        setIsShareDialogOpen(true);
+        if (result.copied) toast.success('Share link copied');
+      }
+    } finally {
+      sharingRunId.current = null;
     }
   };
 
@@ -246,7 +257,8 @@ export function RunsDashboardView({
             {filteredRuns.map((run) => {
               const isCompleted = run.status === 'completed';
               const { completed, total } = getTaskCounts(run);
-              const template = templatesById.get(run.templateId);
+              const template = findRunTemplate(templatesById, run.templateId);
+              const actions = getRunRowActions(run, getRunPermissions(run));
 
               return (
                 <div
@@ -329,7 +341,7 @@ export function RunsDashboardView({
                     className="flex flex-wrap items-center gap-2 opacity-100 transition-opacity xl:opacity-0 xl:group-hover:opacity-100 xl:focus-within:opacity-100"
                     data-run-actions="true"
                   >
-                    {run.isStale && !run.isPublic && onRevalidateRun ? (
+                    {actions.canRevalidate && onRevalidateRun ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -366,32 +378,38 @@ export function RunsDashboardView({
                       </Button>
                     )}
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          aria-label="Run options"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40">
-                        <DropdownMenuItem onClick={() => shareRun(run.id)}>
-                          <Share2 className="mr-2 h-4 w-4" />
-                          Share Run
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => setRunToDelete(run.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {actions.canShare || actions.canDelete ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            aria-label="Run options"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          {actions.canShare ? (
+                            <DropdownMenuItem onClick={() => void shareRun(run.id)}>
+                              <Share2 className="mr-2 h-4 w-4" />
+                              Share Run
+                            </DropdownMenuItem>
+                          ) : null}
+                          {actions.canShare && actions.canDelete ? <DropdownMenuSeparator /> : null}
+                          {actions.canDelete ? (
+                            <DropdownMenuItem
+                              onClick={() => setRunToDelete(run.id)}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          ) : null}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : null}
                   </div>
                 </div>
               );
@@ -434,6 +452,14 @@ export function RunsDashboardView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ShareLinkDialog
+        copiedMessage="Share link copied"
+        description="Anyone with this link can open this run without signing in."
+        onOpenChange={setIsShareDialogOpen}
+        open={isShareDialogOpen}
+        title="Share run"
+        url={sharedLink?.url ?? ''}
+      />
     </DashboardContentShell>
   );
 }

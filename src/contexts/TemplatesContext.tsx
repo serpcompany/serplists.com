@@ -4,6 +4,7 @@ import { useWorkspace } from "./WorkspaceContext";
 import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { isStaleRecordError } from "@/lib/editConflicts";
+import { markRunShared } from "@/lib/queryCache";
 import { prepareTemplatesForImport } from "@/lib/utils/templateBackup";
 import { 
   ChecklistTemplate, 
@@ -34,7 +35,14 @@ import {
   mergePublicTemplateCollections,
   repoTemplates,
 } from "@/lib/repoTemplateCatalog";
-import { refreshAfterRunDelete, refreshAfterTemplateDelete, refreshAfterTemplateSave, refreshRunLists } from "./templateListCache";
+import {
+  refreshAfterRunDelete,
+  refreshAfterRunRevalidated,
+  refreshAfterTemplateDelete,
+  refreshAfterTemplateSave,
+  refreshRunLists,
+  refreshRunsAfterConflict,
+} from "./templateListCache";
 import { createTemplateListFetcher, fetchRunList, shouldRetryListFetch, type TemplateListRequest } from "./templateListFetchers";
 import { buildRunUpdatePayload, type RunUpdateOptions } from "./runUpdatePayload";
 import { assertWorkspaceReady } from "./workspaceSelection";
@@ -166,6 +174,12 @@ export const useTemplateLists = (options: TemplateListOptions = {}) => {
     runsError: listLoadError(runsEnabled, runs),
     refetchTemplates: () => Promise.all([workspaceEnabled && workspace.refetch(), catalogEnabled && catalog.refetch()]),
     refetchRuns: () => (runsEnabled ? runs.refetch() : Promise.resolve()),
+    // `templates` always holds the bundled repo templates, so a non-empty list does not mean
+    // the catalog loaded. isPending covers the wait for the session (query disabled) and the
+    // first request, but not a background refetch of a cached catalog.
+    catalogPending: options.catalog === true && catalog.isPending,
+    catalogError: options.catalog === true && listLoadError(catalogEnabled, catalog) !== null,
+    refetchCatalog: catalog.refetch,
   };
 };
 
@@ -287,7 +301,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         expected_version: template.version,
       });
     },
-    onSuccess: () => refreshAfterTemplateSave(queryClient),
+    onSuccess: (_result, template) => refreshAfterTemplateSave(queryClient, template.id),
     // A conflict means the cached copy is stale: lists reload when a page shows them again.
     onError: (error) => {
       if (isStaleRecordError(error)) void queryClient.invalidateQueries({ queryKey: ['templates'], refetchType: 'none' });
@@ -378,14 +392,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (!user) throw new Error('User must be logged in to revalidate a run');
       await api.revalidateChecklist(run.id, run.revision);
     },
-    onSuccess: async () => {
-      await refreshRunLists(queryClient);
-    },
-    // The runs page sent a stale revision: reload the list before rejecting, so the button
-    // re-enables on the current revision (or disappears) instead of repeating the conflict.
-    onError: async (error) => {
-      if (isStaleRecordError(error)) await refreshRunLists(queryClient);
-    },
+    onSuccess: (_result, run) => refreshAfterRunRevalidated(queryClient, run.id),
+    onError: (error) => refreshRunsAfterConflict(queryClient, error),
   });
 
   const importTemplatesMutation = useMutation({
@@ -453,6 +461,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     revalidateRun: async (run: ChecklistRun) => {
       await revalidateRunAsync(run);
     },
+    markRunShared: (runId: string) => void markRunShared(queryClient, runId),
     deleteRun: async (id: string) => {
       await deleteRunAsync(id);
     },
@@ -460,8 +469,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       importTemplatesAsync({ templatesData, options }),
   }), [
     allTemplates, createRun, createTemplate, deleteRunAsync, deleteTemplateAsync, getAllPublicTemplates, getRun,
-    getRunsForTemplate, getTemplate, getTemplateBySlug, importTemplatesAsync, publicTemplates, revalidateRunAsync,
-    runs, runsLoading, templatesLoading, updateRunAsync, updateTemplate,
+    getRunsForTemplate, getTemplate, getTemplateBySlug, importTemplatesAsync, publicTemplates, queryClient,
+    revalidateRunAsync, runs, runsLoading, templatesLoading, updateRunAsync, updateTemplate,
   ]);
 
   return (

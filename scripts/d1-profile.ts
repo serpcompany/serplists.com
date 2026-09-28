@@ -145,6 +145,7 @@ function buildDatabase() {
 const personalTemplate = "synthetic-template-50"; // owned by user-1, private
 const organizationTemplate = "synthetic-template-40"; // owned by team-seed-growth, private
 const publicTemplateSlug = "synthetic-template-5"; // public, user-owned (synthetic ids equal slugs)
+const publicTemplateOwner = "synth_6"; // synthetic-user-6, the owner of synthetic-template-5
 const adminRun = "synthetic-run-40"; // owned by user-1
 const shareToken = "synthetic-share-50";
 
@@ -153,6 +154,9 @@ function scenarios(): Scenario[] {
     { name: "public catalog (GET /api/templates)", actor: "anon", path: "/api/templates" },
     { name: "public catalog (repeat)", actor: "anon", path: "/api/templates" },
     { name: "public template by slug", actor: "anon", path: `/api/templates/slug/${publicTemplateSlug}` },
+    // The template page's link-preview tags (functions/seo/); the repeat is an edge-cache hit.
+    { name: "public template page", actor: "anon", path: `/profile/${publicTemplateOwner}/${publicTemplateSlug}` },
+    { name: "public template page (repeat)", actor: "anon", path: `/profile/${publicTemplateOwner}/${publicTemplateSlug}` },
     { name: "public profile templates", actor: "anon", path: "/api/templates/public?userId=synthetic-user-2" },
     { name: "public profile by username", actor: "anon", path: "/api/profiles/by-username?username=synth_2" },
     { name: "shared run", actor: "anon", path: `/api/checklists/shared/${shareToken}` },

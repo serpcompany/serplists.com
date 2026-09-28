@@ -10,7 +10,14 @@ import React, {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { patchTeamSummary } from '@/features/teams/teamSummaries';
 import { api, type TeamRole, type TeamSummary } from '@/lib/api';
+import { safeLocalStorage } from '@/lib/browserStorage';
+import {
+  getOrganizationPermissions,
+  getResourcePermissions,
+  type ResourcePermissions,
+} from '@/lib/organizationPermissions';
 
 import { markListsStaleForWorkspaceSwitch } from './templateListCache';
 import {
@@ -57,10 +64,15 @@ type WorkspaceContextValue = {
   canManageTeam: boolean;
   canRunTemplates: boolean;
   createTeam: (input: CreateTeamInput) => Promise<void>;
+  // Permissions on a resource owned by this Organization (Personal when teamId is empty),
+  // from the user's role there, whichever context is active.
+  getPermissions: (teamId?: string) => ResourcePermissions;
   isTeamWorkspace: boolean;
   // True until the session and the active context are known, including while the stored
   // Organization is unconfirmed ('loading' or 'error' status). Lists wait for it.
   isWorkspaceLoading: boolean;
+  /** Applies a confirmed change to one cached Organization without refetching. */
+  patchTeam: (teamId: string, patch: Partial<Omit<TeamSummary, 'id'>>) => void;
   refreshTeams: () => Promise<TeamSummary[]>;
   rememberTeam: (team: TeamSummary) => void;
   // Retries the teams request after it failed ('error' status).
@@ -85,40 +97,12 @@ const personalWorkspace: Workspace = {
   type: 'personal',
 };
 
-const canRoleEditTemplates = (role: TeamRole): boolean =>
-  role === 'owner' || role === 'admin' || role === 'editor';
+const readStoredWorkspaceId = (): string =>
+  safeLocalStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY) || PERSONAL_WORKSPACE_ID;
 
-const canRoleRunTemplates = (role: TeamRole): boolean =>
-  canRoleEditTemplates(role) || role === 'runner';
-
-const canRoleManageTeam = (role: TeamRole): boolean =>
-  role === 'owner' || role === 'admin';
-
-const readStoredWorkspaceId = (): string => {
-  if (typeof window === 'undefined') {
-    return PERSONAL_WORKSPACE_ID;
-  }
-
-  try {
-    return (
-      window.localStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY) ||
-      PERSONAL_WORKSPACE_ID
-    );
-  } catch {
-    return PERSONAL_WORKSPACE_ID;
-  }
-};
-
+// safeLocalStorage never throws; when storage is blocked the choice lasts for the session.
 const writeStoredWorkspaceId = (workspaceId: string): void => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, workspaceId);
-  } catch {
-    // Ignore local storage failures; the in-memory workspace still updates.
-  }
+  safeLocalStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, workspaceId);
 };
 
 export function WorkspaceProvider({
@@ -277,6 +261,19 @@ export function WorkspaceProvider({
     [queryClient, user?.id],
   );
 
+  const patchTeam = useCallback(
+    (teamId: string, patch: Partial<Omit<TeamSummary, 'id'>>) => {
+      setOptimisticTeams((currentTeams) => patchTeamSummary(currentTeams, teamId, patch));
+
+      if (user?.id) {
+        queryClient.setQueryData<TeamSummary[]>(['teams', user.id], (currentTeams) =>
+          currentTeams ? patchTeamSummary(currentTeams, teamId, patch) : currentTeams,
+        );
+      }
+    },
+    [queryClient, user?.id],
+  );
+
   const refreshTeams = useCallback(async () => {
     if (!user?.id) {
       return [];
@@ -310,22 +307,30 @@ export function WorkspaceProvider({
   const retryWorkspace = useCallback(() => {
     void refetchTeams();
   }, [refetchTeams]);
+  const getPermissions = useCallback(
+    (teamId?: string) =>
+      getResourcePermissions(teamId, (id) => teams.find((team) => team.id === id)?.role),
+    [teams],
+  );
 
   // Memoized so a background teams refetch (isFetching toggles on window focus) does not
   // re-render every consumer.
   const value = useMemo<WorkspaceContextValue>(() => {
     const isTeamWorkspace = activeWorkspace.type === 'team';
     const teamRole = isTeamWorkspace ? activeWorkspace.role : undefined;
+    const activePermissions = getOrganizationPermissions(teamRole);
     return {
       activeTeamId: isTeamWorkspace ? activeWorkspace.teamId : undefined,
       activeWorkspace,
       activeWorkspaceId: activeWorkspace.id,
-      canEditTemplates: teamRole ? canRoleEditTemplates(teamRole) : true,
-      canManageTeam: teamRole ? canRoleManageTeam(teamRole) : false,
-      canRunTemplates: teamRole ? canRoleRunTemplates(teamRole) : true,
+      canEditTemplates: teamRole ? activePermissions.canEditTemplates : true,
+      canManageTeam: teamRole ? activePermissions.canManage : false,
+      canRunTemplates: teamRole ? activePermissions.canRun : true,
       createTeam,
+      getPermissions,
       isTeamWorkspace,
       isWorkspaceLoading,
+      patchTeam,
       refreshTeams,
       rememberTeam,
       retryWorkspace,
@@ -336,8 +341,8 @@ export function WorkspaceProvider({
       workspaceStatus,
     };
   }, [
-    activeWorkspace, createTeam, isWorkspaceLoading, refreshTeams, rememberTeam, retryWorkspace, selectWorkspace, teams,
-    workspaces, workspaceStatus,
+    activeWorkspace, createTeam, getPermissions, isWorkspaceLoading, patchTeam, refreshTeams, rememberTeam,
+    retryWorkspace, selectWorkspace, teams, workspaces, workspaceStatus,
   ]);
 
   return (

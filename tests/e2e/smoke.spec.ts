@@ -335,7 +335,7 @@ test("@smoke API-backed public template single renders", async ({ page }) => {
 
 test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
   const description =
-    "First URL instruction line\nSecond URL instruction line\\nThird URL instruction line";
+    "First URL instruction line\nSecond URL instruction line\nSave the list to C:\\new_folder\nThird URL instruction line";
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -460,6 +460,8 @@ test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
   await expect(renderedDescription).toBeVisible();
   await expect(renderedDescription).toContainText("Second URL instruction line");
   await expect(renderedDescription).toContainText("Third URL instruction line");
+  // A typed backslash-n (here in a Windows path) is text, not a line break.
+  await expect(renderedDescription).toContainText("Save the list to C:\\new_folder");
 
   const whiteSpace = await renderedDescription.evaluate(
     (node) => getComputedStyle(node).whiteSpace,

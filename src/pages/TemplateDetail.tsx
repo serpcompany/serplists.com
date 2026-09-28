@@ -40,26 +40,18 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { Switch } from '@/components/ui/switch';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import {
   DashboardContentShell,
   DashboardPageHeader,
@@ -87,10 +79,11 @@ import {
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
+import { getTemplateActionPermissions } from '@/lib/organizationPermissions';
+import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
 import { getRunStartedMessage, getTemplateDuplicatedMessage, nameOtherTemplateDestination } from '@/lib/templateDestination';
 import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
 import { formatLocalDate, formatLocalDateTime } from '@/lib/utils/dbTimestamp';
-import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 
 const TemplateDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -99,7 +92,7 @@ const TemplateDetail = () => {
   // Actions below await a request; they move the user only if they are still here.
   const beginVisit = usePageVisit();
   const { user, isAuthenticated } = useAuth();
-  const { activeTeamId, canEditTemplates, isTeamWorkspace, teams } = useWorkspace();
+  const { activeTeamId, canEditTemplates, getPermissions, isTeamWorkspace, teams } = useWorkspace();
   // No list: the model loads this template by id (docs/design-docs/d1-cost.md).
   const { createRun, createTemplate, deleteTemplate } = useTemplates();
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
@@ -153,6 +146,15 @@ const TemplateDetail = () => {
   const isPublic = displayTemplate?.isPublic ?? false;
   // Share and a visibility change must not race on the same template version.
   const isChangingVisibility = isCreatingShare || isUpdatingVisibility;
+  // Start Run only where the API accepts it: in the Organization that owns a private
+  // Organization Template (where its runs go), otherwise in the active context.
+  const { canStartRun } = getTemplateActionPermissions({
+    activeTeamId,
+    isRepoTemplate: Boolean(displayTemplate && isRepoTemplate(displayTemplate)),
+    permissionsFor: getPermissions,
+    template: displayTemplate ?? { isPublic: false, userId: '' },
+    userId: user?.id,
+  });
   const totalTasks = displayTemplate?.sections.reduce(
     (count, section) => count + section.items.length,
     0,
@@ -219,15 +221,6 @@ const TemplateDetail = () => {
     } finally {
       setIsCreatingShare(false);
     }
-  };
-
-  const handleCopyShareLink = async () => {
-    if (!shareUrl) {
-      return;
-    }
-
-    await navigator.clipboard.writeText(shareUrl);
-    toast.success('Public link copied');
   };
 
   // Duplicate (a template the user can edit) and copy (someone else's) both create a
@@ -457,14 +450,16 @@ const TemplateDetail = () => {
         </Button>
       ) : null}
 
-      <Button
-        size="sm"
-        onClick={() => setRunDialogOpen(true)}
-        className="bg-foreground text-background hover:bg-foreground/90"
-      >
-        <PlayCircle className="mr-2 h-4 w-4" />
-        Start Run
-      </Button>
+      {canStartRun || !user ? (
+        <Button
+          size="sm"
+          onClick={() => setRunDialogOpen(true)}
+          className="bg-foreground text-background hover:bg-foreground/90"
+        >
+          <PlayCircle className="mr-2 h-4 w-4" />
+          Start Run
+        </Button>
+      ) : null}
 
       {canEditTemplate ? (
         <DropdownMenu>
@@ -508,9 +503,7 @@ const TemplateDetail = () => {
       <DashboardPageHeader
         title={displayTemplate.title}
         description={
-          (displayTemplate.description
-            ? normalizeDisplayText(displayTemplate.description)
-            : null) ||
+          displayTemplate.description ||
           'Review template structure, metadata, and run actions.'
         }
         actions={templateHeaderActions}
@@ -588,7 +581,7 @@ const TemplateDetail = () => {
                       </div>
                       {item.description ? (
                         <p className="mt-1 whitespace-pre-line pl-5 text-sm text-muted-foreground">
-                          {normalizeDisplayText(item.description)}
+                          {item.description}
                         </p>
                       ) : null}
                       {item.contents?.length ? (
@@ -768,44 +761,14 @@ const TemplateDetail = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-        <DialogContent className="border-border bg-card">
-          <DialogHeader>
-            <DialogTitle>Share Template</DialogTitle>
-            <DialogDescription>
-              Share this template with others. They can view it and copy it into
-              their library.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="flex items-center gap-2">
-              <Input
-                readOnly
-                value={shareUrl}
-                className="border-border bg-muted"
-              />
-              <Button
-                aria-label="Copy share link"
-                variant="outline"
-                size="icon"
-                onClick={handleCopyShareLink}
-                className="shrink-0 border-border"
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShareDialogOpen(false)}
-              className="border-border"
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ShareLinkDialog
+        copiedMessage="Public link copied"
+        description="Share this template with others. They can view it and copy it into their library."
+        onOpenChange={setShareDialogOpen}
+        open={shareDialogOpen}
+        title="Share Template"
+        url={shareUrl}
+      />
 
       <RunNameDialog
         open={runDialogOpen}

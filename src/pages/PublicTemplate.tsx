@@ -18,12 +18,15 @@ import {
   handleUpgradeRequiredForContext,
   navigateToLoginWithReturnPath,
 } from '@/lib/access-flow';
+import { resolveTemplatePageText } from '@/lib/publicPageMeta';
 import {
+  buildCanonicalPublicTemplatePath,
   buildConsoleRunPath,
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
   buildPublicProfilePath,
   buildPublicTemplatesPath,
+  buildSiteUrl,
   resolvePublicTemplateOwnerSlug,
 } from '@/lib/routes';
 import { buildDefaultRunName } from '@/lib/runs/runName';
@@ -235,18 +238,21 @@ const PublicTemplate = () => {
     );
   }
 
+  // The page also answers to other casings of the owner and to the template id, and visits
+  // carry tracking parameters. The canonical URL is the one the sitemap lists.
+  const canonicalPath = buildCanonicalPublicTemplatePath(displayTemplate);
+  // The same text the link preview gets from functions/seo/ before this page loads.
+  const pageText = resolveTemplatePageText(displayTemplate);
+
   return (
     <div className="pb-24">
       <SEOHead
-        title={displayTemplate.seoTitle?.trim() || displayTemplate.title}
-        description={
-          displayTemplate.seoDescription?.trim() ||
-          displayTemplate.description ||
-          `${displayTemplate.title} - Interactive checklist template`
-        }
+        title={pageText.title}
+        description={pageText.description}
         keywords={displayTemplate.categories || ['checklist', 'template']}
         type="article"
         publishedTime={displayTemplate.createdAt}
+        url={canonicalPath ? buildSiteUrl(canonicalPath) : undefined}
       />
       <PublicTemplateView
         // A new template gets fresh view state (expanded sections, Saved).
