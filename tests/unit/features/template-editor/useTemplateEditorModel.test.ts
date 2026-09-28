@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ChecklistTemplate } from "@/types/checklist";
 
 import {
+  buildTemplateEditorSavedState,
   loadTemplateEditorData,
   saveTemplateEditorData,
   shouldLoadTemplateEditorRecord,
@@ -250,6 +251,56 @@ describe("saveTemplateEditorData", () => {
       success: false,
       errors: [{ type: "save", message: "Save failed" }],
     });
+  });
+});
+
+describe("stale editor protection", () => {
+  const values = {
+    title: "Existing Template",
+    description: "",
+    templateType: "checklist" as const,
+    categories: [],
+    tags: [],
+    isPublic: false,
+    seoTitle: "",
+    seoDescription: "",
+    seoUrl: "",
+    sections: [],
+  };
+
+  it("keeps the version the template was loaded at", async () => {
+    const cached = await loadTemplateEditorData({ id: "template-1", getCachedTemplate: () => buildTemplate({ version: 3 }) });
+    const apiClient = { getTemplateById: vi.fn().mockResolvedValue({ id: "template-1", title: "API", version: 7, sections: [] }) };
+    const fetched = await loadTemplateEditorData({ id: "template-1", getCachedTemplate: () => undefined }, { apiClient });
+
+    expect(cached.version).toBe(3);
+    expect(fetched.version).toBe(7);
+  });
+
+  it("sends the loaded version, and leaves visibility out unless the editor changed it", async () => {
+    const saveTemplate = vi.fn().mockResolvedValue({ success: true, errors: [] });
+    const baseline = { version: 3, isPublic: false };
+
+    await saveTemplateEditorData({ id: "template-1", values, baseline }, { saveTemplate });
+    await saveTemplateEditorData({ id: "template-1", values: { ...values, isPublic: true }, baseline }, { saveTemplate });
+
+    expect(saveTemplate.mock.calls[0][0]).toEqual(expect.objectContaining({ version: 3, isPublic: undefined }));
+    expect(saveTemplate.mock.calls[1][0]).toEqual(expect.objectContaining({ version: 3, isPublic: true }));
+  });
+
+  it("always sends visibility when creating a template", async () => {
+    const saveTemplate = vi.fn().mockResolvedValue({ success: true, errors: [] });
+
+    await saveTemplateEditorData({ values }, { saveTemplate });
+
+    expect(saveTemplate.mock.calls[0][0]).toEqual(expect.objectContaining({ id: undefined, isPublic: false }));
+  });
+
+  it("moves the baseline to what was saved, at the version the save returned", () => {
+    const saved = buildTemplateEditorSavedState({ ...values, isPublic: true }, 5);
+
+    expect(saved.version).toBe(5);
+    expect(saved.initialValues.isPublic).toBe(true);
   });
 });
 

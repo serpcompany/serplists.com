@@ -1405,17 +1405,40 @@ describe('Templates Handlers', () => {
       expect(versionInserts()).toHaveLength(1);
     });
 
-    it('does not version a visibility-only change', async () => {
+    it('versions a visibility change, so a stale editor gets a conflict, without touching content or runs', async () => {
       const response = await put({ is_public: true, expected_version: 3 });
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data).toEqual(expect.objectContaining({ version: 3, content_version: 2, structureChanged: false }));
+      expect(data).toEqual(expect.objectContaining({ version: 4, content_version: 2, structureChanged: false, reconciledRuns: 0 }));
       const templateUpdate = dbMocks.updateChain.set.mock.calls[0][0];
-      expect(templateUpdate).toEqual(expect.objectContaining({ is_public: true }));
-      expect(templateUpdate).not.toHaveProperty('version');
+      expect(templateUpdate).toEqual(expect.objectContaining({ is_public: true, version: 4 }));
       expect(templateUpdate).not.toHaveProperty('content_version');
-      expect(versionInserts()).toHaveLength(0);
+      expect(versionInserts()).toHaveLength(1);
+      expect(versionInserts()[0][0]).toEqual(expect.objectContaining({ version: 4 }));
+      expect(dbMocks.selectChain.orderBy).not.toHaveBeenCalled();
+    });
+
+    it('rejects an editor save made before a visibility change', async () => {
+      dbMocks.selectChain.limit.mockReset();
+      dbMocks.selectChain.limit.mockResolvedValue([]);
+      dbMocks.selectChain.limit.mockResolvedValueOnce([{ ...storedTemplate, is_public: true, version: 4 }]);
+
+      const response = await put({ ...editorPayload, title: 'Launch plan (typo fixed)', is_public: false, expected_version: 3 });
+      const data = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(data.code).toBe('edit_conflict');
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    });
+
+    it('does not version a resent, unchanged visibility', async () => {
+      const response = await put({ is_public: false, expected_version: 3 });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data).toEqual(expect.objectContaining({ version: 3 }));
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
     });
 
     it('accepts a save with no changes without writing anything', async () => {

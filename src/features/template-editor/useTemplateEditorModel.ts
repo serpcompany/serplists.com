@@ -35,6 +35,9 @@ type LoadTemplateEditorDataOptions = {
 type SaveTemplateEditorDataOptions = {
   id?: string;
   values: TemplateEditorFormValues;
+  // What the form was loaded (or last saved) from: an update is guarded by this version and
+  // resends visibility only when the form changed it.
+  baseline?: { version?: number; isPublic: boolean };
 };
 
 type SaveTemplateEditorDependencies = {
@@ -45,6 +48,7 @@ export type TemplateEditorLoadResult = {
   initialValues: TemplateEditorFormValues;
   loadError: string | null;
   templateSlug?: string;
+  version?: number;
 };
 
 export const buildDefaultTemplateEditorTemplate =
@@ -52,6 +56,7 @@ export const buildDefaultTemplateEditorTemplate =
 
 export const buildTemplateEditorSavedState = (
   values: TemplateEditorFormValues,
+  version?: number,
 ): TemplateEditorLoadResult => {
   const normalizedForm = normalizeTemplateEditorFormForSave(values);
 
@@ -71,6 +76,7 @@ export const buildTemplateEditorSavedState = (
     }),
     loadError: null,
     templateSlug: normalizedForm.seoUrl || undefined,
+    version,
   };
 };
 
@@ -85,6 +91,7 @@ const buildLoadResult = (
   initialValues: buildTemplateEditorFormValues(template),
   loadError: null,
   templateSlug: template?.slug ?? template?.seoUrl,
+  version: template?.version,
 });
 
 const getApiClient = (
@@ -141,6 +148,7 @@ export const saveTemplateEditorData = async (
   dependencies: SaveTemplateEditorDependencies,
 ): Promise<SaveTemplateResult> => {
   const normalizedForm = normalizeTemplateEditorFormForSave(options.values);
+  const visibilityUnchanged = Boolean(options.id && options.baseline && options.baseline.isPublic === normalizedForm.isPublic);
   return dependencies.saveTemplate({
     id: options.id,
     title: normalizedForm.title,
@@ -152,7 +160,8 @@ export const saveTemplateEditorData = async (
     templateType: normalizedForm.templateType,
     categories: normalizedForm.categories,
     tags: normalizedForm.tags,
-    isPublic: normalizedForm.isPublic,
+    isPublic: visibilityUnchanged ? undefined : normalizedForm.isPublic,
+    version: options.id ? options.baseline?.version : undefined,
   });
 };
 
@@ -166,6 +175,8 @@ export const useTemplateEditorModel = (
     isSaving,
   } = useTemplateSave();
   const loadedTemplateIdRef = useRef<string | null>(null);
+  // The version the form was loaded or last saved at (see saveTemplateEditorData).
+  const loadedVersionRef = useRef<number | undefined>(undefined);
   const baseGetTemplateRef = useRef(getTemplate);
   const apiClientRef = useRef<TemplateEditorApiClient | undefined>(
     dependencies?.apiClient,
@@ -222,6 +233,7 @@ export const useTemplateEditorModel = (
       }
 
       loadedTemplateIdRef.current = options.id;
+      loadedVersionRef.current = result.version;
       setInitialValues(result.initialValues);
       setLoadError(result.loadError);
       setTemplateSlug(result.templateSlug);
@@ -242,6 +254,7 @@ export const useTemplateEditorModel = (
       {
         id: options.id,
         values,
+        baseline: { version: loadedVersionRef.current, isPublic: initialValues.isPublic },
       },
       {
         saveTemplate: dependencies?.saveTemplate ?? persistTemplateSave,
@@ -249,7 +262,8 @@ export const useTemplateEditorModel = (
     );
 
     if (result.success) {
-      const savedState = buildTemplateEditorSavedState(values);
+      const savedState = buildTemplateEditorSavedState(values, result.version);
+      loadedVersionRef.current = savedState.version;
       setInitialValues(savedState.initialValues);
       setLoadError(null);
       setTemplateSlug(savedState.templateSlug || templateSlug);

@@ -42,7 +42,6 @@ import {
   validateStableTemplateIdentities,
 } from '../utils/template-reconciliation';
 import {
-  isVersionedTemplateChange,
   omitUnchangedTemplateColumns,
   templateStructureChanged,
   validateChangedTemplateFields,
@@ -152,12 +151,13 @@ async function updateTemplateWithHistoryFallback(
   values: TemplateUpdateValues,
   whereClause: SQL | undefined,
   auditEventValues: AuditEventValues,
-  versionValues?: TemplateVersionValues,
+  versionValues: TemplateVersionValues,
   reconciledRunUpdates: ReconciledRunUpdate[] = [],
 ): Promise<{ templateResult: unknown; runResults: unknown[] }> {
   const { audit_events, checklist_runs, template_versions, templates } = schema;
   const runResultIndexes: number[] = [];
-  let nextIndex = versionValues ? 3 : 2;
+  // Run statements follow the template update, version insert, and audit insert.
+  let nextIndex = 3;
   for (const runUpdate of reconciledRunUpdates) {
     if (runUpdate.auditEvent) nextIndex += 1;
     runResultIndexes.push(nextIndex);
@@ -167,7 +167,7 @@ async function updateTemplateWithHistoryFallback(
   const runBatch = (templateValues: TemplateUpdateValues) => {
     const statements = [
       db.update(templates).set(templateValues).where(whereClause),
-      ...(versionValues ? [db.insert(template_versions).values(versionValues)] : []),
+      db.insert(template_versions).values(versionValues),
       db.insert(audit_events).values(auditEventValues),
       ...reconciledRunUpdates.flatMap((runUpdate) => [
         ...(runUpdate.auditEvent
@@ -1368,13 +1368,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     if (Object.keys(changes).length === 0) {
       return json({ success: true, version: currentVersion, content_version: currentContentVersion, structureChanged: false, reconciledRuns: 0 });
     }
-    const shouldVersion = isVersionedTemplateChange(changes);
-    const nextVersion = shouldVersion ? currentVersion + 1 : currentVersion;
+    // Every stored change is a new version, visibility included, so an editor loaded before
+    // a Share gets 409 instead of silently reverting it. content_version (run staleness and
+    // reconciliation) still moves only when the checklist structure changes.
+    const nextVersion = currentVersion + 1;
     const nextContentVersion = syncedItems === null ? currentContentVersion : currentContentVersion + 1;
-    const templateValues: Record<string, unknown> = { ...changes, updated_at: now, updated_by_user_id: userId };
-    if (shouldVersion) {
-      templateValues.version = nextVersion;
-    }
+    const templateValues: Record<string, unknown> = { ...changes, version: nextVersion, updated_at: now, updated_by_user_id: userId };
     if (syncedItems !== null) {
       templateValues.content_version = nextContentVersion;
     }
@@ -1393,17 +1392,15 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       ...templateValues,
     };
 
-    const versionValues = shouldVersion
-      ? await buildTemplateVersionValues({
-        templateId,
-        version: nextVersion,
-        changedByUserId: userId,
-        subject,
-        snapshot: updatedTemplate,
-        changeSummary: 'template.updated',
-        createdAt: now,
-      })
-      : undefined;
+    const versionValues = await buildTemplateVersionValues({
+      templateId,
+      version: nextVersion,
+      changedByUserId: userId,
+      subject,
+      snapshot: updatedTemplate,
+      changeSummary: 'template.updated',
+      createdAt: now,
+    });
     const auditEvent = await buildAuditEventValues({
       actorUserId: userId,
       subject,

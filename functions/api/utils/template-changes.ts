@@ -77,11 +77,6 @@ export function omitUnchangedTemplateColumns(existing: Row, updates: Row): Row {
   );
 }
 
-/** Visibility is not part of a Template version; every other stored column is. */
-export function isVersionedTemplateChange(changes: Row): boolean {
-  return Object.keys(changes).some((column) => column !== 'is_public');
-}
-
 // The request fields behind each templates column.
 const BODY_FIELDS: Record<string, string[]> = {
   title: ['title'],

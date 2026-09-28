@@ -31,7 +31,7 @@ Canonical private routes:
 - Template content updates reconcile into matching active, private runs for the same Resource Owner. Stable section, item, and sub-item IDs preserve run completion and notes across renames and reordering; new work arrives incomplete, and retired work leaves readiness calculations while remaining in run history. Retired sections, tasks, and Sub-tasks keep their completion and notes and appear read-only under "Removed from Template" on the run page and as `retiredItems` in the Run Key `get_run` tool; shared run links leave them out. When a later Template version brings a retired id back, its run state comes back with it. Each reconcile that changes a run adds an "Updated from Template" entry to the run's Changelog naming the retired work (never its notes); Revalidate records the same. A task with Sub-tasks is complete exactly when all of them are (the run page, Run Keys, reconciliation, and revalidation apply the same rule), so a new Sub-task reopens a completed task and removing its last unfinished Sub-task completes it; a task left without Sub-tasks keeps its state. The completion prompt also waits for every Sub-task.
 - Public templates can be shared at `/profile/{username}/{templateSlug}`.
 - Other Users can copy public templates into Personal or an authorized Organization when that ownership context's entitlement allows it.
-- Template history is stored in `template_versions`; related actor/action history is stored in `audit_events`. A save that changes nothing, or only visibility, adds no version.
+- Template history is stored in `template_versions`; related actor/action history is stored in `audit_events`. A save that changes nothing adds no version. A visibility change (Share or the Public/Private switch) adds a version but never changes the checklist content version, so runs are not staled.
 - The Public/Private switch on template detail sends only the visibility flag, so it never reconciles or stales runs.
 
 ## Runs And Sharing
@@ -41,7 +41,7 @@ Canonical private routes:
 - Runs record both the template content version last reconciled and a run revision. API responses expose `is_stale` when the source checklist structure is newer; metadata-only template edits do not stale runs.
 - Completed, archived, and publicly shared runs are frozen when a template changes. A completed private run can be explicitly reconciled and reopened with `POST /api/checklists/:id/revalidate`.
 - Runs that predate stable identities are conservatively marked stale during migration. Their legacy IDs are backfilled deterministically, and their completion/notes remain intact until explicit reconciliation.
-- Run and template saves use optimistic revision/version markers. A stale editor receives `409 edit_conflict` instead of overwriting newer work.
+- Run and template saves use optimistic revision/version markers. A stale editor receives `409 edit_conflict` instead of overwriting newer work. The template editor guards each save with the version it loaded (advanced by its own saves), not the refreshed template list, and resends visibility only when its own switch changed.
 - Run-level sharing creates public `/share/:token` links.
 - Guests can open shared runs without logging in and update checklist completion state.
 - Shared runs do not expose owner-only title editing or destructive actions.

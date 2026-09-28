@@ -537,7 +537,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     getAllPublicTemplates,
     createTemplate: createTemplateMutation.mutateAsync,
     updateTemplate: async (template: TemplateSavePayload) => {
-      await updateTemplateMutation.mutateAsync(template);
+      const result = await updateTemplateMutation.mutateAsync(template);
+      return { version: result.version };
     },
     deleteTemplate: async (id: string) => {
       await deleteTemplateMutation.mutateAsync(id);

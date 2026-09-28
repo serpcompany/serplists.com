@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { useTemplateValidation } from "@/hooks/useTemplateValidation";
-import { ChecklistSection, TemplateSavePayload } from "@/types/checklist";
+import { ChecklistSection, TemplateSavePayload, TemplateUpdateResult } from "@/types/checklist";
 import { ValidationError } from "@/hooks/useTemplateValidation";
 
 export type SaveTemplateResult = {
   success: boolean;
   errors: ValidationError[];
+  // After an update: the version the Template is now at.
+  version?: number;
 };
 
 type SaveTemplateDependencies = {
   getTemplate: (id: string) => TemplateSavePayload | undefined;
-  createTemplate: (template: Omit<TemplateSavePayload, "id">) => Promise<unknown>;
-  updateTemplate: (template: TemplateSavePayload) => Promise<void>;
+  createTemplate: (template: Omit<TemplateSavePayload, "id" | "isPublic"> & { isPublic: boolean }) => Promise<unknown>;
+  updateTemplate: (template: TemplateSavePayload) => Promise<TemplateUpdateResult | void>;
   applyDefaults: (
     title: string,
     sections: ChecklistSection[],
@@ -30,7 +32,10 @@ export type SaveTemplateInput = {
   templateType: "checklist" | "recipe";
   categories: string[];
   tags: string[];
-  isPublic: boolean;
+  // Left out of an update when the editor did not change it.
+  isPublic?: boolean;
+  // The version the editor loaded, so a save made after another change gets 409.
+  version?: number;
 };
 
 export const persistTemplateSave = async (
@@ -55,6 +60,7 @@ export const persistTemplateSave = async (
     categories,
     tags,
     isPublic,
+    version,
   } = input;
 
   const { title: finalTitle, sections: finalSections } = applyDefaults(title, sections);
@@ -76,11 +82,13 @@ export const persistTemplateSave = async (
         tags,
         isPublic,
         rules: existingTemplate?.rules,
-        version: existingTemplate?.version,
+        // The editor's loaded version, not the list cache, which may have refetched a newer
+        // one since the form loaded.
+        version: version ?? existingTemplate?.version,
       };
 
-      await updateTemplate(updatePayload);
-      return { success: true, errors: [] };
+      const updated = await updateTemplate(updatePayload);
+      return { success: true, errors: [], version: updated?.version };
     }
 
     await createTemplate({
@@ -93,7 +101,7 @@ export const persistTemplateSave = async (
       type: templateType,
       categories,
       tags,
-      isPublic,
+      isPublic: isPublic ?? false,
     });
 
     return { success: true, errors: [] };

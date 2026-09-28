@@ -152,7 +152,7 @@ export type TemplateHistoryEvent = {
 };
 
 // PUT /api/templates/:id. Only a checklist-structure change bumps content_version and
-// reconciles active private runs; version advances for any change except visibility.
+// reconciles active private runs; version advances for any stored change, visibility included.
 export type TemplateUpdateResponse = {
   success: boolean;
   slug?: string;

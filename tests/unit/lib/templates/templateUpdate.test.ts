@@ -36,4 +36,10 @@ describe('buildTemplateUpdateRequest', () => {
 
     expect(request).toEqual(expect.objectContaining({ title: 'Launch plan', slug: 'launch-plan', expected_version: 3, is_public: false }));
   });
+
+  it('leaves visibility out when the editor did not change it', () => {
+    const request = buildTemplateUpdateRequest({ id: 'template-1', title: 'Launch plan', sections: [], version: 3 });
+
+    expect(JSON.parse(JSON.stringify(request))).not.toHaveProperty('is_public');
+  });
 });

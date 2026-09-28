@@ -67,7 +67,8 @@ export type TemplateSavePayload = {
   description?: string;
   type?: "checklist" | "recipe";
   sections: ChecklistSection[];
-  isPublic: boolean;
+  // Left out when the editor did not change visibility, so a save never resends a stale value.
+  isPublic?: boolean;
   seoTitle?: string;
   seoDescription?: string;
   seoUrl?: string;
@@ -75,6 +76,12 @@ export type TemplateSavePayload = {
   categories?: string[];
   tags?: string[];
   slug?: string;
+  // The version the editor loaded; the API answers 409 edit_conflict if it has moved on.
+  version?: number;
+};
+
+// What a template save returns: the version the Template is now at.
+export type TemplateUpdateResult = {
   version?: number;
 };
 
@@ -154,7 +161,7 @@ export interface TemplatesContextProps {
   getRunsForTemplate: (templateId: string) => ChecklistRun[];
   getAllPublicTemplates: () => ChecklistTemplate[];
   createTemplate: (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => Promise<ChecklistTemplate>;
-  updateTemplate: (template: TemplateSavePayload) => Promise<void>;
+  updateTemplate: (template: TemplateSavePayload) => Promise<TemplateUpdateResult>;
   deleteTemplate: (id: string) => Promise<void>;
   createRun: (params: { templateId: string; runName?: string; template?: ChecklistTemplate }) => Promise<ChecklistRun | null>;
   updateRun: (run: ChecklistRun) => Promise<ChecklistRun>;

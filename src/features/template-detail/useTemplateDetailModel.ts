@@ -253,8 +253,9 @@ export const startTemplateRun = async (params: {
   }
 };
 
-// Visibility is not template content: send only the flag and the version guard, never
-// the whole template, so the server does not version or reconcile anything.
+// Visibility is not checklist content: send only the flag and the version guard, never
+// the whole template, so the server never reconciles or stales runs. The change is
+// versioned, so keep the version the response returns for the next save on this page.
 export const updateTemplateVisibility = async (params: {
   apiClient?: Pick<TemplateDetailApiClient, 'updateTemplate'>;
   isPublic: boolean;

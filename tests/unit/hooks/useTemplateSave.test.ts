@@ -96,6 +96,34 @@ describe("persistTemplateSave", () => {
     );
   });
 
+  it("guards the save with the version the editor loaded, not a newer cached one, and returns the saved version", async () => {
+    const dependencies = buildDependencies({
+      // The list refetched after another tab shared the template.
+      getTemplate: vi.fn(() => ({ id: "template-1", title: "T", sections: baseSections, isPublic: true, version: 4 })),
+      updateTemplate: vi.fn().mockResolvedValue({ version: 6 }),
+    });
+
+    const result = await persistTemplateSave(
+      dependencies,
+      buildInput({ id: "template-1", isPublic: undefined, version: 3 }),
+    );
+
+    expect(result).toEqual({ success: true, errors: [], version: 6 });
+    const payload = dependencies.updateTemplate.mock.calls[0][0];
+    expect(payload.version).toBe(3);
+    expect(payload.isPublic).toBeUndefined();
+  });
+
+  it("falls back to the cached version when the editor has none", async () => {
+    const dependencies = buildDependencies({
+      getTemplate: vi.fn(() => ({ id: "template-1", title: "T", sections: baseSections, isPublic: true, version: 4 })),
+    });
+
+    await persistTemplateSave(dependencies, buildInput({ id: "template-1" }));
+
+    expect(dependencies.updateTemplate.mock.calls[0][0].version).toBe(4);
+  });
+
   it("returns failure when create rejects", async () => {
     const dependencies = buildDependencies({
       createTemplate: vi.fn().mockRejectedValue(new Error("create failed")),

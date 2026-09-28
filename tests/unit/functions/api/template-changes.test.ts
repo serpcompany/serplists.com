@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  isVersionedTemplateChange,
   omitUnchangedTemplateColumns,
   templateStructureChanged,
 } from '@functions/api/utils/template-changes';
@@ -136,14 +135,3 @@ describe('omitUnchangedTemplateColumns', () => {
   });
 });
 
-describe('isVersionedTemplateChange', () => {
-  it('does not version a visibility-only change', () => {
-    expect(isVersionedTemplateChange({ is_public: true })).toBe(false);
-    expect(isVersionedTemplateChange({})).toBe(false);
-  });
-
-  it('versions content and metadata changes', () => {
-    expect(isVersionedTemplateChange({ is_public: true, title: 'New' })).toBe(true);
-    expect(isVersionedTemplateChange({ items: '[]' })).toBe(true);
-  });
-});
