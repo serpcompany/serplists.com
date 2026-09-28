@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 import { isUserSwitch, removeSignedOutUserQueries } from '@/lib/queryKeys';
 import {
@@ -14,6 +15,7 @@ import {
   type SessionStatus,
   type SessionUser,
 } from './authSession';
+import { browserSessionSyncEnvironment, createSessionSync } from './sessionSync';
 
 interface RegisterResult extends AuthActionResult {
   requiresEmailVerification?: boolean;
@@ -59,15 +61,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAuthenticated = !!user;
   const queryClient = useQueryClient();
   const settledUserIdRef = useRef<string | null>(null);
-  // Bumped whenever sign-in, sign-out or a profile refresh sets the session, so a slower
-  // session check started earlier cannot overwrite it.
-  const sessionVersionRef = useRef(0);
   const sessionCheckInFlightRef = useRef(false);
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
-  const applyConfirmedSession = useCallback((check: ConfirmedSessionCheck) => {
-    sessionVersionRef.current += 1;
-    setState((current) => applySessionCheck(check, current));
-  }, []);
+  // Follows sign-ins and sign-outs in other tabs, which share this tab's session cookie, and
+  // orders session answers so a slower check started earlier cannot overwrite a newer one
+  // (see sessionSync.ts).
+  const [sessionSync] = useState(() =>
+    createSessionSync({
+      readSession,
+      getState: () => stateRef.current,
+      setState,
+      notify: (message) => toast(message),
+    }),
+  );
+  useEffect(() => sessionSync.connect(browserSessionSyncEnvironment()), [sessionSync]);
+
+  // Sign-in, sign-out and profile refreshes in this tab. Sign-in and sign-out are announced to
+  // the other tabs.
+  const applyConfirmedSession = useCallback(
+    (check: ConfirmedSessionCheck, options: { announce?: boolean } = {}) => {
+      sessionSync.claim();
+      setState((current) => applySessionCheck(check, current));
+      if (options.announce) sessionSync.announce(check.kind === 'authenticated' ? check.user.id : null);
+    },
+    [sessionSync],
+  );
 
   // Sign-out and sign-in are SPA navigations, so the QueryClient outlives the session. When the
   // user changes, drop what the previous user loaded. This effect runs after its children's, so
@@ -83,19 +105,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Reads the session, retrying while the server cannot answer. A failed check never signs
   // anyone out: with no user yet it ends as 'unavailable'. One check runs at a time (StrictMode
-  // mounts twice), and its answer is dropped if sign-in or sign-out set the session meanwhile.
+  // mounts twice), and its answer is dropped if a newer answer, a sign-in or a sign-out set the
+  // session meanwhile. A confirmed answer is announced, so tabs that still show another user
+  // (for example after an email verification link signed this one in) re-check.
   const loadSession = useCallback(async () => {
     if (sessionCheckInFlightRef.current) return;
     sessionCheckInFlightRef.current = true;
-    const version = sessionVersionRef.current;
+    const ticket = sessionSync.beginRead();
     try {
       const check = await checkSessionWithRetry(() => authClient.getSession());
-      if (version !== sessionVersionRef.current) return;
+      if (!sessionSync.acceptRead(ticket)) return;
       setState((current) => applySessionCheck(check, current));
+      if (check.kind !== 'unknown') sessionSync.announce(check.kind === 'authenticated' ? check.user.id : null);
     } finally {
       sessionCheckInFlightRef.current = false;
     }
-  }, []);
+  }, [sessionSync]);
 
   useEffect(() => {
     void loadSession();
@@ -130,7 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // The sign-in worked; only reading the session failed. Keep the current state.
         return { ok: false, error: SESSION_UNCONFIRMED_MESSAGE, errorCode: "UNKNOWN" };
       }
-      applyConfirmedSession(check);
+      applyConfirmedSession(check, { announce: true });
       return check.kind === 'authenticated'
         ? { ok: true }
         : { ok: false, error: "Unable to establish session", errorCode: "UNKNOWN" };
@@ -158,7 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Signed up and signed in, but the session could not be read yet: load it again.
         retrySession();
       } else {
-        applyConfirmedSession(check);
+        applyConfirmedSession(check, { announce: true });
       }
       return { ok: true, requiresEmailVerification: false };
     } catch (error) {
@@ -170,7 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOutRef = useRef<(() => Promise<AuthActionResult>) | null>(null);
   signOutRef.current ??= createSignOutRunner(
     () => authClient.signOut(),
-    () => applyConfirmedSession({ kind: 'unauthenticated' }),
+    () => applyConfirmedSession({ kind: 'unauthenticated' }, { announce: true }),
   );
   const logout = signOutRef.current;
 

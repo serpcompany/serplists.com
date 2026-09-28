@@ -44,6 +44,16 @@ and user-facing failure states when a supporting service is unavailable.
   session (`400 FAILED_TO_GET_SESSION`, `401`). On a `429`, `403`, `5xx`, or network
   failure the session cookie is still valid, so the user stays signed in and the menu
   shows the error. Callers navigate away only on `{ ok: true }`.
+- Tabs share one session cookie, so every tab follows a sign-in or sign-out made in
+  another (`src/contexts/sessionSync.ts`). A tab that signs in, signs out, or loads
+  the session announces its user id on a `BroadcastChannel` (a `localStorage`
+  storage event where that is missing). A tab showing a different user re-reads the
+  session and trusts only the server's answer: a new user replaces the old one (whose
+  cached queries are then dropped), a confirmed sign-out sends protected pages to
+  `/login`, and a failed check changes nothing. A tab also re-reads the session when
+  it comes back into view, at most once a minute, and after a back/forward cache
+  restore. Tabs never re-announce what they learned, so one change costs one session
+  read per other tab.
 - Passwords: Better Auth enforces length (10 to 128) and rejects breached passwords;
   `Register.tsx`, `ResetPassword.tsx`, and `SecuritySection.tsx` validate the same
   policy client-side.
