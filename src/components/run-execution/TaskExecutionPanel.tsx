@@ -6,6 +6,7 @@ import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import { onSingleClick } from '@/lib/utils/repeatClick';
 import type { ChecklistItem, ChecklistSection } from '@/types/checklist';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
+import { TaskHeaderReveal } from '@/components/run-execution/TaskHeaderReveal';
 import {
   getPrimaryTaskButton,
   type PrimaryTaskAction,
@@ -69,7 +70,9 @@ export function TaskExecutionPanel({
 
   return (
     <div className="flex h-full min-h-full flex-col">
-      <div className="border-b border-border bg-card px-8 py-6">
+      {/* This panel stays mounted while the task inside it changes, and the window is what
+          scrolls: moving to another task scrolls its header into view and focuses the title. */}
+      <TaskHeaderReveal className="border-b border-border bg-card px-8 py-6" taskId={task.id}>
         <div className="mx-auto max-w-2xl">
           <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
             <span>{section.title}</span>
@@ -105,7 +108,7 @@ export function TaskExecutionPanel({
               )}
             </button>
             <div className="flex-1">
-              <h2 className="text-xl font-semibold text-foreground">
+              <h2 className="text-xl font-semibold text-foreground focus:outline-none" tabIndex={-1}>
                 {task.title}
               </h2>
               {task.description ? (
@@ -116,7 +119,7 @@ export function TaskExecutionPanel({
             </div>
           </div>
         </div>
-      </div>
+      </TaskHeaderReveal>
 
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div className="mx-auto max-w-2xl space-y-4">

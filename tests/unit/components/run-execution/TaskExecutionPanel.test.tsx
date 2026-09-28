@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
+import { TaskHeaderReveal } from '@/components/run-execution/TaskHeaderReveal';
 import type { PrimaryTaskAction } from '@/features/run-execution/primaryTaskAction';
 import type { ChecklistItem } from '@/types/checklist';
 
@@ -195,5 +196,28 @@ describe('TaskExecutionPanel task checkbox is accessible', () => {
       expect(html).toContain('role="checkbox"');
       expect(namelessButtons(html)).toEqual([]);
     }
+  });
+});
+
+// The window scrolls, and the panel stays mounted while the task inside it changes, so the
+// header reveals each new task: scrolled to below the sticky site headers, title focused.
+describe('TaskExecutionPanel reveals the task it moves to', () => {
+  it('wraps the task header in a reveal keyed on the task id', () => {
+    const { tree } = renderPanel({ ...openTask, id: 'task-7' }, { kind: 'complete_task' });
+    const reveals = findElements(tree, (element) => element.type === TaskHeaderReveal);
+
+    expect(reveals).toHaveLength(1);
+    expect(reveals[0]?.props.taskId).toBe('task-7');
+    // The task title and its checkbox are inside the revealed header.
+    expect(findElements(reveals[0], (element) => element.type === 'h2')).toHaveLength(1);
+    expect(findElements(reveals[0], (element) => element.props.role === 'checkbox')).toHaveLength(1);
+  });
+
+  it('makes the task title focusable from script only, below the sticky headers', () => {
+    const html = renderToStaticMarkup(renderPanel({ ...openTask, title: 'Review all page content' }, { kind: 'complete_task' }).tree);
+
+    expect(html).toMatch(/<h2[^>]*tabindex="-1"[^>]*>Review all page content<\/h2>/);
+    // 3.5rem site header, plus the 3.5rem context header below md.
+    expect(html).toMatch(/class="[^"]*scroll-mt-28 md:scroll-mt-14[^"]*"/);
   });
 });

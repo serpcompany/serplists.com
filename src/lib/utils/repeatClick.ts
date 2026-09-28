@@ -32,3 +32,25 @@ export const createJustOpenedGuard = (now: () => number = () => Date.now()) => {
     },
   };
 };
+
+interface ClickTarget {
+  addEventListener: (type: 'click', listener: (event: Event) => void, capture: boolean) => void;
+  removeEventListener: (type: 'click', listener: (event: Event) => void, capture: boolean) => void;
+}
+
+// A page that scrolls under the pointer (the run page scrolling to the task it moved to)
+// puts other controls under the rest of that double click. Call right after such a scroll
+// with `window`: for DOUBLE_CLICK_MS, repeat clicks anywhere on the page are swallowed in
+// the capture phase, before any control acts on them.
+export const ignoreRepeatClicksBriefly = (
+  target: ClickTarget,
+  schedule: (callback: () => void, ms: number) => unknown = setTimeout,
+): void => {
+  const swallowRepeatClick = (event: Event): void => {
+    if (!isRepeatClick(event as MouseEvent)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  target.addEventListener('click', swallowRepeatClick, true);
+  schedule(() => target.removeEventListener('click', swallowRepeatClick, true), DOUBLE_CLICK_MS);
+};
