@@ -1,5 +1,11 @@
 import { optimizeImage, isImageFile } from "@/lib/imageOptimization";
 import { api } from "@/lib/api";
+import {
+  isAllowedUpload,
+  UPLOAD_MAX_BYTES,
+  unsupportedUploadMessage,
+  uploadAcceptAttribute,
+} from "@/lib/schemas/uploadTypes";
 
 export type TemplateUploadBucket =
   | 'template-images'
@@ -36,6 +42,11 @@ export const uploadFile = async (
         console.warn('Image optimization failed, uploading original:', optimizationError);
         // Continue with original file if optimization fails
       }
+    }
+
+    // An image the browser could not convert (HEIC in most browsers) would be refused.
+    if (!isAllowedUpload(bucket, fileToUpload)) {
+      return { success: false, error: unsupportedUploadMessage(bucket) };
     }
 
     // API handles key naming; userId is kept for callsite compatibility.
@@ -94,31 +105,33 @@ export const deleteUploadedAsset = async (url: string): Promise<boolean> => {
   }
 };
 
+const BUCKET_BY_BLOCK_TYPE = {
+  image: 'template-images',
+  video: 'template-videos',
+  file: 'template-files',
+} as const satisfies Record<'image' | 'video' | 'file', TemplateUploadBucket>;
+
+// Checks a picked file against what the API stores (src/lib/schemas/uploadTypes.ts).
+// Image blocks take any image: other decodable types are converted to PNG on upload.
 export const validateFile = (
   file: File,
   type: 'image' | 'video' | 'file'
 ): { valid: boolean; error?: string } => {
-  const maxSize = 50 * 1024 * 1024; // 50MB
-
-  if (file.size > maxSize) {
+  if (file.size > UPLOAD_MAX_BYTES) {
     return { valid: false, error: 'File size must be less than 50MB' };
   }
 
-  switch (type) {
-    case 'image':
-      if (!file.type.startsWith('image/')) {
-        return { valid: false, error: 'Please select an image file' };
-      }
-      break;
-    case 'video':
-      if (!file.type.startsWith('video/')) {
-        return { valid: false, error: 'Please select a video file' };
-      }
-      break;
-    case 'file':
-      // Allow any file type for general file uploads
-      break;
+  if (type === 'image') {
+    return file.type.startsWith('image/')
+      ? { valid: true }
+      : { valid: false, error: 'Please select an image file' };
   }
 
-  return { valid: true };
+  const bucket = BUCKET_BY_BLOCK_TYPE[type];
+  return isAllowedUpload(bucket, file)
+    ? { valid: true }
+    : { valid: false, error: unsupportedUploadMessage(bucket) };
 };
+
+export const uploadAcceptTypesForBlock = (type: 'image' | 'video' | 'file'): string =>
+  type === 'image' ? 'image/*' : uploadAcceptAttribute(BUCKET_BY_BLOCK_TYPE[type]);

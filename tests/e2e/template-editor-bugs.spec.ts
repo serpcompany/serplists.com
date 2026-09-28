@@ -740,6 +740,41 @@ test.describe("template editor regressions", () => {
     expect(uploads[1]?.body.includes(animatedGif)).toBe(true);
   });
 
+  test("uploads the file types a File block offers, as Windows reports them", async ({ page }) => {
+    await loginAsSeedUser(page);
+    await page.goto("/dashboard/templates/new");
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+
+    for (const upload of [
+      { name: "report.zip", mimeType: "application/x-zip-compressed", buffer: Buffer.from([0x50, 0x4b, 0x05, 0x06]) },
+      { name: "data.csv", mimeType: "application/vnd.ms-excel", buffer: Buffer.from("a,b\n1,2\n") },
+    ]) {
+      await page.getByRole("button", { name: "Add Block" }).last().click();
+      await page.getByRole("button", { name: "File", exact: true }).last().click();
+      const input = page.locator('input[type="file"]').last();
+      await expect(input).not.toHaveAttribute("accept", "*/*");
+      await expect(input).toHaveAttribute("accept", /\.zip/);
+
+      await input.setInputFiles(upload);
+      await expect(page.getByText(upload.name, { exact: true })).toBeVisible();
+    }
+
+    // A type the API refuses is caught before upload, with the accepted types named.
+    let uploadRequests = 0;
+    page.on("request", (request) => {
+      if (request.method() === "POST" && request.url().endsWith("/api/uploads")) uploadRequests += 1;
+    });
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("button", { name: "File", exact: true }).last().click();
+    await page.locator('input[type="file"]').last().setInputFiles({
+      name: "page.html",
+      mimeType: "text/html",
+      buffer: Buffer.from("<p>hi</p>"),
+    });
+    await expect(page.getByText(/Use PDF, ZIP, CSV/)).toBeVisible();
+    expect(uploadRequests).toBe(0);
+  });
+
   test("adds tags and categories before save and persists them", async ({ page }) => {
     const templateTitle = `QA Tags ${Date.now()}`;
     const tagName = `tag-${Date.now()}`;

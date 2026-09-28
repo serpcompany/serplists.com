@@ -18,7 +18,10 @@
   `PERSONAL_RUN_MCP_ENABLED=true`.
 - **Uploads** are written under the uploader's key prefix. Only the uploader's
   own avatars can be deleted; template uploads are shared by runs and copies
-  and are never deleted on request.
+  and are never deleted on request. Each bucket takes only the types listed in
+  `src/lib/schemas/uploadTypes.ts` (never HTML, SVG, XML, or scripts, since files
+  are served from the app's origin), files are served as attachments, and every
+  download is sent with `X-Content-Type-Options: nosniff`.
 - **Invites** store only a token hash, never the raw token.
 
 ## Secrets and environment

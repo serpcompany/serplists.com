@@ -6,11 +6,9 @@ import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
-import { AVATAR_MIME_TYPES } from "@/lib/schemas/uploadTypes";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { isAllowedUpload, uploadAcceptAttribute } from "@/lib/schemas/uploadTypes";
 import { deleteUploadedAsset } from "@/lib/utils/fileUpload";
-
-const isAvatarMimeType = (type: string): boolean =>
-  (AVATAR_MIME_TYPES as readonly string[]).includes(type);
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;
@@ -45,7 +43,7 @@ export const AvatarUpload = ({
     const file = input.files?.[0];
     if (!file || !user) return;
 
-    if (!isAvatarMimeType(file.type)) {
+    if (!isAllowedUpload("avatars", file)) {
       toast.error("Please select a PNG, JPEG, WebP, or GIF image");
       input.value = "";
       return;
@@ -82,7 +80,7 @@ export const AvatarUpload = ({
       // A thrown update (network failure) may still have been applied, so no file is
       // deleted here: never the current avatar, and not the new upload either.
       console.error('Error uploading avatar:', error);
-      toast.error("Failed to upload avatar");
+      toast.error(getApiErrorMessage(error, "Failed to upload avatar"));
     } finally {
       setIsUploading(false);
       input.value = "";
@@ -159,7 +157,7 @@ export const AvatarUpload = ({
           <input
             ref={fileInputRef}
             type="file"
-            accept={AVATAR_MIME_TYPES.join(",")}
+            accept={uploadAcceptAttribute("avatars")}
             onChange={handleFileUpload}
             disabled={isUploading || isRemoving}
             className="hidden"

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
 import { FileUpload } from '@/components/ui/file-upload';
+import { uploadAcceptAttribute } from '@/lib/schemas/uploadTypes';
 
 // Unit tests run in node with no DOM, so FileUpload is rendered shallowly: React's
 // state hooks are stubbed and the returned element tree is searched for handlers.
@@ -119,5 +120,45 @@ describe('FileUpload', () => {
       fileSize: 10,
     });
     expect(api.deleteFromR2).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['file', 'template-files'],
+    ['video', 'template-videos'],
+  ] as const)('offers the %s picker only the types the API stores', (type, bucket) => {
+    const tree = FileUpload({ type, value: '', onValueChange: vi.fn(), onFileChange: vi.fn() });
+
+    const fileInput = findElement(tree, (element) => element.props.type === 'file');
+    expect(fileInput?.props.accept).toBe(uploadAcceptAttribute(bucket));
+  });
+
+  it('names the supported types instead of uploading a file the API would refuse', async () => {
+    const tree = FileUpload({ type: 'file', value: '', onValueChange: vi.fn(), onFileChange: vi.fn() });
+    const fileInput = findElement(tree, (element) => element.props.type === 'file');
+
+    await (fileInput!.props.onChange as (event: unknown) => Promise<void>)({
+      target: { files: [new File(['<p>'], 'page.html', { type: 'text/html' })] },
+    });
+
+    expect(api.uploadToR2).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Invalid file',
+        description: expect.stringContaining('PDF, ZIP, CSV'),
+      }),
+    );
+  });
+
+  it('uploads a Windows ZIP to a File block', async () => {
+    vi.mocked(api.uploadToR2).mockResolvedValue({ url: '/api/uploads/file?key=k', fileName: 'r.zip' });
+    const tree = FileUpload({ type: 'file', value: '', onValueChange: vi.fn(), onFileChange: vi.fn() });
+    const fileInput = findElement(tree, (element) => element.props.type === 'file');
+    const zip = new File(['PK'], 'report.zip', { type: 'application/x-zip-compressed' });
+
+    await (fileInput!.props.onChange as (event: unknown) => Promise<void>)({
+      target: { files: [zip] },
+    });
+
+    expect(api.uploadToR2).toHaveBeenCalledWith({ bucket: 'template-files', file: zip });
   });
 });

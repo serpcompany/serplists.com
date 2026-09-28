@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
 import { optimizeImage } from '@/lib/imageOptimization';
-import { uploadFile } from '@/lib/utils/fileUpload';
+import { uploadFile, validateFile } from '@/lib/utils/fileUpload';
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -48,5 +48,38 @@ describe('uploadFile image handling', () => {
     await uploadFile(png, 'template-images', 'user-1');
 
     expect(api.uploadToR2).toHaveBeenCalledWith({ bucket: 'template-images', file: png });
+  });
+});
+
+describe('upload type checks', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each([
+    ['file', 'report.zip', 'application/x-zip-compressed', true],
+    ['file', 'data.csv', 'application/vnd.ms-excel', true],
+    ['file', 'notes.md', '', true],
+    ['file', 'page.html', 'text/html', false],
+    ['video', 'clip.mp4', 'video/mp4', true],
+    ['video', 'movie.mkv', 'video/x-matroska', false],
+    // Image blocks convert other decodable images before upload.
+    ['image', 'photo.avif', 'image/avif', true],
+    ['image', 'notes.txt', 'text/plain', false],
+  ] as const)('validates a %s block file %s (%s)', (type, name, mime, valid) => {
+    expect(validateFile(new File(['x'], name, { type: mime }), type).valid).toBe(valid);
+  });
+
+  it('refuses an image the browser could not convert, before calling the API', async () => {
+    const heic = new File([new Uint8Array(10)], 'photo.heic', { type: 'image/heic' });
+    vi.mocked(optimizeImage).mockRejectedValue(new Error('Failed to load image'));
+
+    const result = await uploadFile(heic, 'template-images', 'user-1');
+
+    expect(api.uploadToR2).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      error: "This file type can't be uploaded here. Use PNG, JPEG, WebP, or GIF images.",
+    });
   });
 });

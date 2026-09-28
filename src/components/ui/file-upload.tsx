@@ -5,6 +5,7 @@ import { Textarea } from './textarea';
 import { Label } from './label';
 import { X, File, Image, Video } from 'lucide-react';
 import {
+  uploadAcceptTypesForBlock,
   uploadFile,
   validateFile,
   UploadResult,
@@ -58,14 +59,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       case 'image': return <Image className="h-4 w-4" />;
       case 'video': return <Video className="h-4 w-4" />;
       case 'file': return <File className="h-4 w-4" />;
-    }
-  };
-
-  const getAcceptTypes = () => {
-    switch (type) {
-      case 'image': return 'image/*';
-      case 'video': return 'video/*';
-      case 'file': return '*/*';
     }
   };
 
@@ -183,7 +176,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept={getAcceptTypes()}
+                accept={uploadAcceptTypesForBlock(type)}
                 onChange={handleFileSelect}
                 disabled={isUploading}
                 className="hidden"

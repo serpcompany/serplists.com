@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { toast } from 'sonner';
 import { AvatarUpload } from '@/components/shared/AvatarUpload';
+import { AVATAR_MIME_TYPES } from '@/lib/schemas/uploadTypes';
 
 // Unit tests run in node with no DOM, so AvatarUpload is rendered shallowly: React's
 // state hooks are stubbed and the returned element tree is searched for handlers.
@@ -173,7 +174,9 @@ describe('AvatarUpload', () => {
   it('accepts only the image types the API stores for avatars', async () => {
     const view = render();
 
-    expect(view.input.props.accept).toBe('image/png,image/jpeg,image/webp,image/gif');
+    const accept = String(view.input.props.accept).split(',');
+    expect(accept.filter((entry) => entry.includes('/'))).toEqual([...AVATAR_MIME_TYPES]);
+    expect(accept).toEqual(expect.arrayContaining(['.png', '.jpg', '.webp', '.gif']));
     await view.selectFile(new File(['<svg/>'], 'a.svg', { type: 'image/svg+xml' }));
 
     expect(api.uploadToR2).not.toHaveBeenCalled();
