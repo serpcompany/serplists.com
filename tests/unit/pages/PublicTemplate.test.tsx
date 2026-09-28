@@ -12,6 +12,7 @@ import {
   REPO_TEMPLATE_USER_ID,
 } from '@/lib/repoTemplateCatalog';
 import { resolvePublicTemplateOwnerSlug } from '@/lib/routes';
+import { MAX_RUN_TITLE_LENGTH } from '@/lib/runName';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 const mockUseTemplateDetailModel = vi.fn();
@@ -336,5 +337,25 @@ describe('PublicTemplate plan limits', () => {
 
     expect(mocks.startBillingCheckout).toHaveBeenCalledWith(true);
     expect(mocks.handleUpgradeRequiredForContext).not.toHaveBeenCalled();
+  });
+});
+
+describe('PublicTemplate run name', () => {
+  afterEach(() => {
+    mocks.viewProps = null;
+  });
+
+  it('names the run so it fits the run title limit, even for a long template title', async () => {
+    const startRun = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1' });
+    renderPublishedRoute(
+      { ...publishedClipyTemplate, title: 'T'.repeat(MAX_RUN_TITLE_LENGTH) },
+      { startRun },
+    );
+
+    await mocks.viewProps?.onStartRun();
+
+    const runName = startRun.mock.calls[0]?.[0] as string;
+    expect(runName.length).toBeLessThanOrEqual(MAX_RUN_TITLE_LENGTH);
+    expect(runName.startsWith('TTTT')).toBe(true);
   });
 });

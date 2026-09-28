@@ -26,6 +26,7 @@ import {
   buildPublicTemplatesPath,
   resolvePublicTemplateOwnerSlug,
 } from '@/lib/routes';
+import { buildDefaultRunName } from '@/lib/runName';
 
 const PublicTemplate = () => {
   const { username, templateSlug } = useParams<{
@@ -79,9 +80,7 @@ const PublicTemplate = () => {
 
     setIsCreatingRun(true);
     try {
-      const result = await startRun(
-        `${template.title} - ${new Date().toLocaleDateString()}`,
-      );
+      const result = await startRun(buildDefaultRunName(template.title));
 
       if (result.kind === 'login_required') {
         navigateToLoginWithReturnPath(navigate, location);
