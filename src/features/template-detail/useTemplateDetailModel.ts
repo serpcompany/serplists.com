@@ -24,6 +24,7 @@ import {
   mapApiTemplateToChecklistTemplate,
 } from './templateDetailMappers';
 import { getTemplateDetailPermissions } from './templatePermissions';
+import { setTemplateVisibility } from './templateVisibility';
 
 export type { TemplateDetailActionResult } from './templateDetailApi';
 
@@ -395,20 +396,30 @@ export const useTemplateDetailModel = (
       userId: options.userId,
     });
 
-  // isPublic is the visibility the page shows, which can be newer than `template`.
-  const shareTemplate = async (
-    isPublic?: boolean,
-  ): Promise<TemplateDetailActionResult> =>
+  // `template` is the only source of visibility; both actions keep it in step with the server.
+  const shareTemplate = async (): Promise<TemplateDetailActionResult> =>
     shareTemplateToPublic({
       canShare: permissions.canShare,
       invalidateTemplates,
       isAuthenticated: options.isAuthenticated,
-      isPublic,
-      onTemplateChange: setTemplate,
+      // Ignore the result if the page moved to another template during the request.
+      onTemplateChange: (shared) =>
+        setTemplate((current) => (current?.id === shared.id ? shared : current)),
       origin: window.location.origin,
       template,
       userId: options.userId,
       username: options.username,
+    });
+
+  const setVisibility = async (
+    isPublic: boolean,
+  ): Promise<TemplateDetailActionResult> =>
+    setTemplateVisibility({
+      canEdit: permissions.canEdit,
+      invalidateTemplates,
+      isPublic,
+      onTemplateChange: setTemplate,
+      template,
     });
 
   return {
@@ -422,6 +433,7 @@ export const useTemplateDetailModel = (
     notFound,
     permissions,
     saveTemplate,
+    setVisibility,
     shareTemplate,
     startRun,
     template,

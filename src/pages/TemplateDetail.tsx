@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Archive,
@@ -90,7 +90,7 @@ import {
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
-import type { ChecklistTemplate, TemplateSavePayload } from '@/types/checklist';
+import type { ChecklistTemplate } from '@/types/checklist';
 
 type TemplateMetrics = {
   copyCount?: number;
@@ -142,26 +142,6 @@ const isHistoryVersion = (
   entry: TemplateHistoryEvent | TemplateHistoryVersion,
 ): entry is TemplateHistoryVersion => 'version' in entry;
 
-const buildTemplateSavePayload = (
-  template: ChecklistTemplate,
-  isPublic: boolean,
-): TemplateSavePayload => ({
-  id: template.id,
-  title: template.title,
-  description: template.description,
-  type: template.type ?? 'checklist',
-  sections: template.sections,
-  isPublic,
-  seoTitle: template.seoTitle,
-  seoDescription: template.seoDescription,
-  seoUrl: template.seoUrl,
-  rules: template.rules,
-  categories: template.categories,
-  tags: template.tags,
-  slug: template.slug,
-  version: template.version,
-});
-
 const TemplateDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -172,7 +152,6 @@ const TemplateDetail = () => {
     createRun,
     createTemplate,
     deleteTemplate,
-    updateTemplate,
     workspaceTemplates,
   } = useTemplateLists();
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
@@ -184,15 +163,13 @@ const TemplateDetail = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
-  const [visibilityOverride, setVisibilityOverride] = useState<boolean | null>(
-    null,
-  );
   const {
     billingState,
     loading,
     notFound,
     permissions,
     saveTemplate,
+    setVisibility,
     shareTemplate,
     startRun,
     template,
@@ -219,7 +196,10 @@ const TemplateDetail = () => {
     isCloning: isCloningTemplate,
     isTeamWorkspace,
   });
-  const isPublic = visibilityOverride ?? displayTemplate?.isPublic ?? false;
+  // The model's template is the only source: Share and the switch both keep it current.
+  const isPublic = displayTemplate?.isPublic ?? false;
+  // Share and a visibility change must not race on the same template version.
+  const isChangingVisibility = isCreatingShare || isUpdatingVisibility;
   const totalTasks = displayTemplate?.sections.reduce(
     (count, section) => count + section.items.length,
     0,
@@ -231,10 +211,6 @@ const TemplateDetail = () => {
       ? history.data.versions
       : history?.data?.events ?? []
   ).slice(0, 8);
-
-  useEffect(() => {
-    setVisibilityOverride(null);
-  }, [displayTemplate?.id]);
 
   const handleUpgrade = () =>
     handleUpgradeRequired({
@@ -279,8 +255,7 @@ const TemplateDetail = () => {
 
     setIsCreatingShare(true);
     try {
-      // Pass the visibility shown here: the Visibility switch may have changed it.
-      const result = await shareTemplate(isPublic);
+      const result = await shareTemplate();
 
       if (result.kind === 'login_required') {
         navigateToLoginWithReturnPath(navigate, location);
@@ -302,8 +277,6 @@ const TemplateDetail = () => {
         return;
       }
 
-      // The model now holds the public template; drop any older switch state.
-      setVisibilityOverride(null);
       setShareUrl(result.shareUrl);
       setShareDialogOpen(true);
     } finally {
@@ -392,7 +365,7 @@ const TemplateDetail = () => {
   const handleExport = async () => {
     const result = exportTemplateFile({
       billingState,
-      template: displayTemplate && { ...displayTemplate, isPublic },
+      template: displayTemplate,
     });
 
     if (result.kind === 'upgrade_required') {
@@ -408,23 +381,27 @@ const TemplateDetail = () => {
   };
 
   const handleTogglePublic = async (nextIsPublic: boolean) => {
-    if (!displayTemplate || !canEditTemplate) {
+    if (!displayTemplate || !canEditTemplate || isChangingVisibility) {
       return;
     }
 
     setIsUpdatingVisibility(true);
     try {
-      await updateTemplate(buildTemplateSavePayload(displayTemplate, nextIsPublic));
-      setVisibilityOverride(nextIsPublic);
-      toast.success(
-        nextIsPublic ? 'Template is now public' : 'Template is now private',
-      );
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'Failed to update template visibility',
-      );
+      const result = await setVisibility(nextIsPublic);
+
+      if (result.kind === 'login_required') {
+        navigateToLoginWithReturnPath(navigate, location);
+      } else if (result.kind === 'ok') {
+        toast.success(
+          nextIsPublic ? 'Template is now public' : 'Template is now private',
+        );
+      } else {
+        toast.error(
+          result.kind === 'error'
+            ? result.message
+            : 'Failed to update template visibility',
+        );
+      }
     } finally {
       setIsUpdatingVisibility(false);
     }
@@ -514,7 +491,7 @@ const TemplateDetail = () => {
               variant="outline"
               size="sm"
               onClick={handleShare}
-              disabled={isCreatingShare}
+              disabled={isChangingVisibility}
               className="border-border"
             >
               <Share2 className="mr-2 h-4 w-4" />
@@ -758,7 +735,7 @@ const TemplateDetail = () => {
                   <Switch
                     id="template-visibility"
                     checked={isPublic}
-                    disabled={!canEditTemplate || isUpdatingVisibility}
+                    disabled={!canEditTemplate || isChangingVisibility}
                     onCheckedChange={handleTogglePublic}
                   />
                   <Label

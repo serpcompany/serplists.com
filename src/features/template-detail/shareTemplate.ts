@@ -19,7 +19,6 @@ export const shareTemplateToPublic = async (params: {
   canShare: boolean;
   invalidateTemplates?: () => Promise<void> | void;
   isAuthenticated: boolean;
-  isPublic?: boolean;
   onTemplateChange: (template: ChecklistTemplate) => void;
   origin: string;
   template: ChecklistTemplate | null;
@@ -57,7 +56,7 @@ export const shareTemplateToPublic = async (params: {
     };
   }
 
-  if (!(params.isPublic ?? nextTemplate.isPublic)) {
+  if (!nextTemplate.isPublic) {
     try {
       await apiClient.updateTemplate(nextTemplate.id, {
         is_public: true,

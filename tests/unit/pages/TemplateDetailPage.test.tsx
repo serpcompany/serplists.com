@@ -8,7 +8,9 @@ import TemplateDetail from '@/pages/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
 
 const mockUseTemplateDetailModel = vi.fn();
-const { workspaceState, workspaceTemplates } = vi.hoisted(() => ({
+const { contextUpdateTemplate, switchProps, workspaceState, workspaceTemplates } = vi.hoisted(() => ({
+  contextUpdateTemplate: vi.fn(),
+  switchProps: [] as Array<Record<string, unknown>>,
   workspaceState: {
     activeTeamId: undefined as string | undefined,
     canEditTemplates: true,
@@ -59,7 +61,7 @@ vi.mock('@/contexts/TemplatesContext', () => {
     createTemplate: vi.fn(),
     deleteTemplate: vi.fn(),
     getTemplate: vi.fn(),
-    updateTemplate: vi.fn(),
+    updateTemplate: contextUpdateTemplate,
     workspaceTemplates,
   });
   return { useTemplates, useTemplateLists: useTemplates };
@@ -68,6 +70,22 @@ vi.mock('@/contexts/TemplatesContext', () => {
 vi.mock('@/contexts/WorkspaceContext', () => ({
   useWorkspace: () => workspaceState,
 }));
+
+// Captures the visibility switch's props so a test can flip it.
+vi.mock('@/components/ui/switch', async () => {
+  const { createElement } = await import('react');
+  return {
+    Switch: (props: Record<string, unknown>) => {
+      switchProps.push(props);
+      return createElement('button', {
+        'aria-checked': String(props.checked),
+        disabled: props.disabled,
+        id: props.id,
+        role: 'switch',
+      });
+    },
+  };
+});
 
 vi.mock('@/lib/access-flow', () => ({
   handleUpgradeRequired: vi.fn(),
@@ -95,7 +113,9 @@ const baseModel = () => ({
 });
 
 beforeEach(() => {
+  contextUpdateTemplate.mockReset();
   mockUseTemplateDetailModel.mockReset();
+  switchProps.length = 0;
   workspaceState.activeTeamId = undefined;
   workspaceState.canEditTemplates = true;
   workspaceState.isTeamWorkspace = false;
@@ -190,6 +210,32 @@ describe('TemplateDetail copy into an Organization', () => {
     expect(html).not.toContain('Copy to');
     expect(html).not.toContain('Upgrade to copy template');
     expect(html).toContain('Start Run');
+  });
+});
+
+describe('TemplateDetail visibility', () => {
+  it('shows the visibility of the template the model holds', () => {
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      template: { ...buildV0DemoPrivateTemplate(), isPublic: false },
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(html).toContain('aria-checked="false"');
+    expect(html).not.toContain('>Public<');
+  });
+
+  it('changes visibility through the model, which keeps the template and its version in step', async () => {
+    const setVisibility = vi.fn().mockResolvedValue({ kind: 'ok' });
+    mockUseTemplateDetailModel.mockReturnValue({ ...baseModel(), setVisibility });
+
+    renderTemplateDetail();
+    const onCheckedChange = switchProps.at(-1)?.onCheckedChange as (value: boolean) => Promise<void>;
+    await onCheckedChange(false);
+
+    expect(setVisibility).toHaveBeenCalledWith(false);
+    expect(contextUpdateTemplate).not.toHaveBeenCalled();
   });
 });
 

@@ -5,6 +5,7 @@ import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { shareTemplateToPublic } from '@/features/template-detail/shareTemplate';
+import { setTemplateVisibility } from '@/features/template-detail/templateVisibility';
 
 const ORIGIN = 'https://serplists.com';
 
@@ -177,22 +178,37 @@ describe('shareTemplateToPublic', () => {
     expect(apiClient.updateTemplate).not.toHaveBeenCalled();
   });
 
-  it('publishes when the page shows the template as private even if the loaded copy says public', async () => {
+  it('publishes again after the switch made the template private, with a version the server accepts', async () => {
     const apiClient = buildApiClient({ username: 'alice' });
+    const shown = buildTemplate({ isPublic: true });
+    const onVisibilityChange = vi.fn();
+    await setTemplateVisibility({
+      apiClient,
+      canEdit: true,
+      isPublic: false,
+      onTemplateChange: onVisibilityChange,
+      template: shown,
+    });
+    const afterSwitch = onVisibilityChange.mock.calls[0]?.[0](shown) as ChecklistTemplate;
+    const onShare = vi.fn();
 
-    await shareTemplateToPublic({
+    const result = await shareTemplateToPublic({
       apiClient,
       canShare: true,
       isAuthenticated: true,
-      isPublic: false,
-      onTemplateChange: vi.fn(),
+      onTemplateChange: onShare,
       origin: ORIGIN,
-      template: buildTemplate({ isPublic: true }),
+      template: afterSwitch,
       userId: 'user-1',
       username: undefined,
     });
 
-    expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
+    expect(result.kind).toBe('ok');
+    expect(apiClient.updateTemplate).toHaveBeenLastCalledWith('template-1', {
+      is_public: true,
+      expected_version: 3,
+    });
+    expect(onShare).toHaveBeenCalledWith(expect.objectContaining({ isPublic: true, version: 3 }));
   });
 
   it('shares library templates without a username', async () => {
