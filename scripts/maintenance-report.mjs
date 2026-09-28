@@ -3,9 +3,10 @@
 // `pnpm run maintenance:report`; .github/workflows/maintenance.yml posts it as an issue.
 // Every signal here is deterministic; the checklist at the end is for the agent doing the work.
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { walkFiles } from "./lib/repo-files.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFileSync(path.join(repoRoot, file), "utf8");
@@ -19,13 +20,8 @@ function lastCommitTime(file) {
   return out ? Number(out) : null;
 }
 
-function walk(dir, predicate) {
-  return readdirSync(path.join(repoRoot, dir), { withFileTypes: true }).flatMap((entry) => {
-    const relative = path.posix.join(dir, entry.name);
-    if (entry.isDirectory()) return entry.name === "node_modules" ? [] : walk(relative, predicate);
-    return predicate(relative) ? [relative] : [];
-  });
-}
+// A missing folder (docs/exec-plans/active/ with every plan completed) has no files.
+const walk = (dir, predicate) => walkFiles(repoRoot, dir, predicate);
 
 function countBy(items, key) {
   const counts = {};
@@ -109,6 +105,7 @@ const staleDesignDocs = read("docs/design-docs/index.md").split("\n")
 sections.push(
   "## Plans and scores",
   [
+    ...(activePlans.length === 0 ? ["- No active plans."] : []),
     ...activePlans.map(({ file, updated, age }) =>
       `- \`${file}\`: last updated ${updated ?? "unknown"}${age !== null && age > STALE_PLAN_DAYS ? ` (**${age} days; update or close it**)` : ""}`),
     `- Tech debt tracker: ${debtRows.length} open items`,

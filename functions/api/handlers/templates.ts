@@ -1,8 +1,8 @@
 import { Env } from '../types';
-import { generateSlug } from '../utils/slug';
+import { decodeSlugPath, generateSlug, resolveRequestedSlug } from '../utils/slug';
 import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
-import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema } from '../utils/payloads';
+import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema, templateUpdatePayloadSchema } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
 import { withEdgeCache } from '../utils/edge-cache';
 import { log } from '../utils/logger';
@@ -776,7 +776,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     // GET /api/templates/slug/:slug
     if (templatesSubpath[0] === 'slug' && templatesSubpath[1]) {
-      const slug = templatesSubpath.slice(1).join('/');
+      const slug = decodeSlugPath(templatesSubpath.slice(1));
+      if (!slug) return jsonError('Template not found', 404);
       const [template] = await withRulesColumnFallback((includeRules) =>
         selectTemplatesWithOwner(env, includeRules)
           .where(and(eq(templates.slug, slug), isNull(templates.deleted_at)))
@@ -1328,7 +1329,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError('Invalid JSON payload', 400);
     }
 
-    const parsed = templatePayloadSchema.safeParse(body);
+    const parsed = templateUpdatePayloadSchema.safeParse(body);
     if (!parsed.success) {
       return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
     }
@@ -1337,9 +1338,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     const rawBody = body as Record<string, unknown>;
 
     // Only update slug if explicitly provided (avoid breaking shared URLs on title edits).
-    const requestedSlugValue = typeof requestedSlug === 'string' && requestedSlug.trim()
-      ? generateSlug(requestedSlug.trim())
-      : null;
+    const hasRequestedSlug = Boolean(requestedSlug?.trim());
 
     const now = new Date().toISOString();
     const updates: Record<string, unknown> = {
@@ -1387,7 +1386,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       updates.tags = JSON.stringify(finalTags);
     }
 
-    if (Object.keys(changedTemplateFields(updates)).length === 0 && !requestedSlugValue) {
+    if (Object.keys(changedTemplateFields(updates)).length === 0 && !hasRequestedSlug) {
       return jsonError('No fields to update', 400);
     }
 
@@ -1422,9 +1421,14 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       });
     }
 
+    const slugRequest = resolveRequestedSlug(requestedSlug, existingTemplate.slug);
+    if (slugRequest.kind === 'invalid') return jsonError(slugRequest.message, 400);
+    if (slugRequest.kind === 'unchanged' && Object.keys(changedTemplateFields(updates)).length === 0) {
+      return jsonError('No fields to update', 400);
+    }
     let nextSlug: string | null = null;
-    if (requestedSlugValue) {
-      nextSlug = requestedSlugValue;
+    if (slugRequest.kind === 'changed') {
+      nextSlug = slugRequest.slug;
       const [conflict] = await db
         .select({ id: templates.id })
         .from(templates)

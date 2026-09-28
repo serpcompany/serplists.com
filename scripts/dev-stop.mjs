@@ -2,8 +2,9 @@
 // Stop the dev servers started by `pnpm run dev`, `dev:api`, or `dev:all`, including their
 // child processes. Killing only the parent (for example, stopping a background task) leaves
 // Vite and Wrangler running on Windows and holding the ports.
-import { execFileSync } from "node:child_process";
-import { isProcessAlive, readDevSession, removeDevSession } from "./dev-auto-lib.mjs";
+// A recorded pid is killed only while it still belongs to the dev launcher that wrote it:
+// after the launcher dies, the OS can give its pid to an unrelated process.
+import { DEV_SESSION_PATH, readDevSession, stopDevSession } from "./dev-auto-lib.mjs";
 
 const session = readDevSession();
 if (!session) {
@@ -11,13 +12,21 @@ if (!session) {
   process.exit(0);
 }
 
-const pids = [session.allPid, session.frontendPid, session.apiPid].filter((pid) => pid && isProcessAlive(pid));
-for (const pid of pids) {
-  if (process.platform === "win32") {
-    execFileSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
-  } else {
-    process.kill(pid, "SIGTERM");
-  }
+const { stopped, skipped, failed } = await stopDevSession({ session });
+
+for (const pid of skipped) {
+  console.log(`Skipped pid ${pid}: it is no longer the dev launcher that started this session, so it was left running.`);
 }
-removeDevSession();
-console.log(pids.length > 0 ? `Stopped dev session (pid ${pids.join(", ")}).` : "Dev session was not running; cleared tmp/dev-session.json.");
+for (const { pid, message } of failed) {
+  console.error(`Could not stop pid ${pid}: ${message}`);
+}
+if (skipped.length > 0 || failed.length > 0) {
+  console.log("If dev servers still hold their ports, stop them from their terminal or the task manager.");
+}
+
+console.log(
+  stopped.length > 0
+    ? `Stopped dev session (pid ${stopped.join(", ")}).`
+    : `Dev session was not running; cleared ${DEV_SESSION_PATH}.`,
+);
+process.exitCode = failed.length > 0 ? 1 : 0;

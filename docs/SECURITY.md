@@ -59,6 +59,9 @@ Rules:
   the process environment by an approved secret manager. `pnpm run
   stripe:local:scrub-live` removes production-only Stripe entries from a checkout.
 - `pnpm run secret:scan` (secretlint) runs in CI and on staged files at commit.
+  `scripts/secret-scan.mjs` scans every git-tracked file, or the files passed to
+  it, as literal paths through secretlint's engine. The secretlint CLI would read
+  route files such as `functions/api/[[route]].ts` as globs and skip them.
 - Keep preview and production Pages secrets separate.
 - GitHub Actions secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL`, and
   `CLOUDFLARE_API_KEY` for deploys; `CLAUDE_CODE_OAUTH_TOKEN` for Claude code review.
@@ -78,6 +81,27 @@ Applied in `functions/api/[[route]].ts` through `functions/api/utils/cors.ts`:
 
 Locally, the dev launcher keeps the frontend origin and the allowlist in sync when
 it moves ports. Do not hand-edit only one side.
+
+## Response headers
+
+`public/_headers` sets HSTS, `X-Frame-Options`, and the Content-Security-Policy on
+static responses (every SPA page). The Vite dev server never applies that file, so
+check policy changes on `wrangler pages dev` or a deployed host.
+
+- `frame-src` must list every video player origin in `EMBED_FRAME_ORIGINS`
+  (`src/lib/utils/embedOrigins.ts`): YouTube, youtube-nocookie, and Clipy.
+  `getVideoEmbedSource` frames only those origins; embed code from any other origin
+  renders as an "Open video" link instead of a frame the browser would refuse.
+- To support another provider, add its origin to both places.
+  `tests/unit/security/headers.test.ts` fails when they drift, or when a bundled
+  public template video would be blocked.
+- `script-src` lists each third-party script origin by name, never `https:`:
+  Google Tag Manager (`index.html`), the Cloudflare Web Analytics beacon
+  (`static.cloudflareinsights.com`, injected by Cloudflare) and Ahrefs Web Analytics
+  (`analytics.ahrefs.com`, loaded by a GTM tag). A tag added in GTM that loads a
+  script from a new origin needs that origin here, and in the list in
+  `tests/unit/security/headers.test.ts`; otherwise the browser blocks it.
+  `connect-src` already allows any `https:` host the beacons report to.
 
 ## Rate limits
 

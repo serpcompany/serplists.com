@@ -16,6 +16,7 @@ import {
   portableChecklistTemplateSchema,
   type PortableChecklistTemplate,
 } from "../../src/lib/schemas/checklistSchema";
+import { normalizeEol } from "./line-endings.mjs";
 
 export type TemplateLintIssue = {
   filePath: string;
@@ -31,6 +32,11 @@ type TemplateSourceDetails = {
   canonicalReadme: string;
   canonicalPreviewHtml: string;
 };
+
+// Sources are compared with LF canonical output, so read them with LF line endings:
+// a CRLF checkout (Windows, core.autocrlf=true) is not drift, and no carriage return
+// leaks into titles parsed from Markdown or YAML.
+const readSource = async (filePath: string) => normalizeEol(await readFile(filePath, "utf8"));
 
 const normalizeJson = (template: PortableChecklistTemplate) => `${JSON.stringify(normalizePortableTemplate(template), null, 2)}\n`;
 
@@ -135,7 +141,7 @@ export const lintSingleTemplateSource = async (filePath: string): Promise<Templa
   }
 
   try {
-    const source = await readFile(filePath, "utf8");
+    const source = await readSource(filePath);
     const details = parseSingleTemplateSource(source, extension);
     const issues = validateTemplateRules(details.normalizedTemplate, filePath);
 
@@ -170,8 +176,8 @@ export const lintTemplatePair = async (jsonPath: string, markdownPath: string): 
 
   try {
     const [jsonSource, markdownSource] = await Promise.all([
-      readFile(jsonPath, "utf8"),
-      readFile(markdownPath, "utf8"),
+      readSource(jsonPath),
+      readSource(markdownPath),
     ]);
 
     const jsonDetails = parseSingleTemplateSource(jsonSource, ".json");
@@ -226,13 +232,13 @@ export const lintYamlTemplateBundle = async (
   const issues: TemplateLintIssue[] = [];
 
   try {
-    const yamlSource = await readFile(yamlPath, "utf8");
+    const yamlSource = await readSource(yamlPath);
     const yamlDetails = parseSingleTemplateSource(yamlSource, path.extname(yamlPath).toLowerCase() as SupportedTemplateSourceExtension);
 
     issues.push(...validateTemplateRules(yamlDetails.normalizedTemplate, yamlPath));
 
     if (paths.jsonPath) {
-      const jsonSource = await readFile(paths.jsonPath, "utf8");
+      const jsonSource = await readSource(paths.jsonPath);
       if (jsonSource !== yamlDetails.canonicalJson) {
         issues.push({
           filePath: paths.jsonPath,
@@ -243,7 +249,7 @@ export const lintYamlTemplateBundle = async (
     }
 
     if (paths.readmePath) {
-      const readmeSource = await readFile(paths.readmePath, "utf8");
+      const readmeSource = await readSource(paths.readmePath);
       if (readmeSource !== yamlDetails.canonicalReadme) {
         issues.push({
           filePath: paths.readmePath,
@@ -254,7 +260,7 @@ export const lintYamlTemplateBundle = async (
     }
 
     if (paths.previewHtmlPath) {
-      const previewSource = await readFile(paths.previewHtmlPath, "utf8");
+      const previewSource = await readSource(paths.previewHtmlPath);
       if (previewSource !== yamlDetails.canonicalPreviewHtml) {
         issues.push({
           filePath: paths.previewHtmlPath,
@@ -265,7 +271,7 @@ export const lintYamlTemplateBundle = async (
     }
 
     if (paths.markdownPath) {
-      const markdownSource = await readFile(paths.markdownPath, "utf8");
+      const markdownSource = await readSource(paths.markdownPath);
       if (markdownSource !== yamlDetails.canonicalMarkdown) {
         issues.push({
           filePath: paths.markdownPath,

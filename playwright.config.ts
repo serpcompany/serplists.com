@@ -21,8 +21,9 @@ const reuseExistingServer =
     ? process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1"
     : !process.env.CI;
 const devVarsFlag = existsSync(".dev.vars") ? " --env-file .dev.vars" : "";
+// tests/e2e/run-smoke.mjs seeds this directory; quoted because it can contain spaces.
 const wranglerPersistFlag = process.env.PLAYWRIGHT_WRANGLER_PERSIST_TO
-  ? ` --persist-to ${process.env.PLAYWRIGHT_WRANGLER_PERSIST_TO}`
+  ? ` --persist-to "${process.env.PLAYWRIGHT_WRANGLER_PERSIST_TO}"`
   : "";
 const frontendCommand = existsSync(".dev.vars")
   ? `pnpm exec dotenv -e .dev.vars -- vite --host ${frontendHost} --port ${frontendPort} --strictPort`

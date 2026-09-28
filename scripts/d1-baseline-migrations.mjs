@@ -1,35 +1,15 @@
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseBaselineArgs, readD1Databases, resolveBaselineTarget } from "./d1-baseline-migrations-lib.mjs";
+import { execTool } from "./lib/run-tool.mjs";
 
-const PRODUCTION_DATABASE_NAME = "serp-checklists-db";
 const MIGRATION_FILE_PATTERN = /^\d{4}_.+\.sql$/;
-const NPX_COMMAND = process.platform === "win32" ? "cmd.exe" : "npx";
-const NPX_ARGS_PREFIX = process.platform === "win32" ? ["/d", "/s", "/c", "npx"] : [];
-
-function readArg(name) {
-  const prefix = `${name}=`;
-  for (let index = process.argv.length - 1; index >= 0; index -= 1) {
-    const arg = process.argv[index];
-    if (arg.startsWith(prefix)) return arg.slice(prefix.length);
-    if (arg === name) {
-      const value = process.argv[index + 1];
-      return value && !value.startsWith("--") ? value : "";
-    }
-  }
-
-  return null;
-}
-
-function hasArg(name) {
-  return process.argv.includes(name);
-}
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function getMigrationFiles() {
-  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-  const migrationsDir = path.resolve(scriptDir, "../db/migrations");
+  const migrationsDir = path.join(repoRoot, "db", "migrations");
 
   return readdirSync(migrationsDir)
     .filter((fileName) => MIGRATION_FILE_PATTERN.test(fileName))
@@ -81,11 +61,9 @@ function runWranglerBaseline({ databaseName, isRemote, sql, usePreviewDatabase }
 
   try {
     writeFileSync(tempSqlPath, sql, "utf8");
-    execFileSync(
-      NPX_COMMAND,
+    execTool(
+      "wrangler",
       [
-        ...NPX_ARGS_PREFIX,
-        "wrangler",
         "d1",
         "execute",
         databaseName,
@@ -95,7 +73,7 @@ function runWranglerBaseline({ databaseName, isRemote, sql, usePreviewDatabase }
         tempSqlPath,
       ],
       {
-        cwd: path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."),
+        cwd: repoRoot,
         env: process.env,
         stdio: "inherit",
       },
@@ -105,13 +83,8 @@ function runWranglerBaseline({ databaseName, isRemote, sql, usePreviewDatabase }
   }
 }
 
-const isRemote = hasArg("--remote");
-const isLocal = hasArg("--local") || !isRemote;
-const databaseName = readArg("--database") || process.env.D1_DATABASE_NAME;
-const throughMigration = readArg("--through");
-const shouldExecute = hasArg("--execute");
-const allowProduction = hasArg("--allow-production");
-const usePreviewDatabase = hasArg("--preview");
+const args = parseBaselineArgs(process.argv.slice(2), process.env);
+const { databaseName, isRemote, shouldExecute, throughMigration, usePreview } = args;
 
 if (!databaseName) {
   console.error("Baseline requires --database <name> or D1_DATABASE_NAME.");
@@ -123,10 +96,12 @@ if (!throughMigration) {
   process.exit(1);
 }
 
-if (isRemote && databaseName === PRODUCTION_DATABASE_NAME && !allowProduction) {
-  console.error(
-    `Refusing to baseline ${PRODUCTION_DATABASE_NAME} without --allow-production.`,
-  );
+const target = resolveBaselineTarget({
+  ...args,
+  d1: readD1Databases(readFileSync(path.join(repoRoot, "wrangler.toml"), "utf8")),
+});
+if (!target.ok) {
+  console.error(`Refusing to baseline: ${target.error}`);
   process.exit(1);
 }
 
@@ -138,8 +113,7 @@ try {
   process.exit(1);
 }
 
-const target = `${databaseName} (${isRemote ? "remote" : isLocal ? "local" : "unknown"})`;
-console.log(`Baselining ${selectedMigrations.length} migration(s) through ${throughMigration} on ${target}:`);
+console.log(`Baselining ${selectedMigrations.length} migration(s) through ${throughMigration} on ${target.label}:`);
 for (const fileName of selectedMigrations) {
   console.log(`- ${fileName}`);
 }
@@ -153,7 +127,7 @@ runWranglerBaseline({
   databaseName,
   isRemote,
   sql: buildBaselineSql(selectedMigrations),
-  usePreviewDatabase,
+  usePreviewDatabase: usePreview,
 });
 
 console.log("D1 migration baseline complete");

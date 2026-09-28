@@ -10,8 +10,9 @@ import { createDb } from '../api/db';
 import type { Env } from '../api/types';
 import bundledTemplateCatalog from './bundled-catalog.generated.json';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../src/data/publicCategories';
+import { CANONICAL_ORIGIN } from '../../src/lib/seo/siteOrigin';
 
-export const CANONICAL_ORIGIN = 'https://serplists.com';
+export { CANONICAL_ORIGIN };
 export const SITEMAP_PAGE_SIZE = 25_000;
 // A sitemap index lists at most 50,000 sitemaps, so no shard number above it is ever
 // published. Rejecting it early also keeps the page's row offset a safe integer.

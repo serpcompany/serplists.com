@@ -150,6 +150,8 @@ test("@smoke public document installs the configured Google Tag Manager containe
   );
   expect(csp).toContain("script-src");
   expect(csp).toContain("https://www.googletagmanager.com");
+  expect(csp).toContain("https://static.cloudflareinsights.com");
+  expect(csp).toContain("https://analytics.ahrefs.com");
   expect(csp).toContain("frame-src");
 });
 
@@ -265,7 +267,7 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
 
   expect(allPageLocations).toContain("https://serplists.com/profile/admin");
   expect(allPageLocations).toContain(
-    "https://serplists.com/profile/admin/technical-seo-audit-checklist",
+    "https://serplists.com/profile/admin/sample-technical-seo-audit-checklist",
   );
   expect(allPageLocations).toContain("https://serplists.com/categories/seo");
   // Registry categories no public Template uses are empty pages, so they stay unlisted.

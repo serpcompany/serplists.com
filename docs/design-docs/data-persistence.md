@@ -83,7 +83,9 @@ Handlers must authorize Organization access before returning or mutating Organiz
 Client requests go through `src/lib/api.ts`, which uses:
 
 - `http://localhost:8788/api` in dev unless `VITE_API_URL` overrides it.
-- `/api` in deployed environments.
+- `/api` in deployed environments. `src/lib/apiBaseUrl.ts` resolves the base for
+  both `api.ts` and the Better Auth client, and ignores a loopback `VITE_API_URL`
+  unless the page is served from a loopback host.
 - Better Auth cookies for session state.
 
 Main server handlers:
