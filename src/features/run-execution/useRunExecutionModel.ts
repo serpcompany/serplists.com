@@ -28,6 +28,7 @@ import {
   type RunExecutionMode,
 } from './runExecutionResult';
 import { createRunSaver, type QueuedRunSave, type RunSave } from './runSaver';
+import { isRunTitleChange } from './runTitle';
 
 export type { RunExecutionActionResult, RunExecutionLoadResult, RunExecutionMode } from './runExecutionResult';
 
@@ -367,6 +368,10 @@ export const saveRunExecutionTitle = async (
   const title = params.title.trim();
   if (!title) {
     return { kind: 'error', message: 'Run title cannot be empty.' };
+  }
+  // Compared with the latest run in the queue: an unchanged title sends nothing.
+  if (!isRunTitleChange(title, params.run.title)) {
+    return { kind: 'ok', run: params.run };
   }
 
   try {

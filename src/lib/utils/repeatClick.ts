@@ -1,0 +1,34 @@
+// A click's `detail` is its click count: 2 on the second click of a double click, 3 on a
+// triple click. Keyboard activation (Enter, Space) and programmatic clicks have 0.
+//
+// A control that changes what it does after a click (Next Task becomes Mark Complete for
+// the next task, Rename becomes Save title) is still under the pointer when the second
+// click of a double click lands, so it ignores that click and a double click acts once.
+
+// The longest double-click interval browsers use (the Windows default).
+export const DOUBLE_CLICK_MS = 500;
+
+export const isRepeatClick = (event: { detail: number }): boolean => event.detail > 1;
+
+export const onSingleClick =
+  (handler: () => void) =>
+  (event: { detail: number }): void => {
+    if (!isRepeatClick(event)) handler();
+  };
+
+// A dialog opened by a click is under the pointer when the rest of that double click lands
+// on its overlay, and a Radix dialog closes on a pointerdown outside its content. Pass
+// `markOpened` as the content's ref and `onPointerDownOutside` to the content, so outside
+// clicks close the dialog only once the double click is over.
+export const createJustOpenedGuard = (now: () => number = () => Date.now()) => {
+  let openedAt = Number.NEGATIVE_INFINITY;
+
+  return {
+    markOpened: (node: unknown): void => {
+      if (node) openedAt = now();
+    },
+    onPointerDownOutside: (event: { preventDefault: () => void }): void => {
+      if (now() - openedAt < DOUBLE_CLICK_MS) event.preventDefault();
+    },
+  };
+};

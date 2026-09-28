@@ -4,6 +4,7 @@ import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
+import { onSingleClick } from '@/lib/utils/repeatClick';
 import type { ChecklistItem, ChecklistSection } from '@/types/checklist';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
 import {
@@ -74,9 +75,11 @@ export function TaskExecutionPanel({
           </div>
 
           <div className="flex items-start gap-4">
+            {/* Completing the task moves on to the next one, so a double click would
+                also toggle that task: the second click is ignored. */}
             <button
               disabled={readOnly}
-              onClick={() => onToggleTask(!isTaskComplete)}
+              onClick={onSingleClick(() => onToggleTask(!isTaskComplete))}
               className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors"
               type="button"
             >
@@ -143,8 +146,11 @@ export function TaskExecutionPanel({
             Previous
           </Button>
 
+          {/* The action changes under the pointer (Next Task shows the next, open task,
+              whose button reads Mark Complete), so the second click of a double click is
+              ignored. */}
           <Button
-            onClick={primaryButton.onClick}
+            onClick={primaryButton.onClick && onSingleClick(primaryButton.onClick)}
             disabled={primaryButton.disabled}
             className="gap-2"
             type="button"

@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
-  Check,
   CheckCircle,
   Copy,
   Edit2,
@@ -23,17 +22,10 @@ import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { RunCompleteDialog } from '@/components/run-execution/RunCompleteDialog';
 import { RunHistorySection } from '@/components/run-execution/RunHistorySection';
 import { MobileRunProgress } from '@/components/run-execution/MobileRunProgress';
 import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar';
@@ -43,6 +35,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { canFinishRun, getPrimaryTaskAction } from '@/features/run-execution/primaryTaskAction';
 import { confirmLeaveWithUnsavedNotes, useUnsavedNotesWarning } from '@/features/run-execution/noteDrafts';
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
+import { isRunTitleChange } from '@/features/run-execution/runTitle';
 import { cn } from '@/lib/utils';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { createShareLinkAndCopy } from '@/lib/shareLink';
@@ -52,6 +45,7 @@ import {
   buildPublicTemplatesPath,
 } from '@/lib/routes';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
+import { onSingleClick } from '@/lib/utils/repeatClick';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
 
 const ChecklistRunPage = () => {
@@ -179,6 +173,11 @@ const ChecklistRunPage = () => {
 
   const handleTitleSave = async () => {
     if (isSharedRun || !run) {
+      return;
+    }
+    // Enter on an untouched title closes the editor without a save or a toast.
+    if (editTitle.trim() === run.title) {
+      handleTitleCancel();
       return;
     }
 
@@ -348,22 +347,28 @@ const ChecklistRunPage = () => {
         <ArrowLeft className="mr-2 h-4 w-4" />
         Runs
       </Button>
+      {/* Save title and Cancel take Rename's place, so the second click of a double
+          click on any of them is ignored. */}
       {!canUpdateRun ? null : !isEditingTitle ? (
         <Button
           size="sm"
           variant="ghost"
           className="text-muted-foreground"
-          onClick={handleTitleEdit}
+          onClick={onSingleClick(handleTitleEdit)}
         >
           <Edit2 className="mr-2 h-4 w-4" />
           Rename
         </Button>
       ) : (
         <>
-          <Button size="sm" onClick={() => void handleTitleSave()}>
+          <Button
+            size="sm"
+            disabled={!isRunTitleChange(editTitle, displayRun.title)}
+            onClick={onSingleClick(() => void handleTitleSave())}
+          >
             Save title
           </Button>
-          <Button size="sm" variant="outline" onClick={handleTitleCancel}>
+          <Button size="sm" variant="outline" onClick={onSingleClick(handleTitleCancel)}>
             Cancel
           </Button>
         </>
@@ -399,6 +404,7 @@ const ChecklistRunPage = () => {
   );
   const privateRunTitle = isEditingTitle ? (
     <Input
+      aria-label="Run title"
       value={editTitle}
       onChange={(event) => setEditTitle(event.target.value)}
       onKeyDown={(event) => {
@@ -664,27 +670,12 @@ const ChecklistRunPage = () => {
         url={shareLink?.url ?? ''}
       />
 
-      <Dialog open={isCompleteDialogOpen} onOpenChange={setIsCompleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Checklist Completed!</DialogTitle>
-            <DialogDescription>
-              Congratulations! You have completed all items in this checklist.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="my-4 flex justify-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-50">
-              <CheckCircle className="h-10 w-10 text-green-500" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={() => void handleCompleteRun()}>
-              <Check className="mr-2 h-4 w-4" />
-              {isSharedRun ? 'Return to Public Runs' : 'Return to Dashboard'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RunCompleteDialog
+        isSharedRun={isSharedRun}
+        onComplete={() => void handleCompleteRun()}
+        onOpenChange={setIsCompleteDialogOpen}
+        open={isCompleteDialogOpen}
+      />
     </div>
   );
 };

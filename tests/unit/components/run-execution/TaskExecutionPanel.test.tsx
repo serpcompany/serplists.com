@@ -21,14 +21,19 @@ const textOf = (node: unknown): string => {
   return React.isValidElement(node) ? textOf((node as AnyElement).props.children) : '';
 };
 
+// A click's `detail` is its click count: 1 for a single click, 2 for the second click of a
+// double click, 0 for keyboard activation.
+type Click = (event: { detail: number }) => void;
+
 const renderPanel = (task: ChecklistItem, primaryAction: PrimaryTaskAction) => {
   const onToggleTask = vi.fn();
   const onToggleSubItem = vi.fn();
+  const onNavigateNext = vi.fn();
   const tree = TaskExecutionPanel({
     hasNext: true,
     hasPrev: false,
     onFinishRun: vi.fn(),
-    onNavigateNext: vi.fn(),
+    onNavigateNext,
     onNavigatePrev: vi.fn(),
     onNotesDraftChange: vi.fn(),
     onSaveNotes: vi.fn(async () => true),
@@ -41,19 +46,19 @@ const renderPanel = (task: ChecklistItem, primaryAction: PrimaryTaskAction) => {
     taskIndex: 0,
     totalTasks: 1,
   });
-  const click = (label: string) => {
+  const click = (label: string, detail = 1) => {
     const [button] = findElements(tree, (element) => typeof element.props.onClick === 'function' && textOf(element) === label);
-    (button?.props.onClick as () => void)();
+    (button?.props.onClick as Click)({ detail });
   };
-  const taskCheckbox = () => {
+  const taskCheckbox = (detail = 1) => {
     const [button] = findElements(tree, (element) => element.type === 'button');
-    (button?.props.onClick as () => void)();
+    (button?.props.onClick as Click)({ detail });
   };
   const subTaskHandler = () => {
     const [renderer] = findElements(tree, (element) => typeof element.props.onSubItemToggle === 'function');
     return renderer?.props.onSubItemToggle as (contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
   };
-  return { click, onToggleSubItem, onToggleTask, subTaskHandler, taskCheckbox };
+  return { click, onNavigateNext, onToggleSubItem, onToggleTask, subTaskHandler, taskCheckbox };
 };
 
 const openTask: ChecklistItem = {
@@ -84,5 +89,45 @@ describe('TaskExecutionPanel sends the value the user clicked', () => {
     const panel = renderPanel(openTask, { kind: 'complete_task' });
     panel.subTaskHandler()(0, 0, true);
     expect(panel.onToggleSubItem).toHaveBeenCalledWith(0, 0, true);
+  });
+});
+
+// The primary button and the task checkbox change what they do under the pointer: Next Task
+// shows the open next task (whose button reads Mark Complete), and a completed task moves
+// on to the next one. The second click of a double click must not act on that new task.
+describe('TaskExecutionPanel ignores the second click of a double click', () => {
+  it('a double click on Next Task moves on without completing the next task', () => {
+    const done = renderPanel({ ...openTask, isCompleted: true }, { kind: 'next_task' });
+    done.click('Next Task', 1);
+    expect(done.onNavigateNext).toHaveBeenCalledTimes(1);
+
+    // The page re-rendered for the open next task before the second click arrived.
+    const next = renderPanel({ ...openTask, id: 'task-2' }, { kind: 'complete_task' });
+    next.click('Mark Complete', 2);
+    expect(next.onToggleTask).not.toHaveBeenCalled();
+  });
+
+  it('a repeat click on Mark Complete after a fast save does not complete the next task', () => {
+    const next = renderPanel({ ...openTask, id: 'task-2' }, { kind: 'complete_task' });
+    next.click('Mark Complete', 2);
+    next.click('Mark Complete', 3);
+    expect(next.onToggleTask).not.toHaveBeenCalled();
+  });
+
+  it('the task checkbox ignores the repeat click too', () => {
+    const next = renderPanel({ ...openTask, id: 'task-2' }, { kind: 'complete_task' });
+    next.taskCheckbox(2);
+    expect(next.onToggleTask).not.toHaveBeenCalled();
+  });
+
+  it('keyboard activation (detail 0) still acts', () => {
+    const panel = renderPanel(openTask, { kind: 'complete_task' });
+    panel.click('Mark Complete', 0);
+    panel.taskCheckbox(0);
+    expect(panel.onToggleTask).toHaveBeenCalledTimes(2);
+
+    const done = renderPanel({ ...openTask, isCompleted: true }, { kind: 'next_task' });
+    done.click('Next Task', 0);
+    expect(done.onNavigateNext).toHaveBeenCalledTimes(1);
   });
 });

@@ -7,6 +7,7 @@ import {
   completeRunExecution,
   createRunExecutionShare,
   loadRunExecutionData,
+  saveRunExecutionTitle,
   saveRunItemNotes,
   toggleRunItem,
   toggleRunSubItem,
@@ -533,5 +534,32 @@ describe('a task with several Sub-tasks blocks', () => {
 
     const untickC = await toggle(marked.run, 3, 0, false);
     expect(untickC.run.sections[0]?.items[0]?.isCompleted).toBe(false);
+  });
+});
+
+// A double click on Rename lands its second click on Save title, and Enter can submit the
+// editor untouched. An unchanged title must not send a PUT (which bumps the revision and
+// writes an audit event).
+describe('saving the run title', () => {
+  it('does not persist a title that is unchanged, even with surrounding spaces', async () => {
+    const updateRun = vi.fn(async (run: ChecklistRun) => run);
+    const run = buildRun();
+
+    const same = await saveRunExecutionTitle({ run, title: 'Launch checklist' }, { updateRun });
+    const padded = await saveRunExecutionTitle({ run, title: '  Launch checklist  ' }, { updateRun });
+
+    expect(same).toEqual({ kind: 'ok', run });
+    expect(padded).toEqual({ kind: 'ok', run });
+    expect(updateRun).not.toHaveBeenCalled();
+  });
+
+  it('persists a changed title once, trimmed', async () => {
+    const updateRun = vi.fn(async (run: ChecklistRun) => run);
+
+    const result = await saveRunExecutionTitle({ run: buildRun(), title: ' Launch v2 ' }, { updateRun });
+
+    expect(result.kind).toBe('ok');
+    expect(updateRun).toHaveBeenCalledTimes(1);
+    expect(updateRun).toHaveBeenCalledWith(expect.objectContaining({ title: 'Launch v2' }));
   });
 });

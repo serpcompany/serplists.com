@@ -345,3 +345,121 @@ test('Mark Complete, then ticking a sub-task that still looks unticked, keeps it
 
   await deleteRun(page, runId);
 });
+
+// Controls that change what they do under the pointer act once on a double click: Next Task
+// shows the open next task (Mark Complete in the same spot), a completed task moves on to
+// the next one, the last task opens the completion dialog over the button, and Rename
+// becomes Save title (src/lib/utils/repeatClick.ts).
+function recordSaves(page: Page, runId: string) {
+  const saves: number[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes(`/api/checklists/${runId}`) && response.request().method() === 'PUT') {
+      saves.push(response.status());
+    }
+  });
+  return saves;
+}
+
+async function pointAt(page: Page, name: string) {
+  const box = await page.getByRole('button', { name }).boundingBox();
+  if (!box) throw new Error(`${name} is not visible`);
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  await page.mouse.move(point.x, point.y);
+}
+
+// One click of a double click, with the click count the browser reports as event.detail.
+async function clickHere(page: Page, clickCount: number) {
+  await page.mouse.down({ clickCount });
+  await page.mouse.up({ clickCount });
+}
+
+test('a double click on Next Task moves on without completing the next task', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createRun(page, `Next Task double click QA ${Date.now()}`);
+  await tickElsewhere(page, runId, { a: true, b: false });
+  const saves = recordSaves(page, runId);
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  await page.getByRole('button', { name: 'Previous' }).click();
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await page.getByRole('button', { name: 'Next Task' }).dblclick();
+  // A wrongly sent save would land within this time; the checks below are for its absence.
+  await page.waitForTimeout(500);
+
+  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mark Complete' })).toBeVisible();
+  expect(await readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, false] });
+  expect(saves).toEqual([]);
+
+  await deleteRun(page, runId);
+});
+
+test('the second click of a double click after a fast save does not complete the next task', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createRun(page, `Fast save double click QA ${Date.now()}`);
+  const saves = recordSaves(page, runId);
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await pointAt(page, 'Mark Complete');
+  await clickHere(page, 1);
+  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  await clickHere(page, 2);
+
+  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, false] });
+  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  expect(saves).toEqual([200]);
+
+  await deleteRun(page, runId);
+});
+
+test('the rest of the double click that completes the last task keeps the completion dialog open', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createRun(page, `Dialog double click QA ${Date.now()}`);
+  await tickElsewhere(page, runId, { a: true, b: false });
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  await pointAt(page, 'Mark Complete');
+  await clickHere(page, 1);
+  const dialog = page.getByRole('dialog', { name: 'Checklist Completed!' });
+  await expect(dialog).toBeVisible();
+  await clickHere(page, 2);
+
+  // A dismissed dialog animates out; give it time before checking it stayed.
+  await page.waitForTimeout(400);
+  await expect(dialog).toBeVisible();
+  expect(await readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, true] });
+
+  await dialog.getByRole('button', { name: 'Return to Dashboard' }).click();
+  await expect(page).toHaveURL(/\/dashboard\/runs$/);
+  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
+
+  await deleteRun(page, runId);
+});
+
+for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 }]) {
+  test(`at ${viewport.width}px a double click on Rename opens the editor and saves nothing`, async ({ page }) => {
+    await loginAsAdmin(page);
+    const runId = await createRun(page, `Rename double click QA ${Date.now()}`);
+    await page.setViewportSize(viewport);
+    const saves = recordSaves(page, runId);
+
+    await page.goto(`/dashboard/runs/${runId}`);
+    await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+    await page.getByRole('button', { name: 'Rename' }).dblclick();
+
+    const titleInput = page.getByRole('textbox', { name: 'Run title' });
+    await expect(titleInput).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save title' })).toBeDisabled();
+
+    // Enter on the untouched title closes the editor without a save.
+    await titleInput.press('Enter');
+    await expect(titleInput).toHaveCount(0);
+    await expect(page.getByText('Run title updated')).toHaveCount(0);
+    expect(saves).toEqual([]);
+
+    await deleteRun(page, runId);
+  });
+}
