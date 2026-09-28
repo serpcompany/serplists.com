@@ -16,6 +16,11 @@ let d1: SqliteD1;
 let fetchMock: ReturnType<typeof vi.fn>;
 /** Runs while Stripe creates a customer, before it answers. */
 let duringCustomerCreate: (() => void) | null;
+/**
+ * A Stripe path whose first call waits for a second call to the same path, so two
+ * concurrent requests reliably overlap there without depending on timing.
+ */
+let overlapAt: "/v1/customers" | "/v1/checkout/sessions" | null;
 
 type Call = { url: string; form: URLSearchParams; idempotencyKey?: string };
 
@@ -28,6 +33,10 @@ function createStripeMock() {
   const keys = new Map<string, { body: string; response?: string }>();
   let nextId = 0;
   const calls: Call[] = [];
+  let secondCallArrived = () => {};
+  const secondCall = new Promise<void>((resolve) => {
+    secondCallArrived = resolve;
+  });
 
   const stripeError = (status: number, error: Record<string, string>) =>
     new Response(JSON.stringify({ error }), { status });
@@ -38,6 +47,8 @@ function createStripeMock() {
     const idempotencyKey = headers["Idempotency-Key"];
     const body = String(init?.body ?? "");
     calls.push({ url: url.pathname, form: new URLSearchParams(body), idempotencyKey });
+    const callsToPath = calls.filter((call) => call.url === url.pathname).length;
+    if (url.pathname === overlapAt && callsToPath === 2) secondCallArrived();
 
     if ((init?.method ?? "GET") === "GET" && url.pathname === "/v1/subscriptions") {
       return new Response(JSON.stringify({ data: [], has_more: false }));
@@ -57,8 +68,7 @@ function createStripeMock() {
     const record: { body: string; response?: string } = { body };
     if (scopedKey) keys.set(scopedKey, record);
 
-    // Stripe takes a moment, so a concurrent request can reach the same step.
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    if (url.pathname === overlapAt && callsToPath === 1) await secondCall;
     let response: string;
     if (url.pathname === "/v1/customers") {
       duringCustomerCreate?.();
@@ -109,6 +119,7 @@ beforeEach(() => {
   d1.sqlite.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(USER_ID, "user-1@example.test");
   sessionMocks.getSessionUserId.mockResolvedValue(USER_ID);
   duringCustomerCreate = null;
+  overlapAt = null;
   stripe = createStripeMock();
   fetchMock = stripe.fetch;
   vi.stubGlobal("fetch", fetchMock);
@@ -121,6 +132,8 @@ afterEach(() => {
 
 describe("concurrent first-time checkouts", () => {
   it("create one Stripe customer and never send a session for a customer the mapping does not hold", async () => {
+    overlapAt = "/v1/customers";
+
     const results = await Promise.all([checkout(), checkout()]);
 
     // Every request asks Stripe for the same customer.
@@ -177,6 +190,7 @@ describe("Stripe idempotency conflicts on the Checkout Session", () => {
     d1.sqlite.prepare(`
       INSERT INTO stripe_customers (user_id, stripe_customer_id, created_at) VALUES (?, 'cus_existing', '2026-01-01T00:00:00.000Z')
     `).run(USER_ID);
+    overlapAt = "/v1/checkout/sessions";
 
     const results = await Promise.all([checkout(), checkout()]);
 
