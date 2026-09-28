@@ -129,12 +129,16 @@ export const useTemplateLists = (options: { catalog?: boolean; workspace?: boole
   if (!queries) {
     throw new Error("useTemplateLists must be used within a TemplatesProvider");
   }
-  useQuery({ ...queries.catalog, enabled: queries.ready && options.catalog === true });
-  useQuery({ ...queries.workspace, enabled: queries.workspace.enabled !== false && options.workspace !== false });
-  useQuery({ ...queries.runs, enabled: queries.runs.enabled !== false && options.runs === true });
+  const catalog = useQuery({ ...queries.catalog, enabled: queries.ready && options.catalog === true });
+  const workspace = useQuery({ ...queries.workspace, enabled: queries.workspace.enabled !== false && options.workspace !== false });
+  const runs = useQuery({ ...queries.runs, enabled: queries.runs.enabled !== false && options.runs === true });
+  // Use this page's queries for loading: the provider's observers hear of fetches a tick late.
   const context = useTemplates();
-  // Until the data can load, report loading rather than an empty workspace.
-  return queries.ready ? context : { ...context, templatesLoading: true, runsLoading: true };
+  return {
+    ...context,
+    templatesLoading: !queries.ready || catalog.isLoading || workspace.isLoading,
+    runsLoading: !queries.ready || runs.isLoading,
+  };
 };
 
 export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -206,8 +210,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { data: catalogApiTemplates = [], isLoading: catalogTemplatesLoading } = useQuery({ ...listQueries.catalog, enabled: false });
   const { data: workspaceTemplates = [], isLoading: workspaceTemplatesLoading } = useQuery({ ...listQueries.workspace, enabled: false });
 
-  // Runs also load on demand (useTemplateLists({ runs: true })); the run page fetches its
-  // own run by id when it is not cached here.
+  // Runs load on demand too: useTemplateLists({ runs: true }) on the runs page only.
   const runsQuery: UseQueryOptions<ChecklistRun[]> = {
     queryKey: ['runs', user?.id, workspaceScopeId],
     queryFn: async (): Promise<ChecklistRun[]> => {
@@ -370,10 +373,11 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   const createRunMutation = useMutation({
-    mutationFn: async ({ templateId, runName }: { templateId: string; runName?: string }) => {
+    mutationFn: async ({ templateId, runName, template: loadedTemplate }: { templateId: string; runName?: string; template?: ChecklistTemplate }) => {
       if (!user) throw new Error("User must be logged in to create a run");
       
-      const template =
+      // Pages that loaded the template pass it, since lists load only on demand.
+      const template = loadedTemplate ??
         allTemplates.find((t: { id: unknown }) => t.id === templateId) ??
         publicTemplates.find((t: { id: unknown }) => t.id === templateId);
       if (!template) throw new Error("Template not found");

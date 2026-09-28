@@ -134,3 +134,9 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   (same key, since both are public only), and let the user's own templates override the
   catalog copy when merging, because the cached copy can be 5 minutes old. The smoke
   suite asserts that `?scope=public` never includes a private template.
+- 2026-09-27: A review found two regressions from on-demand lists: starting a run on a
+  directly opened template page failed ("Template not found"), and a run opened from
+  the runs dashboard reverted saved toggles to the unrefreshed list copy (then 409s).
+  `createRun` now takes the page's loaded template, and the run page always loads its
+  own run by id. `tests/e2e/on-demand-lists.spec.ts` covers both; list pages take their
+  loading state from their own queries; edge-cache keys name the resource, not the path.
