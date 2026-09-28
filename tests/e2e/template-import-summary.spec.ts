@@ -94,11 +94,13 @@ test("the import page lists every failed template when none imported", async ({ 
   await fileInput.setInputFiles({
     name: "launch-plan.json",
     mimeType: "application/json",
-    buffer: Buffer.from(JSON.stringify({
+    // JSON imports take a backup, a portable pack, or an array of templates.
+    buffer: Buffer.from(JSON.stringify([{
       title: "Launch plan",
       sections: [{ title: "Checklist", items: [{ title: "Check DNS" }] }],
-    })),
+    }])),
   });
+  await expect(page.getByRole("heading", { name: "Import Preview" })).toBeVisible();
   await page.getByRole("button", { name: "Confirm Import" }).click();
 
   await expect(page.getByText("Last Import Result")).toBeVisible();
