@@ -61,7 +61,7 @@ columns are stored as text and parsed in handlers.
 - `templates.tags`: JSON array of tag strings.
 - `templates.rules`: template rule metadata.
 - `checklist_runs.items`: sectioned run content with completion state.
-- `audit_events.before_json`, `after_json`, `diff_json`, `metadata_json`: structured audit payloads.
+- `audit_events.before_json`, `after_json`, `diff_json`, `metadata_json`: structured audit payloads, kept small by `functions/api/utils/audit-compaction.ts`. Snapshots omit run and template content (`items`, `retired_items`) and share tokens; a diff's `items` records only the task ids that were completed, reopened, edited, added, or removed, or whose notes changed (never the notes text); each column is capped at 64 KB of UTF-8, with larger values replaced by a `{truncated, bytes, sha256}` marker. An audit row therefore can never push the write it shares a batch with past D1's 2,000,000-byte row limit. History endpoints also redact the full copies that older rows still hold.
 - `template_versions.snapshot_json`: full template snapshot.
 
 ## Resource Ownership

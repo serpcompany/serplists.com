@@ -6,6 +6,7 @@ import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
 import { buildAuditEventValues, type AuditSubject } from '../utils/audit';
+import { redactStoredAuditDiff } from '../utils/audit-compaction';
 import { canManageTeam, canRunTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { z } from 'zod';
 import { calculateRunProgress, reconcileRunSections } from '../utils/template-reconciliation';
@@ -251,7 +252,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
             action: row.action,
             createdAt: row.created_at,
             requestId: row.request_id,
-            diff: parseOptionalJson(row.diff_json),
+            diff: redactStoredAuditDiff(parseOptionalJson(row.diff_json)),
             metadata: parseOptionalJson(row.metadata_json),
             actor: {
               userId: row.actor_user_id,
