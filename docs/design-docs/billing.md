@@ -117,6 +117,15 @@ terminal so the API reads that secret at startup:
 pnpm dev:auto
 ```
 
+The listener forwards to this checkout's own API, because every clone or worktree
+runs its own stack on a free port pair. It uses the API port in
+`tmp/dev-session.json` when that stack is running. Started first, it forwards to
+the pair `dev:auto` would pick at that moment (skipping ports another worktree or
+the smoke stack holds), and it restarts on the right port if `dev:auto` then
+chooses another pair. It prints each URL it forwards to. Set
+`STRIPE_LOCAL_WEBHOOK_URL` (in the environment or `.dev.vars`) to forward
+somewhere else; the listener then never changes it.
+
 Sign in as a Free local persona, choose **Upgrade — $9/month**, and use Stripe's
 test Visa `4242 4242 4242 4242`, any future expiry, and any three-digit CVC.
 Verify the Personal plan changes to Pro, a paid-only API action succeeds, the
