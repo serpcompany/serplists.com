@@ -11,6 +11,7 @@ import type {
   PortableTemplatePack,
   TemplateBackup
 } from "@/lib/schemas/checklistSchema";
+import { uniqueCategoryNames } from "@/lib/categorySlug";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
 import {
   detectTemplateSourceExtension,
@@ -66,6 +67,10 @@ const normalizeStringList = (value: unknown): string[] => {
   return [];
 };
 
+// Categories repeat nothing that shares a slug ('SEO', 'seo'), so a template counts once
+// toward each category page.
+const normalizeCategoryList = (value: unknown): string[] => uniqueCategoryNames(normalizeStringList(value));
+
 const coerceSections = (input: unknown): ChecklistSection[] | null => {
   const parsed = parseJsonArray(input);
   if (!parsed) return null;
@@ -109,7 +114,7 @@ const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTe
     seoTitle: template.seoTitle || "",
     seoDescription: template.seoDescription || "",
     rules: template.rules,
-    categories: normalizeStringList(template.categories ?? template.category),
+    categories: normalizeCategoryList(template.categories ?? template.category),
     tags: normalizeStringList(template.tags),
   };
 };
@@ -136,7 +141,7 @@ const normalizePortableTemplate = (template: PortableChecklistTemplate): Checkli
     seoTitle: template.seoTitle || "",
     seoDescription: template.seoDescription || "",
     rules: template.rules,
-    categories: normalizeStringList(template.categories),
+    categories: normalizeCategoryList(template.categories),
     tags: normalizeStringList(template.tags),
   };
 };
@@ -225,7 +230,7 @@ export const exportPortableTemplatesToJSON = (
       seoTitle: template.seoTitle || undefined,
       seoDescription: template.seoDescription || undefined,
       visibility: template.isPublic ? "public" : "private",
-      categories: normalizeStringList(template.categories),
+      categories: normalizeCategoryList(template.categories),
       tags: normalizeStringList(template.tags),
       sections: template.sections,
       rules: template.rules,

@@ -1,5 +1,6 @@
 import type { ChecklistTemplate } from '@/types/checklist';
 
+import { uniqueCategoryNames } from '@/lib/categorySlug';
 import { buildCategorySlug } from '@/lib/routes';
 import { generateSlug } from '@/utils/urlHelpers';
 
@@ -146,9 +147,10 @@ export const buildDiscoveryCategories = (
   const categoryLabelBySlug = new Map<string, string>();
 
   // A name with no letters or digits has no category page, so it gets no entry
-  // (they used to merge into one '' entry that linked to a 404).
+  // (they used to merge into one '' entry that linked to a 404). A template that lists a
+  // category twice ('SEO' and 'seo') counts once, as the category page lists it once.
   templates.forEach((template) => {
-    template.categories?.forEach((category) => {
+    uniqueCategoryNames(template.categories ?? []).forEach((category) => {
       const slug = buildCategorySlug(category);
       if (!slug) return;
       categoryCountsBySlug.set(slug, (categoryCountsBySlug.get(slug) ?? 0) + 1);

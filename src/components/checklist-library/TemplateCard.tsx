@@ -8,6 +8,7 @@ import {
   buildCanonicalPublicTemplatePath,
   buildPublicProfilePath,
 } from '@/lib/routes';
+import { uniqueCategoryNames } from '@/lib/categorySlug';
 import { cn } from '@/lib/utils';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { generateSlug } from '@/utils/urlHelpers';
@@ -41,7 +42,8 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
   const itemCount = getTemplateItemCount(template);
   const ownerLabel = getTemplateOwnerLabel(template);
   const ownerHandle = template.ownerProfile?.username;
-  const categories = template.categories ?? [];
+  // Imported or API-written lists can repeat a category ('SEO', 'seo'); show each once.
+  const categories = uniqueCategoryNames(template.categories ?? []);
   // Discovery lists only templates with a public URL; if one slips through, render it
   // without links rather than pointing them back at the library.
   const templatePath = buildCanonicalPublicTemplatePath({

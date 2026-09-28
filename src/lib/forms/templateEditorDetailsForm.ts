@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { uniqueCategoryNames } from "@/lib/categorySlug";
 import type { ChecklistTemplate } from "@/types/checklist";
 
 export const TEMPLATE_EDITOR_TYPES = ["checklist", "recipe"] as const;
@@ -55,7 +56,8 @@ export const normalizeTemplateEditorDetailsForSave = (
   title: values.title.trim(),
   description: values.description.trim(),
   templateType: values.templateType,
-  categories: normalizeStringList(values.categories),
+  // By slug, so an imported 'Home Inspection' and the picker's 'home inspection' are one category.
+  categories: uniqueCategoryNames(values.categories),
   tags: normalizeStringList(values.tags),
   isPublic: values.isPublic,
   seoTitle: values.seoTitle.trim(),

@@ -29,3 +29,23 @@ export const categorySlug = (name: string): string => {
 
   return LETTER_OR_DIGIT.test(slug) ? slug : '';
 };
+
+/**
+ * A template's category names, each once: names are trimmed, blanks dropped, and a name
+ * whose slug matches an earlier one ('seo' after 'SEO', 'QA' after 'Q&A') is dropped, so
+ * the first spelling wins. Names with no slug ('!!!') are kept once by exact text. One
+ * template then counts once toward each category page it appears on.
+ */
+export const uniqueCategoryNames = (names: readonly string[]): string[] => {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const raw of names) {
+    const name = raw.trim();
+    if (!name) continue;
+    const key = categorySlug(name) || `text:${name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(name);
+  }
+  return unique;
+};
