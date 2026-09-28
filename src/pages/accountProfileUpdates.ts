@@ -86,7 +86,8 @@ export const saveProfileChanges = async (
     updateUser: (updates: AccountUpdatePayload) => Promise<UpdateUserResult>;
     /** Runs once the server accepted the change, before the session refresh. */
     onSaved: () => void;
-    refreshProfile: () => Promise<void>;
+    // Resolves false when the session could not be re-read; the save itself succeeded.
+    refreshProfile: () => Promise<unknown>;
     refreshTemplateOwnerData: () => Promise<unknown>;
   }
 ): Promise<SaveProfileResult> => {
