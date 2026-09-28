@@ -15,6 +15,7 @@ import { api, type TeamRole, type TeamSummary } from '@/lib/api';
 import {
   PERSONAL_WORKSPACE_ID,
   createWorkspaceSelectionMemory,
+  isConfirmedSignOut,
   reconcileWorkspaceSelection,
   recordWorkspaceSelection,
   resetWorkspaceSelection,
@@ -114,7 +115,7 @@ export function WorkspaceProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const { isLoading: isAuthLoading, user } = useAuth();
+  const { isLoading: isAuthLoading, sessionStatus, user } = useAuth();
   const queryClient = useQueryClient();
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(
     readStoredWorkspaceId,
@@ -181,6 +182,11 @@ export function WorkspaceProvider({
     }
 
     if (!user) {
+      // Forget the stored context only on a confirmed sign-out. When the session check failed
+      // the user may still be signed in, so keep it for when the session comes back.
+      if (!isConfirmedSignOut(sessionStatus)) {
+        return;
+      }
       resetWorkspaceSelection(selectionMemoryRef.current);
       setOptimisticTeams((currentTeams) =>
         currentTeams.length === 0 ? currentTeams : [],
@@ -206,6 +212,7 @@ export function WorkspaceProvider({
   }, [
     activeWorkspaceId,
     isAuthLoading,
+    sessionStatus,
     teams,
     teamsQuery.isFetching,
     teamsQuery.isLoading,

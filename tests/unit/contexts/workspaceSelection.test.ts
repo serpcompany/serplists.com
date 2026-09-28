@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PERSONAL_WORKSPACE_ID,
   createWorkspaceSelectionMemory,
+  isConfirmedSignOut,
   reconcileWorkspaceSelection,
   recordWorkspaceSelection,
   resetWorkspaceSelection,
@@ -118,5 +119,14 @@ describe('workspace selection', () => {
       teamsLoaded: true,
     });
     expect(next).toBe('bravo');
+  });
+});
+
+describe('isConfirmedSignOut', () => {
+  it('forgets the stored Organization only when the server confirmed there is no session', () => {
+    expect(isConfirmedSignOut('unauthenticated')).toBe(true);
+    // A 503, 429 or dropped connection on get-session: the user may still be signed in.
+    expect(isConfirmedSignOut('unavailable')).toBe(false);
+    expect(isConfirmedSignOut('loading')).toBe(false);
   });
 });

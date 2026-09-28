@@ -1,3 +1,5 @@
+import type { SessionStatus } from './authSession';
+
 export const PERSONAL_WORKSPACE_ID = 'personal';
 
 // What the provider remembers between renders, per tab. localStorage is shared by every tab,
@@ -91,4 +93,11 @@ export function resetWorkspaceSelection(memory: WorkspaceSelectionMemory): void 
   memory.userId = null;
   memory.pendingRestoreId = null;
   memory.explicitSelectionId = null;
+}
+
+// With no user, reset the tab to Personal and store Personal only when the server confirmed
+// there is no session. A failed session check ('unavailable') must not wipe the stored
+// Organization: the user is often still signed in and would come back in Personal.
+export function isConfirmedSignOut(sessionStatus: SessionStatus): boolean {
+  return sessionStatus === 'unauthenticated';
 }
