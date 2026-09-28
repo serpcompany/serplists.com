@@ -29,7 +29,10 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
 - **Icons:** `lucide-react`.
 - **Feedback:** `sonner` toasts for results of user actions. The app shell
   (`src/components/AppShell.tsx`) mounts only the sonner `Toaster`, so import `toast`
-  from `sonner`; ESLint blocks the shadcn toast store, which has no renderer.
+  from `sonner`; ESLint blocks the shadcn toast store, which has no renderer. The
+  `Toaster` is mounted before the pages because it drops toasts sent before its own
+  effect runs, such as a page's first-effect notice on a full page load
+  (`tests/unit/components/ToasterPlacement.test.tsx`).
 - **Console layout:** `src/components/dashboard/DashboardContentShell.tsx` provides
   `DashboardContentShell`, `DashboardPageHeader`, `DashboardToolbar`,
   `DashboardScrollArea`, `DashboardEmptyState`, and `DashboardMetricCard`. New
