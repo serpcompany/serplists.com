@@ -1,5 +1,7 @@
 import { resolvePublicTemplateOwnerSlug } from '@/lib/routes';
 import { resolveTemplateDestinationTeamId } from '@/lib/templateDestination';
+import { readApiTemplateTeamId } from '@/lib/templates/apiTemplateOwner';
+import { buildDuplicateTemplateTitle } from '@/lib/templates/duplicateTemplateTitle';
 import {
   isSectionsShape,
   normalizeSections as normalizeChecklistSections,
@@ -78,7 +80,7 @@ export const mapApiTemplateToChecklistTemplate = (
     tags: asStringArray(foundTemplate.tags) ?? [],
     userId: String(foundTemplate.user_id || ''),
     // The owning Organization decides where this template's Runs and copies go.
-    teamId: asString(foundTemplate.team_id) || undefined,
+    teamId: readApiTemplateTeamId(foundTemplate),
     createdAt: String(foundTemplate.created_at || ''),
     updatedAt: String(foundTemplate.updated_at || foundTemplate.created_at || ''),
     isPublic: Boolean(foundTemplate.is_public),
@@ -122,7 +124,8 @@ export const resolveTemplateOwnerProfile = (
   };
 };
 
-// The create payload for Duplicate: the same content under a new title, in the context
+// The create payload for Duplicate: the same content under a new title that still fits
+// the title limit, in the context
 // resolveTemplateDestinationTeamId picks. The server gives the copy its own slug.
 export const buildTemplateCopyPayload = (
   template: ChecklistTemplate,
@@ -138,7 +141,7 @@ export const buildTemplateCopyPayload = (
   seoUrl: '',
   tags: template.tags ?? [],
   teamId: resolveTemplateDestinationTeamId(template, activeTeamId),
-  title: `${template.title} Copy`,
+  title: buildDuplicateTemplateTitle(template.title),
   type: template.type ?? 'checklist',
 });
 

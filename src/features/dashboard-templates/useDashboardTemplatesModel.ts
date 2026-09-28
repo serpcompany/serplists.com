@@ -6,6 +6,8 @@ import { useTemplateLists } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { usePageVisit } from '@/hooks/usePageVisit';
 import type { PageVisit } from '@/lib/navigation/pageVisit';
+import { getAccessFailure } from '@/lib/api-errors';
+import { resolveRunName } from '@/lib/runs/runName';
 import {
   buildConsoleRunPath,
   buildConsoleTemplateCreatePath,
@@ -30,8 +32,11 @@ type DashboardTemplatesStateOptions = {
 };
 
 type DashboardTemplateRunOptions = {
+  now?: Date;
+  /** What the user typed; blank means the default name the dialog shows. */
   runName?: string;
   templateId: string;
+  templateTitle: string;
 };
 
 type DashboardTemplateRunDependencies = {
@@ -47,9 +52,23 @@ type DashboardTemplatesModelDependencies = {
   userId?: string;
 };
 
-type DashboardTemplateRunResult =
+export type DashboardTemplateRunResult =
   | { kind: 'ok'; runId: string }
+  | { kind: 'login_required' }
+  | { kind: 'upgrade_required'; message: string }
   | { kind: 'error'; message: string };
+
+type DashboardTemplateRunFailure = Exclude<
+  DashboardTemplateRunResult,
+  { kind: 'ok' }
+>;
+
+type DashboardTemplateRunFailureActions = {
+  navigateToLogin: () => void;
+  showError: (message: string) => void;
+  /** Resolves true when a checkout redirect has started. */
+  upgrade: () => Promise<boolean>;
+};
 
 type DeleteDashboardTemplateOptions = {
   selectedTemplateId: string;
@@ -127,7 +146,7 @@ export const createDashboardTemplateRun = async (
   try {
     const run = await dependencies.createRun({
       templateId: options.templateId,
-      runName: options.runName,
+      runName: resolveRunName(options.runName, options.templateTitle, options.now),
     });
 
     if (!run?.id) {
@@ -142,12 +161,41 @@ export const createDashboardTemplateRun = async (
       runId: run.id,
     };
   } catch (error) {
-    return {
-      kind: 'error',
-      message:
-        error instanceof Error ? error.message : 'Failed to create checklist run.',
-    };
+    // Decide from the API status and code only, never from message text.
+    const failure = getAccessFailure(error, 'Failed to create checklist run.');
+
+    if (failure.kind === 'auth_required') {
+      return { kind: 'login_required' };
+    }
+
+    if (failure.kind === 'upgrade_required') {
+      return { kind: 'upgrade_required', message: failure.message };
+    }
+
+    return { kind: 'error', message: failure.message };
   }
+};
+
+/**
+ * Reports a failed Start Run exactly once: login for an expired session, the
+ * context's upgrade flow for a plan limit, and one error message otherwise.
+ * Resolves true while a checkout redirect is starting.
+ */
+export const reportDashboardTemplateRunFailure = async (
+  result: DashboardTemplateRunFailure,
+  actions: DashboardTemplateRunFailureActions,
+): Promise<boolean> => {
+  if (result.kind === 'login_required') {
+    actions.navigateToLogin();
+    return false;
+  }
+
+  if (result.kind === 'upgrade_required') {
+    return actions.upgrade();
+  }
+
+  actions.showError(result.message);
+  return false;
 };
 
 export const deleteDashboardTemplate = async (
@@ -189,7 +237,7 @@ export const useDashboardTemplatesModel = (
   const navigate = useNavigate();
   const beginVisit = usePageVisit();
   const { user } = useAuth();
-  const { activeTeamId } = useWorkspace();
+  const { activeTeamId, isTeamWorkspace } = useWorkspace();
   const templateContext = useTemplateLists();
   const model = buildDashboardTemplatesState({
     allTemplates: dependencies?.allTemplates ?? templateContext.allTemplates,
@@ -245,10 +293,12 @@ export const useDashboardTemplatesModel = (
     setSelectedTemplateId(templateId);
   };
 
-  const createRunFromTemplate = async (runName?: string) => {
-    if (!selectedTemplateId) {
+  const createRunFromTemplate = async (
+    runName?: string,
+  ): Promise<DashboardTemplateRunResult> => {
+    if (!selectedTemplate) {
       return {
-        kind: 'error' as const,
+        kind: 'error',
         message: 'Select a template before starting a run.',
       };
     }
@@ -256,9 +306,11 @@ export const useDashboardTemplatesModel = (
     const visit = beginVisit();
     setIsCreatingRun(true);
     try {
+      // Name the run from the template selected at submit time.
       const result = await createDashboardTemplateRun(
         {
-          templateId: selectedTemplateId,
+          templateId: selectedTemplate.id,
+          templateTitle: selectedTemplate.title,
           runName,
         },
         { createRun },
@@ -294,6 +346,7 @@ export const useDashboardTemplatesModel = (
     createRunFromTemplate,
     closeRunLauncher,
     isCreatingRun,
+    isTeamWorkspace,
     openCreateTemplate,
     openPublicLibrary,
     openRunLauncher,

@@ -5,7 +5,9 @@ import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
 import { Layout } from '@/components/Layout';
+import { BILLING_UNAVAILABLE_MESSAGE, createApiError } from '@/lib/api-errors';
 import { mergeAccountTemplateCollections } from '@/lib/repoTemplateCatalog';
+import { buildDefaultRunName } from '@/lib/runs/runName';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import {
@@ -18,6 +20,7 @@ import {
   openDashboardCreateTemplate,
   openDashboardPublicLibrary,
   openDashboardTemplate,
+  reportDashboardTemplateRunFailure,
 } from '@/features/dashboard-templates/useDashboardTemplatesModel';
 
 const authState = vi.hoisted(() => ({
@@ -293,6 +296,7 @@ describe('createDashboardTemplateRun', () => {
       {
         runName: 'Audit sprint',
         templateId: 'template-1',
+        templateTitle: 'Content Audit',
       },
       { createRun },
     );
@@ -307,12 +311,43 @@ describe('createDashboardTemplateRun', () => {
     });
   });
 
+  it('names a run left blank after the template and start time, as the dialog shows', async () => {
+    const createRun = vi.fn().mockResolvedValue({ id: 'run-10' });
+    const now = new Date('2026-09-28T10:15:00.000Z');
+
+    for (const runName of [undefined, '', '   ']) {
+      createRun.mockClear();
+      await createDashboardTemplateRun(
+        { now, runName, templateId: 'template-1', templateTitle: 'Moving Checklist' },
+        { createRun },
+      );
+
+      expect(createRun).toHaveBeenCalledWith({
+        templateId: 'template-1',
+        runName: buildDefaultRunName('Moving Checklist', now),
+      });
+    }
+    expect(buildDefaultRunName('Moving Checklist', now)).toMatch(/^Moving Checklist - /);
+  });
+
+  it('trims a typed run name', async () => {
+    const createRun = vi.fn().mockResolvedValue({ id: 'run-11' });
+
+    await createDashboardTemplateRun(
+      { runName: '  Spring move  ', templateId: 'template-1', templateTitle: 'Moving Checklist' },
+      { createRun },
+    );
+
+    expect(createRun).toHaveBeenCalledWith({ templateId: 'template-1', runName: 'Spring move' });
+  });
+
   it('returns an error when the run mutation resolves without an id', async () => {
     const createRun = vi.fn().mockResolvedValue(null);
 
     const result = await createDashboardTemplateRun(
       {
         templateId: 'template-1',
+        templateTitle: 'Content Audit',
       },
       { createRun },
     );
@@ -329,6 +364,7 @@ describe('createDashboardTemplateRun', () => {
     const result = await createDashboardTemplateRun(
       {
         templateId: 'template-1',
+        templateTitle: 'Content Audit',
       },
       { createRun },
     );
@@ -378,5 +414,112 @@ describe('finishDashboardTemplateRun', () => {
 
     expect(navigate).not.toHaveBeenCalled();
     expect(closeLauncher).not.toHaveBeenCalled();
+  });
+});
+
+describe('createDashboardTemplateRun access failures', () => {
+  const runLimitMessage =
+    'Active run limit reached. Upgrade to Pro to create more checklist runs.';
+
+  const runWithFailure = (error: unknown) =>
+    createDashboardTemplateRun(
+      { templateId: 'template-1', templateTitle: 'Content Audit' },
+      { createRun: vi.fn().mockRejectedValue(error) },
+    );
+
+  it('returns upgrade_required when the run limit is reached', async () => {
+    const result = await runWithFailure(
+      createApiError(403, { error: runLimitMessage, code: 'limit_reached' }),
+    );
+
+    expect(result).toEqual({ kind: 'upgrade_required', message: runLimitMessage });
+  });
+
+  it('returns upgrade_required when the context needs a paid plan', async () => {
+    const result = await runWithFailure(
+      createApiError(403, { error: 'Upgrade required', code: 'upgrade_required' }),
+    );
+
+    expect(result).toEqual({ kind: 'upgrade_required', message: 'Upgrade required' });
+  });
+
+  it('returns login_required when the session has expired', async () => {
+    const result = await runWithFailure(createApiError(401, { error: 'Unauthorized' }));
+
+    expect(result).toEqual({ kind: 'login_required' });
+  });
+
+  it('keeps a plain 403 without a code as an error, not an upgrade', async () => {
+    const result = await runWithFailure(createApiError(403, { error: 'Forbidden' }));
+
+    expect(result).toEqual({ kind: 'error', message: 'Forbidden' });
+  });
+
+  it('reports billing_unavailable with the billing message', async () => {
+    const result = await runWithFailure(
+      createApiError(503, { error: 'Billing down', code: 'billing_unavailable' }),
+    );
+
+    expect(result).toEqual({ kind: 'error', message: BILLING_UNAVAILABLE_MESSAGE });
+  });
+});
+
+describe('reportDashboardTemplateRunFailure', () => {
+  const buildActions = (upgradeResult = true) => ({
+    navigateToLogin: vi.fn(),
+    showError: vi.fn(),
+    upgrade: vi.fn().mockResolvedValue(upgradeResult),
+  });
+
+  it('starts the upgrade flow instead of showing the limit message', async () => {
+    const actions = buildActions(true);
+
+    const redirecting = await reportDashboardTemplateRunFailure(
+      { kind: 'upgrade_required', message: 'Active run limit reached.' },
+      actions,
+    );
+
+    expect(actions.upgrade).toHaveBeenCalledTimes(1);
+    expect(actions.showError).not.toHaveBeenCalled();
+    expect(actions.navigateToLogin).not.toHaveBeenCalled();
+    expect(redirecting).toBe(true);
+  });
+
+  it('reports when the upgrade flow did not redirect', async () => {
+    const actions = buildActions(false);
+
+    const redirecting = await reportDashboardTemplateRunFailure(
+      { kind: 'upgrade_required', message: 'Active run limit reached.' },
+      actions,
+    );
+
+    expect(redirecting).toBe(false);
+  });
+
+  it('sends an expired session to login', async () => {
+    const actions = buildActions();
+
+    const redirecting = await reportDashboardTemplateRunFailure(
+      { kind: 'login_required' },
+      actions,
+    );
+
+    expect(actions.navigateToLogin).toHaveBeenCalledTimes(1);
+    expect(actions.showError).not.toHaveBeenCalled();
+    expect(actions.upgrade).not.toHaveBeenCalled();
+    expect(redirecting).toBe(false);
+  });
+
+  it('shows other errors exactly once', async () => {
+    const actions = buildActions();
+
+    await reportDashboardTemplateRunFailure(
+      { kind: 'error', message: 'Failed to create checklist run.' },
+      actions,
+    );
+
+    expect(actions.showError).toHaveBeenCalledTimes(1);
+    expect(actions.showError).toHaveBeenCalledWith('Failed to create checklist run.');
+    expect(actions.upgrade).not.toHaveBeenCalled();
   });
 });

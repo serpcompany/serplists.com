@@ -107,21 +107,35 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   never fetches them. A page that reads `templates` (the public catalog) calls
   `useTemplateLists({ catalog: true, workspace: false })`, one that reads `allTemplates`
   calls `useTemplateLists()`, and one that reads `runs` adds `runs: true`. The run page
-  fetches its own run by id, and the template editor its own template: an editor
-  must never start from a list copy, which can be minutes old. A catalog miss reads every public Template from D1
+  fetches its own run by id, and the template editor and the template detail page their
+  own template: a page that needs one Template or run never loads a list just to look it
+  up, and an editor must never start from a list copy, which can be minutes old. A catalog miss reads every public Template from D1
   ([D1 cost](design-docs/d1-cost.md)), so pages that only need official templates use
   the bundled `repoTemplates`. The catalog's query key has no user id because the
   catalog is the same for everyone, so it waits only for the session; the workspace
   and run lists also wait for the active context (`src/contexts/templateListObservers.ts`).
-  A failed teams request must not hide the public library. In Personal, `allTemplates` merges the catalog with
+  A failed teams request must not hide the public library. Only pages that display the
+  catalog may load it; `tests/unit/contexts/catalogConsumers.test.ts` lists them, and
+  data built on the server (such as the import/export pack) never needs it on the
+  client. In Personal, `allTemplates` merges the catalog with
   the user's own list; once that list has loaded it is the source of truth for the
   user's Personal templates, so a cached catalog copy it lacks (deleted, made private,
   or moved to an Organization) is dropped.
 - Context values and helpers (`getTemplate`, the lists) keep their identity until their
   data changes, but never key a fetch on them: providers still re-render for unrelated
-  reasons. Template detail pages load through `templateDetailLoader`, which fetches
-  again only for a different template or viewer, shows the page spinner only for a
-  different template, and takes newer versions from the list cache in place.
+  reasons.
+- Template detail pages never show a copy from a list: a list is refetched after an
+  edit only while a page observes it, so an unobserved copy can be arbitrarily old. The
+  public template page loads its template from the API on every visit (bundled library
+  templates excepted). The private detail page loads its template by id (slug as a
+  fallback) with a query keyed under `['templates']`, so every template invalidation
+  (editor saves, visibility, Share, copies, archive, context switches) refetches it
+  while it is open and the next write sends the version the server holds. Both loads
+  are keyed only on the template (and, for the private page, the viewer), so an
+  unrelated re-render never reloads them. A background refetch, including the reload
+  after a `409` edit conflict on Share or the visibility switch, swaps the template in
+  place without the page spinner, and a visibility change keeps the version its `PUT`
+  answer returns.
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.
@@ -159,6 +173,13 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   shows `ListLoadErrorState` (Retry, or Sign in on a `401`) whenever one is set. Never
   decide by the length of a merged list: in Personal the cached catalog can still hold
   the user's public templates while the Personal list itself failed.
+- Parse timestamps from the API with `parseDbTimestamp`, or format them with
+  `formatMonthYear`, `formatLocalDate` or `formatLocalDateTime`, all in
+  `src/lib/utils/dbTimestamp.ts`, not `new Date(value)`. Columns that default to D1's
+  `CURRENT_TIMESTAMP` (such as `users.created_at`) hold UTC as `YYYY-MM-DD HH:MM:SS`,
+  which Safari cannot parse and other browsers read as local time. The formatters
+  return nothing (`''` or `null`) for a value they cannot read; render nothing then,
+  never "Invalid Date".
 
 ## Template editor forms
 

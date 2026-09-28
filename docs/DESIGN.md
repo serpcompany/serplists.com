@@ -29,9 +29,13 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
   inputs have a `Label`. The template grid/list toggle in `src/pages/Templates.tsx`
   is the reference.
 - A control revealed on hover (`opacity-0 group-hover:opacity-100`) must also show on
-  keyboard focus and on touch screens: in the template editor use
-  `ROW_ACTIONS_REVEAL_CLASS` (`src/components/template-editor/reorder.ts`), and a unit
-  test fails on any hover-only class string there.
+  keyboard focus (`group-focus-within:opacity-100`) and on touch screens: in the
+  template editor use `ROW_ACTIONS_REVEAL_CLASS`
+  (`src/components/template-editor/reorder.ts`), and a unit test fails on any
+  hover-only class string there. A hover-only duplicate of an action that is
+  reachable elsewhere leaves the tab order instead (`tabIndex={-1}` inside an
+  `aria-hidden` wrapper), like the Start Run overlay in
+  `src/components/dashboard/TemplateCard.tsx`.
 - Anything that reorders by drag also reorders from the keyboard. The template
   editor's drag handles (`ReorderHandle`) move their section, task or content block
   one place with the Up and Down arrow keys, keep focus on the moved handle, and

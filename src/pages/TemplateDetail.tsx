@@ -1,17 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Archive,
   ArrowLeft,
-  BarChart3,
   Calendar,
   ChevronRight,
   Clock,
   Copy,
   Download,
-  Eye,
   Globe,
   History,
+  Layers,
   ListChecks,
   Lock,
   MoreHorizontal,
@@ -21,7 +20,6 @@ import {
   Tag,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getTemplateChangeErrorMessage, isStaleRecordError } from '@/lib/editConflicts';
 
 import {
   AlertDialog,
@@ -68,19 +66,21 @@ import {
   DashboardScrollArea,
 } from '@/components/dashboard/DashboardContentShell';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
-import { useTemplateLists } from '@/contexts/TemplatesContext';
+import { useTemplates } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { followTemplateActionResult } from '@/features/template-detail/templateActionOutcome';
+import { getCopyTemplateButton } from '@/features/template-detail/copyTemplateButton';
+import {
+  exportTemplateFile,
+  getTemplateExportLabel,
+} from '@/features/template-detail/templateExport';
+import { buildTemplateHistoryTimeline } from '@/features/template-detail/templateHistoryTimeline';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import { usePageVisit } from '@/hooks/usePageVisit';
 import {
+  handleUpgradeRequiredForContext,
   navigateToLoginWithReturnPath,
-  startBillingCheckout,
 } from '@/lib/access-flow';
-import type {
-  TemplateHistoryEvent,
-  TemplateHistoryVersion,
-} from '@/lib/api';
 import {
   buildConsoleRunPath,
   buildConsoleTemplateEditPath,
@@ -89,78 +89,8 @@ import {
 } from '@/lib/routes';
 import { getRunStartedMessage, getTemplateDuplicatedMessage, nameOtherTemplateDestination } from '@/lib/templateDestination';
 import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
+import { formatLocalDate, formatLocalDateTime } from '@/lib/utils/dbTimestamp';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
-import type { ChecklistTemplate, TemplateSavePayload } from '@/types/checklist';
-
-type TemplateMetrics = {
-  copyCount?: number;
-  runCount?: number;
-  viewCount?: number;
-};
-
-const formatDate = (value?: string): string => {
-  if (!value) {
-    return '';
-  }
-
-  return new Date(value).toLocaleDateString('en-US');
-};
-
-const formatDateTime = (value?: string): string => {
-  if (!value) {
-    return '';
-  }
-
-  return new Date(value).toLocaleString('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
-};
-
-const historyActionLabels: Record<string, string> = {
-  'template.created': 'Created template',
-  'template.updated': 'Updated template',
-  'template.imported': 'Imported template',
-  'template.cloned': 'Copied template',
-  'template.deleted': 'Archived template',
-  'template.versioned': 'Saved template version',
-};
-
-const formatHistoryAction = (
-  action: string,
-  version?: number,
-): string => {
-  const label = historyActionLabels[action] ?? action;
-  return typeof version === 'number' ? `${label} v${version}` : label;
-};
-
-const getHistoryActorName = (
-  actor?: TemplateHistoryEvent['actor'] | TemplateHistoryVersion['actor'],
-): string => actor?.name || actor?.username || actor?.email || 'Unknown user';
-
-const isHistoryVersion = (
-  entry: TemplateHistoryEvent | TemplateHistoryVersion,
-): entry is TemplateHistoryVersion => 'version' in entry;
-
-const buildTemplateSavePayload = (
-  template: ChecklistTemplate,
-  isPublic: boolean,
-): TemplateSavePayload => ({
-  id: template.id,
-  title: template.title,
-  description: template.description,
-  type: template.type ?? 'checklist',
-  sections: template.sections,
-  isPublic,
-  seoTitle: template.seoTitle,
-  seoDescription: template.seoDescription,
-  seoUrl: template.seoUrl,
-  rules: template.rules,
-  categories: template.categories,
-  tags: template.tags,
-  slug: template.slug,
-  version: template.version,
-});
 
 const TemplateDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -170,13 +100,8 @@ const TemplateDetail = () => {
   const beginVisit = usePageVisit();
   const { user, isAuthenticated } = useAuth();
   const { activeTeamId, canEditTemplates, isTeamWorkspace, teams } = useWorkspace();
-  const {
-    createRun,
-    createTemplate,
-    deleteTemplate,
-    getTemplate,
-    updateTemplate,
-  } = useTemplateLists();
+  // No list: the model loads this template by id (docs/design-docs/d1-cost.md).
+  const { createRun, createTemplate, deleteTemplate } = useTemplates();
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -186,25 +111,25 @@ const TemplateDetail = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
-  const [visibilityOverride, setVisibilityOverride] = useState<boolean | null>(
-    null,
-  );
   const {
     billingState,
     duplicateTemplate,
+    loadError,
     loading,
     notFound,
-    recordTemplateSave,
-    reloadTemplate,
+    permissions,
+    refetchBilling,
+    reload,
     saveTemplate,
+    setVisibility,
     shareTemplate,
     startRun,
     template,
     history,
   } = useTemplateDetailModel({
+    canEditTemplates,
     createRun,
     createTemplate,
-    getCachedTemplate: getTemplate,
     identifier: id,
     isAuthenticated,
     mode: 'private',
@@ -213,39 +138,36 @@ const TemplateDetail = () => {
     username: user?.username,
   });
   const displayTemplate = template;
-  const metrics = (displayTemplate as (ChecklistTemplate & TemplateMetrics) | null) ?? null;
-  const isOwner = user?.id === displayTemplate?.userId;
-  const isActiveTeamTemplate =
-    Boolean(activeTeamId) && displayTemplate?.teamId === activeTeamId;
-  const canEditTemplate = isOwner || (isActiveTeamTemplate && canEditTemplates);
-  const canViewTemplateHistory = isOwner || isActiveTeamTemplate;
+  // Organization Templates follow the viewer's role, never who created them.
+  const { canEdit: canEditTemplate, canViewHistory: canViewTemplateHistory } = permissions;
+  const copyButton = getCopyTemplateButton({
+    billingState,
+    canEditTemplates,
+    isCloning: isCloningTemplate,
+    isTeamWorkspace,
+    template: displayTemplate,
+  });
   // Runs and copies of another Organization's private template go to that Organization.
   const otherDestination = displayTemplate ? nameOtherTemplateDestination(displayTemplate, activeTeamId, teams) : undefined;
-  const isPublic = visibilityOverride ?? displayTemplate?.isPublic ?? false;
+  // The model's template is the only source: Share and the switch both keep it current.
+  const isPublic = displayTemplate?.isPublic ?? false;
+  // Share and a visibility change must not race on the same template version.
+  const isChangingVisibility = isCreatingShare || isUpdatingVisibility;
   const totalTasks = displayTemplate?.sections.reduce(
     (count, section) => count + section.items.length,
     0,
   ) ?? 0;
-  const createdDate = formatDate(displayTemplate?.createdAt);
-  const updatedDate = formatDate(displayTemplate?.updatedAt ?? displayTemplate?.createdAt);
-  const historyEntries = (
-    history?.data?.versions.length
-      ? history.data.versions
-      : history?.data?.events ?? []
-  ).slice(0, 8);
+  // Parsed as database timestamps (UTC when zoneless); unreadable ones show nothing.
+  const createdDate = formatLocalDate(displayTemplate?.createdAt);
+  const updatedDate = formatLocalDate(displayTemplate?.updatedAt ?? displayTemplate?.createdAt);
+  // Versions and the events no version records (archive, restore, Share), newest first.
+  const historyEntries = buildTemplateHistoryTimeline(history?.data);
 
-  useEffect(() => {
-    setVisibilityOverride(null);
-  }, [displayTemplate?.id]);
-
-  const handleUpgradeRequired = async () => {
-    if (isTeamWorkspace) {
-      toast.error('This Organization needs a paid plan before using this feature.');
-      return;
-    }
-
-    await startBillingCheckout(billingState.billingEnabled);
-  };
+  const handleUpgrade = () =>
+    handleUpgradeRequiredForContext({
+      billingEnabled: billingState.billingEnabled,
+      isTeamWorkspace,
+    });
 
   const goToLogin = () => navigateToLoginWithReturnPath(navigate, location);
 
@@ -260,7 +182,7 @@ const TemplateDetail = () => {
       }
       await followTemplateActionResult(result, visit, {
         loginRequired: goToLogin,
-        upgradeRequired: handleUpgradeRequired,
+        upgradeRequired: handleUpgrade,
         succeeded: ({ runId }) => {
           if (runId) {
             toast.success(getRunStartedMessage(otherDestination));
@@ -283,7 +205,7 @@ const TemplateDetail = () => {
     try {
       await followTemplateActionResult(await shareTemplate(), visit, {
         loginRequired: goToLogin,
-        upgradeRequired: handleUpgradeRequired,
+        upgradeRequired: handleUpgrade,
         succeeded: (result) => {
           if (!result.shareUrl) {
             toast.error('Failed to create a share link for this template.');
@@ -321,12 +243,14 @@ const TemplateDetail = () => {
       const result = canEditTemplate ? await duplicateTemplate() : await saveTemplate();
       await followTemplateActionResult(result, visit, {
         loginRequired: goToLogin,
-        upgradeRequired: handleUpgradeRequired,
+        upgradeRequired: handleUpgrade,
         succeeded: ({ templateId }) => {
           toast.success(
             canEditTemplate
               ? getTemplateDuplicatedMessage(otherDestination)
-              : 'Template copied to your account',
+              : isTeamWorkspace
+                ? 'Template copied to this Organization'
+                : 'Template copied to your account',
           );
           navigate(
             templateId ? buildConsoleTemplatePath(templateId) : buildConsoleTemplatesPath(),
@@ -338,44 +262,49 @@ const TemplateDetail = () => {
     }
   };
 
-  const handleExport = () => {
-    if (!displayTemplate) {
-      return;
+  const handleExport = async () => {
+    const result = exportTemplateFile({
+      billingState,
+      template: displayTemplate,
+    });
+    if (billingState.isError) {
+      refetchBilling();
     }
 
-    const blob = new Blob([JSON.stringify(displayTemplate, null, 2)], {
-      type: 'application/json',
-    });
-    const url = window.URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${displayTemplate.slug ?? displayTemplate.id}.json`;
-    anchor.click();
-    window.URL.revokeObjectURL(url);
-    toast.success('Template exported as JSON');
+    if (result.kind === 'upgrade_required') {
+      await handleUpgrade();
+    } else if (result.kind === 'error') {
+      toast.error(result.message);
+    } else {
+      toast.success('Template exported as JSON');
+      if (result.assetWarnings > 0) {
+        toast.warning('Uploaded files are not included in JSON exports.');
+      }
+    }
   };
 
   const handleTogglePublic = async (nextIsPublic: boolean) => {
-    if (!displayTemplate || !canEditTemplate) {
+    if (!displayTemplate || !canEditTemplate || isChangingVisibility) {
       return;
     }
 
     setIsUpdatingVisibility(true);
     try {
-      const saved = await updateTemplate(buildTemplateSavePayload(displayTemplate, nextIsPublic));
-      recordTemplateSave({ isPublic: nextIsPublic }, saved);
-      setVisibilityOverride(nextIsPublic);
-      toast.success(
-        nextIsPublic ? 'Template is now public' : 'Template is now private',
-      );
-    } catch (error) {
-      // A stale version: reload before re-enabling the switch, so the next toggle is built
-      // on the stored template instead of repeating the 409.
-      if (isStaleRecordError(error)) {
-        setVisibilityOverride(null);
-        await reloadTemplate();
+      const result = await setVisibility(nextIsPublic);
+
+      if (result.kind === 'login_required') {
+        navigateToLoginWithReturnPath(navigate, location);
+      } else if (result.kind === 'ok') {
+        toast.success(
+          nextIsPublic ? 'Template is now public' : 'Template is now private',
+        );
+      } else {
+        toast.error(
+          result.kind === 'error'
+            ? result.message
+            : 'Failed to update template visibility',
+        );
       }
-      toast.error(getTemplateChangeErrorMessage(error, 'Failed to update template visibility'));
     } finally {
       setIsUpdatingVisibility(false);
     }
@@ -408,6 +337,26 @@ const TemplateDetail = () => {
       <DashboardContentShell>
         <DashboardScrollArea className="flex items-center justify-center">
           <LoadingSpinner message="Loading template..." />
+        </DashboardScrollArea>
+      </DashboardContentShell>
+    );
+  }
+
+  // A failed request is not a missing template: say so and let the user retry.
+  if (loadError && !displayTemplate) {
+    return (
+      <DashboardContentShell>
+        <DashboardScrollArea className="flex items-center justify-center">
+          <Card className="p-8 text-center">
+            <h2 className="mb-4 text-3xl font-bold">Unable to load template</h2>
+            <p className="mb-6 text-muted-foreground">{loadError}</p>
+            <div className="flex justify-center gap-2">
+              <Button onClick={reload}>Try again</Button>
+              <Button asChild variant="outline">
+                <Link to={buildConsoleTemplatesPath()}>Back to Templates</Link>
+              </Button>
+            </div>
+          </Card>
         </DashboardScrollArea>
       </DashboardContentShell>
     );
@@ -466,49 +415,46 @@ const TemplateDetail = () => {
 
       {canEditTemplate ? (
         <>
-          {isOwner ? (
+          {permissions.canShare ? (
             <Button
               variant="outline"
               size="sm"
               onClick={handleShare}
-              disabled={isCreatingShare}
+              disabled={isChangingVisibility}
               className="border-border"
             >
               <Share2 className="mr-2 h-4 w-4" />
               {isCreatingShare ? 'Creating...' : 'Share'}
             </Button>
           ) : null}
+          {/* The loaded id, never the route param: this page also opens by slug, the editor only by id. */}
           <Button asChild variant="outline" size="sm" className="border-border">
-            <Link to={buildConsoleTemplateEditPath(id ?? displayTemplate.id)}>
+            <Link to={buildConsoleTemplateEditPath(displayTemplate.id)}>
               <Pencil className="mr-2 h-4 w-4" />
               Edit
             </Link>
           </Button>
         </>
       ) : user ? (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleCloneTemplate}
-          disabled={isCloningTemplate || billingState.isLoading}
-          className="border-border"
-        >
-          <Copy className="mr-2 h-4 w-4" />
-          {isCloningTemplate
-            ? 'Copying...'
-            : billingState.isLoading
-              ? 'Checking plan...'
-              : !billingState.isPro
-                ? 'Upgrade to copy template'
-                : 'Copy to My Templates'}
-        </Button>
-      ) : (
+        copyButton.visible ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCloneTemplate}
+            disabled={copyButton.disabled}
+            className="border-border"
+          >
+            <Copy className="mr-2 h-4 w-4" />
+            {copyButton.label}
+          </Button>
+        ) : null
+      ) : copyButton.visible ? (
         <Button asChild variant="outline" size="sm" className="border-border">
           <Link to="/login" state={{ from: location }}>
             Log in to copy template
           </Link>
         </Button>
-      )}
+      ) : null}
 
       <Button
         size="sm"
@@ -532,13 +478,15 @@ const TemplateDetail = () => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onClick={handleCloneTemplate}>
-              <Copy className="mr-2 h-4 w-4" />
-              Duplicate
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleExport}>
+            {permissions.canDuplicate ? (
+              <DropdownMenuItem onClick={handleCloneTemplate}>
+                <Copy className="mr-2 h-4 w-4" />
+                Duplicate
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem onClick={handleExport} disabled={billingState.isLoading}>
               <Download className="mr-2 h-4 w-4" />
-              Export JSON
+              {getTemplateExportLabel(billingState)}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -568,7 +516,7 @@ const TemplateDetail = () => {
       />
       <DashboardScrollArea>
         <div className="mx-auto max-w-6xl space-y-8">
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2">
           <Card className="border-border bg-card">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -589,45 +537,13 @@ const TemplateDetail = () => {
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <Eye className="h-5 w-5 text-foreground" />
+                  <Layers className="h-5 w-5 text-foreground" />
                 </div>
                 <div>
                   <p className="text-2xl font-semibold text-foreground">
-                    {metrics?.viewCount?.toLocaleString() ?? '0'}
+                    {displayTemplate.sections.length}
                   </p>
-                  <p className="text-xs text-muted-foreground">Views</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border bg-card">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <Copy className="h-5 w-5 text-foreground" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold text-foreground">
-                    {metrics?.copyCount?.toLocaleString() ?? '0'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Copies</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border bg-card">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <BarChart3 className="h-5 w-5 text-foreground" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold text-foreground">
-                    {metrics?.runCount?.toLocaleString() ?? '0'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Runs</p>
+                  <p className="text-xs text-muted-foreground">Sections</p>
                 </div>
               </div>
             </CardContent>
@@ -718,7 +634,7 @@ const TemplateDetail = () => {
                   <Switch
                     id="template-visibility"
                     checked={isPublic}
-                    disabled={!canEditTemplate || isUpdatingVisibility}
+                    disabled={!canEditTemplate || isChangingVisibility}
                     onCheckedChange={handleTogglePublic}
                   />
                   <Label
@@ -801,30 +717,24 @@ const TemplateDetail = () => {
                   </p>
                 ) : historyEntries.length > 0 ? (
                   <div className="divide-y divide-border">
-                    {historyEntries.map((entry) => {
-                      const version = isHistoryVersion(entry)
-                        ? entry.version
-                        : undefined;
-
-                      return (
-                        <div
-                          key={`${isHistoryVersion(entry) ? 'version' : 'event'}-${entry.id}`}
-                          className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-foreground">
-                              {formatHistoryAction(entry.action, version)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {getHistoryActorName(entry.actor)}
-                            </p>
-                          </div>
-                          <time className="text-xs text-muted-foreground">
-                            {formatDateTime(entry.createdAt)}
-                          </time>
+                    {historyEntries.map((entry) => (
+                      <div
+                        key={entry.key}
+                        className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {entry.label}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {entry.actorName}
+                          </p>
                         </div>
-                      );
-                    })}
+                        <time className="text-xs text-muted-foreground">
+                          {formatLocalDateTime(entry.createdAt)}
+                        </time>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">

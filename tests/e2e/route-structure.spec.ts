@@ -210,4 +210,52 @@ test.describe('route structure', () => {
       'noindex, nofollow',
     );
   });
+
+  test('missing public profiles and templates render noindex,nofollow', async ({
+    page,
+  }) => {
+    await page.route('**/api/profiles/by-username**', (route) =>
+      fulfillJson(route, { error: 'Profile not found' }, 404),
+    );
+    await page.route('**/api/templates/slug/**', (route) =>
+      fulfillJson(route, { error: 'Template not found' }, 404),
+    );
+
+    await page.goto('/profile/no-such-user-route-structure');
+    await expect(
+      page.getByRole('heading', { name: 'User not found' }),
+    ).toBeVisible();
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+      'content',
+      'noindex, nofollow',
+    );
+    await expect(page).toHaveTitle(/Profile not found/);
+
+    await page.goto('/profile/no-such-user-route-structure/no-such-template');
+    await expect(
+      page.getByRole('heading', { name: 'Template not found' }),
+    ).toBeVisible();
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+      'content',
+      'noindex, nofollow',
+    );
+    await expect(page).toHaveTitle(/Template not found/);
+  });
+
+  test('a public template that fails to load stays indexable', async ({
+    page,
+  }) => {
+    await page.route('**/api/templates/slug/**', (route) =>
+      fulfillJson(route, { error: 'Service unavailable' }, 503),
+    );
+
+    await page.goto('/profile/route-structure-owner/some-template');
+    await expect(
+      page.getByRole('heading', { name: 'Unable to load template' }),
+    ).toBeVisible();
+    await expect(page.locator('meta[name="robots"]')).not.toHaveAttribute(
+      'content',
+      /noindex/,
+    );
+  });
 });

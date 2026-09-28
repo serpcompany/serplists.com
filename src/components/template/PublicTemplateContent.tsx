@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
+  File,
   Link2,
   ListTodo,
 } from 'lucide-react';
@@ -105,6 +106,35 @@ export function PublicTemplateContent({
         ) : null;
       }
 
+      case 'file': {
+        if (!content.value.trim()) {
+          return null;
+        }
+        const href = safeUrl(content.value);
+        const fileLabel = content.fileName || 'File';
+        return (
+          <div className="mt-3 border-l-2 border-border/70 pl-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <File className="h-4 w-4" />
+              <span className="font-medium text-foreground">{fileLabel}</span>
+              {href ? (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Download ${content.fileName || 'file'}`}
+                  className="text-primary underline-offset-4 hover:underline"
+                >
+                  Download File
+                </a>
+              ) : (
+                <span className="text-muted-foreground">Invalid link</span>
+              )}
+            </div>
+          </div>
+        );
+      }
+
       case 'subItems':
         return content.subItems?.length ? (
           <div className="mt-4 space-y-2 border-l-2 border-border/70 pl-4">
@@ -124,8 +154,12 @@ export function PublicTemplateContent({
           </div>
         ) : null;
 
-      default:
+      default: {
+        // A new content type fails type-checking here until the preview renders it.
+        const unhandledType: never = content.type;
+        void unhandledType;
         return null;
+      }
     }
   };
 

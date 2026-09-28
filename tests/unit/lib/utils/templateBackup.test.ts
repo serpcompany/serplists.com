@@ -6,7 +6,9 @@ import {
   parseTemplatesFromFile,
   parseTemplatesFromJSON,
   generateUniqueIds,
-  prepareTemplatesForImport
+  prepareTemplatesForImport,
+  countImportPublicTemplates,
+  resolveImportIsPublic,
 } from '@/lib/utils/templateBackup';
 import { ChecklistTemplate, TemplateBackup } from '@/lib/schemas/checklistSchema';
 import { renderTemplateMarkdown } from '@/lib/templates/templateMarkdown';
@@ -287,7 +289,9 @@ describe('Template Backup Utilities', () => {
         type: 'application/json'
       });
       
-      await expect(parseTemplatesFromJSON(file)).rejects.toThrow('Template validation failed');
+      await expect(parseTemplatesFromJSON(file)).rejects.toThrow(
+        'Template validation failed: Template 1 > title: Required',
+      );
     });
   });
 
@@ -353,6 +357,57 @@ describe('Template Backup Utilities', () => {
       const item = result.templates[0].sections[0].items[0];
       expect(item.description).toBe('Do X');
       expect(item.contents?.map((content) => content.value)).toEqual([value]);
+    });
+
+    describe('readable validation errors', () => {
+      const expectReadableRejection = async (file: File, pathPattern: RegExp) => {
+        const error = await parseTemplatesFromFile(file).then(
+          () => { throw new Error('expected the file to be rejected'); },
+          (reason: Error) => reason,
+        );
+        expect(error.message).toMatch(/^Template validation failed: /);
+        expect(error.message).toMatch(pathPattern);
+        expect(error.message).not.toMatch(/"code"\s*:/);
+        expect(error.message).not.toMatch(/"path"/);
+        expect(error.message).not.toMatch(/:\s*\[/);
+        expect(error.message).not.toContain('\n');
+      };
+
+      it('names the section for a YAML template with a blank section title', async () => {
+        const source = ['title: YAML Template', 'sections:', '  - title: ""', '    items:', '      - title: Task'].join('\n');
+
+        await expectReadableRejection(
+          new File([source], 'template.yaml', { type: 'application/x-yaml' }),
+          /Section 1 > title: String must contain at least 1 character/,
+        );
+      });
+
+      it('names the field for a Markdown template with no title', async () => {
+        const markdown = ['---', 'visibility: private', '---', '## Prep', '', '### Task'].join('\n');
+
+        await expectReadableRejection(new File([markdown], 'template.md', { type: 'text/markdown' }), /title: String must contain/);
+      });
+
+      it('names the item for a portable JSON pack with a blank item title', async () => {
+        const pack = {
+          kind: 'serplists-template-pack',
+          schemaVersion: '2.0.0',
+          exportedAt: '2026-03-22T00:00:00.000Z',
+          templates: [{ title: 'Pack Template', sections: [{ title: 'Prep', items: [{ title: '' }] }] }],
+        };
+
+        await expectReadableRejection(
+          new File([JSON.stringify(pack)], 'pack.json', { type: 'application/json' }),
+          /Template 1 > Section 1 > Item 1 > title: String must contain at least 1 character/,
+        );
+      });
+
+      it('names the template for a JSON array entry with no title', async () => {
+        await expectReadableRejection(
+          new File([JSON.stringify([{ sections: [] }])], 'templates.json', { type: 'application/json' }),
+          /Template 1 > title: Required/,
+        );
+      });
     });
 
     it('should parse single-template YAML files', async () => {
@@ -636,6 +691,44 @@ describe('Template Backup Utilities', () => {
       expect(result[0].seoTitle).toBe('SEO Title');
       expect(result[0].seoDescription).toBe('SEO Description');
       expect(result[0].rules).toHaveLength(1);
+    });
+  });
+
+  describe('import visibility', () => {
+    const visibilities = ['preserve', 'public', 'private'] as const;
+
+    it.each([
+      [true, 'preserve', true],
+      [false, 'preserve', false],
+      [undefined, 'preserve', false],
+      [true, 'public', true],
+      [false, 'public', true],
+      [undefined, 'public', true],
+      [true, 'private', false],
+      [false, 'private', false],
+      [undefined, 'private', false],
+    ] as const)('isPublic %s with %s visibility is public: %s', (isPublic, visibility, expected) => {
+      expect(resolveImportIsPublic(isPublic, visibility)).toBe(expected);
+    });
+
+    it('counts the public templates the import will create for each visibility', () => {
+      const templates = [
+        createMockTemplate({ id: 'a', isPublic: true }),
+        createMockTemplate({ id: 'b', isPublic: true }),
+        createMockTemplate({ id: 'c', isPublic: false }),
+      ];
+
+      expect(countImportPublicTemplates(templates, 'preserve')).toBe(2);
+      expect(countImportPublicTemplates(templates, 'public')).toBe(3);
+      expect(countImportPublicTemplates(templates, 'private')).toBe(0);
+      expect(countImportPublicTemplates([], 'public')).toBe(0);
+
+      for (const visibility of visibilities) {
+        const prepared = prepareTemplatesForImport(templates, 'user-1', { visibility });
+        expect(prepared.filter((template) => template.isPublic)).toHaveLength(
+          countImportPublicTemplates(templates, visibility),
+        );
+      }
     });
   });
 

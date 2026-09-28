@@ -7,35 +7,31 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, Upload, FileText, AlertCircle, CheckCircle } from "lucide-react";
+import { Download, FileText, AlertCircle, CheckCircle } from "lucide-react";
 import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { toast } from "sonner";
 import { downloadBackupFile, exportPortableTemplatesToJSON, parseTemplatesFromFile } from "@/lib/utils/templateBackup";
-import type { TemplateImportResult } from "@/lib/utils/templateBackup";
-import type { ChecklistTemplate, TemplateImportOptions, TemplateImportSummary } from "@/types/checklist";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import type { ImportVisibility } from "@/lib/utils/templateBackup";
+import type { ChecklistTemplate, TemplateImportSummary } from "@/types/checklist";
+import { exportTemplatePack } from "@/features/template-backup/exportTemplatePack";
+import { selectImportFile } from "@/features/template-backup/importFileSelection";
+import type { ImportPreview } from "@/features/template-backup/importFileSelection";
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
 import { getAccessFailure } from "@/lib/api-errors";
-import { getBillingStatusQueryKey } from "@/lib/billing";
+import { useBillingStatus } from "@/hooks/useBillingStatus";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import { cn } from "@/lib/utils";
-import {
-  countOversizedTemplateAssets,
-  formatAssetSizeLimit,
-  TEMPLATE_IMPORT_MAX_ASSET_BYTES,
-} from "@/lib/schemas/templateAssetLimits";
+import { countOversizedTemplateAssets } from "@/lib/schemas/templateAssetLimits";
+import { ORGANIZATION_BACKUP_UPGRADE_MESSAGE, TemplateBackupPlanNotice } from "@/components/TemplateBackupPlanNotice";
+import { TemplateImportPreview } from "@/components/TemplateImportPreview";
 
 interface TemplateBackupProps {
   className?: string;
 }
 
 const MAX_TEMPLATES_PER_IMPORT = 5;
-const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024; // 2MB
-const SUPPORTED_IMPORT_EXTENSIONS = [".json", ".md", ".markdown", ".yaml", ".yml"];
-
-const ASSET_LIMIT = formatAssetSizeLimit(TEMPLATE_IMPORT_MAX_ASSET_BYTES);
 
 // The same check the API applies per template; it only warns here.
 const countOversizedAssets = (templates: ChecklistTemplate[]): number =>
@@ -44,13 +40,12 @@ const countOversizedAssets = (templates: ChecklistTemplate[]): number =>
 export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   className
 }) => {
-  type ImportVisibility = NonNullable<TemplateImportOptions["visibility"]>;
+  // The export is built on the server, so this page never loads the public catalog.
   const {
     allTemplates,
-    templates,
-    templatesError,
-    importTemplates
-  } = useTemplateLists({ catalog: true });
+    importTemplates,
+    templatesLoading,
+  } = useTemplateLists();
   const {
     user
   } = useAuth();
@@ -60,18 +55,22 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     canEditTemplates,
     isTeamWorkspace,
   } = useWorkspace();
-  const billing = useQuery({
-    queryKey: getBillingStatusQueryKey(user?.id, activeTeamId),
-    queryFn: () => api.getBillingStatus(activeTeamId ? { teamId: activeTeamId } : undefined),
-    enabled: !!user,
-    retry: false
-  });
-  const plan = billing.data?.plan ?? "free";
-  const billingEnabled = billing.data?.billingEnabled ?? true;
-  const hasBackupAccess = plan === "pro" || plan === "team";
+  const billing = useBillingStatus({ enabled: !!user, teamId: activeTeamId, userId: user?.id });
+  const billingEnabled = billing.status === "known" ? billing.billingEnabled : true;
+  // Only a plan the server reported as Free is gated here. When the status check
+  // failed, actions go through and the server's 403 upgrade_required decides.
+  const isKnownFreePlan = billing.status === "known" && !billing.isPaid;
+  const hasBackupAccess = billing.status === "error" || (billing.status === "known" && billing.isPaid);
   const workspaceTemplateLabel = isTeamWorkspace ? "Organization Templates" : "My Templates";
+  // Until the list loads, the context may not be restored yet (an Organization reads as
+  // Personal while it loads), so export and import wait and the counts show a dash.
+  const backupControlsOff = !user || templatesLoading || !hasBackupAccess || !canEditTemplates;
+  const formatCount = (count: number) => (templatesLoading ? "–" : count);
+  // One export at a time: a second click would scan every Template again and download a copy.
+  const exportFlight = useSingleFlight();
+  const isExporting = exportFlight.isRunning;
   const [isImporting, setIsImporting] = useState(false);
-  const [importPreview, setImportPreview] = useState<TemplateImportResult | null>(null);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [lastImportSummary, setLastImportSummary] = useState<TemplateImportSummary | null>(null);
   const [includePublicTemplates, setIncludePublicTemplates] = useState(false);
   const [importVisibility, setImportVisibility] = useState<ImportVisibility>("preserve");
@@ -81,16 +80,12 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     : user
       ? allTemplates.filter(t => t.userId === user.id && !t.teamId)
       : [];
-  const communityTemplates = templates.filter(t => t.isPublic && t.userId !== user?.id);
-  const templatesToExport = includePublicTemplates
-    ? [...ownedTemplates, ...communityTemplates]
-    : ownedTemplates;
   const importOversizeAssets = importPreview ? countOversizedAssets(importPreview.templates) : 0;
   const exceedsTemplateLimit = importPreview ? importPreview.templates.length > MAX_TEMPLATES_PER_IMPORT : false;
 
   const handleUpgrade = async () => {
     if (isTeamWorkspace) {
-      toast.error("Template import/export requires a paid Organization plan.");
+      toast.error(ORGANIZATION_BACKUP_UPGRADE_MESSAGE);
       return;
     }
     await startBillingCheckout(billingEnabled);
@@ -101,7 +96,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       const failure = getAccessFailure(error, fallbackMessage);
       toast.error(
         failure.kind === "upgrade_required"
-          ? "Template import/export requires a paid Organization plan."
+          ? ORGANIZATION_BACKUP_UPGRADE_MESSAGE
           : failure.message,
       );
       return;
@@ -113,7 +108,8 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     });
   };
 
-  const handleExportAll = async () => {
+  const exportAll = async () => {
+    if (templatesLoading) return;
     if (!user) {
       toast.error("Log in to export your templates");
       return;
@@ -124,58 +120,41 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       return;
     }
 
-    if (!hasBackupAccess) {
+    if (isKnownFreePlan) {
       await handleUpgrade();
       return;
     }
 
-    // The export reads templates on the server, so only trust an empty list that loaded.
-    if (templatesToExport.length === 0 && !templatesError) {
-      toast.error("No templates available to export");
-      return;
-    }
-
     try {
-      const backup = await api.exportTemplateBackup({
-        includePublic: includePublicTemplates,
-        teamId: activeTeamId,
-      });
-      downloadBackupFile(backup);
-      const count = Array.isArray((backup as { templates?: unknown }).templates) ? (backup as {
-        templates: unknown[];
-      }).templates.length : 0;
-      toast.success(`Exported ${count} templates successfully`);
+      const result = await exportTemplatePack(
+        { includePublic: includePublicTemplates, teamId: activeTeamId },
+        { download: (pack) => downloadBackupFile(pack) },
+      );
+      if (result.kind === "empty") {
+        toast.error("No templates available to export");
+        return;
+      }
+      toast.success(`Exported ${result.count} templates successfully`);
     } catch (error) {
       console.error("Export error:", error);
       await handleBackupFailure(error, "Failed to export templates");
     }
   };
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const lowerName = file.name.toLowerCase();
-    const isSupported = SUPPORTED_IMPORT_EXTENSIONS.some((extension) => lowerName.endsWith(extension));
-    if (!isSupported) {
-      toast.error("Please select a JSON, Markdown, or YAML template file");
-      return;
-    }
-    if (file.size > MAX_IMPORT_FILE_BYTES) {
-      toast.error("Import file too large (max 2MB)");
-      return;
-    }
-    setLastImportSummary(null);
-    setIsImporting(true);
-    try {
-      const parsedTemplates = await parseTemplatesFromFile(file);
-      setImportPreview(parsedTemplates);
-      toast.success(`Preview: ${parsedTemplates.templates.length} templates ready to import`);
-    } catch (error) {
-      toast.error(`Failed to parse file: ${(error as Error).message}`);
-      setImportPreview(null);
-    } finally {
-      setIsImporting(false);
-    }
-  };
+  const handleExportAll = () => void exportFlight.run(exportAll);
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) =>
+    selectImportFile(event.currentTarget, {
+      onError: (message) => toast.error(message),
+      onPreview: (result, fileName) => {
+        setImportPreview({ ...result, fileName });
+        toast.success(`Preview: ${result.templates.length} templates ready to import`);
+      },
+      parse: parseTemplatesFromFile,
+      resetPreview: () => {
+        setImportPreview(null);
+        setLastImportSummary(null);
+      },
+      setBusy: setIsImporting,
+    });
   const handleConfirmImport = async () => {
     if (!importPreview || !user) return;
 
@@ -184,7 +163,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       return;
     }
 
-    if (!hasBackupAccess) {
+    if (isKnownFreePlan) {
       await handleUpgrade();
       return;
     }
@@ -213,20 +192,13 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
         toast.success(`Successfully imported ${result.imported}/${result.total} templates`);
       }
       setImportPreview(null);
-      // Reset file input
-      const fileInput = document.getElementById('template-file-input') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
     } catch (error) {
       await handleBackupFailure(error, "Failed to import templates");
     } finally {
       setIsImporting(false);
     }
   };
-  const handleCancelImport = () => {
-    setImportPreview(null);
-    const fileInput = document.getElementById('template-file-input') as HTMLInputElement;
-    if (fileInput) fileInput.value = '';
-  };
+  const handleCancelImport = () => setImportPreview(null);
   const downloadSampleTemplate = () => {
     const sampleTemplate: ChecklistTemplate = {
       id: "sample-template-001",
@@ -368,27 +340,13 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     </div>
 
     <div className="mt-6 space-y-6">
-          {user && !billing.isLoading && !hasBackupAccess ? (
-            <div className="rounded-lg border p-4 bg-muted/50">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div className="space-y-1">
-                  <div className="font-medium">{isTeamWorkspace ? "Paid Organization feature" : "Pro feature"}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {isTeamWorkspace
-                      ? "Template import/export requires a paid Organization plan."
-                      : billingEnabled
-                        ? "Template import/export is available on Pro."
-                        : "Billing is temporarily unavailable. Please contact support."}
-                  </div>
-                  {!isTeamWorkspace ? (
-                    <Button className="mt-2" onClick={handleUpgrade} disabled={!billingEnabled}>
-                      {billingEnabled ? "Upgrade to Pro" : "Upgrade unavailable"}
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            </div>
+          {user ? (
+            <TemplateBackupPlanNotice
+              billing={billing}
+              isTeamWorkspace={isTeamWorkspace}
+              onRetry={billing.refetch}
+              onUpgrade={() => void handleUpgrade()}
+            />
           ) : null}
 
           {user && isTeamWorkspace && !canEditTemplates ? (
@@ -406,17 +364,17 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
           ) : null}
 
           {/* Current Templates Stats */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-4" aria-busy={templatesLoading}>
             <div className="text-center">
-              <div className="text-2xl font-bold">{ownedTemplates.length}</div>
+              <div className="text-2xl font-bold">{formatCount(ownedTemplates.length)}</div>
               <div className="text-sm text-muted-foreground">{workspaceTemplateLabel}</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{publicTemplateCount}</div>
+              <div className="text-2xl font-bold text-green-600">{formatCount(publicTemplateCount)}</div>
               <div className="text-sm text-muted-foreground">Public</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{privateTemplateCount}</div>
+              <div className="text-2xl font-bold text-blue-600">{formatCount(privateTemplateCount)}</div>
               <div className="text-sm text-muted-foreground">Private</div>
             </div>
           </div>
@@ -439,12 +397,12 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                   id="include-public-templates"
                   checked={includePublicTemplates}
                   onCheckedChange={setIncludePublicTemplates}
-                  disabled={!user || billing.isLoading || !hasBackupAccess || !canEditTemplates}
+                  disabled={backupControlsOff || isExporting}
                 />
               </div>
-	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={!user || billing.isLoading || !hasBackupAccess || !canEditTemplates}>
+	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={backupControlsOff || isExporting} aria-busy={isExporting}>
 	              <Download className="h-4 w-4" />
-	              Export Portable Pack
+	              {isExporting ? "Exporting..." : "Export Portable Pack"}
 	            </Button>
 	          </div>
 
@@ -471,7 +429,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
               </div>
 	            <div className="space-y-2">
 	              <Label htmlFor="template-file-input">Select a YAML, JSON, or Markdown template file</Label>
-	              <Input id="template-file-input" type="file" accept=".json,.md,.markdown,.yaml,.yml" onChange={handleFileSelect} disabled={isImporting || !user || billing.isLoading || !hasBackupAccess || !canEditTemplates} />
+	              <Input id="template-file-input" type="file" accept=".json,.md,.markdown,.yaml,.yml" onChange={handleFileSelect} disabled={isImporting || backupControlsOff} />
 	              <p className="text-sm text-muted-foreground">
 	                Need an example?{" "}
 	                <Button variant="link" className="p-0 h-auto text-primary" onClick={downloadSampleTemplate}>
@@ -480,105 +438,19 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 	              </p>
 	            </div>
 
-            {/* Import Preview */}
-            {importPreview && <Card className="border-dashed">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    Import Preview
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <Badge variant="secondary">{importPreview.templates.length} templates</Badge>
-                    <Badge variant="outline">
-                      {importPreview.templates.filter(t => t.isPublic).length} public
-                    </Badge>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Templates to import:</h4>
-                    <div className="max-h-40 overflow-y-auto space-y-1">
-                      {importPreview.templates.map((template, index: number) => <div key={index} className="text-sm p-2 bg-muted rounded">
-                          <div className="font-medium">{template.title}</div>
-                          {template.description && <div className="text-muted-foreground truncate">{template.description}</div>}
-                          <div className="text-xs text-muted-foreground">
-                            {template.sections.length} sections
-                          </div>
-                        </div>)}
-                    </div>
-                  </div>
-
-                  {importPreview.warnings.length > 0 && <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
-                        <div className="text-sm">
-                          <p className="font-medium text-amber-800 dark:text-amber-200">
-                            Import Warnings
-                          </p>
-                          <ul className="text-amber-700 dark:text-amber-300 mt-1 space-y-1">
-                            {importPreview.warnings.map((warning, index: number) => <li key={index}>
-                                • {warning.templateTitle}: {warning.message}
-                              </li>)}
-                          </ul>
-                        </div>
-                      </div>
-                    </div>}
-
-                  {(exceedsTemplateLimit || importOversizeAssets > 0) && <div className="bg-sky-50 dark:bg-sky-900/20 p-3 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 text-sky-600 mt-0.5" />
-                        <div className="text-sm">
-                          <p className="font-medium text-sky-800 dark:text-sky-200">
-                            Import Policy (enforced)
-                          </p>
-                          <ul className="text-sky-700 dark:text-sky-300 mt-1 space-y-1">
-                            {exceedsTemplateLimit && <li>
-                                • {importPreview.templates.length} templates selected; limit is {MAX_TEMPLATES_PER_IMPORT} per import
-                              </li>}
-                            {importOversizeAssets > 0 && <li>
-                                • {importOversizeAssets} asset{importOversizeAssets === 1 ? "" : "s"} over {ASSET_LIMIT}; templates with them will not be imported
-                              </li>}
-                          </ul>
-                        </div>
-                      </div>
-                    </div>}
-
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
-                    <div className="flex items-start gap-2">
-                      <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
-                      <div className="text-sm">
-                        <p className="font-medium text-yellow-800 dark:text-yellow-200">
-                          Import Notes:
-                        </p>
-                        <ul className="text-yellow-700 dark:text-yellow-300 mt-1 space-y-1">
-                          <li>• Templates will be assigned new unique IDs</li>
-                          <li>• Visibility follows your selection above</li>
-                          <li>• Existing templates won&apos;t be affected</li>
-                          <li>• Slugs will be regenerated to avoid conflicts</li>
-                          <li>• Uploaded assets are not copied; re-upload if needed</li>
-                          <li>• Limit: max {MAX_TEMPLATES_PER_IMPORT} templates per import (enforced)</li>
-                          <li>• Limit: assets up to {ASSET_LIMIT} each, the upload limit (checked when size is provided)</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={handleConfirmImport}
-                      disabled={isImporting || exceedsTemplateLimit}
-                      className="flex items-center gap-2"
-                    >
-                      <Upload className="h-4 w-4" />
-                      {isImporting ? "Importing..." : "Confirm Import"}
-                    </Button>
-                    <Button variant="outline" onClick={handleCancelImport}>
-                      Cancel
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>}
+            {importPreview && (
+              <TemplateImportPreview
+                confirmDisabled={isImporting || templatesLoading || exceedsTemplateLimit}
+                exceedsTemplateLimit={exceedsTemplateLimit}
+                isImporting={isImporting}
+                maxTemplatesPerImport={MAX_TEMPLATES_PER_IMPORT}
+                onCancel={handleCancelImport}
+                onConfirm={handleConfirmImport}
+                oversizedAssetCount={importOversizeAssets}
+                preview={importPreview}
+                visibility={importVisibility}
+              />
+            )}
 
             {lastImportSummary && <Card className="border-dashed">
                 <CardHeader className="pb-3">

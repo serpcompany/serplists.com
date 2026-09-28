@@ -119,3 +119,56 @@ test('saves a template twice from the editor without loading a template list', a
     await fetch(`${apiBaseUrl}/templates/${id}`, { credentials: 'include', method: 'DELETE' });
   }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
 });
+
+test('opens a template detail page with one request for that template and no list', async ({ page }) => {
+  await loginAsAdmin(page);
+  const templateId = await page.evaluate(async ({ apiBaseUrl, templateTitle }) => {
+    const response = await fetch(`${apiBaseUrl}/templates`, {
+      body: JSON.stringify({
+        title: templateTitle,
+        is_public: false,
+        sections: [{ id: 'detail-section', title: 'Section', items: [{ id: 'detail-item', title: 'Task' }] }],
+      }),
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
+    return ((await response.json()) as { id: string }).id;
+  }, { apiBaseUrl: DEV_API_BASE_URL, templateTitle: `Detail Load QA ${Date.now()}` });
+
+  const templateRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (request.method() === 'GET' && url.pathname.startsWith('/api/templates')) {
+      templateRequests.push(`${url.pathname}${url.search}`);
+    }
+  });
+  const isList = (path: string) => path === '/api/templates' || path.startsWith('/api/templates?');
+
+  try {
+    await page.goto(`/dashboard/templates/${templateId}`);
+    const visibilitySwitch = page.getByRole('switch');
+    await expect(visibilitySwitch).toHaveAttribute('aria-checked', 'false');
+
+    expect(templateRequests.filter(isList)).toEqual([]);
+    expect(templateRequests.filter((path) => path === `/api/templates/${templateId}`)).toHaveLength(1);
+
+    // Each change refetches the one template, so the next change is accepted too.
+    for (const [nextChecked, message] of [['true', 'Template is now public'], ['false', 'Template is now private']] as const) {
+      const saved = page.waitForResponse(
+        (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === 'PUT',
+      );
+      await visibilitySwitch.click();
+      expect((await saved).status()).toBe(200);
+      await expect(page.getByText(message)).toBeVisible();
+      await expect(visibilitySwitch).toHaveAttribute('aria-checked', nextChecked);
+    }
+
+    expect(templateRequests.filter(isList)).toEqual([]);
+  } finally {
+    await page.evaluate(async ({ id, apiBaseUrl }) => {
+      await fetch(`${apiBaseUrl}/templates/${id}`, { credentials: 'include', method: 'DELETE' });
+    }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
+  }
+});

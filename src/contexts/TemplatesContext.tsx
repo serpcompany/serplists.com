@@ -415,7 +415,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   // Helpers and the context value keep their identity until the data they read changes, so
-  // consumers do not re-render (or reload, see templateDetailLoader) on unrelated renders.
+  // consumers do not re-render on unrelated renders.
   const getTemplate = useCallback((id: string) => allTemplates.find((template) => template.id === id), [allTemplates]);
   const getTemplateBySlug = useCallback((slug: string) => allTemplates.find((template) => template.slug === slug), [allTemplates]);
   const getRun = useCallback((id: string) => runs.find((run) => run.id === id), [runs]);

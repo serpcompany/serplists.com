@@ -23,28 +23,66 @@ import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistItem, ChecklistSection, ChecklistTemplate } from '@/types/checklist';
 
+import { getPublicTemplateSaveLabels } from './publicTemplateSaveLabels';
+
 interface PublicTemplateViewProps {
   template: ChecklistTemplate;
   totalItems: number;
   ownerSlug: string | null;
   ownerPath: string | null;
   isAuthenticated: boolean;
+  // Save adds a Template and Start Run adds a Run to the active context, so in an
+  // Organization they follow the viewer's Organization Role (always true in Personal).
+  canSaveTemplate: boolean;
+  canStartRun: boolean;
+  // The plan check failed: no plan is known, so nothing reads as an upgrade.
+  isBillingError: boolean;
   isBillingLoading: boolean;
   isProUser: boolean;
   isCreatingRun: boolean;
   isSaving: boolean;
+  // Save copies into the active context; only Personal copying needs a Pro plan.
+  isTeamWorkspace: boolean;
+  // Save and Start Run wait until the active ownership context is known.
+  isWorkspaceLoading: boolean;
   onStartRun: () => void;
-  onSaveTemplate: () => void;
+  // Resolves true only when the template was saved.
+  onSaveTemplate: () => Promise<boolean>;
 }
 
 const getInitials = (value: string) => value.match(/[A-Za-z0-9]/)?.[0]?.toUpperCase() ?? 'U';
+
+// The call to action says why an action is missing instead of leaving a silent gap.
+const getCallToActionText = (canSaveTemplate: boolean, canStartRun: boolean): string => {
+  if (canSaveTemplate && canStartRun) {
+    return 'Start a run to work through this checklist, or save it to your library for later.';
+  }
+
+  if (canStartRun) {
+    return 'Start a run to work through this checklist. Your role in this Organization cannot add Templates.';
+  }
+
+  if (canSaveTemplate) {
+    return 'Save it to your library for later. Your role in this Organization cannot start runs.';
+  }
+
+  return 'Your role in this Organization can view Templates only, so it cannot copy this one or start a run.';
+};
 
 export function PublicTemplateView({
   template,
   totalItems,
   ownerPath,
+  isAuthenticated,
+  canSaveTemplate,
+  canStartRun,
+  isBillingError,
+  isBillingLoading,
+  isProUser,
   isCreatingRun,
   isSaving,
+  isTeamWorkspace,
+  isWorkspaceLoading,
   onStartRun,
   onSaveTemplate,
 }: PublicTemplateViewProps) {
@@ -77,9 +115,21 @@ export function PublicTemplateView({
   };
 
   const handleSave = async () => {
-    await Promise.resolve(onSaveTemplate());
-    setIsSaved(true);
+    const saved = await onSaveTemplate().catch(() => false);
+    if (saved) {
+      setIsSaved(true);
+    }
   };
+  // Signed-out visitors are never loading a plan, so they can still click Save to sign in.
+  const isSaveDisabled = isSaving || isBillingLoading || isWorkspaceLoading;
+  const saveLabels = getPublicTemplateSaveLabels({
+    isAuthenticated,
+    isBillingError,
+    isBillingLoading,
+    isProUser,
+    isSaving,
+    isTeamWorkspace,
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -103,30 +153,40 @@ export function PublicTemplateView({
               <Share2 className="h-3.5 w-3.5" />
               Share
             </Button>
-            <Button
-              variant={isSaved ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => void handleSave()}
-              className="gap-2"
-              type="button"
-              disabled={isSaving}
-            >
-              {isSaved ? (
-                <>
-                  <Check className="h-3.5 w-3.5" />
-                  Saved
-                </>
-              ) : (
-                <>
-                  <Bookmark className="h-3.5 w-3.5" />
-                  {isSaving ? 'Saving...' : 'Save'}
-                </>
-              )}
-            </Button>
-            <Button size="sm" onClick={onStartRun} className="gap-2" type="button">
-              <Play className="h-3.5 w-3.5" />
-              {isCreatingRun ? 'Starting...' : 'Start Run'}
-            </Button>
+            {canSaveTemplate ? (
+              <Button
+                variant={isSaved ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => void handleSave()}
+                className="gap-2"
+                type="button"
+                disabled={isSaveDisabled}
+              >
+                {isSaved ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <Bookmark className="h-3.5 w-3.5" />
+                    {saveLabels.header}
+                  </>
+                )}
+              </Button>
+            ) : null}
+            {canStartRun ? (
+              <Button
+                size="sm"
+                onClick={onStartRun}
+                className="gap-2"
+                type="button"
+                disabled={isCreatingRun || isWorkspaceLoading}
+              >
+                <Play className="h-3.5 w-3.5" />
+                {isCreatingRun ? 'Starting...' : 'Start Run'}
+              </Button>
+            ) : null}
           </div>
         </div>
       </header>
@@ -254,28 +314,32 @@ export function PublicTemplateView({
             Ready to use this template?
           </h3>
           <p className="mb-4 text-sm text-muted-foreground">
-            Start a run to work through this checklist, or save it to your library for later.
+            {getCallToActionText(canSaveTemplate, canStartRun)}
           </p>
           <div className="flex flex-wrap justify-center gap-3">
-            <Button
-              variant="outline"
-              onClick={() => void handleSave()}
-              disabled={isSaving}
-              type="button"
-              className="gap-2"
-            >
-              <Copy className="h-4 w-4" />
-              Copy to Library
-            </Button>
-            <Button
-              onClick={onStartRun}
-              disabled={isCreatingRun}
-              type="button"
-              className="gap-2"
-            >
-              <Play className="h-4 w-4" />
-              {isCreatingRun ? 'Starting...' : 'Start Run'}
-            </Button>
+            {canSaveTemplate ? (
+              <Button
+                variant="outline"
+                onClick={() => void handleSave()}
+                disabled={isSaveDisabled}
+                type="button"
+                className="gap-2"
+              >
+                <Copy className="h-4 w-4" />
+                {saveLabels.footer}
+              </Button>
+            ) : null}
+            {canStartRun ? (
+              <Button
+                onClick={onStartRun}
+                disabled={isCreatingRun || isWorkspaceLoading}
+                type="button"
+                className="gap-2"
+              >
+                <Play className="h-4 w-4" />
+                {isCreatingRun ? 'Starting...' : 'Start Run'}
+              </Button>
+            ) : null}
           </div>
         </div>
       </main>

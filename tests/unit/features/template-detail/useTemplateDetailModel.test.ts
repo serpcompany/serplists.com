@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createApiError } from '@/lib/api-errors';
+import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import {
@@ -10,6 +11,7 @@ import {
 import {
   duplicateOwnedTemplate,
   loadTemplateDetailData,
+  type LoadTemplateDetailResult,
   saveTemplateToAccount,
   startTemplateRun,
   type TemplateDetailBillingState,
@@ -33,10 +35,14 @@ const buildTemplate = (
   ...overrides,
 });
 
+const loadedTemplate = (result: LoadTemplateDetailResult) =>
+  result.kind === 'ok' ? result.template : null;
+
 const buildBillingState = (
   overrides: Partial<TemplateDetailBillingState> = {},
 ): TemplateDetailBillingState => ({
   billingEnabled: true,
+  isError: false,
   isLoading: false,
   isPro: true,
   ...overrides,
@@ -136,36 +142,40 @@ describe('template detail mappers', () => {
     ]);
     expect(countTemplateItems(mapped)).toBe(2);
   });
+
+  const teamRow = {
+    id: 'template-t',
+    title: 'Organization Checklist',
+    sections: [],
+    user_id: 'user-b',
+    owner_type: 'team',
+    team_id: 'team-1',
+    created_at: '2026-04-18T00:00:00.000Z',
+    is_public: false,
+  };
+
+  it('keeps the Organization that owns a template', () => {
+    expect(mapApiTemplateToChecklistTemplate(teamRow, 'fallback').teamId).toBe('team-1');
+    expect(
+      mapApiTemplateToChecklistTemplate(
+        { ...teamRow, owner_type: undefined, team_id: undefined, teamId: 'team-2' },
+        'fallback',
+      ).teamId,
+    ).toBe('team-2');
+  });
+
+  it('leaves Personal templates without an Organization', () => {
+    for (const row of [
+      { ...teamRow, owner_type: 'user', team_id: null },
+      { ...teamRow, owner_type: 'user', team_id: 'team-1' },
+      { ...teamRow, team_id: '' },
+    ]) {
+      expect(mapApiTemplateToChecklistTemplate(row, 'fallback').teamId).toBeUndefined();
+    }
+  });
 });
 
 describe('loadTemplateDetailData', () => {
-  it('loads a public template from cached data first', async () => {
-    const cachedTemplate = buildTemplate({
-      ownerProfile: { username: 'alice' },
-    });
-    const apiClient = {
-      getTemplateById: vi.fn(),
-      getTemplateBySlug: vi.fn(),
-      getProfileById: vi.fn(),
-      clonePublicTemplate: vi.fn(),
-      updateTemplate: vi.fn(),
-    };
-
-    const result = await loadTemplateDetailData(
-      {
-        mode: 'public',
-        identifier: 'camping-checklist',
-        ownerUsername: 'alice',
-        cachedTemplates: [cachedTemplate],
-      },
-      { apiClient },
-    );
-
-    expect(result).toEqual({ notFound: false, template: cachedTemplate });
-    expect(apiClient.getTemplateById).not.toHaveBeenCalled();
-    expect(apiClient.getTemplateBySlug).not.toHaveBeenCalled();
-  });
-
   it('falls back to the API and resolves the owner profile', async () => {
     const apiClient = {
       getTemplateById: vi.fn(),
@@ -192,13 +202,12 @@ describe('loadTemplateDetailData', () => {
         mode: 'public',
         identifier: 'camping-checklist',
         ownerUsername: 'alice',
-        cachedTemplates: [],
       },
       { apiClient },
     );
 
-    expect(result.notFound).toBe(false);
-    expect(result.template?.ownerProfile).toEqual({
+    expect(result.kind).toBe('ok');
+    expect(loadedTemplate(result)?.ownerProfile).toEqual({
       username: 'alice',
       full_name: 'Alice Example',
     });
@@ -241,18 +250,17 @@ describe('loadTemplateDetailData', () => {
         mode: 'public',
         identifier: 'legacy-checklist',
         ownerUsername: 'alice',
-        cachedTemplates: [],
       },
       { apiClient },
     );
 
-    expect(result.notFound).toBe(false);
-    expect(result.template?.sections).toHaveLength(1);
-    expect(result.template?.sections[0]?.items).toHaveLength(2);
-    expect(countTemplateItems(result.template as ChecklistTemplate)).toBe(2);
+    expect(result.kind).toBe('ok');
+    expect(loadedTemplate(result)?.sections).toHaveLength(1);
+    expect(loadedTemplate(result)?.sections[0]?.items).toHaveLength(2);
+    expect(countTemplateItems(loadedTemplate(result) as ChecklistTemplate)).toBe(2);
   });
 
-  it('returns notFound when the owner segment does not match', async () => {
+  it('returns not_found when the owner segment does not match', async () => {
     const apiClient = {
       getTemplateById: vi.fn(),
       getTemplateBySlug: vi.fn().mockResolvedValue({
@@ -276,12 +284,43 @@ describe('loadTemplateDetailData', () => {
         mode: 'public',
         identifier: 'camping-checklist',
         ownerUsername: 'alice',
-        cachedTemplates: [],
       },
       { apiClient },
     );
 
-    expect(result).toEqual({ notFound: true, template: null });
+    expect(result).toEqual({ kind: 'not_found' });
+  });
+
+  it('keeps the Organization of a private template that is not in the cached list', async () => {
+    const apiClient = {
+      getTemplateById: vi.fn().mockResolvedValue({
+        id: 'template-t',
+        title: 'Organization Checklist',
+        sections: [],
+        user_id: 'user-b',
+        owner_type: 'team',
+        team_id: 'team-1',
+        owner_username: 'bob',
+        created_at: '2026-04-18T00:00:00.000Z',
+        is_public: false,
+      }),
+      getTemplateBySlug: vi.fn(),
+      getProfileById: vi.fn(),
+      clonePublicTemplate: vi.fn(),
+      updateTemplate: vi.fn(),
+    };
+
+    const result = await loadTemplateDetailData(
+      {
+        mode: 'private',
+        identifier: 'template-t',
+      },
+      { apiClient },
+    );
+
+    expect(result.kind).toBe('ok');
+    expect(loadedTemplate(result)?.teamId).toBe('team-1');
+    expect(loadedTemplate(result)?.userId).toBe('user-b');
   });
 });
 
@@ -320,6 +359,112 @@ describe('template detail actions', () => {
 
     expect(result).toEqual({ kind: 'upgrade_required' });
     expect(apiClient.clonePublicTemplate).not.toHaveBeenCalled();
+  });
+
+  it('saves library and API templates into the same Organization', async () => {
+    const apiClient = {
+      getTemplateById: vi.fn(),
+      getTemplateBySlug: vi.fn(),
+      getProfileById: vi.fn(),
+      clonePublicTemplate: vi.fn().mockResolvedValue({ id: 'clone-1' }),
+      updateTemplate: vi.fn(),
+    };
+    const createTemplate = vi.fn().mockResolvedValue(buildTemplate({ id: 'created-1' }));
+
+    const libraryResult = await saveTemplateToAccount({
+      apiClient,
+      billingState: buildBillingState(),
+      createTemplate,
+      isAuthenticated: true,
+      teamId: 'team-1',
+      template: buildTemplate({ id: 'repo:camping', userId: REPO_TEMPLATE_USER_ID }),
+      userId: 'user-1',
+    });
+    const apiResult = await saveTemplateToAccount({
+      apiClient,
+      billingState: buildBillingState(),
+      createTemplate,
+      isAuthenticated: true,
+      teamId: 'team-1',
+      template: buildTemplate(),
+      userId: 'user-1',
+    });
+
+    expect(libraryResult).toEqual({ kind: 'ok', templateId: 'created-1' });
+    expect(createTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ teamId: 'team-1', isPublic: false }),
+    );
+    expect(apiResult).toEqual({ kind: 'ok', templateId: 'clone-1' });
+    expect(apiClient.clonePublicTemplate).toHaveBeenCalledWith('template-1', {
+      teamId: 'team-1',
+      visibility: 'private',
+    });
+  });
+
+  it('saves library and API templates into Personal when no Organization is active', async () => {
+    const apiClient = {
+      getTemplateById: vi.fn(),
+      getTemplateBySlug: vi.fn(),
+      getProfileById: vi.fn(),
+      clonePublicTemplate: vi.fn().mockResolvedValue({ id: 'clone-1' }),
+      updateTemplate: vi.fn(),
+    };
+    const createTemplate = vi.fn().mockResolvedValue(buildTemplate({ id: 'created-1' }));
+
+    await saveTemplateToAccount({
+      apiClient,
+      billingState: buildBillingState(),
+      createTemplate,
+      isAuthenticated: true,
+      teamId: undefined,
+      template: buildTemplate({ id: 'repo:camping', userId: REPO_TEMPLATE_USER_ID }),
+      userId: 'user-1',
+    });
+    await saveTemplateToAccount({
+      apiClient,
+      billingState: buildBillingState(),
+      createTemplate,
+      isAuthenticated: true,
+      teamId: undefined,
+      template: buildTemplate(),
+      userId: 'user-1',
+    });
+
+    expect(createTemplate.mock.calls[0]?.[0]?.teamId).toBeUndefined();
+    expect(apiClient.clonePublicTemplate).toHaveBeenCalledWith('template-1', {
+      teamId: undefined,
+      visibility: 'private',
+    });
+  });
+
+  it('does not send a user to checkout when the plan could not be checked', async () => {
+    const apiClient = {
+      getBillingStatus: vi.fn(),
+      getTemplateById: vi.fn(),
+      getTemplateBySlug: vi.fn(),
+      getProfileById: vi.fn(),
+      clonePublicTemplate: vi.fn(),
+      updateTemplate: vi.fn(),
+    };
+    const createTemplate = vi.fn();
+
+    const result = await saveTemplateToAccount({
+      apiClient,
+      billingState: buildBillingState({ isError: true, isPro: false }),
+      createTemplate,
+      invalidateTemplates: vi.fn(),
+      isAuthenticated: true,
+      teamId: undefined,
+      template: buildTemplate(),
+      userId: 'user-1',
+    });
+
+    expect(result).toEqual({
+      kind: 'error',
+      message: "Couldn't check your plan. Try again.",
+    });
+    expect(apiClient.clonePublicTemplate).not.toHaveBeenCalled();
+    expect(createTemplate).not.toHaveBeenCalled();
   });
 
   it('maps access failures into typed action results', async () => {

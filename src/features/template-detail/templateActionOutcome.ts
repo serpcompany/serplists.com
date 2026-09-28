@@ -1,7 +1,6 @@
 import { toast } from "sonner";
 
 import { buildTemplateCopyPayload } from "@/features/template-detail/templateDetailMappers";
-import { getAccessFailure } from "@/lib/api-errors";
 import { api } from "@/lib/api";
 import type { PageVisit } from "@/lib/navigation/pageVisit";
 import {
@@ -9,6 +8,11 @@ import {
   isRepoTemplate,
 } from "@/lib/repoTemplateCatalog";
 import type { ChecklistRun, ChecklistTemplate } from "@/types/checklist";
+
+import { mapActionFailure, type TemplateDetailActionResult } from "./templateDetailApi";
+import { canCopyTemplate } from "./templatePermissions";
+
+export type { TemplateDetailActionResult } from "./templateDetailApi";
 
 // The template pages' actions (Start Run, Copy/Save, Duplicate, and the model's Share)
 // each resolve to an outcome instead of acting on the page; followTemplateActionResult
@@ -29,33 +33,12 @@ export type CreateRun = (params: {
   templateId: string;
 }) => Promise<ChecklistRun | null>;
 
-export type TemplateDetailActionResult =
-  | { kind: "ok"; runId?: string; shareUrl?: string; templateId?: string }
-  | { kind: "login_required" }
-  | { kind: "upgrade_required" }
-  | { kind: "error"; message: string };
-
 export type TemplateDetailBillingState = {
   billingEnabled: boolean;
+  /** The plan check failed and no plan is known; never treat this as Free. */
+  isError: boolean;
   isLoading: boolean;
   isPro: boolean;
-};
-
-export const mapActionFailure = (
-  error: unknown,
-  fallbackMessage: string,
-): TemplateDetailActionResult => {
-  const failure = getAccessFailure(error, fallbackMessage);
-
-  if (failure.kind === "auth_required") {
-    return { kind: "login_required" };
-  }
-
-  if (failure.kind === "upgrade_required") {
-    return { kind: "upgrade_required" };
-  }
-
-  return { kind: "error", message: failure.message };
 };
 
 export const startTemplateRun = async (params: {
@@ -103,15 +86,29 @@ export const saveTemplateToAccount = async (params: {
     return { kind: "error", message: "Template not found." };
   }
 
+  // The API clones only public templates. Checked before the plan so a private
+  // template never sends anyone to checkout for a copy that cannot succeed.
+  if (!canCopyTemplate(params.template)) {
+    return { kind: "error", message: "Only public templates can be copied." };
+  }
+
   if (!params.isAuthenticated || !params.userId) {
     return { kind: "login_required" };
   }
 
-  if (params.billingState.isLoading) {
+  // Only Personal copying is a Pro feature. The API enforces an Organization's Template
+  // limit (a Free Organization may copy within it) and reports limit_reached, which
+  // maps to upgrade_required.
+  if (!params.teamId && params.billingState.isLoading) {
     return { kind: "error", message: "Checking your plan. Try again in a moment." };
   }
 
-  if (!params.billingState.isPro) {
+  // A failed plan check is not the Free plan: ask for a retry instead of checkout.
+  if (!params.teamId && params.billingState.isError) {
+    return { kind: "error", message: "Couldn't check your plan. Try again." };
+  }
+
+  if (!params.teamId && !params.billingState.isPro) {
     return { kind: "upgrade_required" };
   }
 
@@ -120,7 +117,7 @@ export const saveTemplateToAccount = async (params: {
   try {
     if (isRepoTemplate(params.template)) {
       const createdTemplate = await params.createTemplate(
-        buildRepoTemplateCreatePayload(params.template),
+        buildRepoTemplateCreatePayload(params.template, params.teamId),
       );
       return { kind: "ok", templateId: createdTemplate.id };
     }
@@ -159,7 +156,8 @@ export const duplicateOwnedTemplate = async (params: {
 
 type TemplateActionOutcomeHandlers = {
   loginRequired: () => void;
-  upgradeRequired: () => void | Promise<void>;
+  // May resolve with whether a checkout redirect started; the result is not used here.
+  upgradeRequired: () => void | Promise<unknown>;
   succeeded: (result: Extract<TemplateDetailActionResult, { kind: "ok" }>) => void;
 };
 

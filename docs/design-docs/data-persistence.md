@@ -123,7 +123,10 @@ starter, where the repo entry wins); another owner's template with the same slug
 stays listed. The API also treats every bundled starter slug as taken
 (`functions/api/utils/reserved-template-slugs.ts`, read from the generated sitemap
 catalog): create, import, clone and a slug change get the `-<id8>` suffix instead,
-while a Template that already holds such a slug keeps it. Saving a repo
+while a Template that already holds such a slug keeps it. Repo templates are dated
+by their pack's `exportedAt` (a fixed fallback date when it is missing or invalid,
+never the page-load time), which drives the library's Recent sort and their
+published date, so bump `exportedAt` when a pack's content changes. Saving a repo
 template creates a private D1 template with a slug derived from its title;
 starting a run uses its normalized sections and does not require a source D1 row.
 

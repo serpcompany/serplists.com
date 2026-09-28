@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Template detail pages load their template once. Re-renders from auth, context, list, or
 // mutation state must not refetch it or swap the page for its loading spinner, which would
-// unmount open dialogs (see src/features/template-detail/templateDetailLoader.ts).
+// unmount open dialogs (see src/features/template-detail/useTemplateDetailRecord.ts).
 
 const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 const PUBLIC_TEMPLATE_PATH = '/profile/admin/technical-seo-audit-checklist';

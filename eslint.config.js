@@ -14,7 +14,7 @@ const LEGACY_MAX_LINES = {
   "functions/api/handlers/templates.ts": 1650,
   "functions/api/handlers/checklists.ts": 1200,
   "functions/api/handlers/teams.ts": 1100,
-  "src/pages/TemplateDetail.tsx": 950,
+  "src/pages/TemplateDetail.tsx": 900,
   "functions/api/handlers/agentMcp.ts": 900,
   "src/lib/templates/templateMarkdown.ts": 750,
   "src/components/account/TeamSettingsSection.tsx": 800,
@@ -22,9 +22,8 @@ const LEGACY_MAX_LINES = {
   "src/features/run-execution/useRunExecutionModel.ts": 700,
   "src/lib/api.ts": 650,
   "src/components/template-editor/SectionSidebar.tsx": 650,
-  "src/components/TemplateBackup.tsx": 650,
+  "src/components/TemplateBackup.tsx": 530,
   "src/contexts/TemplatesContext.tsx": 530,
-  "src/pages/UserProfile.tsx": 550,
 };
 
 const VOCABULARY_MESSAGE =

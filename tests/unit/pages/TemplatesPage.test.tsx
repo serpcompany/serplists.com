@@ -8,7 +8,10 @@ import type { ChecklistTemplate } from '@/types/checklist';
 
 const mockUseDashboardTemplatesModel = vi.fn();
 
-vi.mock('@/features/dashboard-templates/useDashboardTemplatesModel', () => ({
+vi.mock('@/features/dashboard-templates/useDashboardTemplatesModel', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@/features/dashboard-templates/useDashboardTemplatesModel')
+  >()),
   useDashboardTemplatesModel: (...args: unknown[]) =>
     mockUseDashboardTemplatesModel(...args),
 }));
@@ -143,5 +146,45 @@ describe('Templates page', () => {
     expect(html).toContain('Retry');
     expect(html).not.toContain('No templates found');
     expect(html).not.toContain('Create your first template');
+  });
+
+  it('orders Most Recent by last activity when some templates were never edited', () => {
+    const templates = [
+      template({ id: 'n1', title: 'Untouched Plan', createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '' }),
+      template({ id: 'a', title: 'Second Of September Edit', createdAt: '2026-07-01T00:00:00.000Z', updatedAt: '2026-09-02T00:00:00.000Z' }),
+      template({ id: 'n2', title: 'Imported Recently', createdAt: '2026-09-10T00:00:00.000Z', updatedAt: '' }),
+      template({ id: 'b', title: 'Twentieth Of September Edit', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-09-20T00:00:00.000Z' }),
+    ];
+    mockUseDashboardTemplatesModel.mockReturnValue({
+      templates,
+      loading: false,
+      isEmpty: false,
+      canCreateRun: true,
+      totalTemplateItems: 8,
+      selectedTemplate: templates[0],
+      selectedTemplateId: 'n1',
+      runLauncherOpen: false,
+      isCreatingRun: false,
+      openCreateTemplate: vi.fn(),
+      openRunLauncher: vi.fn(),
+      openPublicLibrary: vi.fn(),
+      openTemplate: vi.fn(),
+      removeTemplate: vi.fn(),
+      closeRunLauncher: vi.fn(),
+      selectRunTemplate: vi.fn(),
+      createRunFromTemplate: vi.fn(),
+    });
+
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/">
+        <Templates />
+      </StaticRouter>,
+    );
+    const order = ['Twentieth Of September Edit', 'Imported Recently', 'Second Of September Edit', 'Untouched Plan'].map(
+      (title) => html.indexOf(title),
+    );
+
+    expect(order.every((position) => position >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((left, right) => left - right));
   });
 });

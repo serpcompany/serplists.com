@@ -680,6 +680,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             team_id: backupTeamId,
             created_by_user_id: userId,
             created_at: now,
+            updated_at: now,
           };
           const subject: AuditSubject = backupTeamId ? { type: 'team', id: backupTeamId } : { type: 'user', id: userId };
 
@@ -1072,7 +1073,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return json({ success: true });
     }
 
-    // POST /api/templates/:id/clone (Pro only)
+    // POST /api/templates/:id/clone (within the target context's Template limit)
     if (templatesSubpath[0] && templatesSubpath[1] === 'clone') {
       const sourceId = templatesSubpath[0];
       let visibility: 'preserve' | 'public' | 'private' = 'private';
@@ -1158,6 +1159,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         team_id: cloneTeamId,
         created_by_user_id: userId,
         created_at: now,
+        updated_at: now,
       };
       const subject: AuditSubject = cloneTeamId ? { type: 'team', id: cloneTeamId } : { type: 'user', id: userId };
 
@@ -1272,6 +1274,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       team_id: requestedTeamId,
       created_by_user_id: userId,
       created_at: now,
+      updated_at: now,
     };
     const subject: AuditSubject = requestedTeamId ? { type: 'team', id: requestedTeamId } : { type: 'user', id: userId };
 

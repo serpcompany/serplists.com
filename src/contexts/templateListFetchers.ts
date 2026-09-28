@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { isApiError } from '@/lib/api-errors';
+import { readApiTemplateTeamId } from '@/lib/templates/apiTemplateOwner';
 import { calculateSectionsProgress, isSectionsShape, normalizeSections } from '@/lib/utils/checklistSections';
 import type { ChecklistRun, ChecklistSection, ChecklistTemplate } from '@/types/checklist';
 
@@ -47,11 +48,12 @@ export const mapApiTemplate = (template: ApiRow): ChecklistTemplate => ({
     : (Array.isArray(template.tags) ? template.tags as string[] : []),
   userId: optionalString(template.user_id) ?? '',
   createdAt: optionalString(template.created_at) ?? '',
-  updatedAt: optionalString(template.updated_at) ?? '',
+  // A never-edited template has a null updated_at; its last activity is its creation.
+  updatedAt: String(template.updated_at || template.created_at || ''),
   isPublic: Boolean(template.is_public),
   slug: optionalString(template.slug) ?? '',
   version: typeof template.version === 'number' ? template.version : 1,
-  teamId: optionalString(template.team_id) ?? optionalString(template.teamId),
+  teamId: readApiTemplateTeamId(template),
   ownerProfile:
     typeof template.owner_username === 'string' || typeof template.owner_full_name === 'string'
       ? { username: optionalString(template.owner_username), full_name: optionalString(template.owner_full_name) }

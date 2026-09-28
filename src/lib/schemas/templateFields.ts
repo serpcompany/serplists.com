@@ -13,6 +13,10 @@ export const TEMPLATE_FIELD_LIMITS = {
   slug: 160,
 } as const;
 
+// The longest title the API accepts. Titles the app builds itself (such as a duplicate's
+// '<title> Copy') are shortened to fit it.
+export const TEMPLATE_TITLE_MAX_LENGTH = TEMPLATE_FIELD_LIMITS.title;
+
 // The name a template is saved with when its name is left blank.
 export const DEFAULT_TEMPLATE_TITLE = "Untitled Template";
 

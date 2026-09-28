@@ -15,37 +15,21 @@ import {
 import { PublicPageContainer } from '@/components/layout/PublicPageLayout';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { SEOHead } from '@/components/shared/SEOHead';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
-import { api } from '@/lib/api';
 import {
-  REPO_TEMPLATE_OWNER_NAME,
-  REPO_TEMPLATE_OWNER_SLUG,
-  REPO_TEMPLATE_USER_ID,
-  repoTemplates,
-} from '@/lib/repoTemplateCatalog';
+  loadUserProfile,
+  type LoadUserProfileResult,
+  type ProfileSurfaceRecord,
+  type UserProfileRecord,
+} from '@/features/profile/loadUserProfile';
 import {
   buildCanonicalPublicTemplatePath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
-import { normalizeSections } from '@/lib/utils/checklistSections';
+import { formatMonthYear } from '@/lib/utils/dbTimestamp';
 import type { ChecklistTemplate } from '@/types/checklist';
-
-type UserProfileRecord = {
-  id: string;
-  full_name: string | null;
-  username: string;
-  avatar_url: string | null;
-  created_at: string;
-};
-
-type ProfileSurfaceRecord = UserProfileRecord & {
-  bio?: string;
-  location?: string;
-  totalRuns?: number;
-  totalViews?: number;
-  website?: string;
-};
 
 type UserStats = {
   averageItemsPerTemplate: number;
@@ -54,19 +38,10 @@ type UserStats = {
   totalTemplates: number;
 };
 
-type ProfileFallbackState = {
-  profile: ProfileSurfaceRecord;
-  templates: ChecklistTemplate[];
-};
+const NO_TEMPLATES: ChecklistTemplate[] = [];
 
 const countTemplateItems = (template: ChecklistTemplate) =>
   template.sections.reduce((total, section) => total + section.items.length, 0);
-
-const formatJoinedDate = (value: string): string =>
-  new Date(value).toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
-  });
 
 const formatStatValue = (value: number) => value.toLocaleString('en-US');
 
@@ -102,82 +77,6 @@ const buildProfileSummary = (
   return `Public checklist templates and repeatable workflow packs published by @${profile.username}.`;
 };
 
-const normalizeUsername = (value: string | undefined) =>
-  value?.trim().toLowerCase() ?? '';
-
-const mapApiTemplate = (
-  template: Record<string, unknown>,
-): ChecklistTemplate => {
-  const sections = Array.isArray(template.sections)
-    ? template.sections
-    : Array.isArray(template.items)
-      ? [
-          {
-            id: '1',
-            title: 'Checklist',
-            items: template.items,
-          },
-        ]
-      : [];
-
-  return {
-    id: String(template.id),
-    title: String(template.title),
-    description:
-      typeof template.description === 'string' ? template.description : '',
-    sections: normalizeSections(sections),
-    userId: String(template.user_id),
-    createdAt: String(template.created_at),
-    updatedAt:
-      typeof template.updated_at === 'string'
-        ? template.updated_at
-        : String(template.created_at),
-    isPublic: Boolean(template.is_public ?? true),
-    slug: typeof template.slug === 'string' ? template.slug : '',
-    categories: Array.isArray(template.categories)
-      ? (template.categories as string[])
-      : [],
-    tags: Array.isArray(template.tags) ? (template.tags as string[]) : [],
-    version: typeof template.version === 'number' ? template.version : 1,
-    ownerProfile:
-      typeof template.owner_username === 'string' ||
-      typeof template.owner_full_name === 'string'
-        ? {
-            username:
-              typeof template.owner_username === 'string'
-                ? template.owner_username
-                : undefined,
-            full_name:
-              typeof template.owner_full_name === 'string'
-                ? template.owner_full_name
-                : undefined,
-          }
-        : undefined,
-  };
-};
-
-const mergeProfileTemplates = (
-  username: string,
-  apiTemplates: ChecklistTemplate[],
-): ChecklistTemplate[] => {
-  const merged = new Map<string, ChecklistTemplate>();
-  const sources =
-    normalizeUsername(username) === REPO_TEMPLATE_OWNER_SLUG
-      ? [...repoTemplates, ...apiTemplates]
-      : apiTemplates;
-
-  sources.forEach((template) => {
-    const key = template.slug?.trim() || template.id;
-    if (!merged.has(key)) {
-      merged.set(key, template);
-    }
-  });
-
-  return Array.from(merged.values()).sort((left, right) =>
-    right.createdAt.localeCompare(left.createdAt),
-  );
-};
-
 const calculateStats = (templates: ChecklistTemplate[]): UserStats => {
   const totalItems = templates.reduce(
     (total, template) => total + countTemplateItems(template),
@@ -196,25 +95,6 @@ const calculateStats = (templates: ChecklistTemplate[]): UserStats => {
   };
 };
 
-const getFallbackProfileState = (
-  username: string | undefined,
-): ProfileFallbackState | null => {
-  if (normalizeUsername(username) === REPO_TEMPLATE_OWNER_SLUG) {
-    return {
-      profile: {
-        id: REPO_TEMPLATE_USER_ID,
-        full_name: REPO_TEMPLATE_OWNER_NAME,
-        username: REPO_TEMPLATE_OWNER_SLUG,
-        avatar_url: null,
-        created_at: repoTemplates[0]?.createdAt || new Date().toISOString(),
-      },
-      templates: repoTemplates,
-    };
-  }
-
-  return null;
-};
-
 const getProfileWebsiteHref = (website: string) =>
   website.startsWith('http://') || website.startsWith('https://')
     ? website
@@ -223,98 +103,23 @@ const getProfileWebsiteHref = (website: string) =>
 const formatWebsiteLabel = (website: string) =>
   website.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
-const UserProfile = () => {
-  const { username } = useParams<{ username: string }>();
-  const [profile, setProfile] = useState<ProfileSurfaceRecord | null>(null);
-  const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+type UserProfileContentProps = {
+  onRetry: () => void;
+  // Null while the profile loads.
+  result: LoadUserProfileResult | null;
+};
 
-  useEffect(() => {
-    let isCancelled = false;
-
-    const fetchProfile = async () => {
-      if (!username) {
-        setError('No username provided');
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const profileData = (await api.getProfileByUsername(
-          username,
-        )) as UserProfileRecord;
-
-        if (isCancelled) return;
-
-        const decoratedProfile = profileData;
-        let resolvedTemplates: ChecklistTemplate[] = [];
-
-        try {
-          const publicTemplates = (await api.getPublicTemplatesForUser(
-            profileData.id,
-          )) as Array<Record<string, unknown>>;
-
-          resolvedTemplates = mergeProfileTemplates(
-            profileData.username,
-            publicTemplates.map(mapApiTemplate),
-          );
-        } catch (caughtTemplateError) {
-          console.error('Error fetching public templates:', caughtTemplateError);
-
-          const fallbackState = getFallbackProfileState(profileData.username);
-          if (fallbackState) {
-            resolvedTemplates = fallbackState.templates;
-          } else {
-            setProfile(decoratedProfile);
-            setTemplates([]);
-            setError('Unable to load this public profile.');
-            return;
-          }
-        }
-
-        if (isCancelled) return;
-
-        setProfile(decoratedProfile);
-        setTemplates(resolvedTemplates);
-      } catch (caughtError) {
-        console.error('Error fetching public profile:', caughtError);
-
-        const fallbackState = getFallbackProfileState(username);
-        if (fallbackState) {
-          if (isCancelled) return;
-
-          setProfile(fallbackState.profile);
-          setTemplates(fallbackState.templates);
-          setError(null);
-          return;
-        }
-
-        if (isCancelled) return;
-
-        setProfile(null);
-        setTemplates([]);
-        setError('User not found');
-      } finally {
-        if (!isCancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void fetchProfile();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [username]);
-
+export const UserProfileContent = ({
+  onRetry,
+  result,
+}: UserProfileContentProps) => {
+  const profile = result?.kind === 'ok' ? result.profile : null;
+  const templates = result?.kind === 'ok' ? result.templates : NO_TEMPLATES;
   const stats = useMemo(() => calculateStats(templates), [templates]);
+  // Null for a missing or unreadable date, so the page never shows "Invalid Date".
+  const joinedDate = formatMonthYear(profile?.created_at);
 
-  if (loading) {
+  if (!result) {
     return (
       <PublicPageContainer className="py-14">
         <div className="glass-panel p-8">
@@ -324,12 +129,34 @@ const UserProfile = () => {
     );
   }
 
-  if (error || !profile) {
+  // No noindex here: a crawler that hits a brief outage must not drop a live profile.
+  if (result.kind === 'error') {
     return (
       <PublicPageContainer className="py-14">
+        <SEOHead title="Unable to load profile" />
         <EmptyState
-          title={error === 'User not found' ? 'User not found' : 'Error'}
-          description={error || 'Unable to load this public profile.'}
+          title="Unable to load profile"
+          description={result.message}
+          icon={Sparkles}
+          className="min-h-0"
+          action={{ label: 'Try again', onClick: onRetry }}
+        />
+      </PublicPageContainer>
+    );
+  }
+
+  // The page is served with HTTP 200, so noindex is what keeps a gone profile out of search.
+  if (!profile) {
+    return (
+      <PublicPageContainer className="py-14">
+        <SEOHead
+          title="Profile not found"
+          description="This profile does not exist."
+          robots="noindex, nofollow"
+        />
+        <EmptyState
+          title="User not found"
+          description="This profile does not exist."
           icon={Sparkles}
           className="min-h-0"
         />
@@ -369,6 +196,10 @@ const UserProfile = () => {
 
   return (
     <PublicPageContainer className="pb-16 pt-8">
+      <SEOHead
+        title={getProfileDisplayName(profile)}
+        description={buildProfileSummary(profile, stats)}
+      />
       <div className="mx-auto max-w-4xl">
         <section className="mb-10">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">
@@ -411,10 +242,12 @@ const UserProfile = () => {
                   </a>
                 ) : null}
 
-                <span className="inline-flex items-center gap-1.5">
-                  <CalendarDays className="h-4 w-4" />
-                  Joined {formatJoinedDate(profile.created_at)}
-                </span>
+                {joinedDate ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <CalendarDays className="h-4 w-4" />
+                    Joined {joinedDate}
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -521,6 +354,35 @@ const UserProfile = () => {
         </section>
       </div>
     </PublicPageContainer>
+  );
+};
+
+const UserProfile = () => {
+  const { username } = useParams<{ username: string }>();
+  const [result, setResult] = useState<LoadUserProfileResult | null>(null);
+  // Bumped by Try again; a retry starts from the loading state.
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let isCancelled = false;
+    setResult(null);
+
+    void loadUserProfile(username).then((nextResult) => {
+      if (!isCancelled) {
+        setResult(nextResult);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [reloadKey, username]);
+
+  return (
+    <UserProfileContent
+      result={result}
+      onRetry={() => setReloadKey((key) => key + 1)}
+    />
   );
 };
 

@@ -152,6 +152,22 @@ The current import UI derives access from the authenticated entitlement response
 file picker for a User who already has import access. No direct API-post
 workaround is required for an entitled User.
 
+Export and import wait until the active context's Template list has loaded,
+because until then a stored Organization can still read as Personal; the counts
+show a dash meanwhile. The server alone decides whether there is anything to
+export: an empty pack reports "No templates available to export" and downloads
+nothing, so a list request that failed and looks empty never blocks an export.
+Only one export runs at a time: while it runs, the button reads "Exporting..."
+and it and the include-public switch are disabled, and further clicks are
+ignored, so a double click sends one request and downloads one file.
+
+Each file chosen in the picker replaces the previous preview, even when the new
+file is rejected (wrong type, over 2MB, or invalid), so Confirm Import only ever
+imports the last file chosen. The preview shows that file's name, and the picker
+is cleared after every choice so an edited file can be chosen again under the
+same name. The selection rules live in
+`src/features/template-backup/importFileSelection.ts`.
+
 ## Backup/export format
 
 Backup export remains supported for compatibility and restore-style workflows.
@@ -222,6 +238,12 @@ task, content block or sub-task that is not an object (null, a number, a nested 
 empty text) fails the import with a message naming the template and where the entry
 is, and `POST /api/templates/backup` refuses such a template with `invalid_sections`.
 
+A file that fails validation is rejected before anything is sent, with a
+one-line reason that names up to three problems by 1-based position, for example
+`Template validation failed: Section 1 > title: String must contain at least 1 character(s)`.
+YAML syntax errors report their line (`Invalid YAML at line 3: ...`). The shared
+formatter is `src/lib/schemas/formatValidationError.ts`.
+
 ## Strict Markdown template format
 
 The strict Markdown dialect is still supported for compatibility and lintable round-trips, but it is no longer the recommended primary authoring format.
@@ -273,6 +295,9 @@ Generated outputs from `template.yaml` serve different purposes:
 ### Visibility defaults
 - If `isPublic` is present, it is preserved by default.
 - If missing, templates default to **private** unless the importer overrides visibility.
+- The import preview's public count follows the selected override ("Force public"
+  or "Force private"), using the same rule as the import itself
+  (`resolveImportIsPublic` in `src/lib/utils/templateBackup.ts`).
 
 ### Assets
 JSON exports **do not** include R2 assets. If a template references uploaded files

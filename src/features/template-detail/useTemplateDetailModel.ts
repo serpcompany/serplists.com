@@ -1,37 +1,23 @@
-import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { getTemplateChangeErrorMessage, isStaleRecordError } from '@/lib/editConflicts';
+import { useBillingStatus } from '@/hooks/useBillingStatus';
 import { api, type TemplateHistoryResponse } from '@/lib/api';
-import { getBillingStatusQueryKey } from '@/lib/billing';
-import { findPublicTemplateByIdentifier } from '@/lib/repoTemplateCatalog';
-import {
-  buildCanonicalPublicTemplatePath,
-  resolvePublicTemplateOwnerSlug,
-} from '@/lib/routes';
-import type { ChecklistTemplate } from '@/types/checklist';
 
-import {
-  countTemplateItems,
-  mapApiTemplateToChecklistTemplate,
-  resolveTemplateOwnerProfile,
-} from './templateDetailMappers';
-import {
-  createTemplateDetailLoader,
-  initialTemplateDetailViewState,
-  type TemplateDetailViewState,
-} from './templateDetailLoader';
-import { createTemplateDetailRefresh } from './templateDetailRefresh';
+import { shareTemplateToPublic } from './shareTemplate';
 import {
   type CreateRun,
   type CreateTemplate,
   duplicateOwnedTemplate,
-  mapActionFailure,
   saveTemplateToAccount,
   startTemplateRun,
   type TemplateDetailActionResult,
   type TemplateDetailBillingState,
 } from './templateActionOutcome';
+import { countTemplateItems } from './templateDetailMappers';
+import { getTemplateHistoryQueryKey } from './templateHistoryTimeline';
+import { getTemplateDetailPermissions } from './templatePermissions';
+import { setTemplateVisibility } from './templateVisibility';
+import { useTemplateDetailRecord } from './useTemplateDetailRecord';
 
 export {
   duplicateOwnedTemplate,
@@ -40,26 +26,21 @@ export {
   type TemplateDetailActionResult,
   type TemplateDetailBillingState,
 };
+export {
+  loadTemplateDetailData,
+  type LoadTemplateDetailResult,
+} from './loadTemplateDetail';
 
-type TemplateDetailApiClient = Pick<
-  typeof api,
-  | 'clonePublicTemplate'
-  | 'getBillingStatus'
-  | 'getProfileById'
-  | 'getTemplateById'
-  | 'getTemplateBySlug'
-  | 'updateTemplate'
->;
-
-type PublicTemplateDetailOptions = {
-  cachedTemplates: ChecklistTemplate[];
+type PublicTemplateDetailHookOptions = {
   identifier?: string;
   mode: 'public';
   ownerUsername?: string;
 };
 
-type PrivateTemplateDetailOptions = {
-  getCachedTemplate: (identifier: string) => ChecklistTemplate | undefined;
+// The page loads only its own template (by id), never a Template list.
+type PrivateTemplateDetailHookOptions = {
+  // The viewer's role in the active context allows editing Templates.
+  canEditTemplates: boolean;
   identifier?: string;
   mode: 'private';
 };
@@ -68,13 +49,14 @@ type TemplateDetailCommonOptions = {
   createRun: CreateRun;
   createTemplate: CreateTemplate;
   isAuthenticated: boolean;
-  teamId?: string;
+  // Required so every page decides the ownership context: undefined is Personal.
+  teamId: string | undefined;
   userId?: string;
   username?: string;
 };
 
 export type UseTemplateDetailModelOptions = TemplateDetailCommonOptions &
-  (PublicTemplateDetailOptions | PrivateTemplateDetailOptions);
+  (PublicTemplateDetailHookOptions | PrivateTemplateDetailHookOptions);
 
 export type TemplateDetailHistoryState = {
   data: TemplateHistoryResponse | null;
@@ -82,190 +64,62 @@ export type TemplateDetailHistoryState = {
   isLoading: boolean;
 };
 
-type LoadTemplateDetailResult = {
-  notFound: boolean;
-  template: ChecklistTemplate | null;
-};
-
-type TemplateDetailDependencies = {
-  apiClient?: TemplateDetailApiClient;
-};
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const isUuidLike = (value: string): boolean => UUID_PATTERN.test(value);
-
-const getApiClient = (
-  dependencies?: TemplateDetailDependencies,
-): TemplateDetailApiClient => dependencies?.apiClient ?? api;
-
-const hydrateTemplateOwner = async (
-  template: ChecklistTemplate,
-  apiClient: TemplateDetailApiClient,
-): Promise<ChecklistTemplate> => {
-  const { ownerSlug } = resolveTemplateOwnerProfile(template);
-
-  if (ownerSlug || !template.userId) {
-    return template;
-  }
-
-  try {
-    const profile = (await apiClient.getProfileById(
-      template.userId,
-    )) as Record<string, unknown>;
-    return resolveTemplateOwnerProfile(template, profile).template;
-  } catch {
-    return template;
-  }
-};
-
-export const loadTemplateDetailData = async (
-  options: PublicTemplateDetailOptions | PrivateTemplateDetailOptions,
-  dependencies?: TemplateDetailDependencies,
-): Promise<LoadTemplateDetailResult> => {
-  const apiClient = getApiClient(dependencies);
-
-  if (!options.identifier) {
-    return { template: null, notFound: true };
-  }
-
-  if (options.mode === 'public') {
-    if (!options.ownerUsername) {
-      return { template: null, notFound: true };
-    }
-
-    const cachedTemplate = findPublicTemplateByIdentifier(
-      options.cachedTemplates,
-      options.identifier,
-      options.ownerUsername,
-    );
-    if (cachedTemplate) {
-      return { template: cachedTemplate, notFound: false };
-    }
-
-    try {
-      const rawTemplate = isUuidLike(options.identifier)
-        ? await apiClient.getTemplateById(options.identifier)
-        : await apiClient.getTemplateBySlug(options.identifier);
-      const mappedTemplate = await hydrateTemplateOwner(
-        mapApiTemplateToChecklistTemplate(
-          rawTemplate as Record<string, unknown>,
-          options.identifier,
-        ),
-        apiClient,
-      );
-      const ownerSlug = resolvePublicTemplateOwnerSlug(mappedTemplate);
-
-      if (
-        !mappedTemplate.isPublic ||
-        ownerSlug?.toLowerCase() !== options.ownerUsername.toLowerCase()
-      ) {
-        return { template: null, notFound: true };
-      }
-
-      return { template: mappedTemplate, notFound: false };
-    } catch {
-      return { template: null, notFound: true };
-    }
-  }
-
-  const cachedTemplate = options.getCachedTemplate(options.identifier);
-  if (cachedTemplate) {
-    return { template: cachedTemplate, notFound: false };
-  }
-
-  try {
-    let rawTemplate: unknown;
-
-    try {
-      rawTemplate = await apiClient.getTemplateById(options.identifier);
-    } catch {
-      rawTemplate = await apiClient.getTemplateBySlug(options.identifier);
-    }
-
-    const mappedTemplate = await hydrateTemplateOwner(
-      mapApiTemplateToChecklistTemplate(
-        rawTemplate as Record<string, unknown>,
-        options.identifier,
-      ),
-      apiClient,
-    );
-
-    return { template: mappedTemplate, notFound: false };
-  } catch {
-    return { template: null, notFound: true };
-  }
-};
-
 export const useTemplateDetailModel = (
   options: UseTemplateDetailModelOptions,
 ) => {
-  const [view, setView] = useState<TemplateDetailViewState>(initialTemplateDetailViewState);
-  const [loader] = useState(() =>
-    createTemplateDetailLoader({ load: (source) => loadTemplateDetailData(source), onChange: setView }),
-  );
-  const { loading, notFound, template } = view;
   const queryClient = useQueryClient();
-
-  // Runs after every render with the latest list data; the loader decides whether to load.
-  useEffect(() => {
-    loader.sync(
-      options.mode === 'public'
-        ? {
-            cachedTemplates: options.cachedTemplates,
-            identifier: options.identifier,
-            mode: 'public',
-            ownerUsername: options.ownerUsername,
-          }
-        : {
-            getCachedTemplate: options.getCachedTemplate,
-            identifier: options.identifier,
-            mode: 'private',
-          },
-      options.userId,
-    );
+  const {
+    loadError,
+    loading,
+    notFound,
+    reload,
+    template,
+    updateTemplate,
+  } = useTemplateDetailRecord({
+    identifier: options.identifier,
+    mode: options.mode,
+    ownerUsername: options.mode === 'public' ? options.ownerUsername : undefined,
+    userId: options.userId,
   });
-  useEffect(() => () => loader.cancel(), [loader]);
 
-  const billing = useQuery({
-    queryKey: getBillingStatusQueryKey(options.userId, options.teamId),
-    queryFn: () =>
-      api.getBillingStatus(options.teamId ? { teamId: options.teamId } : undefined),
+  const billing = useBillingStatus({
     enabled: options.isAuthenticated,
-    retry: false,
+    teamId: options.teamId,
+    userId: options.userId,
   });
 
   const billingState: TemplateDetailBillingState = {
-    billingEnabled: billing.data?.billingEnabled ?? true,
-    isLoading: options.isAuthenticated && billing.isLoading,
-    isPro: billing.data?.plan === 'pro' || billing.data?.plan === 'team',
+    billingEnabled: billing.status === 'known' ? billing.billingEnabled : true,
+    isError: billing.status === 'error',
+    isLoading: billing.status === 'loading',
+    isPro: billing.status === 'known' && billing.isPaid,
   };
+  const permissions = getTemplateDetailPermissions({
+    activeTeamId: options.teamId,
+    canEditTemplates: options.mode === 'private' && options.canEditTemplates,
+    template: options.mode === 'private' ? template : null,
+    userId: options.userId,
+  });
   const canLoadTemplateHistory =
-    options.mode === 'private' &&
-    options.isAuthenticated &&
-    Boolean(template?.id) &&
-    (template?.userId === options.userId ||
-      (Boolean(options.teamId) && template?.teamId === options.teamId));
+    options.isAuthenticated && permissions.canViewHistory;
 
   const history = useQuery({
-    queryKey: [
-      'template-history',
-      template?.id ?? 'none',
-      options.userId ?? 'guest',
-      options.teamId ?? 'personal',
-    ],
+    queryKey: getTemplateHistoryQueryKey(template?.id, options.userId, options.teamId),
     queryFn: () => api.getTemplateHistory(template?.id ?? ''),
     enabled: canLoadTemplateHistory,
     retry: false,
   });
 
-  const { invalidateTemplates, recordTemplateSave, reloadTemplate } = createTemplateDetailRefresh({
-    loader,
-    queryClient,
-    template,
-    userId: options.userId,
-  });
+  // ['templates'] also covers the open template (so the next write sends its current
+  // version), the public catalog, which Share changes, and the Changelog. After a 409 edit
+  // conflict it reloads the stored template in place, without the loading state.
+  const invalidateTemplates = async () => {
+    if (!options.userId) {
+      return;
+    }
+
+    await queryClient.invalidateQueries({ queryKey: ['templates'] });
+  };
 
   const startRun = async (runName?: string): Promise<TemplateDetailActionResult> =>
     startTemplateRun({
@@ -275,8 +129,13 @@ export const useTemplateDetailModel = (
       template,
     });
 
-  const saveTemplate = async (): Promise<TemplateDetailActionResult> =>
-    saveTemplateToAccount({
+  const saveTemplate = async (): Promise<TemplateDetailActionResult> => {
+    if (billing.status === 'error') {
+      // Check again so the next attempt can go through.
+      billing.refetch();
+    }
+
+    return saveTemplateToAccount({
       billingState,
       createTemplate: options.createTemplate,
       invalidateTemplates,
@@ -285,6 +144,7 @@ export const useTemplateDetailModel = (
       template,
       userId: options.userId,
     });
+  };
 
   const duplicateTemplate = async (): Promise<TemplateDetailActionResult> =>
     template
@@ -295,90 +155,51 @@ export const useTemplateDetailModel = (
         })
       : { kind: 'error', message: 'Template not found.' };
 
-  const shareTemplate = async (): Promise<TemplateDetailActionResult> => {
-    if (!template) {
-      return { kind: 'error', message: 'Template not found.' };
-    }
+  // `template` is the only source of visibility; both actions keep it in step with the server.
+  const shareTemplate = async (): Promise<TemplateDetailActionResult> =>
+    shareTemplateToPublic({
+      canShare: permissions.canShare,
+      invalidateTemplates,
+      isAuthenticated: options.isAuthenticated,
+      // Ignore the result if the page moved to another template during the request.
+      onTemplateChange: (shared) =>
+        updateTemplate((current) => (current?.id === shared.id ? shared : current)),
+      origin: window.location.origin,
+      reloadAfterConflict: invalidateTemplates,
+      template,
+      userId: options.userId,
+      username: options.username,
+    });
 
-    if (!options.isAuthenticated || !options.userId) {
-      return { kind: 'login_required' };
-    }
-
-    if (template.userId !== options.userId) {
-      return {
-        kind: 'error',
-        message: 'You can only share templates you own.',
-      };
-    }
-
-    try {
-      let nextTemplate = template;
-
-      if (!nextTemplate.isPublic) {
-        await api.updateTemplate(nextTemplate.id, {
-          is_public: true,
-          expected_version: nextTemplate.version,
-        });
-        nextTemplate = {
-          ...nextTemplate,
-          isPublic: true,
-        };
-      }
-
-      nextTemplate = await hydrateTemplateOwner(nextTemplate, api);
-
-      if (!nextTemplate.ownerProfile?.username && options.username) {
-        nextTemplate = {
-          ...nextTemplate,
-          ownerProfile: {
-            ...nextTemplate.ownerProfile,
-            username: options.username,
-          },
-        };
-      }
-
-      const publicPath = buildCanonicalPublicTemplatePath(nextTemplate);
-
-      if (!publicPath) {
-        return {
-          kind: 'error',
-          message:
-            'Set a username on your account before sharing templates with the canonical public URL.',
-        };
-      }
-
-      loader.setTemplate(nextTemplate);
-      await invalidateTemplates();
-
-      return {
-        kind: 'ok',
-        shareUrl: `${window.location.origin}${publicPath}`,
-      };
-    } catch (error) {
-      if (isStaleRecordError(error)) {
-        await reloadTemplate();
-        return { kind: 'error', message: getTemplateChangeErrorMessage(error, '') };
-      }
-      return mapActionFailure(
-        error,
-        'Failed to create a share link for this template.',
-      );
-    }
-  };
+  const setVisibility = async (
+    isPublic: boolean,
+  ): Promise<TemplateDetailActionResult> =>
+    setTemplateVisibility({
+      canEdit: permissions.canEdit,
+      invalidateTemplates,
+      isPublic,
+      onTemplateChange: updateTemplate,
+      reloadAfterConflict: invalidateTemplates,
+      template,
+    });
 
   return {
     billingState,
     duplicateTemplate,
+    // Checks the plan again after a failed check, so the next attempt can go through.
+    refetchBilling: billing.refetch,
     history: {
       data: history.data ?? null,
       isError: history.isError,
       isLoading: canLoadTemplateHistory && history.isLoading,
     } satisfies TemplateDetailHistoryState,
+    loadError,
     loading,
     notFound,
-    recordTemplateSave,
-    reloadTemplate,
+    permissions,
+    reload,
     saveTemplate,
+    setVisibility,
     shareTemplate,
     startRun,
     template,
