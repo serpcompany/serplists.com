@@ -75,9 +75,9 @@ Open, all unbounded lists:
 
 | Request | Rows read | Cause |
 | --- | --- | --- |
-| Signed-in template lists (library, dashboard, runs) | 19,219 | One query returns all public templates *or* the user's own, unbounded, and it is not cached |
+| Legacy template list (no `scope`) | 19,219 | Public *or* the user's own, unbounded and uncached; only tabs loaded before the scoped client (TD-15) |
 | Public catalog cache miss (`GET /api/templates`) | 13,009 | Unbounded list of every public template; at most once per data center every 5 minutes, and 0 on a hit |
-| Organization runs | 12,007 | Unbounded, plus a correlated template subquery per run; `TemplatesProvider` still loads the run list on every page for signed-in users |
+| Organization runs | 12,007 | Unbounded, plus a correlated template subquery per run; loaded only on the runs page |
 | Organization templates | 3,007 | Unbounded |
 | Personal and archived runs | about 1,000 each | Unbounded; archived filters `deleted_at IS NOT NULL` after reading every run |
 | Sitemap cache miss | 41,449 (index), 19,419 (templates shard) | Builds every entry; now only after a content change or deploy, once per data center |
@@ -97,6 +97,9 @@ Fixed (rows read before, after; see the plan's progress):
 | Repeat sitemap index / shard | 41,456 / 19,417 | 3 / 3 | Cache API keyed by sitemap revisions |
 | Any page view (pricing, home, profiles, a run) | 26,018 anonymous, 38,438 signed in | 0 | The app fetched the catalog twice on every route; lists now load only on pages that show them, once |
 | Repeat anonymous catalog | 13,009 | 0 | 5-minute edge cache |
+| Signed-in catalog | 19,219 | 2 | `?scope=public` shares the anonymous edge cache (the 2 rows are the session) |
+| Signed-in Personal template list | 19,219 | 609 for 200 templates | `?scope=personal` reads only the user's own templates through `idx_templates_owner` |
+| Any signed-in page view (run list) | 1,007 Personal, 12,007 Organization | 0 | Runs load only on the runs page; the run page fetches one run by id |
 
 Writes per request after step 1 (dropped `idx_templates_slug`, `idx_templates_user_id`,
 `idx_templates_category`, `idx_checklist_runs_assigned_to_user_id`,

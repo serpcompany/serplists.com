@@ -45,16 +45,18 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   workspace are known. Pricing, home, profiles, and runs pages: 0 rows.
 - [x] **Edge-cache the anonymous catalog** for 5 minutes with `withEdgeCache()`: a
   repeat request reads 0 rows (from 13,009).
-- [ ] **Load the run list on demand** the same way; it still loads on every page for
-  signed-in users (Organization runs: 12,007 rows).
+- [x] **Load the run list on demand** the same way (`useTemplateLists({ runs: true })`,
+  used only by the runs page); it loaded on every signed-in page (Organization runs:
+  12,007 rows). The run page fetches its run by id.
 
 ### 2. Bounded lists (API and UI changes)
 
-- [ ] **Split the dashboard from the public catalog.** Signed-in pages request the
-  cached public catalog and, separately, only the active owner's templates
-  (`idx_templates_owner`) instead of "public OR mine"; the UI already merges the two.
-  Target: 19k to the user's own template count, and signed-in catalog views hit the
-  edge cache.
+- [x] **Split the dashboard from the public catalog.** Signed-in pages request
+  `?scope=public` (the shared edge-cached catalog: 2 rows read) and, separately,
+  `?scope=personal` (only the user's templates through `idx_templates_owner`: 609 rows
+  for 200 templates) instead of "public OR mine" (19,219). The UI merges the two as
+  before; the user's own copy now wins over a cached catalog copy. The no-scope request
+  stays for old tabs (TD-15).
 - [ ] **Paginate the public catalog** once it is large enough that cache misses or the
   response size matter. Cursor pagination on `created_at` using
   `idx_templates_public_created_at` (never `OFFSET`), FTS5 for search, an indexed
@@ -124,3 +126,11 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
 - 2026-09-27: Wait for `isWorkspaceLoading` before loading any template list. Without
   it, signed-in pages fetched the list once as a visitor and again as the user, and
   Organization pages fetched the Personal list before the active Organization resolved.
+- 2026-09-27: Add `scope=public|personal` to `GET /api/templates` instead of changing
+  what the no-parameter request returns. Browser tabs opened before a deploy keep the
+  old client, which reads the Personal list from the no-parameter request; changing it
+  would hide their private templates until a reload. The old branch is TD-15.
+- 2026-09-27: Share the edge-cached catalog between anonymous and signed-in requests
+  (same key, since both are public only), and let the user's own templates override the
+  catalog copy when merging, because the cached copy can be 5 minutes old. The smoke
+  suite asserts that `?scope=public` never includes a private template.
