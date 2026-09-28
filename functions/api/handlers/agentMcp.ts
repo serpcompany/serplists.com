@@ -27,9 +27,11 @@ import {
   boundedText,
   jsonByteLength,
   MAX_RESULT_BYTES,
+  outlineRetiredItems,
   outlineSections,
+  parseRetiredItems,
   parseStoredSections,
-  selectRunSections,
+  selectRunScope,
   serializeRun,
   summarizeRun,
   summarizeRunForAudit,
@@ -333,13 +335,19 @@ async function getRun(
 ): Promise<JsonRecord> {
   const args = parseToolArguments(getRunArgs, rawArguments);
   const run = await getOwnedRun(env, identity.userId, args.runId);
-  const sections = selectRunSections(parseStoredSections(run.items), args);
-  const result = { run: serializeRun(run, sections) };
+  const scoped = selectRunScope(parseStoredSections(run.items), parseRetiredItems(run), args);
+  const result = { run: serializeRun(run, scoped.sections, scoped.retiredItems) };
   if (jsonByteLength(result) <= MAX_RESULT_BYTES) return result;
   throw new ToolError(
-    "Run is too large to return at once; call get_run again with a sectionId or taskId from details.sections",
+    "Run is too large to return at once; call get_run again with a sectionId or taskId from details.sections "
+      + "or details.retiredItems",
     "result_too_large",
-    { limit: MAX_RESULT_BYTES, run: summarizeRun(run), sections: outlineSections(sections) },
+    {
+      limit: MAX_RESULT_BYTES,
+      run: summarizeRun(run),
+      sections: outlineSections(scoped.sections),
+      retiredItems: outlineRetiredItems(scoped.retiredItems),
+    },
   );
 }
 

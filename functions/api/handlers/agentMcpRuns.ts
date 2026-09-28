@@ -13,6 +13,8 @@ export const MAX_RUN_CONTENT_BYTES = 384 * 1024;
 // The section/task outline that result_too_large returns must itself stay small.
 const MAX_OUTLINE_BYTES = MAX_RESULT_BYTES / 2;
 const MAX_OUTLINE_SECTIONS = 1_000;
+// The retired-work outline beside it, so both together stay under MAX_RESULT_BYTES.
+const MAX_RETIRED_OUTLINE_BYTES = MAX_OUTLINE_BYTES / 2;
 
 export function utf8ByteLength(text: string): number {
   return new TextEncoder().encode(text).byteLength;
@@ -49,14 +51,22 @@ export function parseStoredSections(value: unknown): JsonRecord[] {
   return sanitizeStoredSections(normalized.sections);
 }
 
-export function serializeRun(run: JsonRecord, sections: JsonRecord[] = parseStoredSections(run.items)): JsonRecord {
+/** Work a Template change removed from the run, with its completion and notes. */
+export function parseRetiredItems(run: JsonRecord): JsonRecord[] {
+  return (parseJsonArray(run.retired_items) ?? []).filter(isRecord);
+}
+
+export function serializeRun(
+  run: JsonRecord,
+  sections: JsonRecord[] = parseStoredSections(run.items),
+  retiredItems: JsonRecord[] = parseRetiredItems(run),
+): JsonRecord {
   return {
     id: run.id,
     templateId: run.template_id,
     title: run.title,
     sections,
-    // Work a Template change removed from the run, with its completion and notes.
-    retiredItems: (parseJsonArray(run.retired_items) ?? []).filter(isRecord),
+    retiredItems,
     status: run.status ?? "in_progress",
     progress: typeof run.progress === "number" ? run.progress : 0,
     revision: typeof run.revision === "number" ? run.revision : 1,
@@ -69,7 +79,7 @@ export function serializeRun(run: JsonRecord, sections: JsonRecord[] = parseStor
 }
 
 export function summarizeRun(run: JsonRecord): JsonRecord {
-  const serialized = serializeRun(run, []);
+  const serialized = serializeRun(run, [], []);
   delete serialized.sections;
   delete serialized.retiredItems;
   return serialized;
@@ -188,23 +198,55 @@ export function updateRunAuditDiff(args: UpdateRunArgs, existing: JsonRecord, up
   return diff;
 }
 
-/** Narrows a run's sections to one section and/or one task for get_run. */
-export function selectRunSections(
+// The section, task or Sub-task record a retired entry holds; null for a malformed entry.
+function retiredRecord(entry: JsonRecord): JsonRecord | null {
+  const record = entry.kind === "section" ? entry.section : entry.kind === "item" ? entry.item : entry.subItem;
+  return isRecord(record) ? record : null;
+}
+
+// The section a retired entry belongs to: its own id for a retired section.
+function retiredSectionId(entry: JsonRecord): unknown {
+  return entry.kind === "section" ? retiredRecord(entry)?.id : entry.sectionId;
+}
+
+// The retired entries for one task: the task itself, its Sub-tasks, or a retired section
+// narrowed to that task. Ids can repeat in older data, so every match is kept.
+function retiredEntriesForTask(entries: JsonRecord[], taskId: string): JsonRecord[] {
+  return entries.flatMap((entry) => {
+    if (entry.kind === "item") return retiredRecord(entry)?.id === taskId ? [entry] : [];
+    if (entry.kind === "subItem") return entry.itemId === taskId ? [entry] : [];
+    const section = entry.kind === "section" ? retiredRecord(entry) : null;
+    const task = section ? sectionTasks(section).find((item) => item.id === taskId) : undefined;
+    return section && task ? [{ ...entry, section: { ...section, items: [task] } }] : [];
+  });
+}
+
+/**
+ * Narrows a run to one section and/or one task for get_run, live or retired. The retired
+ * entries follow the same scope, so a run whose retired work is large can still be read
+ * in parts; an id that only retired work holds returns no live sections.
+ */
+export function selectRunScope(
   sections: JsonRecord[],
+  retiredItems: JsonRecord[],
   scope: { sectionId?: string; taskId?: string },
-): JsonRecord[] {
+): { sections: JsonRecord[]; retiredItems: JsonRecord[] } {
   let scoped = sections;
+  let retired = retiredItems;
   if (scope.sectionId) {
     scoped = sections.filter((section) => section.id === scope.sectionId);
-    if (scoped.length === 0) throw new ToolError("Section not found", "section_not_found");
+    retired = retiredItems.filter((entry) => retiredSectionId(entry) === scope.sectionId);
+    if (scoped.length === 0 && retired.length === 0) throw new ToolError("Section not found", "section_not_found");
   }
-  if (!scope.taskId) return scoped;
+  const { taskId } = scope;
+  if (!taskId) return { sections: scoped, retiredItems: retired };
 
-  for (const section of scoped) {
-    const task = sectionTasks(section).find((item) => item.id === scope.taskId);
-    if (task) return [{ ...section, items: [task] }];
-  }
-  throw new ToolError("Task not found", "task_not_found");
+  const liveSection = scoped.find((section) => sectionTasks(section).some((item) => item.id === taskId));
+  const liveTask = liveSection ? sectionTasks(liveSection).find((item) => item.id === taskId) : undefined;
+  const liveSections = liveSection && liveTask ? [{ ...liveSection, items: [liveTask] }] : [];
+  const retiredForTask = retiredEntriesForTask(retired, taskId);
+  if (liveSections.length === 0 && retiredForTask.length === 0) throw new ToolError("Task not found", "task_not_found");
+  return { sections: liveSections, retiredItems: retiredForTask };
 }
 
 /** Section and task ids an agent can pass back to get_run to read a large run in parts. */
@@ -220,4 +262,36 @@ export function outlineSections(sections: JsonRecord[]): JsonRecord[] {
     title: boundedText(section.title),
     taskCount: sectionTasks(section).length,
   }));
+}
+
+/**
+ * Retired entries by kind, id and title (never notes), with the ids get_run takes to read
+ * them: a retired section's id and task ids, a retired task's id, a Sub-task's itemId.
+ */
+export function outlineRetiredItems(entries: JsonRecord[]): JsonRecord[] {
+  const outline = (entry: JsonRecord, withTasks: boolean): JsonRecord => {
+    const record = retiredRecord(entry);
+    const base = { kind: entry.kind, id: record?.id, title: boundedText(record?.title) };
+    if (entry.kind === "section") {
+      const tasks = record ? sectionTasks(record) : [];
+      return withTasks
+        ? { ...base, tasks: tasks.map((task) => ({ id: task.id, title: boundedText(task.title) })) }
+        : { ...base, taskCount: tasks.length };
+    }
+    if (entry.kind === "subItem") return { ...base, sectionId: entry.sectionId, itemId: entry.itemId };
+    return { ...base, sectionId: entry.sectionId };
+  };
+  const withTasks = entries.map((entry) => outline(entry, true));
+  if (jsonByteLength(withTasks) <= MAX_RETIRED_OUTLINE_BYTES) return withTasks;
+  // Too many to list in full: leave out task lists (a retired section's own read lists
+  // them) and stop at the byte budget.
+  const compact: JsonRecord[] = [];
+  let bytes = 2;
+  for (const entry of entries) {
+    const line = outline(entry, false);
+    bytes += jsonByteLength(line) + 1;
+    if (bytes > MAX_RETIRED_OUTLINE_BYTES) break;
+    compact.push(line);
+  }
+  return compact;
 }

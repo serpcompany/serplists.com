@@ -125,15 +125,16 @@ export const toolDefinitions = [
   },
   {
     name: "get_run",
-    description: "Read a personal run, including its sections, tasks, subtasks, progress, status, and revision. "
-      + "Pass sectionId or taskId to read part of a large run. A run too large to return at once fails with "
-      + "result_too_large and lists its section and task ids.",
+    description: "Read a personal run, including its sections, tasks, subtasks, progress, status, and revision, "
+      + "and retiredItems (work a template change removed). Pass sectionId or taskId to read part of a large run; "
+      + "retiredItems then holds only that section's or task's retired work, and retired ids work too. A run too "
+      + "large to return at once fails with result_too_large and lists its section, task, and retired ids.",
     inputSchema: {
       type: "object",
       properties: {
         runId: { type: "string" },
-        sectionId: { type: "string", description: "Return only this section." },
-        taskId: { type: "string", description: "Return only this task, inside its section." },
+        sectionId: { type: "string", description: "Return only this section, live or retired." },
+        taskId: { type: "string", description: "Return only this task, inside its section, live or retired." },
       },
       required: ["runId"],
       additionalProperties: false,

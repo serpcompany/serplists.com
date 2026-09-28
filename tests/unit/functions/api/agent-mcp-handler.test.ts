@@ -1188,6 +1188,148 @@ describe("personal run MCP handler", () => {
     expect(listBody.result.structuredContent.runs[0]).not.toHaveProperty("sections");
   });
 
+  describe("retired work in a run too large to return at once", () => {
+    function retiredSection(id: string, taskCount: number, notesLength: number): JsonRecord {
+      const items = Array.from({ length: taskCount }, (_, index) => ({
+        id: `${id}-task-${index}`,
+        title: `Old ${index}`,
+        isCompleted: true,
+        notes: "x".repeat(notesLength),
+      }));
+      return { kind: "section", section: { id, title: `Retired ${id}`, items } };
+    }
+    const retiredTask = {
+      kind: "item",
+      sectionId: "section-1",
+      sectionTitle: "Release",
+      item: { id: "task-dns", title: "Check DNS", isCompleted: true, notes: "TTL lowered" },
+    };
+    const retiredSubtask = {
+      kind: "subItem",
+      sectionId: "section-1",
+      itemId: "task-1",
+      itemTitle: "Verify",
+      subItem: { id: "sub-3", title: "Old check", isCompleted: true },
+    };
+    // Small live sections; one retired section over the result limit on its own.
+    const retiredHeavyRun = personalRun({
+      retired_items: JSON.stringify([retiredSection("old-section", 2, 300_000), retiredTask, retiredSubtask]),
+    });
+
+    let readCount = 0;
+    async function getRun(run: JsonRecord, args: JsonRecord = {}) {
+      // A key of its own per read keeps a long walk under the per-key request limit.
+      vi.mocked(authenticatePersonalRunKey).mockResolvedValue({ ...identity, keyId: `retired-read-${readCount++}` });
+      dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
+      const body = await toolBody(await handleAgentMcp(callTool("get_run", { runId: "run-1", ...args }), env));
+      expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(RESULT_LIMIT_BYTES);
+      return body.result;
+    }
+
+    it("lists retired work in the outline and returns only a scope's retired work", async () => {
+      const whole = await getRun(retiredHeavyRun);
+      expect(whole.structuredContent.error).toBe("result_too_large");
+      expect(whole.structuredContent.details.retiredItems).toEqual([
+        {
+          kind: "section",
+          id: "old-section",
+          title: "Retired old-section",
+          tasks: [{ id: "old-section-task-0", title: "Old 0" }, { id: "old-section-task-1", title: "Old 1" }],
+        },
+        { kind: "item", id: "task-dns", title: "Check DNS", sectionId: "section-1" },
+        { kind: "subItem", id: "sub-3", title: "Old check", sectionId: "section-1", itemId: "task-1" },
+      ]);
+
+      const section = await getRun(retiredHeavyRun, { sectionId: "section-1" });
+      expect(section.isError).toBeUndefined();
+      expect(section.structuredContent.run.sections.map((entry: any) => entry.id)).toEqual(["section-1"]);
+      expect(section.structuredContent.run.retiredItems).toEqual([retiredTask, retiredSubtask]);
+
+      const task = await getRun(retiredHeavyRun, { taskId: "task-1" });
+      expect(task.isError).toBeUndefined();
+      expect(task.structuredContent.run.retiredItems).toEqual([retiredSubtask]);
+
+      const retiredOnly = await getRun(retiredHeavyRun, { taskId: "task-dns" });
+      expect(retiredOnly.isError).toBeUndefined();
+      expect(retiredOnly.structuredContent.run.sections).toEqual([]);
+      expect(retiredOnly.structuredContent.run.retiredItems).toEqual([retiredTask]);
+    });
+
+    it("reads a retired section's tasks one at a time when the section is too large", async () => {
+      const oldSection = await getRun(retiredHeavyRun, { sectionId: "old-section" });
+      expect(oldSection.structuredContent.error).toBe("result_too_large");
+      expect(oldSection.structuredContent.details.sections).toEqual([]);
+      expect(oldSection.structuredContent.details.retiredItems[0].tasks).toHaveLength(2);
+
+      const oldTask = await getRun(retiredHeavyRun, { sectionId: "old-section", taskId: "old-section-task-1" });
+      expect(oldTask.isError).toBeUndefined();
+      expect(oldTask.structuredContent.run.sections).toEqual([]);
+      expect(oldTask.structuredContent.run.retiredItems).toEqual([{
+        kind: "section",
+        section: {
+          id: "old-section",
+          title: "Retired old-section",
+          items: [expect.objectContaining({ id: "old-section-task-1", notes: "x".repeat(300_000) })],
+        },
+      }]);
+
+      expect((await getRun(retiredHeavyRun, { taskId: "nope" })).structuredContent.error).toBe("task_not_found");
+      expect((await getRun(retiredHeavyRun, { sectionId: "nope" })).structuredContent.error).toBe("section_not_found");
+      expect((await getRun(retiredHeavyRun, { sectionId: "old-section", taskId: "task-1" })).structuredContent.error)
+        .toBe("task_not_found");
+    });
+
+    it.each([
+      ["a large retired section", retiredHeavyRun],
+      ["large live and retired work in the same section", personalRun({
+        items: JSON.stringify(largeSections(600 * 1024)),
+        retired_items: JSON.stringify([
+          retiredSection("gone", 40, 15_000),
+          ...Array.from({ length: 60 }, (_, index) => ({
+            kind: "item",
+            sectionId: "section-1",
+            item: { id: `retired-${index}`, title: `Retired ${index}`, isCompleted: false, notes: "y".repeat(10_000) },
+          })),
+          retiredSubtask,
+        ]),
+      })],
+    ])("reaches every part of a run with %s by following the outlines", async (_label, run) => {
+      const queue: JsonRecord[] = [{}];
+      const seen = new Set<string>();
+      let tooLarge = 0;
+      while (queue.length > 0) {
+        const args = queue.shift()!;
+        const key = JSON.stringify(args);
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const result = await getRun(run, args);
+        if (!result.isError) continue;
+        // Every task fits on its own, so only a whole run or section may be too large.
+        expect(result.structuredContent.error, key).toBe("result_too_large");
+        expect(args.taskId, key).toBeUndefined();
+        tooLarge += 1;
+        const { sections, retiredItems } = result.structuredContent.details;
+        for (const section of sections) {
+          queue.push({ sectionId: section.id });
+          for (const task of section.tasks ?? []) queue.push({ taskId: task.id });
+        }
+        for (const entry of retiredItems ?? []) {
+          if (entry.kind === "section") {
+            queue.push({ sectionId: entry.id });
+            for (const task of entry.tasks ?? []) queue.push({ sectionId: entry.id, taskId: task.id });
+          } else if (entry.kind === "item") {
+            queue.push({ taskId: entry.id });
+          } else if (entry.kind === "subItem") {
+            queue.push({ taskId: entry.itemId });
+          }
+        }
+      }
+      expect(tooLarge).toBeGreaterThan(0);
+      expect(seen.size).toBeGreaterThan(tooLarge);
+    });
+  });
+
   it("hides a personal run owned by another user", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ user_id: "user-2" })]);
 
