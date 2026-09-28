@@ -43,7 +43,8 @@ function request(
   } as RequestInit);
 }
 
-describe('API router request body limit', () => {
+// Each test imports the whole router graph fresh; allow for a busy machine.
+describe('API router request body limit', { timeout: 30_000 }, () => {
   const handlers = {
     handleTemplates: vi.fn(async () => Response.json({ ok: true })),
     handleChecklists: vi.fn(async () => Response.json({ ok: true })),

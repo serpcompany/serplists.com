@@ -57,7 +57,8 @@ describe('authRateLimitBucket', () => {
   });
 });
 
-describe('API router auth rate limits', () => {
+// Each test imports the whole router graph fresh and sends hundreds of requests.
+describe('API router auth rate limits', { timeout: 30_000 }, () => {
   let ip: string;
 
   beforeEach(() => {

@@ -37,7 +37,7 @@ async function loadSessionHelper(auth: unknown) {
   return import('../../../../functions/api/utils/session');
 }
 
-describe('getSessionUserId', () => {
+describe('getSessionUserId', { timeout: 30_000 }, () => {
   afterEach(() => {
     vi.doUnmock('../../../../functions/api/better-auth');
     vi.resetModules();

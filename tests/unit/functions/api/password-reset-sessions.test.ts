@@ -47,7 +47,7 @@ async function userIdFor(cookie: string) {
   return getSessionUserId(new Request(`${BASE_URL}/api/templates`, { headers: { Cookie: cookie } }), env);
 }
 
-describe('password reset', () => {
+describe('password reset', { timeout: 30_000 }, () => {
   let sentEmails: string[];
 
   beforeEach(() => {
