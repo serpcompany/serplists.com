@@ -22,6 +22,7 @@ import {
   runInsertStatements,
 } from '../utils/active-run-limit';
 import { findShareLinkOutsiders, HIDDEN_ACTOR } from '../utils/share-link-actors';
+import { completionStamps } from '../utils/run-completion';
 import { handleSharedChecklist } from './checklists-shared';
 
 function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: URL): string | null {
@@ -585,6 +586,8 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       template_version: templateRunSource.source?.version ?? 1,
       revision: 1,
       retired_items: '[]',
+      // A run created as completed is stamped like any other completion.
+      ...completionStamps({ currentStatus: null, currentCompletedAt: null, nextStatus: status, userId, now }),
     };
 
     const auditEvent = await buildAuditEventValues({
@@ -645,9 +648,8 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     if (progress !== undefined) {
       updates.progress = progress;
     }
-    if (completed_at !== undefined) {
-      updates.completed_at = completed_at;
-    }
+    // completed_at is not a field of its own: completionStamps below uses it only when the
+    // run becomes completed, and ignores the value the run page echoes on later saves.
 
     if (Object.keys(updates).length === 0) {
       return jsonError('No fields to update', 400);
@@ -683,12 +685,16 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     const now = new Date().toISOString();
     updates.updated_at = now;
     updates.revision = currentRevision + 1;
-    if (status === 'completed') {
-      updates.completed_by_user_id = userId;
-      if (!Object.prototype.hasOwnProperty.call(rawBody, 'completed_at')) {
-        updates.completed_at = now;
-      }
-    }
+    // Only a real completion names the completer; the revision guard below keeps
+    // existingRun.status current for this decision.
+    Object.assign(updates, completionStamps({
+      currentStatus: existingRun.status,
+      currentCompletedAt: existingRun.completed_at,
+      nextStatus: status,
+      requestedCompletedAt: completed_at,
+      userId,
+      now,
+    }));
 
     const auditEvent = await buildAuditEventValues({
       actorUserId: userId,

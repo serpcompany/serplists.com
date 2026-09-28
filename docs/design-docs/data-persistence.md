@@ -72,7 +72,7 @@ Personal data uses User ownership. Organization data uses Organization ownership
 - Personal templates: `templates.owner_type = 'user'`, `templates.user_id = current user`, `templates.team_id IS NULL`.
 - Organization Templates: `templates.owner_type = 'team'`, `templates.team_id = active Organization`, with creator/updater attribution on User columns. The stored `team` values are legacy identifiers.
 - Personal runs: `checklist_runs.user_id = current user`, `checklist_runs.team_id IS NULL`.
-- Organization Runs: `checklist_runs.team_id = active Organization`, with creator/started/completed User attribution.
+- Organization Runs: `checklist_runs.team_id = active Organization`, with creator/started/completed User attribution. `completed_by_user_id` and `completed_at` are written only when a run becomes completed (`functions/api/utils/run-completion.ts`), so a teammate's later save does not take over the completion.
 
 Handlers must authorize Organization access before returning or mutating Organization-scoped rows. Do not trust the legacy client-supplied `teamId` without checking Organization Membership and role.
 

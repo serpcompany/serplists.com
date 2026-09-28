@@ -522,6 +522,47 @@ describe("personal run MCP handler", () => {
     expect(updates).not.toHaveProperty("completed_by_user_id");
   });
 
+  it("keeps the original completion stamps when a completed run is marked completed again", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
+      status: "completed",
+      progress: 100,
+      revision: 2,
+      completed_at: "2026-09-19T01:00:00.000Z",
+      completed_by_user_id: "user-1",
+    })]);
+
+    const response = await handleAgentMcp(callTool("update_run", {
+      runId: "run-1",
+      expectedRevision: 2,
+      operation: "set_run_status",
+      status: "completed",
+    }), env);
+    const body = await response.json() as any;
+
+    expect(body.result.isError).toBeUndefined();
+    const updates = dbMocks.updateChain.set.mock.calls[0][0];
+    expect(updates.status).toBe("completed");
+    expect(updates).not.toHaveProperty("completed_at");
+    expect(updates).not.toHaveProperty("completed_by_user_id");
+  });
+
+  it("stamps the completer and time when a run becomes completed", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
+
+    const response = await handleAgentMcp(callTool("update_run", {
+      runId: "run-1",
+      expectedRevision: 2,
+      operation: "set_run_status",
+      status: "completed",
+    }), env);
+    const body = await response.json() as any;
+
+    expect(body.result.isError).toBeUndefined();
+    const updates = dbMocks.updateChain.set.mock.calls[0][0];
+    expect(updates.completed_by_user_id).toBe("user-1");
+    expect(typeof updates.completed_at).toBe("string");
+  });
+
   it("refuses to reopen a completed run when the Free active-run limit is reached", async () => {
     vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: "free", limits: { maxTemplates: 1, maxActiveRuns: 3 } });
     dbMocks.selectChain.limit

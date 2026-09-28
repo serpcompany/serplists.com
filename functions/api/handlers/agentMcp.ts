@@ -16,6 +16,7 @@ import {
   type PersonalRunKeyIdentity,
 } from "../utils/personal-run-key";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
+import { completionStamps } from "../utils/run-completion";
 import { calculateRunProgress, resetRunCompletionState } from "../utils/template-reconciliation";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
@@ -651,12 +652,16 @@ async function updateRun(
   if (parsed.data.operation === "set_run_status") {
     updates.status = parsed.data.status;
     // Match the existing checklist status endpoint: a status-only transition does
-    // not rewrite progress, and reopening does not erase completion attribution.
+    // not rewrite progress, reopening does not erase completion attribution, and
+    // marking an already completed run completed again does not restamp it.
     updates.progress = typeof existing.progress === "number" ? existing.progress : 0;
-    if (parsed.data.status === "completed") {
-      updates.completed_at = now;
-      updates.completed_by_user_id = identity.userId;
-    }
+    Object.assign(updates, completionStamps({
+      currentStatus: existing.status,
+      currentCompletedAt: existing.completed_at,
+      nextStatus: parsed.data.status,
+      userId: identity.userId,
+      now,
+    }));
   }
 
   const nextRun = { ...existing, ...updates };
