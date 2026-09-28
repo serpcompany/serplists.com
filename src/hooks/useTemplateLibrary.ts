@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useTemplateLists } from "@/contexts/TemplatesContext";
-import { buildCategorySlug } from "@/lib/routes";
+import { buildCategorySlug, hasCanonicalPublicTemplatePath } from "@/lib/routes";
 import { getPredefinedCategories } from "@/utils/categories";
 
 export const useTemplateLibrary = (category?: string, templateType?: "checklist" | "recipe") => {
@@ -13,9 +13,12 @@ export const useTemplateLibrary = (category?: string, templateType?: "checklist"
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
-  // Filter to only public templates
+  // Only public templates with a public URL: a card for a template whose owner has no
+  // username would have nowhere to link, yet still count toward categories.
   const templates = useMemo(() => {
-    const publicTemplates = contextTemplates.filter(t => t.isPublic === true);
+    const publicTemplates = contextTemplates.filter(
+      (t) => t.isPublic === true && hasCanonicalPublicTemplatePath(t),
+    );
     if (!templateType) return publicTemplates;
     return publicTemplates.filter(t => t.type === templateType);
   }, [contextTemplates, templateType]);

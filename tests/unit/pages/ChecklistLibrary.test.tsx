@@ -15,6 +15,7 @@ import {
   buildCanonicalPublicTemplatePath,
   buildPublicCategoryPath,
   buildPublicTemplatesPath,
+  hasCanonicalPublicTemplatePath,
 } from '@/lib/routes';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -130,17 +131,15 @@ describe('ChecklistLibrary route behavior', () => {
     );
   });
 
-  it('falls back to the public library when a template cannot produce a canonical owner URL', () => {
-    const mockNavigate = vi.fn();
+  it('gives a template whose owner has no username no public URL, so discovery leaves it out', () => {
     const template: ChecklistTemplate = {
       ...baseTemplate,
       slug: 'missing-owner',
+      ownerProfile: { full_name: 'Email Signup' },
     };
 
-    const path = buildCanonicalPublicTemplatePath(template);
-    mockNavigate(path ?? buildPublicTemplatesPath());
-
-    expect(mockNavigate).toHaveBeenCalledWith('/templates');
+    expect(buildCanonicalPublicTemplatePath(template)).toBeNull();
+    expect(hasCanonicalPublicTemplatePath(template)).toBe(false);
   });
 
   it('builds category filters as category detail routes', () => {

@@ -93,6 +93,12 @@ export const buildCanonicalPublicTemplatePath = (
   return buildPublicTemplatePath(ownerSlug, templateSlug);
 };
 
+// The only public template route is /profile/:username/:templateSlug, so a template whose
+// owner has no username has no public URL. Public discovery lists only templates that have one.
+export const hasCanonicalPublicTemplatePath = (
+  template: Pick<ChecklistTemplate, 'id' | 'slug' | 'userId' | 'ownerProfile'>,
+): boolean => buildCanonicalPublicTemplatePath(template) !== null;
+
 export const buildConsoleHomePath = (): string => '/dashboard';
 
 export const buildConsoleTemplatesPath = (): string => '/dashboard/templates';

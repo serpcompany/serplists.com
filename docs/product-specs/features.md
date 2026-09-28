@@ -29,7 +29,7 @@ Canonical private routes:
 - Users can create, edit, archive, restore, import, and export templates.
 - Template detail pages render a read-only preview first. Editing happens on `/dashboard/templates/:id/edit`.
 - Template content updates reconcile into matching active, private runs for the same Resource Owner. Stable section, item, and sub-item IDs preserve run completion and notes across renames and reordering; new work arrives incomplete, and retired work leaves readiness calculations while remaining in run history.
-- Public templates can be shared at `/profile/{username}/{templateSlug}`.
+- Public templates can be shared at `/profile/{username}/{templateSlug}`. That is their only public URL, so the template library (`/templates`) and category pages list a public template only when its owner has a username, as the sitemaps do.
 - Other Users can copy public templates into Personal or an authorized Organization when that ownership context's entitlement allows it.
 - Template history is stored in `template_versions`; related actor/action history is stored in `audit_events`.
 

@@ -99,4 +99,35 @@ describe('useTemplateLibrary', () => {
     expect(allCategories).toEqual(expect.arrayContaining(['moving', 'wedding', 'outdoor', 'Tech']));
     expect(allCategories).toEqual([...allCategories].sort());
   });
+
+  it('leaves out public templates that have no public URL because their owner has no username', () => {
+    const orphan = (id: string, ownerProfile?: ChecklistTemplate['ownerProfile']): ChecklistTemplate => ({
+      ...databaseTemplate,
+      id,
+      slug: id,
+      title: `Orphan ${id}`,
+      categories: ['orphaned'],
+      ownerProfile,
+    });
+    mockUseTemplateLists.mockReturnValue({
+      templates: [
+        ...repoTemplates,
+        databaseTemplate,
+        orphan('no-username', { full_name: 'Email Signup' }),
+        orphan('blank-username', { full_name: 'Blank', username: '   ' }),
+        orphan('no-owner-profile'),
+      ],
+      templatesLoading: false,
+      catalogPending: false,
+      catalogError: false,
+      refetchCatalog: vi.fn(),
+    });
+
+    const library = renderFirstPass();
+    const ids = library.templates.map((template) => template.id);
+
+    expect(ids).toEqual([...repoTemplates.map((template) => template.id), databaseTemplate.id]);
+    expect(library.filteredTemplates.map((template) => template.id)).toEqual(ids);
+    expect(library.allCategories).not.toContain('orphaned');
+  });
 });
