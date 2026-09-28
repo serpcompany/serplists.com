@@ -46,6 +46,12 @@ Key. Saves to a run that is already in progress never check the limit, so a cont
 its limit (for example after a downgrade) can still finish its runs
 (`functions/api/utils/active-run-limit.ts`).
 
+Limits hold under concurrent requests. Starting, restoring, and copying runs and
+Templates check the count once for a clear error, then again inside the write itself
+(`INSERT ... SELECT ... WHERE count < limit`, or the same condition on a restore's
+`UPDATE`), so parallel requests cannot all pass the same count
+(`functions/api/utils/guarded-insert.ts`, `functions/api/utils/template-writes.ts`).
+
 ## Organization Matrix
 
 | Capability | Free Organization | Paid Organization |

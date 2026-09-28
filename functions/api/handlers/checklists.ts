@@ -12,7 +12,16 @@ import { z } from 'zod';
 import { calculateRunProgress, reconcileRunSections } from '../utils/template-reconciliation';
 import { batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
 import { canUseTemplateAsRunSource } from '../utils/template-access';
-import { activeRunLimitResponse, findActiveRunLimitHit, isReopening } from '../utils/active-run-limit';
+import {
+  activeRunCapacityAvailableSql,
+  activeRunLimitResponse,
+  checkActiveRunCapacity,
+  countActiveRuns,
+  findActiveRunLimitHit,
+  isReopening,
+  runInsertStatements,
+} from '../utils/active-run-limit';
+import { insertRowWhere, rowExistsSql } from '../utils/guarded-insert';
 import { handleSharedChecklist } from './checklists-shared';
 
 function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: URL): string | null {
@@ -369,10 +378,11 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
 
       const teamId = typeof runRecord.team_id === 'string' && runRecord.team_id ? runRecord.team_id : null;
-      if (runRecord.status === 'in_progress') {
-        const limitHit = await findActiveRunLimitHit(env, { userId, teamId }, userId);
-        if (limitHit) return activeRunLimitResponse(limitHit, 'restore');
-      }
+      const owner = { userId, teamId };
+      const capacity = runRecord.status === 'in_progress'
+        ? await checkActiveRunCapacity(env, owner, userId)
+        : { limit: null, hit: null };
+      if (capacity.hit) return activeRunLimitResponse(capacity.hit, 'restore');
 
       const now = new Date().toISOString();
       const restoreUpdates = {
@@ -395,16 +405,21 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         request,
         createdAt: now,
       });
-      await db.batch([
-        db.update(checklist_runs)
-          .set(restoreUpdates)
-          .where(
-            teamId
-              ? and(eq(checklist_runs.id, checklistId), eq(checklist_runs.team_id, teamId), isNotNull(checklist_runs.deleted_at))
-              : and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId), isNotNull(checklist_runs.deleted_at)),
-          ),
-        db.insert(audit_events).values(auditEvent),
-      ]);
+      const archivedRun = teamId
+        ? and(eq(checklist_runs.id, checklistId), eq(checklist_runs.team_id, teamId), isNotNull(checklist_runs.deleted_at))
+        : and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId), isNotNull(checklist_runs.deleted_at));
+      // With a limit, the restore re-checks it in the same statement and the audit row is
+      // written only if this request restored the run.
+      const batchResults = await db.batch(capacity.limit === null
+        ? [db.update(checklist_runs).set(restoreUpdates).where(archivedRun), db.insert(audit_events).values(auditEvent)]
+        : [
+            db.update(checklist_runs).set(restoreUpdates).where(and(archivedRun, activeRunCapacityAvailableSql(owner, capacity.limit))),
+            insertRowWhere(db, audit_events, auditEvent, rowExistsSql(checklist_runs.id, checklistId, and(isNull(checklist_runs.deleted_at), eq(checklist_runs.updated_at, now)))),
+          ]);
+      if (capacity.limit !== null && batchUpdateMissed(batchResults[0])) {
+        const current = await countActiveRuns(env, owner);
+        if (current >= capacity.limit) return activeRunLimitResponse({ limit: capacity.limit, current }, 'restore');
+      }
 
       return json({ success: true });
     }
@@ -798,8 +813,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       if (accessError) return accessError;
     }
 
-    const limitHit = await findActiveRunLimitHit(env, { userId, teamId: effectiveTeamId }, userId);
-    if (limitHit) return activeRunLimitResponse(limitHit, 'create');
+    const owner = { userId, teamId: effectiveTeamId };
+    const capacity = await checkActiveRunCapacity(env, owner, userId);
+    if (capacity.hit) return activeRunLimitResponse(capacity.hit, 'create');
 
     const checklistId = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -837,10 +853,10 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       request,
       createdAt: now,
     });
-    await db.batch([
-      db.insert(checklist_runs).values(insertedRun),
-      db.insert(audit_events).values(auditEvent),
-    ]);
+    const batchResults = await db.batch(runInsertStatements(db, insertedRun, auditEvent, owner, capacity.limit));
+    if (capacity.limit !== null && batchUpdateMissed(batchResults[0])) {
+      return activeRunLimitResponse({ limit: capacity.limit, current: await countActiveRuns(env, owner) }, 'create');
+    }
 
     return json({ id: checklistId });
   }

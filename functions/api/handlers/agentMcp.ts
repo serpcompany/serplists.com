@@ -3,7 +3,13 @@ import { z } from "zod";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { buildAuditEventValues } from "../utils/audit";
-import { findActiveRunLimitHit, isReopening, type RunOwnerContext } from "../utils/active-run-limit";
+import {
+  checkActiveRunCapacity,
+  countActiveRuns,
+  isReopening,
+  runInsertStatements,
+  type RunOwnerContext,
+} from "../utils/active-run-limit";
 import {
   authenticatePersonalRunKey,
   markPersonalRunKeyUsed,
@@ -468,7 +474,8 @@ async function startRun(
     throw new ToolError("Template not found", "template_not_found");
   }
 
-  await assertActiveRunCapacity(env, { userId: identity.userId, teamId: null });
+  const owner = { userId: identity.userId, teamId: null };
+  const limit = await assertActiveRunCapacity(env, owner);
 
   const normalized = normalizeSectionsPayload(parseJsonArray(template.items) ?? []);
   if (normalized.error) throw new ToolError("Template content is invalid", "invalid_template");
@@ -503,17 +510,20 @@ async function startRun(
     request,
     createdAt: now,
   });
-  await db.batch([
-    db.insert(schema.checklist_runs).values(run),
-    db.insert(schema.audit_events).values(auditEvent),
-  ]);
+  // With a limit, the insert re-checks it atomically so parallel start_run calls cannot all pass.
+  const batchResults = await db.batch(runInsertStatements(db, run, auditEvent, owner, limit));
+  if (limit !== null && batchChanges(batchResults[0]) === 0) {
+    throw new ToolError("Active run limit reached", "limit_reached", { limit, current: await countActiveRuns(env, owner) });
+  }
 
   return { run: serializeRun(run) };
 }
 
-async function assertActiveRunCapacity(env: Env, owner: RunOwnerContext): Promise<void> {
-  const limitHit = await findActiveRunLimitHit(env, owner, owner.userId);
-  if (limitHit) throw new ToolError("Active run limit reached", "limit_reached", { ...limitHit });
+/** Throws limit_reached when the context is at its active-run limit; returns the limit. */
+async function assertActiveRunCapacity(env: Env, owner: RunOwnerContext): Promise<number | null> {
+  const { limit, hit } = await checkActiveRunCapacity(env, owner, owner.userId);
+  if (hit) throw new ToolError("Active run limit reached", "limit_reached", { ...hit });
+  return limit;
 }
 
 async function listRuns(
