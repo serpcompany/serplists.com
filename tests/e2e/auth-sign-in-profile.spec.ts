@@ -10,7 +10,7 @@ test('the account menu links to the profile right after signing in, without a re
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 
-  await page.locator('header').first().getByRole('button', { name: /^[A-Z]$/ }).click();
+  await page.locator('header').first().getByRole('button', { name: 'Account menu' }).click();
   const profile = page.getByRole('menuitem', { name: 'Profile' });
   await expect(profile).toBeVisible();
   await expect(profile).toHaveAttribute('href', '/profile/john');

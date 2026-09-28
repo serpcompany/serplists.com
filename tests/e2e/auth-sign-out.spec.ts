@@ -5,7 +5,7 @@ import { expect, test, type Page } from '@playwright/test';
 // says so, because the session cookie is still valid (src/contexts/authSession.ts).
 
 async function openAccountMenu(page: Page) {
-  await page.locator('header').first().getByRole('button', { name: /^[A-Z]$/ }).click();
+  await page.locator('header').first().getByRole('button', { name: 'Account menu' }).click();
 }
 
 test('a failed sign-out keeps the user signed in, and a later one signs them out for good', async ({ page }) => {
