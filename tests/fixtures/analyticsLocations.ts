@@ -20,6 +20,14 @@ export const SENSITIVE_ANALYTICS_LOCATIONS: Array<[pathname: string, search: str
   ['/anything', '?utm_source=x&Token=y'],
   ['/anything', '?%74oken=x'],
   ['/callback', '?code=abc&state=xyz'],
+  // A return path that points at a sensitive page, as the verification email link and
+  // the invite page's sign-in and sign-up links carry it.
+  ['/login', '?verified=1&next=%2Fteam-invites%2Finvite-token'],
+  ['/login', '?next=%2Fteam-invites%2Finvite-token%3Fx%3D1%23h'],
+  ['/register', '?next=%2Fteam-invites%2Finvite-token'],
+  ['/login', '?NEXT=%2Fshare%2Fshare-token'],
+  ['/login', '?next=%2Fdashboard%3Ftoken%3Dx'],
+  ['/login', '?next=%2Fregister%3Fnext%3D%252Fteam-invites%252Finvite-token'],
 ];
 
 export const SAFE_ANALYTICS_LOCATIONS: Array<[pathname: string, search: string]> = [
@@ -34,4 +42,6 @@ export const SAFE_ANALYTICS_LOCATIONS: Array<[pathname: string, search: string]>
   ['/templates/%E0%A4%A', ''],
   ['/shared-notes', ''],
   ['/reset-passwords-guide', ''],
+  ['/login', '?next=%2Fdashboard%2Fsettings%3Fbilling%3Dsuccess'],
+  ['/register', '?next=%2Ftemplates%23share'],
 ];

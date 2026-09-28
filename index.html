@@ -7,8 +7,9 @@
     <script>
       (function (win, doc) {
         // Tags in the container read location.href, so a document whose URL carries a
-        // share or invite token, a reset token or an email address never loads it. Keep
-        // in step with src/lib/analyticsUrl.ts (tests/unit/security/gtmBootstrap.test.ts).
+        // share or invite token, a reset token or an email address never loads it, nor
+        // one whose `next` return path points at such a page. Keep in step with
+        // src/lib/analyticsUrl.ts (tests/unit/security/gtmBootstrap.test.ts).
         function isSensitiveLocation(pathname, search) {
           var path = pathname;
           try {
@@ -20,10 +21,20 @@
           if (/^\/(share|team-invites|reset-password)(\/|$)/i.test(path)) return true;
           var sensitiveKeys = ['token', 'email', 'code', 'state'];
           var sensitive = false;
-          new URLSearchParams(search).forEach(function (_value, key) {
-            if (sensitiveKeys.indexOf(key.toLowerCase()) !== -1) sensitive = true;
+          new URLSearchParams(search).forEach(function (value, key) {
+            var name = key.toLowerCase();
+            if (sensitiveKeys.indexOf(name) !== -1) sensitive = true;
+            if (name === 'next' && isSensitiveReturnPath(value)) sensitive = true;
           });
           return sensitive;
+        }
+
+        function isSensitiveReturnPath(value) {
+          var withoutHash = value.split('#')[0];
+          var queryStart = withoutHash.indexOf('?');
+          return queryStart === -1
+            ? isSensitiveLocation(withoutHash, '')
+            : isSensitiveLocation(withoutHash.slice(0, queryStart), withoutHash.slice(queryStart));
         }
 
         var skipTagManager = true;

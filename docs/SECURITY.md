@@ -79,10 +79,13 @@ URL (GA4 sends it as `page_location`). So:
 
 - The bootstrap in `index.html` skips the container for any document that opens on
   `/share/*`, `/team-invites/*` or `/reset-password`, or whose query has a `token`,
-  `email`, `code` or `state` parameter. The rule lives in `src/lib/analyticsUrl.ts`;
-  `index.html` inlines a copy, and `tests/unit/security/gtmBootstrap.test.ts` checks
-  that both agree.
-- The app never puts a secret or an email address into a URL it navigates to. Sign-up
+  `email`, `code` or `state` parameter, or a `next` return path
+  (`src/lib/auth/returnPath.ts`) that points at one of those. The verification email
+  returns a new invitee to `/login?verified=1&next=%2Fteam-invites%2F<token>`. The rule
+  lives in `src/lib/analyticsUrl.ts`; `index.html` inlines a copy, and
+  `tests/unit/security/gtmBootstrap.test.ts` checks that both agree.
+- The app never puts an email address into a URL it navigates to, and puts a secret
+  there only inside a `next` return path, which the rule above covers. Sign-up
   passes the new account's email to `/login` in router state; the reset page reads its
   token once and removes it from the address bar (a reload offers a new link). When
   sign-in returns to an invite link in a document where the tags run, it loads the

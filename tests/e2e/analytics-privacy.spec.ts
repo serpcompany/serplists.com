@@ -30,11 +30,23 @@ const SENSITIVE_PAGES = [
     path: '/login?verify_email=1&email=analytics-e2e%40example.com',
     secret: 'analytics-e2e',
   },
+  // Where the verification email returns a new invitee.
+  {
+    path: '/login?verified=1&next=%2Fteam-invites%2Fe2e-analytics-next-token',
+    secret: 'e2e-analytics-next-token',
+  },
 ];
+
+// The path and query parameter names, without the values that carry the secrets.
+const describePage = (path: string): string => {
+  const [pathname, query = ''] = path.split('?');
+  const keys = [...new URLSearchParams(query).keys()];
+  return keys.length > 0 ? `${pathname}?${keys.join('&')}` : pathname;
+};
 
 test.describe('analytics privacy', () => {
   for (const { path, secret } of SENSITIVE_PAGES) {
-    test(`does not load Google Tag Manager on ${path.split('?')[0]}`, async ({ page }) => {
+    test(`does not load Google Tag Manager on ${describePage(path)}`, async ({ page }) => {
       const requests = await recordTagRequests(page);
 
       await page.goto(path);
