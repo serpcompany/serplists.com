@@ -5,7 +5,9 @@ import {
   parseTemplatesFromFile,
   parseTemplatesFromJSON,
   generateUniqueIds,
-  prepareTemplatesForImport
+  prepareTemplatesForImport,
+  countImportPublicTemplates,
+  resolveImportIsPublic,
 } from '@/lib/utils/templateBackup';
 import { ChecklistTemplate, TemplateBackup } from '@/lib/schemas/checklistSchema';
 
@@ -592,6 +594,44 @@ describe('Template Backup Utilities', () => {
       expect(result[0].seoTitle).toBe('SEO Title');
       expect(result[0].seoDescription).toBe('SEO Description');
       expect(result[0].rules).toHaveLength(1);
+    });
+  });
+
+  describe('import visibility', () => {
+    const visibilities = ['preserve', 'public', 'private'] as const;
+
+    it.each([
+      [true, 'preserve', true],
+      [false, 'preserve', false],
+      [undefined, 'preserve', false],
+      [true, 'public', true],
+      [false, 'public', true],
+      [undefined, 'public', true],
+      [true, 'private', false],
+      [false, 'private', false],
+      [undefined, 'private', false],
+    ] as const)('isPublic %s with %s visibility is public: %s', (isPublic, visibility, expected) => {
+      expect(resolveImportIsPublic(isPublic, visibility)).toBe(expected);
+    });
+
+    it('counts the public templates the import will create for each visibility', () => {
+      const templates = [
+        createMockTemplate({ id: 'a', isPublic: true }),
+        createMockTemplate({ id: 'b', isPublic: true }),
+        createMockTemplate({ id: 'c', isPublic: false }),
+      ];
+
+      expect(countImportPublicTemplates(templates, 'preserve')).toBe(2);
+      expect(countImportPublicTemplates(templates, 'public')).toBe(3);
+      expect(countImportPublicTemplates(templates, 'private')).toBe(0);
+      expect(countImportPublicTemplates([], 'public')).toBe(0);
+
+      for (const visibility of visibilities) {
+        const prepared = prepareTemplatesForImport(templates, 'user-1', { visibility });
+        expect(prepared.filter((template) => template.isPublic)).toHaveLength(
+          countImportPublicTemplates(templates, visibility),
+        );
+      }
     });
   });
 

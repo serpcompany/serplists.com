@@ -7,13 +7,14 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, Upload, FileText, AlertCircle, CheckCircle } from "lucide-react";
+import { Download, FileText, AlertCircle, CheckCircle } from "lucide-react";
 import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { toast } from "sonner";
 import { downloadBackupFile, exportPortableTemplatesToJSON, parseTemplatesFromFile } from "@/lib/utils/templateBackup";
-import type { ChecklistTemplate, TemplateImportOptions, TemplateImportSummary } from "@/types/checklist";
+import type { ImportVisibility } from "@/lib/utils/templateBackup";
+import type { ChecklistTemplate, TemplateImportSummary } from "@/types/checklist";
 import { exportTemplatePack } from "@/features/template-backup/exportTemplatePack";
 import { selectImportFile } from "@/features/template-backup/importFileSelection";
 import type { ImportPreview } from "@/features/template-backup/importFileSelection";
@@ -22,6 +23,7 @@ import { getAccessFailure } from "@/lib/api-errors";
 import { useBillingStatus } from "@/hooks/useBillingStatus";
 import { cn } from "@/lib/utils";
 import { ORGANIZATION_BACKUP_UPGRADE_MESSAGE, TemplateBackupPlanNotice } from "@/components/TemplateBackupPlanNotice";
+import { TemplateImportPreview } from "@/components/TemplateImportPreview";
 
 interface TemplateBackupProps {
   className?: string;
@@ -50,7 +52,6 @@ const countOversizedAssets = (templates: ChecklistTemplate[]): number => {
 export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   className
 }) => {
-  type ImportVisibility = NonNullable<TemplateImportOptions["visibility"]>;
   // The export is built on the server, so this page never loads the public catalog.
   const {
     allTemplates,
@@ -450,106 +451,19 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 	              </p>
 	            </div>
 
-            {/* Import Preview */}
-            {importPreview && <Card className="border-dashed">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    Import Preview
-                    <span className="truncate text-sm font-normal text-muted-foreground">{importPreview.fileName}</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <Badge variant="secondary">{importPreview.templates.length} templates</Badge>
-                    <Badge variant="outline">
-                      {importPreview.templates.filter(t => t.isPublic).length} public
-                    </Badge>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Templates to import:</h4>
-                    <div className="max-h-40 overflow-y-auto space-y-1">
-                      {importPreview.templates.map((template, index: number) => <div key={index} className="text-sm p-2 bg-muted rounded">
-                          <div className="font-medium">{template.title}</div>
-                          {template.description && <div className="text-muted-foreground truncate">{template.description}</div>}
-                          <div className="text-xs text-muted-foreground">
-                            {template.sections.length} sections
-                          </div>
-                        </div>)}
-                    </div>
-                  </div>
-
-                  {importPreview.warnings.length > 0 && <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
-                        <div className="text-sm">
-                          <p className="font-medium text-amber-800 dark:text-amber-200">
-                            Import Warnings
-                          </p>
-                          <ul className="text-amber-700 dark:text-amber-300 mt-1 space-y-1">
-                            {importPreview.warnings.map((warning, index: number) => <li key={index}>
-                                • {warning.templateTitle}: {warning.message}
-                              </li>)}
-                          </ul>
-                        </div>
-                      </div>
-                    </div>}
-
-                  {(exceedsTemplateLimit || importOversizeAssets > 0) && <div className="bg-sky-50 dark:bg-sky-900/20 p-3 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 text-sky-600 mt-0.5" />
-                        <div className="text-sm">
-                          <p className="font-medium text-sky-800 dark:text-sky-200">
-                            Import Policy (enforced)
-                          </p>
-                          <ul className="text-sky-700 dark:text-sky-300 mt-1 space-y-1">
-                            {exceedsTemplateLimit && <li>
-                                • {importPreview.templates.length} templates selected; limit is {MAX_TEMPLATES_PER_IMPORT} per import
-                              </li>}
-                            {importOversizeAssets > 0 && <li>
-                                • {importOversizeAssets} asset{importOversizeAssets === 1 ? "" : "s"} over 5MB; compress or remove to import
-                              </li>}
-                          </ul>
-                        </div>
-                      </div>
-                    </div>}
-
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
-                    <div className="flex items-start gap-2">
-                      <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
-                      <div className="text-sm">
-                        <p className="font-medium text-yellow-800 dark:text-yellow-200">
-                          Import Notes:
-                        </p>
-                        <ul className="text-yellow-700 dark:text-yellow-300 mt-1 space-y-1">
-                          <li>• Templates will be assigned new unique IDs</li>
-                          <li>• Visibility follows your selection above</li>
-                          <li>• Existing templates won&apos;t be affected</li>
-                          <li>• Slugs will be regenerated to avoid conflicts</li>
-                          <li>• Uploaded assets are not copied; re-upload if needed</li>
-                          <li>• Limit: max {MAX_TEMPLATES_PER_IMPORT} templates per import (enforced)</li>
-                          <li>• Limit: assets should be ≤ 5MB each (enforced when size is provided)</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={handleConfirmImport}
-                      disabled={isImporting || templatesLoading || exceedsTemplateLimit || importOversizeAssets > 0}
-                      className="flex items-center gap-2"
-                    >
-                      <Upload className="h-4 w-4" />
-                      {isImporting ? "Importing..." : "Confirm Import"}
-                    </Button>
-                    <Button variant="outline" onClick={handleCancelImport}>
-                      Cancel
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>}
+            {importPreview && (
+              <TemplateImportPreview
+                confirmDisabled={isImporting || templatesLoading || exceedsTemplateLimit || importOversizeAssets > 0}
+                exceedsTemplateLimit={exceedsTemplateLimit}
+                isImporting={isImporting}
+                maxTemplatesPerImport={MAX_TEMPLATES_PER_IMPORT}
+                onCancel={handleCancelImport}
+                onConfirm={handleConfirmImport}
+                oversizedAssetCount={importOversizeAssets}
+                preview={importPreview}
+                visibility={importVisibility}
+              />
+            )}
 
             {lastImportSummary && <Card className="border-dashed">
                 <CardHeader className="pb-3">

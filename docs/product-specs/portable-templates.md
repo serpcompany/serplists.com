@@ -258,6 +258,9 @@ Generated outputs from `template.yaml` serve different purposes:
 ### Visibility defaults
 - If `isPublic` is present, it is preserved by default.
 - If missing, templates default to **private** unless the importer overrides visibility.
+- The import preview's public count follows the selected override ("Force public"
+  or "Force private"), using the same rule as the import itself
+  (`resolveImportIsPublic` in `src/lib/utils/templateBackup.ts`).
 
 ### Assets
 JSON exports **do not** include R2 assets. If a template references uploaded files

@@ -435,6 +435,24 @@ export const generateUniqueIds = (templates: ChecklistTemplate[]): ChecklistTemp
   });
 };
 
+export type ImportVisibility = NonNullable<TemplateImportOptions["visibility"]>;
+
+/**
+ * Whether an imported template ends up public under the chosen visibility override.
+ * The import preview and the import payload both use this, and the server applies
+ * the same rule (functions/api/handlers/templates.ts), so they cannot disagree.
+ * A template with no visibility flag is private unless the override says otherwise.
+ */
+export const resolveImportIsPublic = (
+  isPublic: boolean | undefined,
+  visibility: ImportVisibility = "preserve",
+): boolean => (visibility === "preserve" ? isPublic ?? false : visibility === "public");
+
+export const countImportPublicTemplates = (
+  templates: Pick<ChecklistTemplate, "isPublic">[],
+  visibility: ImportVisibility = "preserve",
+): number => templates.filter((template) => resolveImportIsPublic(template.isPublic, visibility)).length;
+
 /**
  * Prepare templates for import (clean and validate)
  */
@@ -444,17 +462,11 @@ export const prepareTemplatesForImport = (
   options: TemplateImportOptions = {}
 ): ChecklistTemplate[] => {
   const templatesWithUniqueIds = generateUniqueIds(templates);
-  const visibility = options.visibility ?? "preserve";
-  
+
   return templatesWithUniqueIds.map(template => ({
     ...template,
     userId,
-    isPublic:
-      visibility === "public"
-        ? true
-        : visibility === "private"
-          ? false
-          : template.isPublic ?? false,
+    isPublic: resolveImportIsPublic(template.isPublic, options.visibility),
     // Reset completion states for fresh imports
     sections: template.sections.map(section => ({
       ...section,
