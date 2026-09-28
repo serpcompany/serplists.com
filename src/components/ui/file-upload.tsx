@@ -5,7 +5,6 @@ import { Textarea } from './textarea';
 import { Label } from './label';
 import { X, File, Image, Video } from 'lucide-react';
 import {
-  deleteUploadedAsset,
   uploadFile,
   validateFile,
   UploadResult,
@@ -32,7 +31,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   className = ''
 }) => {
   const [isUploading, setIsUploading] = useState(false);
-  const [isClearing, setIsClearing] = useState(false);
   const sourceInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
@@ -80,15 +78,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     setIsUploading(true);
 
     try {
-      const previousValue = value;
       const result: UploadResult = await uploadFile(file, getBucketName(), user.id);
-      
+
+      // The previous upload is never deleted here: the saved template, its runs,
+      // versions, and copies may still reference it, and this change is unsaved.
       if (result.success && result.url) {
         onValueChange(result.url);
         onFileInfoChange(result.fileName, result.fileSize);
-        if (previousValue && previousValue !== result.url) {
-          await deleteUploadedAsset(previousValue);
-        }
         toast({
           title: "Upload successful",
           description: `${file.name} has been uploaded.`
@@ -114,16 +110,11 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     }
   };
 
-  const handleClear = async () => {
-    setIsClearing(true);
-
-    try {
-      await deleteUploadedAsset(value);
-      onValueChange('');
-      onFileInfoChange(undefined, undefined);
-    } finally {
-      setIsClearing(false);
-    }
+  // Clearing only changes the form. The stored object stays, because the saved
+  // template, its runs, versions, and copies may still reference it.
+  const handleClear = () => {
+    onValueChange('');
+    onFileInfoChange(undefined, undefined);
   };
 
   return (
@@ -174,7 +165,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={handleClear}
-                disabled={isUploading || isClearing}
+                disabled={isUploading}
                 aria-label={`Remove uploaded ${type}`}
               >
                 <X className="h-4 w-4" />

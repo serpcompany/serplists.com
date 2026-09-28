@@ -3,6 +3,8 @@ import { getSessionUserId } from '../utils/session';
 
 type UploadBucket = 'avatars' | 'template-images' | 'template-videos' | 'template-files';
 
+const TEMPLATE_BUCKETS: readonly UploadBucket[] = ['template-images', 'template-videos', 'template-files'];
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -82,8 +84,20 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
     const key = url.searchParams.get('key');
     if (!key) return json({ error: 'key required' }, 400);
 
-    // Lightweight safety: only allow deleting keys under the user's prefix.
-    if (!key.includes(`/${userId}/`) && !key.startsWith(`avatars/${userId}/`)) {
+    // Template uploads are shared by the saved template, its versions, every run
+    // started from it, and copies or clones, and nothing counts those references.
+    // Deleting one on request would break all of them, so only avatars (referenced
+    // only by the user's own profile) can be deleted here.
+    if (TEMPLATE_BUCKETS.some((bucket) => key.startsWith(`${bucket}/`))) {
+      return json(
+        {
+          error: 'Template uploads cannot be deleted because templates, runs, and copies may still use them',
+          code: 'asset_referenced',
+        },
+        409,
+      );
+    }
+    if (!key.startsWith(`avatars/${userId}/`)) {
       return json({ error: 'Forbidden' }, 403);
     }
 

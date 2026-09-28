@@ -140,7 +140,7 @@ Do not use git history for user-generated Template or Organization history. Git 
 
 - `POST /api/uploads` writes to R2 with a per-user key prefix.
 - `GET /api/uploads/file?key=...` and `HEAD /api/uploads/file?key=...` serve objects with long-lived cache headers.
-- `DELETE /api/uploads/file?key=...` is restricted to the current user prefix.
+- `DELETE /api/uploads/file?key=...` deletes only the current user's avatars. Template uploads (`template-images/`, `template-videos/`, `template-files/`) are refused with 409 because templates, runs, versions, and copies share them; see [database operations](database-operations.md#r2-uploads).
 
 ## Public And Private Data
 

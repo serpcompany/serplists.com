@@ -16,8 +16,9 @@
   Personal templates and listing, starting, reading, and updating Personal runs.
   Keys are stored hashed. The MCP routes are off on remote hosts unless
   `PERSONAL_RUN_MCP_ENABLED=true`.
-- **Uploads** are written under the uploader's key prefix, and deletes are
-  restricted to that prefix.
+- **Uploads** are written under the uploader's key prefix. Only the uploader's
+  own avatars can be deleted; template uploads are shared by runs and copies
+  and are never deleted on request.
 - **Invites** store only a token hash, never the raw token.
 
 ## Secrets and environment

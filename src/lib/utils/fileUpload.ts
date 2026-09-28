@@ -63,14 +63,6 @@ export const uploadFile = async (
   }
 };
 
-export const deleteFile = async (
-  url: string,
-  bucket: TemplateUploadBucket,
-): Promise<boolean> => {
-  void bucket;
-  return deleteUploadedAsset(url);
-};
-
 export const getUploadedAssetKey = (url: string): string | null => {
   try {
     const parsed = new URL(url, 'https://serplists.local');
@@ -88,6 +80,9 @@ export const getUploadedAssetKey = (url: string): string | null => {
 export const isUploadedAssetUrl = (url: string): boolean =>
   getUploadedAssetKey(url) !== null;
 
+// Only avatars can be deleted (the API refuses template uploads): a template
+// upload may still be referenced by the saved template, its runs, versions, and
+// copies, and uploads are not reference-counted.
 export const deleteUploadedAsset = async (url: string): Promise<boolean> => {
   const key = getUploadedAssetKey(url);
 
