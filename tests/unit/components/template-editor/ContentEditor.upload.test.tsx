@@ -73,8 +73,8 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1' } }),
 }));
 
-vi.mock('@/hooks/use-toast', () => ({
-  useToast: () => ({ toast: vi.fn() }),
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 type AnyElement = React.ReactElement<Record<string, unknown>>;

@@ -18,6 +18,8 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 vi.mock('@/contexts/WorkspaceContext', () => ({
   useWorkspace: () => ({
     activeTeamId: undefined,
+    activeWorkspace: { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' },
+    isTeamWorkspace: false,
     isWorkspaceLoading: false,
     workspaceScopeId: 'personal',
     workspaceStatus: 'ready',

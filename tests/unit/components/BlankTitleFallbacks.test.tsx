@@ -58,13 +58,17 @@ describe('blank section and sub-task titles', () => {
         task={sections[1].items[0]}
         taskIndex={0}
         totalTasks={1}
+        onFinishRun={noop}
         onNavigateNext={noop}
         onNavigatePrev={noop}
+        onSelectTask={noop}
         onToggleSubItem={noop}
         onToggleTask={noop}
+        onNotesDraftChange={noop}
         onSaveNotes={async () => true}
         hasNext={false}
         hasPrev={false}
+        primaryAction={{ kind: 'complete_task' }}
       />,
     );
 

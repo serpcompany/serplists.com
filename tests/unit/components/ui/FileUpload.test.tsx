@@ -42,10 +42,9 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1' } }),
 }));
 
-const toast = vi.fn();
-vi.mock('@/hooks/use-toast', () => ({
-  useToast: () => ({ toast }),
-}));
+// Upload feedback goes through sonner, the toaster the app mounts.
+const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 
 type AnyElement = React.ReactElement<Record<string, unknown>>;
 
@@ -152,11 +151,9 @@ describe('FileUpload', () => {
     });
 
     expect(api.uploadToR2).not.toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Invalid file',
-        description: expect.stringContaining('PDF, ZIP, CSV'),
-      }),
+    expect(toast.error).toHaveBeenCalledWith(
+      'Invalid file',
+      expect.objectContaining({ description: expect.stringContaining('PDF, ZIP, CSV') }),
     );
   });
 

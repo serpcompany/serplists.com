@@ -623,7 +623,7 @@ describe('saving the run title', () => {
 
     expect(result.kind).toBe('ok');
     expect(updateRun).toHaveBeenCalledTimes(1);
-    expect(updateRun).toHaveBeenCalledWith(expect.objectContaining({ title: 'Launch v2' }));
+    expect(updateRun).toHaveBeenCalledWith(expect.objectContaining({ title: 'Launch v2' }), { includeTitle: true });
   });
 
   // The API caps run titles at 160 characters after trimming; a longer one used to reach it
@@ -644,7 +644,7 @@ describe('saving the run title', () => {
     const result = await saveRunExecutionTitle({ run: buildRun(), title: `  ${title}  ` }, { updateRun });
 
     expect(result.kind).toBe('ok');
-    expect(updateRun).toHaveBeenCalledWith(expect.objectContaining({ title }));
+    expect(updateRun).toHaveBeenCalledWith(expect.objectContaining({ title }), { includeTitle: true });
   });
 });
 

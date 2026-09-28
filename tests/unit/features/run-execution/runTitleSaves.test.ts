@@ -58,9 +58,14 @@ describe('private run saves', () => {
     expect(longTitle.length).toBeGreaterThan(160);
     const { bodies, dependencies } = setup();
 
-    await toggleRunItem({ itemId: 'item-1', run: buildRun() }, dependencies);
+    await toggleRunItem({ isCompleted: true, itemId: 'item-1', run: buildRun() }, dependencies);
     await saveRunItemNotes({ itemId: 'item-1', notes: 'Checked with legal', run: buildRun() }, dependencies);
-    await completeRunExecution({ run: buildRun() }, dependencies);
+    // Completion needs every task done.
+    const finishedRun = buildRun();
+    finishedRun.sections[0].items.forEach((item) => {
+      item.isCompleted = true;
+    });
+    await completeRunExecution({ run: finishedRun }, dependencies);
 
     expect(bodies).toHaveLength(3);
     for (const body of bodies) {
