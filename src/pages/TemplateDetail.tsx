@@ -269,7 +269,8 @@ const TemplateDetail = () => {
 
     setIsCreatingShare(true);
     try {
-      const result = await shareTemplate();
+      // Pass the visibility shown here: the Visibility switch may have changed it.
+      const result = await shareTemplate(isPublic);
 
       if (result.kind === 'login_required') {
         navigateToLoginWithReturnPath(navigate, location);
@@ -291,6 +292,8 @@ const TemplateDetail = () => {
         return;
       }
 
+      // The model now holds the public template; drop any older switch state.
+      setVisibilityOverride(null);
       setShareUrl(result.shareUrl);
       setShareDialogOpen(true);
     } finally {

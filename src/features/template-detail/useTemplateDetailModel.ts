@@ -303,6 +303,70 @@ export const saveTemplateToAccount = async (params: {
   }
 };
 
+const SHARE_FAILED_MESSAGE = 'Failed to create a share link for this template.';
+
+// Resolves the public URL before changing visibility, so a template that cannot
+// be shared is never published, and once it is published local state follows.
+export const shareTemplateToPublic = async (params: {
+  apiClient?: TemplateDetailApiClient;
+  invalidateTemplates?: () => Promise<void> | void;
+  isAuthenticated: boolean;
+  isPublic?: boolean;
+  onTemplateChange: (template: ChecklistTemplate) => void;
+  origin: string;
+  template: ChecklistTemplate | null;
+  userId?: string;
+  username?: string;
+}): Promise<TemplateDetailActionResult> => {
+  if (!params.template) {
+    return { kind: 'error', message: 'Template not found.' };
+  }
+  if (!params.isAuthenticated || !params.userId) {
+    return { kind: 'login_required' };
+  }
+  if (params.template.userId !== params.userId) {
+    return { kind: 'error', message: 'You can only share templates you own.' };
+  }
+
+  const apiClient = params.apiClient ?? api;
+  let nextTemplate = await hydrateTemplateOwner(params.template, apiClient);
+  if (!nextTemplate.ownerProfile?.username && params.username) {
+    nextTemplate = {
+      ...nextTemplate,
+      ownerProfile: { ...nextTemplate.ownerProfile, username: params.username },
+    };
+  }
+
+  const publicPath = buildCanonicalPublicTemplatePath(nextTemplate);
+  if (!publicPath) {
+    return {
+      kind: 'error',
+      message:
+        'Set a username on your account before sharing templates with the canonical public URL.',
+    };
+  }
+
+  if (!(params.isPublic ?? nextTemplate.isPublic)) {
+    try {
+      await apiClient.updateTemplate(nextTemplate.id, {
+        is_public: true,
+        expected_version: nextTemplate.version,
+      });
+    } catch (error) {
+      return mapActionFailure(error, SHARE_FAILED_MESSAGE);
+    }
+  }
+
+  params.onTemplateChange({ ...nextTemplate, isPublic: true });
+  try {
+    await params.invalidateTemplates?.();
+  } catch {
+    // The template is public either way; lists catch up on their next fetch.
+  }
+
+  return { kind: 'ok', shareUrl: `${params.origin}${publicPath}` };
+};
+
 export const useTemplateDetailModel = (
   options: UseTemplateDetailModelOptions,
 ) => {
@@ -399,9 +463,8 @@ export const useTemplateDetailModel = (
       return;
     }
 
-    await queryClient.invalidateQueries({
-      queryKey: ['templates', options.userId],
-    });
+    // ['templates'] also covers the public catalog, which Share changes.
+    await queryClient.invalidateQueries({ queryKey: ['templates'] });
   };
 
   const startRun = async (runName?: string): Promise<TemplateDetailActionResult> =>
@@ -423,72 +486,20 @@ export const useTemplateDetailModel = (
       userId: options.userId,
     });
 
-  const shareTemplate = async (): Promise<TemplateDetailActionResult> => {
-    if (!template) {
-      return { kind: 'error', message: 'Template not found.' };
-    }
-
-    if (!options.isAuthenticated || !options.userId) {
-      return { kind: 'login_required' };
-    }
-
-    if (template.userId !== options.userId) {
-      return {
-        kind: 'error',
-        message: 'You can only share templates you own.',
-      };
-    }
-
-    try {
-      let nextTemplate = template;
-
-      if (!nextTemplate.isPublic) {
-        await api.updateTemplate(nextTemplate.id, {
-          is_public: true,
-          expected_version: nextTemplate.version,
-        });
-        nextTemplate = {
-          ...nextTemplate,
-          isPublic: true,
-        };
-      }
-
-      nextTemplate = await hydrateTemplateOwner(nextTemplate, api);
-
-      if (!nextTemplate.ownerProfile?.username && options.username) {
-        nextTemplate = {
-          ...nextTemplate,
-          ownerProfile: {
-            ...nextTemplate.ownerProfile,
-            username: options.username,
-          },
-        };
-      }
-
-      const publicPath = buildCanonicalPublicTemplatePath(nextTemplate);
-
-      if (!publicPath) {
-        return {
-          kind: 'error',
-          message:
-            'Set a username on your account before sharing templates with the canonical public URL.',
-        };
-      }
-
-      setTemplate(nextTemplate);
-      await invalidateTemplates();
-
-      return {
-        kind: 'ok',
-        shareUrl: `${window.location.origin}${publicPath}`,
-      };
-    } catch (error) {
-      return mapActionFailure(
-        error,
-        'Failed to create a share link for this template.',
-      );
-    }
-  };
+  // isPublic is the visibility the page shows, which can be newer than `template`.
+  const shareTemplate = async (
+    isPublic?: boolean,
+  ): Promise<TemplateDetailActionResult> =>
+    shareTemplateToPublic({
+      invalidateTemplates,
+      isAuthenticated: options.isAuthenticated,
+      isPublic,
+      onTemplateChange: setTemplate,
+      origin: window.location.origin,
+      template,
+      userId: options.userId,
+      username: options.username,
+    });
 
   return {
     billingState,
