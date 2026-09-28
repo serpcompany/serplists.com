@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  classifyClipySummary,
   handleGenerateTemplateFromClipy,
   parseClipyWatchUrl,
 } from '../../../functions/api/handlers/clipy';
 import { withSerpListsClipyRef } from '@/lib/utils/clipyUrl';
+import { PREDEFINED_CATEGORIES } from '@/utils/categories';
 import { getVideoEmbedSource } from '@/utils/urlHelpers';
 
 const sourceUrl = 'https://clipy.online/video/8fptqlnappr6';
@@ -315,5 +317,82 @@ describe('Clipy link parsing', () => {
         watchUrl: `https://clipy.online/video/${id}`,
       });
     }
+  });
+});
+
+describe('Clipy draft categories and tags', () => {
+  async function generateDraft(overrides: { title?: string; tldr?: string; transcript?: string }) {
+    const context = completeContext();
+    if (overrides.title !== undefined) context.clip.title = overrides.title;
+    if (overrides.tldr !== undefined) context.summary.tldr = overrides.tldr;
+    if (overrides.transcript !== undefined) context.transcript.plaintext = overrides.transcript;
+    const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
+      fetch: vi.fn().mockResolvedValue(Response.json(context)),
+      getUserId: vi.fn().mockResolvedValue('user-1'),
+    });
+    expect(response.status).toBe(200);
+    return (await response.json()).draft as { categories: string[]; tags: string[] };
+  }
+
+  it('never classifies from the transcript', async () => {
+    const draft = await generateDraft({
+      transcript: '[0:12] Now moving on to the Issues tab. [0:20] Pack it up, the next task is the QR code. '
+        + 'Wedding photos later, then camping luggage, relocation, a morning routine, and a home inspection process.',
+    });
+
+    expect(draft.categories).toEqual([]);
+    expect(draft.tags).toEqual(['Clipy', 'GitHub', 'Issue Tracking', 'Software Development']);
+  });
+
+  it.each([
+    ['Moving Day Checklist', 'Everything to do before the movers arrive.', ['moving']],
+    ['Moving House: Change Your Address', 'Update your address everywhere after moving house.', ['moving']],
+    ['Move-Out Cleaning Checklist', 'Get your deposit back.', ['moving']],
+    ['Camping Trip Packing List', 'What to bring to the campsite.', ['camping', 'packing']],
+    ['Vacation Packing List', 'Fit a week of clothes into one suitcase.', ['packing']],
+    ['Wedding Day Timeline', 'Keep the ceremony on schedule.', ['wedding']],
+    ['My Morning Routine', 'Start the day calmly.', ['morning routine']],
+    ['Home Inspection Walkthrough', 'What an inspector checks.', ['home inspection']],
+  ])('files %s under its category', async (title, tldr, expected) => {
+    const draft = await generateDraft({ title, tldr });
+
+    expect(draft.categories).toEqual(expected);
+    expect(draft.categories.every((category) => (PREDEFINED_CATEGORIES as readonly string[]).includes(category))).toBe(true);
+  });
+
+  it.each([
+    ['Moving Files Between Folders', 'Move documents into the right folder.'],
+    ['Moving on to Deployment', 'Keep moving to the next field once the form validates.'],
+    ['Publishing an npm Package', 'Pack the build artifacts and publish the package.'],
+    ['Relocate the Config File', 'Relocate settings into one packaging step.'],
+    ['Pack It Up: Closing a Sprint', 'Wrap up the board.'],
+  ])('does not file %s under a category from ordinary words', async (title, tldr) => {
+    expect((await generateDraft({ title, tldr })).categories).toEqual([]);
+  });
+
+  it.each([
+    'Now moving on to the next step',
+    'Moving from Jira to GitHub',
+    'Keep moving',
+    'Pack it up',
+    'Publish an npm package',
+    'Packaging the release',
+    'Grab a six-pack',
+    'Install the icon pack',
+    'Relocate the file',
+    'Move the card to Done',
+  ])('files nothing under a category for "%s"', (phrase) => {
+    expect(classifyClipySummary({ title: phrase, tldr: phrase }).categories).toEqual([]);
+  });
+
+  it('does not tag generic process words as Project Management or Software Development', async () => {
+    const draft = await generateDraft({
+      title: 'Print a QR Code for the Front Desk',
+      tldr: 'Finish this task as part of the check-in process and workflow.',
+    });
+
+    expect(draft.tags).not.toContain('Project Management');
+    expect(draft.tags).not.toContain('Software Development');
+    expect(draft.tags).not.toContain('Productivity');
   });
 });
