@@ -132,6 +132,27 @@ export function isMissingStripeCustomer(error: unknown): error is StripeApiError
   return error instanceof StripeApiError && error.code === "resource_missing" && error.param === "customer";
 }
 
+/**
+ * Stripe refused a request because its idempotency key is in use by a request still in
+ * flight (409 idempotency_key_in_use), or was first used with other parameters
+ * (idempotency_error). Both mean another attempt for the same action is under way.
+ */
+export function isStripeIdempotencyConflict(error: unknown): error is StripeApiError {
+  return error instanceof StripeApiError
+    && (error.code === "idempotency_key_in_use" || error.type === "idempotency_error");
+}
+
+/**
+ * A short SHA-256 hex digest for idempotency keys, so a key changes whenever the
+ * request it protects changes (Stripe rejects a reused key with other parameters).
+ */
+export async function shortDigest(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest).slice(0, 8))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 async function readStripeResponse(resp: Response): Promise<unknown> {
   const text = await resp.text();
   if (!resp.ok) {

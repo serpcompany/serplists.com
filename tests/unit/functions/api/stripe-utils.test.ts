@@ -2,6 +2,8 @@ import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   getStripeBillingConfig,
   isMissingStripeCustomer,
+  isStripeIdempotencyConflict,
+  shortDigest,
   StripeApiError,
   stripeGet,
   stripePostForm,
@@ -170,5 +172,31 @@ describe("getStripeBillingConfig", () => {
 
     expect(parsed?.proPriceId).toBe("price_new");
     expect(parsed?.proPriceIds).toEqual(["price_new", "price_old", "price_older"]);
+  });
+});
+
+describe("isStripeIdempotencyConflict", () => {
+  const error = (status: number, body: Record<string, string>) => new StripeApiError(status, JSON.stringify({ error: body }));
+
+  it("matches a key still in flight and a key reused with other parameters", () => {
+    expect(isStripeIdempotencyConflict(error(409, { type: "invalid_request_error", code: "idempotency_key_in_use" })))
+      .toBe(true);
+    expect(isStripeIdempotencyConflict(error(400, { type: "idempotency_error" }))).toBe(true);
+  });
+
+  it("does not match other Stripe errors", () => {
+    expect(isStripeIdempotencyConflict(error(400, { type: "invalid_request_error", code: "resource_missing" })))
+      .toBe(false);
+    expect(isStripeIdempotencyConflict(new Error("idempotency_error"))).toBe(false);
+  });
+});
+
+describe("shortDigest", () => {
+  it("is stable for the same input and changes with it", async () => {
+    const digest = await shortDigest("user@example.test");
+
+    expect(digest).toMatch(/^[0-9a-f]{16}$/);
+    expect(await shortDigest("user@example.test")).toBe(digest);
+    expect(await shortDigest("other@example.test")).not.toBe(digest);
   });
 });

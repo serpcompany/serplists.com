@@ -154,7 +154,17 @@ Authenticated:
   `resource_missing` for `customer`, checkout creates a new customer (with an
   idempotency key, so a double click creates one), swaps the mapping only if it
   still holds the missing id, and retries once. Other Stripe errors never
-  replace the customer. The Checkout idempotency key includes the customer id.
+  replace the customer.
+  A first checkout creates the customer with the idempotency key
+  `customer-<userId>-<email digest>`, so concurrent or retried first checkouts
+  share one customer, and stores the mapping with `ON CONFLICT DO NOTHING`: a
+  mapping another request or the webhook stored first is kept, and that request
+  gets `409 checkout_in_progress`. The Checkout idempotency key includes the
+  customer id and a digest of the price and return URLs. When Stripe refuses a
+  key that is still in flight (`idempotency_key_in_use`) or was used with other
+  parameters (`idempotency_error`), checkout returns `409 checkout_in_progress`
+  (try again in a moment) instead of a server error. The client also joins a
+  second `startBillingCheckout` call to the one still pending.
 - `POST /api/billing/portal` → returns `{ url }` to redirect user to Stripe Customer Portal,
   `409 no_billing_account` when the user has no Stripe customer (such as Pro
   granted by an override), or `409 billing_customer_missing` when Stripe no

@@ -102,6 +102,8 @@ instead of inferring access state from message text:
   account, so the Customer Portal cannot open; checkout replaces the account.
 - `409 no_billing_account` means the User has no billing account (for example,
   Pro granted by support), so there is no Customer Portal to open.
+- `409 checkout_in_progress` means another checkout for the User is still
+  starting (a double click or a second tab); trying again shortly succeeds.
 
 ### Subscription status
 

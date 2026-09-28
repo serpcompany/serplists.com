@@ -30,6 +30,29 @@ describe('startBillingCheckout', () => {
     expect(window.location.href).toBe('https://checkout.stripe.test/cs_1');
   });
 
+  it('starts one checkout when it is asked again while the first is still starting', async () => {
+    let finish: (value: { url: string }) => void = () => {};
+    apiMocks.createBillingCheckout.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+
+    const first = startBillingCheckout(true);
+    const second = startBillingCheckout(true);
+    finish({ url: 'https://checkout.stripe.test/cs_1' });
+
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    expect(apiMocks.createBillingCheckout).toHaveBeenCalledTimes(1);
+    expect(window.location.href).toBe('https://checkout.stripe.test/cs_1');
+  });
+
+  it('lets the user try again after a checkout fails', async () => {
+    apiMocks.createBillingCheckout.mockRejectedValueOnce(new Error('Failed to start checkout'));
+    apiMocks.createBillingCheckout.mockResolvedValueOnce({ url: 'https://checkout.stripe.test/cs_2' });
+
+    await expect(startBillingCheckout(true)).resolves.toBe(false);
+    await expect(startBillingCheckout(true)).resolves.toBe(true);
+
+    expect(apiMocks.createBillingCheckout).toHaveBeenCalledTimes(2);
+  });
+
   it('opens the Customer Portal when the subscription needs attention', async () => {
     apiMocks.createBillingCheckout.mockRejectedValueOnce(createApiError(409, {
       error: 'Your Pro subscription needs attention.',

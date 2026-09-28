@@ -33,12 +33,7 @@ const openBillingPortal = async (reason: string): Promise<boolean> => {
   }
 };
 
-export const startBillingCheckout = async (billingEnabled: boolean): Promise<boolean> => {
-  if (!billingEnabled) {
-    toast.error(BILLING_UNAVAILABLE_MESSAGE);
-    return false;
-  }
-
+const requestBillingCheckout = async (): Promise<boolean> => {
   try {
     const { url } = await api.createBillingCheckout();
     window.location.href = url;
@@ -52,6 +47,24 @@ export const startBillingCheckout = async (billingEnabled: boolean): Promise<boo
     toast.error(failure.message);
     return false;
   }
+};
+
+// Several buttons and access failures can start checkout. A second start while one is
+// pending (a double click) joins it instead of sending a second checkout request.
+let pendingCheckout: Promise<boolean> | null = null;
+
+export const startBillingCheckout = async (billingEnabled: boolean): Promise<boolean> => {
+  if (!billingEnabled) {
+    toast.error(BILLING_UNAVAILABLE_MESSAGE);
+    return false;
+  }
+
+  if (!pendingCheckout) {
+    pendingCheckout = requestBillingCheckout().finally(() => {
+      pendingCheckout = null;
+    });
+  }
+  return pendingCheckout;
 };
 
 export const handleAccessFailure = async (
