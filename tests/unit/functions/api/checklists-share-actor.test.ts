@@ -218,6 +218,24 @@ describe('run history of share-link edits', () => {
     expect(events[2].actor).toEqual(expect.objectContaining({ userId: 'former-1' }));
   });
 
+  it('hides a former member only on their share-link events, not on their other edits', async () => {
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([sharedRun({ team_id: 'team-1' })])
+      .mockResolvedValueOnce([member('viewer-9')])
+      .mockResolvedValueOnce([
+        shareEvent('former-1'),
+        { ...shareEvent('former-1', { id: 'audit-archive' }), action: 'checklist_run.archived', metadata_json: null },
+        { ...shareEvent('former-1', { id: 'audit-update' }), action: 'checklist_run.updated', metadata_json: '{"source":"web"}' },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const { events } = await history('viewer-9');
+
+    expect(events[0].actor).toEqual(hidden);
+    expect(events[1].actor).toEqual(expect.objectContaining({ userId: 'former-1', email: 'former-1@example.com' }));
+    expect(events[2].actor).toEqual(expect.objectContaining({ userId: 'former-1', email: 'former-1@example.com' }));
+  });
+
   it('skips the membership lookup when no share-link event names anyone', async () => {
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([sharedRun({ team_id: 'team-1' })])

@@ -21,7 +21,7 @@ import {
   isReopening,
   runInsertStatements,
 } from '../utils/active-run-limit';
-import { findShareLinkOutsiders, HIDDEN_ACTOR } from '../utils/share-link-actors';
+import { findHiddenShareLinkActors, HIDDEN_ACTOR } from '../utils/share-link-actors';
 import { completionStamps } from '../utils/run-completion';
 import { handleSharedChecklist } from './checklists-shared';
 
@@ -178,7 +178,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
           .where(and(eq(audit_events.resource_type, 'checklist_run'), eq(audit_events.resource_id, checklistId)))
           .orderBy(desc(audit_events.created_at))
           .limit(historyLimit);
-        const outsiders = await findShareLinkOutsiders(env, {
+        const hideActor = await findHiddenShareLinkActors(env, {
           userId: checklist.user_id,
           teamId: checklist.team_id ?? null,
         }, eventRows);
@@ -193,7 +193,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
             requestId: row.request_id,
             diff: redactStoredAuditDiff(parseOptionalJson(row.diff_json)),
             metadata: parseOptionalJson(row.metadata_json),
-            actor: row.actor_user_id && outsiders.has(row.actor_user_id) ? HIDDEN_ACTOR : {
+            actor: hideActor(row) ? HIDDEN_ACTOR : {
               userId: row.actor_user_id,
               email: row.actor_email,
               name: row.actor_name,

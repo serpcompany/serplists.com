@@ -13,7 +13,7 @@ import {
   normalizeTeamRole,
 } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
-import { findShareLinkOutsiders, HIDDEN_ACTOR } from "../utils/share-link-actors";
+import { findHiddenShareLinkActors, HIDDEN_ACTOR } from "../utils/share-link-actors";
 
 const createTeamBodySchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -761,7 +761,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       .where(and(eq(audit_events.subject_type, "team"), eq(audit_events.subject_id, teamId)))
       .orderBy(desc(audit_events.created_at))
       .limit(activityLimit);
-    const outsiders = await findShareLinkOutsiders(env, { userId: null, teamId }, rows);
+    const hideActor = await findHiddenShareLinkActors(env, { userId: null, teamId }, rows);
 
     return json(
       rows.map((row) => ({
@@ -774,7 +774,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
         metadata: parseOptionalJson(row.metadata_json),
         requestId: row.request_id,
         createdAt: row.created_at,
-        actor: row.actor_user_id && outsiders.has(row.actor_user_id) ? HIDDEN_ACTOR : {
+        actor: hideActor(row) ? HIDDEN_ACTOR : {
           userId: row.actor_user_id,
           email: row.actorEmail,
           name: row.actorName,

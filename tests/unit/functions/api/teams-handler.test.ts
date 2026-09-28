@@ -536,6 +536,41 @@ describe("Teams handler", () => {
     expect(data[1].actor).toEqual(expect.objectContaining({ userId: "user-2", email: "user-2@example.com" }));
   });
 
+  it("hides a former member only on their share-link events, not on their other activity", async () => {
+    const event = (id: string, action: string, metadata: string | null) => ({
+      id,
+      actor_user_id: "former-1",
+      resource_type: action.startsWith("template") ? "template" : "checklist_run",
+      resource_id: action.startsWith("template") ? "template-1" : "run-1",
+      action,
+      metadata_json: metadata,
+      request_id: null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      actorEmail: "former-1@example.com",
+      actorName: "Name former-1",
+      actorUsername: "former-1",
+    });
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
+      ])
+      .mockResolvedValueOnce([
+        event("event-share", "checklist_run.shared_updated", '{"source":"public_share"}'),
+        event("event-template", "template.updated", '{"field":"title"}'),
+        event("event-archive", "checklist_run.archived", null),
+      ])
+      .mockResolvedValueOnce([]);
+    dbMocks.selectChain.orderBy.mockReturnValueOnce(dbMocks.selectChain);
+
+    const response = await handleTeams(new Request("http://localhost/api/teams/team-1/activity"), mockEnv);
+    const data = (await response.json()) as Array<{ id: string; actor: Record<string, unknown> }>;
+
+    expect(response.status).toBe(200);
+    expect(data[0].actor).toEqual({ userId: null, email: null, name: null, username: null });
+    expect(data[1].actor).toEqual(expect.objectContaining({ userId: "former-1", name: "Name former-1" }));
+    expect(data[2].actor).toEqual(expect.objectContaining({ userId: "former-1", name: "Name former-1" }));
+  });
+
   it("rejects team activity listing for non-admin team members", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([
       { id: "member-1", team_id: "team-1", user_id: "user-1", role: "viewer", status: "active" },
