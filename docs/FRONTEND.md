@@ -65,6 +65,10 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.
+- Send only the fields a save changes. Private run saves (ticks, notes, completion)
+  leave the title out and only a rename sends it (`src/contexts/runUpdatePayload.ts`):
+  a stored title can be longer than the API's 160-character limit, and resending it
+  would fail every save on that run.
 - Surface API failures by their structured code, not message text: `401` means sign
   in (keep the return path), `403 upgrade_required` and `403 limit_reached` mean a
   plan gate, `503 billing_unavailable` means checkout is down.

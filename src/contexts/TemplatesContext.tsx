@@ -35,6 +35,7 @@ import {
 } from "@/lib/repoTemplateCatalog";
 import { refreshAfterRunDelete, refreshAfterTemplateDelete, refreshRunLists } from "./templateListCache";
 import { createTemplateListFetcher, fetchRunList, shouldRetryListFetch, type TemplateListRequest } from "./templateListFetchers";
+import { buildRunUpdatePayload, type RunUpdateOptions } from "./runUpdatePayload";
 
 
 const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
@@ -339,48 +340,14 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   const updateRunMutation = useMutation({
-    mutationFn: async (run: ChecklistRun) => {
+    mutationFn: async ({ run, options }: { run: ChecklistRun; options?: RunUpdateOptions }) => {
       if (!user) throw new Error("User must be logged in to update a run");
-      
-      // Calculate progress
-      let completed = 0;
-      let total = 0;
-      
-      run.sections.forEach((section) => {
-        section.items.forEach((item) => {
-          total++;
-          if (item.isCompleted) {
-            completed++;
-          }
-          // Count sub-items if they exist
-          item.contents?.forEach((content) => {
-            if (content.type === "subItems" && content.subItems) {
-              content.subItems.forEach((subItem) => {
-                total++;
-                if (subItem.isCompleted) {
-                  completed++;
-                }
-              });
-            }
-          });
-        });
-      });
-      
-      const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-      const runWithProgress = { ...run, progress };
-      
-      const result = await api.updateChecklist(runWithProgress.id, {
-        title: runWithProgress.title,
-        status: runWithProgress.status,
-        progress: runWithProgress.progress,
-        sections: runWithProgress.sections,
-        completed_at: runWithProgress.completedAt,
-        expected_revision: runWithProgress.revision,
-      });
-      
+      const payload = buildRunUpdatePayload(run, options);
+      const result = await api.updateChecklist(run.id, payload);
       return {
-        ...runWithProgress,
-        revision: typeof result?.revision === 'number' ? result.revision : runWithProgress.revision,
+        ...run,
+        progress: payload.progress,
+        revision: typeof result?.revision === 'number' ? result.revision : run.revision,
       };
     },
     onSuccess: () => {
@@ -466,7 +433,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { mutateAsync: updateTemplate } = updateTemplateMutation;
   const { mutateAsync: deleteTemplateAsync } = deleteTemplateMutation;
   const { mutateAsync: createRun } = createRunMutation;
-  const { mutateAsync: updateRun } = updateRunMutation;
+  const { mutateAsync: updateRunAsync } = updateRunMutation;
   const { mutateAsync: revalidateRunAsync } = revalidateRunMutation;
   const { mutateAsync: deleteRunAsync } = deleteRunMutation;
   const { mutateAsync: importTemplatesAsync } = importTemplatesMutation;
@@ -488,7 +455,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await deleteTemplateAsync(id);
     },
     createRun,
-    updateRun,
+    updateRun: (run: ChecklistRun, options?: RunUpdateOptions) => updateRunAsync({ run, options }),
     revalidateRun: async (run: ChecklistRun) => {
       await revalidateRunAsync(run);
     },
@@ -500,7 +467,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }), [
     allTemplates, createRun, createTemplate, deleteRunAsync, deleteTemplateAsync, getAllPublicTemplates, getRun,
     getRunsForTemplate, getTemplate, getTemplateBySlug, importTemplatesAsync, publicTemplates, revalidateRunAsync,
-    runs, runsLoading, templatesLoading, updateRun, updateTemplate,
+    runs, runsLoading, templatesLoading, updateRunAsync, updateTemplate,
   ]);
 
   return (

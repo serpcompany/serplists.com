@@ -27,7 +27,12 @@ type RunExecutionApiClient = Pick<
   | 'updateSharedChecklist'
 >;
 
-type UpdateRun = (run: ChecklistRun) => void | Promise<ChecklistRun | void>;
+// Private run saves. Only a rename passes { includeTitle: true }: a stored title can predate
+// the 160-character limit, and resending it would fail every tick, note and completion.
+type UpdateRun = (
+  run: ChecklistRun,
+  options?: { includeTitle?: boolean },
+) => void | Promise<ChecklistRun | void>;
 
 type RunExecutionDependencies = {
   apiClient?: RunExecutionApiClient;
@@ -140,7 +145,7 @@ const toErrorResult = (
 });
 
 const persistRun = async (
-  params: RunExecutionMutationParams,
+  params: RunExecutionMutationParams & { includeTitle?: boolean },
   dependencies: RunExecutionDependencies,
 ): Promise<ChecklistRun> => {
   if (!params.run) {
@@ -168,7 +173,9 @@ const persistRun = async (
     };
   }
 
-  const persisted = await dependencies.updateRun(nextRun);
+  const persisted = params.includeTitle
+    ? await dependencies.updateRun(nextRun, { includeTitle: true })
+    : await dependencies.updateRun(nextRun);
   return persisted ?? nextRun;
 };
 
@@ -406,6 +413,7 @@ export const saveRunExecutionTitle = async (
   try {
     const persistedRun = await persistRun(
       {
+        includeTitle: true,
         run: {
           ...params.run,
           title,

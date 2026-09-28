@@ -138,7 +138,9 @@ export interface TemplatesContextProps {
   updateTemplate: (template: TemplateSavePayload) => Promise<void>;
   deleteTemplate: (id: string) => Promise<void>;
   createRun: (params: { templateId: string; runName?: string; template?: ChecklistTemplate }) => Promise<ChecklistRun | null>;
-  updateRun: (run: ChecklistRun) => Promise<ChecklistRun>;
+  // State saves (ticks, notes, completion) leave the title out; only a rename passes
+  // { includeTitle: true }. See src/contexts/runUpdatePayload.ts.
+  updateRun: (run: ChecklistRun, options?: { includeTitle?: boolean }) => Promise<ChecklistRun>;
   revalidateRun: (run: ChecklistRun) => Promise<void>;
   deleteRun: (id: string) => Promise<void>;
   importTemplates: (templates: ChecklistTemplate[], options?: TemplateImportOptions) => Promise<TemplateImportSummary>;
