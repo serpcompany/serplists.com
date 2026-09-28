@@ -29,7 +29,6 @@ const buildApiClient = (overrides: Record<string, unknown> = {}) => ({
 });
 
 const privateOptions = (identifier: string) => ({
-  getCachedTemplate: () => undefined,
   identifier,
   mode: 'private' as const,
 });

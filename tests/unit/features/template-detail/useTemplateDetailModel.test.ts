@@ -312,7 +312,6 @@ describe('loadTemplateDetailData', () => {
       {
         mode: 'private',
         identifier: 'template-t',
-        getCachedTemplate: () => undefined,
       },
       { apiClient },
     );

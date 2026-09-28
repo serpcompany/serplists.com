@@ -41,16 +41,18 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
   never fetches them. A page that reads `templates` (the public catalog) calls
   `useTemplateLists({ catalog: true, workspace: false })`, one that reads `allTemplates`
   calls `useTemplateLists()`, and one that reads `runs` adds `runs: true`. The run page
-  fetches its own run by id. A catalog miss reads every public Template from D1
+  fetches its own run by id, and the template detail page its own template: a page
+  that needs one Template or run never loads a list just to look it up. A catalog miss reads every public Template from D1
   ([D1 cost](design-docs/d1-cost.md)), so pages that only need official templates use
   the bundled `repoTemplates`. The catalog's query key has no user id because the
   catalog is the same for everyone.
-- Template detail pages never show a copy from a list they do not load: a list is
-  refetched after an edit only while a page observes it, so an unobserved copy can be
-  arbitrarily old. The public template page loads its template from the API on every
-  visit (bundled library templates excepted), and the private detail page reuses only
-  `workspaceTemplates` from `useTemplateLists()`, the active workspace list it keeps
-  fresh; anything else is fetched by id.
+- Template detail pages never show a copy from a list: a list is refetched after an
+  edit only while a page observes it, so an unobserved copy can be arbitrarily old. The
+  public template page loads its template from the API on every visit (bundled library
+  templates excepted). The private detail page loads its template by id (slug as a
+  fallback) with a query keyed under `['templates']`, so every template invalidation
+  (editor saves, visibility, Share, copies, archive, context switches) refetches it
+  while it is open and the next write sends the version the server holds.
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.

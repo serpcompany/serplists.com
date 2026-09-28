@@ -1,34 +1,30 @@
-import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api, type TemplateHistoryResponse } from '@/lib/api';
-import { getAccessFailure, isApiError } from '@/lib/api-errors';
 import { getBillingStatusQueryKey } from '@/lib/billing';
 import {
   buildRepoTemplateCreatePayload,
-  findPublicTemplateByIdentifier,
   isRepoTemplate,
-  repoTemplates,
 } from '@/lib/repoTemplateCatalog';
-import { resolvePublicTemplateOwnerSlug } from '@/lib/routes';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
 import { shareTemplateToPublic } from './shareTemplate';
 import {
-  hydrateTemplateOwner,
   mapActionFailure,
   type TemplateDetailActionResult,
   type TemplateDetailApiClient,
 } from './templateDetailApi';
-import {
-  countTemplateItems,
-  mapApiTemplateToChecklistTemplate,
-} from './templateDetailMappers';
+import { countTemplateItems } from './templateDetailMappers';
 import { getTemplateHistoryQueryKey } from './templateHistoryTimeline';
 import { canCopyTemplate, getTemplateDetailPermissions } from './templatePermissions';
 import { setTemplateVisibility } from './templateVisibility';
+import { useTemplateDetailRecord } from './useTemplateDetailRecord';
 
 export type { TemplateDetailActionResult } from './templateDetailApi';
+export {
+  loadTemplateDetailData,
+  type LoadTemplateDetailResult,
+} from './loadTemplateDetail';
 
 type CreateTemplate = (
   templateData: Omit<
@@ -43,26 +39,18 @@ type CreateRun = (params: {
   templateId: string;
 }) => Promise<ChecklistRun | null>;
 
-// Public pages always read the server copy: an in-memory list can be arbitrarily old.
-type PublicTemplateDetailOptions = {
+type PublicTemplateDetailHookOptions = {
   identifier?: string;
   mode: 'public';
   ownerUsername?: string;
 };
 
-type PrivateTemplateDetailOptions = {
-  getCachedTemplate: (identifier: string) => ChecklistTemplate | undefined;
-  identifier?: string;
-  mode: 'private';
-};
-
-// Only the active workspace list, which the page refetches after edits; never the catalog.
+// The page loads only its own template (by id), never a Template list.
 type PrivateTemplateDetailHookOptions = {
   // The viewer's role in the active context allows editing Templates.
   canEditTemplates: boolean;
   identifier?: string;
   mode: 'private';
-  workspaceTemplates: ChecklistTemplate[] | undefined;
 };
 
 type TemplateDetailCommonOptions = {
@@ -76,7 +64,7 @@ type TemplateDetailCommonOptions = {
 };
 
 export type UseTemplateDetailModelOptions = TemplateDetailCommonOptions &
-  (PublicTemplateDetailOptions | PrivateTemplateDetailHookOptions);
+  (PublicTemplateDetailHookOptions | PrivateTemplateDetailHookOptions);
 
 export type TemplateDetailBillingState = {
   billingEnabled: boolean;
@@ -88,127 +76,6 @@ export type TemplateDetailHistoryState = {
   data: TemplateHistoryResponse | null;
   isError: boolean;
   isLoading: boolean;
-};
-
-// not_found is only for a real answer (404, not public, another owner); anything else can be retried.
-export type LoadTemplateDetailResult =
-  | { kind: 'ok'; template: ChecklistTemplate }
-  | { kind: 'not_found' }
-  | { kind: 'error'; message: string };
-
-type TemplateDetailDependencies = {
-  apiClient?: TemplateDetailApiClient;
-};
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const isUuidLike = (value: string): boolean => UUID_PATTERN.test(value);
-
-const getApiClient = (
-  dependencies?: TemplateDetailDependencies,
-): TemplateDetailApiClient => dependencies?.apiClient ?? api;
-
-const isNotFoundError = (error: unknown): boolean =>
-  isApiError(error) && error.status === 404;
-
-const classifyLoadFailure = (error: unknown): LoadTemplateDetailResult =>
-  isNotFoundError(error)
-    ? { kind: 'not_found' }
-    : { kind: 'error', message: getAccessFailure(error, 'Unable to load template.').message };
-
-// A slug never looks like an id, so only a 404 for another identifier is worth a slug lookup.
-const fetchPrivateTemplate = async (
-  identifier: string,
-  apiClient: TemplateDetailApiClient,
-): Promise<unknown> => {
-  try {
-    return await apiClient.getTemplateById(identifier);
-  } catch (error) {
-    if (isUuidLike(identifier) || !isNotFoundError(error)) {
-      throw error;
-    }
-  }
-
-  return apiClient.getTemplateBySlug(identifier);
-};
-
-export const loadTemplateDetailData = async (
-  options: PublicTemplateDetailOptions | PrivateTemplateDetailOptions,
-  dependencies?: TemplateDetailDependencies,
-): Promise<LoadTemplateDetailResult> => {
-  const apiClient = getApiClient(dependencies);
-
-  if (!options.identifier) {
-    return { kind: 'not_found' };
-  }
-
-  if (options.mode === 'public') {
-    if (!options.ownerUsername) {
-      return { kind: 'not_found' };
-    }
-
-    // Library templates ship in the bundle (the API cannot serve them) and win on a slug clash.
-    const libraryTemplate = findPublicTemplateByIdentifier(
-      repoTemplates,
-      options.identifier,
-    );
-    if (
-      libraryTemplate &&
-      resolvePublicTemplateOwnerSlug(libraryTemplate)?.toLowerCase() ===
-        options.ownerUsername.toLowerCase()
-    ) {
-      return { kind: 'ok', template: libraryTemplate };
-    }
-
-    try {
-      const rawTemplate = isUuidLike(options.identifier)
-        ? await apiClient.getTemplateById(options.identifier)
-        : await apiClient.getTemplateBySlug(options.identifier);
-      const mappedTemplate = await hydrateTemplateOwner(
-        mapApiTemplateToChecklistTemplate(
-          rawTemplate as Record<string, unknown>,
-          options.identifier,
-        ),
-        apiClient,
-      );
-      const ownerSlug = resolvePublicTemplateOwnerSlug(mappedTemplate);
-
-      if (
-        !mappedTemplate.isPublic ||
-        ownerSlug?.toLowerCase() !== options.ownerUsername.toLowerCase()
-      ) {
-        return { kind: 'not_found' };
-      }
-
-      return { kind: 'ok', template: mappedTemplate };
-    } catch (error) {
-      return classifyLoadFailure(error);
-    }
-  }
-
-  const identifier = options.identifier;
-  const cachedTemplate =
-    options.getCachedTemplate(identifier) ??
-    repoTemplates.find((template) => template.id === identifier);
-  if (cachedTemplate) {
-    return { kind: 'ok', template: cachedTemplate };
-  }
-
-  try {
-    const rawTemplate = await fetchPrivateTemplate(identifier, apiClient);
-    const mappedTemplate = await hydrateTemplateOwner(
-      mapApiTemplateToChecklistTemplate(
-        rawTemplate as Record<string, unknown>,
-        options.identifier,
-      ),
-      apiClient,
-    );
-
-    return { kind: 'ok', template: mappedTemplate };
-  } catch (error) {
-    return classifyLoadFailure(error);
-  }
 };
 
 export const startTemplateRun = async (params: {
@@ -303,23 +170,20 @@ export const saveTemplateToAccount = async (params: {
 export const useTemplateDetailModel = (
   options: UseTemplateDetailModelOptions,
 ) => {
-  const [template, setTemplate] = useState<ChecklistTemplate | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  // Bumped by reload(); the only extra effect dependency, so a retry never loops.
-  const [reloadKey, setReloadKey] = useState(0);
   const queryClient = useQueryClient();
-  const workspaceTemplates =
-    options.mode === 'private' ? options.workspaceTemplates : undefined;
-  // Changes only when the workspace list does, so a refetch reloads the template.
-  const getCachedTemplate = useCallback(
-    (identifier: string) =>
-      workspaceTemplates?.find((template) => template.id === identifier),
-    [workspaceTemplates],
-  );
-  const publicOwnerUsername =
-    options.mode === 'public' ? options.ownerUsername : undefined;
+  const {
+    loadError,
+    loading,
+    notFound,
+    reload,
+    template,
+    updateTemplate,
+  } = useTemplateDetailRecord({
+    identifier: options.identifier,
+    mode: options.mode,
+    ownerUsername: options.mode === 'public' ? options.ownerUsername : undefined,
+    userId: options.userId,
+  });
 
   const billing = useQuery({
     queryKey: getBillingStatusQueryKey(options.userId, options.teamId),
@@ -350,60 +214,13 @@ export const useTemplateDetailModel = (
     retry: false,
   });
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadTemplate = async () => {
-      setLoading(true);
-      setNotFound(false);
-      setLoadError(null);
-
-      const result = await loadTemplateDetailData(
-        options.mode === 'public'
-          ? {
-              identifier: options.identifier,
-              mode: 'public',
-              ownerUsername: publicOwnerUsername,
-            }
-          : {
-              getCachedTemplate,
-              identifier: options.identifier,
-              mode: 'private',
-            },
-      );
-
-      if (cancelled) {
-        return;
-      }
-
-      setTemplate(result.kind === 'ok' ? result.template : null);
-      setNotFound(result.kind === 'not_found');
-      setLoadError(result.kind === 'error' ? result.message : null);
-      setLoading(false);
-    };
-
-    void loadTemplate();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    getCachedTemplate,
-    options.identifier,
-    options.mode,
-    publicOwnerUsername,
-    reloadKey,
-  ]);
-
-  const reload = useCallback(() => setReloadKey((key) => key + 1), []);
-
   const invalidateTemplates = async () => {
     if (!options.userId) {
       return;
     }
 
-    // ['templates'] also covers the public catalog, which Share changes, and the
-    // Changelog, which shows the visibility change.
+    // ['templates'] also covers the open template (so the next write sends its current
+    // version), the public catalog, which Share changes, and the Changelog.
     await queryClient.invalidateQueries({ queryKey: ['templates'] });
   };
 
@@ -434,7 +251,7 @@ export const useTemplateDetailModel = (
       isAuthenticated: options.isAuthenticated,
       // Ignore the result if the page moved to another template during the request.
       onTemplateChange: (shared) =>
-        setTemplate((current) => (current?.id === shared.id ? shared : current)),
+        updateTemplate((current) => (current?.id === shared.id ? shared : current)),
       origin: window.location.origin,
       template,
       userId: options.userId,
@@ -448,7 +265,7 @@ export const useTemplateDetailModel = (
       canEdit: permissions.canEdit,
       invalidateTemplates,
       isPublic,
-      onTemplateChange: setTemplate,
+      onTemplateChange: updateTemplate,
       template,
     });
 

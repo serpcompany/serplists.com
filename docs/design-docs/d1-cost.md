@@ -100,6 +100,7 @@ Fixed (rows read before, after; see the plan's progress):
 | Signed-in catalog | 19,219 | 2 | `?scope=public` shares the anonymous edge cache (the 2 rows are the session) |
 | Signed-in Personal template list | 19,219 | 609 for 200 templates | `?scope=personal` reads only the user's own templates through `idx_templates_owner` |
 | Any signed-in page view (run list) | 1,007 Personal, 12,007 Organization | 0 | Runs load only on the runs page; the run page fetches one run by id |
+| Open a template detail page (template list) | 609 for 200 Personal templates, 3,007 Organization, plus the template by id | The template by id only (under 25) | The page fetches its template by id instead of loading the workspace list; edits refetch that one template, not the list |
 
 Writes per request after step 1 (dropped `idx_templates_slug`, `idx_templates_user_id`,
 `idx_templates_category`, `idx_checklist_runs_assigned_to_user_id`,

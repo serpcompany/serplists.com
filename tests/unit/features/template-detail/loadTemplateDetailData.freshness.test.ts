@@ -114,14 +114,13 @@ describe('public template detail freshness', () => {
 });
 
 describe('private template detail freshness', () => {
-  it('resolves a library template from the bundle when the workspace list lacks it', async () => {
+  it('resolves a library template from the bundle without a request', async () => {
     const apiClient = buildApiClient();
 
     const result = await loadTemplateDetailData(
       {
         mode: 'private',
         identifier: libraryTemplate?.id,
-        getCachedTemplate: () => undefined,
       },
       { apiClient },
     );

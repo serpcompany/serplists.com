@@ -14,20 +14,20 @@ const {
   contextCreateTemplate,
   contextUpdateTemplate,
   menuItemProps,
+  mockUseTemplateLists,
   switchProps,
   workspaceState,
-  workspaceTemplates,
 } = vi.hoisted(() => ({
   contextCreateTemplate: vi.fn(),
   contextUpdateTemplate: vi.fn(),
   menuItemProps: [] as Array<Record<string, unknown>>,
+  mockUseTemplateLists: vi.fn(),
   switchProps: [] as Array<Record<string, unknown>>,
   workspaceState: {
     activeTeamId: undefined as string | undefined,
     canEditTemplates: true,
     isTeamWorkspace: false,
   },
-  workspaceTemplates: [] as unknown[],
 }));
 
 // The real model derives permissions from the options the page passes; so does this mock.
@@ -73,9 +73,13 @@ vi.mock('@/contexts/TemplatesContext', () => {
     deleteTemplate: vi.fn(),
     getTemplate: vi.fn(),
     updateTemplate: contextUpdateTemplate,
-    workspaceTemplates,
   });
-  return { useTemplates, useTemplateLists: useTemplates };
+  // Records the lists a page asks for; a detail page must not load any.
+  const useTemplateLists = (options?: Record<string, unknown>) => {
+    mockUseTemplateLists(options);
+    return { ...useTemplates(), workspaceTemplates: [] };
+  };
+  return { useTemplates, useTemplateLists };
 });
 
 vi.mock('@/contexts/WorkspaceContext', () => ({
@@ -522,14 +526,21 @@ describe('TemplateDetail stats', () => {
 });
 
 describe('TemplateDetail page', () => {
-  it('looks templates up in the workspace list, which refreshes after edits, never the catalog', () => {
+  it('loads only its own template, never the workspace list or the catalog', () => {
+    mockUseTemplateLists.mockClear();
     mockUseTemplateDetailModel.mockReturnValue(baseModel());
 
     renderTemplateDetail();
 
+    // useTemplateLists() with no options fetches the whole workspace list with full content.
+    for (const [listOptions] of mockUseTemplateLists.mock.calls) {
+      expect(listOptions).toEqual(expect.objectContaining({ workspace: false }));
+      expect(listOptions).not.toEqual(expect.objectContaining({ catalog: true }));
+    }
     const options = mockUseTemplateDetailModel.mock.calls.at(-1)?.[0] as Record<string, unknown>;
     expect(options.mode).toBe('private');
-    expect(options.workspaceTemplates).toBe(workspaceTemplates);
+    expect(options.identifier).toBe('tpl-1');
+    expect(options).not.toHaveProperty('workspaceTemplates');
     expect(options).not.toHaveProperty('getCachedTemplate');
   });
 

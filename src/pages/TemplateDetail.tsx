@@ -66,7 +66,7 @@ import {
   DashboardScrollArea,
 } from '@/components/dashboard/DashboardContentShell';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
-import { useTemplateLists } from '@/contexts/TemplatesContext';
+import { useTemplates } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { getCopyTemplateButton } from '@/features/template-detail/copyTemplateButton';
 import {
@@ -113,12 +113,8 @@ const TemplateDetail = () => {
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
   const { activeTeamId, canEditTemplates, isTeamWorkspace } = useWorkspace();
-  const {
-    createRun,
-    createTemplate,
-    deleteTemplate,
-    workspaceTemplates,
-  } = useTemplateLists();
+  // No list: the model loads this template by id (docs/design-docs/d1-cost.md).
+  const { createRun, createTemplate, deleteTemplate } = useTemplates();
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -151,7 +147,6 @@ const TemplateDetail = () => {
     teamId: activeTeamId,
     userId: user?.id,
     username: user?.username,
-    workspaceTemplates,
   });
   const displayTemplate = template;
   // Organization Templates follow the viewer's role, never who created them.
