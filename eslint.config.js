@@ -19,11 +19,10 @@ const LEGACY_MAX_LINES = {
   "src/lib/templates/templateMarkdown.ts": 750,
   "src/components/account/TeamSettingsSection.tsx": 600,
   "src/pages/ChecklistRun.tsx": 725,
-  "src/features/run-execution/useRunExecutionModel.ts": 700,
+  "src/features/run-execution/useRunExecutionModel.ts": 650,
   "src/lib/api.ts": 650,
   "src/components/template-editor/SectionSidebar.tsx": 650,
   "src/components/TemplateBackup.tsx": 530,
-  "src/contexts/TemplatesContext.tsx": 530,
 };
 
 const TOAST_MESSAGE =
