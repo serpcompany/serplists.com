@@ -200,6 +200,16 @@ still be saved and toggled. A changed slug is normalized rather than rejected; o
 with nothing left after normalizing (only non-Latin letters, for example) is a `400`
 naming `slug` instead of being ignored.
 
+Slugs are unique across all templates, archived ones included
+(`idx_templates_slug_unique`), and are chosen by reading before writing
+(`functions/api/utils/template-insert.ts`). Create, copy, and import take the clean
+slug, then a `-<id>` suffix, then a random one; if a concurrent request claims the
+slug before the write, the whole insert (template, first version, audit event) is
+retried with a random suffix, up to 3 attempts, then `409 slug_taken`. An import
+reports that as `insert_failed`. A save that changes the slug to one another template
+uses gets the `-<id>` suffix or a random one, each checked, and `409 slug_taken`
+(with `details.slug`) when those are taken or another save claims the slug first.
+
 A portable-pack template that fails validation after normalization is reported as an
 `invalid_sections` failure at its index in the file; the envelope (`kind`,
 `schemaVersion`) and the 5-template limit still apply to the whole file. The import

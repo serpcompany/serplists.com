@@ -1,5 +1,5 @@
 import { Env } from '../types';
-import { generateSlug, truncateSlug, withSlugSuffix } from '../utils/slug';
+import { generateSlug, truncateSlug } from '../utils/slug';
 import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import {
@@ -46,19 +46,24 @@ import {
   templateStructureChanged,
   validateChangedTemplateFields,
 } from '../utils/template-changes';
+import {
+  findFreeSuffixedSlug,
+  generateUniqueSlug,
+  isMissingRulesColumnError,
+  isTemplateSlugUniqueViolation,
+  insertTemplateWithUniqueSlug,
+  omitRulesColumn,
+  templateSlugTakenResponse,
+  type AuditEventValues,
+  type NewTemplateRows,
+  type TemplateInsertValues,
+  type TemplateVersionValues,
+} from '../utils/template-insert';
 
 const junkTemplateTitles = new Set(['Test Template', 'Updated Template Title']);
 
 type QueryResult<T> = PromiseLike<T> | T;
-type TemplateInsertValues = typeof schema.templates.$inferInsert;
 type TemplateUpdateValues = Partial<TemplateInsertValues>;
-type AuditEventValues = typeof schema.audit_events.$inferInsert;
-type TemplateVersionValues = typeof schema.template_versions.$inferInsert;
-
-function isMissingRulesColumnError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /templates[".]?\.?"?rules|no such column:.*rules/i.test(message);
-}
 
 function getTemplateSelectColumns(includeRules: boolean) {
   const { templates } = schema;
@@ -100,37 +105,6 @@ async function withRulesColumnFallback<T>(
     }
 
     return operation(false);
-  }
-}
-
-function omitRulesColumn<T extends Record<string, unknown>>(values: T): Omit<T, 'rules'> {
-  const { rules: _rules, ...rest } = values;
-  return rest;
-}
-
-async function insertTemplateWithHistoryFallback(
-  db: ReturnType<typeof createDb>,
-  values: TemplateInsertValues,
-  versionValues: TemplateVersionValues,
-  auditEventValues: AuditEventValues,
-): Promise<void> {
-  const { audit_events, template_versions, templates } = schema;
-
-  const runBatch = (templateValues: TemplateInsertValues) =>
-    db.batch([
-      db.insert(templates).values(templateValues),
-      db.insert(template_versions).values(versionValues),
-      db.insert(audit_events).values(auditEventValues),
-    ]);
-
-  try {
-    await runBatch(values);
-  } catch (error) {
-    if (!isMissingRulesColumnError(error)) {
-      throw error;
-    }
-
-    await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateInsertValues);
   }
 }
 
@@ -203,37 +177,14 @@ async function updateTemplateWithHistoryFallback(
   return { templateResult: results[0], runResults: runResultIndexes.map((index) => results[index]) };
 }
 
+function slugInUseResponse(slug: string): Response {
+  return jsonError('Another template uses this URL slug. Choose a different slug.', 409, { code: 'slug_taken', details: { slug } });
+}
+
 function batchUpdateMissed(result: unknown): boolean {
   if (!isRecord(result)) return false;
   const meta = result.meta;
   return isRecord(meta) && typeof meta.changes === 'number' && meta.changes === 0;
-}
-
-async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
-  const base = truncateSlug(generateSlug(title || 'template'), TEMPLATE_SLUG_MAX) || 'template';
-  const db = createDb(env);
-  const { templates } = schema;
-
-  // Prefer the clean slug if available; otherwise fall back to a deterministic suffix.
-  const [exists] = await db
-    .select({ id: templates.id })
-    .from(templates)
-    .where(eq(templates.slug, base))
-    .limit(1);
-
-  if (!exists) return base;
-
-  const suffixed = withSlugSuffix(base, templateId.slice(0, 8), TEMPLATE_SLUG_MAX);
-  const [existsSuffixed] = await db
-    .select({ id: templates.id })
-    .from(templates)
-    .where(eq(templates.slug, suffixed))
-    .limit(1);
-
-  if (!existsSuffixed) return suffixed;
-
-  // Extremely unlikely collision; use random suffix.
-  return withSlugSuffix(base, crypto.randomUUID().slice(0, 8), TEMPLATE_SLUG_MAX);
 }
 
 function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
@@ -637,52 +588,59 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           visibility === 'public' ? true : visibility === 'private' ? false : sourceVisibility;
 
         const templateId = crypto.randomUUID();
-        const slug = await generateUniqueSlug(env, fields.data.title, templateId);
+        const now = new Date().toISOString();
+        const subject: AuditSubject = backupTeamId ? { type: 'team', id: backupTeamId } : { type: 'user', id: userId };
 
         try {
-          const now = new Date().toISOString();
-          const insertedTemplate: TemplateInsertValues = {
-            id: templateId,
-            user_id: userId,
+          const slug = await insertTemplateWithUniqueSlug(db, {
             title: fields.data.title,
-            description: fields.data.description || '',
-            type: finalType,
-            seo_title: fields.data.seoTitle || '',
-            seo_description: fields.data.seoDescription || '',
-            rules: fields.data.rules && fields.data.rules.length > 0 ? JSON.stringify(fields.data.rules) : null,
-            items: JSON.stringify(normalizedSections.sections),
-            version: 1,
-            is_public: isPublic,
-            category: JSON.stringify(finalCategories),
-            tags: JSON.stringify(finalTags),
-            slug,
-            owner_type: backupTeamId ? 'team' : 'user',
-            team_id: backupTeamId,
-            created_by_user_id: userId,
-            created_at: now,
-          };
-          const subject: AuditSubject = backupTeamId ? { type: 'team', id: backupTeamId } : { type: 'user', id: userId };
-
-          const versionValues = await buildTemplateVersionValues({
-            templateId,
-            version: 1,
-            changedByUserId: userId,
-            subject,
-            snapshot: insertedTemplate as Record<string, unknown>,
-            changeSummary: 'template.imported',
-            createdAt: now,
+            slug: await generateUniqueSlug(env, fields.data.title, templateId),
+            buildRows: async (candidateSlug) => {
+              const insertedTemplate: TemplateInsertValues = {
+                id: templateId,
+                user_id: userId,
+                title: fields.data.title,
+                description: fields.data.description || '',
+                type: finalType,
+                seo_title: fields.data.seoTitle || '',
+                seo_description: fields.data.seoDescription || '',
+                rules: fields.data.rules && fields.data.rules.length > 0 ? JSON.stringify(fields.data.rules) : null,
+                items: JSON.stringify(normalizedSections.sections),
+                version: 1,
+                is_public: isPublic,
+                category: JSON.stringify(finalCategories),
+                tags: JSON.stringify(finalTags),
+                slug: candidateSlug,
+                owner_type: backupTeamId ? 'team' : 'user',
+                team_id: backupTeamId,
+                created_by_user_id: userId,
+                created_at: now,
+              };
+              return {
+                template: insertedTemplate,
+                version: await buildTemplateVersionValues({
+                  templateId,
+                  version: 1,
+                  changedByUserId: userId,
+                  subject,
+                  snapshot: insertedTemplate as Record<string, unknown>,
+                  changeSummary: 'template.imported',
+                  createdAt: now,
+                }),
+                audit: await buildAuditEventValues({
+                  actorUserId: userId,
+                  subject,
+                  resource: { type: 'template', id: templateId },
+                  action: 'template.imported',
+                  after: insertedTemplate as Record<string, unknown>,
+                  metadata: { source: 'backup_import', importIndex: index, teamId: backupTeamId },
+                  request,
+                  createdAt: now,
+                }),
+              };
+            },
           });
-          const auditEvent = await buildAuditEventValues({
-            actorUserId: userId,
-            subject,
-            resource: { type: 'template', id: templateId },
-            action: 'template.imported',
-            after: insertedTemplate as Record<string, unknown>,
-            metadata: { source: 'backup_import', importIndex: index, teamId: backupTeamId },
-            request,
-            createdAt: now,
-          });
-          await insertTemplateWithHistoryFallback(db, insertedTemplate, versionValues, auditEvent);
+          if (!slug) throw new Error('templates.slug was taken on every attempt');
           summary.imported += 1;
           summary.successes.push({
             index,
@@ -1074,60 +1032,59 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       const isPublic = visibility === 'public' ? true : visibility === 'preserve' ? true : false;
 
       const templateId = crypto.randomUUID();
-      const slug = await generateUniqueSlug(env, source.title || '', templateId);
       const now = new Date().toISOString();
-
-      const clonedTemplate: TemplateInsertValues = {
-        id: templateId,
-        user_id: userId,
-        title: source.title || '',
-        description: source.description || '',
-        type: typeof source.type === 'string' ? source.type : 'checklist',
-        seo_title: typeof source.seo_title === 'string' ? source.seo_title : '',
-        seo_description: typeof source.seo_description === 'string' ? source.seo_description : '',
-        rules: typeof source.rules === 'string' ? source.rules : null,
-        items: source.items,
-        // A copy is a new template: its edit counter and content version start at 1, like
-        // create and import. The source's counters are provenance, kept in the audit event.
-        version: 1,
-        content_version: 1,
-        is_public: isPublic,
-        category: source.category,
-        tags: source.tags,
-        slug,
-        owner_type: cloneTeamId ? 'team' : 'user',
-        team_id: cloneTeamId,
-        created_by_user_id: userId,
-        created_at: now,
-      };
       const subject: AuditSubject = cloneTeamId ? { type: 'team', id: cloneTeamId } : { type: 'user', id: userId };
 
-      const versionValues = await buildTemplateVersionValues({
-        templateId,
-        version: 1,
-        changedByUserId: userId,
-        subject,
-        snapshot: clonedTemplate as Record<string, unknown>,
-        changeSummary: 'template.cloned',
-        createdAt: now,
-      });
-      const auditEvent = await buildAuditEventValues({
-        actorUserId: userId,
-        subject,
-        resource: { type: 'template', id: templateId },
-        action: 'template.cloned',
-        after: clonedTemplate as Record<string, unknown>,
-        metadata: {
-          sourceTemplateId: sourceId,
-          sourceVersion: typeof source.version === 'number' ? source.version : null,
-          sourceContentVersion: typeof source.content_version === 'number' ? source.content_version : null,
-        },
-        request,
-        createdAt: now,
-      });
-      await insertTemplateWithHistoryFallback(db, clonedTemplate, versionValues, auditEvent);
+      const buildRows = async (candidateSlug: string): Promise<NewTemplateRows> => {
+        const clonedTemplate: TemplateInsertValues = {
+          id: templateId,
+          user_id: userId,
+          title: source.title || '',
+          description: source.description || '',
+          type: typeof source.type === 'string' ? source.type : 'checklist',
+          seo_title: typeof source.seo_title === 'string' ? source.seo_title : '',
+          seo_description: typeof source.seo_description === 'string' ? source.seo_description : '',
+          rules: typeof source.rules === 'string' ? source.rules : null,
+          items: source.items,
+          // A copy is a new template: its edit counter and content version start at 1, like
+          // create and import. The source's counters are provenance, kept in the audit event.
+          version: 1,
+          content_version: 1,
+          is_public: isPublic,
+          category: source.category,
+          tags: source.tags,
+          slug: candidateSlug,
+          owner_type: cloneTeamId ? 'team' : 'user',
+          team_id: cloneTeamId,
+          created_by_user_id: userId,
+          created_at: now,
+        };
+        const snapshot = clonedTemplate as Record<string, unknown>;
+        return {
+          template: clonedTemplate,
+          version: await buildTemplateVersionValues({
+            templateId, version: 1, changedByUserId: userId, subject, snapshot, changeSummary: 'template.cloned', createdAt: now,
+          }),
+          audit: await buildAuditEventValues({
+            actorUserId: userId,
+            subject,
+            resource: { type: 'template', id: templateId },
+            action: 'template.cloned',
+            after: snapshot,
+            metadata: {
+              sourceTemplateId: sourceId,
+              sourceVersion: typeof source.version === 'number' ? source.version : null,
+              sourceContentVersion: typeof source.content_version === 'number' ? source.content_version : null,
+            },
+            request,
+            createdAt: now,
+          }),
+        };
+      };
+      const title = source.title || '';
+      const slug = await insertTemplateWithUniqueSlug(db, { title, slug: await generateUniqueSlug(env, title, templateId), buildRows });
 
-      return json({ id: templateId, slug });
+      return slug ? json({ id: templateId, slug }) : templateSlugTakenResponse();
     }
 
     let body: unknown;
@@ -1185,7 +1142,6 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     const templateId = crypto.randomUUID();
     const slugSource = typeof requestedSlug === 'string' && requestedSlug.trim() ? requestedSlug.trim() : title || '';
-    const slug = await generateUniqueSlug(env, slugSource, templateId);
 
     const finalCategories = normalizeStringArray(categories ?? category);
     const finalTags = normalizeStringArray(tags);
@@ -1197,49 +1153,48 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     }
 
     const now = new Date().toISOString();
-    const insertedTemplate: TemplateInsertValues = {
-      id: templateId,
-      user_id: userId,
-      title: title || '',
-      description: description || '',
-      type: finalType,
-      seo_title: seoTitle || '',
-      seo_description: seoDescription || '',
-      rules: Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null,
-      items: JSON.stringify(normalizedSections.sections),
-      version: 1,
-      is_public: isPublic,
-      category: JSON.stringify(finalCategories),
-      tags: JSON.stringify(finalTags),
-      slug,
-      owner_type: requestedTeamId ? 'team' : 'user',
-      team_id: requestedTeamId,
-      created_by_user_id: userId,
-      created_at: now,
-    };
     const subject: AuditSubject = requestedTeamId ? { type: 'team', id: requestedTeamId } : { type: 'user', id: userId };
+    const buildRows = async (candidateSlug: string): Promise<NewTemplateRows> => {
+      const insertedTemplate: TemplateInsertValues = {
+        id: templateId,
+        user_id: userId,
+        title: title || '',
+        description: description || '',
+        type: finalType,
+        seo_title: seoTitle || '',
+        seo_description: seoDescription || '',
+        rules: Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null,
+        items: JSON.stringify(normalizedSections.sections),
+        version: 1,
+        is_public: isPublic,
+        category: JSON.stringify(finalCategories),
+        tags: JSON.stringify(finalTags),
+        slug: candidateSlug,
+        owner_type: requestedTeamId ? 'team' : 'user',
+        team_id: requestedTeamId,
+        created_by_user_id: userId,
+        created_at: now,
+      };
+      const snapshot = insertedTemplate as Record<string, unknown>;
+      return {
+        template: insertedTemplate,
+        version: await buildTemplateVersionValues({
+          templateId, version: 1, changedByUserId: userId, subject, snapshot, changeSummary: 'template.created', createdAt: now,
+        }),
+        audit: await buildAuditEventValues({
+          actorUserId: userId,
+          subject,
+          resource: { type: 'template', id: templateId },
+          action: 'template.created',
+          after: snapshot,
+          request,
+          createdAt: now,
+        }),
+      };
+    };
+    const slug = await insertTemplateWithUniqueSlug(db, { title: slugSource, slug: await generateUniqueSlug(env, slugSource, templateId), buildRows });
 
-    const versionValues = await buildTemplateVersionValues({
-      templateId,
-      version: 1,
-      changedByUserId: userId,
-      subject,
-      snapshot: insertedTemplate as Record<string, unknown>,
-      changeSummary: 'template.created',
-      createdAt: now,
-    });
-    const auditEvent = await buildAuditEventValues({
-      actorUserId: userId,
-      subject,
-      resource: { type: 'template', id: templateId },
-      action: 'template.created',
-      after: insertedTemplate as Record<string, unknown>,
-      request,
-      createdAt: now,
-    });
-    await insertTemplateWithHistoryFallback(db, insertedTemplate, versionValues, auditEvent);
-
-    return json({ id: templateId, slug });
+    return slug ? json({ id: templateId, slug }) : templateSlugTakenResponse();
   }
 
   if (request.method === 'PUT') {
@@ -1367,7 +1322,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         .where(and(eq(templates.slug, requestedSlugValue), ne(templates.id, templateId)))
         .limit(1);
 
-      updates.slug = conflict ? withSlugSuffix(requestedSlugValue, templateId.slice(0, 8), TEMPLATE_SLUG_MAX) : requestedSlugValue;
+      const slug = conflict ? await findFreeSuffixedSlug(db, requestedSlugValue, templateId) : requestedSlugValue;
+      if (!slug) return slugInUseResponse(requestedSlugValue);
+      updates.slug = slug;
     }
 
     const changes = omitUnchangedTemplateColumns(existingTemplate as unknown as Record<string, unknown>, updates);
@@ -1525,6 +1482,10 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         return jsonError('Template changed while it was being saved. Refresh before saving again.', 409, {
           code: 'edit_conflict',
         });
+      }
+      // Another save claimed the slug between the check above and this write.
+      if (isTemplateSlugUniqueViolation(error) && typeof changes.slug === 'string') {
+        return slugInUseResponse(changes.slug);
       }
       throw error;
     }
