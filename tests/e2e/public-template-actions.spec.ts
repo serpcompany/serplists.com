@@ -68,3 +68,24 @@ test('a failed Save keeps the Save button instead of showing Saved', async ({ pa
   await expect(page.getByRole('button', { name: 'Saved' })).toHaveCount(0);
   expect(templateCreates).toBe(1);
 });
+
+test('a Free Personal user sees that Save leads to an upgrade', async ({ page }) => {
+  // John has no Personal Pro plan; copying into Personal is a Pro feature.
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Fill John' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+  let checkouts = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.endsWith('/api/billing/checkout')) {
+      checkouts += 1;
+    }
+  });
+
+  await openPublicTemplate(page);
+
+  await expect(page.getByRole('button', { name: 'Upgrade to save' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Upgrade to copy template' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
+  expect(checkouts).toBe(0);
+});

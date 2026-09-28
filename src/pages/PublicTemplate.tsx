@@ -247,6 +247,7 @@ const PublicTemplate = () => {
         isProUser={billingState.isPro}
         isCreatingRun={isCreatingRun}
         isSaving={isSaving}
+        isTeamWorkspace={isTeamWorkspace}
         isWorkspaceLoading={isWorkspaceLoading}
         onStartRun={handleStartRun}
         onSaveTemplate={handleSaveTemplate}

@@ -22,6 +22,8 @@ import { buildPublicCategoryPath, buildPublicTemplatesPath } from '@/lib/routes'
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistItem, ChecklistSection, ChecklistTemplate } from '@/types/checklist';
 
+import { getPublicTemplateSaveLabels } from './publicTemplateSaveLabels';
+
 interface PublicTemplateViewProps {
   template: ChecklistTemplate;
   totalItems: number;
@@ -32,6 +34,8 @@ interface PublicTemplateViewProps {
   isProUser: boolean;
   isCreatingRun: boolean;
   isSaving: boolean;
+  // Save copies into the active context; only Personal copying needs a Pro plan.
+  isTeamWorkspace: boolean;
   // Save and Start Run wait until the active ownership context is known.
   isWorkspaceLoading: boolean;
   onStartRun: () => void;
@@ -45,9 +49,12 @@ export function PublicTemplateView({
   template,
   totalItems,
   ownerPath,
+  isAuthenticated,
   isBillingLoading,
+  isProUser,
   isCreatingRun,
   isSaving,
+  isTeamWorkspace,
   isWorkspaceLoading,
   onStartRun,
   onSaveTemplate,
@@ -88,6 +95,13 @@ export function PublicTemplateView({
   };
   // Signed-out visitors are never loading a plan, so they can still click Save to sign in.
   const isSaveDisabled = isSaving || isBillingLoading || isWorkspaceLoading;
+  const saveLabels = getPublicTemplateSaveLabels({
+    isAuthenticated,
+    isBillingLoading,
+    isProUser,
+    isSaving,
+    isTeamWorkspace,
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -127,7 +141,7 @@ export function PublicTemplateView({
               ) : (
                 <>
                   <Bookmark className="h-3.5 w-3.5" />
-                  {isSaving ? 'Saving...' : 'Save'}
+                  {saveLabels.header}
                 </>
               )}
             </Button>
@@ -279,7 +293,7 @@ export function PublicTemplateView({
               className="gap-2"
             >
               <Copy className="h-4 w-4" />
-              Copy to Library
+              {saveLabels.footer}
             </Button>
             <Button
               onClick={onStartRun}

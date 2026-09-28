@@ -427,6 +427,20 @@ describe('PublicTemplate ownership context', () => {
     expect(mockNavigate).toHaveBeenCalledWith(buildConsoleTemplatePath('clone-1'));
   });
 
+  it('labels Save as an upgrade for a Free Personal user, never in an Organization', () => {
+    workspaceState.activeTeamId = undefined;
+    workspaceState.isTeamWorkspace = false;
+    const personal = renderPublishedRoute(publishedClipyTemplate).html;
+
+    workspaceState.activeTeamId = 'team-1';
+    workspaceState.isTeamWorkspace = true;
+    const organization = renderPublishedRoute(publishedClipyTemplate).html;
+
+    expect(personal).toContain('Upgrade to copy template');
+    expect(organization).not.toContain('Upgrade to');
+    expect(organization).toContain('Copy to Library');
+  });
+
   it('ignores Start Run and Save until the active Organization is known', async () => {
     workspaceState.activeTeamId = undefined;
     workspaceState.isTeamWorkspace = false;
@@ -440,7 +454,7 @@ describe('PublicTemplate ownership context', () => {
 
     expect(startRun).not.toHaveBeenCalled();
     expect(saveTemplate).not.toHaveBeenCalled();
-    const actionButtons = html.match(/<button[^>]*>(?:(?!<\/button>).)*(?:Start Run|Save|Copy to Library)(?:(?!<\/button>).)*<\/button>/g) ?? [];
+    const actionButtons = html.match(/<button[^>]*>(?:(?!<\/button>).)*(?:Start Run|Save|Copy to Library|Upgrade to)(?:(?!<\/button>).)*<\/button>/g) ?? [];
     expect(actionButtons.length).toBeGreaterThanOrEqual(4);
     for (const button of actionButtons) {
       expect(button).toContain('disabled=""');
