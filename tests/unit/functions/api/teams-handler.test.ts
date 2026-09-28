@@ -1062,4 +1062,42 @@ describe("Teams handler", () => {
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
     expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
   });
+
+  it("keeps a colliding Organization slug within 120 characters", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: "other-team" }]).mockResolvedValueOnce([]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "a".repeat(120) }),
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.slug.length).toBeLessThanOrEqual(120);
+    expect(data.slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+  });
+
+  it("renames an Organization whose stored slug predates the slug bounds", async () => {
+    const storedSlug = `${"a".repeat(120)}-abcd1234`;
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
+      ])
+      .mockResolvedValueOnce([{ id: "team-1", name: "Old Team", slug: storedSlug, archived_at: null }]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams/team-1", {
+        method: "PUT",
+        body: JSON.stringify({ name: "New Team", slug: storedSlug }),
+      }),
+      mockEnv,
+    );
+
+    expect(response.status).toBe(200);
+    expect(dbMocks.updateChain.set.mock.calls[0][0]).toEqual(expect.objectContaining({ name: "New Team" }));
+    expect(dbMocks.updateChain.set.mock.calls[0][0]).not.toHaveProperty("slug");
+  });
 });

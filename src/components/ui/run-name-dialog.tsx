@@ -10,6 +10,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RUN_TITLE_MAX } from "@/lib/schemas/templateLimits";
+
+/** "<template title> - <start time>", with the title shortened so the name fits the run title limit. */
+export const buildDefaultRunName = (templateTitle: string, startedAt: Date = new Date()): string => {
+  const suffix = ` - ${startedAt.toLocaleString()}`;
+  return `${templateTitle.slice(0, Math.max(0, RUN_TITLE_MAX - suffix.length)).trimEnd()}${suffix}`;
+};
 
 interface RunNameDialogProps {
   open: boolean;
@@ -28,7 +35,7 @@ export const RunNameDialog: React.FC<RunNameDialogProps> = ({
 }) => {
   const [runName, setRunName] = useState("");
   
-  const defaultName = `${templateTitle} - ${new Date().toLocaleString()}`;
+  const defaultName = buildDefaultRunName(templateTitle);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +62,7 @@ export const RunNameDialog: React.FC<RunNameDialogProps> = ({
                 value={runName}
                 onChange={(e) => setRunName(e.target.value)}
                 placeholder={defaultName}
+                maxLength={RUN_TITLE_MAX}
                 autoFocus
               />
             </div>

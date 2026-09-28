@@ -352,3 +352,15 @@ describe('Template Import Functionality', () => {
     });
   });
 });
+
+describe('run titles taken from long template titles', () => {
+  it('keeps the run title within the 160-character run limit', () => {
+    const request = buildCreateRunRequest({
+      template: buildRunTemplate({ title: 'Long title '.repeat(20) }),
+      templateId: 'template-1',
+    });
+
+    expect(request.title.length).toBeLessThanOrEqual(160);
+    expect(request.apiPayload.title).toBe(request.title);
+  });
+});

@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from "@ta
 import { api } from "@/lib/api";
 import { prepareTemplatesForImport } from "@/lib/utils/templateBackup";
 import { buildTemplateUpdateRequest, describeTemplateUpdate } from "@/lib/templates/templateUpdate";
+import { RUN_TITLE_MAX } from "@/lib/schemas/templateLimits";
 import { 
   ChecklistTemplate, 
   ChecklistRun, 
@@ -86,7 +87,8 @@ export function buildCreateRunRequest(params: {
   templateId: string;
 }): CreateRunRequest {
   const runSections = resetSectionsCompletion(params.template.sections);
-  const title = params.runName || params.template.title;
+  // Template titles can be longer than a run title may be (imports, older rows).
+  const title = (params.runName || params.template.title).slice(0, RUN_TITLE_MAX).trimEnd();
 
   if (isRepoTemplate(params.template)) {
     return {

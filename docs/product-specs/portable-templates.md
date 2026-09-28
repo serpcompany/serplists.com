@@ -172,7 +172,20 @@ Backup and portable imports return a structured summary with `total`,
 `imported`, `successes[]`, and `failed[]`. Successful entries identify their
 input index, title, stored id, slug, and visibility. Failures identify their
 index, title, human-readable reason, and stable code. Current failure codes are
-`invalid_sections`, `oversized_asset`, and `insert_failed`.
+`invalid_fields`, `invalid_sections`, `oversized_asset`, and `insert_failed`.
+
+`invalid_fields` means a template's fields exceed the bounds every save enforces
+(`src/lib/schemas/templateLimits.ts`): a non-blank title of at most 160 characters,
+description 5000, `seoTitle` 160, `seoDescription` 320, at most 20 categories and 20
+tags of 80 characters, and rules with non-empty `id`, `type`, and `path`. The reason
+names the field (for example `description: String must contain at most 5000
+character(s)`). Imported values are never truncated. Generated slugs (import, clone,
+create, and a de-duplicated slug on save) are shortened to fit 160 characters, and
+Organization slugs to 120.
+
+A template save (`PUT /api/templates/:id`) checks bounds only for fields whose value
+changes, so a row that predates these bounds, or a legacy slug with punctuation, can
+still be saved and toggled. A changed slug is normalized rather than rejected.
 
 A portable-pack template that fails validation after normalization is reported as an
 `invalid_sections` failure at its index in the file; the envelope (`kind`,

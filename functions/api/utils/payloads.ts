@@ -1,4 +1,14 @@
 import { z } from "zod";
+import {
+  RUN_TITLE_MAX,
+  TEMPLATE_DESCRIPTION_MAX,
+  TEMPLATE_LIST_ITEM_MAX,
+  TEMPLATE_LIST_MAX_ITEMS,
+  TEMPLATE_SEO_DESCRIPTION_MAX,
+  TEMPLATE_SEO_TITLE_MAX,
+  TEMPLATE_SLUG_MAX,
+  TEMPLATE_TITLE_MAX,
+} from "../../../src/lib/schemas/templateLimits";
 
 const boundedOptionalString = (max: number) => z.string().trim().max(max).optional();
 const boundedRequiredString = (max: number) => z.string().trim().min(1).max(max);
@@ -20,33 +30,62 @@ const templateRuleSchema = z.object({
 export const templatePayloadSchema = z.object({
   teamId: z.string().trim().min(1).optional(),
   team_id: z.string().trim().min(1).optional(),
-  title: boundedRequiredString(160).optional(),
-  description: boundedOptionalString(5000),
+  title: boundedRequiredString(TEMPLATE_TITLE_MAX).optional(),
+  description: boundedOptionalString(TEMPLATE_DESCRIPTION_MAX),
   type: z.enum(["checklist", "recipe"]).optional(),
-  seoTitle: boundedOptionalString(160),
-  seoDescription: boundedOptionalString(320),
+  seoTitle: boundedOptionalString(TEMPLATE_SEO_TITLE_MAX),
+  seoDescription: boundedOptionalString(TEMPLATE_SEO_DESCRIPTION_MAX),
   rules: z.array(templateRuleSchema).optional(),
   is_public: z.boolean().optional(),
-  categories: stringListField(20, 80),
-  category: boundedOptionalString(80),
-  tags: stringListField(20, 80),
+  categories: stringListField(TEMPLATE_LIST_MAX_ITEMS, TEMPLATE_LIST_ITEM_MAX),
+  category: boundedOptionalString(TEMPLATE_LIST_ITEM_MAX),
+  tags: stringListField(TEMPLATE_LIST_MAX_ITEMS, TEMPLATE_LIST_ITEM_MAX),
   sections: z.unknown().optional(),
   items: z.unknown().optional(),
   slug: z
     .string()
     .trim()
     .min(1)
-    .max(160)
+    .max(TEMPLATE_SLUG_MAX)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, numbers, and hyphens only")
     .optional(),
   expected_version: z.number().int().positive().optional(),
 });
 
+// Saves resend every stored field, and stored values can predate these bounds (imports,
+// clones, legacy slugs). So PUT checks only types on the wire; the handler validates the
+// fields that actually change against templatePayloadSchema once it has read the row,
+// and normalizes a changed slug instead of rejecting it.
+const looseStringList = z.union([z.array(z.string().trim()), z.string().trim()]).optional();
+export const templateUpdatePayloadSchema = templatePayloadSchema.extend({
+  title: z.string().trim().optional(),
+  description: z.string().trim().optional(),
+  seoTitle: z.string().trim().optional(),
+  seoDescription: z.string().trim().optional(),
+  rules: z.array(templateRuleSchema.extend({ id: z.string().trim(), type: z.string().trim(), path: z.string().trim() })).optional(),
+  categories: looseStringList,
+  category: z.string().trim().optional(),
+  tags: looseStringList,
+  slug: z.string().trim().optional(),
+});
+
+// Import files are free-form; each template's fields must fit the same bounds as a save.
+export const templateImportFieldsSchema = templatePayloadSchema
+  .pick({ title: true, description: true, seoTitle: true, seoDescription: true, categories: true, tags: true, rules: true })
+  .required({ title: true });
+
+/** An error message that names the field: "description: String must contain at most 5000 character(s)". */
+export function formatPayloadIssue(error: z.ZodError, fallback: string): string {
+  const issue = error.issues[0];
+  if (!issue) return fallback;
+  return `${issue.path.join(".") || "payload"}: ${issue.message}`;
+}
+
 export const checklistPayloadSchema = z.object({
   teamId: z.string().trim().min(1).optional(),
   team_id: z.string().trim().min(1).optional(),
   template_id: z.string().trim().min(1).nullable().optional(),
-  title: boundedRequiredString(160).optional(),
+  title: boundedRequiredString(RUN_TITLE_MAX).optional(),
   sections: z.unknown().optional(),
   items: z.unknown().optional(),
   status: z.enum(["in_progress", "completed"]).optional(),

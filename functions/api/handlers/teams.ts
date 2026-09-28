@@ -5,7 +5,8 @@ import { createDb, schema } from "../db";
 import { createInviteToken, sha256Hex } from "../utils/crypto";
 import { buildAuditEventValues } from "../utils/audit";
 import { getSessionUserId } from "../utils/session";
-import { generateSlug } from "../utils/slug";
+import { generateSlug, truncateSlug, withSlugSuffix } from "../utils/slug";
+import { TEAM_SLUG_MAX } from "../../../src/lib/schemas/templateLimits";
 import { buildTeamInviteDelivery } from "../utils/team-invite-delivery";
 import {
   canManageTeam,
@@ -14,27 +15,24 @@ import {
 } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
 
+const teamSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(TEAM_SLUG_MAX)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, numbers, and hyphens only");
+
 const createTeamBodySchema = z.object({
   name: z.string().trim().min(1).max(120),
-  slug: z
-    .string()
-    .trim()
-    .min(1)
-    .max(120)
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, numbers, and hyphens only")
-    .optional(),
+  slug: teamSlugSchema.optional(),
 });
 
+// Settings resends the stored slug, which can predate today's slug rules, so the slug is
+// checked against teamSlugSchema only when it changes.
 const updateTeamBodySchema = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
-    slug: z
-      .string()
-      .trim()
-      .min(1)
-      .max(120)
-      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, numbers, and hyphens only")
-      .optional(),
+    slug: z.string().trim().optional(),
   })
   .refine((value) => typeof value.name !== "undefined" || typeof value.slug !== "undefined", {
     message: "No fields to update",
@@ -65,16 +63,16 @@ async function readJson(request: Request): Promise<unknown> {
 async function generateUniqueTeamSlug(env: Env, name: string, teamId: string, requestedSlug?: string): Promise<string> {
   const db = createDb(env);
   const { teams } = schema;
-  const base = generateSlug(requestedSlug || name) || `team-${teamId.slice(0, 8)}`;
+  const base = truncateSlug(generateSlug(requestedSlug || name), TEAM_SLUG_MAX) || `team-${teamId.slice(0, 8)}`;
 
   const [existing] = await db.select({ id: teams.id }).from(teams).where(eq(teams.slug, base)).limit(1);
   if (!existing) return base;
 
-  const suffixed = `${base}-${teamId.slice(0, 8)}`;
+  const suffixed = withSlugSuffix(base, teamId.slice(0, 8), TEAM_SLUG_MAX);
   const [existingSuffixed] = await db.select({ id: teams.id }).from(teams).where(eq(teams.slug, suffixed)).limit(1);
   if (!existingSuffixed) return suffixed;
 
-  return `${base}-${crypto.randomUUID().slice(0, 8)}`;
+  return withSlugSuffix(base, crypto.randomUUID().slice(0, 8), TEAM_SLUG_MAX);
 }
 
 async function getCurrentUserEmail(env: Env, userId: string): Promise<string | null> {
@@ -565,6 +563,10 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     }
 
     if (typeof parsed.data.slug === "string" && parsed.data.slug !== team.slug) {
+      const slug = teamSlugSchema.safeParse(parsed.data.slug);
+      if (!slug.success) {
+        return jsonError(`slug: ${slug.error.issues[0]?.message ?? "Invalid slug"}`, 400);
+      }
       const [existingSlug] = await db
         .select({ id: teams.id })
         .from(teams)

@@ -1,4 +1,4 @@
-import { normalizeStringArray, parseJsonArray } from './payloads';
+import { formatPayloadIssue, normalizeStringArray, parseJsonArray, templatePayloadSchema } from './payloads';
 import { assignMissingStableTemplateIdentities } from './template-reconciliation';
 
 // Clients resend the whole Template on every save (editor saves, visibility toggles), so a
@@ -80,4 +80,30 @@ export function omitUnchangedTemplateColumns(existing: Row, updates: Row): Row {
 /** Visibility is not part of a Template version; every other stored column is. */
 export function isVersionedTemplateChange(changes: Row): boolean {
   return Object.keys(changes).some((column) => column !== 'is_public');
+}
+
+// The request fields behind each templates column.
+const BODY_FIELDS: Record<string, string[]> = {
+  title: ['title'],
+  description: ['description'],
+  seo_title: ['seoTitle'],
+  seo_description: ['seoDescription'],
+  rules: ['rules'],
+  category: ['categories', 'category'],
+  tags: ['tags'],
+};
+
+/**
+ * Checks the fields behind changed columns against the save bounds. Unchanged fields are
+ * skipped, so a stored value that predates the bounds can be resent. Returns an error
+ * message naming the field, or null.
+ */
+export function validateChangedTemplateFields(changes: Row, body: Row): string | null {
+  const changedFields = Object.fromEntries(
+    Object.keys(changes).flatMap((column) =>
+      (BODY_FIELDS[column] ?? []).filter((field) => body[field] !== undefined).map((field) => [field, body[field]]),
+    ),
+  );
+  const result = templatePayloadSchema.safeParse(changedFields);
+  return result.success ? null : formatPayloadIssue(result.error, 'Invalid template payload');
 }

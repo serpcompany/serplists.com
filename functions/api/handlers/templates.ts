@@ -1,8 +1,17 @@
 import { Env } from '../types';
-import { generateSlug } from '../utils/slug';
+import { generateSlug, truncateSlug, withSlugSuffix } from '../utils/slug';
 import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
-import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema } from '../utils/payloads';
+import {
+  formatPayloadIssue,
+  normalizeSectionsPayload,
+  normalizeStringArray,
+  parseJsonArray,
+  templateImportFieldsSchema,
+  templatePayloadSchema,
+  templateUpdatePayloadSchema,
+} from '../utils/payloads';
+import { TEMPLATE_SLUG_MAX } from '../../../src/lib/schemas/templateLimits';
 import { json, jsonError } from '../utils/response';
 import { withEdgeCache } from '../utils/edge-cache';
 import { log } from '../utils/logger';
@@ -23,7 +32,12 @@ import {
   reconcileRunSections,
   validateStableTemplateIdentities,
 } from '../utils/template-reconciliation';
-import { isVersionedTemplateChange, omitUnchangedTemplateColumns, templateStructureChanged } from '../utils/template-changes';
+import {
+  isVersionedTemplateChange,
+  omitUnchangedTemplateColumns,
+  templateStructureChanged,
+  validateChangedTemplateFields,
+} from '../utils/template-changes';
 
 const junkTemplateTitles = new Set(['Test Template', 'Updated Template Title']);
 
@@ -171,7 +185,7 @@ function batchUpdateMissed(result: unknown): boolean {
 }
 
 async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
-  const base = generateSlug(title || 'template') || 'template';
+  const base = truncateSlug(generateSlug(title || 'template'), TEMPLATE_SLUG_MAX) || 'template';
   const db = createDb(env);
   const { templates } = schema;
 
@@ -184,7 +198,7 @@ async function generateUniqueSlug(env: Env, title: string, templateId: string): 
 
   if (!exists) return base;
 
-  const suffixed = `${base}-${templateId.slice(0, 8)}`;
+  const suffixed = withSlugSuffix(base, templateId.slice(0, 8), TEMPLATE_SLUG_MAX);
   const [existsSuffixed] = await db
     .select({ id: templates.id })
     .from(templates)
@@ -194,7 +208,7 @@ async function generateUniqueSlug(env: Env, title: string, templateId: string): 
   if (!existsSuffixed) return suffixed;
 
   // Extremely unlikely collision; use random suffix.
-  return `${base}-${crypto.randomUUID().slice(0, 8)}`;
+  return withSlugSuffix(base, crypto.randomUUID().slice(0, 8), TEMPLATE_SLUG_MAX);
 }
 
 function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
@@ -359,7 +373,7 @@ const templateBackupImportBodySchema = z.object({
     .optional(),
 });
 
-type TemplateImportFailureCode = 'invalid_sections' | 'oversized_asset' | 'insert_failed';
+type TemplateImportFailureCode = 'invalid_fields' | 'invalid_sections' | 'oversized_asset' | 'insert_failed';
 
 type TemplateImportFailure = {
   index: number;
@@ -546,6 +560,18 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
       for (const [position, template] of incomingTemplates.entries()) {
         const index = sourceIndexes?.[position] ?? position;
+        const finalCategories = normalizeStringArray(template.categories ?? template.category);
+        const finalTags = normalizeStringArray(template.tags);
+        const fields = templateImportFieldsSchema.safeParse({ ...template, categories: finalCategories, tags: finalTags });
+        if (!fields.success) {
+          summary.failed.push({
+            index,
+            title: template.title,
+            reason: formatPayloadIssue(fields.error, 'Invalid template fields'),
+            code: 'invalid_fields',
+          });
+          continue;
+        }
         const normalizedSections = normalizeSectionsPayload(template.sections ?? template.items);
         if (normalizedSections.error) {
           summary.failed.push({
@@ -578,8 +604,6 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           continue;
         }
 
-        const finalCategories = normalizeStringArray(template.categories ?? template.category);
-        const finalTags = normalizeStringArray(template.tags);
         const finalType = template.type ?? 'checklist';
         const sourceVisibility =
           template.visibility === 'public'
@@ -596,19 +620,19 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           visibility === 'public' ? true : visibility === 'private' ? false : sourceVisibility;
 
         const templateId = crypto.randomUUID();
-        const slug = await generateUniqueSlug(env, template.title || '', templateId);
+        const slug = await generateUniqueSlug(env, fields.data.title, templateId);
 
         try {
           const now = new Date().toISOString();
           const insertedTemplate: TemplateInsertValues = {
             id: templateId,
             user_id: userId,
-            title: template.title || '',
-            description: template.description || '',
+            title: fields.data.title,
+            description: fields.data.description || '',
             type: finalType,
-            seo_title: template.seoTitle || '',
-            seo_description: template.seoDescription || '',
-            rules: Array.isArray(template.rules) && template.rules.length > 0 ? JSON.stringify(template.rules) : null,
+            seo_title: fields.data.seoTitle || '',
+            seo_description: fields.data.seoDescription || '',
+            rules: fields.data.rules && fields.data.rules.length > 0 ? JSON.stringify(fields.data.rules) : null,
             items: JSON.stringify(normalizedSections.sections),
             version: 1,
             is_public: isPublic,
@@ -1134,7 +1158,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     const parsed = templatePayloadSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
+      return jsonError(formatPayloadIssue(parsed.error, 'Invalid template payload'), 400);
     }
 
     const requestedTeamId = getRequestedTeamId(parsed.data, url);
@@ -1255,17 +1279,18 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError('Invalid JSON payload', 400);
     }
 
-    const parsed = templatePayloadSchema.safeParse(body);
+    const parsed = templateUpdatePayloadSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
+      return jsonError(formatPayloadIssue(parsed.error, 'Invalid template payload'), 400);
     }
 
     const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems, expected_version } = parsed.data;
     const rawBody = body as Record<string, unknown>;
 
     // Only update slug if explicitly provided (avoid breaking shared URLs on title edits).
-    const requestedSlugValue = typeof requestedSlug === 'string' && requestedSlug.trim()
-      ? generateSlug(requestedSlug.trim())
+    // A changed slug is normalized to a valid one rather than rejected.
+    const requestedSlugValue = requestedSlug
+      ? truncateSlug(generateSlug(requestedSlug), TEMPLATE_SLUG_MAX) || null
       : null;
 
     const now = new Date().toISOString();
@@ -1349,17 +1374,22 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       });
     }
 
-    if (requestedSlugValue && requestedSlugValue !== existingTemplate.slug) {
+    // Resending the stored slug is not a change, even when it predates today's slug rules.
+    if (requestedSlugValue && requestedSlug !== existingTemplate.slug && requestedSlugValue !== existingTemplate.slug) {
       const [conflict] = await db
         .select({ id: templates.id })
         .from(templates)
         .where(and(eq(templates.slug, requestedSlugValue), ne(templates.id, templateId)))
         .limit(1);
 
-      updates.slug = conflict ? `${requestedSlugValue}-${templateId.slice(0, 8)}` : requestedSlugValue;
+      updates.slug = conflict ? withSlugSuffix(requestedSlugValue, templateId.slice(0, 8), TEMPLATE_SLUG_MAX) : requestedSlugValue;
     }
 
     const changes = omitUnchangedTemplateColumns(existingTemplate as unknown as Record<string, unknown>, updates);
+    const invalidField = validateChangedTemplateFields(changes, parsed.data);
+    if (invalidField) {
+      return jsonError(invalidField, 400);
+    }
     const currentVersion = typeof existingTemplate.version === 'number' ? existingTemplate.version : 1;
     const currentContentVersion = typeof existingTemplate.content_version === 'number'
       ? existingTemplate.content_version
