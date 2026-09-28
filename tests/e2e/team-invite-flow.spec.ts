@@ -128,10 +128,13 @@ test('@smoke team invite flow asks before joining through a link, lets members l
   await expect(page.getByText(teamName).first()).toBeVisible();
 
   const linkInviteUrl = await createLinkInvite(page, linkInviteeEmail);
-  await expect(page.getByText(linkInviteeEmail)).toBeVisible();
+  await expect(page.getByText(`Invite link for ${linkInviteeEmail}`)).toBeVisible();
+  // exact: the Pending invites row shows the bare email, the link label does not.
+  await expect(page.getByText(linkInviteeEmail, { exact: true })).toBeVisible();
 
   await createLinkInvite(page, settingsInviteeEmail);
-  await expect(page.getByText(settingsInviteeEmail)).toBeVisible();
+  await expect(page.getByText(`Invite link for ${settingsInviteeEmail}`)).toBeVisible();
+  await expect(page.getByText(settingsInviteeEmail, { exact: true })).toBeVisible();
 
   const linkInviteeContext = await browser.newContext();
   const linkInviteePage = await linkInviteeContext.newPage();

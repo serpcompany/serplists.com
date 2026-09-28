@@ -215,7 +215,9 @@ test('@smoke team workspace settings create link invites and expose owner contro
   await expect(page.getByRole('textbox', { name: 'Invite link' })).toHaveValue(
     /\/team-invites\/e2e-token$/,
   );
-  await expect(page.getByText('new@example.com')).toBeVisible();
+  await expect(page.getByText('Invite link for new@example.com')).toBeVisible();
+  // The Pending invites row shows the email on its own.
+  await expect(page.getByText('new@example.com', { exact: true })).toBeVisible();
   expect(apiMock.inviteRequests).toEqual([
     {
       email: 'New@Example.com',
