@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createBetterAuth } from "@functions/api/better-auth";
 import { getAuthEmailPolicy } from "@functions/api/utils/auth-policy";
+import { betterAuthLogger } from "@functions/api/utils/better-auth-logger";
 
 const { betterAuthMock, drizzleAdapterMock, emailThrottle } = vi.hoisted(() => ({
   betterAuthMock: vi.fn(() => ({ handler: vi.fn() })),
@@ -105,6 +106,19 @@ describe("createBetterAuth config", () => {
     // Revocation is immediate only while sessions are read from the database.
     expect(options.session?.cookieCache?.enabled).not.toBe(true);
     expect(options.secondaryStorage).toBeUndefined();
+  });
+
+  it("routes Better Auth's own logs through the JSON logger", () => {
+    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/sign-in/email"));
+
+    const options = betterAuthMock.mock.calls[0]?.[0];
+    // The default logger prints emails to the console (better-auth-logger.test.ts).
+    expect(options.logger).toBe(betterAuthLogger);
+    expect(typeof options.logger.log).toBe("function");
+    // Setting a level makes Better Auth 1.3.4 also print API errors through its
+    // default console logger, bypassing log().
+    expect(options.logger.level).toBeUndefined();
+    expect(options.logger.disabled).not.toBe(true);
   });
 
   it("checks name and avatar on every user write but leaves internal updates alone", async () => {

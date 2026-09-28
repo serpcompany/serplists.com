@@ -15,6 +15,7 @@ import {
 import { getAuthEmailPolicy, isProductionAuthPolicy } from "./utils/auth-policy";
 import { deliverAuthEmail, discardUnsentPasswordResetToken } from "./utils/auth-email-throttle";
 import { log } from "./utils/logger";
+import { betterAuthLogger } from "./utils/better-auth-logger";
 import { assertNotBlockedTestEmail } from "./utils/test-email-block";
 import { buildUserProfileWritePolicy, validateUserProfileWrite } from "./utils/user-profile-validation";
 import { assertUsernameAvailableForUpdate, mapUsernameConflicts } from "./utils/username-conflict";
@@ -64,6 +65,8 @@ export function createBetterAuth(env: Env, request: Request) {
 
   return betterAuth({
     secret: authSecret,
+    // The default logger prints emails to the console; this one writes scrubbed JSON.
+    logger: betterAuthLogger,
     trustedOrigins: Array.from(trustedOrigins),
     database: mapUsernameConflicts(
       drizzleAdapter(db, {

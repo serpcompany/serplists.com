@@ -74,6 +74,13 @@ To deploy by hand (rarely needed): `pnpm run build`, then
   `log()` writes any field named `ip`, `email`, `password`, `token`,
   `authorization`, or `cookie` as `"[redacted]"`, and a field cannot replace the
   `level` or `message` (event name) of the line.
+- Better Auth's own logs go through `log()` as `better_auth` lines
+  (`functions/api/utils/better-auth-logger.ts`), because its default logger prints
+  raw emails (`User not found { email }` on every unknown sign-in or reset). The
+  text is kept in `detail` with email addresses replaced by `[email]`, objects it
+  passes are dropped, and an error keeps only its name and message, cut before
+  Drizzle's bound `params:`. Routine user mistakes (unknown email, wrong password,
+  repeat sign-up) are logged as `info`, not `error`.
 - The router logs each request's path through `sanitizeLogPath()`
   (`functions/api/utils/log-path.ts`), which replaces the secrets some routes carry
   in the URL with `:token`: `auth/reset-password/<token>`,
