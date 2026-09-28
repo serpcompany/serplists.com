@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { api } from '@/lib/api';
-import { getBillingStatusQueryKey, PRO_MONTHLY_PRICE_LABEL } from '@/lib/billing';
+import { getBillingStatusQueryKey, getPersonalBillingAction, PRO_MONTHLY_PRICE_LABEL } from '@/lib/billing';
 
 const Pricing = () => {
   const { user } = useAuth();
@@ -102,9 +102,9 @@ const Pricing = () => {
                   <Button asChild>
                     <Link to="/register">Get Started</Link>
                   </Button>
-                ) : billing.data?.plan === 'pro' ? (
+                ) : getPersonalBillingAction(billing.data) === 'manage' ? (
                   <Button asChild>
-                    <Link to="/account">Manage Pro</Link>
+                    <Link to="/account">{billing.data?.plan === 'pro' ? 'Manage Pro' : 'Manage subscription'}</Link>
                   </Button>
                 ) : (
                   <Button

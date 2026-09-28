@@ -58,10 +58,16 @@ export const isBillingUnavailableError = (error: unknown): error is ApiError => 
   return isApiError(error) && error.code === "billing_unavailable";
 };
 
+/** Checkout refused because an open subscription must be fixed in the Customer Portal. */
+export const isSubscriptionNeedsAttentionError = (error: unknown): error is ApiError => {
+  return isApiError(error) && error.status === 409 && error.code === "subscription_needs_attention";
+};
+
 export type AccessFailure =
   | { kind: "auth_required"; message: string }
   | { kind: "upgrade_required"; message: string }
   | { kind: "billing_unavailable"; message: string }
+  | { kind: "subscription_needs_attention"; message: string }
   | { kind: "error"; message: string };
 
 export const getAccessFailure = (error: unknown, fallbackMessage: string): AccessFailure => {
@@ -78,6 +84,13 @@ export const getAccessFailure = (error: unknown, fallbackMessage: string): Acces
 
   if (isBillingUnavailableError(error)) {
     return { kind: "billing_unavailable", message: BILLING_UNAVAILABLE_MESSAGE };
+  }
+
+  if (isSubscriptionNeedsAttentionError(error)) {
+    return {
+      kind: "subscription_needs_attention",
+      message: getApiErrorMessage(error, "Your Pro subscription needs attention."),
+    };
   }
 
   return { kind: "error", message: getApiErrorMessage(error, fallbackMessage) };

@@ -111,9 +111,20 @@ Webhook “Events” (selected):
 
 ## App endpoints
 Authenticated:
-- `POST /api/billing/checkout` → returns `{ url }` to redirect user to Stripe Checkout
+- `POST /api/billing/checkout` → returns `{ url }` to redirect user to Stripe Checkout.
+  It returns `409 already_subscribed` when the user has Pro or an `active` or
+  `trialing` subscription on any price, and `409 subscription_needs_attention`
+  when an open subscription is not paid up (`past_due`, `unpaid`, `paused`,
+  `incomplete`). Only `canceled` and `incomplete_expired` subscriptions allow a
+  new Checkout, because Stripe would bill both subscriptions. The client opens the
+  Customer Portal on `subscription_needs_attention`.
 - `POST /api/billing/portal` → returns `{ url }` to redirect user to Stripe Customer Portal
-- `GET /api/billing/status` → returns `{ plan, billingEnabled }` (`plan` is `free`, `pro`, or the legacy `team` for a paid Organization)
+- `GET /api/billing/status` → returns `{ plan, limits, billingEnabled }` (`plan` is `free`, `pro`, or the legacy `team` for a paid Organization).
+  In Personal context it also returns `subscriptionStatus` (the most urgent open
+  subscription status, failed payments first, or `null`) and `canManageBilling`
+  (a Stripe customer exists). Organization context never includes them. Billing
+  shows Manage subscription, not Upgrade, whenever `plan` is `pro` or
+  `subscriptionStatus` is set.
 
 Webhook:
 - `POST /api/stripe/webhook` (verifies `Stripe-Signature`, idempotent via `stripe_webhook_events`)

@@ -93,6 +93,18 @@ instead of inferring access state from message text:
 - `403 upgrade_required` means the active context needs a paid entitlement.
 - `403 limit_reached` means the active plan limit has been reached.
 - `503 billing_unavailable` means checkout cannot currently be started.
+- `409 already_subscribed` means the User already has Pro or a paid subscription.
+- `409 subscription_needs_attention` means an open subscription is not paid up;
+  the client opens the Customer Portal instead of a second Checkout.
+
+### Subscription status
+
+Only `active` and `trialing` Stripe subscriptions grant Pro. A `past_due`,
+`unpaid`, `paused`, or `incomplete` subscription resolves to Free, but it still
+blocks a new Checkout, and Billing shows a notice with Manage subscription so the
+User can fix the payment in the Customer Portal. Whether `past_due` should keep
+Pro during Stripe's retry window is an open product decision; change it here
+first if it is made.
 
 Billing status query keys must include the current user id (or an explicit
 guest marker). Never reuse a cached plan between accounts, and do not render a

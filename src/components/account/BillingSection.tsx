@@ -4,7 +4,13 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
-import { getBillingPlanLabel, getBillingStatusQueryKey, PRO_MONTHLY_PRICE_LABEL } from "@/lib/billing";
+import {
+  getBillingPlanLabel,
+  getBillingStatusQueryKey,
+  getPersonalBillingAction,
+  getSubscriptionAttentionMessage,
+  PRO_MONTHLY_PRICE_LABEL,
+} from "@/lib/billing";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -27,6 +33,8 @@ export function BillingSection() {
   const plan = billing.data?.plan;
   const planLabel = getBillingPlanLabel(plan);
   const billingEnabled = billing.data?.billingEnabled ?? true;
+  const personalAction = getPersonalBillingAction(billing.data);
+  const subscriptionAttention = getSubscriptionAttentionMessage(billing.data?.subscriptionStatus);
   const teamBillingMessage = plan === "team"
     ? "Paid Organization entitlements apply while this Organization is selected."
     : "Personal subscriptions are managed from Personal.";
@@ -145,14 +153,19 @@ export function BillingSection() {
           <div className="text-sm text-muted-foreground">
             {teamBillingMessage}
           </div>
-        ) : plan === "pro" ? (
-          <Button
-            onClick={handleManage}
-            variant="secondary"
-            disabled={!billingEnabled || isOpeningPortal}
-          >
-            {isOpeningPortal ? "Opening billing..." : "Manage subscription"}
-          </Button>
+        ) : personalAction === "manage" ? (
+          <>
+            {subscriptionAttention ? (
+              <div className="text-sm text-destructive">{subscriptionAttention}</div>
+            ) : null}
+            <Button
+              onClick={handleManage}
+              variant="secondary"
+              disabled={!billingEnabled || isOpeningPortal}
+            >
+              {isOpeningPortal ? "Opening billing..." : "Manage subscription"}
+            </Button>
+          </>
         ) : (
           <Button
             onClick={handleUpgrade}

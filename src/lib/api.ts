@@ -1,5 +1,6 @@
 import { env } from "@/env";
 import { createApiError } from "@/lib/api-errors";
+import type { BillingStatus } from "@/lib/billing";
 import type { TemplateImportSummary } from "@/types/checklist";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
@@ -584,11 +585,7 @@ class ApiClient {
   }
 
   // Billing (Stripe)
-  async getBillingStatus(params?: { teamId?: string }): Promise<{
-    plan: 'free' | 'pro' | 'team';
-    limits?: { maxTemplates: number | null; maxActiveRuns: number | null };
-    billingEnabled?: boolean;
-  }> {
+  async getBillingStatus(params?: { teamId?: string }): Promise<BillingStatus> {
     const search = new URLSearchParams();
     if (params?.teamId) search.set('teamId', params.teamId);
     const query = search.toString();

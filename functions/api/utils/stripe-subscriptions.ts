@@ -1,17 +1,70 @@
-import { sql } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Env } from "../types";
-import { schema, type createDb } from "../db";
+import { createDb, schema } from "../db";
 import { log } from "./logger";
 import { StripeApiError, stripeGet } from "./stripe";
 
 type Db = ReturnType<typeof createDb>;
 
 // Stripe ends a subscription in one of these statuses and never reopens it.
-const TERMINAL_SUBSCRIPTION_STATUSES = new Set(["canceled", "incomplete_expired"]);
+const TERMINAL_SUBSCRIPTION_STATUSES = ["canceled", "incomplete_expired"];
+
+// Open (non-terminal) statuses, most urgent first: statuses that need the customer to
+// act come before paid-up ones, so a failed payment is what the account surfaces.
+const OPEN_SUBSCRIPTION_STATUS_PRIORITY = ["past_due", "unpaid", "paused", "incomplete", "active", "trialing"];
 
 export function isTerminalSubscriptionStatus(status: string): boolean {
-  return TERMINAL_SUBSCRIPTION_STATUSES.has(status);
+  return TERMINAL_SUBSCRIPTION_STATUSES.includes(status);
+}
+
+/** Statuses that grant Pro. Other open statuses keep billing the customer without it. */
+export function isPaidSubscriptionStatus(status: string): boolean {
+  return status === "active" || status === "trialing";
+}
+
+function statusPriority(status: string): number {
+  const index = OPEN_SUBSCRIPTION_STATUS_PRIORITY.indexOf(status);
+  // A status Stripe adds later is open but unknown: rank it after the known ones.
+  return index === -1 ? OPEN_SUBSCRIPTION_STATUS_PRIORITY.length : index;
+}
+
+export type PersonalSubscriptionSummary = {
+  /** The most urgent open subscription status across every price, or null. */
+  openStatus: string | null;
+  /** A Stripe customer exists, so the Customer Portal can open. */
+  hasCustomer: boolean;
+};
+
+/**
+ * Summarizes a user's stored Stripe billing state. Any open subscription, on any
+ * price, blocks a new Checkout: Stripe would otherwise bill the customer twice.
+ */
+export async function getPersonalSubscriptionSummary(env: Env, userId: string): Promise<PersonalSubscriptionSummary> {
+  const db = createDb(env);
+  const { stripe_customers, stripe_subscriptions } = schema;
+  const [customers, openSubscriptions] = await Promise.all([
+    db
+      .select({ stripeCustomerId: stripe_customers.stripe_customer_id })
+      .from(stripe_customers)
+      .where(eq(stripe_customers.user_id, userId))
+      .limit(1),
+    db
+      .select({ status: stripe_subscriptions.status })
+      .from(stripe_subscriptions)
+      .where(
+        and(
+          eq(stripe_subscriptions.user_id, userId),
+          notInArray(stripe_subscriptions.status, TERMINAL_SUBSCRIPTION_STATUSES),
+        ),
+      )
+      .limit(10),
+  ]);
+
+  const [openStatus] = openSubscriptions
+    .map((row) => row.status)
+    .sort((left, right) => statusPriority(left) - statusPriority(right));
+  return { openStatus: openStatus ?? null, hasCustomer: customers.length > 0 };
 }
 
 // Expandable references arrive as an id string, or as an object when expanded.

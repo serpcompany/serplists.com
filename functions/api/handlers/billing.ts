@@ -5,6 +5,7 @@ import { json, jsonError } from "../utils/response";
 import { getStripeBillingConfig, stripePostForm } from "../utils/stripe";
 import { getSessionUserId } from "../utils/session";
 import { getEntitlementsForContext, getEntitlementsForUser } from "../utils/entitlements";
+import { getPersonalSubscriptionSummary, isPaidSubscriptionStatus } from "../utils/stripe-subscriptions";
 import { canViewTeam, getActiveTeamMembership, normalizeTeamRole } from "../utils/team-access";
 
 type StripeCustomer = { id: string };
@@ -20,6 +21,12 @@ function getAppOrigin(request: Request, env: Env): string {
     }
   }
   return new URL(request.url).origin;
+}
+
+function alreadySubscribed(): Response {
+  return jsonError("You already have Pro. Manage your subscription from Billing.", 409, {
+    code: "already_subscribed",
+  });
 }
 
 export async function handleBilling(request: Request, env: Env): Promise<Response> {
@@ -42,13 +49,23 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
       }
     }
 
-    const entitlements = teamId
-      ? await getEntitlementsForContext(env, { type: "team", teamId, userId })
-      : await getEntitlementsForUser(env, userId);
+    const billingEnabled = Boolean(getStripeBillingConfig(env));
+    if (teamId) {
+      // Organization access must not expose the User's Personal billing state.
+      const entitlements = await getEntitlementsForContext(env, { type: "team", teamId, userId });
+      return json({ plan: entitlements.plan, limits: entitlements.limits, billingEnabled });
+    }
+
+    const [entitlements, subscription] = await Promise.all([
+      getEntitlementsForUser(env, userId),
+      getPersonalSubscriptionSummary(env, userId),
+    ]);
     return json({
       plan: entitlements.plan,
       limits: entitlements.limits,
-      billingEnabled: Boolean(getStripeBillingConfig(env)),
+      billingEnabled,
+      subscriptionStatus: subscription.openStatus,
+      canManageBilling: subscription.hasCustomer,
     });
   }
 
@@ -61,10 +78,18 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
     }
     const { secretKey, proPriceId } = stripe;
     const entitlements = await getEntitlementsForUser(env, userId);
-    if (entitlements.plan === "pro") {
-      return jsonError("You already have Pro. Manage your subscription from Billing.", 409, {
-        code: "already_subscribed",
-      });
+    if (entitlements.plan === "pro") return alreadySubscribed();
+
+    // A subscription on any price, paid or not, blocks a second one: Stripe would
+    // bill both, and a failed payment is fixed in the Customer Portal instead.
+    const { openStatus } = await getPersonalSubscriptionSummary(env, userId);
+    if (openStatus && isPaidSubscriptionStatus(openStatus)) return alreadySubscribed();
+    if (openStatus) {
+      return jsonError(
+        "Your Pro subscription needs attention. Update your payment method with Manage subscription in Billing.",
+        409,
+        { code: "subscription_needs_attention" },
+      );
     }
 
     const nowIso = new Date().toISOString();

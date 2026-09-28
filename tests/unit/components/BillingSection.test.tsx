@@ -40,6 +40,8 @@ vi.mock('@/lib/api', () => ({
 const renderBillingSection = (billingData: {
   billingEnabled?: boolean;
   plan: 'free' | 'pro' | 'team';
+  subscriptionStatus?: string | null;
+  canManageBilling?: boolean;
 }, teamId?: string) => {
   workspaceMock.value = {
     activeTeamId: teamId,
@@ -72,6 +74,32 @@ describe('BillingSection', () => {
 
     expect(html).toContain('Current Personal plan');
     expect(html).toContain('Upgrade to Pro — $9/month');
+  });
+
+  it('sends a past-due subscriber to Manage subscription instead of a second checkout', () => {
+    const html = renderBillingSection({
+      billingEnabled: true,
+      plan: 'free',
+      subscriptionStatus: 'past_due',
+      canManageBilling: true,
+    });
+
+    expect(html).toContain('Your last Pro payment failed.');
+    expect(html).toContain('Manage subscription');
+    expect(html).not.toContain('Upgrade to Pro');
+  });
+
+  it('sends a subscriber whose subscription is not paid up to Manage subscription', () => {
+    const html = renderBillingSection({
+      billingEnabled: true,
+      plan: 'free',
+      subscriptionStatus: 'paused',
+      canManageBilling: true,
+    });
+
+    expect(html).toContain('Your Pro subscription needs attention');
+    expect(html).toContain('Manage subscription');
+    expect(html).not.toContain('Upgrade to Pro');
   });
 
   it('does not show personal checkout actions in a free team workspace', () => {

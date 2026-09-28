@@ -21,6 +21,18 @@ export const navigateToLoginWithReturnPath = (
   });
 };
 
+const openBillingPortal = async (reason: string): Promise<boolean> => {
+  try {
+    const { url } = await api.createBillingPortal();
+    toast.message(reason);
+    window.location.href = url;
+    return true;
+  } catch {
+    toast.error(reason);
+    return false;
+  }
+};
+
 export const startBillingCheckout = async (billingEnabled: boolean): Promise<boolean> => {
   if (!billingEnabled) {
     toast.error(BILLING_UNAVAILABLE_MESSAGE);
@@ -33,6 +45,10 @@ export const startBillingCheckout = async (billingEnabled: boolean): Promise<boo
     return true;
   } catch (error) {
     const failure = getAccessFailure(error, "Failed to start checkout");
+    if (failure.kind === "subscription_needs_attention") {
+      // The existing subscription is fixed in the Customer Portal, not with a second one.
+      return openBillingPortal(failure.message);
+    }
     toast.error(failure.message);
     return false;
   }

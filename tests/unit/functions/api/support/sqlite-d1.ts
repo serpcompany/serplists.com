@@ -90,5 +90,9 @@ export function billingSchemaSql(): string[] {
     "CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT NOT NULL)",
     readMigration("0009_stripe_billing.sql"),
     readMigration("0010_entitlement_overrides.sql"),
+    `CREATE TABLE team_entitlement_overrides (
+      team_id TEXT PRIMARY KEY, plan TEXT NOT NULL, expires_at INTEGER, note TEXT,
+      created_at TEXT NOT NULL, updated_at TEXT
+    )`,
   ];
 }

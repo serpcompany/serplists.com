@@ -54,4 +54,13 @@ describe("api-errors", () => {
       message: "Something went wrong",
     });
   });
+  it("maps a checkout blocked by an open subscription to subscription_needs_attention", () => {
+    expect(getAccessFailure(createApiError(409, {
+      error: "Your Pro subscription needs attention.",
+      code: "subscription_needs_attention",
+    }), "fallback")).toEqual({
+      kind: "subscription_needs_attention",
+      message: "Your Pro subscription needs attention.",
+    });
+  });
 });
