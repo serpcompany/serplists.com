@@ -98,6 +98,15 @@ describe('Organization invite page', () => {
     expect(workspaceMocks.selectWorkspace).not.toHaveBeenCalled();
   });
 
+  it('says accepting keeps the current context without claiming which one it is', () => {
+    // The visitor may be working in another Organization, not in Personal.
+    const html = renderInvitePage(preview);
+
+    expect(html).toContain('Accepting does not change your current context.');
+    expect(html).toContain('Switch to the Organization when you want to work in it.');
+    expect(html).not.toContain('Personal');
+  });
+
   it('offers to switch context for an existing member without switching it', () => {
     const html = renderInvitePage({ ...preview, status: 'already_member' });
 

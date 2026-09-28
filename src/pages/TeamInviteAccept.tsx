@@ -205,8 +205,8 @@ export default function TeamInviteAccept() {
             {inviter} invited you to join as {formatTeamRole(preview.role)}.
           </p>
           <p className="text-xs text-muted-foreground">
-            You stay in your Personal context after accepting. Switch to the Organization
-            when you want to work in it.
+            Accepting does not change your current context. Switch to the Organization when
+            you want to work in it.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
