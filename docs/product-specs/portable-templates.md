@@ -197,6 +197,12 @@ Minimal template fields:
 
 Missing fields are auto-filled during import (ids, timestamps, userId).
 
+In these lenient JSON formats a task or sub-task can be written as its title in text
+(`"items": ["Milk", "Eggs"]`); it imports as a task with that title. Any other section,
+task, content block or sub-task that is not an object (null, a number, a nested array,
+empty text) fails the import with a message naming the template and where the entry
+is, and `POST /api/templates/backup` refuses such a template with `invalid_sections`.
+
 ## Strict Markdown template format
 
 The strict Markdown dialect is still supported for compatibility and lintable round-trips, but it is no longer the recommended primary authoring format.

@@ -196,6 +196,29 @@ export function calculateRunProgress(sections: unknown[]): number {
   return total > 0 ? Math.round((completed / total) * 100) : 0;
 }
 
+// Import refuses a section, task, content block or sub-task that is not an object. The
+// identity pass would silently drop it, and a client that spread a string into a record
+// would store its characters as keys on an untitled task.
+export function findNonObjectTemplateEntry(sections: unknown[]): string | null {
+  for (const [sectionIndex, section] of sections.entries()) {
+    const where = `section ${sectionIndex + 1}`;
+    if (!isRecord(section)) return `Section ${sectionIndex + 1} must be an object`;
+    for (const [itemIndex, item] of getArray(section.items).entries()) {
+      const task = `task ${itemIndex + 1} in ${where}`;
+      if (!isRecord(item)) return `Task ${itemIndex + 1} in ${where} must be an object with a title`;
+      const contents = getArray(item.contents);
+      const contentIndex = contents.findIndex((content) => !isRecord(content));
+      if (contentIndex >= 0) return `Content block ${contentIndex + 1} of ${task} must be an object`;
+      const subItemLists = [item.subItems, ...contents.map((content) => (content as JsonRecord).subItems)];
+      for (const subItems of subItemLists) {
+        const subItemIndex = getArray(subItems).findIndex((subItem) => !isRecord(subItem));
+        if (subItemIndex >= 0) return `Sub-task ${subItemIndex + 1} of ${task} must be an object with a title`;
+      }
+    }
+  }
+  return null;
+}
+
 export function validateStableTemplateIdentities(sections: unknown[]): string | null {
   const sectionIds = new Set<string>();
   const itemIds = new Set<string>();

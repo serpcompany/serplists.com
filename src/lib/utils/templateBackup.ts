@@ -12,6 +12,7 @@ import type {
   TemplateBackup
 } from "@/lib/schemas/checklistSchema";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
+import { findInvalidImportSectionEntry } from "@/lib/utils/importSectionEntries";
 import {
   detectTemplateSourceExtension,
   isMarkdownTemplateExtension,
@@ -66,20 +67,17 @@ const normalizeStringList = (value: unknown): string[] => {
   return [];
 };
 
-const coerceSections = (input: unknown): ChecklistSection[] | null => {
+// A flat list of tasks (the legacy `items` form) goes into one "Checklist" section.
+const coerceSections = (input: unknown, templateTitle: string): ChecklistSection[] | null => {
   const parsed = parseJsonArray(input);
   if (!parsed) return null;
   if (parsed.length === 0) return [];
-  if (isSectionsShape(parsed)) {
-    return normalizeSections(parsed);
+  const sections = isSectionsShape(parsed) ? parsed : [{ id: "1", title: "Checklist", items: parsed }];
+  const invalidEntry = findInvalidImportSectionEntry(sections);
+  if (invalidEntry) {
+    throw new Error(`Template "${templateTitle}": ${invalidEntry}`);
   }
-  return normalizeSections([
-    {
-      id: "1",
-      title: "Checklist",
-      items: parsed,
-    },
-  ]);
+  return normalizeSections(sections);
 };
 
 const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTemplate => {
@@ -89,7 +87,7 @@ const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTe
     throw new Error(`Template "${template.title}" is missing sections/items`);
   }
 
-  const sections = coerceSections(template.sections ?? template.items);
+  const sections = coerceSections(template.sections ?? template.items, template.title);
   if (!sections) {
     throw new Error(`Template "${template.title}" has invalid sections/items`);
   }
@@ -116,7 +114,7 @@ const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTe
 
 const normalizePortableTemplate = (template: PortableChecklistTemplate): ChecklistTemplate => {
   const now = new Date().toISOString();
-  const sections = coerceSections(template.sections);
+  const sections = coerceSections(template.sections, template.title);
   if (!sections) {
     throw new Error(`Template "${template.title}" has invalid sections`);
   }

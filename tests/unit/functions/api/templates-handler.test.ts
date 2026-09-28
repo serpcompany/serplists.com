@@ -1171,6 +1171,50 @@ describe('Templates Handlers', () => {
     ]);
   });
 
+  it('should reject imported templates whose sections, tasks or sub-tasks are not objects', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({
+      plan: 'pro',
+      limits: { maxTemplates: null, maxActiveRuns: null },
+    });
+    dbMocks.selectChain.limit.mockResolvedValue([]);
+
+    const request = new Request('http://localhost/api/templates/backup', {
+      method: 'POST',
+      body: JSON.stringify({
+        templates: [
+          { title: 'Text tasks', sections: [{ id: 's-1', title: 'Shop', items: ['Milk', 'Eggs'] }] },
+          { title: 'Flat text tasks', items: ['Milk'] },
+          { title: 'Null task', sections: [{ id: 's-1', title: 'Shop', items: [{ id: 'i-1', title: 'Milk' }, null] }] },
+          { title: 'Text section', sections: [{ id: 's-1', title: 'Shop', items: [] }, 'Bakery'] },
+          {
+            title: 'Text sub-task',
+            sections: [{
+              id: 's-1',
+              title: 'Shop',
+              items: [{ id: 'i-1', title: 'Dairy', contents: [{ id: 'c-1', type: 'subItems', value: '', subItems: ['Milk'] }] }],
+            }],
+          },
+        ],
+      }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.code).toBe('template_import_failed');
+    expect(data.details.imported).toBe(0);
+    expect(data.details.failed).toEqual([
+      expect.objectContaining({ index: 0, code: 'invalid_sections', reason: expect.stringMatching(/task 1 in section 1/i) }),
+      expect.objectContaining({ index: 1, code: 'invalid_sections', reason: expect.stringMatching(/task 1 in section 1/i) }),
+      expect.objectContaining({ index: 2, code: 'invalid_sections', reason: expect.stringMatching(/task 2 in section 1/i) }),
+      expect.objectContaining({ index: 3, code: 'invalid_sections', reason: expect.stringMatching(/section 2/i) }),
+      expect.objectContaining({ index: 4, code: 'invalid_sections', reason: expect.stringMatching(/sub-task 1 of task 1 in section 1/i) }),
+    ]);
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+  });
+
   it('should return structured failure details when all imported templates fail', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     vi.mocked(getEntitlementsForUser).mockResolvedValue({

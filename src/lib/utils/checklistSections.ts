@@ -31,60 +31,72 @@ export function isSectionsShape(value: unknown): value is ChecklistSection[] {
   return typeof first?.items !== "undefined";
 }
 
+type JsonRecord = Record<string, unknown>;
+
+export const isJsonRecord = (value: unknown): value is JsonRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+// A task or sub-task written as text becomes one with that title. Anything else that is not an
+// object (null, a number, an array, blank text) is skipped: spreading it would store its
+// characters as keys ({"0":"M","1":"i",...}) on a task with no title.
+const toTitledRecord = (value: unknown): JsonRecord | null => {
+  if (typeof value === "string") {
+    const title = value.trim();
+    return title ? { title } : null;
+  }
+  return isJsonRecord(value) ? value : null;
+};
+
+const completionOf = (value: JsonRecord): boolean =>
+  typeof value.isCompleted === "boolean"
+    ? value.isCompleted
+    : typeof value.completed === "boolean"
+      ? value.completed
+      : false;
+
+const normalizeContent = (content: JsonRecord): JsonRecord => {
+  if (content.type !== "subItems" || !Array.isArray(content.subItems)) return content;
+  return {
+    ...content,
+    subItems: content.subItems.flatMap((entry) => {
+      const subItem = toTitledRecord(entry);
+      return subItem ? [{ ...subItem, isCompleted: completionOf(subItem) }] : [];
+    }),
+  };
+};
+
+// Fallback ids use each entry's position in the stored array, so skipping an entry that is
+// not an object never changes the ids of the entries around it.
 export function normalizeSections(raw: unknown): ChecklistSection[] {
   if (!Array.isArray(raw)) return [];
 
-  return raw.map((section, sectionIndex) => {
-    const s = (section ?? {}) as Record<string, unknown>;
-    const rawItems = Array.isArray(s.items) ? (s.items as unknown[]) : [];
+  return raw.flatMap((section, sectionIndex) => {
+    if (!isJsonRecord(section)) return [];
+    const rawItems = Array.isArray(section.items) ? (section.items as unknown[]) : [];
 
-    return {
-      id: typeof s.id === "string" ? s.id : String(sectionIndex + 1),
-      title: typeof s.title === "string" ? s.title : "Checklist",
-      items: rawItems.map((item, itemIndex) => {
-        const it = (item ?? {}) as Record<string, unknown>;
-        const isCompleted =
-          typeof it.isCompleted === "boolean"
-            ? it.isCompleted
-            : typeof it.completed === "boolean"
-              ? it.completed
-              : false;
+    return [{
+      id: typeof section.id === "string" ? section.id : String(sectionIndex + 1),
+      title: typeof section.title === "string" ? section.title : "Checklist",
+      items: rawItems.flatMap((entry, itemIndex) => {
+        const it = toTitledRecord(entry);
+        if (!it) return [];
 
-        const rawContents = Array.isArray(it.contents) ? (it.contents as unknown[]) : undefined;
-        // Content entries are passed through from stored/imported JSON as-is (only legacy sub-item
-        // completion is normalized), so their shape is trusted here rather than validated.
-        const contents = rawContents?.map((c) => {
-          const content = (c ?? {}) as Record<string, unknown>;
-          if (content.type === "subItems" && Array.isArray(content.subItems)) {
-            return {
-              ...content,
-              subItems: (content.subItems as unknown[]).map((si) => {
-                const subItem = (si ?? {}) as Record<string, unknown>;
-                return {
-                  ...subItem,
-                  isCompleted:
-                    typeof subItem.isCompleted === "boolean"
-                      ? subItem.isCompleted
-                      : typeof subItem.completed === "boolean"
-                        ? subItem.completed
-                        : false,
-                };
-              }),
-            };
-          }
-          return content;
-        }) as ChecklistItemContent[] | undefined;
+        // Content entries are passed through from stored/imported JSON as-is (only legacy
+        // sub-item completion is normalized), so their shape is trusted here rather than validated.
+        const contents = Array.isArray(it.contents)
+          ? (it.contents.filter(isJsonRecord).map(normalizeContent) as unknown as ChecklistItemContent[])
+          : undefined;
 
         const { completed: _completed, ...rest } = it;
-        return {
+        return [{
           ...rest,
           id: typeof it.id === "string" ? it.id : `${sectionIndex + 1}-${itemIndex + 1}`,
           title: typeof it.title === "string" ? it.title : "",
-          isCompleted,
+          isCompleted: completionOf(it),
           contents,
-        };
+        }];
       }),
-    } satisfies ChecklistSection;
+    } satisfies ChecklistSection];
   });
 }
 

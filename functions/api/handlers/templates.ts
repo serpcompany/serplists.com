@@ -28,6 +28,7 @@ import {
 import {
   assignMissingStableTemplateIdentities,
   calculateRunProgress,
+  findNonObjectTemplateEntry,
   reconcileRunSections,
   validateStableTemplateIdentities,
 } from '../utils/template-reconciliation';
@@ -605,11 +606,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
       for (const [index, template] of incomingTemplates.entries()) {
         const normalizedSections = normalizeSectionsPayload(template.sections ?? template.items);
-        if (normalizedSections.error) {
+        const sectionsError = normalizedSections.error ?? findNonObjectTemplateEntry(normalizedSections.sections);
+        if (sectionsError) {
           summary.failed.push({
             index,
             title: template.title,
-            reason: normalizedSections.error,
+            reason: sectionsError,
             code: 'invalid_sections',
           });
           continue;
