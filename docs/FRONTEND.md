@@ -44,7 +44,9 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
   fetches its own run by id. A catalog miss reads every public Template from D1
   ([D1 cost](design-docs/d1-cost.md)), so pages that only need official templates use
   the bundled `repoTemplates`. The catalog's query key has no user id because the
-  catalog is the same for everyone.
+  catalog is the same for everyone. Only pages that display the catalog may load it;
+  `tests/unit/contexts/catalogConsumers.test.ts` lists them, and data built on the
+  server (such as the import/export pack) never needs it on the client.
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.

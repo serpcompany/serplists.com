@@ -1,7 +1,7 @@
 # UI Decoupling Execution Plan
 
 - **Status:** active
-- **Last updated:** 2026-09-27
+- **Last updated:** 2026-09-28
 - **Goal:** product screens consume typed feature state and actions, never transport
   code, so a new UI can be built without re-implementing business rules.
 
@@ -16,8 +16,10 @@ legacy call sites are listed in `.dependency-cruiser-known-violations.json`.
   see the [tech debt tracker](../tech-debt-tracker.md).
 - [x] Task 5: `PublicTemplate`, `TemplateDetail`, and `ChecklistRun` no longer call
   `api` at runtime (type-only imports remain). Verified by `deps:check`.
-- [ ] Remove the remaining direct `api` calls from 9 components and pages (see the
+- [ ] Remove the remaining direct `api` calls from 8 components and pages (see the
   known-violations file). `UserInfo.tsx` was dead code and was deleted on 2026-09-27.
+  `TemplateBackup.tsx` stopped calling `api` on 2026-09-28 (billing status through
+  `useBillingStatus`, export through `features/template-backup/exportTemplatePack.ts`).
 - [ ] Tasks 2, 3, 4, 6, 7: status not re-verified since 2026-04-10. Check the code
   before starting; mapper modules already exist under `src/features/*`.
 

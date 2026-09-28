@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { downloadBackupFile, exportPortableTemplatesToJSON, parseTemplatesFromFile } from "@/lib/utils/templateBackup";
 import type { TemplateImportResult } from "@/lib/utils/templateBackup";
 import type { ChecklistTemplate, TemplateImportOptions, TemplateImportSummary } from "@/types/checklist";
-import { api } from "@/lib/api";
+import { exportTemplatePack } from "@/features/template-backup/exportTemplatePack";
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
 import { getAccessFailure } from "@/lib/api-errors";
 import { useBillingStatus } from "@/hooks/useBillingStatus";
@@ -52,11 +52,12 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   className
 }) => {
   type ImportVisibility = NonNullable<TemplateImportOptions["visibility"]>;
+  // The export is built on the server, so this page never loads the public catalog.
   const {
     allTemplates,
-    templates,
-    importTemplates
-  } = useTemplateLists({ catalog: true });
+    importTemplates,
+    templatesLoading,
+  } = useTemplateLists();
   const {
     user
   } = useAuth();
@@ -84,10 +85,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     : user
       ? allTemplates.filter(t => t.userId === user.id && !t.teamId)
       : [];
-  const communityTemplates = templates.filter(t => t.isPublic && t.userId !== user?.id);
-  const templatesToExport = includePublicTemplates
-    ? [...ownedTemplates, ...communityTemplates]
-    : ownedTemplates;
   const importOversizeAssets = importPreview ? countOversizedAssets(importPreview.templates) : 0;
   const exceedsTemplateLimit = importPreview ? importPreview.templates.length > MAX_TEMPLATES_PER_IMPORT : false;
 
@@ -132,21 +129,20 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       return;
     }
 
-    if (templatesToExport.length === 0) {
-      toast.error("No templates available to export");
-      return;
-    }
-
     try {
-      const backup = await api.exportTemplateBackup({
-        includePublic: includePublicTemplates,
-        teamId: activeTeamId,
-      });
-      downloadBackupFile(backup);
-      const count = Array.isArray((backup as { templates?: unknown }).templates) ? (backup as {
-        templates: unknown[];
-      }).templates.length : 0;
-      toast.success(`Exported ${count} templates successfully`);
+      const result = await exportTemplatePack(
+        {
+          includePublic: includePublicTemplates,
+          knownOwnedCount: templatesLoading ? null : ownedTemplates.length,
+          teamId: activeTeamId,
+        },
+        { download: (pack) => downloadBackupFile(pack) },
+      );
+      if (result.kind === "empty") {
+        toast.error("No templates available to export");
+        return;
+      }
+      toast.success(`Exported ${result.count} templates successfully`);
     } catch (error) {
       console.error("Export error:", error);
       await handleBackupFailure(error, "Failed to export templates");

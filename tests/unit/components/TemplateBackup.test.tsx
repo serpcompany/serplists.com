@@ -16,6 +16,7 @@ type BillingQueryResult = {
 
 const mocks = vi.hoisted(() => ({
   billingQuery: null as unknown as BillingQueryResult,
+  templateListOptions: [] as unknown[],
   workspace: {
     activeTeamId: undefined as string | undefined,
     activeWorkspace: { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' },
@@ -38,12 +39,15 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
 }));
 
 vi.mock('@/contexts/TemplatesContext', () => ({
-  useTemplateLists: () => ({
-    allTemplates: [],
-    importTemplates: vi.fn(),
-    templates: [],
-    templatesLoading: false,
-  }),
+  useTemplateLists: (options?: unknown) => {
+    mocks.templateListOptions.push(options);
+    return {
+      allTemplates: [],
+      importTemplates: vi.fn(),
+      templates: [],
+      templatesLoading: false,
+    };
+  },
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -135,5 +139,19 @@ describe('TemplateBackup billing gate', () => {
     expect(html).not.toContain('Couldn&#x27;t check your plan');
     expect(isDisabled(fileInput(html))).toBe(false);
     expect(isDisabled(exportButton(html))).toBe(false);
+  });
+});
+
+describe('TemplateBackup template lists', () => {
+  it('loads only the active context list, never the public catalog', () => {
+    mocks.billingQuery = knownBillingQuery('pro');
+    mocks.templateListOptions.length = 0;
+
+    renderToStaticMarkup(<TemplateBackup />);
+
+    expect(mocks.templateListOptions.length).toBeGreaterThan(0);
+    for (const options of mocks.templateListOptions) {
+      expect((options as { catalog?: boolean } | undefined)?.catalog).not.toBe(true);
+    }
   });
 });
