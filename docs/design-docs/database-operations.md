@@ -104,6 +104,10 @@ baseline.
 - Local: `pnpm run db:seed` (or `db:reset`, which also clears state) seeds test
   Users, Organization fixtures, invites, entitlement overrides, audit rows, and the
   official `serp` publisher with its Templates. Fixture ids keep legacy `team` names.
+  Before seeding, and in `db:cleanup:local`, one atomic batch deletes the test
+  Users and what they made while using the app: Organizations they created (with
+  every Template, Run and invite in them), invites they sent and Template history
+  they wrote in other Organizations. If any delete fails, nothing is deleted.
 - Staging: `pnpm run db:seed:official:staging` for official templates only, unless
   there is a deliberate test-data plan.
 - Production: never seed test Users or Organization fixtures.

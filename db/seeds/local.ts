@@ -78,79 +78,99 @@ function ownedTestUserIds(db: LocalDb) {
     .where(or(inArray(users.id, TEST_USER_IDS), inArray(users.email, TEST_USER_EMAILS)));
 }
 
+// The fixture Organizations plus any Organization a test user created in the app.
+function ownedTestTeamIds(db: LocalDb) {
+  return db
+    .select({ id: teams.id })
+    .from(teams)
+    .where(or(inArray(teams.id, TEST_TEAM_IDS), inArray(teams.created_by_user_id, ownedTestUserIds(db))));
+}
+
+/**
+ * Deletes the test Users and everything they own or created, in one D1 batch:
+ * if any statement fails, nothing is deleted. The subqueries run per statement,
+ * so Organizations are deleted after every statement that looks them up, and
+ * Users last. teams.created_by_user_id, team_invites.invited_by_user_id and
+ * template_versions.changed_by_user_id are ON DELETE RESTRICT, so rows a test
+ * User created in Organizations that survive (invites, Template history) are
+ * deleted too.
+ */
 export async function cleanupLocalTestData(db: LocalDb): Promise<void> {
   const testUserIds = ownedTestUserIds(db);
+  const testTeamIds = ownedTestTeamIds(db);
 
-  await db
-    .delete(checklist_runs)
-    .where(
-      or(
-        inArray(checklist_runs.team_id, TEST_TEAM_IDS),
-        inArray(checklist_runs.template_id, TEST_TEAM_TEMPLATE_IDS),
-        inArray(checklist_runs.user_id, testUserIds),
-        inArray(checklist_runs.id, TEST_RUN_IDS),
+  await db.batch([
+    db
+      .delete(checklist_runs)
+      .where(
+        or(
+          inArray(checklist_runs.team_id, testTeamIds),
+          inArray(checklist_runs.template_id, TEST_TEAM_TEMPLATE_IDS),
+          inArray(checklist_runs.user_id, testUserIds),
+          inArray(checklist_runs.id, TEST_RUN_IDS),
+        ),
       ),
-    );
-  await db
-    .delete(template_versions)
-    .where(
-      or(
-        inArray(template_versions.id, TEST_VERSION_IDS),
-        inArray(template_versions.template_id, TEST_TEAM_TEMPLATE_IDS),
+    db
+      .delete(template_versions)
+      .where(
+        or(
+          inArray(template_versions.id, TEST_VERSION_IDS),
+          inArray(template_versions.template_id, TEST_TEAM_TEMPLATE_IDS),
+          inArray(template_versions.changed_by_user_id, testUserIds),
+        ),
       ),
-    );
-  await db
-    .delete(audit_events)
-    .where(
-      or(
-        inArray(audit_events.subject_id, TEST_TEAM_IDS),
-        inArray(audit_events.id, TEST_AUDIT_IDS),
-        inArray(audit_events.resource_id, [
-          ...TEST_TEAM_IDS,
-          ...TEST_TEAM_TEMPLATE_IDS,
-          "team-invite-seed-client-john",
-        ]),
+    db
+      .delete(audit_events)
+      .where(
+        or(
+          inArray(audit_events.subject_id, TEST_TEAM_IDS),
+          inArray(audit_events.subject_id, testTeamIds),
+          inArray(audit_events.id, TEST_AUDIT_IDS),
+          inArray(audit_events.resource_id, [
+            ...TEST_TEAM_IDS,
+            ...TEST_TEAM_TEMPLATE_IDS,
+            "team-invite-seed-client-john",
+          ]),
+        ),
       ),
-    );
-  await db
-    .delete(template_likes)
-    .where(
-      or(
-        inArray(template_likes.user_id, testUserIds),
-        inArray(template_likes.template_id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS]),
+    db
+      .delete(template_likes)
+      .where(
+        or(
+          inArray(template_likes.user_id, testUserIds),
+          inArray(template_likes.template_id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS]),
+        ),
       ),
-    );
-  await db
-    .delete(usage_analytics)
-    .where(
-      or(
-        inArray(usage_analytics.id, TEST_ANALYTICS_IDS),
-        inArray(usage_analytics.user_id, testUserIds),
+    db
+      .delete(usage_analytics)
+      .where(
+        or(
+          inArray(usage_analytics.id, TEST_ANALYTICS_IDS),
+          inArray(usage_analytics.user_id, testUserIds),
+        ),
       ),
-    );
-  await db
-    .delete(templates)
-    .where(
-      or(
-        inArray(templates.id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS]),
-        inArray(templates.team_id, TEST_TEAM_IDS),
-        inArray(templates.user_id, testUserIds),
+    db
+      .delete(templates)
+      .where(
+        or(
+          inArray(templates.id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS]),
+          inArray(templates.team_id, testTeamIds),
+          inArray(templates.user_id, testUserIds),
+        ),
       ),
-    );
-  await db
-    .delete(team_entitlement_overrides)
-    .where(inArray(team_entitlement_overrides.team_id, TEST_TEAM_IDS));
-  await db.delete(team_invites).where(inArray(team_invites.team_id, TEST_TEAM_IDS));
-  await db
-    .delete(team_members)
-    .where(or(inArray(team_members.team_id, TEST_TEAM_IDS), inArray(team_members.user_id, testUserIds)));
-  await db.delete(teams).where(inArray(teams.id, TEST_TEAM_IDS));
-  await db.delete(entitlement_overrides).where(inArray(entitlement_overrides.user_id, testUserIds));
-  await db.delete(session).where(inArray(session.userId, testUserIds));
-  await db.delete(account).where(inArray(account.userId, testUserIds));
-  await db
-    .delete(users)
-    .where(or(inArray(users.id, TEST_USER_IDS), inArray(users.email, TEST_USER_EMAILS)));
+    db.delete(team_entitlement_overrides).where(inArray(team_entitlement_overrides.team_id, testTeamIds)),
+    db
+      .delete(team_invites)
+      .where(or(inArray(team_invites.team_id, testTeamIds), inArray(team_invites.invited_by_user_id, testUserIds))),
+    db
+      .delete(team_members)
+      .where(or(inArray(team_members.team_id, testTeamIds), inArray(team_members.user_id, testUserIds))),
+    db.delete(teams).where(inArray(teams.id, testTeamIds)),
+    db.delete(entitlement_overrides).where(inArray(entitlement_overrides.user_id, testUserIds)),
+    db.delete(session).where(inArray(session.userId, testUserIds)),
+    db.delete(account).where(inArray(account.userId, testUserIds)),
+    db.delete(users).where(or(inArray(users.id, TEST_USER_IDS), inArray(users.email, TEST_USER_EMAILS))),
+  ]);
 }
 
 const personalTemplateItems = {

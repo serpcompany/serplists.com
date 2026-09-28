@@ -309,4 +309,98 @@ describe("local Drizzle fixture commands", () => {
     },
     60_000,
   );
+
+  it(
+    "cleans up Organizations, invites and Template history the test users created",
+    async () => {
+      runLocalData("seed-test");
+      await withLocalD1(persistPath, async (db) => {
+        if ((await db.select().from(users).where(eq(users.id, OUTSIDER_ID))).length === 0) {
+          await insertOutsider(db);
+        }
+        const createdAt = "2026-01-01 00:00:00";
+        const expiresAt = "2099-01-01 00:00:00";
+        await db.insert(teams).values([
+          { id: "team-user-acme", name: "Acme", created_by_user_id: "user-2", created_at: createdAt },
+          { id: "team-outsider-co", name: "Outsider Co", created_by_user_id: OUTSIDER_ID, created_at: createdAt },
+        ]);
+        await db.insert(team_members).values([
+          { id: "acme-owner", team_id: "team-user-acme", user_id: "user-2", role: "owner", created_at: createdAt },
+          { id: "outsider-owner", team_id: "team-outsider-co", user_id: OUTSIDER_ID, role: "owner", created_at: createdAt },
+          { id: "outsider-jane", team_id: "team-outsider-co", user_id: "user-3", role: "admin", created_at: createdAt },
+        ]);
+        await db.insert(team_invites).values([
+          {
+            id: "acme-invite",
+            team_id: "team-user-acme",
+            email: "new@example.com",
+            token_hash: "acme-invite-token",
+            invited_by_user_id: "user-2",
+            expires_at: expiresAt,
+            created_at: createdAt,
+          },
+          {
+            id: "outsider-invite",
+            team_id: "team-outsider-co",
+            email: "friend@example.com",
+            token_hash: "outsider-invite-token",
+            invited_by_user_id: "user-3",
+            expires_at: expiresAt,
+            created_at: createdAt,
+          },
+        ]);
+        await db.insert(templates).values({
+          id: "outsider-team-template",
+          user_id: OUTSIDER_ID,
+          title: "Outsider Template",
+          items: "[]",
+          owner_type: "team",
+          team_id: "team-outsider-co",
+          created_at: createdAt,
+        });
+        await db.insert(template_versions).values({
+          id: "outsider-team-template-v1",
+          template_id: "outsider-team-template",
+          version: 1,
+          changed_by_user_id: "user-2",
+          subject_type: "team",
+          subject_id: "team-outsider-co",
+          snapshot_json: "{}",
+          created_at: createdAt,
+        });
+      });
+
+      runLocalData("cleanup");
+
+      await withLocalD1(persistPath, async (db) => {
+        expect(await fixtureCounts(db)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        const remainingTeams = await db
+          .select({ id: teams.id })
+          .from(teams)
+          .where(inArray(teams.id, ["team-user-acme", "team-outsider-co"]));
+        expect(remainingTeams).toEqual([{ id: "team-outsider-co" }]);
+        expect(
+          await db.select().from(team_invites).where(inArray(team_invites.invited_by_user_id, TEST_USER_IDS)),
+        ).toEqual([]);
+        expect(
+          await db
+            .select()
+            .from(template_versions)
+            .where(inArray(template_versions.changed_by_user_id, TEST_USER_IDS)),
+        ).toEqual([]);
+        expect(
+          await db.select({ id: templates.id }).from(templates).where(eq(templates.id, "outsider-team-template")),
+        ).toEqual([{ id: "outsider-team-template" }]);
+        expect(await db.select().from(users).where(eq(users.id, OUTSIDER_ID))).toHaveLength(1);
+        expect(await db.select().from(account).where(eq(account.id, OUTSIDER_ACCOUNT_ID))).toHaveLength(1);
+      });
+
+      runLocalData("seed-test");
+
+      await withLocalD1(persistPath, async (db) => {
+        expect(await fixtureCounts(db)).toEqual([4, 4, 2, 2, 6, 1, 1, 7, 5, 5, 4, 3, 5]);
+      });
+    },
+    60_000,
+  );
 });
