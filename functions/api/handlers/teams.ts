@@ -8,25 +8,15 @@ import { batchWriteMissed, insertAuditEventWhere } from "../utils/guarded-writes
 import { getSessionUserId } from "../utils/session";
 import { buildTeamInviteDelivery } from "../utils/team-invite-delivery";
 import { buildInviteRevocation } from "../utils/team-invite-revocation";
-import { generateUniqueTeamSlug, isTeamSlugTaken, teamSlugInUseError } from "../utils/team-slug";
+import { isTeamSlugTaken, isTeamSlugUniqueViolation, teamSlugInUseError } from "../utils/team-slug";
 import {
   canManageTeam,
   getActiveTeamMembership,
   normalizeTeamRole,
 } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
+import { createTeam } from "./team-create";
 import { transferTeamOwnership, updateTeamMember } from "./team-membership";
-
-const createTeamBodySchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  slug: z
-    .string()
-    .trim()
-    .min(1)
-    .max(120)
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, numbers, and hyphens only")
-    .optional(),
-});
 
 const updateTeamBodySchema = z
   .object({
@@ -337,66 +327,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
   }
 
   if (request.method === "POST" && teamsSubpath.length === 0) {
-    const body = await readJson(request);
-    const parsed = createTeamBodySchema.safeParse(body);
-    if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message || "Invalid Organization payload", 400);
-    }
-
-    const now = new Date().toISOString();
-    const teamId = crypto.randomUUID();
-    // A slug the caller typed is used as given or refused, like PUT; only a slug derived
-    // from the name gets a suffix when taken.
-    const requestedSlug = parsed.data.slug;
-    if (requestedSlug && (await isTeamSlugTaken(db, requestedSlug))) {
-      return teamSlugInUseError();
-    }
-    const slug = requestedSlug ?? (await generateUniqueTeamSlug(db, parsed.data.name, teamId));
-    const team = {
-      id: teamId,
-      name: parsed.data.name,
-      slug,
-      billing_owner_user_id: userId,
-      created_by_user_id: userId,
-      created_at: now,
-      updated_at: now,
-      archived_at: null,
-    };
-    const membership = {
-      id: crypto.randomUUID(),
-      team_id: teamId,
-      user_id: userId,
-      role: "owner",
-      status: "active",
-      invited_by_user_id: null,
-      joined_at: now,
-      created_at: now,
-      updated_at: now,
-    };
-
-    const auditEvent = await buildAuditEventValues({
-      actorUserId: userId,
-      subject: { type: "team", id: teamId },
-      resource: { type: "team", id: teamId },
-      action: "team.created",
-      after: { team, membership },
-      request,
-      createdAt: now,
-    });
-    await db.batch([
-      db.insert(teams).values(team),
-      db.insert(team_members).values(membership),
-      db.insert(audit_events).values(auditEvent),
-    ]);
-
-    return json({
-      id: teamId,
-      memberId: membership.id,
-      membershipStatus: membership.status,
-      name: team.name,
-      role: "owner",
-      slug,
-    });
+    return createTeam({ db, request, userId }, await readJson(request));
   }
 
   if (request.method === "POST" && teamsSubpath[0] === "invites" && teamsSubpath[2] === "accept") {
@@ -545,10 +476,18 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       request,
       createdAt: updates.updated_at,
     });
-    await db.batch([
-      db.update(teams).set(updates).where(and(eq(teams.id, teamId), isNull(teams.archived_at))),
-      db.insert(audit_events).values(auditEvent),
-    ]);
+    try {
+      await db.batch([
+        db.update(teams).set(updates).where(and(eq(teams.id, teamId), isNull(teams.archived_at))),
+        db.insert(audit_events).values(auditEvent),
+      ]);
+    } catch (error) {
+      // Another Organization can save the same slug between the check above and this write.
+      if (updates.slug && isTeamSlugUniqueViolation(error)) {
+        return teamSlugInUseError();
+      }
+      throw error;
+    }
 
     return json({
       success: true,
