@@ -37,6 +37,7 @@ Canonical private routes:
 
 - Users can start checklist runs from templates.
 - Runs store progress independently from templates.
+- The runs list (`/dashboard/runs`) links each run to its source Template and matches searches on that Template's title and owner. The source can be a public catalog Template or one of the viewer's Personal or active Organization Templates, public or private. Runs started from library Templates have no source link.
 - Runs record both the template content version last reconciled and a run revision. API responses expose `is_stale` when the source checklist structure is newer; metadata-only template edits do not stale runs.
 - Completed, archived, and publicly shared runs are frozen when a template changes. A completed private run can be explicitly reconciled and reopened with `POST /api/checklists/:id/revalidate`.
 - Runs that predate stable identities are conservatively marked stale during migration. Their legacy IDs are backfilled deterministically, and their completion/notes remain intact until explicit reconciliation.

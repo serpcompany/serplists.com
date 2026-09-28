@@ -50,15 +50,22 @@ import {
   buildRunPath,
 } from '@/lib/routes';
 import { cn } from '@/lib/utils';
-import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
+import type { ChecklistRun } from '@/types/checklist';
 import { toast } from 'sonner';
 import { createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
-
-type StatusFilter = 'all' | 'in_progress' | 'completed';
+import {
+  buildRunTemplateLookup,
+  filterDashboardRuns,
+  findRunTemplate,
+  type RunSourceTemplate,
+  type RunStatusFilter as StatusFilter,
+} from '@/features/dashboard-runs/runTemplateLookup';
 
 interface RunsDashboardViewProps {
   runs: ChecklistRun[];
-  templates?: Pick<ChecklistTemplate, 'id' | 'ownerProfile' | 'title'>[];
+  // The public catalog and the active workspace's own list; see buildRunTemplateLookup.
+  templates?: RunSourceTemplate[];
+  workspaceTemplates?: RunSourceTemplate[];
   onDeleteRun: (runId: string) => void | Promise<void>;
   onRevalidateRun?: (run: ChecklistRun) => void | Promise<void>;
   loading?: boolean;
@@ -86,6 +93,7 @@ const getTaskCounts = (run: ChecklistRun) =>
 export function RunsDashboardView({
   runs,
   templates = [],
+  workspaceTemplates,
   onDeleteRun,
   onRevalidateRun,
   loading = false,
@@ -99,36 +107,14 @@ export function RunsDashboardView({
   const inProgressCount = runs.filter((run) => run.status === 'in_progress').length;
   const completedCount = runs.filter((run) => run.status === 'completed').length;
   const templatesById = useMemo(
-    () => new Map(templates.map((template) => [template.id, template])),
-    [templates],
+    () => buildRunTemplateLookup(templates, workspaceTemplates),
+    [templates, workspaceTemplates],
   );
 
-  const filteredRuns = useMemo(() => {
-    const lowerSearch = searchQuery.toLowerCase();
-
-    return runs
-      .filter((run) => {
-        const template = templatesById.get(run.templateId);
-        const matchesSearch = [
-          run.title,
-          run.status,
-          template?.title ?? '',
-          template?.ownerProfile?.username ?? '',
-          template?.ownerProfile?.full_name ?? '',
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(lowerSearch);
-        const matchesStatus =
-          statusFilter === 'all' || run.status === statusFilter;
-
-        return matchesSearch && matchesStatus;
-      })
-      .sort(
-        (left, right) =>
-          new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime(),
-      );
-  }, [runs, searchQuery, statusFilter, templatesById]);
+  const filteredRuns = useMemo(
+    () => filterDashboardRuns(runs, templatesById, searchQuery, statusFilter),
+    [runs, searchQuery, statusFilter, templatesById],
+  );
 
   const shareRun = async (runId: string) => {
     try {
@@ -238,7 +224,7 @@ export function RunsDashboardView({
             {filteredRuns.map((run) => {
               const isCompleted = run.status === 'completed';
               const { completed, total } = getTaskCounts(run);
-              const template = templatesById.get(run.templateId);
+              const template = findRunTemplate(templatesById, run.templateId);
 
               return (
                 <div

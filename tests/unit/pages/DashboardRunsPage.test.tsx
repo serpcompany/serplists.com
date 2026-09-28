@@ -135,22 +135,35 @@ const runs: ChecklistRun[] = [
   },
 ];
 
-const templates: ChecklistTemplate[] = [
-  {
-    id: 'template-5',
-    title: 'Team Offsite Template',
-    description: '',
-    type: 'checklist',
-    sections: [],
-    userId: 'user-1',
-    createdAt: '2024-01-01T00:00:00Z',
-    updatedAt: '2024-01-01T00:00:00Z',
-    isPublic: false,
-    categories: [],
-    tags: [],
-    ownerProfile: { username: 'devteam' },
-  },
-];
+const privateTemplate: ChecklistTemplate = {
+  id: 'template-5',
+  title: 'Team Offsite Template',
+  description: '',
+  type: 'checklist',
+  sections: [],
+  userId: 'user-1',
+  createdAt: '2024-01-01T00:00:00Z',
+  updatedAt: '2024-01-01T00:00:00Z',
+  isPublic: false,
+  categories: [],
+  tags: [],
+  ownerProfile: { username: 'devteam' },
+};
+
+const publicCatalogTemplate: ChecklistTemplate = {
+  ...privateTemplate,
+  id: 'template-1',
+  title: 'Website Launch Playbook',
+  userId: 'someone-else',
+  isPublic: true,
+  ownerProfile: { username: 'launchcrew' },
+};
+
+// Mirrors the real context: `templates` is the public catalog only
+// (mergePublicTemplateCollections drops private Templates), and private Personal or
+// Organization Templates arrive only through `allTemplates`.
+const templates: ChecklistTemplate[] = [publicCatalogTemplate];
+const allTemplates: ChecklistTemplate[] = [privateTemplate];
 
 describe('/dashboard/runs presentation', () => {
   beforeEach(() => {
@@ -165,6 +178,7 @@ describe('/dashboard/runs presentation', () => {
     });
     mockUseTemplates.mockReturnValue({
       templates,
+      allTemplates,
       templatesLoading: false,
       runs,
       runsLoading: false,
@@ -204,6 +218,50 @@ describe('/dashboard/runs presentation', () => {
     expect(html).not.toContain('Active runs');
     expect(html).not.toContain('Completed runs');
     expect(html).not.toContain('Avg progress');
+  });
+
+  it('keeps the mocked catalog honest: `templates` never holds a private Template', () => {
+    expect(templates.every((template) => template.isPublic)).toBe(true);
+  });
+
+  it('links runs to private workspace Templates and to catalog-only public Templates', () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, logout: vi.fn() });
+    const organizationTemplate: ChecklistTemplate = {
+      ...privateTemplate,
+      id: 'org-template',
+      title: 'Org Checklist',
+      teamId: 'team-1',
+    };
+    mockUseTemplates.mockReturnValue({
+      templates,
+      // In an Organization, allTemplates holds only that Organization's Templates.
+      allTemplates: [organizationTemplate],
+      templatesLoading: false,
+      runs: [
+        { ...runs[0], id: 'run-org', templateId: 'org-template', title: 'Acme' },
+        { ...runs[1], id: 'run-public', templateId: 'template-1', title: 'Beta' },
+        { ...runs[2], id: 'run-library', templateId: '', title: 'Library run' },
+      ],
+      runsLoading: false,
+      updateRun: vi.fn(),
+      revalidateRun: vi.fn(),
+      deleteRun: vi.fn(),
+    });
+
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/dashboard/runs">
+        <Routes>
+          <Route path="*" element={<Dashboard />} />
+        </Routes>
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('From Org Checklist');
+    expect(html).toContain('href="/dashboard/templates/org-template"');
+    expect(html).toContain('From Website Launch Playbook');
+    expect(html).toContain('href="/dashboard/templates/template-1"');
+    expect(html.match(/>From /g)).toHaveLength(2);
+    expect(html).not.toContain('href="/dashboard/templates/"');
   });
 
   it('keeps the runs route structure visible while data is loading', () => {

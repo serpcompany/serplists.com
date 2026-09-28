@@ -118,6 +118,7 @@ const Dashboard = () => {
       <RunsDashboardView
         runs={runs}
         templates={templates}
+        workspaceTemplates={allTemplates}
         onDeleteRun={deleteRun}
         onRevalidateRun={revalidateRun}
         loading={runsLoading}
