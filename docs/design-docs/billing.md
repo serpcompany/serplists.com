@@ -52,8 +52,9 @@ first, then:
 
 1. Create a new Price on the Pro product in Stripe, moving the
    `serp-checklists_pro_monthly` lookup key to it (`transfer_lookup_key`).
-   `bootstrap.mjs` refuses to reuse a lookup-key price whose amount, currency, or
-   interval differs from the request.
+   `bootstrap.mjs` refuses to reuse a lookup-key price that is archived, on
+   another product, or differs from the request in amount, currency, or
+   interval, and prints each price id with its amount.
 2. Append the old price id to `STRIPE_PRO_LEGACY_PRICE_IDS` (comma-separated)
    **before** pointing `STRIPE_PRO_PRICE_ID` at the new price. Otherwise every
    subscriber on the old price resolves to Free.

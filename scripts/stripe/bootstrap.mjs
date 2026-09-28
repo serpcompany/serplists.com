@@ -1,16 +1,8 @@
 import { loadLocalEnv } from "./_env.mjs";
-import { describePriceMismatch } from "./_price.mjs";
+import { bootstrapUsage, describePrice, ensurePrice } from "./_bootstrap-lib.mjs";
 
 function usage(exitCode) {
-  console.log(`Usage:
-  node scripts/stripe/bootstrap.mjs --mode both --currency usd --monthly 1900 [--yearly 19000] [--dry-run]
-
-Reads keys from .env / .env.local / .dev.vars:
-  STRIPE_TEST_SECRET_KEY=sk_test_...
-  STRIPE_LIVE_SECRET_KEY=sk_live_...
-
-Or a single STRIPE_SECRET_KEY (sk_test_... or sk_live_...) for single-mode runs.
-`);
+  console.log(bootstrapUsage());
   process.exit(exitCode);
 }
 
@@ -132,73 +124,35 @@ async function ensureProProduct({ secretKey, dryRun }) {
   });
 }
 
-async function ensurePrice({ secretKey, productId, lookupKey, currency, unitAmount, interval, dryRun }) {
-  const lookupResp = await stripeRequest({
-    secretKey,
-    method: "GET",
-    path: `/v1/prices?lookup_keys[]=${encodeURIComponent(lookupKey)}&limit=1`,
-    dryRun,
-  });
-
-  const existing = lookupResp?.data?.[0];
-  if (existing?.id) {
-    const mismatch = describePriceMismatch(existing, { unitAmount, currency, interval });
-    if (mismatch) {
-      throw new Error(
-        `Price ${existing.id} (lookup key ${lookupKey}) has ${mismatch}. Stripe prices cannot change; ` +
-          "follow the Pro price change procedure in docs/design-docs/billing.md.",
-      );
-    }
-    return existing;
-  }
-
-  return stripeRequest({
-    secretKey,
-    method: "POST",
-    path: "/v1/prices",
-    form: {
-      product: productId,
-      currency,
-      unit_amount: String(unitAmount),
-      "recurring[interval]": interval,
-      lookup_key: lookupKey,
-      "metadata[app]": "serp-checklists",
-      "metadata[tier]": "pro",
-    },
-    dryRun,
-  });
-}
-
 async function bootstrapOne({ secretKey, label, currency, monthly, yearly, dryRun }) {
   const product = await ensureProProduct({ secretKey, dryRun });
   const productId = product?.id ?? "(dry-run)";
+  const request = ({ method, path, form }) => stripeRequest({ secretKey, method, path, form, dryRun });
 
   const monthlyPrice = await ensurePrice({
-    secretKey,
+    request,
     productId,
     lookupKey: "serp-checklists_pro_monthly",
     currency,
     unitAmount: monthly,
     interval: "month",
-    dryRun,
   });
 
   const yearlyPrice = yearly
     ? await ensurePrice({
-        secretKey,
+        request,
         productId,
         lookupKey: "serp-checklists_pro_yearly",
         currency,
         unitAmount: yearly,
         interval: "year",
-        dryRun,
       })
     : null;
 
   console.log(`\n[${label}]`);
   console.log(`Product: ${product?.id ?? "(dry-run)"}`);
-  console.log(`Monthly price: ${monthlyPrice?.id ?? "(dry-run)"}`);
-  if (yearly) console.log(`Yearly price: ${yearlyPrice?.id ?? "(dry-run)"}`);
+  console.log(`Monthly price: ${describePrice(monthlyPrice)}`);
+  if (yearly) console.log(`Yearly price: ${describePrice(yearlyPrice)}`);
 }
 
 async function main() {
