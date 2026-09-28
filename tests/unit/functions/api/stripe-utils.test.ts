@@ -1,5 +1,11 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { StripeApiError, stripeGet, stripePostForm, verifyStripeWebhookSignature } from "@functions/api/utils/stripe";
+import {
+  getStripeBillingConfig,
+  StripeApiError,
+  stripeGet,
+  stripePostForm,
+  verifyStripeWebhookSignature,
+} from "@functions/api/utils/stripe";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -112,5 +118,28 @@ describe("stripeGet", () => {
 
     expect(error).toBeInstanceOf(StripeApiError);
     expect((error as StripeApiError).status).toBe(404);
+  });
+});
+
+describe("getStripeBillingConfig", () => {
+  const config = (legacy?: string) =>
+    getStripeBillingConfig({
+      DB: {} as D1Database,
+      R2_UPLOADS: {} as R2Bucket,
+      STRIPE_SECRET_KEY: "sk_test_example",
+      STRIPE_PRO_PRICE_ID: "price_new",
+      STRIPE_PRO_LEGACY_PRICE_IDS: legacy,
+    });
+
+  it("grants Pro for the checkout price alone when no legacy prices are set", () => {
+    expect(config()?.proPriceIds).toEqual(["price_new"]);
+    expect(config("")?.proPriceIds).toEqual(["price_new"]);
+  });
+
+  it("adds trimmed, de-duplicated legacy prices and keeps checkout on the current price", () => {
+    const parsed = config(" price_old , ,price_older,price_old,price_new ");
+
+    expect(parsed?.proPriceId).toBe("price_new");
+    expect(parsed?.proPriceIds).toEqual(["price_new", "price_old", "price_older"]);
   });
 });

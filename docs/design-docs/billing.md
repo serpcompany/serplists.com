@@ -14,6 +14,7 @@ Plans resolve in `functions/api/utils/entitlements.ts`.
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRO_PRICE_ID`
 - `STRIPE_PORTAL_CONFIGURATION_ID`
+- `STRIPE_PRO_LEGACY_PRICE_IDS` (optional; see [Changing the Pro price](#changing-the-pro-price))
 
 Checkout capability requires `STRIPE_SECRET_KEY` and `STRIPE_PRO_PRICE_ID`.
 Webhook verification separately requires `STRIPE_WEBHOOK_SECRET`. Billing
@@ -39,8 +40,30 @@ node scripts/stripe/bootstrap.mjs --mode live --currency usd --monthly 900
 
 After creating prices, set `STRIPE_PRO_PRICE_ID` in Cloudflare Pages to the **live** monthly `price_...` id.
 
-The launch price is **$9 USD per month**. If the amount changes, update the
-Stripe Price and `PRO_MONTHLY_PRICE_LABEL` in `src/lib/billing.ts` together.
+The launch price is **$9 USD per month**.
+
+## Changing the Pro price
+
+A Stripe Price's amount cannot be edited, and existing subscriptions stay on the
+price they were created with. Pro is granted for `STRIPE_PRO_PRICE_ID` plus any
+price listed in `STRIPE_PRO_LEGACY_PRICE_IDS`; Checkout always uses
+`STRIPE_PRO_PRICE_ID`. Changing the price is a pricing decision, so get approval
+first, then:
+
+1. Create a new Price on the Pro product in Stripe, moving the
+   `serp-checklists_pro_monthly` lookup key to it (`transfer_lookup_key`).
+   `bootstrap.mjs` refuses to reuse a lookup-key price whose amount, currency, or
+   interval differs from the request.
+2. Append the old price id to `STRIPE_PRO_LEGACY_PRICE_IDS` (comma-separated)
+   **before** pointing `STRIPE_PRO_PRICE_ID` at the new price. Otherwise every
+   subscriber on the old price resolves to Free.
+3. Set `STRIPE_PRO_PRICE_ID` to the new price and update
+   `PRO_MONTHLY_PRICE_LABEL` in `src/lib/billing.ts` together.
+4. Remove an id from the legacy list only after no active subscription uses it
+   (for example after migrating subscriptions in Stripe and receiving their
+   `customer.subscription.updated` webhooks).
+
+Test-mode and live price ids differ, so set the list per environment.
 
 ## Customer Portal
 

@@ -1,4 +1,5 @@
 import { loadLocalEnv } from "./_env.mjs";
+import { describePriceMismatch } from "./_price.mjs";
 
 function usage(exitCode) {
   console.log(`Usage:
@@ -140,7 +141,16 @@ async function ensurePrice({ secretKey, productId, lookupKey, currency, unitAmou
   });
 
   const existing = lookupResp?.data?.[0];
-  if (existing?.id) return existing;
+  if (existing?.id) {
+    const mismatch = describePriceMismatch(existing, { unitAmount, currency, interval });
+    if (mismatch) {
+      throw new Error(
+        `Price ${existing.id} (lookup key ${lookupKey}) has ${mismatch}. Stripe prices cannot change; ` +
+          "follow the Pro price change procedure in docs/design-docs/billing.md.",
+      );
+    }
+    return existing;
+  }
 
   return stripeRequest({
     secretKey,

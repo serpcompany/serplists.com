@@ -1,6 +1,6 @@
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
-import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { getStripeBillingConfig } from "./stripe";
 
 export type Plan = "free" | "pro" | "team";
@@ -116,7 +116,7 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
     subs = await db
       .select()
       .from(stripe_subscriptions)
-      .where(and(eq(stripe_subscriptions.user_id, userId), eq(stripe_subscriptions.price_id, stripe.proPriceId)))
+      .where(and(eq(stripe_subscriptions.user_id, userId), inArray(stripe_subscriptions.price_id, stripe.proPriceIds)))
       .orderBy(desc(stripe_subscriptions.updated_at));
   } catch (error) {
     if (!isMissingOptionalBillingTableError(error)) {

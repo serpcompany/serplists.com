@@ -56,6 +56,7 @@ describe("Stripe return URLs", () => {
     expect(response.status).toBe(200);
     expect(sentForm().get("success_url")).toBe(`${ORIGIN}${buildConsoleSettingsPath()}?billing=success`);
     expect(sentForm().get("cancel_url")).toBe(`${ORIGIN}${buildConsoleSettingsPath()}?billing=cancel`);
+    expect(sentForm().get("line_items[0][price]")).toBe("price_pro");
   });
 
   it("returns the Customer Portal to the settings page", async () => {

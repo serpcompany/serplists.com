@@ -70,6 +70,42 @@ describe("getEntitlementsForUser from Stripe subscriptions", () => {
   });
 });
 
+describe("getEntitlementsForUser after the Pro price changes", () => {
+  const afterPriceChange = (legacyPriceIds?: string) =>
+    env({ STRIPE_PRO_PRICE_ID: "price_new", STRIPE_PRO_LEGACY_PRICE_IDS: legacyPriceIds });
+
+  it("keeps Pro for a subscriber still on a listed legacy price", async () => {
+    insertSubscription("sub_1", "active", "price_old");
+
+    const entitlements = await getEntitlementsForUser(afterPriceChange("price_old"), USER_ID);
+
+    expect(entitlements.plan).toBe("pro");
+    expect(entitlements.source).toBe("user_subscription");
+  });
+
+  it("grants Pro only for the checkout price and listed legacy prices", async () => {
+    insertSubscription("sub_1", "active", "price_old");
+    expect((await getEntitlementsForUser(afterPriceChange(), USER_ID)).plan).toBe("free");
+
+    d1.sqlite.exec("DELETE FROM stripe_subscriptions");
+    insertSubscription("sub_2", "active", "price_unrelated");
+    expect((await getEntitlementsForUser(afterPriceChange("price_old"), USER_ID)).plan).toBe("free");
+  });
+
+  it("still requires a paid status on a legacy price", async () => {
+    insertSubscription("sub_1", "past_due", "price_old");
+
+    expect((await getEntitlementsForUser(afterPriceChange("price_old"), USER_ID)).plan).toBe("free");
+  });
+
+  it("grants Pro from the new price next to a canceled legacy subscription", async () => {
+    insertSubscription("sub_old", "canceled", "price_old");
+    insertSubscription("sub_new", "active", "price_new");
+
+    expect((await getEntitlementsForUser(afterPriceChange("price_old"), USER_ID)).plan).toBe("pro");
+  });
+});
+
 describe("getEntitlementsForUser with a manual override", () => {
   it("keeps a Free override visible as an override, even over an active subscription", async () => {
     insertOverride("free");

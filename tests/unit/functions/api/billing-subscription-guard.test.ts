@@ -93,6 +93,19 @@ describe("POST /api/billing/checkout with an existing Stripe subscription", () =
     },
   );
 
+  it("returns 409 already_subscribed for an active subscription on a listed legacy price", async () => {
+    insertSubscription("sub_1", "active", "price_old");
+
+    const response = await handleBilling(
+      new Request("http://localhost/api/billing/checkout", { method: "POST", body: "{}" }),
+      { ...(env() as object), STRIPE_PRO_LEGACY_PRICE_IDS: "price_old" } as never,
+    );
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe("already_subscribed");
+    expect(stripeCalls()).toEqual([]);
+  });
+
   it.each(["active", "trialing"])(
     "returns 409 already_subscribed for a %s subscription on another price",
     async (status) => {

@@ -31,6 +31,7 @@ and `.env.local` are deprecated. Production values are Cloudflare Pages secrets.
 | `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID` | Required for Checkout |
 | `STRIPE_WEBHOOK_SECRET` | Required only by the webhook endpoint |
 | `STRIPE_PORTAL_CONFIGURATION_ID` | Required for self-serve subscription management |
+| `STRIPE_PRO_LEGACY_PRICE_IDS` | Optional, comma-separated; earlier Pro prices that still grant Pro after a price change |
 | `RESEND_API_KEY` or `USESEND_API_KEY` | At least one, for verification and reset emails; otherwise auth-email actions return `503 auth_email_unavailable` |
 | `EMAIL_FROM` | Optional sender override (default `noreply@mail.auth.serp.co`) |
 | `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | Optional CORS allowlist |

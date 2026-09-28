@@ -8,18 +8,29 @@ export type StripeConfig = {
 
 export type StripeBillingConfig = {
   secretKey: string;
+  /** The price new Checkout sessions use. */
   proPriceId: string;
+  /** Every price whose subscription grants Pro: the checkout price, then legacy prices. */
+  proPriceIds: string[];
 };
 
 export type StripeWebhookConfig = {
   webhookSecret: string;
 };
 
+// Stripe prices cannot change amount, so a price change creates a new price while
+// existing subscribers stay on the old one. STRIPE_PRO_LEGACY_PRICE_IDS (comma-separated)
+// keeps those prices granting Pro after STRIPE_PRO_PRICE_ID moves to the new price.
+function parsePriceIds(value: string | undefined): string[] {
+  return (value ?? "").split(",").map((id) => id.trim()).filter(Boolean);
+}
+
 export function getStripeBillingConfig(env: Env): StripeBillingConfig | null {
   const secretKey = env.STRIPE_SECRET_KEY;
   const proPriceId = env.STRIPE_PRO_PRICE_ID;
   if (!secretKey || !proPriceId) return null;
-  return { secretKey, proPriceId };
+  const proPriceIds = [...new Set([proPriceId, ...parsePriceIds(env.STRIPE_PRO_LEGACY_PRICE_IDS)])];
+  return { secretKey, proPriceId, proPriceIds };
 }
 
 export function getStripeWebhookConfig(env: Env): StripeWebhookConfig | null {
