@@ -94,6 +94,7 @@ function personalRun(overrides: JsonRecord = {}): JsonRecord {
 describe("personal run MCP handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dbMocks.selectChain.limit.mockReset();
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
@@ -498,6 +499,45 @@ describe("personal run MCP handler", () => {
     const updates = dbMocks.updateChain.set.mock.calls[0][0];
     expect(updates).not.toHaveProperty("completed_at");
     expect(updates).not.toHaveProperty("completed_by_user_id");
+  });
+
+  it("refuses to reopen a completed run when the Free active-run limit is reached", async () => {
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: "free", limits: { maxTemplates: 1, maxActiveRuns: 3 } });
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([personalRun({ status: "completed", revision: 2 })])
+      .mockResolvedValueOnce([{ count: 3 }]);
+
+    const response = await handleAgentMcp(callTool("update_run", {
+      runId: "run-1",
+      expectedRevision: 2,
+      operation: "set_run_status",
+      status: "in_progress",
+    }), env);
+    const body = await response.json() as any;
+
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent).toEqual(expect.objectContaining({
+      error: "limit_reached",
+      details: { limit: 3, current: 3 },
+    }));
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+  });
+
+  it("does not check the limit for status saves on a run that is already in progress", async () => {
+    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: "free", limits: { maxTemplates: 1, maxActiveRuns: 3 } });
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
+
+    const response = await handleAgentMcp(callTool("update_run", {
+      runId: "run-1",
+      expectedRevision: 2,
+      operation: "set_run_status",
+      status: "in_progress",
+    }), env);
+    const body = await response.json() as any;
+
+    expect(body.result.isError).toBeUndefined();
+    expect(getEntitlementsForUser).not.toHaveBeenCalled();
   });
 
   it("rejects an impossible atomic batch result as an internal invariant", async () => {

@@ -6,6 +6,7 @@ import { buildAuditEventValues } from '../utils/audit';
 import { calculateRunProgress } from '../utils/template-reconciliation';
 import { batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
 import { mergeSharedRunState, readStoredRunSections, sharedRunUpdateSchema } from '../utils/shared-run-merge';
+import { activeRunLimitResponse, findActiveRunLimitHit, isReopening } from '../utils/active-run-limit';
 
 // /api/checklists/shared/:token needs no login: holding the link is the only credential.
 // Guests may read the run and change completion state and task notes, nothing else.
@@ -68,6 +69,13 @@ export async function handleSharedChecklist(
       code: 'edit_conflict',
       details: { expectedRevision: expected_revision, currentRevision },
     });
+  }
+
+  // Reopening adds an active run to the owner's context, whoever holds the link.
+  if (isReopening(existingSharedRun.status, status)) {
+    const owner = { userId: existingSharedRun.user_id, teamId: existingSharedRun.team_id ?? null };
+    const limitHit = await findActiveRunLimitHit(env, owner, userId);
+    if (limitHit) return activeRunLimitResponse(limitHit, 'reopen');
   }
 
   const storedSections = readStoredRunSections(existingSharedRun.items);

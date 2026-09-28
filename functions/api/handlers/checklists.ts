@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { calculateRunProgress, reconcileRunSections } from '../utils/template-reconciliation';
 import { batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
 import { canUseTemplateAsRunSource } from '../utils/template-access';
+import { activeRunLimitResponse, findActiveRunLimitHit, isReopening } from '../utils/active-run-limit';
 import { handleSharedChecklist } from './checklists-shared';
 
 function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: URL): string | null {
@@ -368,28 +369,8 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
 
       const teamId = typeof runRecord.team_id === 'string' && runRecord.team_id ? runRecord.team_id : null;
       if (runRecord.status === 'in_progress') {
-        const entitlements = teamId
-          ? await getEntitlementsForContext(env, { type: 'team', teamId, userId })
-          : await getEntitlementsForUser(env, userId);
-        if (entitlements.plan === 'free' && entitlements.limits.maxActiveRuns) {
-          const [row] = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(checklist_runs)
-            .where(
-              teamId
-                ? and(eq(checklist_runs.team_id, teamId), eq(checklist_runs.status, 'in_progress'), isNull(checklist_runs.deleted_at))
-                : and(eq(checklist_runs.user_id, userId), eq(checklist_runs.status, 'in_progress'), isNull(checklist_runs.team_id), isNull(checklist_runs.deleted_at)),
-            )
-            .limit(1);
-
-          const currentCount = row?.count ?? 0;
-          if (currentCount >= entitlements.limits.maxActiveRuns) {
-            return jsonError('Active run limit reached. Upgrade to Pro to restore more checklist runs.', 403, {
-              code: 'limit_reached',
-              details: { limit: entitlements.limits.maxActiveRuns, current: currentCount, resource: 'active_runs' },
-            });
-          }
-        }
+        const limitHit = await findActiveRunLimitHit(env, { userId, teamId }, userId);
+        if (limitHit) return activeRunLimitResponse(limitHit, 'restore');
       }
 
       const now = new Date().toISOString();
@@ -486,6 +467,11 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       // response does not reveal that a private template exists.
       if (!sourceTemplate || !canUseTemplateAsRunSource(sourceTemplate, { userId, runTeamId: existingRun.team_id ?? null })) {
         return jsonError('Source template not found', 404);
+      }
+      // Revalidation always leaves the run in_progress, which reopens a completed run.
+      if (isReopening(existingRun.status, 'in_progress')) {
+        const limitHit = await findActiveRunLimitHit(env, { userId: existingRun.user_id, teamId: existingRun.team_id ?? null }, userId);
+        if (limitHit) return activeRunLimitResponse(limitHit, 'reopen');
       }
 
       const previousSections = parseJsonArray(existingRun.items) ?? [];
@@ -811,28 +797,8 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       if (accessError) return accessError;
     }
 
-    const entitlements = effectiveTeamId
-      ? await getEntitlementsForContext(env, { type: 'team', teamId: effectiveTeamId, userId })
-      : await getEntitlementsForUser(env, userId);
-    if (entitlements.plan === 'free' && entitlements.limits.maxActiveRuns) {
-      const [row] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(checklist_runs)
-        .where(
-          effectiveTeamId
-            ? and(eq(checklist_runs.team_id, effectiveTeamId), eq(checklist_runs.status, 'in_progress'), isNull(checklist_runs.deleted_at))
-            : and(eq(checklist_runs.user_id, userId), eq(checklist_runs.status, 'in_progress'), isNull(checklist_runs.team_id), isNull(checklist_runs.deleted_at))
-        )
-        .limit(1);
-
-      const currentCount = row?.count ?? 0;
-      if (currentCount >= entitlements.limits.maxActiveRuns) {
-        return jsonError('Active run limit reached. Upgrade to Pro to create more checklist runs.', 403, {
-          code: 'limit_reached',
-          details: { limit: entitlements.limits.maxActiveRuns, current: currentCount, resource: 'active_runs' },
-        });
-      }
-    }
+    const limitHit = await findActiveRunLimitHit(env, { userId, teamId: effectiveTeamId }, userId);
+    if (limitHit) return activeRunLimitResponse(limitHit, 'create');
 
     const checklistId = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -946,6 +912,11 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         code: 'edit_conflict',
         details: { expectedRevision: expected_revision, currentRevision },
       });
+    }
+    // Only a real reopen counts: the run page sends the current status with every save.
+    if (isReopening(existingRun.status, status)) {
+      const limitHit = await findActiveRunLimitHit(env, { userId: existingRun.user_id, teamId: existingRun.team_id ?? null }, userId);
+      if (limitHit) return activeRunLimitResponse(limitHit, 'reopen');
     }
 
     const now = new Date().toISOString();

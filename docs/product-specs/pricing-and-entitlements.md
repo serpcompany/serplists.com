@@ -38,6 +38,14 @@ Current Free limits:
 - 1 personal template.
 - 3 active personal runs.
 
+An active run is one in progress. Every way of adding one counts against the limit of the
+run's own context (its Organization, or its owner's Personal context), not the acting
+User's: starting or restoring a run, and reopening a completed run by revalidating it,
+setting its status back to in progress, through a share link, or through an agent's Run
+Key. Saves to a run that is already in progress never check the limit, so a context over
+its limit (for example after a downgrade) can still finish its runs
+(`functions/api/utils/active-run-limit.ts`).
+
 ## Organization Matrix
 
 | Capability | Free Organization | Paid Organization |

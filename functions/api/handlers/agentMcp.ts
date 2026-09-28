@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { buildAuditEventValues } from "../utils/audit";
-import { getEntitlementsForUser } from "../utils/entitlements";
+import { findActiveRunLimitHit, isReopening, type RunOwnerContext } from "../utils/active-run-limit";
 import {
   authenticatePersonalRunKey,
   markPersonalRunKeyUsed,
@@ -468,26 +468,7 @@ async function startRun(
     throw new ToolError("Template not found", "template_not_found");
   }
 
-  const entitlements = await getEntitlementsForUser(env, identity.userId);
-  if (entitlements.plan === "free" && entitlements.limits.maxActiveRuns) {
-    const [countRow] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(schema.checklist_runs)
-      .where(and(
-        eq(schema.checklist_runs.user_id, identity.userId),
-        isNull(schema.checklist_runs.team_id),
-        eq(schema.checklist_runs.status, "in_progress"),
-        isNull(schema.checklist_runs.deleted_at),
-      ))
-      .limit(1);
-    const currentCount = countRow?.count ?? 0;
-    if (currentCount >= entitlements.limits.maxActiveRuns) {
-      throw new ToolError("Active run limit reached", "limit_reached", {
-        limit: entitlements.limits.maxActiveRuns,
-        current: currentCount,
-      });
-    }
-  }
+  await assertActiveRunCapacity(env, { userId: identity.userId, teamId: null });
 
   const normalized = normalizeSectionsPayload(parseJsonArray(template.items) ?? []);
   if (normalized.error) throw new ToolError("Template content is invalid", "invalid_template");
@@ -528,6 +509,11 @@ async function startRun(
   ]);
 
   return { run: serializeRun(run) };
+}
+
+async function assertActiveRunCapacity(env: Env, owner: RunOwnerContext): Promise<void> {
+  const limitHit = await findActiveRunLimitHit(env, owner, owner.userId);
+  if (limitHit) throw new ToolError("Active run limit reached", "limit_reached", { ...limitHit });
 }
 
 async function listRuns(
@@ -648,6 +634,10 @@ async function updateRun(
       expectedRevision: parsed.data.expectedRevision,
       currentRevision,
     });
+  }
+
+  if (parsed.data.operation === "set_run_status" && isReopening(existing.status, parsed.data.status)) {
+    await assertActiveRunCapacity(env, { userId: identity.userId, teamId: null });
   }
 
   const sections = parseStoredSections(existing.items);
