@@ -588,6 +588,45 @@ test.describe("template editor regressions", () => {
     }
   });
 
+  // One failed load used to hide the preview for good: typing a URL fails on its first
+  // characters, so even the finished, valid URL showed an empty box.
+  test("previews a corrected image URL after a broken one", async ({ page }) => {
+    const onePixelPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+      "base64",
+    );
+    await page.route("https://img.test/**", async (route) => {
+      if (route.request().url().endsWith("/good.png")) {
+        await route.fulfill({ body: onePixelPng, contentType: "image/png" });
+        return;
+      }
+      await route.fulfill({ body: "", status: 404 });
+    });
+
+    await loginAsSeedUser(page);
+    await page.goto("/dashboard/templates/new");
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("button", { name: "Image", exact: true }).last().click();
+
+    const urlField = page.getByLabel("Image URL");
+    const preview = page.getByRole("img", { name: "Preview" });
+    await urlField.fill("https://img.test/bad.png");
+    await expect(page.getByText("Preview unavailable")).toBeVisible();
+    await expect(preview).toHaveCount(0);
+
+    await urlField.fill("https://img.test/good.png");
+    await expect(preview).toBeVisible();
+    await expect
+      .poll(() => preview.evaluate((image: HTMLImageElement) => image.naturalWidth))
+      .toBeGreaterThan(0);
+
+    await urlField.fill("");
+    await urlField.pressSequentially("https://img.test/good.png");
+    await expect(preview).toBeVisible();
+    await expect(page.getByText("Preview unavailable")).toHaveCount(0);
+  });
+
   test("saves an untitled section as 'Section 1' and drops a trailing blank sub-task", async ({ page }) => {
     const stamp = Date.now();
     const templateTitle = `QA Blank titles ${stamp}`;

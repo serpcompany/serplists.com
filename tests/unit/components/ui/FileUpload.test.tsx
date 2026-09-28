@@ -1,18 +1,27 @@
+import { readFileSync } from 'node:fs';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
-import { FileUpload } from '@/components/ui/file-upload';
+import { FileUpload, ImagePreview } from '@/components/ui/file-upload';
 import { uploadAcceptAttribute } from '@/lib/schemas/uploadTypes';
 
 // Unit tests run in node with no DOM, so FileUpload is rendered shallowly: React's
 // state hooks are stubbed and the returned element tree is searched for handlers.
+// `stateOverride.value` replaces every useState initial value while set; setters record
+// their calls in `stateOverride.sets`.
+const stateOverride = vi.hoisted(() => ({ value: undefined as unknown, sets: [] as unknown[] }));
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>();
   const stubs = {
     useId: () => 'file-upload-test',
     useRef: () => ({ current: null }),
-    useState: <T,>(initial: T) => [initial, () => undefined],
+    useState: <T,>(initial: T) => [
+      stateOverride.value === undefined ? initial : stateOverride.value,
+      (next: unknown) => {
+        stateOverride.sets.push(next);
+      },
+    ],
   };
   return { ...actual, ...stubs, default: { ...actual, ...stubs } };
 });
@@ -62,6 +71,8 @@ const EXISTING_URL = '/api/uploads/file?key=template-images%2Fu1%2Fa.png';
 describe('FileUpload', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    stateOverride.value = undefined;
+    stateOverride.sets.length = 0;
   });
 
   it('clears an uploaded file without deleting the stored object', async () => {
@@ -178,5 +189,70 @@ describe('FileUpload', () => {
     ).toBeNull();
     expect(findElement(tree, (element) => element.props.type === 'file')).not.toBeNull();
   });
-});
 
+  // The preview hid its <img> with style.display = 'none' on the first load error. React
+  // kept the same element for the next URL, so a corrected URL loaded but stayed hidden
+  // (typing a URL fails on its first characters), leaving an empty box.
+  describe('image preview', () => {
+    const previewFor = (value: string) =>
+      findElement(
+        FileUpload({ type: 'image', value, onValueChange: vi.fn(), onFileChange: vi.fn() }),
+        (element) => element.type === ImagePreview,
+      );
+
+    it('gives each URL its own preview, so a failed URL cannot hide the next one', () => {
+      const bad = previewFor('https://example.com/phot');
+      const good = previewFor('https://example.com/photo.png');
+
+      expect(bad?.key).toBe('https://example.com/phot');
+      expect(good?.key).toBe('https://example.com/photo.png');
+      expect(good?.props.src).toBe('https://example.com/photo.png');
+    });
+
+    it('previews an uploaded image', () => {
+      expect(previewFor(EXISTING_URL)?.props.src).toBe(EXISTING_URL);
+    });
+
+    it('loads nothing while the URL is only partly typed', () => {
+      expect(previewFor('h')?.props.src).toBeNull();
+      expect(previewFor('https:')?.props.src).toBeNull();
+    });
+
+    it('shows no preview for an empty value', () => {
+      expect(previewFor('')).toBeNull();
+      expect(previewFor('   ')).toBeNull();
+    });
+
+    it('marks a failed load in state instead of hiding the element', () => {
+      const img = ImagePreview({ src: 'https://example.com/photo.png' }) as AnyElement;
+      expect(img.type).toBe('img');
+      expect(img.props.style).toBeUndefined();
+
+      const target = { style: {} as Record<string, string> };
+      (img.props.onError as (event: unknown) => void)({ currentTarget: target, target });
+
+      expect(target.style.display).toBeUndefined();
+      expect(stateOverride.sets).toEqual([true]);
+    });
+
+    it('never hides the preview by setting a style React does not own', () => {
+      const source = readFileSync(
+        new URL('../../../../src/components/ui/file-upload.tsx', import.meta.url),
+        'utf8',
+      );
+      expect(source).not.toMatch(/\.style\.display\s*=/);
+    });
+
+    it('says the preview is unavailable instead of showing an empty box', () => {
+      stateOverride.value = true;
+      const failed = ImagePreview({ src: 'https://example.com/photo.png' }) as AnyElement;
+      stateOverride.value = undefined;
+      const partial = ImagePreview({ src: null }) as AnyElement;
+
+      for (const element of [failed, partial]) {
+        expect(element.type).not.toBe('img');
+        expect(element.props.children).toBe('Preview unavailable');
+      }
+    });
+  });
+});

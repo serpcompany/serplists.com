@@ -11,7 +11,7 @@ import {
   UploadResult,
 } from '@/lib/utils/fileUpload';
 import { formatAssetSizeLimit } from '@/lib/schemas/templateAssetLimits';
-import { isUploadedAssetUrl } from '@/lib/utils/mediaSource';
+import { imagePreviewSrc, isUploadedAssetUrl } from '@/lib/utils/mediaSource';
 import { UPLOAD_MAX_BYTES } from '@/lib/schemas/uploadTypes';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +23,27 @@ export type FileUploadChange = {
   value: string;
   fileName?: string;
   fileSize?: number;
+};
+
+// The preview of one image address (null: nothing loadable yet). FileUpload keys it by
+// the value, so every new value gets a fresh <img> and a fresh failed state: a URL that
+// failed to load (as a URL does while it is typed) cannot hide a later one. A failure
+// is React state, never a style set on the element, which React would keep.
+export const ImagePreview = ({ src }: { src: string | null }): JSX.Element => {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return <p className="py-2 text-center text-xs text-muted-foreground">Preview unavailable</p>;
+  }
+
+  return (
+    <img
+      src={src}
+      alt="Preview"
+      className="max-h-32 mx-auto rounded"
+      onError={() => setFailed(true)}
+    />
+  );
 };
 
 interface FileUploadProps {
@@ -222,16 +243,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       </div>
 
       {/* Preview for images */}
-      {value && type === 'image' && (
+      {value && value.trim() && type === 'image' && (
         <div className="border rounded-lg p-2">
-          <img 
-            src={value} 
-            alt="Preview" 
-            className="max-h-32 mx-auto rounded"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
+          <ImagePreview key={value} src={imagePreviewSrc(value)} />
         </div>
       )}
       

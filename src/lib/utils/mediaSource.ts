@@ -19,6 +19,27 @@ export const getUploadedAssetKey = (url: string): string | null => {
 export const isUploadedAssetUrl = (url: string): boolean =>
   getUploadedAssetKey(url) !== null;
 
+// What an image block's preview loads, or null when the value cannot show an image
+// yet. The renderers load http(s) URLs and paths on this site (safeUrl); anything else,
+// such as a half-typed 'h' or 'https:', would load a page of this site as the image and
+// always fail.
+export const imagePreviewSrc = (value: string): string | null => {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('/')) {
+    // Uploads (/api/uploads/file?key=...) and other paths on this site.
+    return trimmed;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    return (url.protocol === 'https:' || url.protocol === 'http:') && url.hostname
+      ? trimmed
+      : null;
+  } catch {
+    return null;
+  }
+};
+
 export type MediaSourceType = 'upload' | 'url';
 
 type MediaSource = {
