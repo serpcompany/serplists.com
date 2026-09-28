@@ -336,6 +336,71 @@ test.describe("template editor regressions", () => {
     });
   });
 
+  // Generating used to replace a hand-built draft with no question, and anything typed
+  // while the request ran was replaced too.
+  test('asks before a generated Clipy draft replaces unsaved work', async ({ page }) => {
+    await loginAsSeedUser(page);
+    let generateCalls = 0;
+    let holdGenerate = false;
+    let releaseGenerate: () => void = () => {};
+    await page.route('**/api/templates/generate-from-clipy', async (route) => {
+      generateCalls += 1;
+      if (holdGenerate) {
+        await new Promise<void>((resolve) => {
+          releaseGenerate = resolve;
+        });
+      }
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          draft: {
+            title: 'Generated Clipy title',
+            description: '',
+            templateType: 'checklist',
+            categories: [],
+            tags: [],
+            isPublic: false,
+            seoTitle: '',
+            seoDescription: '',
+            seoUrl: '',
+            sections: [
+              {
+                id: 'clipy_replace_steps',
+                title: 'Steps',
+                items: [{ id: 'clipy_replace_step_1', title: 'Generated step', description: '' }],
+              },
+            ],
+          },
+        }),
+      });
+    });
+
+    await page.goto('/dashboard/templates/new');
+    const title = page.getByPlaceholder('Enter template name...');
+    const clipyLink = page.getByLabel('Public Clipy video link');
+    await title.fill('My hand-built checklist');
+    await clipyLink.fill('https://clipy.online/video/replaceme01');
+
+    page.once('dialog', (dialog) => void dialog.dismiss());
+    await page.getByRole('button', { name: 'Generate draft' }).click();
+    await expect(title).toHaveValue('My hand-built checklist');
+    await expect(clipyLink).toHaveValue('https://clipy.online/video/replaceme01');
+    expect(generateCalls).toBe(0);
+
+    holdGenerate = true;
+    page.once('dialog', (dialog) => void dialog.accept());
+    await page.getByRole('button', { name: 'Generate draft' }).click();
+    await expect.poll(() => generateCalls).toBe(1);
+    // Locked while it runs: nothing typed now could survive the replace.
+    await expect(title).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Generating...', exact: true })).toBeDisabled();
+
+    releaseGenerate();
+    await expect(title).toHaveValue('Generated Clipy title');
+    await expect(title).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Generated step', exact: true })).toBeVisible();
+  });
+
   test('shows one task-level notes area and persists it on the run', async ({ page }) => {
     await loginAsSeedUser(page);
     const runId = await page.evaluate(async ({ apiBaseUrl }) => {

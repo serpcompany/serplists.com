@@ -10,6 +10,9 @@ export const EDITOR_UPLOAD_IN_PROGRESS_MESSAGE =
 export const EDITOR_SAVE_IN_PROGRESS_MESSAGE =
   'Your template is still saving. If the save fails, your changes will be lost. Leave anyway?';
 
+export const EDITOR_REPLACE_DRAFT_MESSAGE =
+  'Replace your template with the draft generated from Clipy? Your unsaved changes will be lost.';
+
 // A picked file changes the form only when its upload finishes, so a pending upload
 // counts as unsaved work even when the form is clean. A save in flight never lifts the
 // guard: it can still fail (a conflict, a slug rule, a network error, or the unload
@@ -64,6 +67,13 @@ export const confirmTemplateEditorNavigation = (
 
   return confirmDialog(message);
 };
+
+// A draft generated from Clipy replaces the whole form (it has no undo), so unsaved work
+// needs a yes first. Asked before the request, so a no costs no generation.
+export const confirmReplaceTemplateDraft = (
+  isDirty: boolean,
+  confirmDialog: (message: string) => boolean = (message) => window.confirm(message),
+): boolean => !isDirty || confirmDialog(EDITOR_REPLACE_DRAFT_MESSAGE);
 
 export const applyTemplateBeforeUnloadWarning = (
   event: Pick<BeforeUnloadEvent, 'preventDefault' | 'returnValue'>,

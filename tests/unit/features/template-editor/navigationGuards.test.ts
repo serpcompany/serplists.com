@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  EDITOR_REPLACE_DRAFT_MESSAGE,
   EDITOR_SAVE_IN_PROGRESS_MESSAGE,
   EDITOR_UNSAVED_CHANGES_MESSAGE,
   EDITOR_UPLOAD_IN_PROGRESS_MESSAGE,
   applyTemplateBeforeUnloadWarning,
+  confirmReplaceTemplateDraft,
   confirmTemplateEditorNavigation,
   getTemplateEditorLeaveMessage,
   shouldBlockTemplateEditorNavigation,
@@ -179,5 +181,25 @@ describe('shouldBlockTemplateEditorTransition', () => {
         nextPath: '/dashboard/runs',
       }),
     ).toBe(false);
+  });
+});
+
+// Generating from Clipy replaces the whole form, so unsaved work needs a yes first.
+describe('confirmReplaceTemplateDraft', () => {
+  it('replaces a clean form without asking', () => {
+    const confirmDialog = vi.fn(() => false);
+
+    expect(confirmReplaceTemplateDraft(false, confirmDialog)).toBe(true);
+    expect(confirmDialog).not.toHaveBeenCalled();
+  });
+
+  it('asks before replacing unsaved work and follows the answer', () => {
+    const decline = vi.fn(() => false);
+    const accept = vi.fn(() => true);
+
+    expect(confirmReplaceTemplateDraft(true, decline)).toBe(false);
+    expect(confirmReplaceTemplateDraft(true, accept)).toBe(true);
+    expect(decline).toHaveBeenCalledWith(EDITOR_REPLACE_DRAFT_MESSAGE);
+    expect(EDITOR_REPLACE_DRAFT_MESSAGE).toMatch(/unsaved changes will be lost/);
   });
 });

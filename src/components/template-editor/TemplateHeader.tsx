@@ -14,6 +14,8 @@ interface TemplateHeaderProps {
   isSaving: boolean;
   // A file is still uploading: saving now would store the block without it.
   isUploading?: boolean;
+  // A Clipy draft is generating: it replaces the form when it arrives.
+  isGenerating?: boolean;
   title: string;
   templateSlug?: string;
   onCancel: () => void;
@@ -25,6 +27,7 @@ export const TemplateHeader = ({
   isEditing,
   isSaving,
   isUploading = false,
+  isGenerating = false,
   title,
   onCancel,
   onSave,
@@ -73,7 +76,7 @@ export const TemplateHeader = ({
           variant="default"
           size="sm"
           onClick={onSave}
-          disabled={isSaving || isUploading}
+          disabled={isSaving || isUploading || isGenerating}
           className="bg-foreground text-background hover:bg-foreground/90"
           type="button"
         >
@@ -86,6 +89,11 @@ export const TemplateHeader = ({
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Uploading...
+            </>
+          ) : isGenerating ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Generating...
             </>
           ) : (
             <>

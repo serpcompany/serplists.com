@@ -54,6 +54,10 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
 - A navigation the page starts after it has nothing left to lose (a create that
   saved, or a checkout or sign-in redirect after the draft was kept) is allowed
   without asking.
+- An action on the page that replaces the whole form asks the same way. Generating a
+  Clipy draft asks before the request when the form has unsaved changes
+  (`confirmReplaceTemplateDraft`), locks the editor and Save while it runs so nothing
+  typed meanwhile is replaced, and drops a draft that arrives after the editor closed.
 
 ## Data and state
 

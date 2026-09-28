@@ -35,6 +35,7 @@ import {
 } from "@/features/template-editor/postSaveFormState";
 import {
   EDITOR_LOAD_LATEST_MESSAGE,
+  confirmReplaceTemplateDraft,
   getTemplateEditorLeaveMessage,
   shouldBlockTemplateEditorNavigation,
 } from "@/features/template-editor/navigationGuards";
@@ -73,6 +74,8 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   // The last save was refused because someone saved the template after it loaded.
   const [editConflict, setEditConflict] = useState(false);
+  // A Clipy draft is being generated; it replaces the form when it arrives.
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   // A save that finishes after the user left must not act on the page (a create's
   // redirect would pull them off the page they went to).
   const beginVisit = usePageVisit();
@@ -124,7 +127,7 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
 
   const handleSave = async () => {
     // Save is disabled meanwhile; this also covers a call that skips the button.
-    if (uploads.count() > 0) {
+    if (uploads.count() > 0 || isGeneratingDraft) {
       return;
     }
 
@@ -174,6 +177,7 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
       <TemplateHeader
         isEditing={!!id}
         isSaving={model.isSaving}
+        isGenerating={isGeneratingDraft}
         isUploading={hasPendingUploads}
         onCancel={() => navigate(buildConsoleTemplatesPath())}
         onPreview={() => setIsPreviewOpen(true)}
@@ -222,14 +226,22 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
       />
 
       {/* A create leaves the page when it finishes, so edits made meanwhile could not
-          be kept: lock the editor until then. An update keeps them (see handleSave). */}
+          be kept: lock the editor until then. An update keeps them (see handleSave).
+          A generated Clipy draft replaces the form, so it is locked while that runs. */}
       <fieldset
         className="m-0 min-w-0 border-0 p-0"
-        disabled={shouldLockTemplateEditorWhileSaving({ id, isSaving: model.isSaving })}
+        disabled={
+          shouldLockTemplateEditorWhileSaving({ id, isSaving: model.isSaving }) ||
+          isGeneratingDraft
+        }
       >
         {!id ? (
           <GenerateFromClipy
+            // Unsaved work (typed, restored, or an earlier draft) is replaced only on a yes.
+            confirmReplace={() => confirmReplaceTemplateDraft(templateForm.formState.isDirty)}
+            onGeneratingChange={setIsGeneratingDraft}
             onGenerated={(draft) => {
+              // Against the blank defaults, so the draft counts as unsaved.
               templateForm.reset(draft, { keepDefaultValues: true });
               handleSelectTemplateInfo();
             }}

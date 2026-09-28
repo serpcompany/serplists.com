@@ -73,6 +73,26 @@ describe('TemplateHeader while a file uploads', () => {
   });
 });
 
+// A generated Clipy draft replaces the form when it arrives, so a save meanwhile would
+// store work that is about to be replaced.
+describe('TemplateHeader while a Clipy draft generates', () => {
+  it('disables Save and says a draft is generating', () => {
+    const html = renderToStaticMarkup(
+      <TemplateHeader
+        isEditing={false}
+        isGenerating
+        isSaving={false}
+        title="New Template"
+        onCancel={() => undefined}
+        onSave={() => undefined}
+      />,
+    );
+
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Generating\.\.\.<\/button>/);
+    expect(html).not.toMatch(/>\s*Save\s*<\/button>/);
+  });
+});
+
 describe('TemplateHeader accessible names', () => {
   it('names every button, including the icon-only back and more-actions buttons', () => {
     const html = renderToStaticMarkup(
