@@ -396,8 +396,11 @@ export async function loadCategoryEntries(
     .from(templates)
     .innerJoin(users, eq(users.id, templates.user_id))
     .leftJoin(sitemap_owner_revisions, eq(sitemap_owner_revisions.user_id, users.id))
+    // Same owner rule as the template and profile sitemaps: a template whose owner has no
+    // valid username has no public URL, so the category page does not list it.
     .where(and(
       publicTemplateCondition,
+      validUsernameCondition,
       isNotNull(templates.category),
       nonEmptyTemplateCategoryCondition,
     ));
