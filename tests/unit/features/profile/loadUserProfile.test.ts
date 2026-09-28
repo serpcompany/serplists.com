@@ -42,6 +42,28 @@ describe('loadUserProfile', () => {
     expect(result.templates.map((template) => template.title)).toEqual(['Camping Checklist']);
   });
 
+  it('reads the D1 created_at as UTC and hands the page an ISO timestamp', async () => {
+    const apiClient = buildApiClient({
+      getProfileByUsername: vi.fn().mockResolvedValue({ ...profileRow, created_at: '2025-12-26 09:18:30' }),
+    });
+
+    const result = await loadUserProfile('alice', { apiClient });
+
+    expect(result.kind === 'ok' ? result.profile.created_at : undefined).toBe(
+      '2025-12-26T09:18:30.000Z',
+    );
+  });
+
+  it('keeps the profile when created_at is missing or unreadable', async () => {
+    const apiClient = buildApiClient({
+      getProfileByUsername: vi.fn().mockResolvedValue({ ...profileRow, created_at: 'soon' }),
+    });
+
+    const result = await loadUserProfile('alice', { apiClient });
+
+    expect(result.kind === 'ok' ? result.profile.created_at : undefined).toBeNull();
+  });
+
   it('says the user was not found only when the API answers 404', async () => {
     const apiClient = buildApiClient({
       getProfileByUsername: vi.fn().mockRejectedValue(createApiError(404, { error: 'User not found' })),

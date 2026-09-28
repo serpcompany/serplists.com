@@ -9,12 +9,14 @@ import {
   repoTemplates,
 } from '@/lib/repoTemplateCatalog';
 import { normalizeSections } from '@/lib/utils/checklistSections';
+import { normalizeDbTimestamp } from '@/lib/utils/dbTimestamp';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 // GET /api/profiles/by-username, parsed at the boundary instead of cast.
 const userProfileSchema = z.object({
   avatar_url: z.string().nullable().optional(),
-  created_at: z.string(),
+  // D1 default 'YYYY-MM-DD HH:MM:SS' (UTC); normalized to ISO below. Unreadable is not fatal.
+  created_at: z.union([z.string(), z.number()]).nullable().optional(),
   full_name: z.string().nullable().optional(),
   id: z.string().min(1),
   username: z.string().min(1),
@@ -24,7 +26,8 @@ const publicTemplateRowsSchema = z.array(z.record(z.unknown()));
 
 export type UserProfileRecord = {
   avatar_url: string | null;
-  created_at: string;
+  // ISO 8601 in UTC, or null when the API sent nothing readable.
+  created_at: string | null;
   full_name: string | null;
   id: string;
   username: string;
@@ -162,6 +165,7 @@ const fetchProfile = async (
     return {
       ...parsed.data,
       avatar_url: parsed.data.avatar_url ?? null,
+      created_at: normalizeDbTimestamp(parsed.data.created_at),
       full_name: parsed.data.full_name ?? null,
     };
   } catch (error) {

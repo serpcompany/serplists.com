@@ -27,6 +27,7 @@ import {
   buildCanonicalPublicTemplatePath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
+import { formatMonthYear } from '@/lib/utils/dbTimestamp';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 type UserStats = {
@@ -40,12 +41,6 @@ const NO_TEMPLATES: ChecklistTemplate[] = [];
 
 const countTemplateItems = (template: ChecklistTemplate) =>
   template.sections.reduce((total, section) => total + section.items.length, 0);
-
-const formatJoinedDate = (value: string): string =>
-  new Date(value).toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
-  });
 
 const formatStatValue = (value: number) => value.toLocaleString('en-US');
 
@@ -131,6 +126,8 @@ const UserProfile = () => {
   const profile = result?.kind === 'ok' ? result.profile : null;
   const templates = result?.kind === 'ok' ? result.templates : NO_TEMPLATES;
   const stats = useMemo(() => calculateStats(templates), [templates]);
+  // Null for a missing or unreadable date, so the page never shows "Invalid Date".
+  const joinedDate = formatMonthYear(profile?.created_at);
 
   if (!result) {
     return (
@@ -243,10 +240,12 @@ const UserProfile = () => {
                   </a>
                 ) : null}
 
-                <span className="inline-flex items-center gap-1.5">
-                  <CalendarDays className="h-4 w-4" />
-                  Joined {formatJoinedDate(profile.created_at)}
-                </span>
+                {joinedDate ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <CalendarDays className="h-4 w-4" />
+                    Joined {joinedDate}
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
