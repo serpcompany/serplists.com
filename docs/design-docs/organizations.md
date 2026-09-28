@@ -66,7 +66,7 @@ Organization operations use legacy `/api/teams` route identifiers and require a 
 - `GET /api/teams/:teamId/invites`: list pending invites. Requires `owner` or `admin`.
 - `POST /api/teams/:teamId/invites`: create a link invite. Requires `owner` or `admin`.
 - `DELETE /api/teams/:teamId/invites/:inviteId`: revoke a pending invite. Requires `owner` or `admin`. Returns 409 `invite_already_accepted` when the invite was accepted before the revoke was written, and 404 when another request revoked it first; only the request that revokes it records `team_invite.revoked`.
-- `GET /api/teams/:teamId/activity`: read Organization audit history. Requires `owner` or `admin`.
+- `GET /api/teams/:teamId/activity`: read the latest Organization audit events, newest first; `?limit=` takes 1-100 (default 50). Requires `owner` or `admin`. The settings page requests the 10 it shows.
 - `GET /api/teams/invites/pending`: list pending invites for the current user's email.
 - `POST /api/teams/invites/pending/:inviteId/accept`: accept from the settings page.
 - `POST /api/teams/invites/:token/accept`: accept from a link.

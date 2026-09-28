@@ -490,6 +490,7 @@ describe("Teams handler", () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
+    expect(dbMocks.selectChain.limit).toHaveBeenLastCalledWith(10);
     expect(data).toEqual([
       expect.objectContaining({
         id: "event-1",

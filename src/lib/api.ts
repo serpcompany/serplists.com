@@ -503,8 +503,10 @@ class ApiClient {
     return this.request(`/teams/${encodeURIComponent(teamId)}/invites`);
   }
 
-  async getTeamActivity(teamId: string): Promise<TeamActivityEvent[]> {
-    return this.request(`/teams/${encodeURIComponent(teamId)}/activity`);
+  // Organization settings shows this many recent events; request no more than that.
+  async getTeamActivity(teamId: string, limit = 10): Promise<TeamActivityEvent[]> {
+    const search = new URLSearchParams({ limit: String(limit) });
+    return this.request(`/teams/${encodeURIComponent(teamId)}/activity?${search.toString()}`);
   }
 
   async getIncomingTeamInvites(): Promise<IncomingTeamInvite[]> {

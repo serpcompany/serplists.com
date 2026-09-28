@@ -190,7 +190,7 @@ function scenarios(): Scenario[] {
     { name: "run history", actor: "admin", path: `/api/checklists/${adminRun}/history` },
     { name: "Organization detail", actor: "admin", path: "/api/teams/team-seed-growth" },
     { name: "Organization members", actor: "admin", path: "/api/teams/team-seed-growth/members" },
-    { name: "Organization activity", actor: "admin", path: "/api/teams/team-seed-growth/activity" },
+    { name: "Organization activity", actor: "admin", path: "/api/teams/team-seed-growth/activity?limit=10" },
     { name: "incoming Organization invites", actor: "john", path: "/api/teams/invites/pending" },
     {
       name: "create template (public)", actor: "admin", method: "POST", path: "/api/templates",

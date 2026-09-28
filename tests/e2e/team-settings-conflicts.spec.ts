@@ -225,3 +225,14 @@ test('revoking an invite that was just accepted reports the conflict and shows t
   await expect(revokeButton).toHaveCount(0);
   await expect(page.getByText('New Member')).toBeVisible();
 });
+
+test('Organization activity requests only the events the page shows', async ({ page }) => {
+  const state: MockState = { members: [ownerMember], invites: [], requests: [], respond: () => null };
+  await mockOrganizationApi(page, state);
+  await openOrganizationSettings(page);
+
+  const activitySearches = () => state.requests
+    .filter(({ method, path }) => method === 'GET' && path === '/api/teams/team-1/activity')
+    .map(({ search }) => search);
+  await expect.poll(activitySearches).toContain('?limit=10');
+});

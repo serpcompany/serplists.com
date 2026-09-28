@@ -65,13 +65,13 @@ vi.mock('sonner', () => ({
   },
 }));
 
-function renderSectionWithMembers(members: unknown[]) {
+function renderSectionWithMembers(members: unknown[], activity: unknown[] = []) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   queryClient.setQueryData(['team-members', 'team-1'], members);
   queryClient.setQueryData(['team-invites', 'team-1'], []);
-  queryClient.setQueryData(['team-activity', 'team-1'], []);
+  queryClient.setQueryData(['team-activity', 'team-1'], activity);
 
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
@@ -170,6 +170,23 @@ describe('TeamSettingsSection', () => {
 
     expect(html).toContain('Admin User');
     expect(html).toContain('Make owner');
+  });
+
+  it('renders every activity event it loaded, since the request is already limited to what the page shows', () => {
+    const activity = Array.from({ length: 12 }, (_, index) => ({
+      id: `event-${index}`,
+      action: 'team_member.updated',
+      resource: { type: 'team_member', id: `member-${index}` },
+      metadata: null,
+      requestId: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      actor: { userId: 'user-1', email: null, name: `Actor ${index}`, username: null },
+    }));
+
+    const html = renderSectionWithMembers([], activity);
+
+    expect(html.match(/Member updated/g)).toHaveLength(12);
+    expect(html).toContain('Actor 11');
   });
 
   it('renders team members as read-only for roles that cannot manage the team', () => {

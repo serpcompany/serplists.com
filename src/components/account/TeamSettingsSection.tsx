@@ -766,7 +766,7 @@ export function TeamSettingsSection() {
                   <div className="text-sm text-muted-foreground">No Organization activity recorded yet.</div>
                 ) : (
                   <div className="divide-y rounded-md border border-border">
-                    {activity.slice(0, 10).map((event) => (
+                    {activity.map((event) => (
                       <div
                         key={event.id}
                         className="grid gap-1 p-3 md:grid-cols-[minmax(0,1fr)_180px]"
