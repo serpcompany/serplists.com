@@ -86,6 +86,7 @@ import {
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
+import { getRunStartedMessage, getTemplateDuplicatedMessage, nameOtherTemplateDestination } from '@/lib/templateDestination';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistTemplate, TemplateSavePayload } from '@/types/checklist';
 
@@ -164,7 +165,7 @@ const TemplateDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
-  const { activeTeamId, canEditTemplates, isTeamWorkspace } = useWorkspace();
+  const { activeTeamId, canEditTemplates, isTeamWorkspace, teams } = useWorkspace();
   const {
     createRun,
     createTemplate,
@@ -213,6 +214,8 @@ const TemplateDetail = () => {
     Boolean(activeTeamId) && displayTemplate?.teamId === activeTeamId;
   const canEditTemplate = isOwner || (isActiveTeamTemplate && canEditTemplates);
   const canViewTemplateHistory = isOwner || isActiveTeamTemplate;
+  // Runs and copies of another Organization's private template go to that Organization.
+  const otherDestination = displayTemplate ? nameOtherTemplateDestination(displayTemplate, activeTeamId, teams) : undefined;
   const isPublic = visibilityOverride ?? displayTemplate?.isPublic ?? false;
   const totalTasks = displayTemplate?.sections.reduce(
     (count, section) => count + section.items.length,
@@ -260,7 +263,7 @@ const TemplateDetail = () => {
       }
 
       if (result.runId) {
-        toast.success('Checklist run created');
+        toast.success(getRunStartedMessage(otherDestination));
         setRunDialogOpen(false);
         navigate(buildConsoleRunPath(result.runId));
       }
@@ -324,7 +327,7 @@ const TemplateDetail = () => {
       try {
         const duplicatedTemplate = await createTemplate(buildTemplateCopyPayload(displayTemplate, activeTeamId));
 
-        toast.success('Template duplicated');
+        toast.success(getTemplateDuplicatedMessage(otherDestination));
         navigate(buildConsoleTemplatePath(duplicatedTemplate.id));
       } catch (error) {
         toast.error(

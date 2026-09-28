@@ -13,7 +13,9 @@ User-facing language follows the [product glossary](../PRODUCT_SENSE.md) and the
 - Templates and Runs are scoped to the selected Personal or Organization context.
 - A private Organization Template's content stays in its Organization. Members can open it
   from any context, and its Runs and copies go to its Organization, not the active context
-  (`src/lib/templateDestination.ts`). The API never snapshots it into another context: a
+  (`src/lib/templateDestination.ts`). When that is not the active context, the template
+  page's success toast names the Organization ("Run started in <Organization>", "Template
+  duplicated in <Organization>"). The API never snapshots it into another context: a
   request naming another Organization gets `409 organization_mismatch` with the owning
   Organization's id for its members, and `404` for everyone else. Public Templates and a
   User's own Personal Templates run and copy into the active context.
