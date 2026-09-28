@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createInviteLink,
   getPendingInviteConflict,
+  inviteEmailAfterLink,
   isInviteGoneError,
   reissueInviteLink,
   visibleInviteLink,
@@ -198,5 +199,18 @@ describe('isInviteGoneError', () => {
     expect(isInviteGoneError(new ApiError({ status: 500, message: 'Server error' }))).toBe(false);
     expect(isInviteGoneError(new ApiError({ status: 403, message: 'Forbidden' }))).toBe(false);
     expect(isInviteGoneError(new Error('Failed to fetch'))).toBe(false);
+  });
+});
+
+describe('inviteEmailAfterLink', () => {
+  it('clears the field that still holds the email the link was created for', () => {
+    expect(inviteEmailAfterLink('bob@exmaple.com', 'bob@exmaple.com')).toBe('');
+    // The API stores the email trimmed and lowercase.
+    expect(inviteEmailAfterLink(' Bob@Exmaple.com ', 'bob@exmaple.com')).toBe('');
+  });
+
+  it('keeps an address typed while the link was being created', () => {
+    expect(inviteEmailAfterLink('kept@example.com', 'bob@exmaple.com')).toBe('kept@example.com');
+    expect(inviteEmailAfterLink('bob@exmaple.co', 'bob@exmaple.com')).toBe('bob@exmaple.co');
   });
 });

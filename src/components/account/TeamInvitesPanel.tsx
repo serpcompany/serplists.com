@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { assignableRoles, formatInviteExpiration, formatRole } from '@/components/account/teamSettingsFormat';
-import type { AssignableTeamRole } from '@/features/teams/teamInviteLinks';
+import { inviteEmailAfterLink, type AssignableTeamRole } from '@/features/teams/teamInviteLinks';
 import { useTeamInvites } from '@/features/teams/useTeamInvites';
 import { copyTextToClipboard } from '@/lib/clipboard';
 
@@ -48,7 +48,8 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
     try {
       const result = await createInvite(teamId, email, inviteRole);
       if (result?.kind === 'created') {
-        setInviteEmail('');
+        // The link shows before the lists reload; keep an address typed meanwhile.
+        setInviteEmail((current) => inviteEmailAfterLink(current, email));
         toast.success('Invite link created');
       }
     } catch (error) {
@@ -60,7 +61,7 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
     try {
       const nextLink = await reissueLink(teamId, inviteId, role);
       if (nextLink) {
-        setInviteEmail('');
+        setInviteEmail((current) => inviteEmailAfterLink(current, nextLink.email));
         toast.success('New invite link created. The previous link no longer works.');
       }
     } catch (error) {

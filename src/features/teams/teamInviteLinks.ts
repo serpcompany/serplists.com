@@ -126,6 +126,15 @@ export function visibleInviteLink(
   return inviteLeftPendingList ? null : link;
 }
 
+/**
+ * The invite email field once a link for `linkEmail` is ready: cleared if it
+ * still holds that email, kept if the manager typed another address while the
+ * link was being created. Emails compare like the API stores them (trimmed,
+ * lowercase).
+ */
+export const inviteEmailAfterLink = (fieldValue: string, linkEmail: string): string =>
+  fieldValue.trim().toLowerCase() === linkEmail.trim().toLowerCase() ? '' : fieldValue;
+
 /** Drops the shown link when its invite was just revoked; a newer link for another invite stays. */
 export const withoutRevokedLink = (link: InviteLink | null, inviteId: string): InviteLink | null =>
   link?.inviteId === inviteId ? null : link;
