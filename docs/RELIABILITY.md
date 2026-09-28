@@ -152,6 +152,12 @@ Common failures:
   other than `.wrangler/state`. It stops if a local `VITE_API_URL` or
   `PLAYWRIGHT_API_URL` uses another port than `PLAYWRIGHT_API_PORT`, and seeds
   nothing for a remote API or with `PLAYWRIGHT_REUSE_EXISTING_SERVER=1`.
+- The local stack is a non-production host, so `SEOHead` noindexes every page there.
+  A spec that checks a page's own robots rule loads the page as
+  `https://serplists.com` with `serveLocalAppAsProduction` in
+  `tests/e2e/route-structure.spec.ts`: Playwright answers that origin from the local
+  dev server and the local API itself and aborts every other request, so nothing
+  reaches production or analytics.
 - e2e specs share one database, so `test:e2e:full` runs with one worker (TD-11).
 - Reuse stable test identities instead of registering a new account on every run.
   Production auth blocks known test-email domains; keep that coverage when auth
