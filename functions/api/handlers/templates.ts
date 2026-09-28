@@ -31,6 +31,7 @@ import {
   serializeHistoryEvent,
 } from '../utils/history-queries';
 import { insertRowWhere, rowExistsSql } from '../utils/guarded-insert';
+import { personalProRequiredResponse } from '../utils/limit-reached';
 import {
   countTemplates,
   isMissingRulesColumnError,
@@ -1016,7 +1017,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         ? await getEntitlementsForContext(env, { type: 'team', teamId: cloneTeamId, userId })
         : await getEntitlementsForUser(env, userId);
       if (!cloneTeamId && entitlements.plan !== 'pro') {
-        return jsonError('Upgrade to Pro to copy public templates into Personal.', 403, { code: 'upgrade_required' });
+        return personalProRequiredResponse('copy public templates into Personal');
       }
       const cloneCapacity = entitlements.limits.maxTemplates !== null
         ? { owner: { userId, teamId: cloneTeamId }, limit: entitlements.limits.maxTemplates }

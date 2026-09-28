@@ -32,3 +32,11 @@ export function limitReachedResponse(params: {
     details: { limit: params.limit, current: params.current, resource: params.resource, context },
   });
 }
+
+/**
+ * The 403 for a Personal action that needs Pro whatever the counts (not a Free-plan limit).
+ * Only Personal actions use it: an Organization's plan is never lifted by Personal Pro.
+ */
+export function personalProRequiredResponse(action: string): Response {
+  return jsonError(`Upgrade to Pro to ${action}.`, 403, { code: 'upgrade_required' });
+}

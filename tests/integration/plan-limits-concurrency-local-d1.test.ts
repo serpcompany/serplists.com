@@ -29,7 +29,7 @@ type Handler = (request: Request, env: never) => Promise<Response>;
 
 async function seed() {
   const db = d1.env.DB;
-  const users = ["runs", "org-owner", "org-member", "restore", "mcp", "tpl", "clone", "tpl-restore", "author"];
+  const users = ["runs", "org-owner", "org-member", "restore", "mcp", "tpl", "tpl-restore", "author"];
   const run = db.prepare(`
     INSERT INTO checklist_runs (id, user_id, team_id, title, items, status, started_at, created_at, progress,
       template_version, revision, retired_items, deleted_at)
@@ -146,10 +146,12 @@ describe.sequential("Free plan limits under concurrent requests (local D1)", () 
     expect(await scalar("SELECT count(*) AS value FROM audit_events WHERE actor_user_id = 'tpl' AND action = 'template.created'")).toBe(1);
   });
 
-  it("clones only one template", async () => {
-    expectOneWinner(await burst(["clone"], handleTemplates as Handler, () => post("templates/public-source/clone")));
-    expect(await scalar("SELECT count(*) AS value FROM templates WHERE user_id = 'clone' AND deleted_at IS NULL")).toBe(1);
-    expect(await scalar("SELECT count(*) AS value FROM template_versions WHERE changed_by_user_id = 'clone'")).toBe(1);
+  // Copying into Personal needs Pro, which has no template limit, so the Free template limit
+  // applies to copies into a Free Organization.
+  it("clones only one template into a Free Organization", async () => {
+    expectOneWinner(await burst(["org-owner"], handleTemplates as Handler, () => post("templates/public-source/clone", { teamId: "org-free" })));
+    expect(await scalar("SELECT count(*) AS value FROM templates WHERE team_id = 'org-free' AND deleted_at IS NULL")).toBe(1);
+    expect(await scalar("SELECT count(*) AS value FROM template_versions WHERE template_id IN (SELECT id FROM templates WHERE team_id = 'org-free')")).toBe(1);
   });
 
   it("keeps the in-write limit checks on indexed lookups", async () => {

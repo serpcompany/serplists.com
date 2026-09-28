@@ -75,7 +75,6 @@ const cases: Case[] = [
   { name: 'reopen a run', context: 'organization', resource: 'active_runs', handler: handleChecklists, path: '/api/checklists/run-1', method: 'PUT', body: { status: 'in_progress', expected_revision: 2 }, run: { ...orgRun, status: 'completed', deleted_at: null } },
   { name: 'create a template', context: 'personal', resource: 'templates', handler: handleTemplates, path: '/api/templates', method: 'POST', body: { title: 'Template', sections } },
   { name: 'create a template', context: 'organization', resource: 'templates', handler: handleTemplates, path: '/api/templates', method: 'POST', body: { title: 'Template', sections, teamId: 'org-1' } },
-  { name: 'clone a template', context: 'personal', resource: 'templates', handler: handleTemplates, path: '/api/templates/tpl-1/clone', method: 'POST', body: {} },
   { name: 'clone a template', context: 'organization', resource: 'templates', handler: handleTemplates, path: '/api/templates/tpl-1/clone', method: 'POST', body: { teamId: 'org-1' } },
   { name: 'restore a template', context: 'personal', resource: 'templates', handler: handleTemplates, path: '/api/templates/tpl-1/restore', method: 'POST', template: personalTemplate },
   { name: 'restore a template', context: 'organization', resource: 'templates', handler: handleTemplates, path: '/api/templates/tpl-1/restore', method: 'POST', template: orgTemplate },
@@ -114,6 +113,25 @@ describe('limit_reached names the context whose limit was hit', () => {
     } else {
       expect(data.error).toMatch(/Upgrade to Pro/);
     }
+  });
+});
+
+describe('copying a public template into Personal on Free', () => {
+  // Copying into Personal needs Pro whatever the count, so Free gets upgrade_required
+  // (never a template limit); Pro has no template limit to reach.
+  it('asks for Pro instead of reporting a template limit', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-1');
+    vi.mocked(getEntitlementsForUser).mockResolvedValue(free);
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/tpl-1/clone', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }), env);
+    const data = await response.json() as { error: string; code: string };
+
+    expect(response.status).toBe(403);
+    expect(data.code).toBe('upgrade_required');
+    expect(data.error).toMatch(/Upgrade to Pro/);
   });
 });
 
