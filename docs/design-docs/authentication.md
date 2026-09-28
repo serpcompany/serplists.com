@@ -52,6 +52,9 @@ and user-facing failure states when a supporting service is unavailable.
   `GET /api/profiles/by-username?username=...` and `GET /api/profiles/by-id?userId=...`.
   Public profile and Template share URLs use the username, so Account Settings
   lets a saved username change but not be cleared (`src/pages/accountProfileUpdates.ts`).
+  Saving a new username or name refreshes the cached Template lists, which embed
+  the owner's username, and Share always builds the link from the signed-in owner's
+  current username. Links shared under an old username stop working after a rename.
 - Settings live at `/dashboard/settings`; `/account` and `/dashboard/profile`
   redirect there.
 

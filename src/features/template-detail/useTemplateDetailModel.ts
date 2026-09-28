@@ -124,7 +124,7 @@ const mapActionFailure = (
 
 const hydrateTemplateOwner = async (
   template: ChecklistTemplate,
-  apiClient: TemplateDetailApiClient,
+  apiClient: Pick<TemplateDetailApiClient, 'getProfileById'>,
 ): Promise<ChecklistTemplate> => {
   const { ownerSlug } = resolveTemplateOwnerProfile(template);
 
@@ -140,6 +140,24 @@ const hydrateTemplateOwner = async (
   } catch {
     return template;
   }
+};
+
+/**
+ * The template with the owner name its share link should use. Cached lists
+ * carry the username from when they were fetched, which is stale after a
+ * rename, so the signed-in owner's current username wins.
+ */
+export const resolveShareOwnerTemplate = async (
+  template: ChecklistTemplate,
+  owner: { userId?: string; username?: string },
+  apiClient: Pick<TemplateDetailApiClient, 'getProfileById'>,
+): Promise<ChecklistTemplate> => {
+  const username = owner.username?.trim();
+  if (username && owner.userId && template.userId === owner.userId) {
+    return { ...template, ownerProfile: { ...template.ownerProfile, username } };
+  }
+
+  return hydrateTemplateOwner(template, apiClient);
 };
 
 export const loadTemplateDetailData = async (
@@ -452,17 +470,11 @@ export const useTemplateDetailModel = (
         };
       }
 
-      nextTemplate = await hydrateTemplateOwner(nextTemplate, api);
-
-      if (!nextTemplate.ownerProfile?.username && options.username) {
-        nextTemplate = {
-          ...nextTemplate,
-          ownerProfile: {
-            ...nextTemplate.ownerProfile,
-            username: options.username,
-          },
-        };
-      }
+      nextTemplate = await resolveShareOwnerTemplate(
+        nextTemplate,
+        { userId: options.userId, username: options.username },
+        api,
+      );
 
       const publicPath = buildCanonicalPublicTemplatePath(nextTemplate);
 

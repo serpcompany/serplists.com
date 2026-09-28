@@ -7,8 +7,10 @@ import {
   countTemplateItems,
   mapApiTemplateToChecklistTemplate,
 } from '@/features/template-detail/templateDetailMappers';
+import { buildCanonicalPublicTemplatePath } from '@/lib/routes';
 import {
   loadTemplateDetailData,
+  resolveShareOwnerTemplate,
   saveTemplateToAccount,
   startTemplateRun,
   type TemplateDetailBillingState,
@@ -337,5 +339,48 @@ describe('template detail actions', () => {
     });
 
     expect(result).toEqual({ kind: 'upgrade_required' });
+  });
+});
+
+describe('resolveShareOwnerTemplate', () => {
+  // Cached template lists carry the owner's username from when they were
+  // fetched; after a rename, Share must not build a link with the old one.
+  const renamedOwner = { userId: 'user-1', username: 'alicejones' };
+
+  it("uses the signed-in owner's current username over a cached one", async () => {
+    const apiClient = { getProfileById: vi.fn() };
+    const template = buildTemplate({
+      slug: 'seo-audit',
+      ownerProfile: { username: 'alice', full_name: 'Alice' },
+    });
+
+    const shared = await resolveShareOwnerTemplate(template, renamedOwner, apiClient);
+
+    expect(buildCanonicalPublicTemplatePath(shared)).toBe('/profile/alicejones/seo-audit');
+    expect(shared.ownerProfile?.full_name).toBe('Alice');
+    expect(apiClient.getProfileById).not.toHaveBeenCalled();
+  });
+
+  it('looks the owner up when the session has no username', async () => {
+    const apiClient = { getProfileById: vi.fn().mockResolvedValue({ username: 'alicejones' }) };
+    const template = buildTemplate({ slug: 'seo-audit', ownerProfile: undefined });
+
+    const shared = await resolveShareOwnerTemplate(template, { userId: 'user-1' }, apiClient);
+
+    expect(apiClient.getProfileById).toHaveBeenCalledWith('user-1');
+    expect(buildCanonicalPublicTemplatePath(shared)).toBe('/profile/alicejones/seo-audit');
+  });
+
+  it("never puts the signed-in user's name on someone else's template", async () => {
+    const apiClient = { getProfileById: vi.fn() };
+    const template = buildTemplate({
+      slug: 'seo-audit',
+      userId: 'user-2',
+      ownerProfile: { username: 'bob' },
+    });
+
+    const shared = await resolveShareOwnerTemplate(template, renamedOwner, apiClient);
+
+    expect(buildCanonicalPublicTemplatePath(shared)).toBe('/profile/bob/seo-audit');
   });
 });

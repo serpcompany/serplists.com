@@ -71,6 +71,39 @@ export const planAccountUpdate = (
   return { ok: true, updates: buildAccountUpdatePayload(profileData, user) };
 };
 
+type UpdateUserResult = { error?: { message?: string } | null } | null | undefined;
+
+export type SaveProfileResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Saves profile changes. Template lists embed the owner's username and name,
+ * so when either changes the cached lists are refreshed; otherwise their
+ * public links and Share would keep the old username until they go stale.
+ */
+export const saveProfileChanges = async (
+  updates: AccountUpdatePayload,
+  deps: {
+    updateUser: (updates: AccountUpdatePayload) => Promise<UpdateUserResult>;
+    /** Runs once the server accepted the change, before the session refresh. */
+    onSaved: () => void;
+    refreshProfile: () => Promise<void>;
+    refreshTemplateOwnerData: () => Promise<unknown>;
+  }
+): Promise<SaveProfileResult> => {
+  const result = await deps.updateUser(updates);
+  if (result?.error) {
+    return { ok: false, error: result.error.message || "Failed to update profile" };
+  }
+
+  deps.onSaved();
+  if ("username" in updates || "name" in updates) {
+    // A failed refetch only leaves the lists stale; the profile itself was saved.
+    void deps.refreshTemplateOwnerData().catch(() => undefined);
+  }
+  await deps.refreshProfile();
+  return { ok: true };
+};
+
 export interface ProfileFormValues {
   email: string;
   fullName: string;

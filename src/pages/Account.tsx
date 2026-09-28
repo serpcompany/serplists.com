@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { toast } from 'sonner';
 import { ProfileSection } from '@/components/account/ProfileSection';
@@ -12,6 +13,7 @@ import { isPersonalRunMcpUiEnabled } from '@/env';
 import {
   planAccountUpdate,
   profileFormFromUser,
+  saveProfileChanges,
   syncProfileForm,
   type ProfileFormValues,
 } from './accountProfileUpdates';
@@ -23,6 +25,7 @@ import {
 
 const Account = () => {
   const { user, refreshProfile } = useAuth();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [profileData, setProfileData] = useState<ProfileFormValues>(() =>
     profileFormFromUser(user ?? {}),
@@ -64,25 +67,29 @@ const Account = () => {
         return;
       }
 
-      const result = await authClient.updateUser(updates);
-      if (result?.error) {
-        toast.error(result.error.message || 'Failed to update profile');
+      const result = await saveProfileChanges(updates, {
+        updateUser: (changes) => authClient.updateUser(changes),
+        // The saved values become the baseline, so the refreshed user replaces
+        // them with the server's (possibly normalized) values.
+        onSaved: () => {
+          if (baselineRef.current) {
+            baselineRef.current = {
+              userId: baselineRef.current.userId,
+              values: {
+                ...baselineRef.current.values,
+                fullName: profileData.fullName,
+                username: profileData.username,
+              },
+            };
+          }
+        },
+        refreshProfile,
+        refreshTemplateOwnerData: () => queryClient.invalidateQueries({ queryKey: ['templates'] }),
+      });
+      if (!result.ok) {
+        toast.error(result.error);
         return;
       }
-
-      // The saved values become the baseline, so the refreshed user replaces
-      // them with the server's (possibly normalized) values.
-      if (baselineRef.current) {
-        baselineRef.current = {
-          userId: baselineRef.current.userId,
-          values: {
-            ...baselineRef.current.values,
-            fullName: profileData.fullName,
-            username: profileData.username,
-          },
-        };
-      }
-      await refreshProfile();
       toast.success('Profile updated successfully');
     } catch (error) {
       console.error('Error updating profile:', error);
