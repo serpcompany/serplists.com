@@ -52,8 +52,10 @@ function paidEntitlements(plan: "pro" | "team", source: EntitlementSource): Enti
   };
 }
 
+// A Free override keeps source "user_override" so billing can tell that support set
+// the plan and refuse a self-serve checkout that the override would hide.
 function userOverrideEntitlements(plan: string): Entitlements {
-  return plan === "pro" ? paidEntitlements("pro", "user_override") : freeEntitlements();
+  return plan === "pro" ? paidEntitlements("pro", "user_override") : { ...freeEntitlements(), source: "user_override" };
 }
 
 function teamOverrideEntitlements(plan: string): Entitlements {

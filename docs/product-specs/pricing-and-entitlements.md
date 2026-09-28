@@ -96,6 +96,8 @@ instead of inferring access state from message text:
 - `409 already_subscribed` means the User already has Pro or a paid subscription.
 - `409 subscription_needs_attention` means an open subscription is not paid up;
   the client opens the Customer Portal instead of a second Checkout.
+- `409 plan_managed_by_support` means a manual Free override sets the Personal
+  plan, so self-serve checkout is closed.
 
 ### Subscription status
 
@@ -113,5 +115,6 @@ Free or Pro label as known while billing status is still loading.
 ### Manual personal-plan overrides
 
 Personal manual overrides take precedence over Stripe-derived state until they
-are removed. Use the [admin override procedure](../SECURITY.md#admin-entitlement-override)
+are removed. While one is active, checkout is refused (a subscription bought under
+a Free override would never grant Pro) and Billing says support manages the plan. Use the [admin override procedure](../SECURITY.md#admin-entitlement-override)
 for prerequisites, commands, verification, and temporary-secret cleanup.

@@ -18,6 +18,12 @@ function env(overrides: Record<string, unknown> = {}) {
   } as never;
 }
 
+function insertOverride(plan: string, expiresAt: number | null = null) {
+  d1.sqlite.prepare(`
+    INSERT INTO entitlement_overrides (user_id, plan, expires_at, created_at) VALUES (?, ?, ?, '2026-01-01T00:00:00.000Z')
+  `).run(USER_ID, plan, expiresAt);
+}
+
 function insertSubscription(id: string, status: string, priceId = PRO_PRICE_ID) {
   d1.sqlite.prepare(`
     INSERT INTO stripe_subscriptions (
@@ -61,5 +67,30 @@ describe("getEntitlementsForUser from Stripe subscriptions", () => {
     insertSubscription("sub_canceled", "canceled");
 
     expect((await getEntitlementsForUser(env(), USER_ID)).plan).toBe("pro");
+  });
+});
+
+describe("getEntitlementsForUser with a manual override", () => {
+  it("keeps a Free override visible as an override, even over an active subscription", async () => {
+    insertOverride("free");
+    insertSubscription("sub_1", "active");
+
+    const entitlements = await getEntitlementsForUser(env(), USER_ID);
+
+    expect(entitlements).toEqual({
+      plan: "free",
+      source: "user_override",
+      limits: { maxTemplates: 1, maxActiveRuns: 3 },
+    });
+  });
+
+  it("ignores an expired override", async () => {
+    insertOverride("free", Math.floor(Date.now() / 1000) - 60);
+    insertSubscription("sub_1", "active");
+
+    const entitlements = await getEntitlementsForUser(env(), USER_ID);
+
+    expect(entitlements.plan).toBe("pro");
+    expect(entitlements.source).toBe("user_subscription");
   });
 });

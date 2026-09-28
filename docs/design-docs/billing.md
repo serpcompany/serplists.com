@@ -117,14 +117,17 @@ Authenticated:
   when an open subscription is not paid up (`past_due`, `unpaid`, `paused`,
   `incomplete`). Only `canceled` and `incomplete_expired` subscriptions allow a
   new Checkout, because Stripe would bill both subscriptions. The client opens the
-  Customer Portal on `subscription_needs_attention`.
+  Customer Portal on `subscription_needs_attention`. An active manual override
+  returns `409 plan_managed_by_support` before any Stripe call.
 - `POST /api/billing/portal` → returns `{ url }` to redirect user to Stripe Customer Portal
 - `GET /api/billing/status` → returns `{ plan, limits, billingEnabled }` (`plan` is `free`, `pro`, or the legacy `team` for a paid Organization).
   In Personal context it also returns `subscriptionStatus` (the most urgent open
-  subscription status, failed payments first, or `null`) and `canManageBilling`
-  (a Stripe customer exists). Organization context never includes them. Billing
-  shows Manage subscription, not Upgrade, whenever `plan` is `pro` or
-  `subscriptionStatus` is set.
+  subscription status, failed payments first, or `null`), `canManageBilling`
+  (a Stripe customer exists), and `managedBySupport` (a manual override sets the
+  plan). Organization context never includes them. Billing shows Manage
+  subscription, not Upgrade, whenever `plan` is `pro` or `subscriptionStatus` is
+  set; under a Free override it shows no Upgrade, only Manage subscription for an
+  existing customer.
 
 Webhook:
 - `POST /api/stripe/webhook` (verifies `Stripe-Signature`, idempotent via `stripe_webhook_events`)

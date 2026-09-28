@@ -52,6 +52,13 @@ describe("getPersonalBillingAction", () => {
   it("manages Pro", () => {
     expect(getPersonalBillingAction({ plan: "pro" })).toBe("manage");
   });
+
+  it("leaves a plan that support manages to support, never to checkout", () => {
+    expect(getPersonalBillingAction({ plan: "free", managedBySupport: true })).toBe("support");
+    expect(getPersonalBillingAction({ plan: "free", managedBySupport: true, subscriptionStatus: "active" }))
+      .toBe("support");
+    expect(getPersonalBillingAction({ plan: "pro", managedBySupport: true })).toBe("manage");
+  });
 });
 
 describe("getSubscriptionAttentionMessage", () => {

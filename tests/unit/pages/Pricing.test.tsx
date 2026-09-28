@@ -55,4 +55,16 @@ describe('Pricing', () => {
     expect(html).toContain('Manage Pro');
     expect(html).not.toContain('Upgrade — $9/month');
   });
+
+  it('does not offer the upgrade when support manages the plan', () => {
+    const html = renderPricing({
+      plan: 'free',
+      billingEnabled: true,
+      subscriptionStatus: null,
+      managedBySupport: true,
+    });
+
+    expect(html).not.toContain('Upgrade — $9/month');
+    expect(html).toContain('Your plan is managed by support.');
+  });
 });

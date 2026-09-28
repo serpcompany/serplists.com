@@ -104,3 +104,11 @@ curl -X POST "https://serplists.com/api/admin/entitlements/override" \
 curl -X DELETE "https://serplists.com/api/admin/entitlements/override?userId=USER_ID" \
   -H "X-Admin-Secret: $ENTITLEMENTS_ADMIN_SECRET"          # remove the override
 ```
+
+An active `"free"` override closes self-serve checkout: `POST /api/billing/checkout`
+returns `409 plan_managed_by_support` and Billing shows that support manages the plan,
+until the override is deleted or expires (a `"pro"` override already returns
+`409 already_subscribed`). A `"free"` override does not cancel an
+existing Stripe subscription, which keeps billing: cancel it in Stripe (the user can
+also still open the Customer Portal). To end a comp, prefer `DELETE`, which returns the
+user to their Stripe state.

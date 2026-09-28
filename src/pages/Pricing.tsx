@@ -9,7 +9,12 @@ import { Button } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { api } from '@/lib/api';
-import { getBillingStatusQueryKey, getPersonalBillingAction, PRO_MONTHLY_PRICE_LABEL } from '@/lib/billing';
+import {
+  getBillingStatusQueryKey,
+  getPersonalBillingAction,
+  PLAN_MANAGED_BY_SUPPORT_MESSAGE,
+  PRO_MONTHLY_PRICE_LABEL,
+} from '@/lib/billing';
 
 const Pricing = () => {
   const { user } = useAuth();
@@ -20,6 +25,8 @@ const Pricing = () => {
     enabled: Boolean(user),
     retry: false,
   });
+
+  const personalAction = getPersonalBillingAction(billing.data);
 
   const handleUpgrade = async () => {
     setIsStartingCheckout(true);
@@ -102,7 +109,9 @@ const Pricing = () => {
                   <Button asChild>
                     <Link to="/register">Get Started</Link>
                   </Button>
-                ) : getPersonalBillingAction(billing.data) === 'manage' ? (
+                ) : personalAction === 'support' ? (
+                  <p className="text-sm text-muted-foreground">{PLAN_MANAGED_BY_SUPPORT_MESSAGE}</p>
+                ) : personalAction === 'manage' ? (
                   <Button asChild>
                     <Link to="/account">{billing.data?.plan === 'pro' ? 'Manage Pro' : 'Manage subscription'}</Link>
                   </Button>

@@ -23,7 +23,11 @@ export type BillingStatus = {
   subscriptionStatus?: string | null;
   /** Personal only: a Stripe customer exists, so the Customer Portal can open. */
   canManageBilling?: boolean;
+  /** Personal only: a manual override sets the plan, so self-serve checkout is closed. */
+  managedBySupport?: boolean;
 };
+
+export const PLAN_MANAGED_BY_SUPPORT_MESSAGE = "Your plan is managed by support. Contact support to change it.";
 
 const PAID_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 const FAILED_PAYMENT_SUBSCRIPTION_STATUSES = new Set(["past_due", "unpaid"]);
@@ -31,9 +35,14 @@ const FAILED_PAYMENT_SUBSCRIPTION_STATUSES = new Set(["past_due", "unpaid"]);
 /**
  * A Personal user with Pro or any open Stripe subscription manages it in the Customer
  * Portal. Starting Checkout again would create a second subscription that Stripe bills.
+ * When support manages a Free plan there is no self-serve action, except the portal for
+ * an existing Stripe customer so a subscription can still be canceled.
  */
-export const getPersonalBillingAction = (status?: BillingStatus | null): "manage" | "upgrade" =>
-  status?.plan === "pro" || status?.subscriptionStatus ? "manage" : "upgrade";
+export const getPersonalBillingAction = (status?: BillingStatus | null): "manage" | "upgrade" | "support" => {
+  if (status?.plan === "pro") return "manage";
+  if (status?.managedBySupport) return "support";
+  return status?.subscriptionStatus ? "manage" : "upgrade";
+};
 
 /** Explains an open subscription that is not paid up, or returns null. */
 export const getSubscriptionAttentionMessage = (subscriptionStatus?: string | null): string | null => {

@@ -42,6 +42,7 @@ const renderBillingSection = (billingData: {
   plan: 'free' | 'pro' | 'team';
   subscriptionStatus?: string | null;
   canManageBilling?: boolean;
+  managedBySupport?: boolean;
 }, teamId?: string) => {
   workspaceMock.value = {
     activeTeamId: teamId,
@@ -98,6 +99,34 @@ describe('BillingSection', () => {
     });
 
     expect(html).toContain('Your Pro subscription needs attention');
+    expect(html).toContain('Manage subscription');
+    expect(html).not.toContain('Upgrade to Pro');
+  });
+
+  it('does not offer checkout when support manages the plan', () => {
+    const html = renderBillingSection({
+      billingEnabled: true,
+      plan: 'free',
+      subscriptionStatus: null,
+      canManageBilling: false,
+      managedBySupport: true,
+    });
+
+    expect(html).toContain('Your plan is managed by support. Contact support to change it.');
+    expect(html).not.toContain('Upgrade to Pro');
+    expect(html).not.toContain('Manage subscription');
+  });
+
+  it('keeps the portal for an existing customer when support manages the plan', () => {
+    const html = renderBillingSection({
+      billingEnabled: true,
+      plan: 'free',
+      subscriptionStatus: 'active',
+      canManageBilling: true,
+      managedBySupport: true,
+    });
+
+    expect(html).toContain('Your plan is managed by support.');
     expect(html).toContain('Manage subscription');
     expect(html).not.toContain('Upgrade to Pro');
   });

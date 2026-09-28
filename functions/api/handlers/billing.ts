@@ -66,6 +66,7 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
       billingEnabled,
       subscriptionStatus: subscription.openStatus,
       canManageBilling: subscription.hasCustomer,
+      managedBySupport: entitlements.source === "user_override",
     });
   }
 
@@ -79,6 +80,13 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
     const { secretKey, proPriceId } = stripe;
     const entitlements = await getEntitlementsForUser(env, userId);
     if (entitlements.plan === "pro") return alreadySubscribed();
+    // A manual override outranks Stripe, so a subscription bought under a Free
+    // override would be billed without ever granting Pro.
+    if (entitlements.source === "user_override") {
+      return jsonError("Your plan is managed by support. Contact support to change it.", 409, {
+        code: "plan_managed_by_support",
+      });
+    }
 
     // A subscription on any price, paid or not, blocks a second one: Stripe would
     // bill both, and a failed payment is fixed in the Customer Portal instead.

@@ -39,6 +39,12 @@ function insertSubscription(id: string, status: string, priceId = PRO_PRICE_ID) 
   `).run(id, USER_ID, priceId, status);
 }
 
+function insertOverride(plan: string, expiresAt: number | null = null) {
+  d1.sqlite.prepare(`
+    INSERT INTO entitlement_overrides (user_id, plan, expires_at, created_at) VALUES (?, ?, ?, '2026-01-01T00:00:00.000Z')
+  `).run(USER_ID, plan, expiresAt);
+}
+
 async function checkout(): Promise<{ status: number; body: Record<string, unknown> }> {
   const response = await handleBilling(
     new Request("http://localhost/api/billing/checkout", { method: "POST", body: "{}" }),
@@ -154,5 +160,55 @@ describe("GET /api/billing/status subscription details", () => {
 
     expect(data).not.toHaveProperty("subscriptionStatus");
     expect(data).not.toHaveProperty("canManageBilling");
+  });
+});
+
+describe("billing for a user whose plan support manages", () => {
+  it("refuses checkout under a Free override before creating a Stripe customer or session", async () => {
+    d1.sqlite.exec("DELETE FROM stripe_customers");
+    insertOverride("free");
+
+    const result = await checkout();
+
+    expect(result.status).toBe(409);
+    expect(result.body.code).toBe("plan_managed_by_support");
+    expect(stripeCalls()).toEqual([]);
+    expect(d1.rows("SELECT * FROM stripe_customers")).toEqual([]);
+  });
+
+  it("keeps refusing a Pro override as already subscribed", async () => {
+    insertOverride("pro");
+
+    const result = await checkout();
+
+    expect(result.status).toBe(409);
+    expect(result.body.code).toBe("already_subscribed");
+    expect(stripeCalls()).toEqual([]);
+  });
+
+  it("allows checkout again once the override expires", async () => {
+    insertOverride("free", Math.floor(Date.now() / 1000) - 60);
+
+    const result = await checkout();
+
+    expect(result.status).toBe(200);
+    expect(stripeCalls()).toEqual(["https://api.stripe.com/v1/checkout/sessions"]);
+  });
+
+  it("reports the managed plan and keeps the portal for an existing customer", async () => {
+    insertOverride("free");
+    insertSubscription("sub_1", "active");
+
+    const data = await billingStatus();
+
+    expect(data.plan).toBe("free");
+    expect(data.managedBySupport).toBe(true);
+    expect(data.canManageBilling).toBe(true);
+  });
+
+  it("reports self-serve billing without an override", async () => {
+    const data = await billingStatus();
+
+    expect(data.managedBySupport).toBe(false);
   });
 });

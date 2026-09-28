@@ -9,6 +9,7 @@ import {
   getBillingStatusQueryKey,
   getPersonalBillingAction,
   getSubscriptionAttentionMessage,
+  PLAN_MANAGED_BY_SUPPORT_MESSAGE,
   PRO_MONTHLY_PRICE_LABEL,
 } from "@/lib/billing";
 import { Button } from "@/components/ui/button";
@@ -132,6 +133,16 @@ export function BillingSection() {
     }
   };
 
+  const manageButton = (
+    <Button
+      onClick={handleManage}
+      variant="secondary"
+      disabled={!billingEnabled || isOpeningPortal}
+    >
+      {isOpeningPortal ? "Opening billing..." : "Manage subscription"}
+    </Button>
+  );
+
   return (
     <Card>
       <CardHeader>
@@ -153,18 +164,17 @@ export function BillingSection() {
           <div className="text-sm text-muted-foreground">
             {teamBillingMessage}
           </div>
+        ) : personalAction === "support" ? (
+          <>
+            <div className="text-sm text-muted-foreground">{PLAN_MANAGED_BY_SUPPORT_MESSAGE}</div>
+            {billing.data?.canManageBilling ? manageButton : null}
+          </>
         ) : personalAction === "manage" ? (
           <>
             {subscriptionAttention ? (
               <div className="text-sm text-destructive">{subscriptionAttention}</div>
             ) : null}
-            <Button
-              onClick={handleManage}
-              variant="secondary"
-              disabled={!billingEnabled || isOpeningPortal}
-            >
-              {isOpeningPortal ? "Opening billing..." : "Manage subscription"}
-            </Button>
+            {manageButton}
           </>
         ) : (
           <Button
