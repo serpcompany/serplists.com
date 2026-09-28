@@ -4,6 +4,7 @@ import {
   normalizeSections,
 } from '@/lib/utils/checklistSections';
 import type {
+  ChecklistItem,
   ChecklistRun,
   ChecklistSection,
   ChecklistSubItem,
@@ -197,3 +198,13 @@ export const setSubItemsCompletion = (
     ...subItem,
     isCompleted,
   }));
+
+// A task is done by its sub-tasks only when it has at least one and every one, across
+// all of its Sub-tasks blocks, is ticked. Same rule as the agent API's set_subtask_completed.
+export const areItemSubItemsCompleted = (item: ChecklistItem): boolean => {
+  const subItems =
+    item.contents?.flatMap((content) =>
+      content.type === 'subItems' ? (content.subItems ?? []) : [],
+    ) ?? [];
+  return subItems.length > 0 && subItems.every((subItem) => subItem.isCompleted === true);
+};

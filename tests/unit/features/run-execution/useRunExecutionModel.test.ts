@@ -452,3 +452,82 @@ describe('unsaved task notes ride along with the save that would lose them', () 
   });
 });
 
+
+describe('a task with several Sub-tasks blocks', () => {
+  // Task item-1 has blocks [a, b] and [c], with a text block and an empty block between them.
+  const multiBlockRun = (): ChecklistRun =>
+    buildRun({
+      sections: [
+        {
+          id: 'section-1',
+          title: 'Checklist',
+          items: [
+            {
+              id: 'item-1',
+              title: 'First item',
+              isCompleted: false,
+              contents: [
+                {
+                  type: 'subItems',
+                  value: '',
+                  subItems: [
+                    { id: 'a', title: 'A', isCompleted: false },
+                    { id: 'b', title: 'B', isCompleted: false },
+                  ],
+                },
+                { type: 'text', value: 'Notes between blocks' },
+                { type: 'subItems', value: '', subItems: [] },
+                { type: 'subItems', value: '', subItems: [{ id: 'c', title: 'C', isCompleted: false }] },
+              ],
+            },
+            { id: 'item-2', title: 'Second item', isCompleted: true, contents: [] },
+          ],
+        },
+      ],
+    });
+
+  const toggle = async (run: ChecklistRun, contentIndex: number, subItemIndex: number) => {
+    const result = await toggleRunSubItem(
+      { contentIndex, itemId: 'item-1', run, subItemIndex },
+      { updateRun: vi.fn(async (next: ChecklistRun) => next) },
+    );
+    if (result.kind !== 'ok' || !result.run) {
+      throw new Error('expected ok result');
+    }
+    return { run: result.run, shouldPromptComplete: result.shouldPromptComplete };
+  };
+
+  it('stays open until every sub-task in every block is ticked', async () => {
+    const afterC = await toggle(multiBlockRun(), 3, 0);
+    expect(afterC.run.sections[0]?.items[0]?.isCompleted).toBe(false);
+    expect(afterC.shouldPromptComplete).toBe(false);
+
+    const afterA = await toggle(afterC.run, 0, 0);
+    expect(afterA.run.sections[0]?.items[0]?.isCompleted).toBe(false);
+    expect(afterA.shouldPromptComplete).toBe(false);
+
+    const afterB = await toggle(afterA.run, 0, 1);
+    expect(afterB.run.sections[0]?.items[0]?.isCompleted).toBe(true);
+    expect(afterB.shouldPromptComplete).toBe(true);
+
+    const untickA = await toggle(afterB.run, 0, 0);
+    expect(untickA.run.sections[0]?.items[0]?.isCompleted).toBe(false);
+    expect(untickA.shouldPromptComplete).toBe(false);
+  });
+
+  it('clears a task completed with Mark Complete when a sub-task in another block is unticked', async () => {
+    const marked = await toggleRunItem(
+      { itemId: 'item-1', run: multiBlockRun() },
+      { updateRun: vi.fn(async (next: ChecklistRun) => next) },
+    );
+    if (marked.kind !== 'ok' || !marked.run) {
+      throw new Error('expected ok result');
+    }
+    const item = marked.run.sections[0]?.items[0];
+    expect(item?.isCompleted).toBe(true);
+    expect(item?.contents?.flatMap((content) => content.subItems ?? []).every((sub) => sub.isCompleted)).toBe(true);
+
+    const untickC = await toggle(marked.run, 3, 0);
+    expect(untickC.run.sections[0]?.items[0]?.isCompleted).toBe(false);
+  });
+});

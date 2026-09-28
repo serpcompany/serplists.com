@@ -9,6 +9,7 @@ import type { ChecklistRun } from '@/types/checklist';
 
 import {
   areAllRunItemsCompleted,
+  areItemSubItemsCompleted,
   cloneRunSections,
   countRunExecutionItems,
   getInitialSelectedItemId,
@@ -337,9 +338,8 @@ export const toggleRunSubItem = async (
       }
 
       subItem.isCompleted = !subItem.isCompleted;
-      item.isCompleted = content.subItems.every(
-        (candidate) => candidate.isCompleted,
-      );
+      // Every Sub-tasks block counts, not only the one that was clicked.
+      item.isCompleted = areItemSubItemsCompleted(item);
 
       try {
         const persistedRun = await persistRun(

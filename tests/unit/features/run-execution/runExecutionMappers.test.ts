@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { getNextSelectedItemId, mapChecklistToRun } from '@/features/run-execution/runExecutionMappers';
-import type { ChecklistRun } from '@/types/checklist';
+import {
+  areItemSubItemsCompleted,
+  getNextSelectedItemId,
+  mapChecklistToRun,
+} from '@/features/run-execution/runExecutionMappers';
+import type { ChecklistItem, ChecklistRun } from '@/types/checklist';
 
 const run = (completed: string[]): ChecklistRun =>
   ({
@@ -35,3 +39,35 @@ describe('mapChecklistToRun', () => {
   });
 });
 
+
+describe('areItemSubItemsCompleted', () => {
+  const item = (contents: ChecklistItem['contents']): ChecklistItem => ({ id: 'task', title: 'Task', contents });
+  const block = (...done: (boolean | undefined)[]) => ({
+    type: 'subItems' as const,
+    value: '',
+    subItems: done.map((isCompleted, index) => ({ id: `s${index}`, title: `S${index}`, isCompleted })),
+  });
+
+  it('is false for a task with no sub-tasks at all', () => {
+    expect(areItemSubItemsCompleted(item(undefined))).toBe(false);
+    expect(areItemSubItemsCompleted(item([]))).toBe(false);
+    expect(areItemSubItemsCompleted(item([{ type: 'text', value: 'hi' }]))).toBe(false);
+    expect(areItemSubItemsCompleted(item([block(), { type: 'subItems', value: '' }]))).toBe(false);
+  });
+
+  it('counts the sub-tasks of every block, not just one', () => {
+    expect(areItemSubItemsCompleted(item([block(false, false), block(true)]))).toBe(false);
+    expect(areItemSubItemsCompleted(item([block(true, false), block(true)]))).toBe(false);
+    expect(areItemSubItemsCompleted(item([block(true, true), block(true)]))).toBe(true);
+  });
+
+  it('ignores empty blocks and other content next to ticked ones', () => {
+    expect(
+      areItemSubItemsCompleted(item([block(true), { type: 'text', value: 'x' }, block(), { type: 'subItems', value: '' }])),
+    ).toBe(true);
+  });
+
+  it('treats a sub-task with no completion flag as open', () => {
+    expect(areItemSubItemsCompleted(item([block(true, undefined)]))).toBe(false);
+  });
+});
