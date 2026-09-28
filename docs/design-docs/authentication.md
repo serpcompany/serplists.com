@@ -53,6 +53,12 @@ and user-facing failure states when a supporting service is unavailable.
   policy client-side.
 - Profile: `name`, `username`, `avatar_url`; public lookup through
   `GET /api/profiles/by-username?username=...` and `GET /api/profiles/by-id?userId=...`.
+  Better Auth does not validate `name` or `image`, so `databaseHooks.user` checks
+  them on every user write (`functions/api/utils/user-profile-validation.ts`): the
+  name is trimmed and must be 1-100 characters, and the avatar must be an upload
+  served under `/api/uploads/` by this API or `R2_PUBLIC_BASE_URL`. Updates check
+  only the fields they write. The limits live in `src/lib/schemas/userProfileSchema.ts`,
+  which `Register.tsx` and `ProfileSection.tsx` use for `maxLength`.
 - Settings live at `/dashboard/settings`; `/account` and `/dashboard/profile`
   redirect there.
 

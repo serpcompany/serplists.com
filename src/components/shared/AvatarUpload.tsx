@@ -56,7 +56,9 @@ export const AvatarUpload = ({
 
     try {
       const upload = await api.uploadToR2({ bucket: 'avatars', file });
-      await authClient.updateUser({ image: upload.url });
+      const result = await authClient.updateUser({ image: upload.url });
+      // Keep the current avatar file unless the new one was saved.
+      if (result?.error) throw new Error(result.error.message || "Avatar was not saved");
       await refreshProfile();
       if (currentAvatarUrl && currentAvatarUrl !== upload.url) {
         await deleteUploadedAsset(currentAvatarUrl);
@@ -77,7 +79,8 @@ export const AvatarUpload = ({
     setIsRemoving(true);
 
     try {
-      await authClient.updateUser({ image: null });
+      const result = await authClient.updateUser({ image: null });
+      if (result?.error) throw new Error(result.error.message || "Avatar was not removed");
       await deleteUploadedAsset(currentAvatarUrl);
       await refreshProfile();
       toast.success("Avatar removed successfully!");

@@ -27,6 +27,11 @@ export function requestBodyLimit(path: string): BodyLimit {
   if (path.startsWith('templates/backup')) {
     return { maxBytes: 2 * MB, label: '2MB', countStreamedBytes: true };
   }
+  if (path === 'auth' || path.startsWith('auth/')) {
+    // Sign-in, sign-up and profile bodies are a few hundred bytes. A small cap
+    // stops oversized values before Better Auth parses them.
+    return { maxBytes: 16 * 1024, label: '16KB', countStreamedBytes: true };
+  }
   return { maxBytes: MB, label: '1MB', countStreamedBytes: true };
 }
 

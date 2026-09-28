@@ -18,6 +18,15 @@
   sessions live until the cache expires. Run Keys are separate credentials and are
   not revoked by a reset.
 - **Production blocks known test-email domains** at sign-up and sign-in.
+- **Account fields are validated on every user write.** Better Auth accepts any
+  value for `name` and `image`, so `databaseHooks.user` in
+  `functions/api/better-auth.ts` (rules in `functions/api/utils/user-profile-validation.ts`
+  and `src/lib/schemas/userProfileSchema.ts`) rejects with `400` a name that is not
+  1-100 characters of text after trimming, a display username over 30 characters,
+  and an avatar that is not an upload served by SERP Lists (the request or frontend
+  origin, or `R2_PUBLIC_BASE_URL`, under `/api/uploads/`, at most 2048 characters).
+  `null` or an empty string removes the avatar. Updates check only the fields they
+  write, so Better Auth's internal updates (email verification, username) pass.
 - **Agents act through Run Keys**, revocable credentials limited to reading
   Personal templates and listing, starting, reading, and updating Personal runs.
   Keys are stored hashed. The MCP routes are off on remote hosts unless
@@ -102,7 +111,8 @@ missing. A `429` during intensive local QA means the limit, not broken credentia
 Request bodies are capped in the router before any handler runs
 (`functions/api/utils/body-limit.ts`), for every `POST`/`PUT`/`PATCH`/`DELETE`
 whatever the `Content-Type`, because handlers parse JSON without checking it: 1MB by
-default, 2MB for Template backups, and 50MB (plus multipart overhead) for uploads.
+default, 16KB for `/api/auth/*`, 2MB for Template backups, and 50MB (plus multipart
+overhead) for uploads.
 The cap uses `Content-Length`, or counts streamed bytes when it is missing
 (uploads without it are left to the upload handler, which requires a session before
 parsing and rejects files over 50MB). The unauthenticated shared Run update checks

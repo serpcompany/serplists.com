@@ -89,6 +89,25 @@ describe("createBetterAuth config", () => {
     expect(options.secondaryStorage).toBeUndefined();
   });
 
+  it("checks name and avatar on every user write but leaves internal updates alone", async () => {
+    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/update-user"));
+    const userHooks = betterAuthMock.mock.calls[0]?.[0].databaseHooks.user;
+    const updatedAt = new Date();
+
+    // Email verification and timestamp updates carry no name or image.
+    await expect(userHooks.update.before({ emailVerified: true, updatedAt })).resolves.toEqual({
+      data: { emailVerified: true, updatedAt },
+    });
+    await expect(userHooks.update.before({ name: "x".repeat(101) })).rejects.toMatchObject({ statusCode: 400 });
+    await expect(
+      userHooks.update.before({ image: "https://serplists.com/api/uploads/file?key=avatars%2Fu1%2Fa.png" })
+    ).resolves.toEqual({ data: { image: "https://serplists.com/api/uploads/file?key=avatars%2Fu1%2Fa.png" } });
+    await expect(userHooks.create.before({ email: "new@example.com", name: " Jo " })).resolves.toEqual({
+      data: { email: "new@example.com", name: "Jo" },
+    });
+    await expect(userHooks.create.before({ email: "new@example.com" })).rejects.toMatchObject({ statusCode: 400 });
+  });
+
   it("enables breached-password checks when setting production passwords", () => {
     createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/sign-up/email"));
 

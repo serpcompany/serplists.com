@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { getAuthStatus } from "@/lib/auth-client";
 import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
 import { buildConsoleHomePath } from "@/lib/routes";
+import { USER_NAME_MAX_LENGTH } from "@/lib/schemas/userProfileSchema";
 
 const Register = () => {
   const [name, setName] = useState("");
@@ -87,6 +88,7 @@ const Register = () => {
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Your name"
+            maxLength={USER_NAME_MAX_LENGTH}
             required
           />
         </div>

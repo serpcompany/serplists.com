@@ -8,6 +8,7 @@ import { ExternalLink, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AvatarUpload } from '@/components/shared/AvatarUpload';
 import { buildPublicProfilePath } from '@/lib/routes';
+import { USER_NAME_MAX_LENGTH } from '@/lib/schemas/userProfileSchema';
 
 interface ProfileData {
   email: string;
@@ -82,6 +83,7 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
                 })
               }
               placeholder="Enter your full name"
+              maxLength={USER_NAME_MAX_LENGTH}
             />
           </div>
         </div>

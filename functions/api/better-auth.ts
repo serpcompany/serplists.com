@@ -7,6 +7,7 @@ import { createDb, schema } from "./db";
 import { resolveAuthSecret } from "./utils/auth-secret";
 import { resolveConfiguredCorsOrigins } from "./utils/cors";
 import { log } from "./utils/logger";
+import { buildUserProfileWritePolicy, validateUserProfileWrite } from "./utils/user-profile-validation";
 
 const sendEmail = async (
   env: Env,
@@ -145,6 +146,7 @@ export function createBetterAuth(env: Env, request: Request) {
   }
 
   const isSecure = origin.startsWith("https://");
+  const userProfilePolicy = buildUserProfileWritePolicy(env, trustedOrigins);
 
   const db = createDb(env);
   const plugins = [
@@ -195,6 +197,19 @@ export function createBetterAuth(env: Env, request: Request) {
       },
     },
     plugins,
+    // Better Auth accepts any value for name and image; check them on every
+    // user write so an account cannot store a huge name or a foreign avatar URL.
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (user) => ({ data: validateUserProfileWrite(user, "create", userProfilePolicy) }),
+        },
+        update: {
+          // Better Auth replaces the update with the returned data, so always return it.
+          before: async (user) => ({ data: validateUserProfileWrite(user, "update", userProfilePolicy) }),
+        },
+      },
+    },
     user: {
       modelName: "users",
       fields: {

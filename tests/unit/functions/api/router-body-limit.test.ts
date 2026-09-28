@@ -121,6 +121,16 @@ describe('API router request body limit', { timeout: 30_000 }, () => {
     expect(handlers.handleTemplates).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['declared', { 'Content-Type': 'application/json', 'Content-Length': String(20 * 1024) }, new Uint8Array(16)],
+    ['streamed', { 'Content-Type': 'application/json' }, streamedBody(20 * 1024)],
+  ])('caps %s auth bodies at 16KB before Better Auth parses them', async (_label, headers, body) => {
+    const response = await send(request('POST', 'auth/update-user', { headers, body }));
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toMatchObject({ error: 'Payload too large (max 16KB)' });
+  });
+
   it('allows up to 2MB for Template backups', async () => {
     const allowed = await send(request('POST', 'templates/backup', { body: streamedBody(1.5 * MB) }));
     const rejected = await send(request('POST', 'templates/backup', { body: streamedBody(2 * MB + 1) }));
