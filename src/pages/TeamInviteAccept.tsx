@@ -10,6 +10,7 @@ import {
   formatTeamRole,
 } from '@/features/teams/teamInviteMessages';
 import { useTeamInviteLink } from '@/features/teams/useTeamInviteLink';
+import { buildAuthLinkState, withReturnPath } from '@/lib/auth/returnPath';
 import {
   buildConsoleSettingsPath,
   buildConsoleTemplatesPath,
@@ -79,25 +80,29 @@ export default function TeamInviteAccept() {
     }
 
     if (!isAuthenticated) {
+      // Both links bring the user back here after signing in or signing up.
+      const invitePath = `${location.pathname}${location.search}${location.hash}`;
       return (
         <>
           <p className="text-sm text-muted-foreground">
-            Log in with the invited email address to see and accept this invite.
+            Log in with the invited email address to see and accept this invite. New here?
+            Create an account with that email address.
           </p>
-          <Button asChild>
-            <Link
-              to="/login"
-              state={{
-                from: {
-                  hash: location.hash,
-                  pathname: location.pathname,
-                  search: location.search,
-                },
-              }}
-            >
-              Log in to accept
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild>
+              <Link to={withReturnPath('/login', invitePath)} state={buildAuthLinkState(invitePath)}>
+                Log in to accept
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link
+                to={withReturnPath('/register', invitePath)}
+                state={buildAuthLinkState(invitePath)}
+              >
+                Create an account
+              </Link>
+            </Button>
+          </div>
         </>
       );
     }

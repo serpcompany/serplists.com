@@ -8,12 +8,38 @@
  * Always check `error` before `verified`.
  */
 
+import { RETURN_PATH_PARAM } from "@/lib/auth/returnPath";
+
 /**
  * Callback for verification emails. Better Auth 1.3.4 concatenates it into the
- * email link without encoding it, so it must carry exactly one query parameter:
- * a second `&` would become a parameter of /verify-email and be lost.
+ * email link without encoding it, so it must not contain a raw `&`: a second
+ * parameter would become a parameter of /verify-email and be lost.
  */
 export const EMAIL_VERIFIED_CALLBACK_URL = "/login?verified=1";
+
+// encodeURIComponent plus the characters it leaves alone (! ' ( ) * ~), which
+// Better Auth's callbackURL check rejects.
+const encodeStrict = (value: string): string =>
+  encodeURIComponent(value).replace(
+    /[!'()*~]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+
+/**
+ * The verification callback, carrying a return path as `next` when there is
+ * one. The `&next=...` part is encoded one extra time so it survives the
+ * unencoded email link: /verify-email decodes it and redirects to
+ * `/login?verified=1&next=<path>`.
+ */
+export function buildEmailVerifiedCallbackURL(returnPath: string | null): string {
+  if (!returnPath) {
+    return EMAIL_VERIFIED_CALLBACK_URL;
+  }
+
+  return `${EMAIL_VERIFIED_CALLBACK_URL}${encodeStrict(
+    `&${RETURN_PATH_PARAM}=${encodeStrict(returnPath)}`,
+  )}`;
+}
 
 export type VerificationFailureReason =
   | "token_expired"

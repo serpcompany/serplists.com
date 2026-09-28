@@ -20,10 +20,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import {
-  EMAIL_VERIFIED_CALLBACK_URL,
+  buildEmailVerifiedCallbackURL,
   parseLoginSearch,
   stripLoginNoticeParams,
 } from "@/lib/auth/loginNotice";
+import { buildAuthLinkState, getReturnPath, withReturnPath } from "@/lib/auth/returnPath";
+import { buildConsoleSettingsPath } from "@/lib/routes";
 
 function getVerificationFailure(search: string): string | null {
   const { notice } = parseLoginSearch(search);
@@ -45,7 +47,10 @@ const Login = () => {
   const [verificationFailure, setVerificationFailure] = useState<string | null>(() =>
     getVerificationFailure(location.search),
   );
-  const from = location.state?.from?.pathname || "/account";
+  // Where the user was headed (with its query and hash), from router state or
+  // the `next` parameter that survives the email verification link.
+  const returnPath = getReturnPath(location);
+  const from = returnPath ?? buildConsoleSettingsPath();
   const showResendVerification = Boolean(unverifiedEmail || verificationFailure);
 
   useEffect(() => {
@@ -129,7 +134,7 @@ const Login = () => {
 
       const result = await authClient.sendVerificationEmail({
         email: targetEmail,
-        callbackURL: EMAIL_VERIFIED_CALLBACK_URL,
+        callbackURL: buildEmailVerifiedCallbackURL(returnPath),
       });
 
       if (result?.error) {
@@ -154,7 +159,8 @@ const Login = () => {
         <>
           Don&apos;t have an account?{" "}
           <Link
-            to="/register"
+            to={withReturnPath("/register", returnPath)}
+            state={buildAuthLinkState(returnPath)}
             className="font-medium text-primary hover:underline"
           >
             Sign up

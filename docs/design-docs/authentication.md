@@ -34,11 +34,17 @@ and user-facing failure states when a supporting service is unavailable.
   `error` before `verified`, explains the failure, and offers to resend
   (`src/lib/auth/loginNotice.ts`), then removes the one-shot parameters from the
   URL. Better Auth puts the callback into the email link unencoded, so it must
-  keep a single query parameter.
+  not contain a raw `&`; `buildEmailVerifiedCallbackURL` encodes an extra `next`
+  parameter one more time so it survives the link.
 - Verification and reset emails use `RESEND_API_KEY`, then `USESEND_API_KEY`.
   Callbacks await delivery so provider failures surface in the request.
   `GET /api/auth/status` reports whether email delivery is available.
-- Protected routes preserve the requested destination through login.
+- Protected routes preserve the requested destination (path, query, and hash)
+  through login and sign-up (`src/lib/auth/returnPath.ts`). It travels as router
+  state `from` and as a `next` query parameter, which Login, Register, and the
+  verification callback carry forward so a new account returns to the page that
+  sent it, such as an Organization invite. Only same-origin, non-auth paths are
+  accepted.
 - Passwords: Better Auth enforces length (10 to 128) and rejects breached passwords;
   `Register.tsx`, `ResetPassword.tsx`, and `SecuritySection.tsx` validate the same
   policy client-side.

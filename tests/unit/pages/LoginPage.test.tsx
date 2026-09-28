@@ -58,6 +58,31 @@ describe('Login page', () => {
     expect(html).not.toContain('Email verified');
   });
 
+  it('carries the return path to sign-up so a new invitee comes back to the invite', () => {
+    const html = renderToStaticMarkup(
+      <StaticRouter
+        location={{
+          pathname: '/login',
+          state: { from: { pathname: '/team-invites/abc', search: '?x=1', hash: '#h' } },
+        }}
+      >
+        <Login />
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('href="/register?next=%2Fteam-invites%2Fabc%3Fx%3D1%23h"');
+  });
+
+  it('reads the return path from next after the email verification round trip', () => {
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/login?verified=1&next=%2Fteam-invites%2Fabc">
+        <Login />
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('href="/register?next=%2Fteam-invites%2Fabc"');
+  });
+
   it('does not offer a resend after a successful verification', () => {
     const html = renderToStaticMarkup(
       <StaticRouter location="/login?verified=1">

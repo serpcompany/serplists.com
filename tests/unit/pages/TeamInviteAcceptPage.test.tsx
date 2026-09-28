@@ -104,4 +104,13 @@ describe('Organization invite page', () => {
     expect(html).toContain('Log in to accept');
     expect(apiMocks.getTeamInvitePreview).not.toHaveBeenCalled();
   });
+
+  it('lets a new invitee create an account and come back to the invite', () => {
+    authState.isAuthenticated = false;
+
+    const html = renderInvitePage();
+
+    expect(html).toContain('Create an account');
+    expect(html).toContain('href="/register?next=%2Fteam-invites%2Finvite-token"');
+  });
 });

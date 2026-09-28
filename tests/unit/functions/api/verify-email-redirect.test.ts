@@ -1,8 +1,15 @@
+import { betterAuth } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
 import { signJWT } from "better-auth/crypto";
 import { describe, expect, it } from "vitest";
 
 import { createBetterAuth } from "@functions/api/better-auth";
-import { EMAIL_VERIFIED_CALLBACK_URL, getLoginNotice } from "@/lib/auth/loginNotice";
+import {
+  buildEmailVerifiedCallbackURL,
+  EMAIL_VERIFIED_CALLBACK_URL,
+  getLoginNotice,
+} from "@/lib/auth/loginNotice";
+import { getReturnPath } from "@/lib/auth/returnPath";
 
 // Pins the Better Auth redirect contract that Login's notice parsing relies on.
 // A failed verification link must land on the callback with `error=<code>`
@@ -51,5 +58,59 @@ describe("verify-email failure redirect", () => {
     expect(status).toBe(302);
     expect(location).toBe("/login?verified=1&error=invalid_token");
     expect(getLoginNotice(new URL(location!, "http://x").search)?.kind).toBe("verification_failed");
+  });
+});
+
+// A new invitee who signs up from an invite link must come back to it after
+// verifying their email. The return path rides in the callback as `next`,
+// which only survives Better Auth's unencoded email link because
+// buildEmailVerifiedCallbackURL encodes it one extra time.
+describe("verification return path round trip", () => {
+  async function signUpAndOpenVerificationLink(returnPath: string) {
+    const sentLinks: string[] = [];
+    const auth = betterAuth({
+      secret: SECRET,
+      baseURL: "http://localhost:8788",
+      trustedOrigins: ["http://localhost:8788"],
+      database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
+      emailAndPassword: { enabled: true, requireEmailVerification: true },
+      emailVerification: {
+        sendOnSignUp: true,
+        sendVerificationEmail: async ({ url }) => {
+          sentLinks.push(url);
+        },
+      },
+    });
+
+    const signUp = await auth.handler(
+      new Request("http://localhost:8788/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "http://localhost:8788" },
+        body: JSON.stringify({
+          name: "New Invitee",
+          email: "new-invitee@example.com",
+          password: "a-long-enough-password",
+          callbackURL: buildEmailVerifiedCallbackURL(returnPath),
+        }),
+      }),
+    );
+    expect(signUp.status).toBe(200);
+    expect(sentLinks).toHaveLength(1);
+
+    const verify = await auth.handler(new Request(sentLinks[0]!));
+    return { status: verify.status, location: verify.headers.get("location") };
+  }
+
+  it.each([
+    "/team-invites/abc_DEF-123",
+    "/team-invites/abc?x=1#h",
+    "/templates/launch-(v2)!~*'",
+  ])("returns to %s after verification", async (returnPath) => {
+    const { status, location } = await signUpAndOpenVerificationLink(returnPath);
+
+    expect(status).toBe(302);
+    const search = new URL(location!, "http://x").search;
+    expect(getLoginNotice(search)?.kind).toBe("verified");
+    expect(getReturnPath({ search })).toBe(returnPath);
   });
 });

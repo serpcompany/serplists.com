@@ -28,7 +28,12 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<AuthActionResult>;
-  register: (name: string, email: string, password: string) => Promise<RegisterResult>;
+  register: (
+    name: string,
+    email: string,
+    password: string,
+    callbackURL?: string,
+  ) => Promise<RegisterResult>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
 }
@@ -94,14 +99,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const register = async (name: string, email: string, password: string): Promise<RegisterResult> => {
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    callbackURL: string = EMAIL_VERIFIED_CALLBACK_URL,
+  ): Promise<RegisterResult> => {
     try {
-      const result = await authClient.signUp.email({
-        name,
-        email,
-        password,
-        callbackURL: EMAIL_VERIFIED_CALLBACK_URL,
-      });
+      const result = await authClient.signUp.email({ name, email, password, callbackURL });
       if (result?.error) {
         return { ok: false, error: result.error.message ?? "Registration failed", errorCode: "UNKNOWN" };
       }

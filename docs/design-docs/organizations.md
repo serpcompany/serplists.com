@@ -81,8 +81,9 @@ Invites are link-based today:
 2. The API stores only `token_hash`, never the raw invite token.
 3. The response includes `delivery.mode = "link"`, `invitePath`, and `inviteUrl`.
 4. Invitees can accept through the legacy compatibility route `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
-5. Opening `/team-invites/:token` never joins anyone. The page loads the read-only preview and shows the Organization, inviter, and role with **Accept invite** and **Decline**; only a click accepts. Accepting leaves the active context unchanged and offers **Switch to <Organization>**, so a link from another site cannot quietly move a User's new Templates and Runs into an Organization.
-6. Members other than the `owner` can leave from **Leave Organization** on `/dashboard/settings`, which returns them to Personal.
+5. A signed-out invitee can **Log in to accept** or **Create an account**; both return to the invite link afterward, including through email verification.
+6. Opening `/team-invites/:token` never joins anyone. The page loads the read-only preview and shows the Organization, inviter, and role with **Accept invite** and **Decline**; only a click accepts. Accepting leaves the active context unchanged and offers **Switch to <Organization>**, so a link from another site cannot quietly move a User's new Templates and Runs into an Organization.
+7. Members other than the `owner` can leave from **Leave Organization** on `/dashboard/settings`, which returns them to Personal.
 
 The API response already uses a `delivery` object so email can be added later without changing the UI contract. A future email implementation should keep the link accept route and switch delivery from `link` to a queued/sent email mode.
 

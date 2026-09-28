@@ -213,3 +213,42 @@ test('@smoke team invite flow asks before joining through a link, lets members l
   await expect(page.getByText(linkInviteeEmail)).toHaveCount(0);
   await expect(page.getByText('Member left')).toBeVisible();
 });
+
+test('a new invitee who signs up from the invite link comes back to the invite', async ({ browser, page }) => {
+  test.setTimeout(120_000);
+
+  const suffix = uniqueSuffix();
+  const teamName = `Signup Team ${suffix}`;
+  const inviteeEmail = `signup+${suffix}@e2e.local`;
+
+  await registerAccount(page, { email: `owner+${suffix}@e2e.local`, name: 'Owner User' });
+  await page.goto('/dashboard/settings');
+  await page.locator('#team-name').fill(teamName);
+  await page.getByRole('button', { name: 'Create Organization' }).click();
+  await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(teamName, {
+    timeout: 15_000,
+  });
+  const inviteUrl = await createLinkInvite(page, inviteeEmail);
+  const invitePath = new URL(inviteUrl).pathname;
+
+  const inviteeContext = await browser.newContext();
+  const inviteePage = await inviteeContext.newPage();
+  await gotoInvite(inviteePage, inviteUrl);
+
+  // Through Log in, then Sign up: the invite path must survive both hops.
+  await inviteePage.getByRole('link', { name: 'Log in to accept' }).click();
+  await inviteePage.getByRole('link', { name: 'Sign up' }).click();
+  await expect(inviteePage).toHaveURL(/\/register\?next=/);
+
+  await inviteePage.getByLabel('Name').fill('New Invitee');
+  await inviteePage.getByLabel('Email').fill(inviteeEmail);
+  await inviteePage.locator('#password').fill(PASSWORD);
+  await inviteePage.locator('#confirmPassword').fill(PASSWORD);
+  await inviteePage.getByRole('button', { name: 'Create account' }).click();
+
+  // Local development skips email verification, so sign-up lands on the invite.
+  await expect(inviteePage).toHaveURL(new RegExp(`${invitePath}$`), { timeout: 30_000 });
+  await inviteePage.getByRole('button', { name: 'Accept invite' }).click();
+  await expect(inviteePage.getByText('Invite accepted.')).toBeVisible({ timeout: 30_000 });
+  await inviteeContext.close();
+});
