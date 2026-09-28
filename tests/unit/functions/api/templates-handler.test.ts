@@ -1122,4 +1122,138 @@ describe('Templates Handlers', () => {
     expect(response.status).toBe(200);
     expect(data.id).toBeDefined();
   });
+
+  describe('template saves that resend unchanged sections', () => {
+    const storedSections = [
+      {
+        id: 'section-1',
+        title: 'Launch',
+        items: [
+          {
+            id: 'item-1',
+            title: 'Write copy',
+            description: 'Draft it',
+            contents: [{ id: 'content-1', type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Short' }] }],
+          },
+          { id: 'item-2', title: 'Publish' },
+        ],
+      },
+    ];
+    // The editor's copy of storedSections: other key order, injected run state, empty defaults.
+    const editorSections = [
+      {
+        title: 'Launch',
+        id: 'section-1',
+        items: [
+          {
+            isCompleted: false,
+            contents: [{ value: '', type: 'subItems', id: 'content-1', subItems: [{ title: 'Short', id: 'sub-1', isCompleted: false }] }],
+            description: 'Draft it',
+            title: 'Write copy',
+            id: 'item-1',
+          },
+          { id: 'item-2', title: 'Publish', description: '', contents: [], isCompleted: false, completed: false },
+        ],
+      },
+    ];
+    const storedTemplate = {
+      id: 'template-1',
+      user_id: 'user-123',
+      owner_type: 'user',
+      team_id: null,
+      title: 'Launch plan',
+      description: 'Ship it',
+      type: 'checklist',
+      seo_title: '',
+      seo_description: '',
+      items: JSON.stringify(storedSections),
+      category: '[]',
+      tags: '["launch"]',
+      slug: 'launch-plan',
+      version: 3,
+      content_version: 2,
+      is_public: false,
+    };
+    // Everything the editor sends on Save, matching storedTemplate.
+    const editorPayload = {
+      title: 'Launch plan',
+      description: 'Ship it',
+      type: 'checklist',
+      seoTitle: '',
+      seoDescription: '',
+      sections: editorSections,
+      categories: [],
+      tags: ['launch'],
+      is_public: false,
+      slug: 'launch-plan',
+      expected_version: 3,
+    };
+    const put = (body: unknown) => handleTemplates(new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }), mockEnv);
+    const versionInserts = () => dbMocks.insertChain.values.mock.calls.filter(([values]) => 'snapshot_json' in values);
+
+    beforeEach(() => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+      dbMocks.selectChain.limit.mockResolvedValueOnce([storedTemplate]);
+    });
+
+    it('saves metadata edits without bumping content_version or rewriting runs', async () => {
+      const response = await put({ ...editorPayload, title: 'Launch plan v2', description: 'Ship it well', is_public: true });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data).toEqual(expect.objectContaining({ success: true, structureChanged: false, reconciledRuns: 0, content_version: 2, version: 4 }));
+      expect(dbMocks.updateChain.set).toHaveBeenCalledTimes(1);
+      const templateUpdate = dbMocks.updateChain.set.mock.calls[0][0];
+      expect(templateUpdate).toEqual(expect.objectContaining({ title: 'Launch plan v2', description: 'Ship it well', is_public: true, version: 4 }));
+      expect(templateUpdate).not.toHaveProperty('content_version');
+      expect(templateUpdate).not.toHaveProperty('items');
+      expect(templateUpdate).not.toHaveProperty('slug');
+      expect(dbMocks.selectChain.orderBy).not.toHaveBeenCalled();
+      expect(versionInserts()).toHaveLength(1);
+    });
+
+    it('does not version a visibility-only change', async () => {
+      const response = await put({ is_public: true, expected_version: 3 });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data).toEqual(expect.objectContaining({ version: 3, content_version: 2, structureChanged: false }));
+      const templateUpdate = dbMocks.updateChain.set.mock.calls[0][0];
+      expect(templateUpdate).toEqual(expect.objectContaining({ is_public: true }));
+      expect(templateUpdate).not.toHaveProperty('version');
+      expect(templateUpdate).not.toHaveProperty('content_version');
+      expect(versionInserts()).toHaveLength(0);
+    });
+
+    it('accepts a save with no changes without writing anything', async () => {
+      const response = await put(editorPayload);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data).toEqual(expect.objectContaining({ success: true, version: 3, content_version: 2, structureChanged: false }));
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+      expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+    });
+
+    it('still reconciles active runs when the checklist structure changes', async () => {
+      const reordered = JSON.parse(JSON.stringify(editorSections));
+      reordered[0].items.reverse();
+      dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+        { id: 'run-1', items: JSON.stringify(storedSections), retired_items: '[]', status: 'in_progress', is_public: false, revision: 1 },
+      ]);
+
+      const response = await put({ ...editorPayload, sections: reordered });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data).toEqual(expect.objectContaining({ structureChanged: true, reconciledRuns: 1, content_version: 3, version: 4 }));
+      expect(dbMocks.updateChain.set.mock.calls[0][0]).toEqual(expect.objectContaining({ content_version: 3, version: 4 }));
+      expect(JSON.parse(dbMocks.updateChain.set.mock.calls[0][0].items)[0].items.map((item: { id: string }) => item.id))
+        .toEqual(['item-2', 'item-1']);
+      expect(dbMocks.updateChain.set.mock.calls[1][0]).toEqual(expect.objectContaining({ template_version: 3, revision: 2 }));
+    });
+  });
 });

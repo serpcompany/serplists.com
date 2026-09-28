@@ -253,6 +253,26 @@ export const startTemplateRun = async (params: {
   }
 };
 
+// Visibility is not template content: send only the flag and the version guard, never
+// the whole template, so the server does not version or reconcile anything.
+export const updateTemplateVisibility = async (params: {
+  apiClient?: Pick<TemplateDetailApiClient, 'updateTemplate'>;
+  isPublic: boolean;
+  template: ChecklistTemplate;
+}): Promise<ChecklistTemplate> => {
+  const apiClient = params.apiClient ?? api;
+  const result = await apiClient.updateTemplate(params.template.id, {
+    is_public: params.isPublic,
+    expected_version: params.template.version,
+  });
+
+  return {
+    ...params.template,
+    isPublic: params.isPublic,
+    version: typeof result?.version === 'number' ? result.version : params.template.version,
+  };
+};
+
 export const saveTemplateToAccount = async (params: {
   apiClient?: TemplateDetailApiClient;
   billingState: TemplateDetailBillingState;
@@ -442,14 +462,7 @@ export const useTemplateDetailModel = (
       let nextTemplate = template;
 
       if (!nextTemplate.isPublic) {
-        await api.updateTemplate(nextTemplate.id, {
-          is_public: true,
-          expected_version: nextTemplate.version,
-        });
-        nextTemplate = {
-          ...nextTemplate,
-          isPublic: true,
-        };
+        nextTemplate = await updateTemplateVisibility({ isPublic: true, template: nextTemplate });
       }
 
       nextTemplate = await hydrateTemplateOwner(nextTemplate, api);
@@ -489,6 +502,15 @@ export const useTemplateDetailModel = (
     }
   };
 
+  const setVisibility = async (isPublic: boolean): Promise<void> => {
+    if (!template) {
+      return;
+    }
+
+    setTemplate(await updateTemplateVisibility({ isPublic, template }));
+    await invalidateTemplates();
+  };
+
   return {
     billingState,
     history: {
@@ -499,6 +521,7 @@ export const useTemplateDetailModel = (
     loading,
     notFound,
     saveTemplate,
+    setVisibility,
     shareTemplate,
     startRun,
     template,

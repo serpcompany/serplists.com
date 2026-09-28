@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Archive,
@@ -85,7 +85,7 @@ import {
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
-import type { ChecklistTemplate, TemplateSavePayload } from '@/types/checklist';
+import type { ChecklistTemplate } from '@/types/checklist';
 
 type TemplateMetrics = {
   copyCount?: number;
@@ -137,26 +137,6 @@ const isHistoryVersion = (
   entry: TemplateHistoryEvent | TemplateHistoryVersion,
 ): entry is TemplateHistoryVersion => 'version' in entry;
 
-const buildTemplateSavePayload = (
-  template: ChecklistTemplate,
-  isPublic: boolean,
-): TemplateSavePayload => ({
-  id: template.id,
-  title: template.title,
-  description: template.description,
-  type: template.type ?? 'checklist',
-  sections: template.sections,
-  isPublic,
-  seoTitle: template.seoTitle,
-  seoDescription: template.seoDescription,
-  seoUrl: template.seoUrl,
-  rules: template.rules,
-  categories: template.categories,
-  tags: template.tags,
-  slug: template.slug,
-  version: template.version,
-});
-
 const TemplateDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -168,7 +148,6 @@ const TemplateDetail = () => {
     createTemplate,
     deleteTemplate,
     getTemplate,
-    updateTemplate,
   } = useTemplateLists();
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
@@ -179,14 +158,12 @@ const TemplateDetail = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
-  const [visibilityOverride, setVisibilityOverride] = useState<boolean | null>(
-    null,
-  );
   const {
     billingState,
     loading,
     notFound,
     saveTemplate,
+    setVisibility,
     shareTemplate,
     startRun,
     template,
@@ -209,7 +186,7 @@ const TemplateDetail = () => {
     Boolean(activeTeamId) && displayTemplate?.teamId === activeTeamId;
   const canEditTemplate = isOwner || (isActiveTeamTemplate && canEditTemplates);
   const canViewTemplateHistory = isOwner || isActiveTeamTemplate;
-  const isPublic = visibilityOverride ?? displayTemplate?.isPublic ?? false;
+  const isPublic = displayTemplate?.isPublic ?? false;
   const totalTasks = displayTemplate?.sections.reduce(
     (count, section) => count + section.items.length,
     0,
@@ -221,10 +198,6 @@ const TemplateDetail = () => {
       ? history.data.versions
       : history?.data?.events ?? []
   ).slice(0, 8);
-
-  useEffect(() => {
-    setVisibilityOverride(null);
-  }, [displayTemplate?.id]);
 
   const handleUpgradeRequired = async () => {
     if (isTeamWorkspace) {
@@ -399,8 +372,7 @@ const TemplateDetail = () => {
 
     setIsUpdatingVisibility(true);
     try {
-      await updateTemplate(buildTemplateSavePayload(displayTemplate, nextIsPublic));
-      setVisibilityOverride(nextIsPublic);
+      await setVisibility(nextIsPublic);
       toast.success(
         nextIsPublic ? 'Template is now public' : 'Template is now private',
       );

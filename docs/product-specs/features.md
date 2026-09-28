@@ -31,7 +31,8 @@ Canonical private routes:
 - Template content updates reconcile into matching active, private runs for the same Resource Owner. Stable section, item, and sub-item IDs preserve run completion and notes across renames and reordering; new work arrives incomplete, and retired work leaves readiness calculations while remaining in run history.
 - Public templates can be shared at `/profile/{username}/{templateSlug}`.
 - Other Users can copy public templates into Personal or an authorized Organization when that ownership context's entitlement allows it.
-- Template history is stored in `template_versions`; related actor/action history is stored in `audit_events`.
+- Template history is stored in `template_versions`; related actor/action history is stored in `audit_events`. A save that changes nothing, or only visibility, adds no version.
+- The Public/Private switch on template detail sends only the visibility flag, so it never reconciles or stales runs.
 
 ## Runs And Sharing
 

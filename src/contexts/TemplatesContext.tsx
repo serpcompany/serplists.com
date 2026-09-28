@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { prepareTemplatesForImport } from "@/lib/utils/templateBackup";
+import { buildTemplateUpdateRequest, describeTemplateUpdate } from "@/lib/templates/templateUpdate";
 import { 
   ChecklistTemplate, 
   ChecklistRun, 
@@ -331,28 +332,15 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     mutationFn: async (template: TemplateSavePayload) => {
       if (!user) throw new Error("User must be logged in to update a template");
 
-      const result = await api.updateTemplate(template.id, {
-        title: template.title,
-        description: template.description,
-        type: template.type,
-        seoTitle: template.seoTitle,
-        seoDescription: template.seoDescription,
-        rules: template.rules,
-        sections: template.sections,
-        categories: template.categories,
-        tags: template.tags,
-        is_public: template.isPublic,
-        slug: template.seoUrl?.trim() || template.slug?.trim() || undefined,
-        expected_version: template.version,
-      });
-      
+      const result = await api.updateTemplate(template.id, buildTemplateUpdateRequest(template));
       if (!result) throw new Error('Failed to update template');
-      return undefined;
+      return result;
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
+      const outcome = describeTemplateUpdate(result);
       await queryClient.invalidateQueries({ queryKey: ['templates'] });
-      await queryClient.invalidateQueries({ queryKey: ['runs'] });
-      toast.success("Template updated. Checklist changes were reconciled into active private runs.");
+      if (outcome.invalidateRuns) await queryClient.invalidateQueries({ queryKey: ['runs'] });
+      toast.success(outcome.message);
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -574,7 +562,9 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     getRunsForTemplate,
     getAllPublicTemplates,
     createTemplate: createTemplateMutation.mutateAsync,
-    updateTemplate: updateTemplateMutation.mutateAsync,
+    updateTemplate: async (template: TemplateSavePayload) => {
+      await updateTemplateMutation.mutateAsync(template);
+    },
     deleteTemplate: async (id: string) => {
       await deleteTemplateMutation.mutateAsync(id);
     },

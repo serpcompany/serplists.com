@@ -151,6 +151,17 @@ export type TemplateHistoryEvent = {
   actor: TemplateHistoryActor;
 };
 
+// PUT /api/templates/:id. Only a checklist-structure change bumps content_version and
+// reconciles active private runs; version advances for any change except visibility.
+export type TemplateUpdateResponse = {
+  success: boolean;
+  slug?: string;
+  version?: number;
+  content_version?: number;
+  structureChanged?: boolean;
+  reconciledRuns?: number;
+};
+
 export type TemplateHistoryResponse = {
   templateId: string;
   subject: { type: 'user' | 'team'; id: string };
@@ -293,7 +304,7 @@ class ApiClient {
     is_public?: boolean;
     slug?: string;
     expected_version?: number;
-  }) {
+  }): Promise<TemplateUpdateResponse> {
     return this.request(`/templates/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),

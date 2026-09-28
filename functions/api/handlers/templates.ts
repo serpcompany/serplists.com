@@ -26,6 +26,7 @@ import {
   reconcileRunSections,
   validateStableTemplateIdentities,
 } from '../utils/template-reconciliation';
+import { isVersionedTemplateChange, omitUnchangedTemplateColumns, templateStructureChanged } from '../utils/template-changes';
 
 const junkTemplateTitles = new Set(['Test Template', 'Updated Template Title']);
 
@@ -284,26 +285,6 @@ function getTemplateSubject(template: Record<string, unknown>, fallbackUserId: s
     type: 'user',
     id: typeof template.user_id === 'string' && template.user_id ? template.user_id : fallbackUserId,
   };
-}
-
-function shouldCreateTemplateVersion(rawBody: Record<string, unknown>, nextSlug: string | null): boolean {
-  return Boolean(nextSlug)
-    || Object.prototype.hasOwnProperty.call(rawBody, 'title')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'description')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'type')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'seoTitle')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'seoDescription')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'rules')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'sections')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'items')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'categories')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'category')
-    || Object.prototype.hasOwnProperty.call(rawBody, 'tags');
-}
-
-function changedTemplateFields(updates: Record<string, unknown>): Record<string, unknown> {
-  const { updated_at: _updatedAt, updated_by_user_id: _updatedByUserId, version: _version, content_version: _contentVersion, ...diff } = updates;
-  return diff;
 }
 
 function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: URL): string | null {
@@ -1342,10 +1323,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       : null;
 
     const now = new Date().toISOString();
-    const updates: Record<string, unknown> = {
-      updated_at: now,
-      updated_by_user_id: userId,
-    };
+    const updates: Record<string, unknown> = {};
     let syncedItems: string | null = null;
     let incomingSections: unknown[] | null = null;
 
@@ -1373,7 +1351,6 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         return jsonError(normalizedSections.error, 400);
       }
       incomingSections = normalizedSections.sections;
-      updates.items = JSON.stringify(normalizedSections.sections);
     }
     if (Object.prototype.hasOwnProperty.call(rawBody, 'is_public') && typeof is_public === 'boolean') {
       updates.is_public = is_public;
@@ -1387,7 +1364,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       updates.tags = JSON.stringify(finalTags);
     }
 
-    if (Object.keys(changedTemplateFields(updates)).length === 0 && !requestedSlugValue) {
+    if (Object.keys(updates).length === 0 && !incomingSections && !requestedSlugValue) {
       return jsonError('No fields to update', 400);
     }
 
@@ -1412,8 +1389,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       if (identityError) {
         return jsonError(identityError, 400);
       }
-      syncedItems = JSON.stringify(stableSections);
-      updates.items = syncedItems;
+      // Clients resend unchanged sections on every save; only a real structure change may
+      // bump content_version and reconcile runs.
+      if (templateStructureChanged(previousSections, stableSections)) {
+        syncedItems = JSON.stringify(stableSections);
+        updates.items = syncedItems;
+      }
     }
     if (typeof expected_version === 'number' && expected_version !== existingTemplate.version) {
       return jsonError('Template changed since it was loaded. Refresh before saving again.', 409, {
@@ -1422,34 +1403,33 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       });
     }
 
-    let nextSlug: string | null = null;
-    if (requestedSlugValue) {
-      nextSlug = requestedSlugValue;
+    if (requestedSlugValue && requestedSlugValue !== existingTemplate.slug) {
       const [conflict] = await db
         .select({ id: templates.id })
         .from(templates)
-        .where(and(eq(templates.slug, nextSlug), ne(templates.id, templateId)))
+        .where(and(eq(templates.slug, requestedSlugValue), ne(templates.id, templateId)))
         .limit(1);
 
-      if (conflict) {
-        nextSlug = `${nextSlug}-${templateId.slice(0, 8)}`;
-      }
-
-      updates.slug = nextSlug;
+      updates.slug = conflict ? `${requestedSlugValue}-${templateId.slice(0, 8)}` : requestedSlugValue;
     }
 
-    const shouldVersion = shouldCreateTemplateVersion(rawBody, nextSlug);
+    const changes = omitUnchangedTemplateColumns(existingTemplate as unknown as Record<string, unknown>, updates);
     const currentVersion = typeof existingTemplate.version === 'number' ? existingTemplate.version : 1;
-    const nextVersion = shouldVersion ? currentVersion + 1 : currentVersion;
     const currentContentVersion = typeof existingTemplate.content_version === 'number'
       ? existingTemplate.content_version
       : currentVersion;
+    if (Object.keys(changes).length === 0) {
+      return json({ success: true, version: currentVersion, content_version: currentContentVersion, structureChanged: false, reconciledRuns: 0 });
+    }
+    const shouldVersion = isVersionedTemplateChange(changes);
+    const nextVersion = shouldVersion ? currentVersion + 1 : currentVersion;
     const nextContentVersion = syncedItems === null ? currentContentVersion : currentContentVersion + 1;
+    const templateValues: Record<string, unknown> = { ...changes, updated_at: now, updated_by_user_id: userId };
     if (shouldVersion) {
-      updates.version = nextVersion;
+      templateValues.version = nextVersion;
     }
     if (syncedItems !== null) {
-      updates.content_version = nextContentVersion;
+      templateValues.content_version = nextContentVersion;
     }
 
     if (typeof title === 'string' && junkTemplateTitles.has(title)) {
@@ -1463,7 +1443,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     const subject = getTemplateSubject(existingTemplate as unknown as Record<string, unknown>, userId);
     const updatedTemplate = {
       ...(existingTemplate as unknown as Record<string, unknown>),
-      ...updates,
+      ...templateValues,
     };
 
     const versionValues = shouldVersion
@@ -1484,7 +1464,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       action: 'template.updated',
       before: existingTemplate as unknown as Record<string, unknown>,
       after: updatedTemplate,
-      diff: changedTemplateFields(updates),
+      diff: changes,
       request,
       createdAt: now,
     });
@@ -1544,10 +1524,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       };
     });
 
+    let reconciledRuns = 0;
     try {
       const batchResults = await updateTemplateWithHistoryFallback(
         db,
-        updates as TemplateUpdateValues,
+        templateValues as TemplateUpdateValues,
         templateUpdateWhere,
         auditEvent,
         versionValues,
@@ -1558,6 +1539,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           code: 'edit_conflict',
         });
       }
+      // Run updates follow the template update, version insert, and audit insert.
+      const runResults = batchResults.slice(versionValues ? 3 : 2);
+      reconciledRuns = reconciledRunUpdates.filter((_, index) => !batchUpdateMissed(runResults[index])).length;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (/unique constraint failed:.*template_versions|template_versions.*unique/i.test(message)) {
@@ -1568,7 +1552,14 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       throw error;
     }
 
-    return json({ success: true, slug: typeof updates.slug === 'string' ? updates.slug : undefined });
+    return json({
+      success: true,
+      slug: typeof changes.slug === 'string' ? changes.slug : undefined,
+      version: nextVersion,
+      content_version: nextContentVersion,
+      structureChanged: syncedItems !== null,
+      reconciledRuns,
+    });
   }
 
   if (request.method === 'DELETE') {

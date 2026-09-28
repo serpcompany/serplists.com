@@ -11,6 +11,7 @@ import {
   loadTemplateDetailData,
   saveTemplateToAccount,
   startTemplateRun,
+  updateTemplateVisibility,
   type TemplateDetailBillingState,
 } from '@/features/template-detail/useTemplateDetailModel';
 
@@ -337,5 +338,27 @@ describe('template detail actions', () => {
     });
 
     expect(result).toEqual({ kind: 'upgrade_required' });
+  });
+});
+
+describe('updateTemplateVisibility', () => {
+  it('sends only the visibility flag and version guard, never the template content', async () => {
+    const apiClient = { updateTemplate: vi.fn().mockResolvedValue({ success: true, version: 4 }) };
+    const template = buildTemplate({ isPublic: false, version: 4 });
+
+    const next = await updateTemplateVisibility({ apiClient, isPublic: true, template });
+
+    expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
+    expect(apiClient.updateTemplate.mock.calls[0]).toEqual(['template-1', { is_public: true, expected_version: 4 }]);
+    expect(next).toEqual({ ...template, isPublic: true, version: 4 });
+  });
+
+  it('keeps the next toggle on the version the server returned', async () => {
+    const apiClient = { updateTemplate: vi.fn().mockResolvedValue({ success: true, version: 7 }) };
+
+    const next = await updateTemplateVisibility({ apiClient, isPublic: false, template: buildTemplate({ version: 6 }) });
+
+    expect(next.version).toBe(7);
+    expect(next.isPublic).toBe(false);
   });
 });
