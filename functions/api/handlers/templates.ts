@@ -4,6 +4,7 @@ import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle
 import { createDb, schema } from '../db';
 import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
+import { withEdgeCache } from '../utils/edge-cache';
 import { log } from '../utils/logger';
 import { getSessionUserId } from '../utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
@@ -976,13 +977,18 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         )
       : and(eq(templates.is_public, true), isNull(templates.deleted_at));
 
-    const rows = await withRulesColumnFallback((includeRules) =>
-      selectTemplatesWithOwner(env, includeRules)
-        .where(whereClause)
-        .orderBy(desc(templates.created_at)),
-    );
+    const listTemplates = async () => {
+      const rows = await withRulesColumnFallback((includeRules) =>
+        selectTemplatesWithOwner(env, includeRules)
+          .where(whereClause)
+          .orderBy(desc(templates.created_at)),
+      );
+      return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
+    };
 
-    return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
+    // Every visitor gets the same public catalog, and building it reads every public
+    // Template, so serve it from the edge for up to 5 minutes (the app's client staleTime).
+    return userId ? listTemplates() : withEdgeCache(request, 5 * 60, listTemplates);
   }
 
   if (request.method === 'POST') {

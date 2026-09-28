@@ -151,6 +151,7 @@ const shareToken = "synthetic-share-50";
 function scenarios(): Scenario[] {
   return [
     { name: "public catalog (GET /api/templates)", actor: "anon", path: "/api/templates" },
+    { name: "public catalog (repeat)", actor: "anon", path: "/api/templates" },
     { name: "public template by slug", actor: "anon", path: `/api/templates/slug/${publicTemplateSlug}` },
     { name: "public profile templates", actor: "anon", path: "/api/templates/public?userId=synthetic-user-2" },
     { name: "public profile by username", actor: "anon", path: "/api/profiles/by-username?username=synth_2" },
