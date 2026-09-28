@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ChecklistTemplate } from "@/types/checklist";
 import { PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION } from "@/lib/schemas/checklistSchema";
 import {
   REPO_TEMPLATE_OWNER_NAME,
@@ -326,7 +327,7 @@ describe("repo template catalog", () => {
     });
     const accountTemplates = mergeAccountTemplateCollections(
       [template("first", "Cached title", 1), template("second", "Second", 1)],
-      [template("first", "Edited title", 2)],
+      [template("first", "Edited title", 2), template("second", "Second", 1)],
       "user-1",
     );
 
@@ -334,5 +335,62 @@ describe("repo template catalog", () => {
       ["first", "Edited title"],
       ["second", "Second"],
     ]);
+  });
+
+  describe("when the user's own list has loaded", () => {
+    const template = (id: string, overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
+      id,
+      title: id,
+      description: "",
+      sections: [],
+      userId: "user-1",
+      createdAt: "2026-03-24T00:00:00.000Z",
+      updatedAt: "2026-03-24T00:00:00.000Z",
+      isPublic: true,
+      slug: id,
+      categories: [],
+      tags: [],
+      version: 1,
+      ...overrides,
+    });
+    const ids = (templates: ChecklistTemplate[]) => templates.map((entry) => entry.id);
+
+    it("drops a cached catalog copy of a Personal template the user deleted", () => {
+      const catalog = [template("deleted"), template("kept")];
+
+      expect(ids(mergeAccountTemplateCollections(catalog, [template("kept")], "user-1"))).toEqual(["kept"]);
+      expect(ids(mergeAccountTemplateCollections([template("deleted")], [], "user-1"))).toEqual([]);
+    });
+
+    it("keeps other users' public templates, repo templates, and the user's Organization templates", () => {
+      const catalog = [
+        template("someone-else", { userId: "user-2" }),
+        template("repo:camping", { userId: REPO_TEMPLATE_USER_ID }),
+        template("org-template", { teamId: "team-1" }),
+      ];
+
+      expect(ids(mergeAccountTemplateCollections(catalog, [], "user-1"))).toEqual([
+        "someone-else",
+        "repo:camping",
+        "org-template",
+      ]);
+    });
+
+    it("uses the owned copy when a public template was made private, and adds private ones", () => {
+      const merged = mergeAccountTemplateCollections(
+        [template("was-public")],
+        [template("was-public", { isPublic: false }), template("private", { isPublic: false })],
+        "user-1",
+      );
+
+      expect(merged.map((entry) => [entry.id, entry.isPublic])).toEqual([
+        ["was-public", false],
+        ["private", false],
+      ]);
+    });
+
+    it("keeps the catalog copies until the user's own list has loaded", () => {
+      expect(ids(mergeAccountTemplateCollections([template("mine")], undefined, "user-1"))).toEqual(["mine"]);
+    });
   });
 });

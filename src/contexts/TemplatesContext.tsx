@@ -33,7 +33,7 @@ import {
   mergePublicTemplateCollections,
   repoTemplates,
 } from "@/lib/repoTemplateCatalog";
-import { refreshRunLists } from "./templateListCache";
+import { dropTemplateFromCatalog, refreshRunLists } from "./templateListCache";
 
 
 const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
@@ -209,7 +209,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // These observers read whatever useTemplateLists() has loaded, without fetching.
   const listQueries = buildTemplateListQueries({ ready: !isWorkspaceLoading, userId: user?.id, activeTeamId, workspaceScopeId, fetchList: fetchTemplateList });
   const { data: catalogApiTemplates = [], isLoading: catalogTemplatesLoading } = useQuery({ ...listQueries.catalog, enabled: false });
-  const { data: workspaceTemplates = [], isLoading: workspaceTemplatesLoading } = useQuery({ ...listQueries.workspace, enabled: false });
+  const { data: loadedWorkspaceTemplates, isLoading: workspaceTemplatesLoading } = useQuery({ ...listQueries.workspace, enabled: false });
+  const workspaceTemplates = useMemo(() => loadedWorkspaceTemplates ?? [], [loadedWorkspaceTemplates]);
 
   // Runs load on demand too: useTemplateLists({ runs: true }) on the runs page only.
   const runsQuery: UseQueryOptions<ChecklistRun[]> = {
@@ -270,8 +271,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     () =>
       activeTeamId
         ? workspaceTemplates
-        : mergeAccountTemplateCollections(publicTemplates, workspaceTemplates, user?.id),
-    [activeTeamId, publicTemplates, workspaceTemplates, user?.id],
+        : mergeAccountTemplateCollections(publicTemplates, loadedWorkspaceTemplates, user?.id),
+    [activeTeamId, publicTemplates, workspaceTemplates, loadedWorkspaceTemplates, user?.id],
   );
   const templatesLoading = catalogTemplatesLoading || workspaceTemplatesLoading;
 
@@ -367,7 +368,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await api.deleteTemplate(id);
       return true;
     },
-    onSuccess: () => {
+    onSuccess: (_deleted, id) => {
+      dropTemplateFromCatalog(queryClient, id);
       queryClient.invalidateQueries({ queryKey: ['templates'] });
       queryClient.invalidateQueries({ queryKey: ['runs'] });
     }

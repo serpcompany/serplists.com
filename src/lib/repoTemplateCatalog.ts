@@ -104,19 +104,33 @@ export const mergePublicTemplateCollections = (
   return Array.from(merged.values());
 };
 
+// `apiCollection` is the user's own Personal list, or undefined until it has loaded.
 export const mergeAccountTemplateCollections = (
   publicCollection: ChecklistTemplate[],
-  apiCollection: ChecklistTemplate[],
+  apiCollection: ChecklistTemplate[] | undefined,
   currentUserId?: string,
 ): ChecklistTemplate[] => {
-  if (!currentUserId) return publicCollection;
+  if (!currentUserId || !apiCollection) return publicCollection;
 
   const ownedTemplates = apiCollection.filter(
     (template) => template.userId === currentUserId,
   );
-  // The catalog can be up to 5 minutes old (edge cache), so the user's own copy wins;
-  // Map.set keeps each template's original position.
-  const merged = new Map(publicCollection.map((template) => [template.id, template]));
+  const ownedIds = new Set(ownedTemplates.map((template) => template.id));
+  // The catalog can be up to 5 minutes old (edge cache), so the loaded Personal list is the
+  // source of truth for the user's own Personal templates: a catalog copy missing from it was
+  // deleted, made private, or moved to an Organization. The user's own copy wins, and Map.set
+  // keeps each template's original position.
+  const merged = new Map(
+    publicCollection
+      .filter(
+        (template) =>
+          template.userId !== currentUserId ||
+          Boolean(template.teamId) ||
+          isRepoTemplate(template) ||
+          ownedIds.has(template.id),
+      )
+      .map((template) => [template.id, template]),
+  );
   ownedTemplates.forEach((template) => merged.set(template.id, template));
 
   return Array.from(merged.values());

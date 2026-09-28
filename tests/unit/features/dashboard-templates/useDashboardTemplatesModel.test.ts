@@ -5,6 +5,7 @@ import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
 import { Layout } from '@/components/Layout';
+import { mergeAccountTemplateCollections } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import {
@@ -191,6 +192,19 @@ describe('buildDashboardTemplatesState', () => {
     expect(state.canCreateTemplate).toBe(true);
     expect(state.canCreateRun).toBe(false);
     expect(state.totalTemplateItems).toBe(0);
+  });
+
+  it('drops a deleted public template that is still in the cached public catalog', () => {
+    const deleted = buildTemplate({ id: 'deleted-public', title: 'Deleted Public', isPublic: true });
+    const kept = buildTemplate({ id: 'kept', title: 'Kept' });
+    const state = buildDashboardTemplatesState({
+      allTemplates: mergeAccountTemplateCollections([deleted], [kept], 'user-1'),
+      templatesLoading: false,
+      userId: 'user-1',
+    });
+
+    expect(state.templates.map((template) => template.id)).toEqual(['kept']);
+    expect(state.canCreateRun).toBe(true);
   });
 
   it('keeps loading true while the source data is still resolving', () => {
