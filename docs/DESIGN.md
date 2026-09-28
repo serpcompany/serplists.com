@@ -14,7 +14,8 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
 - **Themes:** light (default) and dark, stored under `serplists-theme` and applied
   as the `dark` class on `<html>` (`src/lib/theme.ts`).
 - **Icons:** `lucide-react`.
-- **Feedback:** `sonner` toasts for results of user actions.
+- **Feedback:** `sonner` toasts for results of user actions. `App.tsx` mounts only the sonner
+  `Toaster`, so import `toast` from `sonner`; ESLint blocks the shadcn toast store, which has no renderer.
 - **Console layout:** `src/components/dashboard/DashboardContentShell.tsx` provides
   `DashboardContentShell`, `DashboardPageHeader`, `DashboardToolbar`,
   `DashboardScrollArea`, `DashboardEmptyState`, and `DashboardMetricCard`. New

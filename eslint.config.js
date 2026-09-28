@@ -28,6 +28,10 @@ const LEGACY_MAX_LINES = {
   "src/features/template-detail/useTemplateDetailModel.ts": 550,
 };
 
+const TOAST_MESSAGE =
+  "App.tsx mounts only the sonner Toaster, so toasts from any other toast store are never shown. " +
+  "Import { toast } from 'sonner' instead.";
+
 const VOCABULARY_MESSAGE =
   "User-visible text must use docs/PRODUCT_SENSE.md terms: 'Organization' (not Team/Workspace) and 'Personal' " +
   "(not 'Personal workspace'). Legacy code identifiers are fine; this rule only checks visible copy.";
@@ -81,6 +85,18 @@ export default tseslint.config(
     files: [file],
     rules: { "max-lines": ["error", { max }] },
   })),
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [{ name: "@radix-ui/react-toast", message: TOAST_MESSAGE }],
+          patterns: [{ group: ["**/use-toast", "**/ui/toast", "**/ui/toaster"], message: TOAST_MESSAGE }],
+        },
+      ],
+    },
+  },
   {
     files: ["functions/**/*.ts"],
     ignores: ["functions/api/utils/logger.ts"],
