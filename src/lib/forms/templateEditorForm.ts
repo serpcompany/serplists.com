@@ -125,11 +125,12 @@ export function createTemplateEditorSection(): TemplateEditorSection {
   };
 }
 
-// Stored content is not validated on import (TD-3): legacy backups and hand-written or
-// generated JSON can hold nulls, numbers, unknown types, or bare values. Loading
+// Content stored before the API checked every write (legacy backups, hand-written or
+// generated JSON) can hold nulls, numbers, unknown types, or bare values. Loading
 // coerces all of it into values the editor schema accepts, keeping what it can (an
 // unknown block becomes a text block with its value), so a template is never stuck
-// unsaveable. Values are read as unknown for that reason.
+// unsaveable. Values are read as unknown for that reason, straight from the stored
+// sections: the display mappers drop what no page renders, and a save would delete it.
 const TEMPLATE_EDITOR_CONTENT_TYPES = templateEditorContentSchema.shape.type.options;
 
 type StoredRecord = Record<string, unknown>;
@@ -253,12 +254,18 @@ function buildTemplateEditorSections(sections?: unknown): TemplateEditorSection[
   return [createTemplateEditorSection()];
 }
 
+// A template whose sections may be stored JSON of any shape (see above).
+export type TemplateEditorFormSource = Omit<Partial<ChecklistTemplate>, "sections"> & {
+  sections?: unknown;
+};
+
 export function buildTemplateEditorFormValues(
-  template?: Partial<ChecklistTemplate>,
+  template: TemplateEditorFormSource = {},
 ): TemplateEditorFormValues {
+  const { sections, ...details } = template;
   return {
-    ...buildTemplateEditorDetailsFormValues(template),
-    sections: buildTemplateEditorSections(template?.sections),
+    ...buildTemplateEditorDetailsFormValues(details),
+    sections: buildTemplateEditorSections(sections),
   };
 }
 

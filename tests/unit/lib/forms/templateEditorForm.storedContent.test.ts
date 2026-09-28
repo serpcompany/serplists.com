@@ -8,8 +8,8 @@ import {
 } from "@/lib/forms/templateEditorForm";
 import type { ChecklistSection } from "@/types/checklist";
 
-// Stored content is not validated on import (TD-3): a legacy backup, a hand-written or
-// generated JSON file can hold nulls, numbers, or unknown types. The editor must still
+// Content stored before the API checked every write (a legacy backup, a hand-written or
+// generated JSON file) can hold nulls, numbers, or unknown types. The editor must still
 // open it in a state it can save.
 const malformedContents: Array<[string, unknown]> = [
   ["null file details", { id: "c1", type: "file", value: "https://x/doc.pdf", fileName: null, fileSize: null, uploadType: null }],

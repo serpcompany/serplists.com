@@ -222,12 +222,14 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   collapsed, is keyed by section id and never seeded from the sections present at
   mount: a Clipy draft, a restored draft, or a save replaces the sections with
   `reset()`.
-- Stored content is not validated on import (TD-3), so `buildTemplateEditorFormValues`
-  coerces it into values the editor schema accepts: numeric ids and values become
-  strings, an unknown block type becomes a text block that keeps its value, invalid
-  file details are dropped, and every content block gets its own id (uploads find
-  their block by id). A loaded template can always be saved. Save validation errors
-  inside the outline name the section, task, and content block.
+- Content stored before the API checked every write can hold shapes the editor does
+  not use, so `buildTemplateEditorFormValues` coerces it into values the editor schema
+  accepts: numeric ids and values become strings, an unknown block type becomes a text
+  block that keeps its value, invalid file details are dropped, and every content block
+  gets its own id (uploads find their block by id). The editor builds the form from the
+  stored sections the API returns, not the display mapper's copy, which drops what no
+  page renders. A loaded template can always be saved without losing content. Save
+  validation errors inside the outline name the section, task, and content block.
 - An image, video, or file block's `fileName` and `fileSize` describe the file its
   value points to: an upload, or a linked file an author named (`uploadType: "url"`).
   Typing in the URL field writes the value with `withMediaValue`
