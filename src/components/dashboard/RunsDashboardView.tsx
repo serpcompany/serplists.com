@@ -51,6 +51,7 @@ import {
   buildRunPath,
 } from '@/lib/routes';
 import { cn } from '@/lib/utils';
+import { countRunTasks } from '@/lib/utils/checklistSections';
 import type { ChecklistRun } from '@/types/checklist';
 import { toast } from 'sonner';
 import { createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
@@ -86,17 +87,11 @@ const formatDate = (dateString: string) =>
     year: 'numeric',
   });
 
-const getTaskCounts = (run: ChecklistRun) =>
-  run.sections.reduce(
-    (acc, section) => {
-      const completed = section.items.filter((item) => item.isCompleted).length;
-      return {
-        completed: acc.completed + completed,
-        total: acc.total + section.items.length,
-      };
-    },
-    { completed: 0, total: 0 },
-  );
+// Tasks only, as on the run page; the bar shows the run's overall progress.
+const getTaskCounts = (run: ChecklistRun) => {
+  const { tasksCompleted, tasksTotal } = countRunTasks(run.sections);
+  return { completed: tasksCompleted, total: tasksTotal };
+};
 
 export function RunsDashboardView({
   runs,

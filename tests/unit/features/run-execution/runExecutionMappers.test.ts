@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { calculateRunProgress } from '@functions/api/utils/template-reconciliation';
 import {
   areItemSubItemsCompleted,
+  countRunExecutionItems,
   getNextSelectedItemId,
   getSelectionAfterToggle,
   mapChecklistToRun,
@@ -112,5 +114,76 @@ describe('areItemSubItemsCompleted', () => {
 
   it('treats a sub-task with no completion flag as open', () => {
     expect(areItemSubItemsCompleted(item([block(true, undefined)]))).toBe(false);
+  });
+});
+
+// "Tasks" on the run page are top-level tasks, as in the task list, "Task N of M" and the
+// runs list. Sub-tasks are counted apart; progress still weights both, like the API.
+describe('countRunExecutionItems', () => {
+  const task = (id: string, subTasks: boolean[], isCompleted = false): ChecklistItem => ({
+    id,
+    title: id,
+    isCompleted,
+    contents: [
+      {
+        type: 'subItems',
+        value: '',
+        subItems: subTasks.map((done, index) => ({ id: `${id}-${index}`, title: `${id} ${index}`, isCompleted: done })),
+      },
+    ],
+  });
+  const runOf = (...items: ChecklistItem[]): ChecklistRun =>
+    ({ id: 'run-1', sections: [{ id: 's1', title: 'One', items }] }) as unknown as ChecklistRun;
+
+  it('counts tasks and sub-tasks separately', () => {
+    const counts = countRunExecutionItems(runOf(task('a', [false, false, false]), task('b', [false, false, false]), task('c', [false, false, false])));
+    expect(counts).toEqual({ progress: 0, subTasksCompleted: 0, subTasksTotal: 9, tasksCompleted: 0, tasksTotal: 3 });
+  });
+
+  it('does not count a ticked sub-task as a finished task', () => {
+    const counts = countRunExecutionItems(runOf(task('a', [true, false, false]), task('b', [false, false, false]), task('c', [false, false, false])));
+    expect(counts).toMatchObject({ subTasksCompleted: 1, tasksCompleted: 0, tasksTotal: 3 });
+    expect(counts.progress).toBe(8);
+  });
+
+  it('sums every Sub-tasks block of a task and skips other content', () => {
+    const item: ChecklistItem = {
+      id: 'a',
+      title: 'a',
+      isCompleted: false,
+      contents: [
+        { type: 'text', value: 'Read me' },
+        { type: 'subItems', value: '', subItems: [{ id: 'a-1', title: 'one', isCompleted: true }] },
+        { type: 'subItems', value: '' },
+        { type: 'subItems', value: '', subItems: [{ id: 'a-2', title: 'two', isCompleted: false }] },
+      ],
+    };
+    expect(countRunExecutionItems(runOf(item, { id: 'b', title: 'b', isCompleted: true }))).toEqual({
+      progress: 50,
+      subTasksCompleted: 1,
+      subTasksTotal: 2,
+      tasksCompleted: 1,
+      tasksTotal: 2,
+    });
+  });
+
+  it('returns zeros for no run or a run with no tasks', () => {
+    const zero = { progress: 0, subTasksCompleted: 0, subTasksTotal: 0, tasksCompleted: 0, tasksTotal: 0 };
+    expect(countRunExecutionItems(null)).toEqual(zero);
+    expect(countRunExecutionItems(runOf())).toEqual(zero);
+    expect(countRunExecutionItems({ id: 'run-1', sections: [] } as unknown as ChecklistRun)).toEqual(zero);
+  });
+
+  it('weights progress the same way as the API that stores it', () => {
+    const patterns: ChecklistItem[][] = [
+      [task('a', [true, false, false]), task('b', [false, false, false]), task('c', [false, false, false])],
+      [task('a', [true, true, true], true), task('b', [true, false]), { id: 'c', title: 'c', isCompleted: true }],
+      [task('a', [false], true), { id: 'b', title: 'b', isCompleted: false }],
+      [{ id: 'a', title: 'a', isCompleted: true }],
+    ];
+    for (const items of patterns) {
+      const run = runOf(...items);
+      expect(countRunExecutionItems(run).progress).toBe(calculateRunProgress(run.sections));
+    }
   });
 });

@@ -64,26 +64,42 @@ export function normalizeSections(raw: unknown): ChecklistSection[] {
   });
 }
 
-export function calculateSectionsProgress(sections: ChecklistSection[]): number {
-  let completed = 0;
-  let total = 0;
+// A run's tasks are its top-level items; sub-tasks are the rows of their Sub-tasks blocks.
+// They are counted apart, so a label that says "tasks" never includes sub-tasks.
+export type RunTaskCounts = {
+  subTasksCompleted: number;
+  subTasksTotal: number;
+  tasksCompleted: number;
+  tasksTotal: number;
+};
 
-  sections.forEach((section) => {
-    section.items.forEach((item) => {
-      total++;
-      if (item.isCompleted) completed++;
+export function countRunTasks(sections: ChecklistSection[]): RunTaskCounts {
+  const counts: RunTaskCounts = { subTasksCompleted: 0, subTasksTotal: 0, tasksCompleted: 0, tasksTotal: 0 };
 
-      item.contents?.forEach((content) => {
-        if (content.type === "subItems" && content.subItems) {
-          content.subItems.forEach((subItem) => {
-            total++;
-            if (subItem.isCompleted) completed++;
-          });
+  for (const section of sections) {
+    for (const item of section.items) {
+      counts.tasksTotal += 1;
+      if (item.isCompleted === true) counts.tasksCompleted += 1;
+
+      for (const content of item.contents ?? []) {
+        if (content.type !== "subItems" || !content.subItems) continue;
+        for (const subItem of content.subItems) {
+          counts.subTasksTotal += 1;
+          if (subItem.isCompleted === true) counts.subTasksCompleted += 1;
         }
-      });
-    });
-  });
+      }
+    }
+  }
 
+  return counts;
+}
+
+// Overall progress weights every task and sub-task the same, like the API's
+// calculateRunProgress (functions/api/utils/template-reconciliation.ts), which stores it.
+export function calculateSectionsProgress(sections: ChecklistSection[]): number {
+  const counts = countRunTasks(sections);
+  const total = counts.tasksTotal + counts.subTasksTotal;
+  const completed = counts.tasksCompleted + counts.subTasksCompleted;
   return total > 0 ? Math.round((completed / total) * 100) : 0;
 }
 

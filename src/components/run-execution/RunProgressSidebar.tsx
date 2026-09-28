@@ -1,9 +1,12 @@
 import { Check, ChevronRight, Circle } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { countRunTasks } from '@/lib/utils/checklistSections';
 import type { ChecklistSection, ChecklistItem } from '@/types/checklist';
 
 interface RunProgressPanelProps {
+  // The run's overall progress (tasks and sub-tasks), the same percentage as the header.
+  progress: number;
   sections: ChecklistSection[];
   currentSectionId: string | null;
   currentTaskId: string | null;
@@ -16,14 +19,8 @@ interface RunTaskListProps extends RunProgressPanelProps {
 }
 
 const getSectionProgress = (section: ChecklistSection) => {
-  const total = section.items.length;
-  const completed = section.items.filter((item) => item.isCompleted).length;
-
-  return {
-    completed,
-    percentage: total > 0 ? (completed / total) * 100 : 0,
-    total,
-  };
+  const { tasksCompleted, tasksTotal } = countRunTasks([section]);
+  return { completed: tasksCompleted, total: tasksTotal };
 };
 
 const isTaskCompleted = (item: ChecklistItem) => item.isCompleted === true;
@@ -37,13 +34,10 @@ export function RunTaskList({
   currentTaskId,
   label,
   onSelectTask,
+  progress,
 }: RunTaskListProps) {
-  const completedTasks = sections.reduce(
-    (total, section) => total + section.items.filter((item) => item.isCompleted).length,
-    0,
-  );
-  const totalTasks = sections.reduce((total, section) => total + section.items.length, 0);
-  const overallPercentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+  // Counts tasks only, like "Task N of M"; the bar shows the overall progress.
+  const { tasksCompleted: completedTasks, tasksTotal: totalTasks } = countRunTasks(sections);
 
   return (
     <>
@@ -163,7 +157,7 @@ export function RunTaskList({
         <div className="h-2 overflow-hidden rounded-full bg-secondary">
           <div
             className="h-full bg-success transition-all duration-300"
-            style={{ width: `${overallPercentage}%` }}
+            style={{ width: `${progress}%` }}
           />
         </div>
       </div>

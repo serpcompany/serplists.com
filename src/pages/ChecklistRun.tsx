@@ -44,6 +44,7 @@ import {
   buildConsoleRunsPath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
+import { countRunTasks } from '@/lib/utils/checklistSections';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import { onSingleClick } from '@/lib/utils/repeatClick';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
@@ -328,13 +329,8 @@ const ChecklistRunPage = () => {
       : null;
 
   const sectionProgress = displayRun.sections.map((section, index) => {
-    const completed = section.items.filter((item) => item.isCompleted).length;
-    return {
-      completed,
-      index,
-      total: section.items.length,
-      section,
-    };
+    const { tasksCompleted, tasksTotal } = countRunTasks([section]);
+    return { completed: tasksCompleted, index, total: tasksTotal, section };
   });
   // Stays available after the completion dialog is dismissed, a reload, or MCP ticks.
   const finishRunButton = canUpdateRun && canFinishRun(displayRun) ? (
@@ -423,7 +419,8 @@ const ChecklistRunPage = () => {
   ) : (
     displayRun.title
   );
-  const privateRunDescription = `${counts.completed} of ${counts.total} tasks finished`;
+  // Tasks only, like the task list and "Task N of M"; the percentage also weights sub-tasks.
+  const privateRunDescription = `${counts.tasksCompleted} of ${counts.tasksTotal} tasks finished`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -492,7 +489,7 @@ const ChecklistRunPage = () => {
                       {progress}%
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {counts.completed} of {counts.total} tasks
+                      {counts.tasksCompleted} of {counts.tasksTotal} tasks
                     </p>
                   </div>
                 </div>
@@ -599,14 +596,14 @@ const ChecklistRunPage = () => {
           />
           <DashboardScrollArea className="p-0">
           <MobileRunProgress
-            completedTasks={counts.completed}
+            completedTasks={counts.tasksCompleted}
             currentSectionId={currentSectionId}
             currentTaskId={activeItemId}
             onSelectTask={(_, taskId) => setSelectedItemId(taskId)}
             position={selectedEntry ? { index: selectedIndex, total: flatItems.length } : null}
             progress={displayProgress}
             sections={displayRun.sections}
-            totalTasks={counts.total}
+            totalTasks={counts.tasksTotal}
           />
 
           <div
@@ -655,6 +652,7 @@ const ChecklistRunPage = () => {
               <RunHistorySection history={history} />
             </main>
             <RunProgressPanel
+              progress={displayProgress}
               sections={displayRun.sections}
               currentSectionId={currentSectionId}
               currentTaskId={activeItemId}

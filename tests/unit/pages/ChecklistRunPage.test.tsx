@@ -4,6 +4,7 @@ import { Route, Routes } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { countRunExecutionItems } from '@/features/run-execution/runExecutionMappers';
 import ChecklistRunPage from '@/pages/ChecklistRun';
 import type { ChecklistRun } from '@/types/checklist';
 
@@ -80,7 +81,7 @@ const baseRun: ChecklistRun = {
 describe('ChecklistRunPage layout', () => {
   it('renders the private run inside the shared dashboard shell with one persistent app sidebar', () => {
     mockUseRunExecutionModel.mockReturnValue({
-      counts: { completed: 2, total: 9 },
+      counts: { progress: 35, subTasksCompleted: 1, subTasksTotal: 6, tasksCompleted: 1, tasksTotal: 3 },
       createShare: vi.fn(),
       history: {
         data: {
@@ -165,7 +166,7 @@ describe('ChecklistRunPage layout', () => {
 
   it('renders the shared run as the public copyable checklist flow', () => {
     mockUseRunExecutionModel.mockReturnValue({
-      counts: { completed: 2, total: 7 },
+      counts: { progress: 29, subTasksCompleted: 1, subTasksTotal: 4, tasksCompleted: 1, tasksTotal: 3 },
       createShare: vi.fn(),
       history: {
         data: null,
@@ -244,7 +245,7 @@ const renderRunPage = (
 ) => {
   const done = run.sections[0].items.filter((item) => item.isCompleted).length;
   mockUseRunExecutionModel.mockReturnValue({
-    counts: { completed: done, total: 2 },
+    counts: countRunExecutionItems(run),
     createShare: vi.fn(),
     history: { data: null, isError: false, isLoading: false },
     isSharedRun: options.shared === true,
@@ -410,3 +411,55 @@ describe('ChecklistRunPage Organization roles', () => {
   });
 });
 
+
+// Sub-tasks are not tasks: every "tasks" count on the page matches the task list, the
+// "Task N of M" badge and the runs list.
+describe('ChecklistRunPage task counts', () => {
+  const taskWithSubTasks = (id: string, ticked: number) => ({
+    id,
+    title: `Task ${id}`,
+    isCompleted: false,
+    contents: [
+      {
+        type: 'subItems' as const,
+        value: '',
+        subItems: [0, 1, 2].map((index) => ({ id: `${id}-${index}`, title: `Step ${id}${index}`, isCompleted: index < ticked })),
+      },
+    ],
+  });
+  // Three tasks with three sub-tasks each, one sub-task ticked: 1 of 12 units, 8%.
+  const runWithSubTasks = (): ChecklistRun => ({
+    ...baseRun,
+    progress: 8,
+    sections: [
+      {
+        id: 'section-1',
+        title: 'Pre-Launch',
+        items: [taskWithSubTasks('a', 1), taskWithSubTasks('b', 0), taskWithSubTasks('c', 0)],
+      },
+    ],
+  });
+
+  it('shows the same task total in the header, the progress block and the task list', () => {
+    const html = renderRunPage(runWithSubTasks(), { selectedItemId: 'a' });
+
+    expect(html.match(/0 of 3 tasks finished/g)).toHaveLength(2);
+    expect(html).toContain('0 / 3 tasks');
+    expect(html).toContain('Task 1 of 3');
+    expect(html).not.toMatch(/(of|\/) 12/);
+  });
+
+  it('fills the task list bar with the same overall progress as the header', () => {
+    const html = renderRunPage(runWithSubTasks(), { selectedItemId: 'a' });
+
+    expect(html.match(/width:8%/g)).toHaveLength(2);
+    expect(html).not.toContain('width:0%');
+  });
+
+  it('counts tasks, not sub-tasks, in the shared view', () => {
+    const html = renderRunPage(runWithSubTasks(), { selectedItemId: 'a', shared: true });
+
+    expect(html).toContain('0 of 3 tasks');
+    expect(html).not.toMatch(/of 12/);
+  });
+});

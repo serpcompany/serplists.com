@@ -1,7 +1,9 @@
 import {
   calculateSectionsProgress,
+  countRunTasks,
   isSectionsShape,
   normalizeSections,
+  type RunTaskCounts,
 } from '@/lib/utils/checklistSections';
 import type {
   ChecklistItem,
@@ -132,47 +134,12 @@ export const getSelectionAfterToggle = (
   return toggled?.isCompleted ? getNextSelectedItemId(run, toggledItemId) : currentSelectedItemId;
 };
 
+// Tasks and sub-tasks of the run, counted apart, with the overall progress that weights both.
 export const countRunExecutionItems = (
   run: ChecklistRun | null,
-): {
-  completed: number;
-  progress: number;
-  total: number;
-} => {
-  if (!run) {
-    return { completed: 0, progress: 0, total: 0 };
-  }
-
-  let completed = 0;
-  let total = 0;
-
-  run.sections.forEach((section) => {
-    section.items.forEach((item) => {
-      total += 1;
-      if (item.isCompleted) {
-        completed += 1;
-      }
-
-      item.contents?.forEach((content) => {
-        if (content.type !== 'subItems' || !content.subItems) {
-          return;
-        }
-
-        content.subItems.forEach((subItem) => {
-          total += 1;
-          if (subItem.isCompleted) {
-            completed += 1;
-          }
-        });
-      });
-    });
-  });
-
-  return {
-    completed,
-    progress: total > 0 ? Math.round((completed / total) * 100) : 0,
-    total,
-  };
+): RunTaskCounts & { progress: number } => {
+  const sections = run?.sections ?? [];
+  return { ...countRunTasks(sections), progress: calculateSectionsProgress(sections) };
 };
 
 export const getSelectedRunItem = (

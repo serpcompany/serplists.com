@@ -33,7 +33,7 @@ const sections: ChecklistSection[] = [
 
 describe('RunTaskList', () => {
   const list = (currentTaskId: string | null, onSelectTask = vi.fn()) =>
-    RunTaskList({ currentSectionId: 'setup', currentTaskId, label: 'Run tasks', onSelectTask, sections });
+    RunTaskList({ currentSectionId: 'setup', currentTaskId, label: 'Run tasks', onSelectTask, progress: 33, sections });
 
   it('lists every task at any width, marking the current and finished ones', () => {
     const html = renderToStaticMarkup(list('t2'));
@@ -59,9 +59,38 @@ describe('RunTaskList', () => {
     expect(onSelectTask).toHaveBeenCalledWith('launch', 't3');
   });
 
+  // The bar is the run's overall progress (sub-tasks weigh in), the same as the header's;
+  // the label counts tasks only.
+  it('fills the bar with the overall progress it is given and counts tasks, not sub-tasks', () => {
+    const withSubTasks: ChecklistSection[] = [
+      {
+        id: 'setup',
+        title: 'Setup',
+        items: [
+          {
+            id: 't1',
+            title: 'Create the account',
+            isCompleted: false,
+            contents: [
+              { type: 'subItems', value: '', subItems: [{ id: 's1', title: 'Pick a name', isCompleted: true }] },
+            ],
+          },
+          { id: 't2', title: 'Invite the Organization', isCompleted: false },
+        ],
+      },
+    ];
+    const html = renderToStaticMarkup(
+      RunTaskList({ currentSectionId: 'setup', currentTaskId: 't1', label: 'Run tasks', onSelectTask: vi.fn(), progress: 33, sections: withSubTasks }),
+    );
+
+    expect(html).toContain('0 / 2 tasks');
+    expect(html).toContain('0/2');
+    expect(html).toContain('width:33%');
+  });
+
   it('shows an empty state for a run with no tasks', () => {
     const html = renderToStaticMarkup(
-      RunTaskList({ currentSectionId: null, currentTaskId: null, label: 'Run tasks', onSelectTask: vi.fn(), sections: [] }),
+      RunTaskList({ currentSectionId: null, currentTaskId: null, label: 'Run tasks', onSelectTask: vi.fn(), progress: 0, sections: [] }),
     );
     expect(html).toContain('This run has no tasks.');
   });
@@ -70,7 +99,7 @@ describe('RunTaskList', () => {
 describe('RunProgressPanel', () => {
   it('stays the desktop column only', () => {
     const html = renderToStaticMarkup(
-      <RunProgressPanel currentSectionId="setup" currentTaskId="t2" onSelectTask={vi.fn()} sections={sections} />,
+      <RunProgressPanel currentSectionId="setup" currentTaskId="t2" onSelectTask={vi.fn()} progress={33} sections={sections} />,
     );
     expect(html).toMatch(/<section class="hidden [^"]*xl:flex"[^>]*data-run-progress-panel="true"/);
     expect(html).toContain('Invite the Organization');

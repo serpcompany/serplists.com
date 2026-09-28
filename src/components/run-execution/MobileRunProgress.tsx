@@ -108,6 +108,7 @@ export function MobileRunProgress({
                   onSelectTask(sectionId, taskId);
                   setIsTaskListOpen(false);
                 }}
+                progress={progress}
                 sections={sections}
               />
             </SheetContent>
