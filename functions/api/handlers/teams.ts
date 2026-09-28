@@ -6,9 +6,9 @@ import { createInviteToken, sha256Hex } from "../utils/crypto";
 import { buildAuditEventValues } from "../utils/audit";
 import { batchWriteMissed, insertAuditEventWhere } from "../utils/guarded-writes";
 import { getSessionUserId } from "../utils/session";
-import { generateSlug } from "../utils/slug";
 import { buildTeamInviteDelivery } from "../utils/team-invite-delivery";
 import { buildInviteRevocation } from "../utils/team-invite-revocation";
+import { generateUniqueTeamSlug, isTeamSlugTaken, teamSlugInUseError } from "../utils/team-slug";
 import {
   canManageTeam,
   getActiveTeamMembership,
@@ -55,21 +55,6 @@ async function readJson(request: Request): Promise<unknown> {
   } catch {
     return null;
   }
-}
-
-async function generateUniqueTeamSlug(env: Env, name: string, teamId: string, requestedSlug?: string): Promise<string> {
-  const db = createDb(env);
-  const { teams } = schema;
-  const base = generateSlug(requestedSlug || name) || `team-${teamId.slice(0, 8)}`;
-
-  const [existing] = await db.select({ id: teams.id }).from(teams).where(eq(teams.slug, base)).limit(1);
-  if (!existing) return base;
-
-  const suffixed = `${base}-${teamId.slice(0, 8)}`;
-  const [existingSuffixed] = await db.select({ id: teams.id }).from(teams).where(eq(teams.slug, suffixed)).limit(1);
-  if (!existingSuffixed) return suffixed;
-
-  return `${base}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
 async function getCurrentUserEmail(env: Env, userId: string): Promise<string | null> {
@@ -360,7 +345,13 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
 
     const now = new Date().toISOString();
     const teamId = crypto.randomUUID();
-    const slug = await generateUniqueTeamSlug(env, parsed.data.name, teamId, parsed.data.slug);
+    // A slug the caller typed is used as given or refused, like PUT; only a slug derived
+    // from the name gets a suffix when taken.
+    const requestedSlug = parsed.data.slug;
+    if (requestedSlug && (await isTeamSlugTaken(db, requestedSlug))) {
+      return teamSlugInUseError();
+    }
+    const slug = requestedSlug ?? (await generateUniqueTeamSlug(db, parsed.data.name, teamId));
     const team = {
       id: teamId,
       name: parsed.data.name,
@@ -530,16 +521,8 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     }
 
     if (typeof parsed.data.slug === "string" && parsed.data.slug !== team.slug) {
-      const [existingSlug] = await db
-        .select({ id: teams.id })
-        .from(teams)
-        .where(eq(teams.slug, parsed.data.slug))
-        .limit(1);
-
-      if (existingSlug && existingSlug.id !== teamId) {
-        return jsonError("Organization slug is already in use", 409, {
-          code: "team_slug_exists",
-        });
+      if (await isTeamSlugTaken(db, parsed.data.slug, teamId)) {
+        return teamSlugInUseError();
       }
 
       updates.slug = parsed.data.slug;

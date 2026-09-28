@@ -161,6 +161,59 @@ describe("Teams handler", () => {
     );
   });
 
+  it("rejects team creation with an explicitly requested slug that is taken", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: "other-team" }]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "Acme", slug: "acme" }),
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data).toEqual({ error: "Organization slug is already in use", code: "team_slug_exists" });
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+    expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
+  });
+
+  it("creates a team with an explicitly requested free slug unchanged", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "Acme", slug: "acme" }),
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.slug).toBe("acme");
+    expect(dbMocks.insertChain.values.mock.calls[0][0].slug).toBe("acme");
+  });
+
+  it("suffixes a name-derived slug that is taken", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: "other-team" }]).mockResolvedValueOnce([]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "Acme" }),
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.slug).toMatch(/^acme-[0-9a-f]{8}$/);
+    expect(dbMocks.insertChain.values.mock.calls[0][0].slug).toBe(data.slug);
+  });
+
   it("lists active team memberships", async () => {
     dbMocks.selectChain.orderBy.mockResolvedValueOnce([
       {

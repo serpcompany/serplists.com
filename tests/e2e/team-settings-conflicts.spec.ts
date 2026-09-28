@@ -271,3 +271,24 @@ test('Save Organization stays disabled until a field changes and sends only what
   await expect(page.getByText('No fields to update')).toHaveCount(0);
   expect(updateBodies).toEqual([{ name: 'Acme Ops' }]);
 });
+
+test('creating an Organization with a taken slug shows the conflict and keeps the form', async ({ page }) => {
+  const state: MockState = {
+    members: [ownerMember],
+    invites: [],
+    requests: [],
+    respond: (method, path) => (method === 'POST' && path === '/api/teams'
+      ? { status: 409, body: { error: 'Organization slug is already in use', code: 'team_slug_exists' } }
+      : null),
+  };
+  await mockOrganizationApi(page, state);
+  await openOrganizationSettings(page);
+
+  await page.locator('#team-name').fill('Acme');
+  await page.locator('#team-slug').fill('acme-team');
+  await page.getByRole('button', { name: 'Create Organization' }).click();
+
+  await expect(page.getByText('Organization slug is already in use')).toBeVisible();
+  await expect(page.getByText('Organization created')).toHaveCount(0);
+  await expect(page.locator('#team-slug')).toHaveValue('acme-team');
+});

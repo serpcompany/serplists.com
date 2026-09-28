@@ -341,6 +341,35 @@ describe("Organization membership writes against SQLite", () => {
     });
   });
 
+  describe("Organization slugs", () => {
+    function teamSlugs() {
+      return d1.rows<{ slug: string }>("SELECT slug FROM teams ORDER BY created_at, slug").map(({ slug }) => slug);
+    }
+
+    it("rejects a requested slug another Organization already uses, even an archived one", async () => {
+      const taken = await asUser("new-user", "POST", "", { name: "Acme", slug: "acme" });
+      d1.run("UPDATE teams SET archived_at = ? WHERE id = 'team-1'", createdAt);
+      const takenByArchived = await asUser("new-user", "POST", "", { name: "Acme", slug: "acme" });
+
+      expect(taken).toEqual({
+        status: 409,
+        data: { error: "Organization slug is already in use", code: "team_slug_exists" },
+      });
+      expect(takenByArchived.status).toBe(409);
+      expect(teamSlugs()).toEqual(["acme"]);
+      expect(auditActions("team.created")).toHaveLength(0);
+      d1.run("UPDATE teams SET archived_at = NULL WHERE id = 'team-1'");
+    });
+
+    it("suffixes a slug derived from the name when it is taken", async () => {
+      const created = await asUser("new-user", "POST", "", { name: "Acme" });
+
+      expect(created.status).toBe(200);
+      expect(created.data?.slug).toMatch(/^acme-[0-9a-f]{8}$/);
+      expect(teamSlugs()).toEqual(["acme", created.data?.slug]);
+    });
+  });
+
   describe("incoming invites", () => {
     it("finds a signed-in user's invites through the email index, whatever the case of their email", async () => {
       d1.run("UPDATE users SET email = 'New@Example.TEST' WHERE id = 'new-user'");

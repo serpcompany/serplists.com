@@ -57,7 +57,7 @@ Source of truth: `db/migrations/0021_add_teams_audit_history.sql` and `db/migrat
 Organization operations use legacy `/api/teams` route identifiers and require a Better Auth session cookie.
 
 - `GET /api/teams`: list active Organizations for the current User.
-- `POST /api/teams`: create an Organization and its `owner` membership.
+- `POST /api/teams`: create an Organization and its `owner` membership. A requested `slug` that another Organization uses (archived ones included) returns 409 `team_slug_exists`, as `PUT` does; a slug derived from the name gets a suffix instead.
 - `GET /api/teams/:teamId`: read Organization details for a member.
 - `PUT /api/teams/:teamId`: update an Organization name or slug. Requires `owner` or `admin`. A body that names neither field is a 400; values that match the current ones (after trimming) return 200 without a write or audit event. The settings form keeps Save disabled until a field changes and sends only the changed fields; clearing the slug field keeps the current slug.
 - `GET /api/teams/:teamId/members`: list members. Managers can see inactive rows; non-managers see active members.
