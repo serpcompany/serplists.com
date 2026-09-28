@@ -11,10 +11,36 @@ import {
 } from "../utils/personal-run-key";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
 import { calculateRunProgress } from "../utils/template-reconciliation";
+import {
+  applyRunOperation,
+  assertRunContentFits,
+  boundedText,
+  jsonByteLength,
+  MAX_RESULT_BYTES,
+  outlineSections,
+  parseStoredSections,
+  resetCompletionState,
+  selectRunSections,
+  serializeRun,
+  summarizeRun,
+  updateRunResult,
+  utf8ByteLength,
+} from "./agentMcpRuns";
+import {
+  getRunArgs,
+  isReadOnlyTool,
+  isRecord,
+  listRunsArgs,
+  parseToolArguments,
+  startRunArgs,
+  ToolError,
+  toolDefinitions,
+  updateRunArgs,
+  type JsonRecord,
+} from "./agentMcpTools";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const MAX_REQUEST_BYTES = 1024 * 1024;
-const MAX_RESULT_BYTES = 512 * 1024;
 const MAX_LIST_RESULTS = 100;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_REQUESTS = 120;
@@ -22,37 +48,10 @@ const MAX_RATE_LIMIT_KEYS = 1_000;
 
 const rateLimitWindows = new Map<string, { count: number; resetsAt: number }>();
 
-type JsonRecord = Record<string, unknown>;
 type JsonRpcId = string | number | null;
-
-class ToolError extends Error {
-  constructor(
-    message: string,
-    readonly code: string,
-    readonly details?: JsonRecord,
-  ) {
-    super(message);
-  }
-}
-
-const isRecord = (value: unknown): value is JsonRecord =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isValidRequestId = (value: unknown): value is string | number =>
   typeof value === "string" || (typeof value === "number" && Number.isSafeInteger(value));
-
-const listRunsArgs = z.object({
-  status: z.enum(["in_progress", "completed"]).optional(),
-}).strict();
-
-const startRunArgs = z.object({
-  templateId: z.string().trim().min(1),
-  title: z.string().trim().min(1).max(160).optional(),
-}).strict();
-
-const getRunArgs = z.object({
-  runId: z.string().trim().min(1),
-}).strict();
 
 const initializeArgs = z.object({
   protocolVersion: z.string().trim().min(1),
@@ -62,139 +61,6 @@ const initializeArgs = z.object({
     version: z.string().trim().min(1),
   }).passthrough(),
 }).passthrough();
-
-const updateRunArgs = z.discriminatedUnion("operation", [
-  z.object({
-    runId: z.string().trim().min(1),
-    expectedRevision: z.number().int().positive(),
-    operation: z.literal("set_task_completed"),
-    taskId: z.string().trim().min(1),
-    completed: z.boolean(),
-  }).strict(),
-  z.object({
-    runId: z.string().trim().min(1),
-    expectedRevision: z.number().int().positive(),
-    operation: z.literal("set_subtask_completed"),
-    taskId: z.string().trim().min(1),
-    subtaskId: z.string().trim().min(1),
-    completed: z.boolean(),
-  }).strict(),
-  z.object({
-    runId: z.string().trim().min(1),
-    expectedRevision: z.number().int().positive(),
-    operation: z.literal("set_task_notes"),
-    taskId: z.string().trim().min(1),
-    notes: z.string().max(20_000),
-  }).strict(),
-  z.object({
-    runId: z.string().trim().min(1),
-    expectedRevision: z.number().int().positive(),
-    operation: z.literal("set_run_status"),
-    status: z.enum(["in_progress", "completed"]),
-  }).strict(),
-]);
-
-const toolDefinitions = [
-  {
-    name: "list_templates",
-    description: "List the authenticated user's active personal SOP templates. Templates are read-only.",
-    inputSchema: { type: "object", properties: {}, additionalProperties: false },
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  },
-  {
-    name: "start_run",
-    description: "Start a personal checklist run from one of the authenticated user's templates.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        templateId: { type: "string" },
-        title: { type: "string", minLength: 1, maxLength: 160 },
-      },
-      required: ["templateId"],
-      additionalProperties: false,
-    },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-  },
-  {
-    name: "list_runs",
-    description: "List the authenticated user's active personal checklist runs.",
-    inputSchema: {
-      type: "object",
-      properties: { status: { type: "string", enum: ["in_progress", "completed"] } },
-      additionalProperties: false,
-    },
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  },
-  {
-    name: "get_run",
-    description: "Read a personal run, including its sections, tasks, subtasks, progress, status, and revision.",
-    inputSchema: {
-      type: "object",
-      properties: { runId: { type: "string" } },
-      required: ["runId"],
-      additionalProperties: false,
-    },
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  },
-  {
-    name: "update_run",
-    description: "Update one explicit part of a personal run. Pass the latest expectedRevision to prevent lost updates.",
-    inputSchema: {
-      type: "object",
-      oneOf: [
-        {
-          type: "object",
-          properties: {
-            runId: { type: "string" },
-            expectedRevision: { type: "integer", minimum: 1 },
-            operation: { const: "set_task_completed" },
-            taskId: { type: "string" },
-            completed: { type: "boolean" },
-          },
-          required: ["runId", "expectedRevision", "operation", "taskId", "completed"],
-          additionalProperties: false,
-        },
-        {
-          type: "object",
-          properties: {
-            runId: { type: "string" },
-            expectedRevision: { type: "integer", minimum: 1 },
-            operation: { const: "set_subtask_completed" },
-            taskId: { type: "string" },
-            subtaskId: { type: "string" },
-            completed: { type: "boolean" },
-          },
-          required: ["runId", "expectedRevision", "operation", "taskId", "subtaskId", "completed"],
-          additionalProperties: false,
-        },
-        {
-          type: "object",
-          properties: {
-            runId: { type: "string" },
-            expectedRevision: { type: "integer", minimum: 1 },
-            operation: { const: "set_task_notes" },
-            taskId: { type: "string" },
-            notes: { type: "string", maxLength: 20_000 },
-          },
-          required: ["runId", "expectedRevision", "operation", "taskId", "notes"],
-          additionalProperties: false,
-        },
-        {
-          type: "object",
-          properties: {
-            runId: { type: "string" },
-            expectedRevision: { type: "integer", minimum: 1 },
-            operation: { const: "set_run_status" },
-            status: { type: "string", enum: ["in_progress", "completed"] },
-          },
-          required: ["runId", "expectedRevision", "operation", "status"],
-          additionalProperties: false,
-        },
-      ],
-    },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
-  },
-] as const;
 
 function jsonResponse(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), {
@@ -227,13 +93,10 @@ function toolResult(id: JsonRpcId, structuredContent: JsonRecord, text: string, 
   });
 }
 
-function boundedText(value: unknown, maximum = 160): string {
-  const text = typeof value === "string" ? value : "Untitled";
-  return text.length <= maximum ? text : `${text.slice(0, maximum - 1)}…`;
-}
-
+// Only for read-only tools. A mutation must never report failure after its write has
+// committed, so mutating tools size their results before the write or keep them compact.
 function assertBoundedResult(value: JsonRecord): void {
-  if (new TextEncoder().encode(JSON.stringify(value)).byteLength > MAX_RESULT_BYTES) {
+  if (jsonByteLength(value) > MAX_RESULT_BYTES) {
     throw new ToolError("Result is too large; request a smaller resource", "result_too_large");
   }
 }
@@ -313,23 +176,6 @@ function rateLimit(identity: PersonalRunKeyIdentity): { allowed: true } | { allo
   return { allowed: false, retryAfter: Math.max(1, Math.ceil((window.resetsAt - now) / 1000)) };
 }
 
-function parseStoredSections(value: unknown): JsonRecord[] {
-  const normalized = normalizeSectionsPayload(parseJsonArray(value) ?? []);
-  return normalized.sections.filter(isRecord);
-}
-
-function resetCompletionState(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(resetCompletionState);
-  if (!isRecord(value)) return value;
-
-  const next: JsonRecord = { ...value };
-  if (Object.prototype.hasOwnProperty.call(next, "isCompleted")) next.isCompleted = false;
-  if (Array.isArray(next.items)) next.items = next.items.map(resetCompletionState);
-  if (Array.isArray(next.subItems)) next.subItems = next.subItems.map(resetCompletionState);
-  if (Array.isArray(next.contents)) next.contents = next.contents.map(resetCompletionState);
-  return next;
-}
-
 function summarizeTemplate(template: JsonRecord): JsonRecord {
   return {
     id: template.id,
@@ -342,74 +188,6 @@ function summarizeTemplate(template: JsonRecord): JsonRecord {
     createdAt: template.created_at,
     updatedAt: template.updated_at,
   };
-}
-
-function serializeRun(run: JsonRecord): JsonRecord {
-  return {
-    id: run.id,
-    templateId: run.template_id,
-    title: run.title,
-    sections: parseStoredSections(run.items),
-    status: run.status ?? "in_progress",
-    progress: typeof run.progress === "number" ? run.progress : 0,
-    revision: typeof run.revision === "number" ? run.revision : 1,
-    templateVersion: typeof run.template_version === "number" ? run.template_version : 1,
-    startedAt: run.started_at,
-    completedAt: run.completed_at,
-    createdAt: run.created_at,
-    updatedAt: run.updated_at,
-  };
-}
-
-function summarizeRun(run: JsonRecord): JsonRecord {
-  const serialized = serializeRun(run);
-  delete serialized.sections;
-  return serialized;
-}
-
-function getSubtasks(task: JsonRecord): JsonRecord[] {
-  const direct = Array.isArray(task.subItems) ? task.subItems.filter(isRecord) : [];
-  const nested = Array.isArray(task.contents)
-    ? task.contents.filter(isRecord).flatMap((content) =>
-        Array.isArray(content.subItems) ? content.subItems.filter(isRecord) : [])
-    : [];
-  return [...direct, ...nested];
-}
-
-function findTask(sections: JsonRecord[], taskId: string): JsonRecord | null {
-  for (const section of sections) {
-    if (!Array.isArray(section.items)) continue;
-    const task = section.items.find((item) => isRecord(item) && item.id === taskId);
-    if (isRecord(task)) return task;
-  }
-  return null;
-}
-
-function applyRunOperation(
-  sections: JsonRecord[],
-  operation: z.infer<typeof updateRunArgs>,
-): void {
-  if (operation.operation === "set_run_status") return;
-
-  const task = findTask(sections, operation.taskId);
-  if (!task) throw new ToolError("Task not found", "task_not_found");
-
-  if (operation.operation === "set_task_notes") {
-    task.notes = operation.notes;
-    return;
-  }
-
-  const subtasks = getSubtasks(task);
-  if (operation.operation === "set_task_completed") {
-    task.isCompleted = operation.completed;
-    for (const subtask of subtasks) subtask.isCompleted = operation.completed;
-    return;
-  }
-
-  const subtask = subtasks.find((candidate) => candidate.id === operation.subtaskId);
-  if (!subtask) throw new ToolError("Subtask not found", "subtask_not_found");
-  subtask.isCompleted = operation.completed;
-  task.isCompleted = subtasks.length > 0 && subtasks.every((candidate) => candidate.isCompleted === true);
 }
 
 async function listTemplates(env: Env, identity: PersonalRunKeyIdentity): Promise<JsonRecord> {
@@ -443,15 +221,14 @@ async function startRun(
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
 ): Promise<JsonRecord> {
-  const parsed = startRunArgs.safeParse(rawArguments ?? {});
-  if (!parsed.success) throw new ToolError(parsed.error.issues[0]?.message ?? "Invalid arguments", "invalid_arguments");
+  const args = parseToolArguments(startRunArgs, rawArguments);
 
   const db = createDb(env);
   const [template] = await db
     .select()
     .from(schema.templates)
     .where(and(
-      eq(schema.templates.id, parsed.data.templateId),
+      eq(schema.templates.id, args.templateId),
       eq(schema.templates.user_id, identity.userId),
       eq(schema.templates.owner_type, "user"),
       isNull(schema.templates.team_id),
@@ -498,7 +275,7 @@ async function startRun(
     user_id: identity.userId,
     team_id: null,
     template_id: template.id,
-    title: parsed.data.title ?? template.title,
+    title: args.title ?? template.title,
     items: JSON.stringify(resetCompletionState(normalized.sections)),
     status: "in_progress",
     progress: 0,
@@ -512,6 +289,11 @@ async function startRun(
     revision: 1,
     retired_items: "[]",
   };
+  // Size the run before writing: once the batch commits, start_run must return the run
+  // rather than an error, or the agent retries and creates duplicate runs. The content
+  // cap leaves room under MAX_RESULT_BYTES for the run's scalar fields.
+  assertRunContentFits(utf8ByteLength(run.items));
+  const result = { run: serializeRun(run) };
   const auditEvent = await buildAuditEventValues({
     actorUserId: identity.userId,
     subject: { type: "user", id: identity.userId },
@@ -527,7 +309,7 @@ async function startRun(
     db.insert(schema.audit_events).values(auditEvent),
   ]);
 
-  return { run: serializeRun(run) };
+  return result;
 }
 
 async function listRuns(
@@ -535,15 +317,14 @@ async function listRuns(
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
 ): Promise<JsonRecord> {
-  const parsed = listRunsArgs.safeParse(rawArguments ?? {});
-  if (!parsed.success) throw new ToolError(parsed.error.issues[0]?.message ?? "Invalid arguments", "invalid_arguments");
+  const args = parseToolArguments(listRunsArgs, rawArguments);
 
   const filters = [
     eq(schema.checklist_runs.user_id, identity.userId),
     isNull(schema.checklist_runs.team_id),
     isNull(schema.checklist_runs.deleted_at),
   ];
-  if (parsed.data.status) filters.push(eq(schema.checklist_runs.status, parsed.data.status));
+  if (args.status) filters.push(eq(schema.checklist_runs.status, args.status));
 
   const rows = await createDb(env)
     .select()
@@ -581,9 +362,16 @@ async function getRun(
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
 ): Promise<JsonRecord> {
-  const parsed = getRunArgs.safeParse(rawArguments ?? {});
-  if (!parsed.success) throw new ToolError(parsed.error.issues[0]?.message ?? "Invalid arguments", "invalid_arguments");
-  return { run: serializeRun(await getOwnedRun(env, identity.userId, parsed.data.runId)) };
+  const args = parseToolArguments(getRunArgs, rawArguments);
+  const run = await getOwnedRun(env, identity.userId, args.runId);
+  const sections = selectRunSections(parseStoredSections(run.items), args);
+  const result = { run: serializeRun(run, sections) };
+  if (jsonByteLength(result) <= MAX_RESULT_BYTES) return result;
+  throw new ToolError(
+    "Run is too large to return at once; call get_run again with a sectionId or taskId from details.sections",
+    "result_too_large",
+    { limit: MAX_RESULT_BYTES, run: summarizeRun(run), sections: outlineSections(sections) },
+  );
 }
 
 function batchChanges(result: unknown): number | null {
@@ -638,34 +426,37 @@ async function updateRun(
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
 ): Promise<JsonRecord> {
-  const parsed = updateRunArgs.safeParse(rawArguments ?? {});
-  if (!parsed.success) throw new ToolError(parsed.error.issues[0]?.message ?? "Invalid arguments", "invalid_arguments");
+  const args = parseToolArguments(updateRunArgs, rawArguments);
 
-  const existing = await getOwnedRun(env, identity.userId, parsed.data.runId);
+  const existing = await getOwnedRun(env, identity.userId, args.runId);
   const currentRevision = typeof existing.revision === "number" ? existing.revision : 1;
-  if (parsed.data.expectedRevision !== currentRevision) {
+  if (args.expectedRevision !== currentRevision) {
     throw new ToolError("Run changed since it was loaded; fetch it again before updating", "edit_conflict", {
-      expectedRevision: parsed.data.expectedRevision,
+      expectedRevision: args.expectedRevision,
       currentRevision,
     });
   }
 
   const sections = parseStoredSections(existing.items);
-  applyRunOperation(sections, parsed.data);
+  const currentBytes = jsonByteLength(sections);
+  applyRunOperation(sections, args);
+  const items = JSON.stringify(sections);
+  // Checked before the write, so an oversized update never commits.
+  assertRunContentFits(utf8ByteLength(items), currentBytes);
   const now = new Date().toISOString();
   const updates: JsonRecord = {
-    items: JSON.stringify(sections),
+    items,
     progress: calculateRunProgress(sections),
     revision: currentRevision + 1,
     updated_at: now,
   };
 
-  if (parsed.data.operation === "set_run_status") {
-    updates.status = parsed.data.status;
+  if (args.operation === "set_run_status") {
+    updates.status = args.status;
     // Match the existing checklist status endpoint: a status-only transition does
     // not rewrite progress, and reopening does not erase completion attribution.
     updates.progress = typeof existing.progress === "number" ? existing.progress : 0;
-    if (parsed.data.status === "completed") {
+    if (args.status === "completed") {
       updates.completed_at = now;
       updates.completed_by_user_id = identity.userId;
     }
@@ -675,14 +466,14 @@ async function updateRun(
   const auditEvent = await buildAuditEventValues({
     actorUserId: identity.userId,
     subject: { type: "user", id: identity.userId },
-    resource: { type: "checklist_run", id: parsed.data.runId },
+    resource: { type: "checklist_run", id: args.runId },
     action: "checklist_run.updated",
     before: existing,
     after: nextRun,
     diff: updates,
     metadata: {
       source: "mcp",
-      operation: parsed.data.operation,
+      operation: args.operation,
       personalRunKeyId: identity.keyId,
       personalRunKeyName: identity.name,
     },
@@ -694,14 +485,14 @@ async function updateRun(
     insertAuditWhenRunRevisionMatches(
       db,
       auditEvent,
-      parsed.data.runId,
+      args.runId,
       identity.userId,
       currentRevision,
     ),
     db.update(schema.checklist_runs)
       .set(updates)
       .where(and(
-        eq(schema.checklist_runs.id, parsed.data.runId),
+        eq(schema.checklist_runs.id, args.runId),
         eq(schema.checklist_runs.user_id, identity.userId),
         isNull(schema.checklist_runs.team_id),
         eq(schema.checklist_runs.revision, currentRevision),
@@ -718,7 +509,7 @@ async function updateRun(
     throw new ToolError("Unable to update the run safely", "internal_invariant");
   }
 
-  return { run: serializeRun(nextRun) };
+  return updateRunResult(nextRun, sections, args);
 }
 
 async function callTool(
@@ -855,7 +646,7 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     if (typeof params.name !== "string") return rpcError(id, -32602, "Tool name is required");
     try {
       const { data, text } = await callTool(request, env, identity, params.name, params.arguments);
-      assertBoundedResult(data);
+      if (isReadOnlyTool(params.name)) assertBoundedResult(data);
       try {
         await markPersonalRunKeyUsed(env, identity);
       } catch {

@@ -91,6 +91,53 @@ function personalRun(overrides: JsonRecord = {}): JsonRecord {
   };
 }
 
+const RESULT_LIMIT_BYTES = 512 * 1024;
+
+const byteLength = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+
+// Sections whose serialized size is at least `targetBytes`: the standard task-1 (with
+// subtasks sub-1/sub-2) followed by filler tasks carrying long ASCII notes.
+function largeSections(targetBytes: number, fillerNotes = 10_000): JsonRecord[] {
+  const task1 = {
+    id: "task-1",
+    title: "Verify",
+    isCompleted: false,
+    notes: "",
+    contents: [{
+      type: "subItems",
+      subItems: [
+        { id: "sub-1", title: "Tests pass", isCompleted: false },
+        { id: "sub-2", title: "Preview checked", isCompleted: false },
+      ],
+    }],
+  };
+  const items: JsonRecord[] = [task1];
+  const sections = [{ id: "section-1", title: "Release", items }];
+  let index = 0;
+  while (byteLength(sections) < targetBytes) {
+    items.push({ id: `filler-${index}`, title: `Filler ${index}`, isCompleted: false, notes: "x".repeat(fillerNotes) });
+    index += 1;
+  }
+  return sections;
+}
+
+function ownedTemplate(items: unknown[]): JsonRecord {
+  return {
+    id: "template-1",
+    user_id: "user-1",
+    owner_type: "user",
+    team_id: null,
+    deleted_at: null,
+    title: "Release SOP",
+    items: JSON.stringify(items),
+    content_version: 1,
+  };
+}
+
+async function toolBody(response: Response): Promise<any> {
+  return response.json();
+}
+
 describe("personal run MCP handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -550,6 +597,172 @@ describe("personal run MCP handler", () => {
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent.error).toBe("result_too_large");
     expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
+  });
+
+  describe("run size bounds", () => {
+    it("rejects start_run on an oversized template before writing anything", async () => {
+      dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(largeSections(600 * 1024))]);
+
+      const body = await toolBody(await handleAgentMcp(callTool("start_run", { templateId: "template-1" }), env));
+
+      expect(body.result.isError).toBe(true);
+      expect(body.result.structuredContent.error).toBe("content_too_large");
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+      expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
+    });
+
+    it("rejects set_task_notes that pushes a run past the content cap without writing", async () => {
+      dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
+        items: JSON.stringify(largeSections(370 * 1024)),
+      })]);
+
+      const body = await toolBody(await handleAgentMcp(callTool("update_run", {
+        runId: "run-1",
+        expectedRevision: 1,
+        operation: "set_task_notes",
+        taskId: "task-1",
+        notes: "n".repeat(20_000),
+      }), env));
+
+      expect(body.result.isError).toBe(true);
+      expect(body.result.structuredContent.error).toBe("content_too_large");
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    });
+
+    it("counts notes by UTF-8 bytes, not characters", async () => {
+      // About 340 KB of ASCII plus 20,000 three-byte characters: under the cap in
+      // characters, over it in bytes.
+      dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
+        items: JSON.stringify(largeSections(340 * 1024)),
+      })]);
+
+      const body = await toolBody(await handleAgentMcp(callTool("update_run", {
+        runId: "run-1",
+        expectedRevision: 1,
+        operation: "set_task_notes",
+        taskId: "task-1",
+        notes: "界".repeat(20_000),
+      }), env));
+
+      expect(body.result.structuredContent.error).toBe("content_too_large");
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["set_task_completed", { taskId: "task-1", completed: true }],
+      ["set_subtask_completed", { taskId: "task-1", subtaskId: "sub-1", completed: true }],
+      ["set_task_notes", { taskId: "filler-0", notes: "" }],
+      ["set_run_status", { status: "completed" }],
+    ])("never reports a committed %s on an oversized run as a failure", async (operation, fields) => {
+      dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
+        items: JSON.stringify(largeSections(600 * 1024)),
+        revision: 7,
+      })]);
+
+      const body = await toolBody(await handleAgentMcp(callTool("update_run", {
+        runId: "run-1",
+        expectedRevision: 7,
+        operation,
+        ...fields,
+      }), env));
+
+      expect(dbMocks.db.batch).toHaveBeenCalledOnce();
+      expect(body.result.isError).toBeUndefined();
+      expect(body.result.structuredContent.run).toEqual(expect.objectContaining({ id: "run-1", revision: 8 }));
+      expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(RESULT_LIMIT_BYTES);
+      expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, identity);
+    });
+
+    it("returns every committed mutation within the result bound", async () => {
+      const tools = (await toolBody(await handleAgentMcp(rpcRequest("tools/list"), env))).result.tools;
+      const mutatingTools = tools.filter((tool: any) => tool.annotations.readOnlyHint === false)
+        .map((tool: any) => tool.name);
+      expect(mutatingTools).toEqual(["start_run", "update_run"]);
+
+      const calls: Record<string, () => Promise<Response>> = {
+        start_run: () => {
+          dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(largeSections(370 * 1024))]);
+          return handleAgentMcp(callTool("start_run", { templateId: "template-1" }), env);
+        },
+        update_run: () => {
+          dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
+            items: JSON.stringify(largeSections(370 * 1024)),
+          })]);
+          return handleAgentMcp(callTool("update_run", {
+            runId: "run-1",
+            expectedRevision: 1,
+            operation: "set_task_completed",
+            taskId: "task-1",
+            completed: true,
+          }), env);
+        },
+      };
+
+      for (const name of mutatingTools) {
+        vi.mocked(markPersonalRunKeyUsed).mockClear();
+        dbMocks.db.batch.mockClear();
+        const body = await toolBody(await calls[name]());
+        expect(dbMocks.db.batch).toHaveBeenCalledOnce();
+        expect(body.result.isError).toBeUndefined();
+        expect(body.result.structuredContent.run).toEqual(expect.objectContaining({
+          id: expect.any(String),
+          revision: expect.any(Number),
+        }));
+        expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(RESULT_LIMIT_BYTES);
+        expect(markPersonalRunKeyUsed).toHaveBeenCalledOnce();
+      }
+    });
+
+    it("returns the changed task and a compact run summary from update_run", async () => {
+      dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
+
+      const body = await toolBody(await handleAgentMcp(callTool("update_run", {
+        runId: "run-1",
+        expectedRevision: 2,
+        operation: "set_task_notes",
+        taskId: "task-1",
+        notes: "Evidence",
+      }), env));
+
+      expect(body.result.structuredContent.run).not.toHaveProperty("sections");
+      expect(body.result.structuredContent.run).toEqual(expect.objectContaining({ id: "run-1", revision: 3 }));
+      expect(body.result.structuredContent.task).toEqual(expect.objectContaining({ id: "task-1", notes: "Evidence" }));
+    });
+
+    it("reads one task or section of a run too large to return at once", async () => {
+      const oversized = personalRun({ items: JSON.stringify(largeSections(600 * 1024)) });
+
+      dbMocks.selectChain.limit.mockResolvedValueOnce([oversized]);
+      const whole = await toolBody(await handleAgentMcp(callTool("get_run", { runId: "run-1" }), env));
+      expect(whole.result.isError).toBe(true);
+      expect(whole.result.structuredContent.error).toBe("result_too_large");
+      expect(whole.result.structuredContent.message).toContain("taskId");
+      expect(whole.result.structuredContent.details.run).toEqual(expect.objectContaining({ id: "run-1", revision: 1 }));
+      expect(whole.result.structuredContent.details.sections[0]).toEqual(expect.objectContaining({
+        id: "section-1",
+        tasks: expect.arrayContaining([{ id: "task-1", title: "Verify" }]),
+      }));
+      expect(byteLength(whole.result.structuredContent)).toBeLessThanOrEqual(RESULT_LIMIT_BYTES);
+
+      dbMocks.selectChain.limit.mockResolvedValueOnce([oversized]);
+      const task = await toolBody(await handleAgentMcp(callTool("get_run", { runId: "run-1", taskId: "task-1" }), env));
+      expect(task.result.isError).toBeUndefined();
+      expect(task.result.structuredContent.run.sections).toEqual([
+        expect.objectContaining({ id: "section-1", items: [expect.objectContaining({ id: "task-1" })] }),
+      ]);
+      expect(task.result.structuredContent.run.revision).toBe(1);
+
+      dbMocks.selectChain.limit.mockResolvedValueOnce([oversized]);
+      const missing = await toolBody(await handleAgentMcp(callTool("get_run", { runId: "run-1", taskId: "nope" }), env));
+      expect(missing.result.structuredContent.error).toBe("task_not_found");
+
+      dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun()]);
+      const section = await toolBody(await handleAgentMcp(callTool("get_run", {
+        runId: "run-1",
+        sectionId: "section-1",
+      }), env));
+      expect(section.result.structuredContent.run.sections.map((entry: any) => entry.id)).toEqual(["section-1"]);
+    });
   });
 
   it("applies a process-local request limit per key", async () => {

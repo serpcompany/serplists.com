@@ -395,6 +395,38 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(afterAudit.count).toBe(beforeAudit.count);
   });
 
+  it("creates no run when start_run rejects an oversized template", async () => {
+    const items = [{
+      id: "section-large",
+      title: "Large",
+      // About 560 KB: over both the MCP run content cap and the 512 KB result bound.
+      items: Array.from({ length: 56 }, (_, index) => ({
+        id: `large-task-${index}`,
+        title: `Large task ${index}`,
+        isCompleted: false,
+        notes: "x".repeat(10_000),
+      })),
+    }];
+    await env.DB.prepare(`
+      INSERT INTO templates (
+        id, user_id, title, items, is_public, created_at, version, type, owner_type,
+        team_id, created_by_user_id, content_version
+      ) VALUES ('template-large', 'user-a', 'Large SOP', ?, 0, ?, 1, 'checklist', 'user', NULL, 'user-a', 1)
+    `).bind(JSON.stringify(items), "2026-09-19T02:30:00.000Z").run();
+    const countRuns = async () => (await rows<{ count: number }>(
+      "SELECT count(*) AS count FROM checklist_runs WHERE user_id = 'user-a'",
+    ))[0].count;
+    const before = await countRuns();
+
+    const errors: Array<string | undefined> = [];
+    for (const id of [51, 52]) {
+      errors.push(toolError(await bodyOf(await callTool("start_run", { templateId: "template-large" }, id))));
+    }
+
+    expect(await countRuns()).toBe(before);
+    expect(errors).toEqual(["content_too_large", "content_too_large"]);
+  });
+
   it("revokes immediately and cascades keys only with their owning user", async () => {
     await env.DB.prepare("UPDATE personal_run_keys SET revoked_at = ? WHERE id = ?")
       .bind("2026-09-19T03:00:00.000Z", keyId)
