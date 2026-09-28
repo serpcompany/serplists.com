@@ -5,7 +5,7 @@ import { getClientIp, log } from './utils/logger';
 import { checkRateLimit } from './utils/rate-limit';
 import { checkAuthRateLimit } from './utils/auth-rate-limit';
 import { createBetterAuth, getAuthEmailPolicy } from './better-auth';
-import { isBodyWithinLimit } from './utils/body';
+import { findOversizedBody } from './utils/body-limit';
 import { 
   handleProfileByUsername, 
   handleProfileById
@@ -125,26 +125,10 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       return finalize(response);
     }
 
-    if (
-      (request.method === 'POST' || request.method === 'PUT') &&
-      request.headers.get('Content-Type')?.includes('application/json')
-    ) {
-      const maxBytes = path.startsWith('templates/backup') ? 2 * 1024 * 1024 : 1024 * 1024;
-      const maxLabel = path.startsWith('templates/backup') ? '2MB' : '1MB';
-      const contentLength = request.headers.get('Content-Length');
-      if (contentLength) {
-        const bytes = Number.parseInt(contentLength, 10);
-        if (Number.isFinite(bytes) && bytes > maxBytes) {
-          response = jsonError(`Payload too large (max ${maxLabel})`, 413);
-          return finalize(response);
-        }
-      } else {
-        const ok = await isBodyWithinLimit(request.clone(), maxBytes);
-        if (!ok) {
-          response = jsonError(`Payload too large (max ${maxLabel})`, 413);
-          return finalize(response);
-        }
-      }
+    const oversizedLabel = await findOversizedBody(request, path);
+    if (oversizedLabel) {
+      response = jsonError(`Payload too large (max ${oversizedLabel})`, 413);
+      return finalize(response);
     }
 
     if (ip) {

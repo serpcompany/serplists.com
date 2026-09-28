@@ -97,6 +97,17 @@ The limiter is an in-memory map (`functions/api/utils/rate-limit.ts`), so it is 
 consistent across Cloudflare edges, and it is skipped when `CF-Connecting-IP` is
 missing. A `429` during intensive local QA means the limit, not broken credentials.
 
+## Request size limits
+
+Request bodies are capped in the router before any handler runs
+(`functions/api/utils/body-limit.ts`), for every `POST`/`PUT`/`PATCH`/`DELETE`
+whatever the `Content-Type`, because handlers parse JSON without checking it: 1MB by
+default, 2MB for Template backups, and 50MB (plus multipart overhead) for uploads.
+The cap uses `Content-Length`, or counts streamed bytes when it is missing
+(uploads without it are left to the upload handler, which requires a session before
+parsing and rejects files over 50MB). The unauthenticated shared Run update checks
+its share token before reading the body.
+
 ## Admin entitlement override
 
 `POST /api/admin/entitlements/override` grants or revokes Pro without Stripe (comps,

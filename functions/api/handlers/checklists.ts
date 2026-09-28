@@ -241,6 +241,17 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     }
 
     if (request.method === 'PUT') {
+      // No session is required here, so check the token before reading the body.
+      const [existingSharedRun] = await db
+        .select()
+        .from(checklist_runs)
+        .where(and(eq(checklist_runs.share_token, shareToken), eq(checklist_runs.is_public, true), isNull(checklist_runs.deleted_at)))
+        .limit(1);
+
+      if (!existingSharedRun || !existingSharedRun.id) {
+        return jsonError('Shared run not found', 404);
+      }
+
       let body: unknown;
       try {
         body = await request.json();
@@ -280,16 +291,6 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
 
       if (status === 'completed') {
         updates.share_used_at = new Date().toISOString();
-      }
-
-      const [existingSharedRun] = await db
-        .select()
-        .from(checklist_runs)
-        .where(and(eq(checklist_runs.share_token, shareToken), eq(checklist_runs.is_public, true), isNull(checklist_runs.deleted_at)))
-        .limit(1);
-
-      if (!existingSharedRun || !existingSharedRun.id) {
-        return jsonError('Shared run not found', 404);
       }
 
       const currentRevision = typeof existingSharedRun.revision === 'number' ? existingSharedRun.revision : 1;
