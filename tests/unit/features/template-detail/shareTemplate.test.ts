@@ -4,7 +4,7 @@ import { createApiError } from '@/lib/api-errors';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 
-import { shareTemplateToPublic } from '@/features/template-detail/useTemplateDetailModel';
+import { shareTemplateToPublic } from '@/features/template-detail/shareTemplate';
 
 const ORIGIN = 'https://serplists.com';
 

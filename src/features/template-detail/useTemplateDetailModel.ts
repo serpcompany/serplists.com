@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { getAccessFailure } from '@/lib/api-errors';
 import { api, type TemplateHistoryResponse } from '@/lib/api';
 import { getBillingStatusQueryKey } from '@/lib/billing';
 import {
@@ -10,28 +9,23 @@ import {
   isRepoTemplate,
   repoTemplates,
 } from '@/lib/repoTemplateCatalog';
-import {
-  buildCanonicalPublicTemplatePath,
-  resolvePublicTemplateOwnerSlug,
-} from '@/lib/routes';
+import { resolvePublicTemplateOwnerSlug } from '@/lib/routes';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
+import { shareTemplateToPublic } from './shareTemplate';
+import {
+  hydrateTemplateOwner,
+  mapActionFailure,
+  type TemplateDetailActionResult,
+  type TemplateDetailApiClient,
+} from './templateDetailApi';
 import {
   countTemplateItems,
   mapApiTemplateToChecklistTemplate,
-  resolveTemplateOwnerProfile,
 } from './templateDetailMappers';
 import { getTemplateDetailPermissions } from './templatePermissions';
 
-type TemplateDetailApiClient = Pick<
-  typeof api,
-  | 'clonePublicTemplate'
-  | 'getBillingStatus'
-  | 'getProfileById'
-  | 'getTemplateById'
-  | 'getTemplateBySlug'
-  | 'updateTemplate'
->;
+export type { TemplateDetailActionResult } from './templateDetailApi';
 
 type CreateTemplate = (
   templateData: Omit<
@@ -81,12 +75,6 @@ type TemplateDetailCommonOptions = {
 export type UseTemplateDetailModelOptions = TemplateDetailCommonOptions &
   (PublicTemplateDetailOptions | PrivateTemplateDetailHookOptions);
 
-export type TemplateDetailActionResult =
-  | { kind: 'ok'; runId?: string; shareUrl?: string; templateId?: string }
-  | { kind: 'login_required' }
-  | { kind: 'upgrade_required' }
-  | { kind: 'error'; message: string };
-
 export type TemplateDetailBillingState = {
   billingEnabled: boolean;
   isLoading: boolean;
@@ -116,43 +104,6 @@ const isUuidLike = (value: string): boolean => UUID_PATTERN.test(value);
 const getApiClient = (
   dependencies?: TemplateDetailDependencies,
 ): TemplateDetailApiClient => dependencies?.apiClient ?? api;
-
-const mapActionFailure = (
-  error: unknown,
-  fallbackMessage: string,
-): TemplateDetailActionResult => {
-  const failure = getAccessFailure(error, fallbackMessage);
-
-  if (failure.kind === 'auth_required') {
-    return { kind: 'login_required' };
-  }
-
-  if (failure.kind === 'upgrade_required') {
-    return { kind: 'upgrade_required' };
-  }
-
-  return { kind: 'error', message: failure.message };
-};
-
-const hydrateTemplateOwner = async (
-  template: ChecklistTemplate,
-  apiClient: TemplateDetailApiClient,
-): Promise<ChecklistTemplate> => {
-  const { ownerSlug } = resolveTemplateOwnerProfile(template);
-
-  if (ownerSlug || !template.userId) {
-    return template;
-  }
-
-  try {
-    const profile = (await apiClient.getProfileById(
-      template.userId,
-    )) as Record<string, unknown>;
-    return resolveTemplateOwnerProfile(template, profile).template;
-  } catch {
-    return template;
-  }
-};
 
 export const loadTemplateDetailData = async (
   options: PublicTemplateDetailOptions | PrivateTemplateDetailOptions,
@@ -317,75 +268,6 @@ export const saveTemplateToAccount = async (params: {
   } catch (error) {
     return mapActionFailure(error, 'Failed to save template');
   }
-};
-
-const SHARE_FAILED_MESSAGE = 'Failed to create a share link for this template.';
-
-// Resolves the public URL before changing visibility, so a template that cannot
-// be shared is never published, and once it is published local state follows.
-export const shareTemplateToPublic = async (params: {
-  apiClient?: TemplateDetailApiClient;
-  // From getTemplateDetailPermissions: edit rights, not who created the template.
-  canShare: boolean;
-  invalidateTemplates?: () => Promise<void> | void;
-  isAuthenticated: boolean;
-  isPublic?: boolean;
-  onTemplateChange: (template: ChecklistTemplate) => void;
-  origin: string;
-  template: ChecklistTemplate | null;
-  userId?: string;
-  username?: string;
-}): Promise<TemplateDetailActionResult> => {
-  if (!params.template) {
-    return { kind: 'error', message: 'Template not found.' };
-  }
-  if (!params.isAuthenticated || !params.userId) {
-    return { kind: 'login_required' };
-  }
-  if (!params.canShare) {
-    return { kind: 'error', message: 'You can only share templates you own.' };
-  }
-
-  const apiClient = params.apiClient ?? api;
-  const isCreator = params.template.userId === params.userId;
-  let nextTemplate = await hydrateTemplateOwner(params.template, apiClient);
-  // The link lives under the Creator's username, so only the Creator's own name may stand in.
-  if (!nextTemplate.ownerProfile?.username && params.username && isCreator) {
-    nextTemplate = {
-      ...nextTemplate,
-      ownerProfile: { ...nextTemplate.ownerProfile, username: params.username },
-    };
-  }
-
-  const publicPath = buildCanonicalPublicTemplatePath(nextTemplate);
-  if (!publicPath) {
-    return {
-      kind: 'error',
-      message: isCreator
-        ? 'Set a username on your account before sharing templates with the canonical public URL.'
-        : SHARE_FAILED_MESSAGE,
-    };
-  }
-
-  if (!(params.isPublic ?? nextTemplate.isPublic)) {
-    try {
-      await apiClient.updateTemplate(nextTemplate.id, {
-        is_public: true,
-        expected_version: nextTemplate.version,
-      });
-    } catch (error) {
-      return mapActionFailure(error, SHARE_FAILED_MESSAGE);
-    }
-  }
-
-  params.onTemplateChange({ ...nextTemplate, isPublic: true });
-  try {
-    await params.invalidateTemplates?.();
-  } catch {
-    // The template is public either way; lists catch up on their next fetch.
-  }
-
-  return { kind: 'ok', shareUrl: `${params.origin}${publicPath}` };
 };
 
 export const useTemplateDetailModel = (
