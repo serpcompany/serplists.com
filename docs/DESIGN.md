@@ -31,3 +31,6 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
 - Show a neutral loading state rather than a guessed value (for example, never
   render a plan label before billing status loads).
 - Check layouts at desktop and mobile widths with `pnpm run ui:snap` (`--mobile`).
+- A control hidden at one width needs a way to reach it at the others. The run page's
+  task column shows only at `xl`; below it, the progress block's Tasks button opens the
+  same list (`RunTaskList`) in a sheet (`src/components/run-execution/MobileRunProgress.tsx`).

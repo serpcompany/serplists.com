@@ -137,6 +137,8 @@ describe('ChecklistRunPage layout', () => {
     expect(html).toContain('data-dashboard-page-header="true"');
     expect(html).toContain('data-run-workspace-shell="true"');
     expect(html).toContain('data-mobile-run-progress="true"');
+    // Below xl the desktop panel is hidden, so the mobile block must open the task list.
+    expect(html).toMatch(/data-mobile-run-progress="true"(?:(?!<\/section>).)*data-mobile-run-tasks-trigger="true"/s);
     expect(html).toContain('data-run-progress-panel="true"');
     expect(html).toContain('Overall Progress');
     expect(html).toContain('Changelog');
@@ -155,7 +157,8 @@ describe('ChecklistRunPage layout', () => {
     expect(html).toContain('min-h-[calc(100dvh-3.5rem)]');
     expect(html).not.toContain('data-run-progress-sidebar="true"');
     expect(html).not.toContain('border-r border-border bg-card xl:flex xl:w-64');
-    expect(html).not.toContain('Tasks');
+    // The old left-hand "Tasks" outline is gone; the mobile Tasks button is a different control.
+    expect(html).not.toMatch(/<h2[^>]*>Tasks<\/h2>/);
     expect(html).not.toContain('Work through the run like a docs outline');
     expect(html).not.toContain('More options');
   });

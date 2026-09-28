@@ -35,6 +35,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { RunHistorySection } from '@/components/run-execution/RunHistorySection';
+import { MobileRunProgress } from '@/components/run-execution/MobileRunProgress';
 import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar';
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
 import { useTemplates } from '@/contexts/TemplatesContext';
@@ -318,6 +319,7 @@ const ChecklistRunPage = () => {
     (entry) => entry.item.id === activeItemId,
   );
   const selectedEntry = selectedIndex >= 0 ? flatItems[selectedIndex] : null;
+  const currentSectionId = selectedEntry?.section.id ?? selectedData?.section.id ?? null;
   const previousEntry = selectedIndex > 0 ? flatItems[selectedIndex - 1] : null;
   const nextEntry =
     selectedIndex >= 0 && selectedIndex < flatItems.length - 1
@@ -587,27 +589,16 @@ const ChecklistRunPage = () => {
             actions={privateRunHeaderActions}
           />
           <DashboardScrollArea className="p-0">
-          <section
-            className="border-b border-border bg-card px-4 py-4 sm:px-6 xl:hidden"
-            data-mobile-run-progress="true"
-          >
-            <div className="mb-3 flex items-center justify-between gap-3 text-sm">
-              <div>
-                <p className="font-medium text-foreground">
-                  {displayProgress}% complete
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {counts.completed} of {counts.total} tasks finished
-                </p>
-              </div>
-              {selectedEntry ? (
-                <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
-                  Task {selectedIndex + 1} of {flatItems.length}
-                </span>
-              ) : null}
-            </div>
-            <Progress value={displayProgress} className="h-2" />
-          </section>
+          <MobileRunProgress
+            completedTasks={counts.completed}
+            currentSectionId={currentSectionId}
+            currentTaskId={activeItemId}
+            onSelectTask={(_, taskId) => setSelectedItemId(taskId)}
+            position={selectedEntry ? { index: selectedIndex, total: flatItems.length } : null}
+            progress={displayProgress}
+            sections={displayRun.sections}
+            totalTasks={counts.total}
+          />
 
           <div
             className="grid min-h-[calc(100dvh-3.5rem)] grid-cols-1 gap-0 xl:grid-cols-[minmax(0,1fr)_320px]"
@@ -655,7 +646,7 @@ const ChecklistRunPage = () => {
             </main>
             <RunProgressPanel
               sections={displayRun.sections}
-              currentSectionId={selectedEntry?.section.id ?? selectedData?.section.id ?? null}
+              currentSectionId={currentSectionId}
               currentTaskId={activeItemId}
               onSelectTask={(_, taskId) => setSelectedItemId(taskId)}
             />
