@@ -78,10 +78,14 @@ validation failures by the current runtime.
 
 Three versions serve different contracts:
 
-- `templates.version` is the storage schema version for `templates.items`;
-  its current value is `1`.
+- `templates.version` is the template's edit counter, used for save conflict
+  checks (`expected_version`) and Changelog numbers. Create, import, and copy all
+  start it at `1` (a copy never inherits its source's counter; the source's
+  `version` and `content_version` go in the copy's audit event), and each save that
+  changes a stored field advances it. `templates.content_version` counts checklist
+  structure changes, which runs follow.
 - Backup exports use root format version `1.0.0` and retain each template's
-  storage version.
+  `version`.
 - Portable packs use `schemaVersion`; the current portable version is `2.0.0`.
 
 When evolving a format, accept and migrate supported older versions during

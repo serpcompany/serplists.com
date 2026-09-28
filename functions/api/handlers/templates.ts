@@ -1087,7 +1087,10 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         seo_description: typeof source.seo_description === 'string' ? source.seo_description : '',
         rules: typeof source.rules === 'string' ? source.rules : null,
         items: source.items,
-        version: typeof source.version === 'number' ? source.version : 1,
+        // A copy is a new template: its edit counter and content version start at 1, like
+        // create and import. The source's counters are provenance, kept in the audit event.
+        version: 1,
+        content_version: 1,
         is_public: isPublic,
         category: source.category,
         tags: source.tags,
@@ -1101,7 +1104,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
       const versionValues = await buildTemplateVersionValues({
         templateId,
-        version: typeof clonedTemplate.version === 'number' ? clonedTemplate.version : 1,
+        version: 1,
         changedByUserId: userId,
         subject,
         snapshot: clonedTemplate as Record<string, unknown>,
@@ -1114,7 +1117,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         resource: { type: 'template', id: templateId },
         action: 'template.cloned',
         after: clonedTemplate as Record<string, unknown>,
-        metadata: { sourceTemplateId: sourceId },
+        metadata: {
+          sourceTemplateId: sourceId,
+          sourceVersion: typeof source.version === 'number' ? source.version : null,
+          sourceContentVersion: typeof source.content_version === 'number' ? source.content_version : null,
+        },
         request,
         createdAt: now,
       });

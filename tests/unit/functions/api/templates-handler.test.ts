@@ -1300,6 +1300,24 @@ describe('Templates Handlers', () => {
       expect(data.code).toBe('limit_reached');
       expect(dbMocks.db.batch).not.toHaveBeenCalled();
     });
+
+    it('starts the copy at version 1, keeping the source counters only as provenance', async () => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+      vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } });
+      dbMocks.selectChain.limit.mockResolvedValueOnce([{ ...publicSource, version: 37, content_version: 12 }]).mockResolvedValueOnce([]);
+
+      const response = await clone({ visibility: 'private' });
+
+      expect(response.status).toBe(200);
+      const inserted = dbMocks.insertChain.values.mock.calls.map(([values]) => values);
+      const templateRow = inserted.find((values) => 'owner_type' in values);
+      const versionRow = inserted.find((values) => 'snapshot_json' in values);
+      const auditRow = inserted.find((values) => values.action === 'template.cloned');
+      expect(templateRow).toEqual(expect.objectContaining({ version: 1, content_version: 1 }));
+      expect(versionRow).toEqual(expect.objectContaining({ version: 1, change_summary: 'template.cloned' }));
+      expect(JSON.parse(versionRow.snapshot_json)).toEqual(expect.objectContaining({ version: 1, content_version: 1 }));
+      expect(JSON.parse(auditRow.metadata_json)).toEqual({ sourceTemplateId: 'template-1', sourceVersion: 37, sourceContentVersion: 12 });
+    });
   });
 
   it('should clone a public template for pro users', async () => {
