@@ -45,6 +45,10 @@ and user-facing failure states when a supporting service is unavailable.
   verification callback carry forward so a new account returns to the page that
   sent it, such as an Organization invite. Only same-origin, non-auth paths are
   accepted.
+- `logout()` from `useAuth` returns a promise that resolves once the session is
+  cleared in the app, even if the server call failed (`src/lib/auth/signOut.ts`).
+  A page that sends the user to `/login` after signing out must await it: Login
+  redirects a signed-in visitor straight to the return path.
 - Passwords: Better Auth enforces length (10 to 128) and rejects breached passwords;
   `Register.tsx`, `ResetPassword.tsx`, and `SecuritySection.tsx` validate the same
   policy client-side.

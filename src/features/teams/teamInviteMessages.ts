@@ -4,6 +4,13 @@ import type { TeamRole } from '@/lib/api';
 export const formatTeamRole = (role: TeamRole): string =>
   role.charAt(0).toUpperCase() + role.slice(1);
 
+/**
+ * True when the signed-in account is not the one the invite was sent to. The
+ * invite page then offers to sign out and come back as the invited account.
+ */
+export const isInviteEmailMismatch = (error: unknown): boolean =>
+  isApiError(error) && error.status === 403 && error.code === 'invite_email_mismatch';
+
 /** Explains why an invite link cannot be previewed, accepted, or declined. */
 export function describeTeamInviteError(error: unknown): string {
   if (isApiError(error)) {

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { EMAIL_VERIFIED_CALLBACK_URL } from '@/lib/auth/loginNotice';
+import { endSession } from '@/lib/auth/signOut';
 
 interface User {
   id: string;
@@ -34,7 +35,8 @@ interface AuthContextType {
     password: string,
     callbackURL?: string,
   ) => Promise<RegisterResult>;
-  logout: () => void;
+  /** Resolves once the user is signed out here, even if the server call failed. */
+  logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -125,12 +127,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
-    authClient.signOut().finally(() => {
-      setUser(null);
-      setSession(null);
-    });
-  };
+  const logout = () =>
+    endSession(
+      () => authClient.signOut(),
+      () => {
+        setUser(null);
+        setSession(null);
+      },
+    );
 
   const refreshProfile = async () => {
     try {

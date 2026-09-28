@@ -5,13 +5,19 @@ import { Route, Routes } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { teamInvitePreviewQueryKey } from '@/features/teams/useTeamInviteLink';
 import TeamInviteAccept from '@/pages/TeamInviteAccept';
 
 // Opening an invite link must not join the Organization or switch context:
 // the page shows who invited you, to which Organization and role, and waits
 // for a click.
 
-const authState = vi.hoisted(() => ({ isAuthenticated: true, isLoading: false }));
+const authState = vi.hoisted(() => ({
+  isAuthenticated: true,
+  isLoading: false,
+  logout: vi.fn(async () => {}),
+  user: { id: 'user-1', email: 'invitee@example.com' } as { id: string; email: string } | null,
+}));
 const workspaceMocks = vi.hoisted(() => ({
   refreshTeams: vi.fn(async () => []),
   rememberTeam: vi.fn(),
@@ -50,10 +56,13 @@ const preview = {
   inviterEmail: 'owner@example.com',
 };
 
-function renderInvitePage(seed?: typeof preview | { status: 'already_member' } & Omit<typeof preview, 'status'>) {
+function renderInvitePage(
+  seed?: typeof preview | { status: 'already_member' } & Omit<typeof preview, 'status'>,
+  seededForUserId = 'user-1',
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (seed) {
-    queryClient.setQueryData(['team-invite-preview', 'invite-token'], seed);
+    queryClient.setQueryData(teamInvitePreviewQueryKey('invite-token', seededForUserId), seed);
   }
 
   return renderToStaticMarkup(
@@ -72,6 +81,7 @@ describe('Organization invite page', () => {
     vi.clearAllMocks();
     authState.isAuthenticated = true;
     authState.isLoading = false;
+    authState.user = { id: 'user-1', email: 'invitee@example.com' };
   });
 
   it('shows the Organization, inviter, and role with Accept and Decline instead of accepting on load', () => {
@@ -96,8 +106,17 @@ describe('Organization invite page', () => {
     expect(workspaceMocks.selectWorkspace).not.toHaveBeenCalled();
   });
 
+  it("does not show a preview cached for another account after switching accounts", () => {
+    const html = renderInvitePage(preview, 'user-previous');
+
+    expect(html).toContain('Loading invite...');
+    expect(html).not.toContain('Acme Corp');
+    expect(html).not.toContain('Accept invite');
+  });
+
   it('asks signed-out visitors to log in first', () => {
     authState.isAuthenticated = false;
+    authState.user = null;
 
     const html = renderInvitePage();
 
@@ -107,6 +126,7 @@ describe('Organization invite page', () => {
 
   it('lets a new invitee create an account and come back to the invite', () => {
     authState.isAuthenticated = false;
+    authState.user = null;
 
     const html = renderInvitePage();
 

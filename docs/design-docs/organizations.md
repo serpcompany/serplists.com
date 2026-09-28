@@ -59,7 +59,7 @@ Organization operations use legacy `/api/teams` route identifiers and require a 
 - `GET /api/teams/invites/pending`: list pending invites for the current user's email.
 - `POST /api/teams/invites/pending/:inviteId/accept`: accept from the settings page.
 - `GET /api/teams/invites/:token`: read-only preview of a link invite (Organization, inviter, role, expiry, and `status` `pending` or `already_member`). Only the invited email sees it: another account gets `403 invite_email_mismatch` with no Organization details; revoked, used, or archived invites return `404`, expired ones `410`.
-- `POST /api/teams/invites/:token/accept`: accept from a link.
+- `POST /api/teams/invites/:token/accept`: accept from a link. Both accept routes return `403 invite_email_mismatch`, without the invited email, to another account.
 - `POST /api/teams/invites/:token/decline`: the invited email revokes its own pending invite and records `team_invite.declined`.
 
 Template and Run routes accept the legacy `teamId` parameter where Organization scoping is supported:
@@ -85,6 +85,7 @@ Invites are link-based today:
    The link box names the invite's email and closes when that invite is revoked, or when a refreshed **Pending invites** list no longer has it (accepted, expired, or revoked elsewhere), so a dead link cannot be copied.
 4. Invitees can accept through the legacy compatibility route `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
 5. A signed-out invitee can **Log in to accept** or **Create an account**; both return to the invite link afterward, including through email verification.
+   Opening the link while signed in to another account names that account and offers **Sign out and continue**, which waits for sign-out and then opens the login page with the invite as the return path. The preview is cached per account, so the next account never sees the previous one's answer.
 6. Opening `/team-invites/:token` never joins anyone. The page loads the read-only preview and shows the Organization, inviter, and role with **Accept invite** and **Decline**; only a click accepts. Accepting leaves the active context unchanged and offers **Switch to <Organization>**, so a link from another site cannot quietly move a User's new Templates and Runs into an Organization.
 7. Members other than the `owner` can leave from **Leave Organization** on `/dashboard/settings`, which returns them to Personal.
 

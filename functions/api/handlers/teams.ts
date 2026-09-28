@@ -18,6 +18,7 @@ import { reissueTeamInviteLink } from "./team-invite-links";
 import {
   declineTeamInvite,
   getCurrentUserEmail,
+  inviteEmailMismatch,
   leaveTeam,
   previewTeamInvite,
 } from "./team-self-service";
@@ -168,7 +169,7 @@ async function acceptTeamInviteRecord({
 
   const userEmail = await getCurrentUserEmail(env, userId);
   if (!userEmail || userEmail.toLowerCase() !== invite.email.toLowerCase()) {
-    return jsonError("Invite is for a different email address", 403);
+    return inviteEmailMismatch();
   }
 
   const [existingMembership] = await db

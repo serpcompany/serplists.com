@@ -123,7 +123,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const shouldRenderFooter = publicTier !== 'minimal';
 
   const handleLogout = () => {
-    logout();
+    void logout();
     navigate('/');
   };
 

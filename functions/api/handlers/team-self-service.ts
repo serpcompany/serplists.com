@@ -28,7 +28,8 @@ function isExpired(expiresAt: string): boolean {
 }
 
 const inviteNotFound = () => jsonError("Invite not found", 404);
-const inviteEmailMismatch = () =>
+// The body never names the invited address, so holding a link does not reveal it.
+export const inviteEmailMismatch = () =>
   jsonError("Invite is for a different email address", 403, { code: "invite_email_mismatch" });
 const inviteExpired = () => jsonError("Invite expired", 410, { code: "invite_expired" });
 

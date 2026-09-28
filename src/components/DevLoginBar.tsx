@@ -84,7 +84,7 @@ export function DevLoginBar(): JSX.Element | null {
   };
 
   const handleLogout = () => {
-    logout();
+    void logout();
     toast.success('Logged out');
     navigate('/');
   };

@@ -344,3 +344,53 @@ test('revoking an invite removes its link, and only its link, from the page', as
   await expect(inviteLink).toHaveValue(keptUrl);
   await expect(page.getByText(`Invite link for ${keptEmail}`)).toBeVisible();
 });
+
+test('an invite opened in another account offers to sign out and come back to it', async ({ browser, page }) => {
+  test.setTimeout(120_000);
+
+  const suffix = uniqueSuffix();
+  const teamName = `Switch Team ${suffix}`;
+  const inviteeEmail = `invitee+${suffix}@e2e.local`;
+  const otherEmail = `other+${suffix}@e2e.local`;
+
+  await registerAccount(page, { email: `owner+${suffix}@e2e.local`, name: 'Owner User' });
+  await page.goto('/dashboard/settings');
+  await page.locator('#team-name').fill(teamName);
+  await page.getByRole('button', { name: 'Create Organization' }).click();
+  await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(teamName, {
+    timeout: 15_000,
+  });
+  const inviteUrl = await createLinkInvite(page, inviteeEmail);
+  const invitePath = new URL(inviteUrl).pathname;
+
+  // The invited account exists, but this device is signed in to another one.
+  const inviteeContext = await browser.newContext();
+  await registerAccount(await inviteeContext.newPage(), { email: inviteeEmail, name: 'Invitee' });
+  await inviteeContext.close();
+
+  const deviceContext = await browser.newContext();
+  const devicePage = await deviceContext.newPage();
+  await registerAccount(devicePage, { email: otherEmail, name: 'Other Account' });
+  await gotoInvite(devicePage, inviteUrl);
+
+  const mismatch = devicePage.locator('p', {
+    hasText: 'This invite was sent to a different email address.',
+  });
+  await expect(mismatch).toContainText(otherEmail, { timeout: 30_000 });
+  await expect(devicePage.getByRole('button', { name: 'Accept invite' })).toHaveCount(0);
+
+  // Sign-out finishes before the login page opens, so it does not bounce back
+  // to the invite as the old account.
+  await devicePage.getByRole('button', { name: 'Sign out and continue' }).click();
+  await expect(devicePage).toHaveURL(/\/login\?next=/, { timeout: 15_000 });
+  await expect(devicePage.getByRole('button', { name: 'Sign in' })).toBeVisible();
+
+  await devicePage.getByLabel('Email').fill(inviteeEmail);
+  await devicePage.locator('#password').fill(PASSWORD);
+  await devicePage.getByRole('button', { name: 'Sign in' }).click();
+
+  await expect(devicePage).toHaveURL(new RegExp(`${invitePath}$`), { timeout: 30_000 });
+  await devicePage.getByRole('button', { name: 'Accept invite' }).click();
+  await expect(devicePage.getByText('Invite accepted.')).toBeVisible({ timeout: 30_000 });
+  await deviceContext.close();
+});

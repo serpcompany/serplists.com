@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -5,12 +6,15 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { createSingleFlight } from '@/features/teams/singleFlight';
 import {
   describeTeamInviteError,
   formatTeamRole,
+  isInviteEmailMismatch,
 } from '@/features/teams/teamInviteMessages';
 import { useTeamInviteLink } from '@/features/teams/useTeamInviteLink';
 import { buildAuthLinkState, withReturnPath } from '@/lib/auth/returnPath';
+import { signOutAndReturn } from '@/lib/auth/signOut';
 import {
   buildConsoleSettingsPath,
   buildConsoleTemplatesPath,
@@ -22,9 +26,13 @@ export default function TeamInviteAccept() {
   const { token } = useParams<{ token: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading } = useAuth();
-  const invite = useTeamInviteLink(token, !isLoading && isAuthenticated);
+  const { isAuthenticated, isLoading, logout, user } = useAuth();
+  const invite = useTeamInviteLink(token, !isLoading && isAuthenticated ? (user?.id ?? null) : null);
   const preview = invite.preview;
+  // Signing in, signing up, or switching accounts all come back to this path.
+  const invitePath = `${location.pathname}${location.search}${location.hash}`;
+  const [signOutOnce] = useState(createSingleFlight);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const handleAccept = async () => {
     try {
@@ -44,6 +52,18 @@ export default function TeamInviteAccept() {
       // The error renders below the buttons.
     }
   };
+
+  // Waits for sign-out before opening the login page; otherwise the login page
+  // would send the still signed-in account straight back here.
+  const handleSignOutAndContinue = () =>
+    signOutOnce(async () => {
+      setIsSigningOut(true);
+      try {
+        await signOutAndReturn({ logout, navigate, returnPath: invitePath });
+      } finally {
+        setIsSigningOut(false);
+      }
+    });
 
   const handleSwitch = (teamId: string) => {
     invite.switchToOrganization(teamId);
@@ -65,6 +85,25 @@ export default function TeamInviteAccept() {
     </>
   );
 
+  const renderEmailMismatch = () => (
+    <>
+      <p className="text-sm text-muted-foreground">
+        {user?.email ? (
+          <>
+            You're signed in as <span className="font-medium text-foreground">{user.email}</span>.{' '}
+          </>
+        ) : null}
+        This invite was sent to a different email address. Sign out, then log in or create an
+        account with the invited email address to accept it.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button disabled={isSigningOut} onClick={() => void handleSignOutAndContinue()}>
+          {isSigningOut ? 'Signing out...' : 'Sign out and continue'}
+        </Button>
+      </div>
+    </>
+  );
+
   const renderBody = () => {
     if (!token) {
       return <p className="text-sm text-muted-foreground">This invite link is missing a token.</p>;
@@ -81,7 +120,6 @@ export default function TeamInviteAccept() {
 
     if (!isAuthenticated) {
       // Both links bring the user back here after signing in or signing up.
-      const invitePath = `${location.pathname}${location.search}${location.hash}`;
       return (
         <>
           <p className="text-sm text-muted-foreground">
@@ -105,6 +143,10 @@ export default function TeamInviteAccept() {
           </div>
         </>
       );
+    }
+
+    if ([invite.previewError, invite.acceptError, invite.declineError].some(isInviteEmailMismatch)) {
+      return renderEmailMismatch();
     }
 
     if (invite.previewError) {

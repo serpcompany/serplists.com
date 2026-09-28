@@ -25,14 +25,22 @@ const respondWithTimeout = <T>(task: Promise<T>) =>
     'The invite is taking longer than expected. Refresh this page and try again.',
   );
 
-export const teamInvitePreviewQueryKey = (token: string | undefined) => ['team-invite-preview', token];
+// The preview depends on who asks (only the invited account sees it), so it is
+// cached per account: after switching accounts the page never shows the
+// previous account's answer.
+export const teamInvitePreviewQueryKey = (token: string | undefined, viewerId: string | null) => [
+  'team-invite-preview',
+  token,
+  viewerId,
+];
 
 /**
  * State and actions for an invite link page. Opening the page only reads the
  * preview; joining happens when the invitee clicks Accept, and switching the
- * active context is a separate, explicit step.
+ * active context is a separate, explicit step. `viewerId` is the signed-in
+ * user's id, or null until the session is known.
  */
-export function useTeamInviteLink(token: string | undefined, enabled: boolean) {
+export function useTeamInviteLink(token: string | undefined, viewerId: string | null) {
   const queryClient = useQueryClient();
   const { refreshTeams, rememberTeam, selectWorkspace } = useWorkspace();
   // Accept and Decline share one guard, so a double click (or clicking both)
@@ -40,9 +48,9 @@ export function useTeamInviteLink(token: string | undefined, enabled: boolean) {
   const [respondOnce] = useState(createSingleFlight);
 
   const previewQuery = useQuery({
-    queryKey: teamInvitePreviewQueryKey(token),
+    queryKey: teamInvitePreviewQueryKey(token, viewerId),
     queryFn: () => api.getTeamInvitePreview(token as string),
-    enabled: Boolean(token) && enabled,
+    enabled: Boolean(token) && Boolean(viewerId),
     retry: false,
     staleTime: 0,
   });
