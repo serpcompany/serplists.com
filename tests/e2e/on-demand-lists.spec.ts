@@ -75,3 +75,47 @@ test('keeps toggled tasks and advances on a run opened from the runs dashboard',
   expect(completed).toEqual([true, true]);
   await deleteRun(page, runId);
 });
+
+test('saves a template twice from the editor without loading a template list', async ({ page }) => {
+  await loginAsAdmin(page);
+  const title = `Editor save QA ${Date.now()}`;
+  const templateId = await page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
+    const response = await fetch(`${apiBaseUrl}/templates`, {
+      body: JSON.stringify({
+        title: templateTitle,
+        sections: [{ id: 'save-section', title: 'Section', items: [{ id: 'save-task', title: 'Task' }] }],
+      }),
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
+    return ((await response.json()) as { id: string }).id;
+  }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+
+  // The editor loads its template by id; a list request (?scope= or ?teamId=) is waste.
+  const listRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (request.method() === 'GET' && url.pathname.endsWith('/api/templates') && url.search) listRequests.push(url.search);
+  });
+  await page.goto(`/dashboard/templates/${templateId}/edit`);
+  const nameInput = page.getByPlaceholder('Enter template name...');
+  await expect(nameInput).toHaveValue(title);
+
+  for (const suffix of [' v2', ' v3']) {
+    await nameInput.fill(`${title}${suffix}`);
+    const saved = page.waitForResponse(
+      (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === 'PUT',
+    );
+    await page.getByRole('button', { name: 'Save' }).click();
+    // The second save sends the version the first one returned, so neither is a 409.
+    expect((await saved).status()).toBe(200);
+    await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
+  }
+
+  expect(listRequests).toEqual([]);
+  await page.evaluate(async ({ id, apiBaseUrl }) => {
+    await fetch(`${apiBaseUrl}/templates/${id}`, { credentials: 'include', method: 'DELETE' });
+  }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
+});
