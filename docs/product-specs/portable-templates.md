@@ -133,6 +133,13 @@ The current import UI derives access from the authenticated entitlement response
 file picker for a User who already has import access. No direct API-post
 workaround is required for an entitled User.
 
+Each file chosen in the picker replaces the previous preview, even when the new
+file is rejected (wrong type, over 2MB, or invalid), so Confirm Import only ever
+imports the last file chosen. The preview shows that file's name, and the picker
+is cleared after every choice so an edited file can be chosen again under the
+same name. The selection rules live in
+`src/features/template-backup/importFileSelection.ts`.
+
 ## Backup/export format
 
 Backup export remains supported for compatibility and restore-style workflows.

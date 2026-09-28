@@ -13,9 +13,10 @@ import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { toast } from "sonner";
 import { downloadBackupFile, exportPortableTemplatesToJSON, parseTemplatesFromFile } from "@/lib/utils/templateBackup";
-import type { TemplateImportResult } from "@/lib/utils/templateBackup";
 import type { ChecklistTemplate, TemplateImportOptions, TemplateImportSummary } from "@/types/checklist";
 import { exportTemplatePack } from "@/features/template-backup/exportTemplatePack";
+import { selectImportFile } from "@/features/template-backup/importFileSelection";
+import type { ImportPreview } from "@/features/template-backup/importFileSelection";
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
 import { getAccessFailure } from "@/lib/api-errors";
 import { useBillingStatus } from "@/hooks/useBillingStatus";
@@ -28,8 +29,6 @@ interface TemplateBackupProps {
 
 const MAX_TEMPLATES_PER_IMPORT = 5;
 const MAX_ASSET_BYTES = 5 * 1024 * 1024;
-const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024; // 2MB
-const SUPPORTED_IMPORT_EXTENSIONS = [".json", ".md", ".markdown", ".yaml", ".yml"];
 
 const countOversizedAssets = (templates: ChecklistTemplate[]): number => {
   let count = 0;
@@ -75,7 +74,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const hasBackupAccess = billing.status === "error" || (billing.status === "known" && billing.isPaid);
   const workspaceTemplateLabel = isTeamWorkspace ? "Organization Templates" : "My Templates";
   const [isImporting, setIsImporting] = useState(false);
-  const [importPreview, setImportPreview] = useState<TemplateImportResult | null>(null);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [lastImportSummary, setLastImportSummary] = useState<TemplateImportSummary | null>(null);
   const [includePublicTemplates, setIncludePublicTemplates] = useState(false);
   const [importVisibility, setImportVisibility] = useState<ImportVisibility>("preserve");
@@ -148,32 +147,20 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       await handleBackupFailure(error, "Failed to export templates");
     }
   };
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const lowerName = file.name.toLowerCase();
-    const isSupported = SUPPORTED_IMPORT_EXTENSIONS.some((extension) => lowerName.endsWith(extension));
-    if (!isSupported) {
-      toast.error("Please select a JSON, Markdown, or YAML template file");
-      return;
-    }
-    if (file.size > MAX_IMPORT_FILE_BYTES) {
-      toast.error("Import file too large (max 2MB)");
-      return;
-    }
-    setLastImportSummary(null);
-    setIsImporting(true);
-    try {
-      const parsedTemplates = await parseTemplatesFromFile(file);
-      setImportPreview(parsedTemplates);
-      toast.success(`Preview: ${parsedTemplates.templates.length} templates ready to import`);
-    } catch (error) {
-      toast.error(`Failed to parse file: ${(error as Error).message}`);
-      setImportPreview(null);
-    } finally {
-      setIsImporting(false);
-    }
-  };
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) =>
+    selectImportFile(event.currentTarget, {
+      onError: (message) => toast.error(message),
+      onPreview: (result, fileName) => {
+        setImportPreview({ ...result, fileName });
+        toast.success(`Preview: ${result.templates.length} templates ready to import`);
+      },
+      parse: parseTemplatesFromFile,
+      resetPreview: () => {
+        setImportPreview(null);
+        setLastImportSummary(null);
+      },
+      setBusy: setIsImporting,
+    });
   const handleConfirmImport = async () => {
     if (!importPreview || !user) return;
 
@@ -216,20 +203,13 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
         toast.success(`Successfully imported ${result.imported}/${result.total} templates`);
       }
       setImportPreview(null);
-      // Reset file input
-      const fileInput = document.getElementById('template-file-input') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
     } catch (error) {
       await handleBackupFailure(error, "Failed to import templates");
     } finally {
       setIsImporting(false);
     }
   };
-  const handleCancelImport = () => {
-    setImportPreview(null);
-    const fileInput = document.getElementById('template-file-input') as HTMLInputElement;
-    if (fileInput) fileInput.value = '';
-  };
+  const handleCancelImport = () => setImportPreview(null);
   const downloadSampleTemplate = () => {
     const sampleTemplate: ChecklistTemplate = {
       id: "sample-template-001",
@@ -475,6 +455,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                   <CardTitle className="text-base flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-green-600" />
                     Import Preview
+                    <span className="truncate text-sm font-normal text-muted-foreground">{importPreview.fileName}</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
