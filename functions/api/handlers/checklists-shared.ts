@@ -4,7 +4,7 @@ import { createDb, schema } from '../db';
 import { json, jsonError } from '../utils/response';
 import { buildAuditEventValues } from '../utils/audit';
 import { calculateRunProgress } from '../utils/template-reconciliation';
-import { batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
+import { auditedRunUpdate, batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
 import { mergeSharedRunState, readStoredRunSections, sharedRunUpdateSchema } from '../utils/shared-run-merge';
 import { activeRunLimitResponse, findActiveRunLimitHit, isReopening } from '../utils/active-run-limit';
 import { canViewRun } from '../utils/run-access';
@@ -19,7 +19,7 @@ export async function handleSharedChecklist(
   userId: string | null,
 ): Promise<Response> {
   const db = createDb(env);
-  const { audit_events, checklist_runs } = schema;
+  const { checklist_runs } = schema;
   const activeShare = and(
     eq(checklist_runs.share_token, shareToken),
     eq(checklist_runs.is_public, true),
@@ -126,15 +126,15 @@ export async function handleSharedChecklist(
     request,
     createdAt: now,
   });
-  const batchResults = await db.batch([
-    db
-      .update(checklist_runs)
-      .set(updates)
-      .where(and(eq(checklist_runs.id, existingSharedRun.id), eq(checklist_runs.revision, currentRevision), activeShare)),
-    db.insert(audit_events).values(auditEvent),
-  ]);
+  const batchResults = await db.batch(auditedRunUpdate(
+    db,
+    existingSharedRun.id,
+    and(eq(checklist_runs.revision, currentRevision), activeShare),
+    updates,
+    auditEvent,
+  ));
 
-  if (batchUpdateMissed(batchResults[0])) {
+  if (batchUpdateMissed(batchResults[1])) {
     return jsonError('Checklist run changed while it was being saved. Refresh before saving again.', 409, {
       code: 'edit_conflict',
     });

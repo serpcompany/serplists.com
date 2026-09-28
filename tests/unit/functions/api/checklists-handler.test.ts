@@ -787,7 +787,8 @@ describe('Checklists Handlers', () => {
     expect(update).toEqual(expect.objectContaining({ status: 'completed', progress: 100 }));
     const batchStatements = dbMocks.db.batch.mock.calls[0][0];
     expect(batchStatements).toHaveLength(2);
-    expect(batchStatements[0]).toBe(dbMocks.updateChain);
+    // The audit row is written first, guarded on the run's state; then the run update.
+    expect(batchStatements[1]).toBe(dbMocks.updateChain);
     expect(dbMocks.insertChain.values).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'checklist_run.shared_updated',
@@ -861,7 +862,8 @@ describe('Checklists Handlers', () => {
         created_at: new Date().toISOString(),
       },
     ]);
-    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }]);
+    // The guarded audit insert and the update both miss: nothing was written.
+    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
 
     const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1', {
       method: 'PUT',

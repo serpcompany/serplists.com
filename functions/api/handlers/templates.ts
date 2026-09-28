@@ -103,14 +103,19 @@ async function updateTemplateWithHistoryFallback(
     whereClause: SQL | undefined;
     updatedAt: string;
   }> = [],
-): Promise<readonly unknown[]> {
+): Promise<boolean> {
   const { audit_events, checklist_runs, template_versions, templates } = schema;
+  // The audit row goes first, only while the template still matches whereClause, and every
+  // other statement requires that audit row. A plain INSERT would commit even when the
+  // UPDATE lost a race, leaving history (and reconciled runs) for a change that never happened.
+  const auditWritten = rowExistsSql(audit_events.id, String(auditEventValues.id));
+  const templateUpdateIndex = versionValues ? 2 : 1;
 
   const runBatch = (templateValues: TemplateUpdateValues) => {
     const statements = [
-      db.update(templates).set(templateValues).where(whereClause),
-      ...(versionValues ? [db.insert(template_versions).values(versionValues)] : []),
-      db.insert(audit_events).values(auditEventValues),
+      insertRowWhere(db, audit_events, auditEventValues, sql`exists (select 1 from ${templates} where ${whereClause})`),
+      ...(versionValues ? [insertRowWhere(db, template_versions, versionValues, auditWritten)] : []),
+      db.update(templates).set(templateValues).where(and(whereClause, auditWritten)),
       ...reconciledRunUpdates.map((runUpdate) =>
         db
           .update(checklist_runs)
@@ -122,22 +127,24 @@ async function updateTemplateWithHistoryFallback(
             revision: runUpdate.revision + 1,
             updated_at: runUpdate.updatedAt,
           })
-          .where(runUpdate.whereClause),
+          .where(and(runUpdate.whereClause, auditWritten)),
       ),
     ] as const;
 
     return db.batch(statements);
   };
 
+  let results: readonly unknown[];
   try {
-    return await runBatch(values);
+    results = await runBatch(values);
   } catch (error) {
     if (!isMissingRulesColumnError(error)) {
       throw error;
     }
 
-    return await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateUpdateValues);
+    results = await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateUpdateValues);
   }
+  return !batchUpdateMissed(results[templateUpdateIndex]);
 }
 
 function batchUpdateMissed(result: unknown): boolean {
@@ -1034,18 +1041,22 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         createdAt: now,
       });
       const archivedTemplate = teamId
-        ? and(eq(templates.id, templateId), eq(templates.team_id, teamId), isNotNull(templates.deleted_at))
-        : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNotNull(templates.deleted_at));
-      // With a limit, the restore re-checks it in the same statement; the audit row follows it.
-      const restoreResults = await db.batch(limit === null
-        ? [db.update(templates).set(restoreUpdates).where(archivedTemplate), db.insert(audit_events).values(auditEvent)]
-        : [
-            db.update(templates).set(restoreUpdates).where(and(archivedTemplate, templateCapacityAvailableSql({ owner, limit }))),
-            insertRowWhere(db, audit_events, auditEvent, rowExistsSql(templates.id, templateId, and(isNull(templates.deleted_at), eq(templates.updated_at, now)))),
-          ]);
-      if (limit !== null && batchUpdateMissed(restoreResults[0])) {
-        const currentCount = await countTemplates(env, owner);
-        if (currentCount >= limit) return templateLimitResponse(restoreLimitMessage, limit, currentCount);
+        ? and(eq(templates.team_id, teamId), isNotNull(templates.deleted_at))
+        : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNotNull(templates.deleted_at));
+      // With a limit, the restore re-checks it in the same statement. The audit row is written
+      // first and only while the restore will apply, so a lost race records nothing.
+      const restoreGuard = limit === null ? archivedTemplate : and(archivedTemplate, templateCapacityAvailableSql({ owner, limit }));
+      const restoreResults = await db.batch([
+        insertRowWhere(db, audit_events, auditEvent, rowExistsSql(templates.id, templateId, restoreGuard)),
+        db.update(templates).set(restoreUpdates).where(and(eq(templates.id, templateId), restoreGuard)),
+      ]);
+      if (batchUpdateMissed(restoreResults[1])) {
+        if (limit !== null) {
+          const currentCount = await countTemplates(env, owner);
+          if (currentCount >= limit) return templateLimitResponse(restoreLimitMessage, limit, currentCount);
+        }
+        // A concurrent request restored it first.
+        return jsonError('Template is not archived', 400);
       }
 
       return json({ success: true });
@@ -1405,8 +1416,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     }
 
     const templateUpdateWhere = existingTemplate.owner_type === 'team' && existingTemplate.team_id
-      ? and(eq(templates.id, templateId), eq(templates.team_id, existingTemplate.team_id), eq(templates.version, currentVersion))
-      : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), eq(templates.version, currentVersion));
+      ? and(eq(templates.id, templateId), eq(templates.team_id, existingTemplate.team_id), eq(templates.version, currentVersion), isNull(templates.deleted_at))
+      : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), eq(templates.version, currentVersion), isNull(templates.deleted_at));
 
     const subject = getTemplateSubject(existingTemplate as unknown as Record<string, unknown>, userId);
     const updatedTemplate = {
@@ -1493,7 +1504,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     });
 
     try {
-      const batchResults = await updateTemplateWithHistoryFallback(
+      const updated = await updateTemplateWithHistoryFallback(
         db,
         updates as TemplateUpdateValues,
         templateUpdateWhere,
@@ -1501,7 +1512,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         versionValues,
         reconciledRunUpdates,
       );
-      if (batchUpdateMissed(batchResults[0])) {
+      if (!updated) {
         return jsonError('Template changed while it was being saved. Refresh before saving again.', 409, {
           code: 'edit_conflict',
         });
@@ -1570,16 +1581,18 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       request,
       createdAt: now,
     });
-    await db.batch([
-      db.update(templates)
-        .set(archiveUpdates)
-        .where(
-          existingTemplate.owner_type === 'team' && existingTemplate.team_id
-            ? and(eq(templates.id, templateId), eq(templates.team_id, existingTemplate.team_id), isNull(templates.deleted_at))
-            : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at)),
-        ),
-      db.insert(audit_events).values(auditEvent),
+    const activeTemplate = existingTemplate.owner_type === 'team' && existingTemplate.team_id
+      ? and(eq(templates.team_id, existingTemplate.team_id), isNull(templates.deleted_at))
+      : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at));
+    // The audit row is written first and only while the template is still active.
+    const archiveResults = await db.batch([
+      insertRowWhere(db, audit_events, auditEvent, rowExistsSql(templates.id, templateId, activeTemplate)),
+      db.update(templates).set(archiveUpdates).where(and(eq(templates.id, templateId), activeTemplate)),
     ]);
+    if (batchUpdateMissed(archiveResults[1])) {
+      // A concurrent request archived it first.
+      return jsonError('Template not found or unauthorized', 404);
+    }
 
     return json({ success: true });
   }

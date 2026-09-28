@@ -10,7 +10,7 @@ import { canRunTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTea
 import { canDeleteRun, canRestoreRun, canUpdateRun, canViewRun, canViewRunHistory } from '../utils/run-access';
 import { z } from 'zod';
 import { calculateRunProgress, reconcileRunSections } from '../utils/template-reconciliation';
-import { batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
+import { auditedRunUpdate, batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
 import { canUseTemplateAsRunSource } from '../utils/template-access';
 import {
   activeRunCapacityAvailableSql,
@@ -21,7 +21,6 @@ import {
   isReopening,
   runInsertStatements,
 } from '../utils/active-run-limit';
-import { insertRowWhere, rowExistsSql } from '../utils/guarded-insert';
 import { findShareLinkOutsiders, HIDDEN_ACTOR } from '../utils/share-link-actors';
 import { handleSharedChecklist } from './checklists-shared';
 
@@ -362,20 +361,21 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         request,
         createdAt: now,
       });
-      const archivedRun = teamId
-        ? and(eq(checklist_runs.id, checklistId), eq(checklist_runs.team_id, teamId), isNotNull(checklist_runs.deleted_at))
-        : and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId), isNotNull(checklist_runs.deleted_at));
-      // With a limit, the restore re-checks it in the same statement and the audit row is
-      // written only if this request restored the run.
-      const batchResults = await db.batch(capacity.limit === null
-        ? [db.update(checklist_runs).set(restoreUpdates).where(archivedRun), db.insert(audit_events).values(auditEvent)]
-        : [
-            db.update(checklist_runs).set(restoreUpdates).where(and(archivedRun, activeRunCapacityAvailableSql(owner, capacity.limit))),
-            insertRowWhere(db, audit_events, auditEvent, rowExistsSql(checklist_runs.id, checklistId, and(isNull(checklist_runs.deleted_at), eq(checklist_runs.updated_at, now)))),
-          ]);
-      if (capacity.limit !== null && batchUpdateMissed(batchResults[0])) {
-        const current = await countActiveRuns(env, owner);
-        if (current >= capacity.limit) return activeRunLimitResponse({ limit: capacity.limit, current }, 'restore');
+      const archivedRun = and(
+        teamId ? eq(checklist_runs.team_id, teamId) : eq(checklist_runs.user_id, userId),
+        isNotNull(checklist_runs.deleted_at),
+      );
+      // With a limit, the restore re-checks it in the same statement.
+      const batchResults = await db.batch(auditedRunUpdate(db, checklistId, capacity.limit === null
+        ? archivedRun
+        : and(archivedRun, activeRunCapacityAvailableSql(owner, capacity.limit)), restoreUpdates, auditEvent));
+      if (batchUpdateMissed(batchResults[1])) {
+        if (capacity.limit !== null) {
+          const current = await countActiveRuns(env, owner);
+          if (current >= capacity.limit) return activeRunLimitResponse({ limit: capacity.limit, current }, 'restore');
+        }
+        // A concurrent request restored it first.
+        return jsonError('Checklist is not archived', 400);
       }
 
       return json({ success: true });
@@ -474,16 +474,12 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         request,
         createdAt: now,
       });
-      const batchResults = await db.batch([
-        db.update(checklist_runs).set(updates).where(and(
-          eq(checklist_runs.id, checklistId),
-          eq(checklist_runs.revision, currentRevision),
-          isNull(checklist_runs.deleted_at),
-        )),
-        db.insert(audit_events).values(auditEvent),
-      ]);
+      const batchResults = await db.batch(auditedRunUpdate(db, checklistId, and(
+        eq(checklist_runs.revision, currentRevision),
+        isNull(checklist_runs.deleted_at),
+      ), updates, auditEvent));
 
-      if (batchUpdateMissed(batchResults[0])) {
+      if (batchUpdateMissed(batchResults[1])) {
         return jsonError('Checklist run changed while it was being revalidated. Refresh and try again.', 409, {
           code: 'edit_conflict',
         });
@@ -537,26 +533,14 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         request,
         createdAt: now,
       });
-      await db.batch([
-        db
-          .update(checklist_runs)
-          .set({
-            is_public: false,
-            share_token: null,
-            share_expires_at: null,
-            share_used_at: null,
-          })
-          .where(and(eq(checklist_runs.id, runId), eq(checklist_runs.is_public, true), isNull(checklist_runs.deleted_at))),
-        db
-          .update(checklist_runs)
-          .set(shareUpdates)
-          .where(
-            run.team_id
-              ? and(eq(checklist_runs.id, runId), eq(checklist_runs.team_id, run.team_id), isNull(checklist_runs.deleted_at))
-              : and(eq(checklist_runs.id, runId), eq(checklist_runs.user_id, userId), isNull(checklist_runs.deleted_at)),
-          ),
-        db.insert(audit_events).values(auditEvent),
-      ]);
+      // The new token replaces the old one, so the previous link stops working.
+      const batchResults = await db.batch(auditedRunUpdate(db, runId, and(
+        run.team_id ? eq(checklist_runs.team_id, run.team_id) : eq(checklist_runs.user_id, userId),
+        isNull(checklist_runs.deleted_at),
+      ), shareUpdates, auditEvent));
+      if (batchUpdateMissed(batchResults[1])) {
+        return jsonError('Checklist run not found', 404);
+      }
 
       return json({
         id: runId,
@@ -742,18 +726,13 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       request,
       createdAt: now,
     });
-    const batchResults = await db.batch([
-      db.update(checklist_runs)
-        .set(updates)
-        .where(
-          existingRun.team_id
-            ? and(eq(checklist_runs.id, checklistId), eq(checklist_runs.team_id, existingRun.team_id), eq(checklist_runs.revision, currentRevision), isNull(checklist_runs.deleted_at))
-            : and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId), eq(checklist_runs.revision, currentRevision), isNull(checklist_runs.deleted_at))
-        ),
-      db.insert(audit_events).values(auditEvent),
-    ]);
+    const batchResults = await db.batch(auditedRunUpdate(db, checklistId, and(
+      existingRun.team_id ? eq(checklist_runs.team_id, existingRun.team_id) : eq(checklist_runs.user_id, userId),
+      eq(checklist_runs.revision, currentRevision),
+      isNull(checklist_runs.deleted_at),
+    ), updates, auditEvent));
 
-    if (batchUpdateMissed(batchResults[0])) {
+    if (batchUpdateMissed(batchResults[1])) {
       return jsonError('Checklist run changed while it was being saved. Refresh before saving again.', 409, {
         code: 'edit_conflict',
       });
@@ -802,11 +781,8 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       request,
       createdAt: now,
     });
-    // The audit row is written first, and only while the run is still shared.
-    await db.batch([
-      insertRowWhere(db, audit_events, auditEvent, rowExistsSql(checklist_runs.id, runId, sharedRun)),
-      db.update(checklist_runs).set(revokeUpdates).where(and(eq(checklist_runs.id, runId), sharedRun)),
-    ]);
+    // Written only while the run is still shared, so a repeat or concurrent revoke records nothing.
+    await db.batch(auditedRunUpdate(db, runId, sharedRun, revokeUpdates, auditEvent));
 
     return json({ id: runId, isPublic: false });
   }
@@ -858,16 +834,14 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       request,
       createdAt: now,
     });
-    await db.batch([
-      db.update(checklist_runs)
-        .set(archiveUpdates)
-        .where(
-          existingChecklist.team_id
-            ? and(eq(checklist_runs.id, checklistId), eq(checklist_runs.team_id, existingChecklist.team_id), isNull(checklist_runs.deleted_at))
-            : and(eq(checklist_runs.id, checklistId), eq(checklist_runs.user_id, userId), isNull(checklist_runs.deleted_at))
-        ),
-      db.insert(audit_events).values(auditEvent),
-    ]);
+    const batchResults = await db.batch(auditedRunUpdate(db, checklistId, and(
+      existingChecklist.team_id ? eq(checklist_runs.team_id, existingChecklist.team_id) : eq(checklist_runs.user_id, userId),
+      isNull(checklist_runs.deleted_at),
+    ), archiveUpdates, auditEvent));
+    if (batchUpdateMissed(batchResults[1])) {
+      // A concurrent request archived it first.
+      return jsonError('Checklist not found or unauthorized', 404);
+    }
 
     return json({ success: true });
   }

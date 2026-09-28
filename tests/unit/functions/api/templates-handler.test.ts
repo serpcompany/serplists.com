@@ -584,7 +584,8 @@ describe('Templates Handlers', () => {
         is_public: false,
       },
     ]);
-    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    // The guarded audit and version inserts and the update all miss: nothing was written.
+    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]);
 
     const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
       method: 'PUT',

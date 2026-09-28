@@ -36,6 +36,16 @@ vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForContext: vi.fn(),
 }));
 
+vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@functions/api/utils/guarded-insert')>();
+  return {
+    ...actual,
+    // Guarded audit inserts go through the plain insert mock so tests can inspect the row;
+    // the guards themselves are covered in audit-guards.test.ts and the local D1 tests.
+    insertRowWhere: vi.fn((db: any, table: unknown, values: unknown) => db.insert(table).values(values)),
+  };
+});
+
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getSessionUserId } from '@functions/api/utils/session';
 

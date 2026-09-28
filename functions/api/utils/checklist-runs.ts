@@ -1,6 +1,7 @@
-import { getTableColumns, sql } from 'drizzle-orm';
-import { schema } from '../db';
+import { and, eq, getTableColumns, sql, type SQL } from 'drizzle-orm';
+import { schema, type createDb } from '../db';
 import type { AuditSubject } from './audit';
+import { insertRowWhere, rowExistsSql } from './guarded-insert';
 import { runSourceTemplateUsableSql } from './template-access';
 
 // Helpers shared by the checklist run handlers (private and share-link routes).
@@ -61,6 +62,27 @@ export function batchUpdateMissed(result: unknown): boolean {
   if (!isRecord(result)) return false;
   const meta = result.meta;
   return isRecord(meta) && typeof meta.changes === 'number' && meta.changes === 0;
+}
+
+/**
+ * Batch statements for a guarded run write and its audit row, which land together or not at
+ * all. The audit row is inserted first, only while run `runId` matches `guard` (the state the
+ * write requires: revision, owner scope, archive state); the UPDATE then runs under the same
+ * guard. A plain audit INSERT would commit even when the UPDATE lost a race and matched no
+ * row. After the batch, `batchUpdateMissed(results[1])` means nothing was written.
+ */
+export function auditedRunUpdate(
+  db: ReturnType<typeof createDb>,
+  runId: string,
+  guard: SQL | undefined,
+  updates: Record<string, unknown>,
+  auditEvent: typeof schema.audit_events.$inferInsert,
+) {
+  const { audit_events, checklist_runs } = schema;
+  return [
+    insertRowWhere(db, audit_events, auditEvent, rowExistsSql(checklist_runs.id, runId, guard)),
+    db.update(checklist_runs).set(updates).where(and(eq(checklist_runs.id, runId), guard)),
+  ] as const;
 }
 
 export function getRunSubject(run: Record<string, unknown>, fallbackUserId: string): AuditSubject {
