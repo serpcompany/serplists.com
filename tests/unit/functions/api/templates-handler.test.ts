@@ -951,6 +951,28 @@ describe('Templates Handlers', () => {
       ])
       .mockResolvedValueOnce([
         {
+          id: 'audit-4',
+          actor_user_id: 'user-123',
+          action: 'template.restored',
+          metadata_json: null,
+          request_id: 'req-4',
+          created_at: '2026-07-03T12:02:00.000Z',
+          actor_email: 'editor@example.com',
+          actor_name: 'Editor Example',
+          actor_username: 'editor',
+        },
+        {
+          id: 'audit-3',
+          actor_user_id: 'user-123',
+          action: 'template.deleted',
+          metadata_json: null,
+          request_id: 'req-3',
+          created_at: '2026-07-03T12:01:00.000Z',
+          actor_email: 'editor@example.com',
+          actor_name: 'Editor Example',
+          actor_username: 'editor',
+        },
+        {
           id: 'audit-2',
           actor_user_id: 'user-123',
           action: 'template.updated',
@@ -979,11 +1001,20 @@ describe('Templates Handlers', () => {
     // Events come with the versions: a Share's event labels its version in the Changelog,
     // and archive and restore record only an event.
     expect(data.events).toEqual([
+      expect.objectContaining({ id: 'audit-4', action: 'template.restored', metadata: null }),
+      expect.objectContaining({ id: 'audit-3', action: 'template.deleted', metadata: null }),
       expect.objectContaining({ id: 'audit-2', action: 'template.updated', metadata: { visibility: 'public' } }),
     ]);
+    for (const event of data.events) {
+      expect(event).not.toHaveProperty('diff');
+    }
+    // Both lists stop at the requested limit, and the events read leaves out diff_json.
     expect(dbMocks.selectChain.limit).toHaveBeenCalledTimes(4);
     expect(dbMocks.selectChain.limit).toHaveBeenNthCalledWith(3, 8);
     expect(dbMocks.selectChain.limit).toHaveBeenNthCalledWith(4, 8);
+    const eventColumns = (dbMocks.db.select.mock.calls[3] as unknown[])[0] as Record<string, unknown>;
+    expect(eventColumns).toHaveProperty('metadata_json');
+    expect(eventColumns).not.toHaveProperty('diff_json');
     // Ordering by version lets the unique (template_id, version) index stop at LIMIT.
     const versionOrder = collectSqlColumnNames(dbMocks.selectChain.orderBy.mock.calls[0][0]);
     expect(versionOrder).toContain('version');
