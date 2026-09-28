@@ -12,7 +12,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { api, type TeamRole, type TeamSummary } from '@/lib/api';
 
-const PERSONAL_WORKSPACE_ID = 'personal';
+import {
+  PERSONAL_WORKSPACE_ID,
+  createWorkspaceSelectionMemory,
+  reconcileWorkspaceSelection,
+  recordWorkspaceSelection,
+  resetWorkspaceSelection,
+} from './workspaceSelection';
+
 const ACTIVE_WORKSPACE_STORAGE_KEY = 'serplists.activeWorkspaceId';
 
 export type Workspace =
@@ -113,7 +120,7 @@ export function WorkspaceProvider({
     readStoredWorkspaceId,
   );
   const [optimisticTeams, setOptimisticTeams] = useState<TeamSummary[]>([]);
-  const explicitWorkspaceSelectionRef = useRef<string | null>(null);
+  const selectionMemoryRef = useRef(createWorkspaceSelectionMemory());
 
   const teamsQuery = useQuery({
     queryKey: ['teams', user?.id],
@@ -174,7 +181,7 @@ export function WorkspaceProvider({
     }
 
     if (!user) {
-      explicitWorkspaceSelectionRef.current = null;
+      resetWorkspaceSelection(selectionMemoryRef.current);
       setOptimisticTeams((currentTeams) =>
         currentTeams.length === 0 ? currentTeams : [],
       );
@@ -183,31 +190,18 @@ export function WorkspaceProvider({
       return;
     }
 
-    const storedWorkspaceId = readStoredWorkspaceId();
-    if (
-      activeWorkspaceId === PERSONAL_WORKSPACE_ID &&
-      storedWorkspaceId !== PERSONAL_WORKSPACE_ID &&
-      teams.some((team) => team.id === storedWorkspaceId)
-    ) {
-      setActiveWorkspaceId(storedWorkspaceId);
-      return;
-    }
-
-    if (
-      activeWorkspaceId !== PERSONAL_WORKSPACE_ID &&
-      teams.some((team) => team.id === activeWorkspaceId)
-    ) {
-      explicitWorkspaceSelectionRef.current = null;
-      return;
-    }
-
-    if (
-      activeWorkspaceId !== PERSONAL_WORKSPACE_ID &&
-      !teamsQuery.isLoading &&
-      !teamsQuery.isFetching &&
-      explicitWorkspaceSelectionRef.current !== activeWorkspaceId
-    ) {
-      setActiveWorkspaceId(PERSONAL_WORKSPACE_ID);
+    // See workspaceSelection.ts: storage seeds the tab once per user, so a teams refetch never
+    // moves this tab to an Organization another tab stored.
+    const nextWorkspaceId = reconcileWorkspaceSelection(selectionMemoryRef.current, {
+      activeWorkspaceId,
+      readStoredWorkspaceId,
+      userId: user.id,
+      teamIds: teams.map((team) => team.id),
+      teamsSettled: !teamsQuery.isLoading && !teamsQuery.isFetching,
+      teamsLoaded: teamsQuery.isSuccess,
+    });
+    if (nextWorkspaceId !== activeWorkspaceId) {
+      setActiveWorkspaceId(nextWorkspaceId);
     }
   }, [
     activeWorkspaceId,
@@ -215,6 +209,7 @@ export function WorkspaceProvider({
     teams,
     teamsQuery.isFetching,
     teamsQuery.isLoading,
+    teamsQuery.isSuccess,
     user,
   ]);
 
@@ -229,8 +224,7 @@ export function WorkspaceProvider({
     (workspaceId: string) => {
       const nextWorkspaceId = workspaceId || PERSONAL_WORKSPACE_ID;
 
-      explicitWorkspaceSelectionRef.current =
-        nextWorkspaceId === PERSONAL_WORKSPACE_ID ? null : nextWorkspaceId;
+      recordWorkspaceSelection(selectionMemoryRef.current, nextWorkspaceId);
       setActiveWorkspaceId(nextWorkspaceId);
       writeStoredWorkspaceId(nextWorkspaceId);
       void queryClient.invalidateQueries({ queryKey: ['templates'] });

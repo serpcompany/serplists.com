@@ -52,7 +52,7 @@ Canonical private routes:
 
 - Users always have a Personal context and can belong to Organizations.
 - Organization-owned templates and runs are shared with active Organization members.
-- Context switching is available from the dashboard shell and persists locally. This remembered selection is transitional convenience state; canonical Organization routes are tracked in issue #212.
+- Context switching is available from the dashboard shell and persists locally. This remembered selection is transitional convenience state; canonical Organization routes are tracked in issue #212. A new tab starts in the remembered context; switching in one tab does not switch tabs that are already open.
 - Organization roles:
   - `owner`: full Organization management and ownership transfer.
   - `admin`: manage Organization settings, members, and invites.

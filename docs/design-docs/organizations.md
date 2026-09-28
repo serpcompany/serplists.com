@@ -85,6 +85,7 @@ The API response already uses a `delivery` object so email can be added later wi
 
 - Context state is managed by the legacy-named `src/contexts/WorkspaceContext.tsx`.
 - The remembered context is persisted under the legacy local-storage key `serplists.activeWorkspaceId`.
+- Every tab shares that key, so it only seeds a tab: it is read once per signed-in user, and the stored Organization is restored when the first teams load lists it (or a later one, if that load failed). After that a tab keeps its own selection and never follows a context another tab stored (`src/contexts/workspaceSelection.ts`).
 - Templates and Runs invalidate React Query caches when the context changes.
 - `/dashboard/settings` currently combines Account, Organization, member, invite, and billing controls; issue #206 tracks their explicit separation.
 - `/account` and `/dashboard/profile` are legacy redirects to `/dashboard/settings`.
