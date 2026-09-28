@@ -1,10 +1,10 @@
 import { 
   validateBackup, 
   validatePortableTemplatePackEnvelope,
-  validatePortableTemplatePack,
   validateTemplateImportArray,
   PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION
 } from "@/lib/schemas/checklistSchema";
+import { parsePortableTemplate } from "@/lib/schemas/portableTemplateNormalize";
 import type { 
   ChecklistTemplateImport,
   PortableChecklistTemplate,
@@ -211,31 +211,37 @@ export const exportPortableTemplatesToJSON = (
   exportedBy?: string
 ): PortableTemplatePack => {
   const warnings = collectAssetWarnings(templates);
+  const results = templates.map((template) => parsePortableTemplate({
+    title: template.title,
+    description: template.description || "",
+    type: template.type,
+    slug: template.slug || undefined,
+    seoTitle: template.seoTitle || undefined,
+    seoDescription: template.seoDescription || undefined,
+    visibility: template.isPublic ? "public" : "private",
+    categories: normalizeStringList(template.categories),
+    tags: normalizeStringList(template.tags),
+    sections: template.sections,
+    rules: template.rules,
+  }));
+  const exported = results.flatMap((result) => (result.success ? [result.data] : []));
+  const skippedTemplates = results.flatMap((result) =>
+    result.success ? [] : [{ title: result.title, reason: result.reason }]
+  );
 
   return {
     kind: "serplists-template-pack",
     schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     exportedBy,
-    templates: templates.map((template) => ({
-      title: template.title,
-      description: template.description || "",
-      type: template.type,
-      slug: template.slug || undefined,
-      seoTitle: template.seoTitle || undefined,
-      seoDescription: template.seoDescription || undefined,
-      visibility: template.isPublic ? "public" : "private",
-      categories: normalizeStringList(template.categories),
-      tags: normalizeStringList(template.tags),
-      sections: template.sections,
-      rules: template.rules,
-    })),
+    templates: exported,
     manifest: {
-      totalTemplates: templates.length,
+      totalTemplates: exported.length,
       format: "portable",
       includesVisibility: true,
-      includesRules: templates.some((template) => Array.isArray(template.rules) && template.rules.length > 0),
+      includesRules: exported.some((template) => Array.isArray(template.rules) && template.rules.length > 0),
       assetWarnings: warnings.length,
+      ...(skippedTemplates.length > 0 ? { skippedTemplates } : {}),
     },
   };
 };
@@ -294,10 +300,29 @@ export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
   });
 };
 
+// Each template in a portable pack is normalized and validated on its own: invalid ones are
+// skipped with a preview warning, and the file fails only when none of them is valid.
+const parsePortablePackTemplates = (
+  templates: unknown[],
+): { templates: ChecklistTemplate[]; warnings: TemplateImportWarning[] } => {
+  const results = templates.map(parsePortableTemplate);
+  const warnings = results.flatMap((result, index) => result.success ? [] : [{
+    templateTitle: result.title || `Template ${index + 1}`,
+    message: `Skipped: ${result.reason}`,
+  }]);
+  const valid = results.flatMap((result) => (result.success ? [result.data] : []));
+  if (valid.length === 0 && warnings.length > 0) {
+    throw new Error(warnings.map((warning) => `${warning.templateTitle}: ${warning.message}`).join("; "));
+  }
+
+  return { templates: valid.map((template) => normalizePortableTemplate(template)), warnings };
+};
+
 export const parseTemplatesFromData = (data: unknown): TemplateImportResult => {
   try {
     let rawTemplates: ChecklistTemplateImport[] = [];
     let normalizedTemplates: ChecklistTemplate[] = [];
+    let skippedWarnings: TemplateImportWarning[] = [];
 
     if (Array.isArray(data)) {
       rawTemplates = validateTemplateImportArray(data);
@@ -307,8 +332,9 @@ export const parseTemplatesFromData = (data: unknown): TemplateImportResult => {
       if (portablePackEnvelope.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
         throw new Error(`Unsupported portable template schema version: ${portablePackEnvelope.schemaVersion}`);
       }
-      const portablePack = validatePortableTemplatePack(data);
-      normalizedTemplates = portablePack.templates.map((template) => normalizePortableTemplate(template));
+      const portablePack = parsePortablePackTemplates(portablePackEnvelope.templates);
+      normalizedTemplates = portablePack.templates;
+      skippedWarnings = portablePack.warnings;
     } else if (data && typeof data === "object" && "templates" in data) {
       try {
         const backup = validateBackup(data);
@@ -321,7 +347,7 @@ export const parseTemplatesFromData = (data: unknown): TemplateImportResult => {
       throw new Error("Unsupported JSON format (expected backup or template array)");
     }
 
-    const warnings = collectAssetWarnings(normalizedTemplates);
+    const warnings = [...skippedWarnings, ...collectAssetWarnings(normalizedTemplates)];
 
     return { templates: normalizedTemplates, warnings };
   } catch (error) {

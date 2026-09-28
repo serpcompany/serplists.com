@@ -15,11 +15,8 @@ import {
 } from '../utils/audit';
 import { canEditTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { z } from 'zod';
-import {
-  PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
-  portableTemplatePackEnvelopeSchema,
-  portableTemplateRuleSchema,
-} from '../../../src/lib/schemas/checklistSchema';
+import { portableTemplateRuleSchema } from '../../../src/lib/schemas/checklistSchema';
+import { buildPortableTemplatePack, parsePortableTemplatePackImport } from '../utils/template-portable';
 import {
   assignMissingStableTemplateIdentities,
   calculateRunProgress,
@@ -407,32 +404,6 @@ function hasOversizedAssets(sections: unknown[], maxAssetBytes: number): boolean
   return false;
 }
 
-function countReferencedUploads(sections: unknown[]): number {
-  let count = 0;
-
-  for (const section of sections) {
-    if (!isRecord(section)) continue;
-    const items = section.items;
-    if (!Array.isArray(items)) continue;
-    for (const item of items) {
-      if (!isRecord(item)) continue;
-      const contents = item.contents;
-      if (!Array.isArray(contents)) continue;
-      for (const content of contents) {
-        if (!isRecord(content)) continue;
-        const type = content.type;
-        const value = typeof content.value === 'string' ? content.value : '';
-        const isUpload = content.uploadType === 'upload' || value.includes('/api/uploads/file') || value.includes('uploads/file?key=');
-        if ((type === 'image' || type === 'video' || type === 'file') && isUpload) {
-          count += 1;
-        }
-      }
-    }
-  }
-
-  return count;
-}
-
 export async function handleTemplates(request: Request, env: Env): Promise<Response> {
   const userId = await getSessionUserId(request, env);
   const url = new URL(request.url);
@@ -508,32 +479,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       const privateTemplates = exportedTemplates.filter((t) => !t.isPublic);
 
       if (exportFormat === 'portable') {
-        return json({
-          kind: 'serplists-template-pack',
-          schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
-          exportedAt: new Date().toISOString(),
-          exportedBy: userRow?.email,
-          templates: exportedTemplates.map((template) => ({
-            title: template.title,
-            description: template.description || '',
-            type: typeof template.type === 'string' ? template.type : 'checklist',
-            seoTitle: template.seoTitle || '',
-            seoDescription: template.seoDescription || '',
-            rules: template.rules,
-            sections: template.sections || [],
-            categories: template.categories || [],
-            tags: template.tags || [],
-            visibility: template.isPublic ? 'public' : 'private',
-            slug: template.slug || undefined,
-          })),
-          manifest: {
-            totalTemplates: exportedTemplates.length,
-            format: 'portable',
-            includesVisibility: exportedTemplates.length > 0,
-            includesRules: exportedTemplates.some((template) => Array.isArray(template.rules) && template.rules.length > 0),
-            assetWarnings: exportedTemplates.reduce((total, template) => total + countReferencedUploads(template.sections || []), 0),
-          },
-        });
+        return json(buildPortableTemplatePack(exportedTemplates, userRow?.email));
       }
 
       return json({
@@ -560,18 +506,15 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         return jsonError('Invalid JSON payload', 400);
       }
 
+      // Portable templates that fail validation stay in the summary under their file index.
+      let sourceIndexes: number[] | null = null;
+      let portableFailures: TemplateImportFailure[] = [];
       if (isRecord(body) && body.kind === 'serplists-template-pack') {
-        const portableBody = portableTemplatePackEnvelopeSchema.safeParse(body);
-        if (!portableBody.success) {
-          return jsonError(portableBody.error.issues[0]?.message || 'Invalid portable template pack payload', 400);
-        }
-        if (portableBody.data.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
-          return jsonError(`Unsupported portable template schema version: ${portableBody.data.schemaVersion}`, 400, {
-            code: 'unsupported_portable_schema_version',
-          });
-        }
-
-        body = { templates: portableBody.data.templates };
+        const portable = parsePortableTemplatePackImport(body);
+        if ('response' in portable) return portable.response;
+        body = { templates: portable.templates };
+        sourceIndexes = portable.sourceIndexes;
+        portableFailures = portable.failures;
       }
 
       const parsedBody = Array.isArray(body)
@@ -583,24 +526,26 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       }
 
       const { templates: incomingTemplates, options } = parsedBody.data;
+      const fileTemplateCount = incomingTemplates.length + portableFailures.length;
 
-      if (incomingTemplates.length > MAX_TEMPLATES_PER_IMPORT) {
+      if (fileTemplateCount > MAX_TEMPLATES_PER_IMPORT) {
         return jsonError(`Import limited to ${MAX_TEMPLATES_PER_IMPORT} templates per file for now`, 400, {
           code: 'import_limit',
-          details: { limit: MAX_TEMPLATES_PER_IMPORT, current: incomingTemplates.length },
+          details: { limit: MAX_TEMPLATES_PER_IMPORT, current: fileTemplateCount },
         });
       }
 
       const visibility = options?.visibility ?? 'preserve';
 
       const summary: TemplateImportSummary = {
-        total: incomingTemplates.length,
+        total: fileTemplateCount,
         imported: 0,
-        failed: [],
+        failed: [...portableFailures],
         successes: [],
       };
 
-      for (const [index, template] of incomingTemplates.entries()) {
+      for (const [position, template] of incomingTemplates.entries()) {
+        const index = sourceIndexes?.[position] ?? position;
         const normalizedSections = normalizeSectionsPayload(template.sections ?? template.items);
         if (normalizedSections.error) {
           summary.failed.push({
@@ -715,6 +660,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         }
       }
 
+      summary.failed.sort((a, b) => a.index - b.index);
       if (summary.imported === 0 && summary.failed.length > 0) {
         return jsonError('Template import failed', 400, {
           code: 'template_import_failed',

@@ -228,6 +228,25 @@
         "assetWarnings": {
           "type": "integer",
           "minimum": 0
+        },
+        "skippedTemplates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [

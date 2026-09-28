@@ -37,9 +37,23 @@ export const portableTemplatePackSchema = z.object({
     includesVisibility: z.boolean().optional(),
     includesRules: z.boolean().optional(),
     assetWarnings: z.number().optional(),
+    skippedTemplates: z.array(z.object({ title: z.string(), reason: z.string() })).optional(),
   }).optional(),
 });
 ```
+
+Export and import both pass each template through `parsePortableTemplate`
+(`src/lib/schemas/portableTemplateNormalize.ts`) so every pack we write can be read
+back, including packs exported before this normalization existed. It keeps ids and
+fixes what the editor can save but the strict schema rejects:
+- a blank section title becomes `Section N` and a blank task title `Task N` (N is the position, as the editor outline shows it)
+- blank sub-tasks, sub-task blocks left empty, and image/video/file/embed blocks without a value are dropped
+- sections without tasks are dropped, and an unknown `type` becomes `checklist`
+
+A template that still fails (for example one with no tasks) is left out of an export
+and listed in `manifest.skippedTemplates`; `manifest.totalTemplates` counts only the
+templates written. On import, it becomes a per-template failure instead of rejecting
+the whole file.
 
 Portable template fields are intentionally cleaner than app row exports:
 - no `userId`
@@ -159,6 +173,11 @@ Backup and portable imports return a structured summary with `total`,
 input index, title, stored id, slug, and visibility. Failures identify their
 index, title, human-readable reason, and stable code. Current failure codes are
 `invalid_sections`, `oversized_asset`, and `insert_failed`.
+
+A portable-pack template that fails validation after normalization is reported as an
+`invalid_sections` failure at its index in the file; the envelope (`kind`,
+`schemaVersion`) and the 5-template limit still apply to the whole file. The import
+preview in the app skips such templates with a warning.
 
 Mixed-result imports retain both lists. When every template fails, the API
 returns `400` with `code: "template_import_failed"` and the full summary in

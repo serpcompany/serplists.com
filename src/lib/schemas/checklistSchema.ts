@@ -185,11 +185,18 @@ export const portableTemplatePackEnvelopeSchema = z.object({
     includesVisibility: z.boolean().optional(),
     includesRules: z.boolean().optional(),
     assetWarnings: z.number().int().nonnegative().optional(),
+    skippedTemplates: z.array(z.object({ title: z.string(), reason: z.string() })).optional(),
   }).optional(),
 });
 
 export const portableTemplatePackSchema = portableTemplatePackEnvelopeSchema.extend({
   schemaVersion: z.literal(PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION),
+});
+
+// Envelope checks only. Importers normalize and validate each template on its own
+// (parsePortableTemplate), so one bad template fails alone instead of rejecting the file.
+export const portableTemplatePackLooseEnvelopeSchema = portableTemplatePackEnvelopeSchema.extend({
+  templates: z.array(z.unknown()),
 });
 
 // Type exports
@@ -203,7 +210,7 @@ export type ChecklistRun = z.infer<typeof checklistRunSchema>;
 export type TemplateBackup = z.infer<typeof templateBackupSchema>;
 export type PortableTemplateRule = z.infer<typeof portableTemplateRuleSchema>;
 export type PortableChecklistTemplate = z.infer<typeof portableChecklistTemplateSchema>;
-export type PortableTemplatePackEnvelope = z.infer<typeof portableTemplatePackEnvelopeSchema>;
+export type PortableTemplatePackLooseEnvelope = z.infer<typeof portableTemplatePackLooseEnvelopeSchema>;
 export type PortableTemplatePack = z.infer<typeof portableTemplatePackSchema>;
 
 // Validation functions
@@ -223,8 +230,8 @@ export const validateTemplateImportArray = (data: unknown): ChecklistTemplateImp
   return z.array(checklistTemplateImportSchema).parse(data);
 };
 
-export const validatePortableTemplatePackEnvelope = (data: unknown): PortableTemplatePackEnvelope => {
-  return portableTemplatePackEnvelopeSchema.parse(data);
+export const validatePortableTemplatePackEnvelope = (data: unknown): PortableTemplatePackLooseEnvelope => {
+  return portableTemplatePackLooseEnvelopeSchema.parse(data);
 };
 
 export const validatePortableTemplatePack = (data: unknown): PortableTemplatePack => {
