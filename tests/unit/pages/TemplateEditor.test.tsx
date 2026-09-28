@@ -1,7 +1,6 @@
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { Route, Routes } from 'react-router-dom';
-import { StaticRouter } from 'react-router-dom/server';
+
+import { renderDataRoutes } from '../../fixtures/renderDataRoutes';
 import { describe, expect, it, vi } from 'vitest';
 
 import TemplateEditor from '@/pages/TemplateEditor';
@@ -20,8 +19,12 @@ vi.mock('@/hooks/useTemplateEditorState', () => ({
     mockUseTemplateEditorState(...args),
 }));
 
+// The editor's leave guard (useBlocker) needs a data router, as in the app.
+const renderEditorAt = (location: string, path: string): Promise<string> =>
+  renderDataRoutes([{ path, element: <TemplateEditor /> }], location);
+
 describe('TemplateEditor page', () => {
-  it('uses the v0-style split editor shell instead of the old wide content canvas', () => {
+  it('uses the v0-style split editor shell instead of the old wide content canvas', async () => {
     mockUseTemplateEditorModel.mockReturnValue({
       initialValues: buildTemplateEditorFormValues({
         title: 'New Employee Onboarding',
@@ -60,13 +63,7 @@ describe('TemplateEditor page', () => {
       handleSelectTemplateInfo: vi.fn(),
     });
 
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/templates/new">
-        <Routes>
-          <Route path="/dashboard/templates/new" element={<TemplateEditor />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    const html = await renderEditorAt('/dashboard/templates/new', '/dashboard/templates/new');
 
     expect(html).toContain('Template Settings');
     expect(html).toContain('Search &amp; SEO');
@@ -78,7 +75,7 @@ describe('TemplateEditor page', () => {
     expect(html).toContain('Generate from Clipy');
   });
 
-  it('does not show Clipy import controls while editing an existing template', () => {
+  it('does not show Clipy import controls while editing an existing template', async () => {
     mockUseTemplateEditorModel.mockReturnValue({
       initialValues: buildTemplateEditorFormValues({ title: 'Existing template' }),
       isSaving: false,
@@ -100,18 +97,15 @@ describe('TemplateEditor page', () => {
       handleSelectTemplateInfo: vi.fn(),
     });
 
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/templates/template-1/edit">
-        <Routes>
-          <Route path="/dashboard/templates/:id/edit" element={<TemplateEditor />} />
-        </Routes>
-      </StaticRouter>,
+    const html = await renderEditorAt(
+      '/dashboard/templates/template-1/edit',
+      '/dashboard/templates/:id/edit',
     );
 
     expect(html).not.toContain('Generate from Clipy');
   });
 
-  const renderSavingEditor = (location: string, path: string): string => {
+  const renderSavingEditor = (location: string, path: string): Promise<string> => {
     mockUseTemplateEditorModel.mockReturnValue({
       initialValues: buildTemplateEditorFormValues({ title: 'Draft template' }),
       isSaving: true,
@@ -133,25 +127,19 @@ describe('TemplateEditor page', () => {
       handleSelectTemplateInfo: vi.fn(),
     });
 
-    return renderToStaticMarkup(
-      <StaticRouter location={location}>
-        <Routes>
-          <Route path={path} element={<TemplateEditor />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    return renderEditorAt(location, path);
   };
 
   // A create leaves the page when it finishes, so edits made meanwhile could not be kept.
-  it('locks the new-template editor while it is being created', () => {
-    const html = renderSavingEditor('/dashboard/templates/new', '/dashboard/templates/new');
+  it('locks the new-template editor while it is being created', async () => {
+    const html = await renderSavingEditor('/dashboard/templates/new', '/dashboard/templates/new');
 
     expect(html).toMatch(/<fieldset[^>]*disabled=""/);
   });
 
   // An update stays on the page and keeps edits made during the save.
-  it('keeps an existing template editable while it saves', () => {
-    const html = renderSavingEditor(
+  it('keeps an existing template editable while it saves', async () => {
+    const html = await renderSavingEditor(
       '/dashboard/templates/template-1/edit',
       '/dashboard/templates/:id/edit',
     );

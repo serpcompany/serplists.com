@@ -20,6 +20,7 @@ import {
   publicHeaderLinks,
 } from '@/components/layout/publicSiteLinks';
 import { cn } from '@/lib/utils';
+import { runAfterLeaveConfirmed } from '@/lib/navigation/leaveGuard';
 import {
   buildConsoleHomePath,
   buildConsoleRunsPath,
@@ -122,9 +123,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const content = children ?? <Outlet />;
   const shouldRenderFooter = publicTier !== 'minimal';
 
+  // Signing out unmounts the page, so a page with unsaved changes is asked first.
   const handleLogout = () => {
-    logout();
-    navigate('/');
+    runAfterLeaveConfirmed(() => {
+      logout();
+      navigate('/');
+    });
   };
 
   const userInitial =
@@ -135,7 +139,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const accountMenu = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-10 px-2 hover:bg-transparent">
+        <Button
+          variant="ghost"
+          aria-label="Account menu"
+          className="h-10 px-2 hover:bg-transparent"
+        >
           <Avatar className="h-8 w-8 border border-border">
             <AvatarFallback className="bg-secondary text-sm font-semibold text-foreground">
               {userInitial}

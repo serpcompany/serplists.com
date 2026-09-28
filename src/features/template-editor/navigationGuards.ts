@@ -11,6 +11,18 @@ export const shouldBlockTemplateEditorNavigation = ({
   loading: boolean;
 }): boolean => isDirty && !isSaving && !loading;
 
+// For useBlocker: ask only when the editor route itself would change. A search or hash
+// change keeps the editor mounted, so nothing is lost.
+export const shouldBlockTemplateEditorTransition = ({
+  shouldBlock,
+  currentPath,
+  nextPath,
+}: {
+  shouldBlock: boolean;
+  currentPath: string;
+  nextPath: string;
+}): boolean => shouldBlock && currentPath !== nextPath;
+
 export const confirmTemplateEditorNavigation = (
   shouldBlock: boolean,
   confirmDialog: (message: string) => boolean = (message) =>

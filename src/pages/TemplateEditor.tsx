@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,11 +30,8 @@ import {
   cloneTemplateEditorFormValues,
   rebaseTemplateEditorFormAfterSave,
 } from "@/features/template-editor/postSaveFormState";
-import {
-  applyTemplateBeforeUnloadWarning,
-  confirmTemplateEditorNavigation,
-  shouldBlockTemplateEditorNavigation,
-} from "@/features/template-editor/navigationGuards";
+import { shouldBlockTemplateEditorNavigation } from "@/features/template-editor/navigationGuards";
+import { useTemplateEditorLeaveGuard } from "@/features/template-editor/useTemplateEditorLeaveGuard";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const shouldNavigateToTemplatesAfterSave = (params: {
@@ -80,32 +77,7 @@ const TemplateEditor = () => {
     templateForm.reset(model.initialValues);
   }, [model.initialValues, templateForm]);
 
-  useEffect(() => {
-    if (!shouldBlockNavigation) {
-      return undefined;
-    }
-
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      applyTemplateBeforeUnloadWarning(event, shouldBlockNavigation);
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [shouldBlockNavigation]);
-
-  const navigateWithEditorGuard = useCallback(
-    (path: string) => {
-      if (!confirmTemplateEditorNavigation(shouldBlockNavigation)) {
-        return;
-      }
-
-      navigate(path);
-    },
-    [navigate, shouldBlockNavigation],
-  );
+  const { allowLeave } = useTemplateEditorLeaveGuard(shouldBlockNavigation);
 
   const handleSave = async () => {
     // model.save validates first and returns errors that name the field; the alert
@@ -118,7 +90,9 @@ const TemplateEditor = () => {
     }
 
     if (shouldNavigateToTemplatesAfterSave({ id, result })) {
+      // The create is saved (and the editor was locked meanwhile): nothing to lose.
       templateForm.reset(result.savedValues);
+      allowLeave();
       navigate(buildConsoleTemplatesPath());
       return;
     }
@@ -159,7 +133,7 @@ const TemplateEditor = () => {
       <TemplateHeader
         isEditing={!!id}
         isSaving={model.isSaving}
-        onCancel={() => navigateWithEditorGuard(buildConsoleTemplatesPath())}
+        onCancel={() => navigate(buildConsoleTemplatesPath())}
         onPreview={() => setIsPreviewOpen(true)}
         onSave={handleSave}
         templateSlug={model.templateSlug}

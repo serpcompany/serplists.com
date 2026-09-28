@@ -9,7 +9,7 @@ through shadcn/ui on Tailwind ([DESIGN.md](DESIGN.md)). Path aliases: `@/*` maps
 
 | Path | Role |
 | --- | --- |
-| `src/App.tsx`, `src/main.tsx` | Providers, routes, bootstrap |
+| `src/App.tsx`, `src/appRoutes.tsx`, `src/main.tsx` | Providers and the data router, the route tree, bootstrap |
 | `src/pages/` | Route screens: compose components and feature models |
 | `src/components/` | Feature UI; `components/ui/` holds presentational primitives |
 | `src/features/*/` | Headless feature models (`use*Model.ts`) and mappers from API shapes to domain types |
@@ -26,6 +26,24 @@ reachable from `src/main.tsx`. Remaining legacy call sites are tracked in the
 
 Canonical private routes live under `/dashboard/*`; the full route list is in
 [system overview](design-docs/system-overview.md#routes).
+
+Routes render through a data router (`createBrowserRouter` and `RouterProvider`), not
+`BrowserRouter`, so a page can block navigation with `useBlocker`. Unit tests render
+routes with `tests/fixtures/renderDataRoutes.tsx` (a static data router).
+
+## Unsaved changes
+
+A page that holds unsaved edits must ask before they are lost, whichever way the user
+leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
+
+- `useBlocker` covers every route change: sidebar, header, account menu, in-page
+  links, and browser Back/Forward. It asks only when the pathname changes.
+- Actions that leave the page without a navigation it can block first, such as Sign
+  out (which unmounts the page), call `runAfterLeaveConfirmed` from
+  `src/lib/navigation/leaveGuard.ts`; the page registers with `registerLeaveGuard`.
+- `beforeunload` covers reloads, tab closes, and external links.
+- A navigation the page starts after it has nothing left to lose (a create that
+  saved) is allowed without asking.
 
 ## Data and state
 

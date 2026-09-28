@@ -5,6 +5,7 @@ import {
   applyTemplateBeforeUnloadWarning,
   confirmTemplateEditorNavigation,
   shouldBlockTemplateEditorNavigation,
+  shouldBlockTemplateEditorTransition,
 } from '@/features/template-editor/navigationGuards';
 
 describe('template editor navigation guards', () => {
@@ -73,5 +74,37 @@ describe('template editor navigation guards', () => {
     expect(guardedEvent.returnValue).toBe('');
     expect(unguardedEvent.preventDefault).not.toHaveBeenCalled();
     expect(unguardedEvent.returnValue).toBeUndefined();
+  });
+});
+
+describe('shouldBlockTemplateEditorTransition', () => {
+  it('blocks leaving the editor route while there are unsaved changes', () => {
+    expect(
+      shouldBlockTemplateEditorTransition({
+        shouldBlock: true,
+        currentPath: '/dashboard/templates/template-1/edit',
+        nextPath: '/dashboard/runs',
+      }),
+    ).toBe(true);
+  });
+
+  it('does not block a search or hash change on the same editor route', () => {
+    expect(
+      shouldBlockTemplateEditorTransition({
+        shouldBlock: true,
+        currentPath: '/dashboard/templates/template-1/edit',
+        nextPath: '/dashboard/templates/template-1/edit',
+      }),
+    ).toBe(false);
+  });
+
+  it('does not block when there is nothing to lose', () => {
+    expect(
+      shouldBlockTemplateEditorTransition({
+        shouldBlock: false,
+        currentPath: '/dashboard/templates/template-1/edit',
+        nextPath: '/dashboard/runs',
+      }),
+    ).toBe(false);
   });
 });

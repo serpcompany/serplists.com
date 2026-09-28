@@ -618,6 +618,82 @@ test.describe("template editor regressions", () => {
     await deleteTemplate(page, templateId);
   });
 
+  test("asks before unsaved template edits are lost through the app shell or Back", async ({ page }) => {
+    await loginAsSeedUser(page);
+    const templateTitle = `QA Leave guard ${Date.now()}`;
+    const templateId = await createTemplateViaApi(page, templateTitle);
+    const editorUrl = new RegExp(`/dashboard/templates/${templateId}/edit$`);
+    const draft = "Edited but not saved";
+    const dialogs: string[] = [];
+    let acceptDialogs = false;
+    page.on("dialog", async (dialog) => {
+      dialogs.push(dialog.message());
+      await (acceptDialogs ? dialog.accept() : dialog.dismiss());
+    });
+
+    // Arrive through the app so browser Back stays inside the single-page app.
+    await page.goto(`/dashboard/templates/${templateId}`);
+    await page.getByRole("link", { name: "Edit" }).click();
+    await expect(page).toHaveURL(editorUrl);
+    await page.getByRole("button", { exact: true, name: "First task" }).click();
+    await page.getByLabel("Description (Optional)").fill(draft);
+
+    const expectStillEditing = async (asked: number) => {
+      await expect.poll(() => dialogs.length).toBe(asked);
+      expect(dialogs.at(-1)).toContain("unsaved template changes");
+      await expect(page).toHaveURL(editorUrl);
+      await expect(page.getByLabel("Description (Optional)")).toHaveValue(draft);
+    };
+
+    await page.getByRole("link", { name: "Runs", exact: true }).click();
+    await expectStillEditing(1);
+
+    await page.goBack();
+    await expectStillEditing(2);
+
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("menuitem", { name: "My Runs" }).click();
+    await expectStillEditing(3);
+
+    // Dismissing Sign out keeps the user signed in with the draft.
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
+    await expectStillEditing(4);
+    await expect(page.getByRole("button", { name: "Switch context" })).toBeVisible();
+
+    // The editor's own back button asks once, not twice.
+    await page.getByRole("button", { name: "Back to templates" }).click();
+    await expectStillEditing(5);
+
+    acceptDialogs = true;
+    await page.getByRole("link", { name: "Runs", exact: true }).click();
+    await expect(page).toHaveURL(/\/dashboard\/runs$/);
+    expect(dialogs).toHaveLength(6);
+
+    await deleteTemplate(page, templateId);
+  });
+
+  test("leaves a new template without asking once it is saved", async ({ page }) => {
+    await loginAsSeedUser(page);
+    const templateTitle = `QA Leave after create ${Date.now()}`;
+    const dialogs: string[] = [];
+    page.on("dialog", async (dialog) => {
+      dialogs.push(dialog.message());
+      await dialog.dismiss();
+    });
+
+    await page.goto("/dashboard/templates/new");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    expect(dialogs).toEqual([]);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    if (savedTemplate && typeof savedTemplate.id === "string") {
+      await deleteTemplate(page, savedTemplate.id);
+    }
+  });
+
   test("adds tags and categories before save and persists them", async ({ page }) => {
     const templateTitle = `QA Tags ${Date.now()}`;
     const tagName = `tag-${Date.now()}`;
