@@ -14,6 +14,7 @@ import {
   validateTemplateEditorFormForSave,
 } from "@/lib/forms/templateEditorForm";
 import { api } from "@/lib/api";
+import { resolvePublicTemplateOwnerSlug } from "@/lib/routes";
 import type { ChecklistTemplate } from "@/types/checklist";
 
 type TemplateEditorApiClient = Pick<typeof api, "getTemplateById">;
@@ -55,6 +56,9 @@ export type TemplateEditorLoadResult = {
   // The version of the same snapshot initialValues came from. Saves send it as
   // expected_version so a stale editor gets a conflict instead of overwriting.
   version?: number;
+  // A loaded template's public profile slug: its creator's username (also for an
+  // Organization's template), or null when they have none. Absent for a new template.
+  ownerSlug?: string | null;
 };
 
 export const buildDefaultTemplateEditorTemplate =
@@ -104,6 +108,13 @@ const buildLoadResult = (
   loadError: null,
   templateSlug: template?.slug ?? template?.seoUrl,
   version: template?.version,
+  ownerSlug: template?.id
+    ? resolvePublicTemplateOwnerSlug({
+        id: template.id,
+        userId: template.userId ?? "",
+        ownerProfile: template.ownerProfile,
+      })
+    : undefined,
 });
 
 const getApiClient = (
@@ -205,6 +216,7 @@ export const useTemplateEditorModel = (
   const [loading, setLoading] = useState(() => Boolean(options.id));
   const [loadError, setLoadError] = useState<string | null>(null);
   const [templateSlug, setTemplateSlug] = useState<string | undefined>();
+  const [ownerSlug, setOwnerSlug] = useState<string | null | undefined>();
 
   apiClientRef.current = dependencies?.apiClient;
 
@@ -220,6 +232,7 @@ export const useTemplateEditorModel = (
         );
         setLoadError(null);
         setTemplateSlug(undefined);
+        setOwnerSlug(undefined);
         setLoading(false);
         return;
       }
@@ -246,6 +259,7 @@ export const useTemplateEditorModel = (
       setInitialValues(result.initialValues);
       setLoadError(result.loadError);
       setTemplateSlug(result.templateSlug);
+      setOwnerSlug(result.ownerSlug);
       setLoading(false);
     };
 
@@ -304,6 +318,7 @@ export const useTemplateEditorModel = (
     reload,
     save,
     isSaving,
+    ownerSlug,
     templateSlug,
   };
 };

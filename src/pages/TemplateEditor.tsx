@@ -12,6 +12,8 @@ import { OutlineSidebar } from "@/components/template-editor/OutlineSidebar";
 import { EditorPanels } from "@/components/template-editor/EditorPanels";
 import { GenerateFromClipy } from "@/components/template-editor/GenerateFromClipy";
 import { buildConsoleTemplatesPath } from "@/lib/routes";
+import { resolveTemplateEditorOwnerSlug } from "@/lib/templates/templateSeoPreview";
+import { useAuth } from "@/contexts/CloudflareAuthContext";
 import {
   templateEditorFormSchema,
   type TemplateEditorFormValues,
@@ -66,6 +68,7 @@ type TemplateEditorFormProps = {
 // outline, and the header start from the loaded values.
 const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   // The last save was refused because someone saved the template after it loaded.
   const [editConflict, setEditConflict] = useState(false);
@@ -253,6 +256,11 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
               />
 
               <EditorPanels
+                publicOwnerSlug={resolveTemplateEditorOwnerSlug({
+                  isNew: !id,
+                  loadedOwnerSlug: model.ownerSlug,
+                  viewerUsername: user?.username,
+                })}
                 selectedItemIndex={selectedItemIndex}
                 selectedSectionIndex={selectedSectionIndex}
                 showingSEO={showingSEO}

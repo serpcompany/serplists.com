@@ -13,6 +13,9 @@ export const TEMPLATE_FIELD_LIMITS = {
   slug: 160,
 } as const;
 
+// The name a template is saved with when its name is left blank.
+export const DEFAULT_TEMPLATE_TITLE = "Untitled Template";
+
 export const TEMPLATE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const TEMPLATE_SLUG_PATTERN_MESSAGE =
   "slug must be lowercase letters, numbers, and hyphens only";

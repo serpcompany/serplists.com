@@ -180,6 +180,52 @@ describe("loadTemplateEditorData versions", () => {
   });
 });
 
+// The Search & SEO preview puts the public URL under the template's creator.
+describe("loadTemplateEditorData owner", () => {
+  it("keeps the creator's username from the loaded record", async () => {
+    const result = await loadTemplateEditorData(
+      { id: "template-2" },
+      {
+        apiClient: {
+          getTemplateById: vi.fn().mockResolvedValue({
+            id: "template-2",
+            user_id: "user-2",
+            title: "API Template",
+            slug: "api-template",
+            sections: [],
+            owner_username: "teammate",
+          }),
+        },
+      },
+    );
+
+    expect(result.ownerSlug).toBe("teammate");
+  });
+
+  it("has no owner slug when the creator has no username", async () => {
+    const result = await loadTemplateEditorData(
+      { id: "template-2" },
+      {
+        apiClient: {
+          getTemplateById: vi.fn().mockResolvedValue({
+            id: "template-2",
+            user_id: "user-2",
+            title: "API Template",
+            sections: [],
+            owner_username: null,
+          }),
+        },
+      },
+    );
+
+    expect(result.ownerSlug).toBeNull();
+  });
+
+  it("has no owner for a new template", async () => {
+    expect((await loadTemplateEditorData({})).ownerSlug).toBeUndefined();
+  });
+});
+
 describe("saveTemplateEditorData versions", () => {
   it("sends the version the editor loaded as the expected version", async () => {
     const saveTemplate = vi.fn().mockResolvedValue({ success: true, errors: [], version: 6 });

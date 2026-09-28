@@ -1,4 +1,5 @@
 import type { ChecklistItem, ChecklistItemContent, ChecklistSection } from "@/types/checklist";
+import { DEFAULT_TEMPLATE_TITLE } from "@/lib/schemas/templateFields";
 import { sectionFallbackTitle } from "@/lib/utils/checklistSections";
 
 export interface ValidationError {
@@ -52,7 +53,7 @@ export const applyTemplateSaveDefaults = (
   title: string,
   sections: ChecklistSection[],
 ): { title: string; sections: ChecklistSection[] } => {
-  const defaultTitle = title.trim() || "Untitled Template";
+  const defaultTitle = title.trim() || DEFAULT_TEMPLATE_TITLE;
 
   if (sections.length === 0) {
     return {

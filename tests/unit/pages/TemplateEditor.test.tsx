@@ -35,6 +35,11 @@ vi.mock('@/hooks/useTemplateEditorState', () => ({
     mockUseTemplateEditorState(...args),
 }));
 
+const mockUser = { id: 'user-1', email: 'jane@test.com', username: 'jane' };
+vi.mock('@/contexts/CloudflareAuthContext', () => ({
+  useAuth: () => ({ user: mockUser }),
+}));
+
 vi.mock('@/features/template-editor/useTemplateEditorAccess', () => ({
   useTemplateEditorAccess: (...args: unknown[]) =>
     mockUseTemplateEditorAccess(...args),
@@ -332,5 +337,51 @@ describe('TemplateEditor page', () => {
       expect(html).toContain(`aria-label="Collapse ${title}"`);
       expect(html).toContain(`${title} task`);
     }
+  });
+  // The Search & SEO preview shows the public page: /profile/<creator>/<slug>.
+  it("previews a new template's public URL under the signed-in user", async () => {
+    mockUseTemplateEditorModel.mockReturnValue({
+      initialValues: buildTemplateEditorFormValues({ title: 'Launch Checklist' }),
+      isSaving: false,
+      loading: false,
+      loadError: null,
+      save: vi.fn(),
+      templateSlug: undefined,
+    });
+    mockUseTemplateEditorState.mockReturnValue({
+      ...editorState(),
+      showingSEO: true,
+      showingTemplateInfo: false,
+    });
+
+    const html = await renderEditorAt('/dashboard/templates/new', '/dashboard/templates/new');
+
+    expect(html).toContain('/profile/jane/launch-checklist');
+    expect(html).not.toContain('example.com');
+  });
+
+  it("previews an existing template's public URL under its creator", async () => {
+    mockUseTemplateEditorModel.mockReturnValue({
+      initialValues: buildTemplateEditorFormValues({ title: 'Launch', slug: 'launch' }),
+      isSaving: false,
+      loading: false,
+      loadError: null,
+      ownerSlug: 'teammate',
+      save: vi.fn(),
+      templateSlug: 'launch',
+    });
+    mockUseTemplateEditorState.mockReturnValue({
+      ...editorState(),
+      showingSEO: true,
+      showingTemplateInfo: false,
+    });
+
+    const html = await renderEditorAt(
+      '/dashboard/templates/template-1/edit',
+      '/dashboard/templates/:id/edit',
+    );
+
+    expect(html).toContain('/profile/teammate/launch');
+    expect(html).not.toContain('/profile/jane/');
   });
 });

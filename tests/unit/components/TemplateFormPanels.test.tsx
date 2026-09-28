@@ -73,7 +73,66 @@ describe('Template form panels', () => {
     expect(html).toContain('URL Slug');
     expect(html).toContain('Search Description');
     expect(html).toContain('Preview');
-    expect(html).toContain('example.com/templates/');
+  });
+});
+
+// The preview showed example.com/templates/<slug>, a route the app does not have, and
+// "untitled" for a blank slug. Public templates live at /profile/<username>/<slug>.
+describe('Search & SEO preview URL', () => {
+  function SeoHarness(props: {
+    children: React.ReactNode;
+    values: Partial<TemplateEditorDetailsFormValues>;
+  }): JSX.Element {
+    const form = useForm<TemplateEditorDetailsFormValues>({
+      defaultValues: { ...buildTemplateEditorDetailsFormValues(), ...props.values },
+    });
+
+    return <Form {...form}>{props.children}</Form>;
+  }
+
+  it('previews the public template URL for the slug', () => {
+    const html = renderToStaticMarkup(
+      <SeoHarness values={{ seoUrl: 'launch-checklist' }}>
+        <SEOMetaEditor ownerSlug="jane" />
+      </SeoHarness>,
+    );
+
+    expect(html).toContain('https://serplists.com/profile/jane/launch-checklist');
+    expect(html).not.toContain('example.com');
+    expect(html).not.toContain('/templates/');
+  });
+
+  it('previews the slug a new template gets from its name when the slug is blank', () => {
+    const html = renderToStaticMarkup(
+      <SeoHarness values={{ seoUrl: '', title: 'Launch Checklist!' }}>
+        <SEOMetaEditor ownerSlug="jane" />
+      </SeoHarness>,
+    );
+
+    expect(html).toContain('/profile/jane/launch-checklist');
+    expect(html).not.toContain('untitled');
+  });
+
+  it('says a username is needed when the owner has none', () => {
+    const html = renderToStaticMarkup(
+      <SeoHarness values={{ seoUrl: 'launch-checklist' }}>
+        <SEOMetaEditor ownerSlug={null} />
+      </SeoHarness>,
+    );
+
+    expect(html).toContain('needs a username');
+    expect(html).not.toContain('/profile/');
+    expect(html).not.toContain('/templates/');
+  });
+
+  it('says a private template has no live public page', () => {
+    const html = renderToStaticMarkup(
+      <SeoHarness values={{ seoUrl: 'launch-checklist', isPublic: false }}>
+        <SEOMetaEditor ownerSlug="jane" />
+      </SeoHarness>,
+    );
+
+    expect(html).toContain('This template is private');
   });
 });
 

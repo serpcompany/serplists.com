@@ -31,6 +31,7 @@ Canonical private routes:
 - In the editor, sections, tasks and a task's content blocks reorder by dragging their handle, or with the Up and Down arrow keys on the focused handle. Blocks keep their ids when they move, and runs and public pages show blocks in the saved order.
 - Template content updates reconcile into matching active, private runs for the same Resource Owner. Stable section, item, and sub-item IDs preserve run completion and notes across renames and reordering; new work arrives incomplete, and retired work leaves readiness calculations while remaining in run history.
 - Public templates can be shared at `/profile/{username}/{templateSlug}`.
+- The editor's Search & SEO panel previews that URL: the username is the template's creator (also for an Organization's template), and the slug is the one a save stores (a blank slug keeps the saved one, or for a new template comes from its name). It says when the creator has no username or the template is private, and notes that a slug another template already uses gets a short suffix.
 - Other Users can copy public templates into Personal or an authorized Organization when that ownership context's entitlement allows it.
 - Template history is stored in `template_versions`; related actor/action history is stored in `audit_events`.
 
