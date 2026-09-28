@@ -109,4 +109,39 @@ describe('Templates page', () => {
     expect(html).toContain('Create Template');
     expect(html).not.toContain('No templates matched this view.');
   });
+
+  it('shows a load error with Retry instead of the empty state when the list failed to load', () => {
+    mockUseDashboardTemplatesModel.mockReturnValue({
+      templates: [],
+      loading: false,
+      isEmpty: true,
+      loadError: new Error('HTTP 500'),
+      retryLoad: vi.fn(),
+      canCreateRun: false,
+      totalTemplateItems: 0,
+      selectedTemplate: null,
+      selectedTemplateId: '',
+      runLauncherOpen: false,
+      isCreatingRun: false,
+      openCreateTemplate: vi.fn(),
+      openRunLauncher: vi.fn(),
+      openPublicLibrary: vi.fn(),
+      openTemplate: vi.fn(),
+      removeTemplate: vi.fn(),
+      closeRunLauncher: vi.fn(),
+      selectRunTemplate: vi.fn(),
+      createRunFromTemplate: vi.fn(),
+    });
+
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/">
+        <Templates />
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('Couldn&#x27;t load your templates');
+    expect(html).toContain('Retry');
+    expect(html).not.toContain('No templates found');
+    expect(html).not.toContain('Create your first template');
+  });
 });

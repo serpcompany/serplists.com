@@ -26,7 +26,7 @@ export type {
 } from "@/types/checklist";
 
 import { generateSlug } from "@/utils/urlHelpers";
-import { calculateSectionsProgress, isSectionsShape, normalizeSections, resetSectionsCompletion } from "@/lib/utils/checklistSections";
+import { resetSectionsCompletion } from "@/lib/utils/checklistSections";
 import {
   isRepoTemplate,
   mergeAccountTemplateCollections,
@@ -34,12 +34,13 @@ import {
   repoTemplates,
 } from "@/lib/repoTemplateCatalog";
 import { dropTemplateFromCatalog, refreshRunLists } from "./templateListCache";
+import { createTemplateListFetcher, fetchRunList, shouldRetryListFetch, type TemplateListRequest } from "./templateListFetchers";
 
 
 const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
+const fetchTemplateList = createTemplateListFetcher(api);
 
 type TemplateListQuery = UseQueryOptions<ChecklistTemplate[]>;
-type TemplateListRequest = { teamId?: string; scope?: 'public' | 'personal' };
 type TemplateListQueries = { catalog: TemplateListQuery; workspace: TemplateListQuery; ready: boolean };
 const TemplateListQueriesContext = createContext<
   (TemplateListQueries & { runs: UseQueryOptions<ChecklistRun[]> }) | undefined
@@ -57,11 +58,17 @@ export const buildTemplateListQueries = (params: {
   workspaceScopeId: string;
   fetchList: (request: TemplateListRequest) => () => Promise<ChecklistTemplate[]>;
 }): TemplateListQueries => ({
-  catalog: { queryKey: ['templates', 'catalog'], queryFn: params.fetchList({ scope: 'public' }), staleTime: 5 * 60 * 1000 },
+  catalog: {
+    queryKey: ['templates', 'catalog'],
+    queryFn: params.fetchList({ scope: 'public' }),
+    staleTime: 5 * 60 * 1000,
+    retry: shouldRetryListFetch,
+  },
   workspace: {
     queryKey: ['templates', params.userId ?? 'visitor', params.workspaceScopeId],
     queryFn: params.fetchList(params.activeTeamId ? { teamId: params.activeTeamId } : { scope: 'personal' }),
     staleTime: 5 * 60 * 1000,
+    retry: shouldRetryListFetch,
     enabled: params.ready && Boolean(params.userId),
   },
   ready: params.ready,
@@ -113,8 +120,6 @@ export function buildCreateRunRequest(params: {
   };
 }
 
-// calculateSectionsProgress is imported from lib/utils/checklistSections
-
 export const useTemplates = () => {
   const context = useContext(TemplatesContext);
   if (!context) {
@@ -130,15 +135,23 @@ export const useTemplateLists = (options: { catalog?: boolean; workspace?: boole
   if (!queries) {
     throw new Error("useTemplateLists must be used within a TemplatesProvider");
   }
-  const catalog = useQuery({ ...queries.catalog, enabled: queries.ready && options.catalog === true });
-  const workspace = useQuery({ ...queries.workspace, enabled: queries.workspace.enabled !== false && options.workspace !== false });
-  const runs = useQuery({ ...queries.runs, enabled: queries.runs.enabled !== false && options.runs === true });
-  // Use this page's queries for loading: the provider's observers hear of fetches a tick late.
+  const catalogEnabled = queries.ready && options.catalog === true;
+  const workspaceEnabled = queries.workspace.enabled !== false && options.workspace !== false;
+  const runsEnabled = queries.runs.enabled !== false && options.runs === true;
+  const catalog = useQuery({ ...queries.catalog, enabled: catalogEnabled });
+  const workspace = useQuery({ ...queries.workspace, enabled: workspaceEnabled });
+  const runs = useQuery({ ...queries.runs, enabled: runsEnabled });
+  // Use this page's queries for loading and errors: the provider's observers hear of fetches a
+  // tick late. A failed refetch keeps the last good list, so show an error only without data.
   const context = useTemplates();
   return {
     ...context,
     templatesLoading: !queries.ready || catalog.isLoading || workspace.isLoading,
     runsLoading: !queries.ready || runs.isLoading,
+    templatesError: (workspaceEnabled ? workspace.error : null) ?? (catalogEnabled ? catalog.error : null),
+    runsError: runsEnabled ? runs.error : null,
+    refetchTemplates: () => Promise.all([workspaceEnabled && workspace.refetch(), catalogEnabled && catalog.refetch()]),
+    refetchRuns: () => (runsEnabled ? runs.refetch() : Promise.resolve()),
   };
 };
 
@@ -146,65 +159,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { user } = useAuth();
   const { activeTeamId, isWorkspaceLoading, workspaceScopeId } = useWorkspace();
   const queryClient = useQueryClient();
-
-  const mapApiTemplate = (template: Record<string, unknown>): ChecklistTemplate => ({
-    id: String(template.id),
-    title: String(template.title || ''),
-    description: typeof template.description === 'string' ? template.description : '',
-    type: typeof template.type === 'string' ? template.type as "checklist" | "recipe" : 'checklist',
-    seoTitle: typeof template.seoTitle === 'string' ? template.seoTitle : '',
-    seoDescription: typeof template.seoDescription === 'string' ? template.seoDescription : '',
-    rules: Array.isArray(template.rules) ? template.rules as ChecklistTemplate["rules"] : undefined,
-    seoUrl: typeof template.slug === 'string' ? template.slug : '',
-    sections: normalizeSections((() => {
-      if (template.sections) return template.sections;
-      if (template.items) {
-        const parsedItems = typeof template.items === 'string' ? JSON.parse(template.items) : template.items;
-        if (Array.isArray(parsedItems) && parsedItems.length > 0 && parsedItems[0]?.items) {
-          return parsedItems;
-        }
-        return [{
-          id: '1',
-          title: 'Checklist',
-          items: parsedItems
-        }];
-      }
-      return [];
-    })()),
-    categories: Array.isArray(template.categories)
-      ? template.categories as string[]
-      : (template.category ? [String(template.category)] : []),
-    tags: typeof template.tags === 'string' ? JSON.parse(template.tags) : (Array.isArray(template.tags) ? template.tags as string[] : []),
-    userId: typeof template.user_id === 'string' ? template.user_id : '',
-    createdAt: typeof template.created_at === 'string' ? template.created_at : '',
-    updatedAt: typeof template.updated_at === 'string' ? template.updated_at : '',
-    isPublic: Boolean(template.is_public),
-    slug: typeof template.slug === 'string' ? template.slug : '',
-    version: typeof template.version === 'number' ? template.version : 1,
-    teamId:
-      typeof template.team_id === 'string'
-        ? template.team_id
-        : typeof template.teamId === 'string'
-          ? template.teamId
-          : undefined,
-    ownerProfile:
-      typeof template.owner_username === "string" || typeof template.owner_full_name === "string"
-        ? {
-            username: typeof template.owner_username === "string" ? template.owner_username : undefined,
-            full_name: typeof template.owner_full_name === "string" ? template.owner_full_name : undefined,
-          }
-        : undefined,
-  });
-
-  const fetchTemplateList = (request: TemplateListRequest) => async (): Promise<ChecklistTemplate[]> => {
-    try {
-      const templatesData = await api.getTemplates(request);
-      return templatesData.map((template: Record<string, unknown>) => mapApiTemplate(template));
-    } catch (error) {
-      console.error('Error fetching templates:', error);
-      return [];
-    }
-  };
 
   // These observers read whatever useTemplateLists() has loaded, without fetching.
   const listQueries = buildTemplateListQueries({ ready: !isWorkspaceLoading, userId: user?.id, activeTeamId, workspaceScopeId, fetchList: fetchTemplateList });
@@ -215,49 +169,10 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Runs load on demand too: useTemplateLists({ runs: true }) on the runs page only.
   const runsQuery: UseQueryOptions<ChecklistRun[]> = {
     queryKey: ['runs', user?.id, workspaceScopeId],
-    queryFn: async (): Promise<ChecklistRun[]> => {
-      if (!user) return [];
-      
-      try {
-        const checklistsData = await api.getChecklists(
-          activeTeamId ? { teamId: activeTeamId } : undefined,
-        );
-        // Transform to run format
-        const transformedRuns = checklistsData.map((checklist: Record<string, unknown>) => {
-          const sections = (() => {
-            const raw = typeof checklist.items === 'string' ? JSON.parse(checklist.items) : (checklist.items || []);
-            if (isSectionsShape(raw)) return raw as ChecklistSection[];
-            return [{ id: '1', title: 'Checklist', items: raw }];
-          })();
-
-          return ({
-          id: checklist.id,
-          templateId: checklist.template_id || '',
-          title: checklist.title,
-          status: (checklist.status || 'in_progress') as "in_progress" | "completed",
-          sections: normalizeSections(sections),
-          startedAt: checklist.started_at || checklist.created_at,
-          completedAt: checklist.completed_at || undefined,
-          userId: checklist.user_id || '',
-          teamId: typeof checklist.team_id === 'string' ? checklist.team_id : undefined,
-          templateVersion: typeof checklist.template_version === 'number' ? checklist.template_version : 1,
-          revision: typeof checklist.revision === 'number' ? checklist.revision : 1,
-          isStale: checklist.is_stale === true,
-          isPublic: checklist.is_public === true || checklist.is_public === 1,
-        });
-        });
-
-        return transformedRuns.map((r: ChecklistRun) => ({
-          ...r,
-          progress: calculateSectionsProgress(r.sections),
-        }));
-      } catch (error) {
-        console.error('Error fetching runs:', error);
-        return [];
-      }
-    },
+    queryFn: async (): Promise<ChecklistRun[]> => (user ? fetchRunList(api, activeTeamId) : []),
     enabled: listQueries.ready && !!user,
     staleTime: 5 * 60 * 1000,
+    retry: shouldRetryListFetch,
   };
   const { data: runs = [], isLoading: runsLoading } = useQuery({ ...runsQuery, enabled: false });
 

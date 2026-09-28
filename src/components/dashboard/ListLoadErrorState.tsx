@@ -1,0 +1,41 @@
+import { AlertTriangle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+import { Button } from '@/components/ui/button';
+import { DashboardEmptyState } from '@/components/dashboard/DashboardContentShell';
+import { isAuthRequiredError } from '@/lib/api-errors';
+
+interface ListLoadErrorStateProps {
+  error: unknown;
+  listName: 'templates' | 'runs';
+  onRetry: () => void;
+}
+
+// Shown in place of an empty list when the list failed to load, so a failed request never
+// reads as "you have nothing here".
+export function ListLoadErrorState({ error, listName, onRetry }: ListLoadErrorStateProps) {
+  const signedOut = isAuthRequiredError(error);
+
+  return (
+    <DashboardEmptyState
+      icon={<AlertTriangle className="h-7 w-7" />}
+      title={`Couldn't load your ${listName}`}
+      description={
+        signedOut
+          ? 'Your session has ended. Sign in again to continue.'
+          : 'Something went wrong while loading. Check your connection and try again.'
+      }
+      action={
+        signedOut ? (
+          <Button asChild>
+            <Link to="/login">Sign in</Link>
+          </Button>
+        ) : (
+          <Button type="button" onClick={onRetry}>
+            Retry
+          </Button>
+        )
+      }
+    />
+  );
+}

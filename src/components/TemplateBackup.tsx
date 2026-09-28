@@ -55,6 +55,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const {
     allTemplates,
     templates,
+    templatesError,
     importTemplates
   } = useTemplateLists({ catalog: true });
   const {
@@ -135,7 +136,8 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       return;
     }
 
-    if (templatesToExport.length === 0) {
+    // The export reads templates on the server, so only trust an empty list that loaded.
+    if (templatesToExport.length === 0 && !templatesError) {
       toast.error("No templates available to export");
       return;
     }

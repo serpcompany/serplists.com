@@ -53,6 +53,8 @@ const Dashboard = () => {
     templatesLoading,
     runs,
     runsLoading,
+    runsError,
+    refetchRuns,
     updateRun,
     revalidateRun,
     deleteRun,
@@ -121,6 +123,8 @@ const Dashboard = () => {
         onDeleteRun={deleteRun}
         onRevalidateRun={revalidateRun}
         loading={runsLoading}
+        loadError={runsError}
+        onRetryLoad={() => void refetchRuns()}
       />
     );
   }

@@ -267,6 +267,8 @@ export const useDashboardTemplatesModel = (
 
   return {
     ...model,
+    loadError: templateContext.templatesError,
+    retryLoad: () => void templateContext.refetchTemplates(),
     createRunFromTemplate,
     closeRunLauncher,
     isCreatingRun,

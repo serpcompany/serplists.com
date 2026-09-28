@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { ListLoadErrorState } from '@/components/dashboard/ListLoadErrorState';
 import { TemplateCard } from '@/components/dashboard/TemplateCard';
 import { TemplateListItem } from '@/components/dashboard/TemplateListItem';
 import {
@@ -227,6 +228,8 @@ const Templates = () => {
         <div className="space-y-8">
           {model.loading ? (
             <div className="text-sm text-muted-foreground">Loading templates...</div>
+          ) : model.loadError && model.templates.length === 0 ? (
+            <ListLoadErrorState error={model.loadError} listName="templates" onRetry={model.retryLoad} />
           ) : filteredTemplates.length === 0 ? (
             <DashboardEmptyState
               icon={<SlidersHorizontal className="h-7 w-7" />}

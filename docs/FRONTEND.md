@@ -61,6 +61,12 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
 - Surface API failures by their structured code, not message text: `401` means sign
   in (keep the return path), `403 upgrade_required` and `403 limit_reached` mean a
   plan gate, `503 billing_unavailable` means checkout is down.
+- Query functions reject when a request fails; never catch and return `[]`, which
+  caches an empty list as fresh data and hides the error. Template and run list
+  fetchers (`src/contexts/templateListFetchers.ts`) parse rows one at a time and skip a
+  malformed row. `useTemplateLists()` returns `templatesError` and `runsError`; a page
+  shows `ListLoadErrorState` (Retry, or Sign in on a `401`) instead of its empty state
+  when a list failed and has no data.
 
 ## Template editor forms
 

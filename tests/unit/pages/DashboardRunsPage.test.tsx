@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Dashboard from '@/pages/Dashboard';
 import { createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
+import { createApiError } from '@/lib/api-errors';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
 const mockUseAuth = vi.fn();
@@ -233,6 +234,39 @@ describe('/dashboard/runs presentation', () => {
     expect(html).toContain('Search runs...');
     expect(html).toContain('role="combobox"');
     expect(html).toContain('aria-busy="true"');
+    expect(html).not.toContain('No runs found');
+  });
+
+  it.each([
+    ['a failed load', new Error('HTTP 500'), 'Retry'],
+    ['an expired session', createApiError(401, { error: 'Unauthorized' }), 'Sign in'],
+  ])('shows %s instead of an empty runs list', (_name, runsError, action) => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
+      logout: vi.fn(),
+    });
+    mockUseTemplates.mockReturnValue({
+      templates: [],
+      templatesLoading: false,
+      runs: [],
+      runsLoading: false,
+      runsError,
+      refetchRuns: vi.fn(),
+      updateRun: vi.fn(),
+      deleteRun: vi.fn(),
+    });
+
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/dashboard/runs">
+        <Routes>
+          <Route path="*" element={<Dashboard />} />
+        </Routes>
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('My Runs');
+    expect(html).toContain('Couldn&#x27;t load your runs');
+    expect(html).toContain(action);
     expect(html).not.toContain('No runs found');
   });
 

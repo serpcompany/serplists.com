@@ -13,6 +13,7 @@ import {
   Trash2,
 } from 'lucide-react';
 
+import { ListLoadErrorState } from '@/components/dashboard/ListLoadErrorState';
 import { Button } from '@/components/ui/button';
 import {
   DashboardContentShell,
@@ -62,6 +63,8 @@ interface RunsDashboardViewProps {
   onDeleteRun: (runId: string) => void | Promise<void>;
   onRevalidateRun?: (run: ChecklistRun) => void | Promise<void>;
   loading?: boolean;
+  loadError?: unknown;
+  onRetryLoad?: () => void;
 }
 
 const formatDate = (dateString: string) =>
@@ -89,6 +92,8 @@ export function RunsDashboardView({
   onDeleteRun,
   onRevalidateRun,
   loading = false,
+  loadError,
+  onRetryLoad = () => undefined,
 }: RunsDashboardViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -216,6 +221,8 @@ export function RunsDashboardView({
               </div>
             ))}
           </div>
+        ) : loadError && runs.length === 0 ? (
+          <ListLoadErrorState error={loadError} listName="runs" onRetry={onRetryLoad} />
         ) : filteredRuns.length === 0 ? (
           <DashboardEmptyState
             icon={<Filter className="h-7 w-7" />}
