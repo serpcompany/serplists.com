@@ -20,6 +20,11 @@
   are read from D1; enabling Better Auth's `session.cookieCache` would let revoked
   sessions live until the cache expires. Run Keys are separate credentials and are
   not revoked by a reset.
+- **Reset and verification links use the host the request reached.**
+  `createBetterAuth` pins `baseURL` to the request origin, because Better Auth
+  1.3.4 otherwise builds links (and a trusted origin) from `X-Forwarded-Host`,
+  which a client can send; the router also drops that header. Keep `baseURL`
+  pinned and leave `advanced.trustedProxyHeaders` off when upgrading.
 - **New passwords are 10 characters to 72 UTF-8 bytes.** Passwords are hashed
   with bcrypt, which ignores everything after 72 bytes, so a longer password
   would be stored as its first 72 bytes. A Better Auth `hooks.before`

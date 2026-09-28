@@ -43,6 +43,27 @@ describe('API router request id propagation', { timeout: 30_000 }, () => {
     expect(data.requestId).not.toBe('client-provided-request-id');
   });
 
+  it('drops a client X-Forwarded-Host so no handler builds URLs from it', async () => {
+    vi.doMock('../../../../functions/api/handlers/templates', () => ({
+      handleTemplates: vi.fn((request: Request) =>
+        Response.json({
+          forwardedHost: request.headers.get('X-Forwarded-Host'),
+          forwardedFor: request.headers.get('X-Forwarded-For'),
+        }),
+      ),
+    }));
+
+    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const response = await apiWorker.fetch(
+      new Request('http://localhost/api/templates', {
+        headers: { 'X-Forwarded-Host': 'evil.example', 'X-Forwarded-For': '203.0.113.7' },
+      }),
+      buildEnv(),
+    );
+
+    expect(await response.json()).toEqual({ forwardedHost: null, forwardedFor: '203.0.113.7' });
+  });
+
   it('keeps personal run MCP routes off on remote hosts unless explicitly enabled', async () => {
     const handleAgentMcp = vi.fn(() => Response.json({ ok: true }));
     vi.doMock('../../../../functions/api/handlers/agentMcp', () => ({ handleAgentMcp }));

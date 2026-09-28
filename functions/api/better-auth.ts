@@ -64,6 +64,12 @@ export function createBetterAuth(env: Env, request: Request) {
   ];
 
   return betterAuth({
+    // Pinned so Better Auth never derives it from the request: with no baseURL,
+    // 1.3.4 builds reset and verification links from X-Forwarded-Host, which a
+    // client can set. On Cloudflare, request.url's host is one routed to this
+    // project. Must be an origin with no path, or basePath is not appended.
+    baseURL: origin,
+    basePath: "/api/auth",
     secret: authSecret,
     // The default logger prints emails to the console; this one writes scrubbed JSON.
     logger: betterAuthLogger,

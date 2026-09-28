@@ -77,6 +77,10 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
   const requestId = crypto.randomUUID();
   const requestHeaders = new Headers(context.request.headers);
   requestHeaders.set('X-Request-Id', requestId);
+  // A client can send X-Forwarded-Host; nothing may build URLs from it (Better
+  // Auth's baseURL is pinned in better-auth.ts). X-Forwarded-For stays for
+  // getClientIp in local dev.
+  requestHeaders.delete('X-Forwarded-Host');
   const request = new Request(context.request, { headers: requestHeaders });
   const url = new URL(request.url);
   const path = url.pathname.replace('/api/', '');
