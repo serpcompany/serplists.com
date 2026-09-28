@@ -911,7 +911,9 @@ describe('Templates Handlers', () => {
 
   it('should return template history for active team members', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.orderBy.mockReturnValueOnce(dbMocks.selectChain);
+    dbMocks.selectChain.orderBy
+      .mockReturnValueOnce(dbMocks.selectChain)
+      .mockReturnValueOnce(dbMocks.selectChain);
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([
         {
@@ -946,6 +948,19 @@ describe('Templates Handlers', () => {
           actor_name: 'Editor Example',
           actor_username: 'editor',
         },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'audit-2',
+          actor_user_id: 'user-123',
+          action: 'template.updated',
+          metadata_json: '{"visibility":"public"}',
+          request_id: 'req-2',
+          created_at: '2026-07-03T12:00:00.000Z',
+          actor_email: 'editor@example.com',
+          actor_name: 'Editor Example',
+          actor_username: 'editor',
+        },
       ]);
 
     const request = new Request('http://localhost/api/templates/template-1/history?limit=8', { method: 'GET' });
@@ -961,17 +976,21 @@ describe('Templates Handlers', () => {
         actor: expect.objectContaining({ name: 'Editor Example' }),
       }),
     );
-    // Versions exist, so the audit-event fallback is never queried.
-    expect(data.events).toEqual([]);
-    expect(dbMocks.selectChain.limit).toHaveBeenCalledTimes(3);
-    expect(dbMocks.selectChain.limit).toHaveBeenLastCalledWith(8);
+    // Events come with the versions: a Share's event labels its version in the Changelog,
+    // and archive and restore record only an event.
+    expect(data.events).toEqual([
+      expect.objectContaining({ id: 'audit-2', action: 'template.updated', metadata: { visibility: 'public' } }),
+    ]);
+    expect(dbMocks.selectChain.limit).toHaveBeenCalledTimes(4);
+    expect(dbMocks.selectChain.limit).toHaveBeenNthCalledWith(3, 8);
+    expect(dbMocks.selectChain.limit).toHaveBeenNthCalledWith(4, 8);
     // Ordering by version lets the unique (template_id, version) index stop at LIMIT.
     const versionOrder = collectSqlColumnNames(dbMocks.selectChain.orderBy.mock.calls[0][0]);
     expect(versionOrder).toContain('version');
     expect(versionOrder).not.toContain('created_at');
   });
 
-  it('falls back to audit events without diffs for templates that have no versions', async () => {
+  it('returns audit events without diffs, also for templates that have no versions', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.orderBy
       .mockReturnValueOnce(dbMocks.selectChain)

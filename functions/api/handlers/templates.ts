@@ -793,11 +793,13 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       }
 
       try {
-        const versionRows = await selectTemplateVersionHistory(db, templateId, historyLimit);
-        // Audit events are only a fallback for templates created before versioning.
-        const eventRows = versionRows.length > 0
-          ? []
-          : await selectAuditEventHistory(db, 'template', templateId, historyLimit);
+        // The Changelog merges both lists: archive and restore record only an event, and a
+        // Share's event labels its version (templateHistoryTimeline.ts). Both reads stop at
+        // LIMIT on an index.
+        const [versionRows, eventRows] = await Promise.all([
+          selectTemplateVersionHistory(db, templateId, historyLimit),
+          selectAuditEventHistory(db, 'template', templateId, historyLimit),
+        ]);
 
         return json({
           templateId,
