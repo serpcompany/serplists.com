@@ -106,7 +106,9 @@ test('a 429 on the page-load session check retries instead of redirecting to log
   await page.goto('/dashboard');
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
   expect(rejected).toBe(1);
-  expect(new URL(page.url()).pathname).toBe('/dashboard');
+  // Once the retried check confirms the session, /dashboard forwards a signed-in user to
+  // their Templates (src/appRoutes.tsx), never to /login.
+  expect(new URL(page.url()).pathname).toBe('/dashboard/templates');
   expect(loginNavigations).toEqual([]);
 });
 
