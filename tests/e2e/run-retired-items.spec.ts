@@ -36,7 +36,7 @@ test('notes on a task removed from the Template stay visible on the Run', async 
       { id: `retired-copy-${suffix}`, title: 'Write copy' },
     ],
   }];
-  const template = await api<{ id: string; version: number }>(page, '/templates', 'POST', {
+  const template = await api<{ id: string }>(page, '/templates', 'POST', {
     title: `Retired work QA ${suffix}`,
     sections,
     is_public: false,
@@ -51,8 +51,11 @@ test('notes on a task removed from the Template stay visible on the Run', async 
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await expect(page.getByRole('heading', { name: 'Write copy' })).toBeVisible();
 
+  // A content edit names the version it was based on (the API refuses one without it).
+  const { version } = await api<{ version: number }>(page, `/templates/${template.id}`, 'GET');
   await api(page, `/templates/${template.id}`, 'PUT', {
     sections: [{ ...sections[0], items: [sections[0].items[1]] }],
+    expected_version: version,
   });
 
   await page.reload();
