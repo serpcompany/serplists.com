@@ -28,7 +28,7 @@ test('starts a run from a public template page opened directly', async ({ page }
   await deleteRun(page, decodeURIComponent(new URL(page.url()).pathname.split('/').pop() ?? ''));
 });
 
-test('keeps toggled tasks on a run opened from the runs dashboard', async ({ page }) => {
+test('keeps toggled tasks and advances on a run opened from the runs dashboard', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Toggle QA ${Date.now()}`;
   const runId = await page.evaluate(async ({ runTitle, apiBaseUrl }) => {
@@ -60,10 +60,9 @@ test('keeps toggled tasks on a run opened from the runs dashboard', async ({ pag
     expect((await saved).status()).toBe(200);
   };
 
+  // Completing a task moves straight on to the next one.
   await expect(page.getByRole('heading', { name: 'First task' })).toBeVisible();
   await completeTask();
-  await expect(page.getByRole('button', { name: 'Next Task' })).toBeVisible();
-  await page.getByRole('button', { name: 'Next Task' }).click();
   await expect(page.getByRole('heading', { name: 'Second task' })).toBeVisible();
   await completeTask();
 
