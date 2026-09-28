@@ -11,6 +11,7 @@ import {
   buildTemplateEditorFormValues,
   normalizeTemplateEditorFormForSave,
   type TemplateEditorFormValues,
+  validateTemplateEditorFormForSave,
 } from "@/lib/forms/templateEditorForm";
 import { api } from "@/lib/api";
 import type { ChecklistTemplate } from "@/types/checklist";
@@ -35,6 +36,8 @@ type LoadTemplateEditorDataOptions = {
 type SaveTemplateEditorDataOptions = {
   id?: string;
   expectedVersion?: number;
+  // The slug the template has now; an unedited one is kept and not resent.
+  storedSlug?: string;
   values: TemplateEditorFormValues;
 };
 
@@ -56,8 +59,11 @@ export const buildDefaultTemplateEditorTemplate =
 
 export const buildTemplateEditorSavedState = (
   values: TemplateEditorFormValues,
+  // savedSlug: the slug the API stored, which may carry a suffix the form lacks.
+  slugs: { storedSlug?: string; savedSlug?: string } = {},
 ): TemplateEditorLoadResult => {
-  const normalizedForm = normalizeTemplateEditorFormForSave(values);
+  const normalizedForm = normalizeTemplateEditorFormForSave(values, slugs);
+  const slug = slugs.savedSlug ?? normalizedForm.seoUrl;
 
   return {
     initialValues: buildTemplateEditorFormValues({
@@ -66,15 +72,15 @@ export const buildTemplateEditorSavedState = (
       sections: normalizedForm.sections,
       seoTitle: normalizedForm.seoTitle,
       seoDescription: normalizedForm.seoDescription,
-      seoUrl: normalizedForm.seoUrl,
-      slug: normalizedForm.seoUrl,
+      seoUrl: slug,
+      slug,
       categories: normalizedForm.categories,
       tags: normalizedForm.tags,
       type: normalizedForm.templateType,
       isPublic: normalizedForm.isPublic,
     }),
     loadError: null,
-    templateSlug: normalizedForm.seoUrl || undefined,
+    templateSlug: slug || undefined,
   };
 };
 
@@ -145,10 +151,18 @@ export const saveTemplateEditorData = async (
   options: SaveTemplateEditorDataOptions,
   dependencies: SaveTemplateEditorDependencies,
 ): Promise<SaveTemplateResult> => {
-  const normalizedForm = normalizeTemplateEditorFormForSave(options.values);
+  const normalizedForm = normalizeTemplateEditorFormForSave(options.values, {
+    storedSlug: options.storedSlug,
+  });
+  const validationErrors = validateTemplateEditorFormForSave(normalizedForm);
+  if (validationErrors.length > 0) {
+    return { success: false, errors: validationErrors };
+  }
+
   return dependencies.saveTemplate({
     id: options.id,
     expectedVersion: options.expectedVersion,
+    storedSlug: options.storedSlug,
     title: normalizedForm.title,
     description: normalizedForm.description,
     sections: normalizedForm.sections,
@@ -253,6 +267,7 @@ export const useTemplateEditorModel = (
       {
         id: options.id,
         expectedVersion: expectedVersionRef.current,
+        storedSlug: templateSlug,
         values,
       },
       {
@@ -262,7 +277,10 @@ export const useTemplateEditorModel = (
 
     if (result.success) {
       expectedVersionRef.current = result.version;
-      const savedState = buildTemplateEditorSavedState(values);
+      const savedState = buildTemplateEditorSavedState(values, {
+        storedSlug: templateSlug,
+        savedSlug: result.slug,
+      });
       setInitialValues(savedState.initialValues);
       setLoadError(null);
       setTemplateSlug(savedState.templateSlug || templateSlug);

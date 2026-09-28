@@ -9,6 +9,8 @@ export type SaveTemplateResult = {
   errors: ValidationError[];
   // The template's version after a successful update; the next save sends it.
   version?: number;
+  // The slug the API stored, when a slug was sent (it may carry a suffix).
+  slug?: string;
 };
 
 // Never read the version from the template lists: they refetch in the background and
@@ -36,6 +38,9 @@ export type SaveTemplateInput = {
   isPublic: boolean;
   // The version the editor loaded (or last saved). Required for updates.
   expectedVersion?: number;
+  // The slug the template has now. An unchanged slug is not resent, so a stored slug
+  // that predates today's slug rules never blocks a save or moves the URL.
+  storedSlug?: string;
 };
 
 const MISSING_VERSION_MESSAGE =
@@ -63,6 +68,7 @@ export const persistTemplateSave = async (
     tags,
     isPublic,
     expectedVersion,
+    storedSlug,
   } = input;
 
   const { title: finalTitle, sections: finalSections } = applyDefaults(title, sections);
@@ -73,7 +79,9 @@ export const persistTemplateSave = async (
         return { success: false, errors: [{ type: "save", message: MISSING_VERSION_MESSAGE }] };
       }
 
-      // Rules are not edited here; leaving them out keeps the stored rules.
+      // Rules are not edited here; leaving them out keeps the stored rules. Likewise an
+      // empty or unchanged slug is left out and the stored slug is kept.
+      const changedSlug = seoUrl && seoUrl !== storedSlug ? seoUrl : undefined;
       const updatePayload: TemplateSavePayload = {
         id,
         title: finalTitle,
@@ -81,8 +89,8 @@ export const persistTemplateSave = async (
         sections: finalSections,
         seoTitle,
         seoDescription,
-        seoUrl,
-        slug: seoUrl,
+        seoUrl: changedSlug,
+        slug: changedSlug,
         type: templateType,
         categories,
         tags,
@@ -91,7 +99,7 @@ export const persistTemplateSave = async (
       };
 
       const saved = await updateTemplate(updatePayload);
-      return { success: true, errors: [], version: saved?.version };
+      return { success: true, errors: [], version: saved?.version, slug: saved?.slug };
     }
 
     await createTemplate({

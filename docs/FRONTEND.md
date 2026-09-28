@@ -59,7 +59,13 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
   types with guaranteed ids, and nested field factories.
 - Use React Hook Form field arrays for sections, items, content blocks, and
   sub-items instead of a second nested state tree.
-- Omit an empty slug from create and update payloads rather than sending `""`.
+- Omit an empty slug from create and update payloads rather than sending `""`, and
+  omit an update's slug when it is the one already stored, so a stored slug that
+  predates today's rules never blocks a save or moves the URL.
+- Field limits and slug rules live in `src/lib/schemas/templateFields.ts`, shared
+  with the API payload schema. The editor schema applies them with messages that
+  name the field, and saves are validated before the API call. The URL slug is
+  normalized (`slugifyTemplateSlug`) when the field loses focus and on save.
 - Keep category autocomplete triggers as real text inputs and use `onKeyDown` for
   tag entry.
 - Preserve `seoTitle`, `seoDescription`, `slug`/`seoUrl`, and `rules` across save

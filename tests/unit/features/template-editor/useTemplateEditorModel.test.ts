@@ -334,6 +334,57 @@ describe("saveTemplateEditorData", () => {
   });
 });
 
+describe("saveTemplateEditorData validation", () => {
+  const values = {
+    title: "Existing Template",
+    description: "",
+    templateType: "checklist" as const,
+    categories: [],
+    tags: [],
+    isPublic: true,
+    seoTitle: "",
+    seoDescription: "",
+    seoUrl: "",
+    sections: [],
+  };
+
+  it("names the field and skips the API when a value is over its limit", async () => {
+    const saveTemplate = vi.fn();
+
+    const result = await saveTemplateEditorData(
+      {
+        id: "template-1",
+        expectedVersion: 2,
+        values: { ...values, seoDescription: "x".repeat(400) },
+      },
+      { saveTemplate },
+    );
+
+    expect(saveTemplate).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.errors.map((error) => error.message).join(" ")).toContain(
+      "Search description",
+    );
+  });
+
+  it("sends a typed URL slug as a valid slug", async () => {
+    const saveTemplate = vi.fn().mockResolvedValue({ success: true, errors: [] });
+
+    await saveTemplateEditorData(
+      {
+        id: "template-1",
+        expectedVersion: 2,
+        values: { ...values, seoUrl: "My Launch Checklist" },
+      },
+      { saveTemplate },
+    );
+
+    expect(saveTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ seoUrl: "my-launch-checklist" }),
+    );
+  });
+});
+
 describe("editor lane decisions", () => {
   it("does not request a reload for the same editor record", () => {
     expect(shouldLoadTemplateEditorRecord("template-1", null)).toBe(true);

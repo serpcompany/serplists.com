@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+import {
+  slugifyTemplateSlug,
+  TEMPLATE_FIELD_LIMITS as LIMITS,
+} from "@/lib/schemas/templateFields";
 import type { ChecklistTemplate } from "@/types/checklist";
 
 export const TEMPLATE_EDITOR_TYPES = ["checklist", "recipe"] as const;
@@ -19,15 +23,33 @@ const normalizeStringList = (values: string[]): string[] => {
   }, []);
 };
 
+const maxLength = (label: string, max: number) =>
+  z.string().max(max, `${label} must be ${max} characters or fewer.`);
+
+const boundedList = (label: string) =>
+  z
+    .array(
+      z
+        .string()
+        .max(
+          LIMITS.listItemLength,
+          `${label}: each must be ${LIMITS.listItemLength} characters or fewer.`,
+        ),
+    )
+    .max(LIMITS.listItems, `${label}: use ${LIMITS.listItems} or fewer.`);
+
+// The same limits as the API (src/lib/schemas/templateFields.ts), with messages that
+// name the field as the editor labels it. The URL slug has no rule here: it is
+// normalized into a valid slug when saved.
 export const templateEditorDetailsSchema = z.object({
-  title: z.string(),
-  description: z.string(),
+  title: maxLength("Template name", LIMITS.title),
+  description: maxLength("Goal / summary", LIMITS.description),
   templateType: z.enum(TEMPLATE_EDITOR_TYPES),
-  categories: z.array(z.string()),
-  tags: z.array(z.string()),
+  categories: boundedList("Categories"),
+  tags: boundedList("Tags"),
   isPublic: z.boolean(),
-  seoTitle: z.string(),
-  seoDescription: z.string(),
+  seoTitle: maxLength("Search title", LIMITS.seoTitle),
+  seoDescription: maxLength("Search description", LIMITS.seoDescription),
   seoUrl: z.string(),
 });
 
@@ -49,8 +71,19 @@ export const buildTemplateEditorDetailsFormValues = (
   seoUrl: template?.seoUrl ?? template?.slug ?? "",
 });
 
+// `storedSlug` is the slug the template has now. Left unedited it is kept as is, even
+// if it predates today's slug rules, so saving never moves a template's URL by itself.
+export const normalizeTemplateEditorSlugForSave = (
+  seoUrl: string,
+  storedSlug?: string,
+): string => {
+  const typed = seoUrl.trim();
+  return storedSlug && typed === storedSlug ? storedSlug : slugifyTemplateSlug(typed);
+};
+
 export const normalizeTemplateEditorDetailsForSave = (
   values: TemplateEditorDetailsFormValues,
+  options: { storedSlug?: string } = {},
 ): TemplateEditorDetailsFormValues => ({
   title: values.title.trim(),
   description: values.description.trim(),
@@ -60,5 +93,5 @@ export const normalizeTemplateEditorDetailsForSave = (
   isPublic: values.isPublic,
   seoTitle: values.seoTitle.trim(),
   seoDescription: values.seoDescription.trim(),
-  seoUrl: values.seoUrl.trim(),
+  seoUrl: normalizeTemplateEditorSlugForSave(values.seoUrl, options.storedSlug),
 });

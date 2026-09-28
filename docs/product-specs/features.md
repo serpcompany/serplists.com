@@ -92,5 +92,6 @@ Password for all seeded users: `password123`.
 - `503 billing_unavailable`: paid action cannot be started because billing config is unavailable.
 - `503 auth_email_unavailable`: auth email delivery is unavailable for flows that require outbound email.
 - `409 edit_conflict`: a template or run changed after the editor loaded it; refresh before retrying.
+- `400` on a template create or update payload: the message starts with the failing field (for example `seoDescription: ...`) and `details.field` names it.
 
 The client preserves API `status`, `code`, and `details` so UI behavior does not depend on string matching generic error messages.

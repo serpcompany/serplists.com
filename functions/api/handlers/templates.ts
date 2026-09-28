@@ -2,7 +2,7 @@ import { Env } from '../types';
 import { generateSlug } from '../utils/slug';
 import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
-import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema } from '../utils/payloads';
+import { describePayloadError, normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
 import { withEdgeCache } from '../utils/edge-cache';
 import { log } from '../utils/logger';
@@ -20,6 +20,7 @@ import {
   portableTemplatePackEnvelopeSchema,
   portableTemplateRuleSchema,
 } from '../../../src/lib/schemas/checklistSchema';
+import { appendTemplateSlugSuffix, capTemplateSlug } from '../../../src/lib/schemas/templateFields';
 import {
   assignMissingStableTemplateIdentities,
   calculateRunProgress,
@@ -173,7 +174,8 @@ function batchUpdateMissed(result: unknown): boolean {
 }
 
 async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
-  const base = generateSlug(title || 'template') || 'template';
+  // Titles from imports are not length-limited, so cap the slug like any other.
+  const base = capTemplateSlug(generateSlug(title || 'template')) || 'template';
   const db = createDb(env);
   const { templates } = schema;
 
@@ -186,7 +188,7 @@ async function generateUniqueSlug(env: Env, title: string, templateId: string): 
 
   if (!exists) return base;
 
-  const suffixed = `${base}-${templateId.slice(0, 8)}`;
+  const suffixed = appendTemplateSlugSuffix(base, templateId.slice(0, 8));
   const [existsSuffixed] = await db
     .select({ id: templates.id })
     .from(templates)
@@ -196,7 +198,7 @@ async function generateUniqueSlug(env: Env, title: string, templateId: string): 
   if (!existsSuffixed) return suffixed;
 
   // Extremely unlikely collision; use random suffix.
-  return `${base}-${crypto.randomUUID().slice(0, 8)}`;
+  return appendTemplateSlugSuffix(base, crypto.randomUUID().slice(0, 8));
 }
 
 function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
@@ -1207,7 +1209,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     const parsed = templatePayloadSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
+      const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
+      return jsonError(message, 400, { details });
     }
 
     const requestedTeamId = getRequestedTeamId(parsed.data, url);
@@ -1330,7 +1333,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     const parsed = templatePayloadSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message || 'Invalid template payload', 400);
+      const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
+      return jsonError(message, 400, { details });
     }
 
     const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems, expected_version } = parsed.data;
@@ -1435,7 +1439,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         .limit(1);
 
       if (conflict) {
-        nextSlug = `${nextSlug}-${templateId.slice(0, 8)}`;
+        nextSlug = appendTemplateSlugSuffix(nextSlug, templateId.slice(0, 8));
       }
 
       updates.slug = nextSlug;

@@ -12,6 +12,7 @@ import { Tags } from "@/components/ui/tags";
 import { Textarea } from "@/components/ui/textarea";
 import { PREDEFINED_CATEGORIES } from "@/utils/categories";
 import type { TemplateEditorDetailsFormValues } from "@/lib/forms/templateEditorDetailsForm";
+import { TEMPLATE_FIELD_LIMITS } from "@/lib/schemas/templateFields";
 
 interface TemplateBasicInfoProps {
   showIntro?: boolean;
@@ -69,6 +70,7 @@ export const TemplateBasicInfo = ({
           <FieldLabel>Template Name</FieldLabel>
           <Input
             value={title}
+            maxLength={TEMPLATE_FIELD_LIMITS.title}
             onChange={(event) =>
               setValue("title", event.target.value, { shouldDirty: true })
             }
@@ -81,6 +83,7 @@ export const TemplateBasicInfo = ({
           <FieldLabel>Goal / Summary</FieldLabel>
           <Textarea
             value={description}
+            maxLength={TEMPLATE_FIELD_LIMITS.description}
             onChange={(event) =>
               setValue("description", event.target.value, { shouldDirty: true })
             }
@@ -141,6 +144,7 @@ export const TemplateBasicInfo = ({
           <div className="flex gap-2">
             <Input
               value={tagInput}
+              maxLength={TEMPLATE_FIELD_LIMITS.listItemLength}
               onChange={(event) => setTagInput(event.target.value)}
               placeholder="Add tag..."
               onKeyDown={(event) => {

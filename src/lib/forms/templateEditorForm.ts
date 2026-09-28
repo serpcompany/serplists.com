@@ -203,12 +203,27 @@ export function buildTemplateEditorFormValues(
 
 export function normalizeTemplateEditorFormForSave(
   values: TemplateEditorFormValues,
+  options: { storedSlug?: string } = {},
 ): TemplateEditorFormValues {
   const normalizedDetails: TemplateEditorDetailsFormValues =
-    normalizeTemplateEditorDetailsForSave(values);
+    normalizeTemplateEditorDetailsForSave(values, options);
 
   return {
     ...normalizedDetails,
     sections: values.sections,
   };
+}
+
+// Checks save-ready values against the editor schema, which carries the API's limits.
+// Each message names the field as the editor labels it.
+export function validateTemplateEditorFormForSave(
+  values: TemplateEditorFormValues,
+): Array<{ type: "validation"; message: string }> {
+  const result = templateEditorFormSchema.safeParse(values);
+  if (result.success) {
+    return [];
+  }
+
+  const messages = new Set(result.error.issues.map((issue) => issue.message));
+  return Array.from(messages, (message) => ({ type: "validation" as const, message }));
 }

@@ -98,11 +98,8 @@ const TemplateEditor = () => {
   );
 
   const handleSave = async () => {
-    const isValid = await templateForm.trigger();
-    if (!isValid) {
-      return;
-    }
-
+    // model.save validates first and returns errors that name the field; the alert
+    // below shows them.
     const result = await model.save(templateForm.getValues());
     if (shouldNavigateToTemplatesAfterSave({ id, result })) {
       navigate(buildConsoleTemplatesPath());

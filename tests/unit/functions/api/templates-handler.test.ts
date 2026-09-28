@@ -296,6 +296,57 @@ describe('Templates Handlers', () => {
     expect(inserted.rules).toContain('required-field');
   });
 
+  it('names the invalid field in template payload errors', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({ seoDescription: 'x'.repeat(321), expected_version: 1 }),
+    }), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain('seoDescription');
+    expect(data.details).toEqual(expect.objectContaining({ field: 'seoDescription' }));
+  });
+
+  it('keeps a suffixed slug within the slug limit when the title slug is taken', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([]) // template count
+      .mockResolvedValueOnce([{ id: 'other-template' }]) // base slug taken
+      .mockResolvedValueOnce([]); // suffixed slug free
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'a'.repeat(160), sections: [] }),
+    }), mockEnv);
+
+    expect(response.status).toBe(200);
+    const inserted = dbMocks.insertChain.values.mock.calls[0][0];
+    expect(inserted.slug.length).toBeLessThanOrEqual(160);
+    expect(inserted.slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+  });
+
+  it('keeps a conflict-suffixed slug within the slug limit on update', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        { id: 'template-1', user_id: 'user-123', owner_type: 'user', team_id: null, items: '[]', version: 1, is_public: false },
+      ])
+      .mockResolvedValueOnce([{ id: 'other-template' }]);
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({ slug: 'b'.repeat(160), expected_version: 1 }),
+    }), mockEnv);
+
+    expect(response.status).toBe(200);
+    const storedSlug = dbMocks.updateChain.set.mock.calls[0][0].slug;
+    expect(storedSlug.length).toBeLessThanOrEqual(160);
+    expect(storedSlug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+  });
+
   it('should enforce free plan template limit', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 1 }]);

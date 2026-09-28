@@ -126,6 +126,34 @@ describe("persistTemplateSave", () => {
     expect(dependencies.updateTemplate).not.toHaveBeenCalled();
   });
 
+  it("does not resend a stored slug the user did not change", async () => {
+    // Stored slugs can predate today's limits; resending one would fail validation or move the URL.
+    const storedSlug = `${"a".repeat(160)}-1a2b3c4d`;
+    const dependencies = buildDependencies();
+
+    await persistTemplateSave(
+      dependencies,
+      buildInput({ id: "template-1", expectedVersion: 3, seoUrl: storedSlug, storedSlug }),
+    );
+
+    const payload = dependencies.updateTemplate.mock.calls[0][0];
+    expect(payload.slug).toBeUndefined();
+    expect(payload.seoUrl).toBeUndefined();
+  });
+
+  it("sends a slug the user changed", async () => {
+    const dependencies = buildDependencies();
+
+    await persistTemplateSave(
+      dependencies,
+      buildInput({ id: "template-1", expectedVersion: 3, seoUrl: "new-slug", storedSlug: "old-slug" }),
+    );
+
+    expect(dependencies.updateTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ slug: "new-slug", seoUrl: "new-slug" }),
+    );
+  });
+
   it("returns failure when create rejects", async () => {
     const dependencies = buildDependencies({
       createTemplate: vi.fn().mockRejectedValue(new Error("create failed")),
