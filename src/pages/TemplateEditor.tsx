@@ -55,10 +55,17 @@ export const shouldLockTemplateEditorWhileSaving = (params: {
   isSaving: boolean;
 }): boolean => params.isSaving && !params.id;
 
-const TemplateEditor = () => {
-  const { id } = useParams();
+type TemplateEditorModel = ReturnType<typeof useTemplateEditorModel>;
+
+type TemplateEditorFormProps = {
+  id?: string;
+  model: TemplateEditorModel;
+};
+
+// Mounted only once the template has loaded (see TemplateEditor), so the form, the
+// outline, and the header start from the loaded values.
+const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
   const navigate = useNavigate();
-  const model = useTemplateEditorModel({ id });
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   // The last save was refused because someone saved the template after it loaded.
   const [editConflict, setEditConflict] = useState(false);
@@ -92,6 +99,8 @@ const TemplateEditor = () => {
     hasPendingUploads,
   });
 
+  // The form starts from model.initialValues; this follows a later change (the new
+  // template's defaults are set once the model mounts).
   useEffect(() => {
     templateForm.reset(model.initialValues);
   }, [model.initialValues, templateForm]);
@@ -161,31 +170,6 @@ const TemplateEditor = () => {
     setEditConflict(false);
     model.reload();
   };
-
-  if (model.loading) {
-    return (
-      <div className="flex h-52 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (model.loadError) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-10">
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Unable to load template</AlertTitle>
-        <AlertDescription>{model.loadError}</AlertDescription>
-        </Alert>
-        <div className="mt-4">
-          <Button variant="outline" onClick={() => navigate(buildConsoleTemplatesPath())}>
-            Back to Templates
-          </Button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -316,6 +300,44 @@ const TemplateEditor = () => {
       </Dialog>
     </div>
   );
+};
+
+// Shows the spinner or the load error, and creates the editor only once the template
+// has loaded. A form created earlier would start from the blank defaults and be reset
+// after the outline mounted, so the first frame showed "New Template" and one empty
+// section. Reloading (Load latest version) passes through loading again, which
+// remounts the editor with the reloaded values.
+const TemplateEditor = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const model = useTemplateEditorModel({ id });
+
+  if (model.loading) {
+    return (
+      <div className="flex h-52 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (model.loadError) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-10">
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Unable to load template</AlertTitle>
+        <AlertDescription>{model.loadError}</AlertDescription>
+        </Alert>
+        <div className="mt-4">
+          <Button variant="outline" onClick={() => navigate(buildConsoleTemplatesPath())}>
+            Back to Templates
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return <TemplateEditorForm id={id} key={id ?? "new"} model={model} />;
 };
 
 export default TemplateEditor;

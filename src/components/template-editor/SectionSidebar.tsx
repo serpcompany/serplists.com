@@ -98,18 +98,39 @@ export function SectionSidebar({
     useState<OutlineDragState | null>(null);
   const [outlineDropTarget, setOutlineDropTarget] =
     useState<OutlineDropTarget | null>(null);
-  const [expandedSections, setExpandedSections] = useState<Set<number>>(
-    new Set(sectionsFieldArray.fields.map((_, index) => index)),
+  // Sections the user collapsed, by section id; every other section is expanded. The
+  // outline can mount before the template loads (a reset then replaces every section),
+  // and a Clipy draft or a save resets the form too, so expansion must not be seeded
+  // from the sections present at mount. Keyed by id, a collapsed section stays
+  // collapsed when it moves or the form is reset to the saved values.
+  const [collapsedSectionIds, setCollapsedSectionIds] = useState<Set<string>>(
+    () => new Set(),
   );
 
-  function toggleSection(sectionIndex: number): void {
-    setExpandedSections((current) => {
+  function toggleSection(sectionId: string): void {
+    setCollapsedSectionIds((current) => {
       const next = new Set(current);
-      if (next.has(sectionIndex)) {
-        next.delete(sectionIndex);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
       } else {
-        next.add(sectionIndex);
+        next.add(sectionId);
       }
+      return next;
+    });
+  }
+
+  function expandSection(sectionId: string | undefined): void {
+    if (!sectionId) {
+      return;
+    }
+
+    setCollapsedSectionIds((current) => {
+      if (!current.has(sectionId)) {
+        return current;
+      }
+
+      const next = new Set(current);
+      next.delete(sectionId);
       return next;
     });
   }
@@ -122,12 +143,8 @@ export function SectionSidebar({
 
   function handleAddSection(): void {
     const nextIndex = sectionsFieldArray.fields.length;
+    // A new section has a new id, so it starts expanded.
     sectionsFieldArray.append(createTemplateEditorSection());
-    setExpandedSections((current) => {
-      const next = new Set(current);
-      next.add(nextIndex);
-      return next;
-    });
     onSelectSection(nextIndex);
   }
 
@@ -138,17 +155,6 @@ export function SectionSidebar({
     }
 
     sectionsFieldArray.remove(sectionIndex);
-    setExpandedSections((current) => {
-      const next = new Set<number>();
-      for (const index of current) {
-        if (index === sectionIndex) {
-          continue;
-        }
-
-        next.add(index > sectionIndex ? index - 1 : index);
-      }
-      return next;
-    });
     onSelectSection(Math.max(0, sectionIndex - 1));
   }
 
@@ -159,7 +165,7 @@ export function SectionSidebar({
       [...currentItems, createTemplateEditorItem()],
       { shouldDirty: true, shouldTouch: true, shouldValidate: true },
     );
-    setExpandedSections((current) => new Set(current).add(sectionIndex));
+    expandSection(getValues(`sections.${sectionIndex}.id`));
     onSelectItem(sectionIndex, currentItems.length);
   }
 
@@ -301,11 +307,6 @@ export function SectionSidebar({
 
     const fromIndex = drag.sectionIndex;
     sectionsFieldArray.move(fromIndex, toIndex);
-    setExpandedSections((current) =>
-      new Set(
-        [...current].map((index) => remapIndexAfterMove(index, fromIndex, toIndex)),
-      ),
-    );
 
     const nextSelectedSection = remapIndexAfterMove(
       selectedSectionIndex,
@@ -380,7 +381,7 @@ export function SectionSidebar({
               outlineSelectionActive &&
               selectedSectionIndex === sectionIndex &&
               selectedItemIndex === null;
-            const isExpanded = expandedSections.has(sectionIndex);
+            const isExpanded = !collapsedSectionIds.has(sectionField.id);
             const sectionDropEdge =
               outlineDropTarget?.kind === "section" &&
               outlineDropTarget.sectionIndex === sectionIndex
@@ -433,7 +434,7 @@ export function SectionSidebar({
                         ? `Collapse ${section?.title || buildSectionFallbackLabel(sectionIndex)}`
                         : `Expand ${section?.title || buildSectionFallbackLabel(sectionIndex)}`
                     }
-                    onClick={() => toggleSection(sectionIndex)}
+                    onClick={() => toggleSection(sectionField.id)}
                     className="flex h-7 w-6 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
                     type="button"
                   >

@@ -11,6 +11,7 @@ const mockUseTemplateEditorModel = vi.fn();
 const mockUseTemplateEditorState = vi.fn();
 const mockUseTemplateEditorAccess = vi.fn();
 const mockUsePendingTemplateEditorUploads = vi.fn();
+const useFormCalls = vi.fn();
 
 const buildAccess = (overrides: Record<string, unknown> = {}) => ({
   draft: null,
@@ -45,7 +46,19 @@ vi.mock('@/features/template-editor/pendingUploads', async (importOriginal) => (
     mockUsePendingTemplateEditorUploads(...args),
 }));
 
+vi.mock('react-hook-form', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-hook-form')>();
+  return {
+    ...actual,
+    useForm: (props?: Parameters<typeof actual.useForm>[0]) => {
+      useFormCalls(props);
+      return actual.useForm(props);
+    },
+  };
+});
+
 beforeEach(() => {
+  useFormCalls.mockClear();
   mockUseTemplateEditorAccess.mockReturnValue(buildAccess());
   mockUsePendingTemplateEditorUploads.mockImplementation(() => ({
     uploads: createPendingUploads(),
@@ -249,5 +262,75 @@ describe('TemplateEditor page', () => {
     );
 
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Uploading\.\.\.<\/button>/);
+  });
+
+  const editorState = () => ({
+    selectedSectionIndex: 0,
+    selectedItemIndex: null,
+    showingSEO: false,
+    showingTemplateInfo: true,
+    errors: [],
+    setErrors: vi.fn(),
+    handleSelectSection: vi.fn(),
+    handleSelectItem: vi.fn(),
+    handleSelectSEO: vi.fn(),
+    handleSelectTemplateInfo: vi.fn(),
+  });
+
+  // A form created while loading starts from the blank defaults and is reset later,
+  // after the outline has mounted: one frame of "New Template", and only the first
+  // loaded section expanded.
+  it('creates the editor form only once the template has loaded', async () => {
+    mockUseTemplateEditorModel.mockReturnValue({
+      initialValues: buildTemplateEditorFormValues(),
+      isSaving: false,
+      loading: true,
+      loadError: null,
+      save: vi.fn(),
+      templateSlug: undefined,
+    });
+    mockUseTemplateEditorState.mockReturnValue(editorState());
+
+    const html = await renderEditorAt(
+      '/dashboard/templates/template-1/edit',
+      '/dashboard/templates/:id/edit',
+    );
+
+    expect(html).toContain('animate-spin');
+    expect(html).not.toContain('New Template');
+    expect(useFormCalls).not.toHaveBeenCalled();
+  });
+
+  it('starts the editor from the loaded template, every section expanded', async () => {
+    const sections = ['Before', 'During', 'After'].map((title, index) => ({
+      id: `section-${index}`,
+      title,
+      items: [{ id: `item-${index}`, title: `${title} task`, contents: [] }],
+    }));
+    mockUseTemplateEditorModel.mockReturnValue({
+      initialValues: buildTemplateEditorFormValues({ title: 'Moving checklist', sections }),
+      isSaving: false,
+      loading: false,
+      loadError: null,
+      save: vi.fn(),
+      templateSlug: 'moving-checklist',
+    });
+    mockUseTemplateEditorState.mockReturnValue(editorState());
+
+    const html = await renderEditorAt(
+      '/dashboard/templates/template-1/edit',
+      '/dashboard/templates/:id/edit',
+    );
+
+    expect(useFormCalls.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        defaultValues: expect.objectContaining({ title: 'Moving checklist' }),
+      }),
+    );
+    expect(html).not.toContain('New Template');
+    for (const title of ['Before', 'During', 'After']) {
+      expect(html).toContain(`aria-label="Collapse ${title}"`);
+      expect(html).toContain(`${title} task`);
+    }
   });
 });

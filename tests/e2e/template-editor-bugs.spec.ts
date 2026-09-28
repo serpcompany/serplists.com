@@ -941,6 +941,87 @@ test.describe("template editor regressions", () => {
     expect(uploadRequests).toBe(0);
   });
 
+  test("opens every section of a saved template expanded, from the first frame", async ({ page }) => {
+    await loginAsSeedUser(page);
+    const stamp = Date.now();
+    const templateTitle = `QA Outline ${stamp}`;
+    const sectionTitles = ["Before the move", "Moving day", "After the move"];
+    const templateId = await page.evaluate(async ({ title, titles, apiBaseUrl }) => {
+      const response = await fetch(`${apiBaseUrl}/templates`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title,
+          is_public: false,
+          sections: titles.map((sectionTitle, index) => ({
+            id: `outline-section-${index}`,
+            title: sectionTitle,
+            items: [{ id: `outline-task-${index}`, title: `${sectionTitle} task`, description: "" }],
+          })),
+        }),
+      });
+      if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
+      return ((await response.json()) as { id: string }).id;
+    }, { title: templateTitle, titles: sectionTitles, apiBaseUrl: DEV_API_BASE_URL });
+
+    // Record whether the header ever showed the blank form's title before the template.
+    await page.addInitScript(() => {
+      const w = window as unknown as { __sawNewTemplate?: boolean };
+      w.__sawNewTemplate = false;
+      new MutationObserver(() => {
+        const headers = Array.from(document.querySelectorAll("header"));
+        if (headers.some((header) => header.textContent?.includes("New Template"))) {
+          w.__sawNewTemplate = true;
+        }
+      }).observe(document, { childList: true, subtree: true, characterData: true });
+    });
+
+    await page.goto(`/dashboard/templates/${templateId}/edit`);
+    for (const title of sectionTitles) {
+      await expect(page.getByRole("button", { name: `Collapse ${title}` })).toBeVisible();
+      await expect(page.getByRole("button", { name: `${title} task`, exact: true })).toBeVisible();
+    }
+    expect(
+      await page.evaluate(() => (window as unknown as { __sawNewTemplate?: boolean }).__sawNewTemplate),
+    ).toBe(false);
+
+    await deleteTemplate(page, templateId);
+  });
+
+  test("expands every section of a generated Clipy draft", async ({ page }) => {
+    await loginAsSeedUser(page);
+    await page.route("**/api/templates/generate-from-clipy", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          draft: {
+            title: "Two part walkthrough",
+            description: "",
+            templateType: "checklist",
+            categories: [],
+            tags: [],
+            isPublic: false,
+            seoTitle: "",
+            seoDescription: "",
+            seoUrl: "",
+            sections: [
+              { id: "clipy_two_part_1", title: "Part one", items: [{ id: "clipy_two_part_1_task", title: "First part task", description: "" }] },
+              { id: "clipy_two_part_2", title: "Part two", items: [{ id: "clipy_two_part_2_task", title: "Second part task", description: "" }] },
+            ],
+          },
+        }),
+      });
+    });
+
+    await page.goto("/dashboard/templates/new");
+    await page.getByLabel("Public Clipy video link").fill("https://clipy.online/video/twopart1234");
+    await page.getByRole("button", { name: "Generate draft" }).click();
+
+    await expect(page.getByRole("button", { name: "Collapse Part two" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Second part task", exact: true })).toBeVisible();
+  });
+
   test("adds tags and categories before save and persists them", async ({ page }) => {
     const templateTitle = `QA Tags ${Date.now()}`;
     const tagName = `tag-${Date.now()}`;

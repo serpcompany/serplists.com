@@ -95,6 +95,12 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   types with guaranteed ids, and nested field factories.
 - Use React Hook Form field arrays for sections, items, content blocks, and
   sub-items instead of a second nested state tree.
+- The editor page creates its form only after the template has loaded
+  (`TemplateEditorForm` in `src/pages/TemplateEditor.tsx`), so nothing mounts against
+  the blank defaults. UI state about sections, such as which ones the outline has
+  collapsed, is keyed by section id and never seeded from the sections present at
+  mount: a Clipy draft, a restored draft, or a save replaces the sections with
+  `reset()`.
 - Stored content is not validated on import (TD-3), so `buildTemplateEditorFormValues`
   coerces it into values the editor schema accepts: numeric ids and values become
   strings, an unknown block type becomes a text block that keeps its value, invalid
