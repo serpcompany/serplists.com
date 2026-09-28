@@ -12,7 +12,7 @@ interface VideoEmbedProps {
 
 export const VideoEmbed: React.FC<VideoEmbedProps> = ({ 
   url, 
-  title = "YouTube video",
+  title = "Embedded video",
   className = "h-64 w-full rounded-md"
 }) => {
   const source = getVideoEmbedSource(url);
@@ -36,6 +36,21 @@ export const VideoEmbed: React.FC<VideoEmbedProps> = ({
             <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />
           </a>
         ) : null}
+      </div>
+    );
+  }
+
+  if (source?.kind === 'link') {
+    // Embed code from an origin the Content-Security-Policy does not frame.
+    return (
+      <div className="p-4">
+        <a
+          {...getOutboundLinkProps(source.url)}
+          className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+        >
+          Open video
+          <ExternalLink aria-hidden="true" className="h-4 w-4" />
+        </a>
       </div>
     );
   }

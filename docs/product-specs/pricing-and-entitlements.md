@@ -118,7 +118,10 @@ instead of inferring access state from message text:
 
 Billing status query keys must include the current user id (or an explicit
 guest marker). Never reuse a cached plan between accounts, and do not render a
-Free or Pro label as known while billing status is still loading.
+Free or Pro label as known while billing status is still loading. If billing
+status fails to load, the plan is unknown, not Free: show "Unavailable" with a
+Retry, and do not show upgrade prompts, plan gates, or subscription actions until
+it loads (`getBillingPlanStatus` in `src/lib/billing.ts`).
 
 ### Manual personal-plan overrides
 

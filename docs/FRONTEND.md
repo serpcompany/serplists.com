@@ -36,7 +36,13 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
 - Contexts and feature models own server state with React Query. Query keys include
   the user id and the active Ownership Context so Personal and Organization data
   never mix; switching context invalidates Template and Run queries. Billing keys
-  include the user id; never show a Free or Pro label while status is loading.
+  include the user id; never show a Free or Pro label while status is loading, and
+  treat a failed status as unknown, never Free (`getBillingPlanStatus`).
+- React Query v5 reports a failed first load as `isLoading: false` with no data, so
+  a list that only checks `isLoading` shows its empty state for an error. Render
+  query-backed lists with `QueryListState` (`src/components/shared/QueryListState.tsx`):
+  loading, a load error with Retry, the empty state only for a loaded empty list,
+  and the last loaded list (with a Retry notice) when a refresh fails.
 - Template and run lists load on demand. `TemplatesProvider` wraps every route but
   never fetches them. A page that reads `templates` (the public catalog) calls
   `useTemplateLists({ catalog: true, workspace: false })`, one that reads `allTemplates`
@@ -45,6 +51,10 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
   ([D1 cost](design-docs/d1-cost.md)), so pages that only need official templates use
   the bundled `repoTemplates`. The catalog's query key has no user id because the
   catalog is the same for everyone.
+- After a write, reload the affected query with `reloadQuery`
+  (`src/lib/queryReload.ts`), not `refetch()` or `fetchQuery`. Those join a fetch
+  already in flight (a first load, for `refetch()`), which read the server before
+  the write and puts the old list back when it lands.
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.

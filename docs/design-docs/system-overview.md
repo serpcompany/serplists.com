@@ -132,6 +132,7 @@ JSON fields:
 - User entitlements come from user overrides, dev test personas, Stripe subscriptions, or Free fallback.
 - Organization entitlements come from the legacy `team_entitlement_overrides` table.
 - Free limits are currently 1 Template and 3 active Runs. Paid Personal and Organization contexts have unlimited Templates and active Runs.
+- A count followed by a separate insert lets concurrent requests all pass a limit, so enforce the active Run limit inside the insert itself with the guarded statements in `functions/api/utils/active-run-limit.ts` (web run create and restore and MCP `start_run` do); a pre-check count only gives an early, friendly error.
 
 ## Audit And History
 

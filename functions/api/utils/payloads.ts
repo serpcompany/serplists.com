@@ -28,6 +28,13 @@ const templateRuleSchema = z.object({
   severity: z.enum(["error", "warning"]).optional(),
 });
 
+export const templateSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(TEMPLATE_SLUG_MAX)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, numbers, and hyphens only");
+
 export const templatePayloadSchema = z.object({
   teamId: z.string().trim().min(1).optional(),
   team_id: z.string().trim().min(1).optional(),
@@ -43,20 +50,15 @@ export const templatePayloadSchema = z.object({
   tags: stringListField(TEMPLATE_LIST_MAX_ITEMS, TEMPLATE_LIST_ITEM_MAX),
   sections: z.unknown().optional(),
   items: z.unknown().optional(),
-  slug: z
-    .string()
-    .trim()
-    .min(1)
-    .max(TEMPLATE_SLUG_MAX)
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug must be lowercase letters, numbers, and hyphens only")
-    .optional(),
+  slug: templateSlugSchema.optional(),
   expected_version: z.number().int().positive().optional(),
 });
 
 // Saves resend every stored field, and stored values can predate these bounds (imports,
-// clones, legacy slugs). So PUT checks only types on the wire; the handler validates the
-// fields that actually change against templatePayloadSchema once it has read the row,
-// and normalizes a changed slug instead of rejecting it.
+// clones, legacy slugs such as those migrations 0002 and 0005 backfilled). So PUT checks
+// only types on the wire; the handler validates the fields that actually change against
+// templatePayloadSchema once it has read the row, and normalizes a changed slug instead
+// of rejecting it (resolveRequestedSlug).
 const looseStringList = z.union([z.array(z.string().trim()), z.string().trim()]).optional();
 export const templateUpdatePayloadSchema = templatePayloadSchema.extend({
   title: z.string().trim().optional(),

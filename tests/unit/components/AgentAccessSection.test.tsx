@@ -1,12 +1,15 @@
 import React from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  AgentAccessSection,
   AgentAccessSectionView,
   type AgentAccessSectionViewProps,
 } from '@/components/account/AgentAccessSection';
 import type { AgentKey } from '@/lib/api';
+import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
 
 const activeKey: AgentKey = {
   id: 'key-1',
@@ -21,16 +24,19 @@ const activeKey: AgentKey = {
 const defaultProps: AgentAccessSectionViewProps = {
   createdKey: null,
   isCreating: false,
+  isError: false,
   isLoading: false,
   keys: [],
   keyName: '',
   mcpEndpoint: 'https://demo.serplists.test/api/mcp',
+  mcpHostMismatch: false,
   revokingKeyId: null,
   onCopyEndpoint: vi.fn(),
   onCopySecret: vi.fn(),
   onCreate: vi.fn(),
   onDismissSecret: vi.fn(),
   onKeyNameChange: vi.fn(),
+  onRetry: vi.fn(),
   onRevoke: vi.fn(),
 };
 
@@ -96,5 +102,94 @@ describe('AgentAccessSectionView', () => {
     expect(html).toContain('Revoked');
     expect(html).toContain('slrk_demo12...');
     expect(html).not.toContain('slrk_secret_visible_once');
+  });
+
+  it('shows a load error with Retry instead of an empty key list when the keys failed to load', () => {
+    const html = renderView({ isError: true, keys: undefined });
+
+    expect(html).toContain('load your Run Keys');
+    expect(html).toContain('Retry');
+    expect(html).not.toContain('No Run Keys yet.');
+    expect(html).not.toContain('Loading keys...');
+    expect(html).toContain('Create Run Key');
+  });
+
+  it('keeps the loaded keys revocable when a later refresh fails', () => {
+    const html = renderView({ isError: true, keys: [activeKey] });
+
+    expect(html).toContain('Codex SOP Runner');
+    expect(html).toContain('Revoke');
+    expect(html).toContain('refresh your Run Keys');
+    expect(html).toContain('Retry');
+    expect(html).not.toContain('No Run Keys yet.');
+  });
+});
+
+describe('AgentAccessSection', () => {
+  const renderSection = (queryClient: ReturnType<typeof createTestQueryClient>) =>
+    renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <AgentAccessSection />
+      </QueryClientProvider>,
+    );
+
+  it('shows the endpoint the server accepts, not the address the page was opened on', () => {
+    // A per-deployment URL such as https://3f2a1b9c.serp-checklists.pages.dev is not on the
+    // MCP host allowlist, so the server points agents at the canonical staging address.
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(['agent-keys'], []);
+    queryClient.setQueryData(['agent-mcp-connection'], {
+      mcpEndpoint: 'https://staging.serplists.com/api/mcp',
+      hostMismatch: true,
+    });
+
+    const html = renderSection(queryClient);
+
+    expect(html).toContain('value="https://staging.serplists.com/api/mcp"');
+    expect(html).toContain('url = &quot;https://staging.serplists.com/api/mcp&quot;');
+    expect(html).toContain('uses staging.serplists.com');
+    expect(html).not.toContain('localhost:8788/api/mcp');
+  });
+
+  it('shows the endpoint for the current address without a notice when the server accepts it', () => {
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(['agent-keys'], []);
+    queryClient.setQueryData(['agent-mcp-connection'], {
+      mcpEndpoint: 'https://staging.serplists.com/api/mcp',
+      hostMismatch: false,
+    });
+
+    const html = renderSection(queryClient);
+
+    expect(html).toContain('value="https://staging.serplists.com/api/mcp"');
+    expect(html).not.toContain('can&#x27;t connect through this address');
+  });
+
+  it('says MCP is unavailable instead of showing an endpoint the server rejects', () => {
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(['agent-keys'], []);
+    queryClient.setQueryData(['agent-mcp-connection'], { mcpEndpoint: null, hostMismatch: true });
+
+    const html = renderSection(queryClient);
+
+    expect(html).toContain('can&#x27;t connect through this address');
+    expect(html).not.toContain('Copy endpoint');
+    expect(html).not.toContain('[mcp_servers.serplists]');
+    expect(html).not.toContain('/api/mcp');
+  });
+
+  it('does not report "No Run Keys yet." when loading the keys failed', () => {
+    const queryClient = createTestQueryClient();
+    seedQueryError(queryClient, ['agent-keys']);
+
+    const html = renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <AgentAccessSection />
+      </QueryClientProvider>,
+    );
+
+    expect(html).toContain('load your Run Keys');
+    expect(html).toContain('Retry');
+    expect(html).not.toContain('No Run Keys yet.');
   });
 });

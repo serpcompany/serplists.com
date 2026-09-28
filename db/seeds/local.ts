@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, count, eq, inArray, or } from "drizzle-orm";
 import {
   account,
   audit_events,
@@ -78,79 +78,99 @@ function ownedTestUserIds(db: LocalDb) {
     .where(or(inArray(users.id, TEST_USER_IDS), inArray(users.email, TEST_USER_EMAILS)));
 }
 
+// The fixture Organizations plus any Organization a test user created in the app.
+function ownedTestTeamIds(db: LocalDb) {
+  return db
+    .select({ id: teams.id })
+    .from(teams)
+    .where(or(inArray(teams.id, TEST_TEAM_IDS), inArray(teams.created_by_user_id, ownedTestUserIds(db))));
+}
+
+/**
+ * Deletes the test Users and everything they own or created, in one D1 batch:
+ * if any statement fails, nothing is deleted. The subqueries run per statement,
+ * so Organizations are deleted after every statement that looks them up, and
+ * Users last. teams.created_by_user_id, team_invites.invited_by_user_id and
+ * template_versions.changed_by_user_id are ON DELETE RESTRICT, so rows a test
+ * User created in Organizations that survive (invites, Template history) are
+ * deleted too.
+ */
 export async function cleanupLocalTestData(db: LocalDb): Promise<void> {
   const testUserIds = ownedTestUserIds(db);
+  const testTeamIds = ownedTestTeamIds(db);
 
-  await db
-    .delete(checklist_runs)
-    .where(
-      or(
-        inArray(checklist_runs.team_id, TEST_TEAM_IDS),
-        inArray(checklist_runs.template_id, TEST_TEAM_TEMPLATE_IDS),
-        inArray(checklist_runs.user_id, testUserIds),
-        inArray(checklist_runs.id, TEST_RUN_IDS),
+  await db.batch([
+    db
+      .delete(checklist_runs)
+      .where(
+        or(
+          inArray(checklist_runs.team_id, testTeamIds),
+          inArray(checklist_runs.template_id, TEST_TEAM_TEMPLATE_IDS),
+          inArray(checklist_runs.user_id, testUserIds),
+          inArray(checklist_runs.id, TEST_RUN_IDS),
+        ),
       ),
-    );
-  await db
-    .delete(template_versions)
-    .where(
-      or(
-        inArray(template_versions.id, TEST_VERSION_IDS),
-        inArray(template_versions.template_id, TEST_TEAM_TEMPLATE_IDS),
+    db
+      .delete(template_versions)
+      .where(
+        or(
+          inArray(template_versions.id, TEST_VERSION_IDS),
+          inArray(template_versions.template_id, TEST_TEAM_TEMPLATE_IDS),
+          inArray(template_versions.changed_by_user_id, testUserIds),
+        ),
       ),
-    );
-  await db
-    .delete(audit_events)
-    .where(
-      or(
-        inArray(audit_events.subject_id, TEST_TEAM_IDS),
-        inArray(audit_events.id, TEST_AUDIT_IDS),
-        inArray(audit_events.resource_id, [
-          ...TEST_TEAM_IDS,
-          ...TEST_TEAM_TEMPLATE_IDS,
-          "team-invite-seed-client-john",
-        ]),
+    db
+      .delete(audit_events)
+      .where(
+        or(
+          inArray(audit_events.subject_id, TEST_TEAM_IDS),
+          inArray(audit_events.subject_id, testTeamIds),
+          inArray(audit_events.id, TEST_AUDIT_IDS),
+          inArray(audit_events.resource_id, [
+            ...TEST_TEAM_IDS,
+            ...TEST_TEAM_TEMPLATE_IDS,
+            "team-invite-seed-client-john",
+          ]),
+        ),
       ),
-    );
-  await db
-    .delete(template_likes)
-    .where(
-      or(
-        inArray(template_likes.user_id, testUserIds),
-        inArray(template_likes.template_id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS]),
+    db
+      .delete(template_likes)
+      .where(
+        or(
+          inArray(template_likes.user_id, testUserIds),
+          inArray(template_likes.template_id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS]),
+        ),
       ),
-    );
-  await db
-    .delete(usage_analytics)
-    .where(
-      or(
-        inArray(usage_analytics.id, TEST_ANALYTICS_IDS),
-        inArray(usage_analytics.user_id, testUserIds),
+    db
+      .delete(usage_analytics)
+      .where(
+        or(
+          inArray(usage_analytics.id, TEST_ANALYTICS_IDS),
+          inArray(usage_analytics.user_id, testUserIds),
+        ),
       ),
-    );
-  await db
-    .delete(templates)
-    .where(
-      or(
-        inArray(templates.id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS]),
-        inArray(templates.team_id, TEST_TEAM_IDS),
-        inArray(templates.user_id, testUserIds),
+    db
+      .delete(templates)
+      .where(
+        or(
+          inArray(templates.id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS]),
+          inArray(templates.team_id, testTeamIds),
+          inArray(templates.user_id, testUserIds),
+        ),
       ),
-    );
-  await db
-    .delete(team_entitlement_overrides)
-    .where(inArray(team_entitlement_overrides.team_id, TEST_TEAM_IDS));
-  await db.delete(team_invites).where(inArray(team_invites.team_id, TEST_TEAM_IDS));
-  await db
-    .delete(team_members)
-    .where(or(inArray(team_members.team_id, TEST_TEAM_IDS), inArray(team_members.user_id, testUserIds)));
-  await db.delete(teams).where(inArray(teams.id, TEST_TEAM_IDS));
-  await db.delete(entitlement_overrides).where(inArray(entitlement_overrides.user_id, testUserIds));
-  await db.delete(session).where(inArray(session.userId, testUserIds));
-  await db.delete(account).where(inArray(account.userId, testUserIds));
-  await db
-    .delete(users)
-    .where(or(inArray(users.id, TEST_USER_IDS), inArray(users.email, TEST_USER_EMAILS)));
+    db.delete(team_entitlement_overrides).where(inArray(team_entitlement_overrides.team_id, testTeamIds)),
+    db
+      .delete(team_invites)
+      .where(or(inArray(team_invites.team_id, testTeamIds), inArray(team_invites.invited_by_user_id, testUserIds))),
+    db
+      .delete(team_members)
+      .where(or(inArray(team_members.team_id, testTeamIds), inArray(team_members.user_id, testUserIds))),
+    db.delete(teams).where(inArray(teams.id, testTeamIds)),
+    db.delete(entitlement_overrides).where(inArray(entitlement_overrides.user_id, testUserIds)),
+    db.delete(session).where(inArray(session.userId, testUserIds)),
+    db.delete(account).where(inArray(account.userId, testUserIds)),
+    db.delete(users).where(or(inArray(users.id, TEST_USER_IDS), inArray(users.email, TEST_USER_EMAILS))),
+  ]);
 }
 
 const personalTemplateItems = {
@@ -555,7 +575,7 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       is_public: true,
       category: json(["SEO", "Technical SEO"]),
       tags: json(["audit", "crawl", "indexation", "cwv"]),
-      slug: "technical-seo-audit-checklist",
+      slug: "sample-technical-seo-audit-checklist",
       created_at: at(0),
     },
     {
@@ -567,7 +587,7 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       is_public: true,
       category: json(["SEO", "Research"]),
       tags: json(["keywords", "intent", "mapping"]),
-      slug: "keyword-research-mapping-checklist",
+      slug: "sample-keyword-research-mapping-checklist",
       created_at: at(0),
     },
     {
@@ -579,7 +599,7 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       is_public: true,
       category: json(["Content", "SEO"]),
       tags: json(["refresh", "update", "on-page"]),
-      slug: "content-refresh-checklist",
+      slug: "sample-content-refresh-checklist",
       created_at: at(0),
     },
     {
@@ -603,7 +623,7 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       is_public: true,
       category: json(["SEO", "Local SEO"]),
       tags: json(["gbp", "local", "maps"]),
-      slug: "local-seo-gbp-checklist",
+      slug: "sample-local-seo-gbp-checklist",
       created_at: at(0),
     },
     {
@@ -642,6 +662,10 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       category: json(["Operations", "SEO"]),
       tags: json(["team", "launch", "qa"]),
       slug: "shared-growth-launch-checklist",
+      // Matches its newest template_versions row (version 2) below. A save writes history
+      // row version + 1, so a lower version makes every save collide and return 409.
+      // content_version stays 1: the seeded Run was started from that content.
+      version: 2,
       created_at: at(-3 * DAY),
       updated_at: at(-DAY),
     },
@@ -1040,6 +1064,54 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
   ]);
 }
 
+export type LocalSeedStatus = {
+  /** seed-test finished: the test Users exist and the row it writes last is there. */
+  testData: boolean;
+  /** db/seeds/official-templates.sql ran (one INSERT for all official Templates). */
+  officialTemplates: boolean;
+  /** seed-official-login ran: the SERP persona can sign in. */
+  officialLogin: boolean;
+};
+
+// seedLocalTestData inserts audit events last and this one last among them, and it
+// runs without a transaction, so a seed cut short (an error, Ctrl+C) has no marker.
+const LOCAL_SEED_COMPLETE_AUDIT_ID = TEST_AUDIT_IDS[TEST_AUDIT_IDS.length - 1];
+const OFFICIAL_SEED_TEMPLATE_ID = "serp-template-technical-seo-audit";
+const OFFICIAL_LOGIN_ACCOUNT_ID = "account-serp-user-credential";
+
+/**
+ * Which local seed stages have completed. `pnpm run setup` reads this after migrating
+ * and seeds only what is missing, so a failed or interrupted seed is finished on the
+ * next run and data already there is never reset. A database without the tables
+ * (never migrated) reads as not seeded.
+ */
+export async function readLocalSeedStatus(db: LocalDb): Promise<LocalSeedStatus> {
+  try {
+    const [[testUsers], [marker], [officialTemplate], [officialLogin]] = await Promise.all([
+      db.select({ value: count() }).from(users).where(inArray(users.email, TEST_USER_EMAILS)),
+      db.select({ value: count() }).from(audit_events).where(eq(audit_events.id, LOCAL_SEED_COMPLETE_AUDIT_ID)),
+      db
+        .select({ value: count() })
+        .from(templates)
+        .where(and(eq(templates.id, OFFICIAL_SEED_TEMPLATE_ID), eq(templates.user_id, "serp-user"))),
+      db
+        .select({ value: count() })
+        .from(account)
+        .where(and(eq(account.id, OFFICIAL_LOGIN_ACCOUNT_ID), eq(account.userId, "serp-user"))),
+    ]);
+    return {
+      testData: testUsers.value === TEST_USER_EMAILS.length && marker.value === 1,
+      officialTemplates: officialTemplate.value === 1,
+      officialLogin: officialLogin.value === 1,
+    };
+  } catch (error) {
+    if (/no such table/i.test(error instanceof Error ? `${error.message} ${String(error.cause ?? "")}` : String(error))) {
+      return { testData: false, officialTemplates: false, officialLogin: false };
+    }
+    throw error;
+  }
+}
+
 export async function seedOfficialLocalLogin(db: LocalDb): Promise<void> {
   const now = new Date(Math.floor(Date.now() / 1000) * 1000);
   const timestamp = sqliteTime(now);
@@ -1048,7 +1120,7 @@ export async function seedOfficialLocalLogin(db: LocalDb): Promise<void> {
     .delete(account)
     .where(and(eq(account.userId, "serp-user"), eq(account.providerId, "credential")));
   await db.insert(account).values({
-    id: "account-serp-user-credential",
+    id: OFFICIAL_LOGIN_ACCOUNT_ID,
     accountId: "serp-user",
     providerId: "credential",
     userId: "serp-user",

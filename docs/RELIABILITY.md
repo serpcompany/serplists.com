@@ -43,7 +43,12 @@ pass. The deploy workflow:
    `pnpm run verify:staging` for other branches
 3. builds with full git history (`fetch-depth: 0`), because sitemap `lastmod`
    values come from `git log`; a shallow clone would stamp every page with the
-   deploy date
+   deploy date, so `sitemap:generate` fails on one in CI. Each bundled Template is
+   dated by the newest commit on the built branch (first-parent) that changed its
+   content, read from the pack history (`scripts/lib/sitemapLastmod.ts`). The
+   committed `functions/sitemap/bundled-catalog.generated.json` is never trusted
+   for those dates, so a copy generated before an edit was committed cannot keep an
+   old date. Content that is not committed yet gets the local build time.
 4. runs `wrangler pages deploy ./dist --branch <branch>`
 5. probes the new deployment's `/api/health` (the Worker boots) and
    `/api/templates` (D1 is bound). A 5xx or no response fails the run; other
@@ -54,6 +59,11 @@ Cloudflare Pages settings:
 - Project name `serplists-com`, set directly in the workflow. Do not use the
   `serp-checklists.pages.dev` domain or the `wrangler.toml` `name` as the project name.
 - Domains: `serp-checklists.pages.dev`, `serplists.com`, `staging.serplists.com`.
+- Only `serplists.com` may be indexed. `public/_headers` sends
+  `X-Robots-Tag: noindex, nofollow` on `staging.serplists.com` and every `*.pages.dev`
+  host, and `SEOHead` points canonical links at `https://serplists.com` and defaults
+  robots to noindex on any other host (`src/lib/seo/siteOrigin.ts`). Leave robots.txt
+  crawlable on those hosts: a `Disallow` would hide the noindex from crawlers.
 - GitHub secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL`, `CLOUDFLARE_API_KEY`.
   The workflow uses email plus global key because the repo's legacy
   `CLOUDFLARE_API_TOKEN` could not read the Pages project.
@@ -63,7 +73,9 @@ Cloudflare Pages settings:
   to 22 in both workflows.
 
 To deploy by hand (rarely needed): `pnpm run build`, then
-`npx wrangler pages deploy ./dist --project-name serplists-com`.
+`npx wrangler pages deploy ./dist --project-name serplists-com`. Never deploy a
+`build:dev` bundle. `build` ignores `.dev.vars` and refuses a localhost
+`VITE_API_URL`, so a local API URL cannot ship.
 
 ## Observability
 
@@ -87,6 +99,12 @@ To deploy by hand (rarely needed): `pnpm run build`, then
   `checklists/shared/<shareToken>` and `teams/invites/<token>/accept`. Add any new
   route with a secret in its path there. Cloudflare's own request metadata still
   records the full URL, so limit who can read the runtime logs.
+- Handlers that catch their own errors must log them: the router's `api_error`
+  line only sees errors that reach it. Log errors with `describeErrorForLog()`,
+  which drops the bound parameters (user content) that Drizzle puts in a failed
+  query's message. The MCP endpoint (`/api/mcp`) answers tool failures with an
+  HTTP 200 JSON-RPC error, so look for its `mcp_tool_error`, `mcp_tool_invariant`,
+  and `mcp_auth_error` lines rather than a 5xx status.
 - Production: Cloudflare runtime logs for the Pages project. There is no external
   log sink, metrics, traces, or alerting yet.
 - Local: `pnpm run dev:all` mirrors output to `tmp/logs/dev-all.log`; search for
@@ -127,6 +145,12 @@ Common failures:
   production. They use an isolated stack: frontend `localhost:4173`, API
   `localhost:8788`, and D1 state in `.wrangler/smoke-state`. Keep both on the
   `localhost` host name; mixing `127.0.0.1` drops `SameSite=Lax` cookies.
+  `tests/e2e/run-smoke.mjs` seeds the same directory the API server runs on
+  (`PLAYWRIGHT_WRANGLER_PERSIST_TO`) whatever ports or URLs you preset, and a
+  preset `PLAYWRIGHT_WRANGLER_PERSIST_TO` must be a folder inside `.wrangler/`
+  other than `.wrangler/state`. It stops if a local `VITE_API_URL` or
+  `PLAYWRIGHT_API_URL` uses another port than `PLAYWRIGHT_API_PORT`, and seeds
+  nothing for a remote API or with `PLAYWRIGHT_REUSE_EXISTING_SERVER=1`.
 - e2e specs share one database, so `test:e2e:full` runs with one worker (TD-11).
 - Reuse stable test identities instead of registering a new account on every run.
   Production auth blocks known test-email domains; keep that coverage when auth

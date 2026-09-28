@@ -19,39 +19,21 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
 import { getAccessFailure } from "@/lib/api-errors";
-import { getBillingStatusQueryKey } from "@/lib/billing";
+import { getBillingPlanStatus, getBillingStatusQueryKey, PLAN_UNKNOWN_MESSAGE } from "@/lib/billing";
 import {
   formatExportSummaryMessage, formatImportFailure, formatImportSummaryMessage, getExportSummary, getImportSummaryFromError,
 } from "@/lib/templates/templateImportSummary";
 import { addPublicTemplatesToPack, selectPublicTemplatesForExport } from "@/lib/templates/portableExport";
 import { isPersonalTemplateOf } from "@/lib/templates/templateOwnership";
+import {
+  countOversizedAssets, MAX_IMPORT_FILE_BYTES, MAX_TEMPLATES_PER_IMPORT, SUPPORTED_IMPORT_EXTENSIONS,
+} from "@/lib/templates/templateImportLimits";
+import { QueryErrorNotice } from "@/components/shared/QueryListState";
 import { cn } from "@/lib/utils";
 
 interface TemplateBackupProps {
   className?: string;
 }
-
-const MAX_TEMPLATES_PER_IMPORT = 5;
-const MAX_ASSET_BYTES = 5 * 1024 * 1024;
-const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024; // 2MB
-const SUPPORTED_IMPORT_EXTENSIONS = [".json", ".md", ".markdown", ".yaml", ".yml"];
-
-const countOversizedAssets = (templates: ChecklistTemplate[]): number => {
-  let count = 0;
-  templates.forEach((template) => {
-    template.sections.forEach((section) => {
-      section.items.forEach((item) => {
-        item.contents?.forEach((content) => {
-          if (content.type !== "image" && content.type !== "video" && content.type !== "file") return;
-          if (typeof content.fileSize === "number" && content.fileSize > MAX_ASSET_BYTES) {
-            count += 1;
-          }
-        });
-      });
-    });
-  });
-  return count;
-};
 
 export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   className
@@ -78,9 +60,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     enabled: !!user,
     retry: false
   });
-  const plan = billing.data?.plan ?? "free";
+  // Never treat a loading or failed billing status as Free.
+  const planStatus = getBillingPlanStatus(billing);
   const billingEnabled = billing.data?.billingEnabled ?? true;
-  const hasBackupAccess = plan === "pro" || plan === "team";
+  const hasBackupAccess = planStatus === "pro" || planStatus === "team";
   const workspaceTemplateLabel = isTeamWorkspace ? "Organization Templates" : "My Templates";
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<TemplateImportResult | null>(null);
@@ -103,6 +86,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const exceedsTemplateLimit = importPreview ? importPreview.templates.length > MAX_TEMPLATES_PER_IMPORT : false;
 
   const handleUpgrade = async () => {
+    if (planStatus === "loading" || planStatus === "unknown") {
+      toast.error(planStatus === "loading" ? "Checking your plan. Try again in a moment." : PLAN_UNKNOWN_MESSAGE);
+      return;
+    }
     if (isTeamWorkspace) {
       toast.error("Template import/export requires a paid Organization plan.");
       return;
@@ -385,7 +372,11 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     </div>
 
     <div className="mt-6 space-y-6">
-          {user && !billing.isLoading && !hasBackupAccess ? (
+          {user && planStatus === "unknown" ? (
+            <QueryErrorNotice message={PLAN_UNKNOWN_MESSAGE} onRetry={() => void billing.refetch()} />
+          ) : null}
+
+          {user && planStatus === "free" ? (
             <div className="rounded-lg border p-4 bg-muted/50">
               <div className="flex items-start gap-3">
                 <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5" />

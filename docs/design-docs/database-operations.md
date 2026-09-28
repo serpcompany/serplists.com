@@ -69,8 +69,13 @@ pnpm run check:prod:d1-schema
 
 `verify:staging` and `verify:prod:d1` are non-destructive: they check bindings,
 list migration state, and detect schema drift without applying anything. If
-`check:prod:d1-schema` fails, production is missing tables or columns the deployed
-API needs; apply pending migrations before shipping the frontend.
+`check:prod:d1-schema` fails, production is missing tables, columns, named indexes
+or SQL-only triggers the deployed API needs; apply pending migrations before
+shipping the frontend. The check requires every Drizzle table, column and named
+index (`REQUIRED_D1_*` in `scripts/check-production-d1-schema-lib.mjs`, which a
+unit test keeps equal to `db/schema/`) and every trigger in
+`db/sql-only-schema.json`, on its table and with the recorded definition. Extra
+columns, indexes and tables are allowed.
 
 Never run `wrangler d1 execute ... --remote --file=...` for schema changes; use
 `db:migrate:d1:*` so D1 records the migration.
@@ -88,17 +93,81 @@ pnpm run db:migrate:d1:prod
 pnpm run check:prod:d1-schema
 ```
 
+A remote baseline needs exactly one of `--preview` (staging, as
+`db:migrations:baseline:staging` passes) or `--allow-production` (production). The
+script resolves the target the way Wrangler does: `DB` and `serp-checklists-db`
+both mean production unless `--preview` is set, so `--database DB` without
+`--preview` is refused. `--allow-production` is refused for anything that does not
+resolve to production, a name outside `wrangler.toml` is refused, and so is any
+remote run while `CLOUDFLARE_ENV` is set. The dry run prints the resolved database
+UUID.
+
 Use `--through 0021` only if the legacy-named `teams`/audit migration was already
-applied outside Wrangler. Fresh staging databases need no baseline.
+applied outside Wrangler. Never baseline past a migration whose objects are not
+already in the database: baselining only records ledger rows, and
+`check:prod:d1-schema` is what catches a gap. Fresh staging databases need no
+baseline.
 
 ## Seeds
 
 - Local: `pnpm run db:seed` (or `db:reset`, which also clears state) seeds test
   Users, Organization fixtures, invites, entitlement overrides, audit rows, and the
   official `serp` publisher with its Templates. Fixture ids keep legacy `team` names.
+  Before seeding, and in `db:cleanup:local`, one atomic batch deletes the test
+  Users and what they made while using the app: Organizations they created (with
+  every Template, Run and invite in them), invites they sent and Template history
+  they wrote in other Organizations. If any delete fails, nothing is deleted.
+  A seeded Template's `version` must be at least its newest `template_versions`
+  row: a save writes history row `version + 1`, so a lower value makes every save
+  fail with a 409 edit conflict. `tests/integration/local-d1-fixtures.test.ts`
+  checks this for every seeded Template and saves the seeded Organization Template.
+  The seed stages are listed once in `scripts/lib/local-d1-seed.mjs`.
+  `readLocalSeedStatus` (`db/seeds/local.ts`) marks each stage complete by the row
+  it writes last, so `pnpm run setup` seeds only the stages that are missing
+  (`tests/integration/setup-local-seed.test.ts`). If seedLocalTestData gains a later
+  insert, move the completion marker to it.
 - Staging: `pnpm run db:seed:official:staging` for official templates only, unless
   there is a deliberate test-data plan.
 - Production: never seed test Users or Organization fixtures.
+- Staging and production have no cleanup command. Deleting accounts or other data
+  in a remote database is a manual operation a human approves ([AGENTS.md](../../AGENTS.md)).
+  It has to resolve the `ON DELETE RESTRICT` references to `users` first:
+  `teams.created_by_user_id`, `team_invites.invited_by_user_id` and
+  `template_versions.changed_by_user_id`. It also has to target exact user ids,
+  never an email pattern. `tests/unit/scripts/package-scripts.test.ts` fails if a
+  package script runs a SQL file against a remote D1, other than the official
+  Template seed.
+- `db/seeds/official-templates.sql` skips rows whose id already exists, so reruns
+  are safe. Any other conflict (another Template with an official slug, or another
+  User with the `serp` email or username) fails with a UNIQUE constraint error
+  instead of silently dropping the row. Test-seed Templates use `sample-` slugs so
+  they never collide with official ones.
+- The `items` JSON in that file sits inside SQL string literals, and SQLite does
+  not process backslash escapes there. Write a line break as the JSON escape `\n`
+  (one backslash), never `\\n`, which stores a literal backslash and `n`.
+  `tests/unit/db/seeds/official-templates.test.ts` checks this. Because existing
+  rows are skipped, fixing the file does not repair a database that was already
+  seeded. Staging and production still hold the old text and need this data
+  migration, which does not exist yet. Add it as the next free migration number
+  after `0026`. A human approves applying it remotely:
+
+  ```sql
+  UPDATE templates SET items = replace(items, '\\n', '\n')
+  WHERE user_id = 'serp-user'
+    AND id IN ('serp-template-technical-seo-audit', 'serp-template-keyword-research-mapping',
+               'serp-template-content-refresh', 'serp-template-local-seo-gbp',
+               'serp-template-serp-features')
+    AND instr(items, '\\n') > 0;
+  ```
+
+  SQLite reads `'\\n'` as three characters and `'\n'` as two, so the statement
+  turns each double-escaped break into the JSON escape. The `instr` guard makes a
+  second run change nothing. Run against the old seed, it updates 4 rows (one
+  Template has no line breaks) and leaves them byte-identical to the fixed seed.
+  Leave `content_version` alone, so Runs are not offered an update. The Drizzle
+  schema does not change. Copies of these Templates and Runs started from them
+  keep the old text, so the display normalizer for legacy backslash-n text stays
+  until a human decides about that user data.
 
 ## Checking stored checklist content
 

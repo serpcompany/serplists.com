@@ -1,23 +1,15 @@
 import type { Env } from '../../api/types';
 import {
-  bundledInventoryLastmod,
-  cachedSitemap,
   handleInMemoryPagedSitemap,
   loadCategoryEntries,
-  mostRecentLastmod,
 } from '../../sitemap/shared';
+import { cachedSitemap } from '../../sitemap/cache';
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { env, params } = context;
-  return cachedSitemap(context, (request, revisions) => handleInMemoryPagedSitemap(
+  return cachedSitemap(context, (request) => handleInMemoryPagedSitemap(
     request,
     params.page,
-    () => loadCategoryEntries(
-      env,
-      mostRecentLastmod(
-        revisions.get('categories'),
-        bundledInventoryLastmod('categories'),
-      ),
-    ),
-  ));
+    () => loadCategoryEntries(env),
+  ), { kind: 'categories', page: params.page });
 };

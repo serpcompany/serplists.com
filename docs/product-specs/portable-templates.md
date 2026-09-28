@@ -317,6 +317,11 @@ JSON exports **do not** include R2 assets. If a template references uploaded fil
 - For live public-library publishing today, the imported template should be owned by the intended public publisher account before import, because author username is resolved from DB ownership, not from the portable JSON file.
 
 `seoUrl` is represented by the stored `slug` field and mapped back into the editor's `Custom URL Slug` input.
+A new or changed slug must be lowercase letters, numbers, and hyphens (160 characters
+at most). An update that echoes the stored slug unchanged is accepted even when that
+slug predates the rule (the legacy backfills in migrations 0002 and 0005), and it is
+never rewritten on an unrelated save. `GET /api/templates/slug/:slug` percent-decodes
+the slug before looking it up.
 
 ## Sections and items
 ```ts

@@ -54,6 +54,14 @@
   Personal templates and listing, starting, reading, and updating Personal runs.
   Keys are stored hashed. The MCP routes are off on remote hosts unless
   `PERSONAL_RUN_MCP_ENABLED=true`.
+- **`/api/mcp` answers only known hosts** (DNS-rebinding defense in
+  `functions/api/utils/agent-mcp-host.ts`): loopback hosts and the hosts in
+  `FRONTEND_URL` and `CORS_ALLOWED_ORIGINS`; any other host gets `403 Invalid Host`.
+  Per-deployment URLs such as `https://<hash>.<project>.pages.dev` are never listed,
+  so Agent Access asks the server which endpoint to show
+  (`GET /api/agent-keys/connection`). On a host the check rejects, it shows the
+  endpoint on the first configured origin with a note, or no endpoint when none is
+  configured. Never widen the check to a `pages.dev` suffix.
 - **Share links** (`/share/:token`) need no login, so the token is the only
   credential. `PUT /api/checklists/shared/:token` requires `expected_revision` and
   applies only completion, task notes, and status onto the stored run
@@ -105,10 +113,10 @@ and `.env.local` are deprecated. Production values are Cloudflare Pages secrets.
 | `STRIPE_PORTAL_CONFIGURATION_ID` | Required for self-serve subscription management |
 | `RESEND_API_KEY` or `USESEND_API_KEY` | At least one, for verification and reset emails; otherwise auth-email actions return `503 auth_email_unavailable` |
 | `EMAIL_FROM` | Optional sender override (default `noreply@mail.auth.serp.co`) |
-| `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | Optional CORS allowlist |
+| `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | Optional CORS allowlist; also the remote hosts `/api/mcp` accepts. The first valid one (`FRONTEND_URL` first) is the MCP endpoint Agent Access shows on any other host |
 | `R2_PUBLIC_BASE_URL` | Optional public file URL base |
 | `ENTITLEMENTS_ADMIN_SECRET` | Optional; enables the admin override endpoint (below) |
-| `PERSONAL_RUN_MCP_ENABLED`, `VITE_PERSONAL_RUN_MCP_ENABLED` | Optional; enable Run Key and MCP routes on a remote host (on by default only for localhost) |
+| `PERSONAL_RUN_MCP_ENABLED`, `VITE_PERSONAL_RUN_MCP_ENABLED` | Optional; enable Run Key and MCP routes on a remote host (on by default only for loopback hosts: `localhost`, `127.0.0.1`, `[::1]`; `false` turns them off there too) |
 
 Rules:
 
@@ -128,6 +136,9 @@ Rules:
   the process environment by an approved secret manager. `pnpm run
   stripe:local:scrub-live` removes production-only Stripe entries from a checkout.
 - `pnpm run secret:scan` (secretlint) runs in CI and on staged files at commit.
+  `scripts/secret-scan.mjs` scans every git-tracked file, or the files passed to
+  it, as literal paths through secretlint's engine. The secretlint CLI would read
+  route files such as `functions/api/[[route]].ts` as globs and skip them.
 - Keep preview and production Pages secrets separate.
 - GitHub Actions secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL`, and
   `CLOUDFLARE_API_KEY` for deploys; `CLAUDE_CODE_OAUTH_TOKEN` for Claude code review.
@@ -152,6 +163,27 @@ Applied in `functions/api/[[route]].ts` through `functions/api/utils/cors.ts`:
 
 Locally, the dev launcher keeps the frontend origin and the allowlist in sync when
 it moves ports. Do not hand-edit only one side.
+
+## Response headers
+
+`public/_headers` sets HSTS, `X-Frame-Options`, and the Content-Security-Policy on
+static responses (every SPA page). The Vite dev server never applies that file, so
+check policy changes on `wrangler pages dev` or a deployed host.
+
+- `frame-src` must list every video player origin in `EMBED_FRAME_ORIGINS`
+  (`src/lib/utils/embedOrigins.ts`): YouTube, youtube-nocookie, and Clipy.
+  `getVideoEmbedSource` frames only those origins; embed code from any other origin
+  renders as an "Open video" link instead of a frame the browser would refuse.
+- To support another provider, add its origin to both places.
+  `tests/unit/security/headers.test.ts` fails when they drift, or when a bundled
+  public template video would be blocked.
+- `script-src` lists each third-party script origin by name, never `https:`:
+  Google Tag Manager (`index.html`), the Cloudflare Web Analytics beacon
+  (`static.cloudflareinsights.com`, injected by Cloudflare) and Ahrefs Web Analytics
+  (`analytics.ahrefs.com`, loaded by a GTM tag). A tag added in GTM that loads a
+  script from a new origin needs that origin here, and in the list in
+  `tests/unit/security/headers.test.ts`; otherwise the browser blocks it.
+  `connect-src` already allows any `https:` host the beacons report to.
 
 ## Rate limits
 

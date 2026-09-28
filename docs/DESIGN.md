@@ -30,4 +30,5 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
   is the reference.
 - Show a neutral loading state rather than a guessed value (for example, never
   render a plan label before billing status loads).
-- Check layouts at desktop and mobile widths with `pnpm run ui:snap` (`--mobile`).
+- Check layouts at desktop and mobile widths with `pnpm run ui:snap` (add `--mobile`,
+  before or after the route).

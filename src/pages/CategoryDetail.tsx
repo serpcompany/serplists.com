@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
@@ -144,7 +145,7 @@ const CategoryDetail = () => {
     surface: 'category-templates',
     userId: user?.id,
   });
-  const { allCategories, templates } = useTemplateLibrary();
+  const { allCategories, templates, catalogLoading } = useTemplateLibrary();
 
   const slug = categorySlug ?? 'business';
   const categories = useMemo(
@@ -168,6 +169,15 @@ const CategoryDetail = () => {
   };
   const Icon = category.icon;
   const categoryTemplateCount = categoryStats?.count ?? 0;
+  // Registry categories render before any public Template uses them; keep those empty
+  // pages out of search results, but only once the catalog API has answered. Bundled
+  // Templates arrive first, so a count of 0 means nothing until then.
+  const isEmptyCategory = !catalogLoading && categoryTemplateCount === 0;
+  const emptyMessage = searchQuery.trim()
+    ? 'No templates found matching your search.'
+    : catalogLoading
+      ? 'Loading templates…'
+      : 'No public templates in this category yet.';
 
   const filteredTemplates = useMemo(() => {
     const base =
@@ -189,6 +199,8 @@ const CategoryDetail = () => {
   }, [searchQuery, slug, sortBy, templates]);
 
   if (!isKnownCategory) {
+    // A category only D1 Templates use is unknown until the catalog loads.
+    if (catalogLoading) return <LoadingSpinner message="Loading templates…" />;
     // An accented category's URL from before its letters were folded ('caf-guides').
     const renamed = findCategoryNameByLegacySlug(categories.map((item) => item.name), slug);
     return renamed ? <Navigate to={buildPublicCategoryPath(renamed)} replace /> : <NotFound />;
@@ -198,10 +210,15 @@ const CategoryDetail = () => {
     <div className="bg-background">
       <SEOHead
         title={`${category.name} Templates`}
-        description={`${categoryTemplateCount} templates for ${category.name}. ${category.description}`}
+        description={
+          catalogLoading
+            ? `Templates for ${category.name}. ${category.description}`
+            : `${categoryTemplateCount} templates for ${category.name}. ${category.description}`
+        }
         keywords={[category.name, 'checklist templates', 'workflow templates']}
         image={SEO_IMAGE_URL}
         url={`${CATEGORY_BASE_URL}/${encodeURIComponent(slug)}`}
+        robots={isEmptyCategory ? 'noindex, follow' : undefined}
       />
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6 flex items-center gap-2 text-sm">
@@ -225,9 +242,11 @@ const CategoryDetail = () => {
               {category.name}
             </h1>
             <p className="mt-1 text-muted-foreground">{category.description}</p>
-            <Badge className="mt-3" variant="secondary">
-              {categoryTemplateCount} templates
-            </Badge>
+            {catalogLoading ? null : (
+              <Badge className="mt-3" variant="secondary">
+                {categoryTemplateCount} templates
+              </Badge>
+            )}
           </div>
         </div>
 
@@ -309,9 +328,7 @@ const CategoryDetail = () => {
           </div>
         ) : (
           <div className="mt-6 rounded-xl border border-border bg-card p-12 text-center">
-            <p className="text-muted-foreground">
-              No templates found matching your search.
-            </p>
+            <p className="text-muted-foreground">{emptyMessage}</p>
           </div>
         )}
 

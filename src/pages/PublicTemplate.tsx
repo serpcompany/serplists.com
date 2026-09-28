@@ -16,7 +16,9 @@ import {
   startBillingCheckout,
 } from '@/lib/access-flow';
 import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
+import { buildCanonicalUrl } from '@/lib/seo/siteOrigin';
 import {
+  buildCanonicalPublicTemplatePath,
   buildConsoleRunPath,
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
@@ -142,6 +144,9 @@ const PublicTemplate = () => {
     ? resolvePublicTemplateOwnerSlug(displayTemplate)
     : null;
   const ownerPath = ownerSlug ? buildPublicProfilePath(ownerSlug) : null;
+  const canonicalPath = displayTemplate
+    ? buildCanonicalPublicTemplatePath(displayTemplate)
+    : null;
 
   if (loading) {
     return (
@@ -190,6 +195,7 @@ const PublicTemplate = () => {
         keywords={displayTemplate.categories || ['checklist', 'template']}
         type="article"
         publishedTime={displayTemplate.createdAt}
+        url={canonicalPath ? buildCanonicalUrl(canonicalPath) : undefined}
       />
       <PublicTemplateView
         template={displayTemplate}

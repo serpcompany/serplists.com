@@ -1,5 +1,5 @@
 import { Env } from '../types';
-import { generateSlug, truncateSlug } from '../utils/slug';
+import { decodeSlugPath, resolveRequestedSlug } from '../utils/slug';
 import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import {
@@ -12,7 +12,6 @@ import {
   templatePayloadSchema,
   templateUpdatePayloadSchema,
 } from '../utils/payloads';
-import { TEMPLATE_SLUG_MAX } from '../../../src/lib/schemas/templateLimits';
 import { json, jsonError } from '../utils/response';
 import { withEdgeCache } from '../utils/edge-cache';
 import { log } from '../utils/logger';
@@ -735,7 +734,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     // GET /api/templates/slug/:slug
     if (templatesSubpath[0] === 'slug' && templatesSubpath[1]) {
-      const slug = templatesSubpath.slice(1).join('/');
+      const slug = decodeSlugPath(templatesSubpath.slice(1));
+      if (!slug) return jsonError('Template not found', 404);
       const [template] = await withRulesColumnFallback((includeRules) =>
         selectTemplatesWithOwner(env, includeRules)
           .where(and(eq(templates.slug, slug), isNull(templates.deleted_at)))
@@ -1226,11 +1226,6 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     const rawBody = body as Record<string, unknown>;
 
     // Only update slug if explicitly provided (avoid breaking shared URLs on title edits).
-    // A changed slug is normalized to a valid one rather than rejected.
-    const requestedSlugValue = requestedSlug
-      ? truncateSlug(generateSlug(requestedSlug), TEMPLATE_SLUG_MAX) || null
-      : null;
-
     const now = new Date().toISOString();
     const updates: Record<string, unknown> = {};
     let syncedItems: string | null = null;
@@ -1312,12 +1307,14 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       });
     }
 
-    // A new custom slug with no letters or digits to keep ('Список') is an error, not ignored.
-    if (requestedSlug?.trim() && !requestedSlugValue && requestedSlug !== existingTemplate.slug) {
-      return jsonError('slug: Use Latin letters or numbers in the URL slug.', 400);
+    const slugRequest = resolveRequestedSlug(requestedSlug, existingTemplate.slug);
+    if (slugRequest.kind === 'invalid') return jsonError(slugRequest.message, 400);
+    // A body whose only field is the stored slug asks for nothing.
+    if (slugRequest.kind === 'unchanged' && Object.keys(updates).length === 0 && !incomingSections) {
+      return jsonError('No fields to update', 400);
     }
-    // Resending the stored slug is not a change, even when it predates today's slug rules.
-    if (requestedSlugValue && requestedSlug !== existingTemplate.slug && requestedSlugValue !== existingTemplate.slug) {
+    if (slugRequest.kind === 'changed') {
+      const requestedSlugValue = slugRequest.slug;
       const [conflict] = await db
         .select({ id: templates.id })
         .from(templates)

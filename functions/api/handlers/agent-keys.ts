@@ -2,9 +2,13 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
+import { resolveAgentMcpConnection } from "../utils/agent-mcp-host";
 import { createPersonalRunKeySecret } from "../utils/personal-run-key";
 import { json, jsonError } from "../utils/response";
 import { getSessionUserId } from "../utils/session";
+
+// GET /api/agent-keys/connection. Key ids are UUIDs, so this segment never names a key.
+const CONNECTION_PATH = "connection";
 
 const createKeyBodySchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(80, "Name must be 80 characters or fewer"),
@@ -38,6 +42,11 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
     return jsonError("Not found", 404);
   }
   const keyId = handlerPath[1];
+
+  if (request.method === "GET" && keyId === CONNECTION_PATH) {
+    return json(resolveAgentMcpConnection(request, env));
+  }
+
   const db = createDb(env);
   const { personal_run_keys } = schema;
 

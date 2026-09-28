@@ -76,6 +76,36 @@ function collectSqlColumnNames(value: unknown, seen = new Set<unknown>()): strin
   ];
 }
 
+function collectSqlParamValues(value: unknown, seen = new Set<unknown>()): unknown[] {
+  if (!value || typeof value !== 'object' || seen.has(value)) {
+    return [];
+  }
+
+  seen.add(value);
+  const record = value as Record<string, unknown>;
+  const own = 'encoder' in record && 'value' in record ? [record.value] : [];
+  const chunks = Array.isArray(record.queryChunks) ? record.queryChunks : [];
+
+  return [...own, ...chunks.flatMap((chunk) => collectSqlParamValues(chunk, seen))];
+}
+
+// Migrations 0002 and 0005 backfilled slugs from titles without stripping
+// punctuation, so older rows can hold slugs today's slug rule rejects.
+const legacySlugTemplate = () => ({
+  id: 'template-1',
+  user_id: 'user-123',
+  owner_type: 'user',
+  team_id: null,
+  title: 'Q&A: Launch plan',
+  description: '',
+  items: '[]',
+  version: 3,
+  is_public: false,
+  slug: 'qanda:-launch-plan-1a2b3c4d',
+  created_at: new Date().toISOString(),
+  updated_at: null,
+});
+
 describe('Templates Handlers', () => {
   let mockEnv: any;
 
@@ -1754,5 +1784,101 @@ describe('Templates Handlers', () => {
       expect(data.error).toMatch(/^slug: /);
       expect(dbMocks.db.batch).not.toHaveBeenCalled();
     });
+  });
+
+  it('saves a template whose stored legacy slug is echoed back unchanged', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([legacySlugTemplate()]);
+
+    const request = new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: 'Q&A: Launch plan (fixed typo)',
+        slug: 'qanda:-launch-plan-1a2b3c4d',
+        expected_version: 3,
+      }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+
+    expect(response.status).toBe(200);
+    const updates = dbMocks.updateChain.set.mock.calls[0][0];
+    expect(updates).toEqual(expect.objectContaining({ title: 'Q&A: Launch plan (fixed typo)' }));
+    expect(updates).not.toHaveProperty('slug');
+  });
+
+  it('toggles visibility on a template with a legacy slug', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([legacySlugTemplate()]);
+
+    const request = new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({ is_public: true, slug: 'qanda:-launch-plan-1a2b3c4d' }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+
+    expect(response.status).toBe(200);
+    const updates = dbMocks.updateChain.set.mock.calls[0][0];
+    expect(updates).toEqual(expect.objectContaining({ is_public: true }));
+    expect(updates).not.toHaveProperty('slug');
+  });
+
+  it('still rejects a changed slug the slug rule cannot keep anything of', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([legacySlugTemplate()]);
+
+    const request = new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({ title: 'Launch plan', slug: '?!?' }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toMatch(/^slug: /);
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+  });
+
+  it('rejects a PUT whose only field is the unchanged slug', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([legacySlugTemplate()]);
+
+    const request = new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({ slug: 'qanda:-launch-plan-1a2b3c4d' }),
+    });
+
+    const response = await handleTemplates(request, mockEnv);
+
+    expect(response.status).toBe(400);
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+  });
+
+  it('decodes percent-encoded slugs before looking them up', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      { ...legacySlugTemplate(), is_public: 1, owner_username: 'owner' },
+    ]);
+
+    const request = new Request(
+      `http://localhost/api/templates/slug/${encodeURIComponent('qanda:-launch-plan-1a2b3c4d')}`,
+      { method: 'GET' },
+    );
+    const response = await handleTemplates(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.slug).toBe('qanda:-launch-plan-1a2b3c4d');
+    const whereArg = dbMocks.selectChain.where.mock.calls[0][0];
+    expect(collectSqlParamValues(whereArg)).toContain('qanda:-launch-plan-1a2b3c4d');
+  });
+
+  it('answers a malformed percent-encoded slug with 404', async () => {
+    const request = new Request('http://localhost/api/templates/slug/%E0%A4%A', { method: 'GET' });
+    const response = await handleTemplates(request, mockEnv);
+
+    expect(response.status).toBe(404);
+    expect(dbMocks.selectChain.limit).not.toHaveBeenCalled();
   });
 });

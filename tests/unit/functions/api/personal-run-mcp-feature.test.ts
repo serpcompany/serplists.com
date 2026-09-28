@@ -12,6 +12,18 @@ describe("personal run MCP feature gate", () => {
     expect(isPersonalRunMcpEnabled({} as never, new URL("https://staging.serplists.com/api/mcp"))).toBe(false);
   });
 
+  it("defaults on for IPv6 loopback, which URL serializes with brackets", () => {
+    expect(new URL("http://[::1]:8788/api/mcp").hostname).toBe("[::1]");
+    expect(isPersonalRunMcpEnabled({} as never, new URL("http://[::1]:8788/api/mcp"))).toBe(true);
+    expect(isPersonalRunMcpEnabled({} as never, new URL("http://[0:0:0:0:0:0:0:1]/api/mcp"))).toBe(true);
+    expect(isPersonalRunMcpEnabled(
+      { PERSONAL_RUN_MCP_ENABLED: "false" } as never,
+      new URL("http://[::1]:8788/api/mcp"),
+    )).toBe(false);
+    expect(isPersonalRunMcpEnabled({} as never, new URL("http://localhost.evil.com/api/mcp"))).toBe(false);
+    expect(isPersonalRunMcpEnabled({} as never, new URL("http://127.0.0.1.nip.io/api/mcp"))).toBe(false);
+  });
+
   it("honors explicit enablement and disablement", () => {
     expect(isPersonalRunMcpEnabled(
       { PERSONAL_RUN_MCP_ENABLED: "true" } as never,

@@ -1,5 +1,6 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
+import { isLoopbackHostname } from "@/lib/utils/loopbackHostname";
 
 export const env = createEnv({
   clientPrefix: "VITE_",
@@ -16,5 +17,5 @@ export const isPersonalRunMcpUiEnabled = (hostname?: string): boolean => {
   if (env.VITE_PERSONAL_RUN_MCP_ENABLED === "false") return false;
 
   const currentHostname = hostname ?? (typeof window === "undefined" ? "" : window.location.hostname);
-  return currentHostname === "localhost" || currentHostname === "127.0.0.1" || currentHostname === "::1";
+  return isLoopbackHostname(currentHostname);
 };

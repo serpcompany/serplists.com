@@ -12,8 +12,9 @@ async function mcpRequest(
   method: string,
   params?: JsonRecord,
   id = 1,
+  endpoint = `${apiBaseUrl}/mcp`,
 ) {
-  const response = await fetch(`${apiBaseUrl}/mcp`, {
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       Accept: 'application/json, text/event-stream',
@@ -62,6 +63,27 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   });
   expect(initialized.response.status).toBe(200);
   expect((initialized.body.result as JsonRecord).protocolVersion).toBe(protocolVersion);
+
+  // The endpoint the page shows must be one the MCP host check accepts.
+  const shownEndpoint = await page.getByLabel('SERP Lists MCP endpoint').inputValue();
+  const shownInitialized = await mcpRequest(secret, 'initialize', {
+    protocolVersion,
+    capabilities: {},
+    clientInfo: { name: 'serplists-playwright', version: '1.0.0' },
+  }, 2, shownEndpoint);
+  expect(shownInitialized.response.status).toBe(200);
+
+  // Model APIs reject a tool list whose schemas have a combinator at the root, so every
+  // tool must advertise a plain object schema with top-level properties.
+  const listed = await mcpRequest(secret, 'tools/list', undefined, 10);
+  for (const tool of (listed.body.result as JsonRecord).tools as JsonRecord[]) {
+    const inputSchema = tool.inputSchema as JsonRecord;
+    expect(inputSchema.type).toBe('object');
+    expect(typeof inputSchema.properties).toBe('object');
+    for (const keyword of ['oneOf', 'anyOf', 'allOf', 'not', '$ref']) {
+      expect(inputSchema).not.toHaveProperty(keyword);
+    }
+  }
 
   const templateResult = await mcpRequest(secret, 'tools/call', {
     name: 'list_templates',
@@ -130,4 +152,52 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
 
   const denied = await mcpRequest(secret, 'tools/list', undefined, 6);
   expect(denied.response.status).toBe(401);
+});
+
+test('a Run Key created while the key list is still loading shows in the list', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
+    timeout: 30_000,
+  });
+
+  // Hold the first key list response until the create has returned, so the list the
+  // page first requested predates the new key.
+  let releaseFirstList: () => void = () => undefined;
+  const firstListReleased = new Promise<void>((resolve) => {
+    releaseFirstList = resolve;
+  });
+  let heldFirstList = false;
+  await page.route('**/api/agent-keys', async (route) => {
+    if (route.request().method() !== 'GET' || heldFirstList) {
+      await route.continue();
+      return;
+    }
+    heldFirstList = true;
+    const response = await route.fetch();
+    await firstListReleased;
+    await route.fulfill({ response });
+  });
+
+  await page.goto('/dashboard/settings');
+  await expect(page.getByRole('heading', { name: 'Agent Access' })).toBeVisible();
+
+  const keyName = `Playwright Slow List Runner ${Date.now()}`;
+  await page.getByLabel('Key name').fill(keyName);
+  const created = page.waitForResponse(
+    (response) => response.url().endsWith('/api/agent-keys') && response.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Create Run Key' }).click();
+  await created;
+  releaseFirstList();
+
+  await expect(page.getByLabel('New Run Key secret')).toBeVisible();
+  const keyRow = page.locator('div.divide-y > div').filter({ hasText: keyName });
+  await expect(keyRow).toHaveCount(1);
+  await expect(page.getByText('No Run Keys yet.')).toHaveCount(0);
+
+  await keyRow.getByRole('button', { name: 'Revoke', exact: true }).click();
+  await page.getByRole('button', { name: 'Revoke key' }).click();
+  await expect(keyRow.getByText('Revoked')).toBeVisible();
 });

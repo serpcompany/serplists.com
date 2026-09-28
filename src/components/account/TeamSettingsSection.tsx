@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Copy, Crown, Link2, Trash2, Users } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -15,15 +15,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { QueryListState } from '@/components/shared/QueryListState';
+import { TeamActivityList } from '@/components/account/TeamActivityList';
 import { api, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/lib/api';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { reloadQuery } from '@/lib/queryReload';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
-import {
-  formatActivityTime,
-  formatTeamActivityAction,
-  getActivityActorName,
-} from '@/features/teams/teamActivityFormat';
 import { getTeamSettingsUpdate } from '@/features/teams/teamSettingsUpdate';
 
 type AssignableTeamRole = Exclude<TeamRole, 'owner'>;
@@ -126,8 +124,6 @@ export function TeamSettingsSection() {
     staleTime: 30 * 1000,
   });
 
-  const activity = activityQuery.data ?? [];
-
   const incomingInvitesQuery = useQuery({
     queryKey: ['incoming-team-invites'],
     queryFn: () => api.getIncomingTeamInvites(),
@@ -136,11 +132,8 @@ export function TeamSettingsSection() {
 
   const incomingInvites = incomingInvitesQuery.data ?? [];
   const queryClient = useQueryClient();
-  // refetch() joins a first load still in flight, which predates the change; cancel it first.
-  const reload = async (query: { refetch: () => Promise<unknown> }, queryKey: unknown[]) => {
-    await queryClient.cancelQueries({ queryKey });
-    await query.refetch();
-  };
+  // A plain refetch() joins a first load still in flight, which predates the change.
+  const reload = (queryKey: QueryKey) => reloadQuery(queryClient, queryKey);
   const activeMemberId =
     isTeamWorkspace && 'memberId' in activeWorkspace
       ? activeWorkspace.memberId
@@ -211,7 +204,7 @@ export function TeamSettingsSection() {
     try {
       await api.updateTeam(activeTeamId, teamSettingsUpdate);
       await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload(['team-activity', activeTeamId]);
       toast.success('Organization updated');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update Organization');
@@ -242,8 +235,8 @@ export function TeamSettingsSection() {
       });
       setInviteUrl(resolveCreatedInviteUrl(invite));
       setInviteEmail('');
-      await reload(invitesQuery, ['team-invites', activeTeamId]);
-      await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload(['team-invites', activeTeamId]);
+      await reload(['team-activity', activeTeamId]);
       toast.success('Invite link created');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create invite');
@@ -265,9 +258,9 @@ export function TeamSettingsSection() {
       toast.error(error instanceof Error ? error.message : 'Failed to revoke invite');
     } finally {
       // A 409 means the invite was accepted first: the invitee is now a member.
-      await reload(invitesQuery, ['team-invites', activeTeamId]);
-      await reload(membersQuery, ['team-members', activeTeamId]);
-      await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload(['team-invites', activeTeamId]);
+      await reload(['team-members', activeTeamId]);
+      await reload(['team-activity', activeTeamId]);
       setRevokingInviteId(null);
     }
   };
@@ -283,13 +276,13 @@ export function TeamSettingsSection() {
 
       persistAcceptedWorkspace(acceptedInvite.teamId);
       selectWorkspace(acceptedInvite.teamId);
-      await reload(incomingInvitesQuery, ['incoming-team-invites']);
+      await reload(['incoming-team-invites']);
       void refreshTeams().catch(() => undefined);
       toast.success('Organization invite accepted');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to accept invite');
       // A refused invite (already a member, revoked, expired) is no longer listed.
-      await reload(incomingInvitesQuery, ['incoming-team-invites']);
+      await reload(['incoming-team-invites']);
     } finally {
       setAcceptingIncomingInviteId(null);
     }
@@ -320,14 +313,14 @@ export function TeamSettingsSection() {
     try {
       await api.updateTeamMember(activeTeamId, member.id, updates);
       await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
-      await reload(invitesQuery, ['team-invites', activeTeamId]); // status changes revoke their invites
+      await reload(['team-activity', activeTeamId]);
+      await reload(['team-invites', activeTeamId]); // status changes revoke their invites
       toast.success('Member updated');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update member');
     } finally {
       // A 409 means the member changed elsewhere (for example, became the owner).
-      await reload(membersQuery, ['team-members', activeTeamId]);
+      await reload(['team-members', activeTeamId]);
       setUpdatingMemberId(null);
     }
   };
@@ -349,13 +342,13 @@ export function TeamSettingsSection() {
     try {
       await api.transferTeamOwnership(activeTeamId, member.id);
       await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload(['team-activity', activeTeamId]);
       toast.success('Organization ownership transferred');
     } catch (error) {
       void refreshTeams().catch(() => undefined);
       toast.error(error instanceof Error ? error.message : 'Failed to transfer ownership');
     } finally {
-      await reload(membersQuery, ['team-members', activeTeamId]);
+      await reload(['team-members', activeTeamId]);
       setTransferringOwnerMemberId(null);
     }
   };
@@ -572,11 +565,14 @@ export function TeamSettingsSection() {
             {canManageTeam ? (
               <div className="space-y-3">
                 <div className="text-sm font-medium text-foreground">Pending invites</div>
-                {invitesQuery.isLoading ? (
-                  <div className="text-sm text-muted-foreground">Loading invites...</div>
-                ) : invites.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No pending invites.</div>
-                ) : (
+                <QueryListState
+                  query={invitesQuery}
+                  loadingLabel="Loading invites..."
+                  loadErrorLabel="Couldn't load pending invites."
+                  refreshErrorLabel="Couldn't refresh pending invites. Showing the last loaded list."
+                  onRetry={() => void reload(['team-invites', activeTeamId])}
+                  empty={<div className="text-sm text-muted-foreground">No pending invites.</div>}
+                >
                   <div className="divide-y rounded-md border border-border">
                     {invites.map((invite) => (
                       <div
@@ -610,17 +606,20 @@ export function TeamSettingsSection() {
                       </div>
                     ))}
                   </div>
-                )}
+                </QueryListState>
               </div>
             ) : null}
 
             <div className="space-y-3">
               <div className="text-sm font-medium text-foreground">Members</div>
-              {membersQuery.isLoading ? (
-                <div className="text-sm text-muted-foreground">Loading members...</div>
-              ) : members.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No members found.</div>
-              ) : (
+              <QueryListState
+                query={membersQuery}
+                loadingLabel="Loading members..."
+                loadErrorLabel="Couldn't load members."
+                refreshErrorLabel="Couldn't refresh members. Showing the last loaded list."
+                onRetry={() => void reload(['team-members', activeTeamId])}
+                empty={<div className="text-sm text-muted-foreground">No members found.</div>}
+              >
                 <div className="divide-y rounded-md border border-border">
                   {members.map((member) => {
                     const isOwner = member.role === 'owner';
@@ -719,39 +718,14 @@ export function TeamSettingsSection() {
                     );
                   })}
                 </div>
-              )}
+              </QueryListState>
             </div>
 
             {canManageTeam ? (
-              <div className="space-y-3">
-                <div className="text-sm font-medium text-foreground">Activity</div>
-                {activityQuery.isLoading ? (
-                  <div className="text-sm text-muted-foreground">Loading activity...</div>
-                ) : activity.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No Organization activity recorded yet.</div>
-                ) : (
-                  <div className="divide-y rounded-md border border-border">
-                    {activity.map((event) => (
-                      <div
-                        key={event.id}
-                        className="grid gap-1 p-3 md:grid-cols-[minmax(0,1fr)_180px]"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-foreground">
-                            {formatTeamActivityAction(event.action)}
-                          </div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {getActivityActorName(event.actor)}
-                          </div>
-                        </div>
-                        <div className="text-sm text-muted-foreground md:text-right">
-                          {formatActivityTime(event.createdAt)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <TeamActivityList
+                query={activityQuery}
+                onRetry={() => void reload(['team-activity', activeTeamId])}
+              />
             ) : null}
           </div>
         ) : (

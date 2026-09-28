@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -7,6 +6,7 @@ import { getPlatformProxy, type PlatformProxy } from "wrangler";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { handleAgentMcp } from "../../functions/api/handlers/agentMcp";
 import { createPersonalRunKeySecret } from "../../functions/api/utils/personal-run-key";
+import { execTool } from "../../scripts/lib/run-tool.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const migrationsDir = path.join(repoRoot, "db/migrations");
@@ -158,9 +158,8 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
         .map((name) => readFileSync(path.join(migrationsDir, name), "utf8"))
         .join("\n"),
     );
-    execFileSync("pnpm", [
-      "exec",
-      "wrangler",
+    // Through run-tool.mjs: spawning pnpm by name fails where pnpm is only a .cmd shim.
+    execTool("wrangler", [
       "d1",
       "execute",
       "serp-checklists-db",
@@ -315,6 +314,17 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(history).toHaveLength(3);
     expect(history.every((event) => event.actor_user_id === "user-a")).toBe(true);
     expect(history.every((event) => String(event.metadata_json).includes(`"personalRunKeyId":"${keyId}"`))).toBe(true);
+
+    // Audit rows describe the change; they do not store copies of the run's content.
+    const payloads = await rows<JsonRecord>(`
+      SELECT
+        coalesce(json_extract(before_json, '$.items'), json_extract(after_json, '$.items'),
+          json_extract(diff_json, '$.items'), json_extract(after_json, '$.retired_items')) AS stored_items,
+        length(coalesce(before_json, '')) + length(coalesce(after_json, '')) + length(coalesce(diff_json, '')) AS bytes
+      FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ?
+    `, runId);
+    expect(payloads.map(({ stored_items }) => stored_items)).toEqual([null, null, null]);
+    expect(Math.max(...payloads.map(({ bytes }) => Number(bytes)))).toBeLessThan(2_048);
   });
 
   it("allows exactly one same-revision update and writes exactly one audit event", async () => {
@@ -393,6 +403,87 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       runId,
     );
     expect(afterAudit.count).toBe(beforeAudit.count);
+  });
+
+  it("creates no run when start_run rejects an oversized template", async () => {
+    const items = [{
+      id: "section-large",
+      title: "Large",
+      // About 560 KB: over both the MCP run content cap and the 512 KB result bound.
+      items: Array.from({ length: 56 }, (_, index) => ({
+        id: `large-task-${index}`,
+        title: `Large task ${index}`,
+        isCompleted: false,
+        notes: "x".repeat(10_000),
+      })),
+    }];
+    await env.DB.prepare(`
+      INSERT INTO templates (
+        id, user_id, title, items, is_public, created_at, version, type, owner_type,
+        team_id, created_by_user_id, content_version
+      ) VALUES ('template-large', 'user-a', 'Large SOP', ?, 0, ?, 1, 'checklist', 'user', NULL, 'user-a', 1)
+    `).bind(JSON.stringify(items), "2026-09-19T02:30:00.000Z").run();
+    const countRuns = async () => (await rows<{ count: number }>(
+      "SELECT count(*) AS count FROM checklist_runs WHERE user_id = 'user-a'",
+    ))[0].count;
+    const before = await countRuns();
+
+    const errors: Array<string | undefined> = [];
+    for (const id of [51, 52]) {
+      errors.push(toolError(await bodyOf(await callTool("start_run", { templateId: "template-large" }, id))));
+    }
+
+    expect(await countRuns()).toBe(before);
+    expect(errors).toEqual(["content_too_large", "content_too_large"]);
+  });
+
+  it("holds a Free owner to the active run limit under concurrent start_run calls", async () => {
+    const freeLimit = 3;
+    const activeRuns = async () => (await rows<{ count: number }>(`
+      SELECT count(*) AS count FROM checklist_runs
+      WHERE user_id = 'user-a' AND team_id IS NULL AND status = 'in_progress' AND deleted_at IS NULL
+    `))[0].count;
+    const createdAudits = async () => (await rows<{ count: number }>(
+      "SELECT count(*) AS count FROM audit_events WHERE action = 'checklist_run.created' AND actor_user_id = 'user-a'",
+    ))[0].count;
+    const activeBefore = await activeRuns();
+    const auditsBefore = await createdAudits();
+    expect(activeBefore).toBeLessThan(freeLimit);
+
+    const bodies = await Promise.all([61, 62, 63, 64, 65].map(async (id) =>
+      bodyOf(await callTool("start_run", { templateId: "template-a" }, id))));
+
+    const started = bodies.filter((body) => toolError(body) === undefined);
+    expect(started).toHaveLength(freeLimit - activeBefore);
+    expect(bodies.filter((body) => toolError(body) === "limit_reached")).toHaveLength(bodies.length - started.length);
+    expect(await activeRuns()).toBe(freeLimit);
+    expect(await createdAudits()).toBe(auditsBefore + started.length);
+  });
+
+  it("lists a never-edited template ahead of older edits when the list is cut to 100", async () => {
+    const insertTemplate = (id: string, createdAt: string, updatedAt: string | null) => env.DB.prepare(`
+      INSERT INTO templates (
+        id, user_id, title, items, is_public, created_at, updated_at, version, type, owner_type,
+        team_id, created_by_user_id, content_version
+      ) VALUES (?, 'user-a', ?, '[]', 0, ?, ?, 1, 'checklist', 'user', NULL, 'user-a', 1)
+    `).bind(id, `SOP ${id}`, createdAt, updatedAt);
+    await env.DB.batch(Array.from({ length: 101 }, (_, index) => {
+      const suffix = String(index).padStart(3, "0");
+      return insertTemplate(`edited-${suffix}`, "2024-01-01T00:00:00.000Z", `2025-01-01T00:00:00.${suffix}Z`);
+    }));
+    // Imported in one request: created in the same millisecond and never edited.
+    await env.DB.batch([
+      insertTemplate("imported-a", "2026-09-20T00:00:00.000Z", null),
+      insertTemplate("imported-b", "2026-09-20T00:00:00.000Z", null),
+    ]);
+
+    const payload = toolPayload(await bodyOf(await callTool("list_templates", {}, 71)));
+    const ids = (payload.templates as JsonRecord[]).map(({ id }) => id);
+
+    expect(ids.slice(0, 2)).toEqual(["imported-b", "imported-a"]);
+    expect(ids).toContain("template-a");
+    expect(ids).toHaveLength(100);
+    expect(payload.truncated).toBe(true);
   });
 
   it("revokes immediately and cascades keys only with their owning user", async () => {

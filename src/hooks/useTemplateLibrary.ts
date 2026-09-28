@@ -16,7 +16,11 @@ export const useTemplateLibrary = (category?: string, templateType?: "checklist"
     return publicTemplates.filter(t => t.type === templateType);
   }, [contextTemplates, templateType]);
 
-  const loading = (templatesLoading ?? false) && templates.length === 0;
+  // Bundled Templates are always present, so `loading` turns false before the catalog
+  // API answers. `catalogLoading` stays true until it does: use it before treating a
+  // category or search as empty.
+  const catalogLoading = templatesLoading ?? false;
+  const loading = catalogLoading && templates.length === 0;
 
   useEffect(() => {
     // Extract all unique categories and combine with predefined ones
@@ -76,6 +80,7 @@ export const useTemplateLibrary = (category?: string, templateType?: "checklist"
     templates,
     filteredTemplates,
     loading,
+    catalogLoading,
     searchQuery,
     setSearchQuery,
     selectedCategories,

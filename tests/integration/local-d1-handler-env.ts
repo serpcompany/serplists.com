@@ -1,9 +1,9 @@
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getPlatformProxy, type PlatformProxy } from "wrangler";
+import { execTool } from "../../scripts/lib/run-tool.mjs";
 
 // A throwaway local D1 with every migration applied, for calling API handlers against
 // real SQL (no dev server). Each call gets its own temp directory.
@@ -19,8 +19,9 @@ export type LocalD1 = {
 
 export async function startLocalD1(prefix: string): Promise<LocalD1> {
   const persistPath = mkdtempSync(path.join(tmpdir(), `serplists-${prefix}-`));
-  execFileSync("pnpm", [
-    "exec", "wrangler", "d1", "migrations", "apply", "serp-checklists-db", "--local", "--persist-to", persistPath,
+  // Through run-tool.mjs: spawning pnpm by name fails where pnpm is only a .cmd shim.
+  execTool("wrangler", [
+    "d1", "migrations", "apply", "serp-checklists-db", "--local", "--persist-to", persistPath,
   ], {
     cwd: repoRoot,
     env: { ...process.env, CI: "1" },

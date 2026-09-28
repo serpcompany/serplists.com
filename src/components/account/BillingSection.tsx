@@ -4,8 +4,14 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
-import { getBillingPlanLabel, getBillingStatusQueryKey, PRO_MONTHLY_PRICE_LABEL } from "@/lib/billing";
+import {
+  getBillingPlanLabel,
+  getBillingPlanStatus,
+  getBillingStatusQueryKey,
+  PRO_MONTHLY_PRICE_LABEL,
+} from "@/lib/billing";
 import { Button } from "@/components/ui/button";
+import { QueryErrorNotice } from "@/components/shared/QueryListState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 
@@ -25,7 +31,9 @@ export function BillingSection() {
   const { refetch: refetchBilling } = billing;
 
   const plan = billing.data?.plan;
-  const planLabel = getBillingPlanLabel(plan);
+  // "unknown" (status failed to load) is not Free: offer Retry, never an upgrade.
+  const planStatus = getBillingPlanStatus(billing);
+  const planLabel = getBillingPlanLabel(plan) ?? (planStatus === "unknown" ? "Unavailable" : "Checking...");
   const billingEnabled = billing.data?.billingEnabled ?? true;
   const teamBillingMessage = plan === "team"
     ? "Paid Organization entitlements apply while this Organization is selected."
@@ -131,11 +139,14 @@ export function BillingSection() {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="text-sm text-muted-foreground">
-          Current {isTeamWorkspace ? "Organization" : "Personal"} plan: <span className="font-medium text-foreground">{planLabel ?? "Checking..."}</span>
+          Current {isTeamWorkspace ? "Organization" : "Personal"} plan: <span className="font-medium text-foreground">{planLabel}</span>
         </div>
 
         {billing.isError ? (
-          <div className="text-sm text-muted-foreground">Billing status unavailable.</div>
+          <QueryErrorNotice
+            message={planStatus === "unknown" ? "Billing status unavailable." : "Couldn't refresh billing status."}
+            onRetry={() => void refetchBilling()}
+          />
         ) : null}
         {!billing.isError && !billingEnabled ? (
           <div className="text-sm text-muted-foreground">Billing checkout is currently unavailable.</div>
@@ -145,7 +156,7 @@ export function BillingSection() {
           <div className="text-sm text-muted-foreground">
             {teamBillingMessage}
           </div>
-        ) : plan === "pro" ? (
+        ) : planStatus === "unknown" ? null : plan === "pro" ? (
           <Button
             onClick={handleManage}
             variant="secondary"

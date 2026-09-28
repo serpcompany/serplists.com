@@ -247,6 +247,10 @@ export function WorkspaceProvider({
       ]);
 
       if (user?.id) {
+        // A teams request still in flight read the server before this change and would
+        // drop the team when it lands. Cancelling reverts the query to its last data,
+        // and the write below is kept as that data.
+        void queryClient.cancelQueries({ queryKey: ['teams', user.id], exact: true });
         queryClient.setQueryData<TeamSummary[]>(
           ['teams', user.id],
           (currentTeams = []) => [
@@ -264,6 +268,8 @@ export function WorkspaceProvider({
       return [];
     }
 
+    // fetchQuery joins a request already in flight, which predates the caller's write.
+    await queryClient.cancelQueries({ queryKey: ['teams', user.id], exact: true });
     return queryClient.fetchQuery({
       queryKey: ['teams', user.id],
       queryFn: () => api.getTeams(),
