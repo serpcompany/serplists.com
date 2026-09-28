@@ -38,7 +38,7 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
     if (teamId) {
       const membership = await getActiveTeamMembership(env, teamId, userId);
       if (!membership || !canViewTeam(normalizeTeamRole(membership.role))) {
-        return jsonError("Team not found", 404);
+        return jsonError("Organization not found", 404);
       }
     }
 

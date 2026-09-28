@@ -1,0 +1,92 @@
+[
+  {
+    "type": "dependency",
+    "from": "src/components/account/AgentAccessSection.tsx",
+    "to": "src/lib/api.ts",
+    "rule": {
+      "severity": "error",
+      "name": "screens-do-not-call-transport"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/components/account/BillingSection.tsx",
+    "to": "src/lib/api.ts",
+    "rule": {
+      "severity": "error",
+      "name": "screens-do-not-call-transport"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/components/account/TeamSettingsSection.tsx",
+    "to": "src/lib/api.ts",
+    "rule": {
+      "severity": "error",
+      "name": "screens-do-not-call-transport"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/components/dashboard/ArchiveRecoverySection.tsx",
+    "to": "src/lib/api.ts",
+    "rule": {
+      "severity": "error",
+      "name": "screens-do-not-call-transport"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/components/shared/AvatarUpload.tsx",
+    "to": "src/lib/api.ts",
+    "rule": {
+      "severity": "error",
+      "name": "screens-do-not-call-transport"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/components/template-editor/GenerateFromClipy.tsx",
+    "to": "src/lib/api.ts",
+    "rule": {
+      "severity": "error",
+      "name": "screens-do-not-call-transport"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/components/TemplateBackup.tsx",
+    "to": "src/lib/api.ts",
+    "rule": {
+      "severity": "error",
+      "name": "screens-do-not-call-transport"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/pages/Pricing.tsx",
+    "to": "src/lib/api.ts",
+    "rule": {
+      "severity": "error",
+      "name": "screens-do-not-call-transport"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/pages/UserProfile.tsx",
+    "to": "src/lib/api.ts",
+    "rule": {
+      "severity": "error",
+      "name": "screens-do-not-call-transport"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/components/ui/file-upload.tsx",
+    "to": "src/contexts/CloudflareAuthContext.tsx",
+    "rule": {
+      "severity": "error",
+      "name": "ui-primitives-stay-presentational"
+    }
+  }
+]

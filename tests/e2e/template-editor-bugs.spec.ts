@@ -17,16 +17,17 @@ async function registerAccount(page: Page) {
   await page.locator("#password").fill(PASSWORD);
   await page.locator("#confirmPassword").fill(PASSWORD);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByRole("button", { name: "Switch workspace" })).toBeVisible({
+  await expect(page.getByRole("button", { name: "Switch context" })).toBeVisible({
     timeout: 30_000,
   });
 }
 
+// Admin is a Pro persona created by `seed-test`, which the isolated e2e database runs.
 async function loginAsSeedUser(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill SERP' }).click();
+  await page.getByRole('button', { name: 'Fill Admin' }).click();
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch workspace' })).toBeVisible({
+  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
     timeout: 30_000,
   });
 }

@@ -120,12 +120,17 @@ const categoryData: Record<
   },
 };
 
-const sortLabels: Record<string, string> = {
+type CategorySort = DiscoverySort | 'name';
+
+const sortLabels: Record<CategorySort, string> = {
   name: 'Name A-Z',
   popular: 'Most Popular',
   recent: 'Most Recent',
   trending: 'Trending',
 };
+
+const isCategorySort = (value: string): value is CategorySort =>
+  Object.prototype.hasOwnProperty.call(sortLabels, value);
 const CATEGORY_BASE_URL = 'https://serplists.com/categories';
 const SEO_IMAGE_URL = 'https://serplists.com/placeholder.svg';
 
@@ -133,7 +138,7 @@ const CategoryDetail = () => {
   const { categorySlug } = useParams<{ categorySlug: string }>();
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<DiscoverySort | 'name'>('popular');
+  const [sortBy, setSortBy] = useState<CategorySort>('popular');
   const [viewMode, setViewMode] = useViewModePreference({
     surface: 'category-templates',
     userId: user?.id,
@@ -243,7 +248,12 @@ const CategoryDetail = () => {
           sortBy="popular"
           trailingControls={
             <div className="flex items-center gap-2">
-              <Select value={sortBy} onValueChange={setSortBy}>
+              <Select
+                value={sortBy}
+                onValueChange={(value) => {
+                  if (isCategorySort(value)) setSortBy(value);
+                }}
+              >
                 <SelectTrigger className="w-40 border-border bg-card">
                   <SelectValue>{sortLabels[sortBy]}</SelectValue>
                 </SelectTrigger>

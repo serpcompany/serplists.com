@@ -132,7 +132,8 @@ export function PublicTemplateContent({
     const itemKey = `${sectionIndex}-${itemIndex}`;
     const isExpanded = expandedItems[itemKey];
     const hasContent = item.contents && item.contents.length > 0;
-    const hasDescription = item.description && item.description.trim() !== '';
+    const description = item.description;
+    const hasDescription = description && description.trim() !== '';
     const isExpandable = Boolean(hasContent || hasDescription);
 
     return (
@@ -173,7 +174,7 @@ export function PublicTemplateContent({
                   <div className="mt-3 space-y-3">
                     {hasDescription ? (
                       <p className="whitespace-pre-line text-sm leading-7 text-muted-foreground">
-                        {normalizeDisplayText(item.description)}
+                        {normalizeDisplayText(description)}
                       </p>
                     ) : null}
 

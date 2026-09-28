@@ -123,10 +123,14 @@ if (env.PLAYWRIGHT_REUSE_EXISTING_SERVER !== "1") {
   prepareSmokeD1();
 }
 
+// `--all` runs the full e2e suite through the same isolated local stack.
+const runAll = process.argv.includes("--all");
+const playwrightArgs = process.argv.slice(2).filter((arg) => arg !== "--all");
+
 const pnpmBin = "pnpm";
 const child = spawn(
   pnpmBin,
-  ["exec", "playwright", "test", "--grep", "@smoke", ...process.argv.slice(2)],
+  ["exec", "playwright", "test", ...(runAll ? [] : ["--grep", "@smoke"]), ...playwrightArgs],
   {
     env,
     shell: process.platform === "win32",

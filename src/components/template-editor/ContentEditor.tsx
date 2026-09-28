@@ -10,6 +10,7 @@ import { TextContentEditor } from "@/components/template-editor/content-types/Te
 import { Button } from "@/components/ui/button";
 import {
   createTemplateEditorContent,
+  type TemplateEditorContent,
   type TemplateEditorContentType,
   type TemplateEditorFormValues,
 } from "@/lib/forms/templateEditorForm";
@@ -59,7 +60,7 @@ export function ContentEditor({
 
   function handleContentMetaChange(
     contentIndex: number,
-    updates: Partial<TemplateEditorFormValues["sections"][number]["items"][number]["contents"][number]>,
+    updates: Partial<TemplateEditorContent>,
   ): void {
     const currentContent = contents[contentIndex];
     if (!currentContent) {

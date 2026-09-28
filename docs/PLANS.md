@@ -1,0 +1,45 @@
+# Plans
+
+Plans are versioned with the code so the next agent run can pick up where the last
+one stopped without chat history.
+
+- **Small changes** (one PR, obvious approach): no plan file; the PR description is enough.
+- **Multi-step work** (several PRs, open design questions, or work that spans
+  sessions): create `active/<short-name>.md` from the template below and keep it
+  current as you go.
+- **Finished work**: set the status to completed and move the file to `completed/`.
+  Do not delete plans; their decision logs explain why the code looks the way it does.
+- **Shortcuts and known debt**: record them in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
+
+The weekly [maintenance report](design-docs/agent-workflow.md#weekly-maintenance) flags active plans that
+have not been updated in 30 days.
+
+## Active
+
+- [Agent harness](exec-plans/active/agent-harness.md): mechanical checks, docs, and tooling that
+  let agents work reliably in this repo.
+- [UI decoupling](exec-plans/active/ui-decoupling.md): screens consume feature state instead of
+  transport code.
+
+## Completed
+
+- None yet.
+
+## Template
+
+```markdown
+# <Plan name>
+
+- **Status:** active
+- **Last updated:** YYYY-MM-DD
+- **Goal:** <one sentence: the outcome, not the tasks>
+
+## Progress
+
+- [x] <done step, with PR or commit>
+- [ ] <next step>
+
+## Decision log
+
+- YYYY-MM-DD: <decision and why; what alternative was rejected>
+```

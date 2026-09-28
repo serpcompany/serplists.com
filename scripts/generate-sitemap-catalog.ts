@@ -164,7 +164,11 @@ const output = `${JSON.stringify({
 }, null, 2)}\n`;
 if (process.argv.includes('--check')) {
   const existing = await readFile(outputPath, 'utf8').catch(() => '');
-  if (existing !== output) throw new Error('Generated sitemap catalog is stale');
+  if (existing !== output) {
+    throw new Error(
+      'Generated sitemap catalog is stale. Run `pnpm run sitemap:generate` and commit functions/sitemap/bundled-catalog.generated.json.',
+    );
+  }
 } else {
   await writeFile(outputPath, output, 'utf8');
 }

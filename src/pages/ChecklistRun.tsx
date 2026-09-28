@@ -68,14 +68,15 @@ const formatRunHistoryTime = (value?: string): string => {
   });
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
 const getRunHistoryActorName = (entry: TemplateHistoryEvent): string => {
   const humanName = entry.actor?.name || entry.actor?.username || entry.actor?.email || 'Unknown user';
   const metadata = entry.metadata;
 
   if (
-    metadata
-    && typeof metadata === 'object'
-    && !Array.isArray(metadata)
+    isRecord(metadata)
     && metadata.source === 'mcp'
     && typeof metadata.personalRunKeyName === 'string'
     && metadata.personalRunKeyName.trim()
@@ -424,9 +425,7 @@ const ChecklistRunPage = () => {
   ) : (
     displayRun.title
   );
-  const privateRunDescription = displayRun.templateOwner?.username
-    ? `by @${displayRun.templateOwner.username}`
-    : `${counts.completed} of ${counts.total} tasks finished`;
+  const privateRunDescription = `${counts.completed} of ${counts.total} tasks finished`;
   const runHistoryEntries = (history?.data?.events ?? []).slice(0, 8);
 
   return (

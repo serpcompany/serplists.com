@@ -197,7 +197,7 @@ describe('TeamSettingsSection', () => {
       },
     ]);
 
-    expect(html).toContain('Owners and admins manage team settings, invites, and activity.');
+    expect(html).toContain('Owners and admins manage Organization settings, invites, and activity.');
     expect(html).toContain('Views shared templates and runs.');
     expect(html).toContain('Editor User');
     expect(html).not.toContain('Invite email');

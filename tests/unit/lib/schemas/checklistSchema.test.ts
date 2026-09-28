@@ -5,7 +5,6 @@ import {
   checklistItemSchema,
   checklistSectionSchema,
   checklistTemplateSchema,
-  checklistRunSchema,
   templateBackupSchema,
   validateTemplate,
   validateBackup,

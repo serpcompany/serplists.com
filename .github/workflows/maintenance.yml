@@ -1,0 +1,135 @@
+name: Weekly maintenance
+
+# Two recurring cleanup jobs, built on the deterministic `pnpm run maintenance:report`:
+# - doc-gardening: Claude fixes documentation that no longer matches the code and
+#   opens a small fix-up PR into staging.
+# - report: posts the full report (debt, oversized files, stale plans) as one
+#   reusable `ready-for-agent` issue.
+# Scheduled workflows run from the default branch. Details: docs/design-docs/agent-workflow.md.
+on:
+  schedule:
+    - cron: "0 14 * * 1" # Mondays 14:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: weekly-maintenance
+  cancel-in-progress: false
+
+jobs:
+  doc-gardening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: read
+      id-token: write
+    env:
+      COREPACK_ENABLE_AUTO_PIN: "0"
+      HAS_CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+    steps:
+      - name: Skip until the Claude token is configured
+        if: env.HAS_CLAUDE_TOKEN != 'true'
+        run: echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not set, so doc gardening is skipped."
+
+      - name: Checkout staging
+        if: env.HAS_CLAUDE_TOKEN == 'true'
+        uses: actions/checkout@v5
+        with:
+          ref: staging
+          # Full history: the report compares each doc's last edit with the code it references.
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        if: env.HAS_CLAUDE_TOKEN == 'true'
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        if: env.HAS_CLAUDE_TOKEN == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        if: env.HAS_CLAUDE_TOKEN == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build report
+        if: env.HAS_CLAUDE_TOKEN == 'true'
+        run: mkdir -p tmp && pnpm run --silent maintenance:report > tmp/maintenance-report.md
+
+      - name: Garden docs with Claude
+        if: env.HAS_CLAUDE_TOKEN == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            You are this repository's weekly doc gardener. Follow AGENTS.md.
+            Goal: documentation that no longer matches the code gets fixed in one small PR.
+
+            1. Read tmp/maintenance-report.md. Your work list is the "Docs check" failures,
+               the "Docs to re-verify" list, and design docs flagged as stale under
+               "Plans and scores". Handle at most 8 docs; start with the ones whose
+               referenced code changed most.
+            2. For each doc, read it and the code it describes. Fix statements that are no
+               longer true, remove references to things that no longer exist, and keep the
+               doc's structure and tone. If a doc is still accurate, change nothing in it.
+            3. Update the "Last verified" date in docs/design-docs/index.md for each design
+               doc you checked against the code (even if it needed no edits), and the
+               "Last updated" line of any exec plan you edit. Use today's date (UTC).
+            4. Edit only AGENTS.md, ARCHITECTURE.md, and files under docs/. Never touch code,
+               tests, workflows, baselines, or generated files in docs/generated/.
+            5. Run `pnpm run docs:check`; it must pass.
+            6. If you changed nothing, stop and say "No doc drift found". Otherwise, unless
+               `gh pr list --state open --search "docs: weekly doc gardening in:title"`
+               already lists a PR (then stop and say so): create branch
+               chore/doc-gardening-<YYYY-MM-DD> from the current HEAD, commit with the
+               message "docs: weekly doc gardening", push it, and open a PR into staging
+               titled "docs: weekly doc gardening (<YYYY-MM-DD>)". In the PR body, list each
+               doc you changed, what was wrong, and which code you checked it against, and
+               list the docs you verified without changes.
+          claude_args: |
+            --max-turns 80
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh pr list:*),Bash(gh pr create:*),Bash(pnpm run docs:check),Bash(date:*)"
+
+  report:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      COREPACK_ENABLE_AUTO_PIN: "0"
+      GH_TOKEN: ${{ github.token }}
+      TITLE: Weekly repository maintenance
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: staging
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build report
+        run: pnpm run --silent maintenance:report > report.md
+
+      - name: Open or update the maintenance issue
+        run: |
+          number=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --body-file report.md
+            gh issue comment "$number" --body "Report refreshed on $(date -u +%F)."
+          else
+            gh issue create --title "$TITLE" --body-file report.md --label chore --label ready-for-agent
+          fi

@@ -37,7 +37,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   await page.goto('/login');
   await page.getByRole('button', { name: 'Fill Admin' }).click();
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch workspace' })).toBeVisible({
+  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
     timeout: 30_000,
   });
 

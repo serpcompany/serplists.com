@@ -108,7 +108,7 @@ describe("Billing handler", () => {
     const data = await response.json();
 
     expect(response.status).toBe(404);
-    expect(data.error).toBe("Team not found");
+    expect(data.error).toBe("Organization not found");
     expect(entitlementsMocks.getEntitlementsForContext).not.toHaveBeenCalled();
   });
 

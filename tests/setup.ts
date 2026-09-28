@@ -1,5 +1,4 @@
 // Test setup file
-import { beforeAll, afterAll } from 'vitest';
 
 // Mock localStorage for Node environment
 global.localStorage = {

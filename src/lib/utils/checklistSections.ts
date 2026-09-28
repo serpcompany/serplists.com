@@ -1,4 +1,4 @@
-import type { ChecklistSection } from "@/types/checklist";
+import type { ChecklistItemContent, ChecklistSection } from "@/types/checklist";
 
 export function isSectionsShape(value: unknown): value is ChecklistSection[] {
   if (!Array.isArray(value)) return false;
@@ -27,6 +27,8 @@ export function normalizeSections(raw: unknown): ChecklistSection[] {
               : false;
 
         const rawContents = Array.isArray(it.contents) ? (it.contents as unknown[]) : undefined;
+        // Content entries are passed through from stored/imported JSON as-is (only legacy sub-item
+        // completion is normalized), so their shape is trusted here rather than validated.
         const contents = rawContents?.map((c) => {
           const content = (c ?? {}) as Record<string, unknown>;
           if (content.type === "subItems" && Array.isArray(content.subItems)) {
@@ -47,7 +49,7 @@ export function normalizeSections(raw: unknown): ChecklistSection[] {
             };
           }
           return content;
-        });
+        }) as ChecklistItemContent[] | undefined;
 
         const { completed: _completed, ...rest } = it;
         return {
