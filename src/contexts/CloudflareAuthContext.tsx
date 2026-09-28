@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useState, useEffect } from 'react';
 import { authClient } from '@/lib/auth-client';
+import { getAuthErrorMessage, isEmailNotVerifiedError } from '@/lib/auth/authErrors';
 import {
   checkSessionWithRetry,
   classifySessionResult,
@@ -115,8 +116,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = await authClient.signIn.email({ email, password });
       if (result?.error) {
-        const message = result.error.message ?? "Login failed";
-        if (message.toLowerCase().includes("email not verified")) {
+        const message = getAuthErrorMessage(result.error, "Login failed");
+        if (isEmailNotVerifiedError(result.error)) {
           return { ok: false, error: message, errorCode: "EMAIL_NOT_VERIFIED" };
         }
         return { ok: false, error: message, errorCode: "UNKNOWN" };
@@ -148,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const callbackURL = "/login?verified=1";
       const result = await authClient.signUp.email({ name, email, password, callbackURL });
       if (result?.error) {
-        return { ok: false, error: result.error.message ?? "Registration failed", errorCode: "UNKNOWN" };
+        return { ok: false, error: getAuthErrorMessage(result.error, "Registration failed"), errorCode: "UNKNOWN" };
       }
 
       const nextSession = await authClient.getSession();

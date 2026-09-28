@@ -1,6 +1,6 @@
 import type { Env } from '../types';
 import { resolveTrustedOrigins } from './cors';
-import { jsonError } from './response';
+import { authJsonError } from './response';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -25,17 +25,17 @@ export function rejectUnsafeAuthRequest(request: Request, env: Env): Response | 
   if (SAFE_METHODS.has(request.method)) return null;
 
   if (mediaType(request.headers.get('Content-Type')) !== 'application/json') {
-    return jsonError('Auth requests must send a JSON body.', 415);
+    return authJsonError('Auth requests must send a JSON body.', 415, { code: 'unsupported_media_type' });
   }
 
   const origin = request.headers.get('Origin');
   if (origin !== null) {
     // `Origin: null` (sandboxed frames, some redirects) is never trusted.
     if (!resolveTrustedOrigins(request, env).has(origin)) {
-      return jsonError('Origin not allowed', 403);
+      return authJsonError('Origin not allowed', 403, { code: 'origin_not_allowed' });
     }
   } else if (request.headers.get('Sec-Fetch-Site') === 'cross-site') {
-    return jsonError('Cross-site request not allowed', 403);
+    return authJsonError('Cross-site request not allowed', 403, { code: 'origin_not_allowed' });
   }
 
   return null;

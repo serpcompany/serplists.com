@@ -24,7 +24,7 @@ import { handleTeams } from './handlers/teams';
 import { handleGenerateTemplateFromClipy } from './handlers/clipy';
 import { handleAgentKeys } from './handlers/agent-keys';
 import { handleAgentMcp } from './handlers/agentMcp';
-import { jsonError } from './utils/response';
+import { authJsonError, jsonError } from './utils/response';
 import { isPersonalRunMcpEnabled, isPersonalRunMcpPath } from './utils/personal-run-mcp-feature';
 
 function isLocalRequest(url: URL): boolean {
@@ -85,6 +85,10 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
   const startMs = Date.now();
   // Only for the in-memory rate limits: a client IP is personal data, never logged.
   const ip = getClientIp(request);
+  // Better Auth's client shows `message`, so auth errors the router sends itself carry one.
+  const isAuthPath = path.startsWith('auth');
+  const errorResponse = (message: string, status: number) =>
+    isAuthPath ? authJsonError(message, status) : jsonError(message, status);
 
   const finalize = (handlerResponse: Response) => {
     // HEAD gets the status and headers without a body, whatever the handler built.
@@ -118,13 +122,13 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         path: logPath,
         error: error instanceof Error ? error.message : String(error),
       });
-      response = jsonError('Server configuration error', 500);
+      response = errorResponse('Server configuration error', 500);
       return finalize(response);
     }
 
     const oversizedLabel = await findOversizedBody(request, path);
     if (oversizedLabel) {
-      response = jsonError(`Payload too large (max ${oversizedLabel})`, 413);
+      response = errorResponse(`Payload too large (max ${oversizedLabel})`, 413);
       return finalize(response);
     }
 
@@ -137,14 +141,16 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         if (routeLimit) {
           response = routeRateLimitResponse(routeLimit.bucket, limit.retryAfterSeconds);
         } else {
-          response = jsonError('Too many requests', 429);
-          response.headers.set('Retry-After', String(limit.retryAfterSeconds));
+          response = authJsonError('Too many requests. Please try again later.', 429, {
+            code: 'rate_limited',
+            retryAfterSeconds: limit.retryAfterSeconds,
+          });
         }
         return finalize(response);
       }
     }
 
-    if (path.startsWith('auth')) {
+    if (isAuthPath) {
       const rejection = rejectUnsafeAuthRequest(request, env);
       if (rejection) return finalize(rejection);
     }
@@ -176,7 +182,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         try {
           body = await request.clone().json();
         } catch {
-          return finalize(jsonError('Invalid JSON', 400));
+          return finalize(authJsonError('Invalid JSON', 400));
         }
         const email =
           typeof body === 'object' && body !== null && 'email' in body && typeof body.email === 'string'
@@ -185,7 +191,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         const blockedDomain = email ? blockedTestEmailDomain(email) : null;
         if (blockedDomain) {
           log('warn', 'blocked_test_user_auth', { domain: blockedDomain, path: logPath });
-          response = jsonError(TEST_ACCOUNTS_DISABLED_MESSAGE, 403);
+          response = authJsonError(TEST_ACCOUNTS_DISABLED_MESSAGE, 403, { code: 'test_account_blocked' });
           return finalize(response);
         }
       }
@@ -195,7 +201,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         requiresConfiguredAuthEmail(path, emailPolicy.emailVerificationRequired) &&
         !emailPolicy.emailAuthAvailable
       ) {
-        response = jsonError('Auth email is temporarily unavailable. Please contact support.', 503, {
+        response = authJsonError('Auth email is temporarily unavailable. Please contact support.', 503, {
           code: 'auth_email_unavailable',
         });
         return finalize(response);
@@ -235,10 +241,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
     }
   } catch (error) {
     if (error instanceof SyntaxError) {
-      response = new Response(JSON.stringify({ error: 'Invalid JSON' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      response = errorResponse('Invalid JSON', 400);
     } else {
       log('error', 'api_error', {
         requestId,
@@ -246,10 +249,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         path: logPath,
         error: error instanceof Error ? error.message : String(error),
       });
-      response = new Response(JSON.stringify({ error: 'Internal Server Error' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      response = errorResponse('Internal Server Error', 500);
     }
   }
 

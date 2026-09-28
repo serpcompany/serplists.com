@@ -52,6 +52,16 @@ describe('submitPasswordReset', () => {
     expect(signOutLocally).not.toHaveBeenCalled();
   });
 
+  it('tells a rate-limited reset to wait', async () => {
+    const result = await submitPasswordReset({
+      resetPassword: async () => ({ data: null, error: { error: 'Too many requests', status: 429 } }),
+      signOutLocally: async () => undefined,
+      isSignedIn: false,
+    });
+
+    expect(result).toEqual({ ok: false, message: 'Too many attempts. Please wait a few minutes and try again.' });
+  });
+
   it('still reports success when clearing the local session fails', async () => {
     const result = await submitPasswordReset({
       resetPassword: async () => ({ data: { status: true }, error: null }),

@@ -61,6 +61,17 @@ and user-facing failure states when a supporting service is unavailable.
   and rethrows, so the API answers `500`. A `401` there would send a signed-in user
   to `/login`, or quietly show them anonymous data. Anonymous requests never reach
   D1 here, so public pages are unaffected.
+- Auth errors the API router sends itself, before Better Auth runs (rate limit,
+  blocked test account, `auth_email_unavailable`, a non-JSON body or an untrusted
+  Origin, an oversized body, a server error), use `authJsonError`: `{ message, error,
+  code }`, because the Better Auth client hands the UI the parsed body and Better
+  Auth's own errors put the text in `message`. The `429` is code `rate_limited` with
+  `Retry-After` and `retryAfterSeconds` in the body, since the client cannot read the
+  header from Better Auth's result. The UI reads every auth error through
+  `getAuthErrorMessage` (`src/lib/auth/authErrors.ts`): a `429` always becomes a
+  "Too many attempts" wait message, never a failed-login message; otherwise it shows
+  `message`, then `error`, then the page's fallback. Unverified email is detected by
+  the `EMAIL_NOT_VERIFIED` code.
 - Only a definite answer changes the signed-in state: `get-session` returning no
   session (or a `401`) signs the user out. A `429`, `5xx`, or network failure is
   treated as unknown (`src/lib/auth/sessionCheck.ts`): the current user is kept,

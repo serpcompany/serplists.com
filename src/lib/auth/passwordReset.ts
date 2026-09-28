@@ -1,3 +1,5 @@
+import { getAuthErrorMessage } from './authErrors';
+
 export type PasswordResetResult = { ok: true } | { ok: false; message: string };
 
 /**
@@ -14,7 +16,7 @@ export async function submitPasswordReset(params: {
   try {
     const result = await params.resetPassword();
     if (result?.error) {
-      return { ok: false, message: result.error.message || 'Unable to reset password' };
+      return { ok: false, message: getAuthErrorMessage(result.error, 'Unable to reset password') };
     }
   } catch {
     return { ok: false, message: 'Unable to reset password' };

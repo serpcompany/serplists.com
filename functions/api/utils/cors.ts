@@ -61,7 +61,8 @@ export function applyCorsHeaders(response: Response, request: Request, env: Env)
     'Access-Control-Allow-Headers',
     'Content-Type, Authorization, X-Request-Id, X-CSRF-Token, X-Requested-With'
   );
-  response.headers.set('Access-Control-Expose-Headers', 'X-Request-Id');
+  // Retry-After lets a cross-origin client (local dev) read how long a 429 lasts.
+  response.headers.set('Access-Control-Expose-Headers', 'X-Request-Id, Retry-After');
 
   if (origin !== '*') {
     response.headers.append('Vary', 'Origin');
