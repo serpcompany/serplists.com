@@ -32,6 +32,11 @@ and user-facing failure states when a supporting service is unavailable.
   Callbacks await delivery so provider failures surface in the request.
   `GET /api/auth/status` reports whether email delivery is available.
 - Protected routes preserve the requested destination through login.
+- Only a definite answer changes the signed-in state: `get-session` returning no
+  session (or a `401`) signs the user out. A `429`, `5xx`, or network failure is
+  treated as unknown (`src/lib/auth/sessionCheck.ts`): the current user is kept,
+  the first check on page load retries with backoff, and if it still fails
+  `RequireAuth` offers a retry instead of redirecting to `/login`.
 - Passwords: Better Auth enforces length (10 to 128) and rejects breached passwords;
   `Register.tsx`, `ResetPassword.tsx`, and `SecuritySection.tsx` validate the same
   policy client-side.

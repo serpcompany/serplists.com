@@ -75,8 +75,14 @@ it moves ports. Do not hand-edit only one side.
 
 Best-effort, per IP, in `functions/api/[[route]].ts`, before Better Auth dispatch:
 
-- `/api/auth/*` (every auth route, including password reset and verification): 30
-  requests per 5 minutes on deployed hosts; 300 per hour locally for testing.
+- Session checks (exactly `GET /api/auth/get-session` and `GET /api/auth/status`):
+  600 requests per 5 minutes, in their own bucket, so page loads from a shared IP
+  never lock signed-in users out or eat into the sign-in limit.
+- Every other `/api/auth/*` route (sign-in by email or username, sign-up, password
+  reset, verification links, username checks, and any future Better Auth
+  endpoint): 30 requests per 5 minutes on deployed hosts; 300 per hour locally for
+  testing. This is deny-by-default: `functions/api/utils/auth-rate-limit.ts` matches
+  the session-check allowlist on method and exact path.
 - Sensitive writes (`POST`/`PUT`/`DELETE` under templates, checklists, uploads, the
   legacy Organization routes `teams`, and Run Key/MCP writes): 120 per minute.
 - MCP also limits each authenticated Run Key to 120 requests per minute.

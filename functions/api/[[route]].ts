@@ -3,6 +3,7 @@ import { getApiEnv } from './env';
 import { applyCorsHeaders, buildCorsPreflightResponse } from './utils/cors';
 import { getClientIp, log } from './utils/logger';
 import { checkRateLimit } from './utils/rate-limit';
+import { checkAuthRateLimit } from './utils/auth-rate-limit';
 import { createBetterAuth, getAuthEmailPolicy } from './better-auth';
 import { isBodyWithinLimit } from './utils/body';
 import { 
@@ -147,18 +148,20 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
     }
 
     if (ip) {
-      const isAuth = path.startsWith('auth/');
+      const authLimit = checkAuthRateLimit({
+        method: request.method,
+        path,
+        ip,
+        isLocal: isLocalRequest(url),
+      });
       const isSensitiveWrite =
         (request.method === 'POST' || request.method === 'PUT' || request.method === 'DELETE') &&
         (path.startsWith('templates') || path.startsWith('checklists') || path.startsWith('uploads') || path.startsWith('teams') || path === 'agent-keys' || path.startsWith('agent-keys/') || path === 'mcp');
 
-      if (isAuth) {
-        const limit = isLocalRequest(url)
-          ? checkRateLimit(`auth:${ip}`, { windowMs: 60 * 60 * 1000, max: 300 })
-          : checkRateLimit(`auth:${ip}`, { windowMs: 5 * 60 * 1000, max: 30 });
-        if (!limit.allowed) {
+      if (authLimit) {
+        if (!authLimit.allowed) {
           response = jsonError('Too many requests', 429);
-          response.headers.set('Retry-After', String(limit.retryAfterSeconds));
+          response.headers.set('Retry-After', String(authLimit.retryAfterSeconds));
           return finalize(response);
         }
       } else if (isSensitiveWrite) {
