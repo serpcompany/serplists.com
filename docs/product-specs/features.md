@@ -30,6 +30,7 @@ Canonical private routes:
 - Template detail pages render a read-only preview first. Editing happens on `/dashboard/templates/:id/edit`.
 - Template content updates reconcile into matching active, private runs for the same Resource Owner. Stable section, item, and sub-item IDs preserve run completion and notes across renames and reordering; new work arrives incomplete, and retired work leaves readiness calculations while remaining in run history.
 - Public templates can be shared at `/profile/{username}/{templateSlug}`. That is their only public URL, so the template library (`/templates`) and category pages list a public template only when its owner has a username, as the sitemaps do. The page also opens for other casings of the username and for the template id, but its canonical URL and `og:url` are always `https://serplists.com/profile/{username}/{templateSlug}` with the stored username casing and no query string, matching the sitemap entry.
+- The template library keeps its search, sort and category filters in the URL (`?search=`, `?sort=`, `?category=`), so links and Back/Forward change what it shows. A link to `/templates?category={slug}` with no other filter redirects to `/categories/{slug}`; the library's own filter edits never redirect.
 - Other Users can copy public templates into Personal or an authorized Organization when that ownership context's entitlement allows it.
 - Template history is stored in `template_versions`; related actor/action history is stored in `audit_events`.
 

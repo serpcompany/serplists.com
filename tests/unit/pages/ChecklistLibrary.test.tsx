@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import ChecklistLibrary from '@/pages/ChecklistLibrary';
 import Categories from '@/pages/Categories';
 import CategoryDetail from '@/pages/CategoryDetail';
+import { LIBRARY_FILTER_UPDATE_STATE } from '@/components/checklist-library/libraryFilters';
 import {
   REPO_TEMPLATE_OWNER_SLUG,
   REPO_TEMPLATE_USER_ID,
@@ -343,6 +344,44 @@ describe('Discovery pages while the catalog loads', () => {
     expect(registry).toContain('Business &amp; Operations');
     expect(registry).not.toContain('No templates found matching your search.');
     expect(registry).toContain('aria-busy="true"');
+  });
+
+  it('stays on the library when its own edit leaves only a category in the URL', () => {
+    mockUseTemplateLibrary.mockReturnValue(
+      libraryState({ templates: [bundledTemplate, movingTemplate] }),
+    );
+
+    // Clearing the search on ?category=moving&search=box writes ?category=moving.
+    const selfWritten = renderToStaticMarkup(
+      <StaticRouter
+        location={{
+          pathname: '/templates',
+          search: '?category=moving',
+          state: LIBRARY_FILTER_UPDATE_STATE,
+        }}
+      >
+        <ChecklistLibrary />
+      </StaticRouter>,
+    );
+    expect(selfWritten).toContain('Discover Templates');
+    expect(selfWritten).toContain('Moving Day');
+    expect(selfWritten).not.toContain('Camping Checklist');
+
+    // A link from elsewhere still lands on the category page.
+    const incoming = renderLibrary('/templates?category=moving');
+    expect(incoming).not.toContain('Discover Templates');
+  });
+
+  it('shows the search from the URL in the search box and filters by it', () => {
+    mockUseTemplateLibrary.mockReturnValue(
+      libraryState({ templates: [bundledTemplate, movingTemplate] }),
+    );
+
+    const markup = renderLibrary('/templates?search=%20moving%20&sort=recent');
+
+    expect(markup).toContain('value="moving"');
+    expect(markup).toContain('Moving Day');
+    expect(markup).not.toContain('Camping Checklist');
   });
 
   it('never tells a library search that nothing matched before the catalog has loaded', () => {

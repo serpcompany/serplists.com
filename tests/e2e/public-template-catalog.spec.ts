@@ -128,3 +128,48 @@ test('public creator profile page stays available under /profile/:username', asy
   expect(templateSurfaceRadius).toBeLessThan(16);
   await expect(firstTemplateChip).toBeVisible();
 });
+
+test('library filters follow the URL and clearing the search keeps the page', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1200 });
+  const searchBox = page.getByPlaceholder('Search templates...');
+  const campingCard = page.getByRole('heading', {
+    name: 'Ultimate Camping Checklist',
+  });
+
+  // The header link to a plain /templates resets a search typed on the page.
+  await page.goto('/templates');
+  await expect(campingCard).toBeVisible();
+  await searchBox.fill('zzzz-no-such-template');
+  await expect(page).toHaveURL(/\/templates\?search=zzzz-no-such-template$/);
+  await expect(campingCard).toHaveCount(0);
+  await page
+    .locator('header nav')
+    .getByRole('link', { name: 'Templates', exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/templates$/);
+  await expect(searchBox).toHaveValue('');
+  await expect(campingCard).toBeVisible();
+
+  // Back returns to the search, and the box and results follow it.
+  await page.goBack();
+  await expect(page).toHaveURL(/\/templates\?search=zzzz-no-such-template$/);
+  await expect(searchBox).toHaveValue('zzzz-no-such-template');
+  await expect(campingCard).toHaveCount(0);
+
+  // Clearing the search on a legacy category link leaves the user on the library.
+  await page.goto('/templates?category=outdoor&search=camping');
+  await expect(searchBox).toHaveValue('camping');
+  await searchBox.fill('');
+  await expect(page).toHaveURL(/\/templates\?category=outdoor$/);
+  await expect(
+    page.getByRole('heading', { name: 'Discover Templates' }),
+  ).toBeVisible();
+  await expect(searchBox).toBeFocused();
+  await expect(campingCard).toBeVisible();
+
+  // A category-only link from elsewhere still goes to the category page.
+  await page.goto('/templates?category=outdoor');
+  await expect(page).toHaveURL(/\/categories\/outdoor$/);
+});

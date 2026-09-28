@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Link, Navigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ChevronRight, Filter, Search } from 'lucide-react';
 
 import { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
@@ -10,16 +10,21 @@ import {
   filterAndSortTemplates,
   type DiscoverySort,
 } from '@/components/checklist-library/discovery-utils';
+import {
+  DEFAULT_LIBRARY_SORT,
+  LIBRARY_FILTER_UPDATE_STATE,
+  buildLibraryFilterParams,
+  readLibraryFilters,
+  resolveLibraryLegacyRedirect,
+  syncSearchDraft,
+  type SearchDraftState,
+} from '@/components/checklist-library/libraryFilters';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
-import {
-  buildPublicCategoryPath,
-  buildSiteUrl,
-  resolveLegacyTemplatesCategoryRedirectPath,
-} from '@/lib/routes';
+import { buildPublicCategoryPath, buildSiteUrl } from '@/lib/routes';
 
 type ChecklistLibraryProps = {
   templateType?: 'checklist' | 'recipe';
@@ -27,7 +32,6 @@ type ChecklistLibraryProps = {
   description?: string;
 };
 
-const DEFAULT_SORT: DiscoverySort = 'popular';
 const PUBLIC_TEMPLATES_URL = buildSiteUrl('/templates');
 const SEO_IMAGE_URL = buildSiteUrl('/placeholder.svg');
 
@@ -37,20 +41,26 @@ const ChecklistLibrary = ({
   description,
 }: ChecklistLibraryProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const legacyCategoryRedirectPath =
-    resolveLegacyTemplatesCategoryRedirectPath(searchParams);
-  const [searchQuery, setSearchQuery] = useState(
-    () => searchParams.get('search') ?? '',
+  const location = useLocation();
+  const legacyCategoryRedirectPath = resolveLibraryLegacyRedirect(
+    searchParams,
+    location.state,
   );
-  const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | null>(
-    () => searchParams.get('category'),
-  );
-  const [sortBy, setSortBy] = useState<DiscoverySort>(() => {
-    const sort = searchParams.get('sort');
-    return sort === 'recent' || sort === 'trending' || sort === 'popular'
-      ? sort
-      : DEFAULT_SORT;
-  });
+  // The URL is the only source of the filters: this page stays mounted when a link or
+  // Back/Forward changes it.
+  const {
+    categorySlug: selectedCategorySlug,
+    query: searchQuery,
+    sort: sortBy,
+  } = readLibraryFilters(searchParams);
+  const [searchDraft, setSearchDraft] = useState<SearchDraftState>(() => ({
+    draft: searchQuery,
+    syncedQuery: searchQuery,
+  }));
+  const syncedSearchDraft = syncSearchDraft(searchDraft, searchQuery);
+  if (syncedSearchDraft !== searchDraft) {
+    setSearchDraft(syncedSearchDraft);
+  }
 
   const { templates, loading, catalogError, retryCatalog, allCategories } =
     useTemplateLibrary(undefined, templateType);
@@ -76,39 +86,33 @@ const ChecklistLibrary = ({
     selectedCategoryName ? ` in ${selectedCategoryName}` : ''
   }`;
 
-  const updateFilters = ({
-    categorySlug = selectedCategorySlug,
-    query = searchQuery,
-    sort = sortBy,
-  }: {
+  const updateFilters = (changes: {
     categorySlug?: string | null;
     query?: string;
     sort?: DiscoverySort;
   }) => {
-    const nextParams = new URLSearchParams();
-    const normalizedQuery = query.trim();
-
-    if (categorySlug) {
-      nextParams.set('category', categorySlug);
+    const {
+      categorySlug = selectedCategorySlug,
+      query = searchQuery,
+      sort = sortBy,
+    } = changes;
+    if (changes.query !== undefined) {
+      const draft = changes.query;
+      setSearchDraft((current) => ({ ...current, draft }));
     }
-    if (normalizedQuery) {
-      nextParams.set('search', normalizedQuery);
-    }
-    if (sort !== DEFAULT_SORT) {
-      nextParams.set('sort', sort);
-    }
-
-    setSearchQuery(query);
-    setSelectedCategorySlug(categorySlug);
-    setSortBy(sort);
-    setSearchParams(nextParams, { replace: true });
+    // The state marks this entry as written here, so a URL left with only a category
+    // does not trigger the legacy redirect.
+    setSearchParams(buildLibraryFilterParams({ categorySlug, query, sort }), {
+      replace: true,
+      state: LIBRARY_FILTER_UPDATE_STATE,
+    });
   };
 
   const handleResetFilters = () => {
     updateFilters({
       categorySlug: null,
       query: '',
-      sort: DEFAULT_SORT,
+      sort: DEFAULT_LIBRARY_SORT,
     });
   };
   const seoHead = (
@@ -185,7 +189,7 @@ const ChecklistLibrary = ({
                     updateFilters({ query: event.target.value })
                   }
                   placeholder="Search templates..."
-                  value={searchQuery}
+                  value={syncedSearchDraft.draft}
                 />
               </div>
               <p className="text-sm text-muted-foreground">{resultLabel}</p>
