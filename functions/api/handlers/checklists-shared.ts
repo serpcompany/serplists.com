@@ -47,6 +47,13 @@ export async function handleSharedChecklist(
     return new Response('Method Not Allowed', { status: 405 });
   }
 
+  // No session is required here, so check the token before reading the body.
+  const [existingSharedRun] = await db.select().from(checklist_runs).where(activeShare).limit(1);
+
+  if (!existingSharedRun || !existingSharedRun.id) {
+    return jsonError('Shared run not found', 404);
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -63,12 +70,6 @@ export async function handleSharedChecklist(
   const { sections, status, expected_revision } = parsed.data;
   if (sections === undefined && status === undefined) {
     return jsonError('No fields to update', 400);
-  }
-
-  const [existingSharedRun] = await db.select().from(checklist_runs).where(activeShare).limit(1);
-
-  if (!existingSharedRun || !existingSharedRun.id) {
-    return jsonError('Shared run not found', 404);
   }
 
   const currentRevision = typeof existingSharedRun.revision === 'number' ? existingSharedRun.revision : 1;

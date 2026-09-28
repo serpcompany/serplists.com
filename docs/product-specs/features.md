@@ -96,5 +96,8 @@ Password for all seeded users: `password123`.
 - `503 billing_unavailable`: paid action cannot be started because billing config is unavailable.
 - `503 auth_email_unavailable`: auth email delivery is unavailable for flows that require outbound email.
 - `409 edit_conflict`: a template or run changed after the editor loaded it; refresh before retrying.
+- `429 rate_limited` (auth routes): too many attempts from this network; the body's
+  `retryAfterSeconds` and the `Retry-After` header say how long to wait. Auth errors
+  also carry `message`, which the Better Auth client reads.
 
 The client preserves API `status`, `code`, and `details` so UI behavior does not depend on string matching generic error messages.

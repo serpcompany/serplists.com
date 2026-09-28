@@ -53,6 +53,7 @@ const counts = {
   runs: 40000 * scale,
   likes: 20000 * scale,
   auditEvents: 40000 * scale,
+  invites: 5000 * scale,
   templateVersions: 20000 * scale,
   analytics: 50000 * scale,
 };
@@ -121,6 +122,15 @@ SELECT 'synthetic-audit-' || i, ${syntheticUser("i")},
   CASE WHEN i % 20 = 0 THEN 'team-seed-growth' ELSE ${syntheticUser("i")} END,
   'template', 'synthetic-template-' || (i % ${counts.templates} + 1), 'template.updated',
   datetime('now', '-' || (i % 200) || ' days') FROM n;
+
+-- Historical invites (expired, some revoked) for other emails: the incoming-invites lookup
+-- must find a user's invites through the email index instead of scanning these.
+${numbers(counts.invites)}
+INSERT INTO team_invites (id, team_id, email, role, token_hash, invited_by_user_id, expires_at, revoked_at, created_at, updated_at)
+SELECT 'synthetic-invite-' || i, 'synthetic-team-' || (i % ${counts.teams} + 1), 'invitee' || i || '@example.test', 'viewer',
+  'synthetic-invite-hash-' || i, ${syntheticUser("i * 10")}, datetime('now', '-' || (i % 60 + 1) || ' days'),
+  CASE WHEN i % 3 = 0 THEN datetime('now', '-' || (i % 60 + 2) || ' days') END,
+  datetime('now', '-' || (i % 60 + 8) || ' days'), datetime('now') FROM n;
 
 ${numbers(counts.templateVersions)}
 INSERT INTO template_versions (id, template_id, version, changed_by_user_id, subject_type, subject_id, snapshot_json, created_at)
@@ -193,7 +203,8 @@ function scenarios(): Scenario[] {
     { name: "run history", actor: "admin", path: `/api/checklists/${adminRun}/history` },
     { name: "Organization detail", actor: "admin", path: "/api/teams/team-seed-growth" },
     { name: "Organization members", actor: "admin", path: "/api/teams/team-seed-growth/members" },
-    { name: "Organization activity", actor: "admin", path: "/api/teams/team-seed-growth/activity" },
+    { name: "Organization activity", actor: "admin", path: "/api/teams/team-seed-growth/activity?limit=10" },
+    { name: "incoming Organization invites", actor: "john", path: "/api/teams/invites/pending" },
     {
       name: "create template (public)", actor: "admin", method: "POST", path: "/api/templates",
       body: { title: "Profiled template", is_public: true, categories: ["SEO"], sections: [{ id: "s1", title: "Section", items: [{ id: "i1", title: "Task" }] }] },
@@ -289,7 +300,7 @@ async function explainPlans(sqls: string[]): Promise<Map<string, string>> {
       }
     }
     const tableCounts = await platform.env.DB.prepare(
-      "SELECT 'templates' AS t, COUNT(*) AS n FROM templates UNION ALL SELECT 'checklist_runs', COUNT(*) FROM checklist_runs UNION ALL SELECT 'users', COUNT(*) FROM users UNION ALL SELECT 'audit_events', COUNT(*) FROM audit_events UNION ALL SELECT 'template_versions', COUNT(*) FROM template_versions",
+      "SELECT 'templates' AS t, COUNT(*) AS n FROM templates UNION ALL SELECT 'checklist_runs', COUNT(*) FROM checklist_runs UNION ALL SELECT 'users', COUNT(*) FROM users UNION ALL SELECT 'audit_events', COUNT(*) FROM audit_events UNION ALL SELECT 'template_versions', COUNT(*) FROM template_versions UNION ALL SELECT 'team_invites', COUNT(*) FROM team_invites",
     ).all<{ t: string; n: number }>();
     plans.set("__counts__", tableCounts.results.map((row) => `${row.t}: ${row.n.toLocaleString()}`).join(", "));
   } finally {

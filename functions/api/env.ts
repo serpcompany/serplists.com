@@ -2,6 +2,14 @@ import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 import type { Env } from "./types";
 import { resolveAuthSecret } from "./utils/auth-secret";
+import { describeFrontendUrlProblem, describeOriginListProblem } from "./utils/origin-list";
+
+// A malformed origin fails every request with 500 "Server configuration error"
+// instead of being dropped from the CORS and trusted-origin allowlists.
+const refineWith = (describe: (value: string) => string | null) => (value: string, ctx: z.RefinementCtx) => {
+  const problem = describe(value);
+  if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
+};
 
 export const getApiEnv = (env: Env) => {
   const parsedEnv = createEnv({
@@ -11,8 +19,8 @@ export const getApiEnv = (env: Env) => {
       AUTH_EMAIL_VERIFICATION_REQUIRED: z.enum(["true", "false"]).optional(),
       PERSONAL_RUN_MCP_ENABLED: z.enum(["true", "false"]).optional(),
       R2_PUBLIC_BASE_URL: z.string().url().optional(),
-      FRONTEND_URL: z.string().url().optional(),
-      CORS_ALLOWED_ORIGINS: z.string().min(1).optional(),
+      FRONTEND_URL: z.string().superRefine(refineWith(describeFrontendUrlProblem)).optional(),
+      CORS_ALLOWED_ORIGINS: z.string().superRefine(refineWith(describeOriginListProblem)).optional(),
       STRIPE_SECRET_KEY: z.string().min(1).optional(),
       STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
       STRIPE_PRO_PRICE_ID: z.string().min(1).optional(),

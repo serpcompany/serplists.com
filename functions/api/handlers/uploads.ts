@@ -1,7 +1,11 @@
 import type { Env } from '../types';
 import { getSessionUserId } from '../utils/session';
-
-type UploadBucket = 'avatars' | 'template-images' | 'template-videos' | 'template-files';
+import { serveR2Object } from '../utils/r2-file-response';
+import {
+  UPLOAD_MAX_BYTES,
+  formatUploadLimit,
+  type UploadBucket,
+} from '../../../src/lib/schemas/uploadLimits';
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -26,9 +30,35 @@ const allowedMimeTypesByBucket: Record<UploadBucket, Set<string>> = {
   ]),
 };
 
-function isAllowedUploadType(bucket: UploadBucket, file: File): boolean {
-  if (!file.type) return true;
-  return allowedMimeTypesByBucket[bucket].has(file.type);
+// Used only when the browser could not tell the type: no Content-Type, or the
+// generic application/octet-stream it sends for unregistered extensions.
+const mimeTypeByExtension: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
+  pdf: 'application/pdf',
+  zip: 'application/zip',
+  json: 'application/json',
+  txt: 'text/plain',
+  md: 'text/markdown',
+  markdown: 'text/markdown',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+
+/** The type to store the file as, or null when the bucket does not accept it. */
+function resolveUploadType(bucket: UploadBucket, file: File, extension: string): string | null {
+  const type =
+    !file.type || file.type === 'application/octet-stream'
+      ? mimeTypeByExtension[extension.toLowerCase()]
+      : file.type;
+  return type && allowedMimeTypesByBucket[bucket].has(type) ? type : null;
 }
 
 function assertBucket(value: string | null): UploadBucket | null {
@@ -47,6 +77,19 @@ function sanitizeFilename(filename: string): string {
   return filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
 }
 
+/**
+ * Only an account's own avatar (`avatars/<userId>/<file>`) can be deleted.
+ * Template media is referenced by Templates, template versions, Runs and
+ * public-template clones, and uploads record neither their Personal or
+ * Organization owner nor their references, so no one can know a delete is
+ * safe, and the uploader may have been disabled in or removed from the
+ * Organization. Clearing template media only unlinks it (TD-19).
+ */
+function isOwnAvatarKey(key: string, userId: string): boolean {
+  const [bucket, owner, file, ...rest] = key.split('/');
+  return bucket === 'avatars' && owner === userId && Boolean(file) && rest.length === 0;
+}
+
 function buildApiUrl(base: string, key: string): string {
   return `${base}/api/uploads/file?key=${encodeURIComponent(key)}`;
 }
@@ -61,17 +104,8 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
     const key = url.searchParams.get('key');
     if (!key) return json({ error: 'key required' }, 400);
 
-    const object = await env.R2_UPLOADS.get(key);
-    if (!object) return json({ error: 'Not Found' }, 404);
-
-    const headers = new Headers();
-    object.writeHttpMetadata(headers);
-    headers.set('etag', object.httpEtag);
-    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-
-    if (request.method === 'HEAD') return new Response(null, { status: 200, headers });
-
-    return new Response(object.body, { status: 200, headers });
+    // Keys contain a UUID, so objects never change once uploaded.
+    return serveR2Object(request, env.R2_UPLOADS, key, 'public, max-age=31536000, immutable');
   }
 
   // Delete: DELETE /api/uploads/file?key=...
@@ -82,8 +116,7 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
     const key = url.searchParams.get('key');
     if (!key) return json({ error: 'key required' }, 400);
 
-    // Lightweight safety: only allow deleting keys under the user's prefix.
-    if (!key.includes(`/${userId}/`) && !key.startsWith(`avatars/${userId}/`)) {
+    if (!isOwnAvatarKey(key, userId)) {
       return json({ error: 'Forbidden' }, 403);
     }
 
@@ -103,10 +136,13 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
     const file = form.get('file');
     if (!(file instanceof File)) return json({ error: 'file required' }, 400);
 
-    const maxBytes = 50 * 1024 * 1024;
-    if (file.size > maxBytes) return json({ error: 'File too large (max 50MB)' }, 413);
+    const maxBytes = UPLOAD_MAX_BYTES[bucket];
+    if (file.size > maxBytes) return json({ error: `File too large (max ${formatUploadLimit(maxBytes)})` }, 413);
 
-    if (!isAllowedUploadType(bucket, file)) {
+    const filename = sanitizeFilename(file.name || 'upload');
+    const ext = filename.includes('.') ? filename.split('.').pop() ?? '' : '';
+    const contentType = resolveUploadType(bucket, file, ext);
+    if (!contentType) {
       return json(
         {
           error: 'Unsupported file type for bucket',
@@ -118,13 +154,13 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
       );
     }
 
-    const filename = sanitizeFilename(file.name || 'upload');
-    const ext = filename.includes('.') ? filename.split('.').pop() : '';
     const key = `${bucket}/${userId}/${crypto.randomUUID()}${ext ? `.${ext}` : ''}`;
 
-    await env.R2_UPLOADS.put(key, await file.arrayBuffer(), {
+    // Pass the File itself: copying it into an ArrayBuffer would hold a 50MB
+    // upload twice, close to the isolate's 128MB memory limit.
+    await env.R2_UPLOADS.put(key, file, {
       httpMetadata: {
-        contentType: file.type || 'application/octet-stream',
+        contentType,
         contentDisposition: bucket === 'template-files' ? `attachment; filename="${filename}"` : undefined,
       },
     });
@@ -137,7 +173,7 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
       url: apiUrl,
       fileName: file.name,
       fileSize: file.size,
-      contentType: file.type || null,
+      contentType,
     });
   }
 

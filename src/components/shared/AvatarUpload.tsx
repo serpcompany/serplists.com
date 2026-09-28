@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { deleteUploadedAsset } from "@/lib/utils/fileUpload";
+import { UPLOAD_MAX_BYTES, formatUploadLimit } from "@/lib/schemas/uploadLimits";
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;
@@ -46,9 +47,9 @@ export const AvatarUpload = ({
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File size must be less than 5MB");
+    // Validate file size (the API enforces the same limit)
+    if (file.size > UPLOAD_MAX_BYTES.avatars) {
+      toast.error(`File size must be less than ${formatUploadLimit(UPLOAD_MAX_BYTES.avatars)}`);
       return;
     }
 
@@ -56,7 +57,9 @@ export const AvatarUpload = ({
 
     try {
       const upload = await api.uploadToR2({ bucket: 'avatars', file });
-      await authClient.updateUser({ image: upload.url });
+      const result = await authClient.updateUser({ image: upload.url });
+      // Keep the current avatar file unless the new one was saved.
+      if (result?.error) throw new Error(result.error.message || "Avatar was not saved");
       await refreshProfile();
       if (currentAvatarUrl && currentAvatarUrl !== upload.url) {
         await deleteUploadedAsset(currentAvatarUrl);
@@ -77,7 +80,8 @@ export const AvatarUpload = ({
     setIsRemoving(true);
 
     try {
-      await authClient.updateUser({ image: null });
+      const result = await authClient.updateUser({ image: null });
+      if (result?.error) throw new Error(result.error.message || "Avatar was not removed");
       await deleteUploadedAsset(currentAvatarUrl);
       await refreshProfile();
       toast.success("Avatar removed successfully!");

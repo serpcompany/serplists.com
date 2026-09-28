@@ -1,4 +1,5 @@
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, exists, inArray, isNotNull, isNull } from "drizzle-orm";
+import { alias, type SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 
@@ -93,4 +94,37 @@ export async function userHasTeamRole(
     membership,
     role,
   };
+}
+
+/**
+ * SQL that holds while `userId` is an active member of `teamId` (with one of `roles`, if
+ * given), for guarding or filtering in the same statement. Pass values, or columns of the
+ * outer query to correlate.
+ */
+export function activeTeamMemberExists(
+  db: ReturnType<typeof createDb>,
+  teamId: SQLiteColumn | string,
+  userId: SQLiteColumn | string,
+  roles?: readonly TeamRole[],
+) {
+  const member = alias(schema.team_members, roles ? "active_manager" : "active_member");
+  return exists(
+    db.select({ id: member.id }).from(member).where(
+      and(
+        eq(member.team_id, teamId),
+        eq(member.user_id, userId),
+        eq(member.status, "active"),
+        roles ? inArray(member.role, [...roles]) : undefined,
+      ),
+    ),
+  );
+}
+
+/** SQL that holds while `userId` is an active owner or admin of `teamId`. */
+export function activeTeamManagerExists(
+  db: ReturnType<typeof createDb>,
+  teamId: SQLiteColumn | string,
+  userId: SQLiteColumn | string,
+) {
+  return activeTeamMemberExists(db, teamId, userId, ["owner", "admin"]);
 }

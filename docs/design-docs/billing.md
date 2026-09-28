@@ -114,6 +114,12 @@ Authenticated:
 - `POST /api/billing/portal` → returns `{ url }` to redirect user to Stripe Customer Portal
 - `GET /api/billing/status` → returns `{ plan, billingEnabled }` (`plan` is `free`, `pro`, or the legacy `team` for a paid Organization)
 
+Checkout and portal each call Stripe, whose rate limit the whole Stripe account
+shares, so they are limited per IP and per account and answer `429` with
+`Retry-After` ([rate limits](../SECURITY.md#rate-limits)). Checkout creates the
+Stripe customer with the idempotency key `customer-<userId>` and keeps a mapping
+another request stored first, so a double click shares one customer.
+
 Webhook:
 - `POST /api/stripe/webhook` (verifies `Stripe-Signature`, idempotent via `stripe_webhook_events`)
 

@@ -8,10 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
+import { submitPasswordReset } from "@/lib/auth/passwordReset";
+import { useAuth } from "@/contexts/CloudflareAuthContext";
 
 const ResetPassword = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isAuthenticated, logout } = useAuth();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,15 +44,17 @@ const ResetPassword = () => {
 
     setIsSubmitting(true);
     try {
-      const result = await authClient.resetPassword({ newPassword: password, token });
-      if (result?.error) {
-        toast.error(result.error.message || "Unable to reset password");
+      const result = await submitPasswordReset({
+        resetPassword: () => authClient.resetPassword({ newPassword: password, token }),
+        signOutLocally: logout,
+        isSignedIn: isAuthenticated,
+      });
+      if (!result.ok) {
+        toast.error(result.message);
       } else {
         toast.success("Password updated. Please sign in again.");
         navigate("/login", { replace: true });
       }
-    } catch (err) {
-      toast.error("Unable to reset password");
     } finally {
       setIsSubmitting(false);
     }

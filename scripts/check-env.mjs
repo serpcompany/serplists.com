@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
+import { describeFrontendUrlProblem, describeOriginListProblem } from "./lib/origin-list.mjs";
 
 const parseEnvFile = (path) => {
   if (!existsSync(path)) return {};
@@ -52,6 +53,12 @@ if (forbiddenLiveKeys.length > 0 || liveStripeValues.length > 0) {
   );
 }
 
+// Same rules as functions/api/env.ts, so a malformed origin fails before deploy.
+const refineWith = (describe) => (value, ctx) => {
+  const problem = describe(value);
+  if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
+};
+
 createEnv({
   server: {
     JWT_SECRET: z.string().min(1).optional(),
@@ -60,8 +67,8 @@ createEnv({
     PERSONAL_RUN_MCP_ENABLED: z.enum(["true", "false"]).optional(),
     VITE_PERSONAL_RUN_MCP_ENABLED: z.enum(["true", "false"]).optional(),
     R2_PUBLIC_BASE_URL: z.string().url().optional(),
-    FRONTEND_URL: z.string().url().optional(),
-    CORS_ALLOWED_ORIGINS: z.string().min(1).optional(),
+    FRONTEND_URL: z.string().superRefine(refineWith(describeFrontendUrlProblem)).optional(),
+    CORS_ALLOWED_ORIGINS: z.string().superRefine(refineWith(describeOriginListProblem)).optional(),
     STRIPE_SECRET_KEY: z.string().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
     STRIPE_PRO_PRICE_ID: z.string().min(1).optional(),

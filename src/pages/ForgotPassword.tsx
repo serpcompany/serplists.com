@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { authClient, getAuthStatus } from "@/lib/auth-client";
+import { getAuthErrorMessage } from "@/lib/auth/authErrors";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -28,13 +29,13 @@ const ForgotPassword = () => {
       const result = await authClient.requestPasswordReset({ email, redirectTo });
 
       if (result?.error) {
-        toast.error(result.error.message || "Unable to send reset email");
+        toast.error(getAuthErrorMessage(result.error, "Unable to send reset email"));
       } else {
         setSubmitted(true);
         toast.success("If an account exists, a reset link has been sent.");
       }
     } catch (error) {
-      toast.error("Unable to send reset email");
+      toast.error(getAuthErrorMessage(error, "Unable to send reset email"));
     } finally {
       setIsSubmitting(false);
     }

@@ -73,7 +73,14 @@ Organization scoping applies.
 - Organizations: `GET|POST /api/teams`, `GET|PUT /api/teams/:teamId`, `GET /api/teams/:teamId/members`, `PUT /api/teams/:teamId/members/:memberId`, `PUT /api/teams/:teamId/owner`, invites, and activity (see [organizations](organizations.md))
 - Billing: `POST /api/billing/checkout`, `POST /api/billing/portal`, `GET /api/billing/status`; Stripe webhook `POST /api/stripe/webhook`
 - Uploads: `POST /api/uploads`, `GET|HEAD|DELETE /api/uploads/file?key=...`
-- Health: `GET /api/health`
+- Health: `GET|HEAD /api/health`
+
+`functions/api/[[route]].ts` exports one catch-all `onRequest`, so every method,
+`HEAD` and `PATCH` included, reaches the API. Pages matches a verb export such as
+`onRequestGet` only on its exact method and sends any other method to the static
+assets, which would answer `200` with the SPA's `index.html`. A `HEAD` answer keeps
+the status and headers the route builds and drops the body; routes that only check
+for `GET` answer `HEAD` with their own `404` or `405`.
 
 Run responses include `template_version`, `current_template_version`, `revision`,
 and derived `is_stale`. Send `expected_revision` when updating a run and
@@ -139,8 +146,13 @@ Do not use git history for user-generated Template or Organization history. Git 
 ## File Uploads
 
 - `POST /api/uploads` writes to R2 with a per-user key prefix.
-- `GET /api/uploads/file?key=...` and `HEAD /api/uploads/file?key=...` serve objects with long-lived cache headers.
-- `DELETE /api/uploads/file?key=...` is restricted to the current user prefix.
+- `GET /api/uploads/file?key=...` and `HEAD /api/uploads/file?key=...` serve objects with long-lived cache headers,
+  single byte ranges (`206`, `416`), and `If-None-Match` revalidation (`304`) through
+  `functions/api/utils/r2-file-response.ts`. Uploaded videos need ranges: Safari will not play one without them,
+  and no browser can seek past what it has buffered.
+- `DELETE /api/uploads/file?key=...` deletes only the signed-in user's own avatar
+  (`avatars/<userId>/<file>`). Template media answers `403`: Templates, versions,
+  Runs and clones may still reference it, so the editor only unlinks it (TD-19).
 
 ## Public And Private Data
 

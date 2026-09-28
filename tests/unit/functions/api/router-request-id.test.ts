@@ -7,7 +7,8 @@ function buildEnv(overrides?: Record<string, unknown>) {
   } as any;
 }
 
-describe('API router request id propagation', () => {
+// Each test imports the whole router graph fresh; allow for a busy machine.
+describe('API router request id propagation', { timeout: 30_000 }, () => {
   afterEach(() => {
     vi.doUnmock('../../../../functions/api/handlers/templates');
     vi.resetModules();

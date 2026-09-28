@@ -19,7 +19,7 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
   with `rowsRead`, `rowsWritten`, `rowsReturned`, and `durationMs`
   (`functions/api/utils/d1-profiler.ts`, wired in `functions/api/db.ts`).
 - **Per endpoint, at scale:** `pnpm run d1:profile` builds an isolated local D1 with
-  about 150k synthetic rows (20k templates, 40k runs, 40k audit events), replays
+  about 150k synthetic rows (20k templates, 40k runs, 40k audit events, 5k invites), replays
   anonymous, Personal, and Organization requests, and writes
   `tmp/d1-profile/report.md` with rows read and written per request and per
   statement, efficiency (rows returned / rows read), and `EXPLAIN QUERY PLAN`. Use
@@ -40,7 +40,10 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
    avoid single-column indexes on low-cardinality columns (`is_public`, `status`); the
    planner picks them and scans half the table. When such an index still beats a better
    one, write the term as ``sql`+${column} = 1` ``: unary `+` stops SQLite using an index
-   for that term (the public profile query does this).
+   for that term (the public profile query does this). Never wrap an indexed column in a
+   function: `lower(email) = ?` cannot use the email index and reads the whole table.
+   Normalize on write and compare with plain equality (invite emails are lowercased by
+   the create-invite Zod schema, so incoming invites match `email = ?`).
 3. **Never write on a read path.** Make upserts conditional so an unchanged value writes
    nothing.
 4. **Every index costs a write.** Each insert writes one row per index, and updates do

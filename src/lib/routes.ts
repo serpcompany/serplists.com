@@ -90,6 +90,19 @@ export const resolveLegacyTemplatesCategoryRedirectPath = (
 export const buildPublicProfilePath = (username: string): string =>
   `/profile/${encodeURIComponent(username)}`;
 
+/**
+ * Usernames are stored lowercase and profile lookups ignore case, so
+ * /profile/JohnDoe loads @johndoe. Returns the path to replace the URL with
+ * when its casing differs from the stored username, or null.
+ */
+export const getCanonicalProfilePath = (
+  routeUsername: string | undefined,
+  storedUsername: string | null | undefined,
+): string | null =>
+  routeUsername && storedUsername && routeUsername !== storedUsername
+    ? buildPublicProfilePath(storedUsername)
+    : null;
+
 export const buildPublicTemplatePath = (
   ownerSlug: string,
   templateSlug: string,

@@ -1,5 +1,6 @@
 import { optimizeImage, isImageFile } from "@/lib/imageOptimization";
 import { api } from "@/lib/api";
+import { UPLOAD_MAX_BYTES, formatUploadLimit } from "@/lib/schemas/uploadLimits";
 
 export type TemplateUploadBucket =
   | 'template-images'
@@ -63,14 +64,6 @@ export const uploadFile = async (
   }
 };
 
-export const deleteFile = async (
-  url: string,
-  bucket: TemplateUploadBucket,
-): Promise<boolean> => {
-  void bucket;
-  return deleteUploadedAsset(url);
-};
-
 export const getUploadedAssetKey = (url: string): string | null => {
   try {
     const parsed = new URL(url, 'https://serplists.local');
@@ -88,10 +81,15 @@ export const getUploadedAssetKey = (url: string): string | null => {
 export const isUploadedAssetUrl = (url: string): boolean =>
   getUploadedAssetKey(url) !== null;
 
+/**
+ * Deletes a replaced or removed avatar. Only avatars can be deleted: Templates,
+ * versions, Runs and clones may still reference template media, so clearing or
+ * replacing it only unlinks it, and the API refuses the delete.
+ */
 export const deleteUploadedAsset = async (url: string): Promise<boolean> => {
   const key = getUploadedAssetKey(url);
 
-  if (!key) {
+  if (!key?.startsWith('avatars/')) {
     return false;
   }
 
@@ -108,10 +106,12 @@ export const validateFile = (
   file: File,
   type: 'image' | 'video' | 'file'
 ): { valid: boolean; error?: string } => {
-  const maxSize = 50 * 1024 * 1024; // 50MB
+  const bucket: TemplateUploadBucket =
+    type === 'image' ? 'template-images' : type === 'video' ? 'template-videos' : 'template-files';
+  const maxSize = UPLOAD_MAX_BYTES[bucket]; // the API enforces the same limit
 
   if (file.size > maxSize) {
-    return { valid: false, error: 'File size must be less than 50MB' };
+    return { valid: false, error: `File size must be less than ${formatUploadLimit(maxSize)}` };
   }
 
   switch (type) {

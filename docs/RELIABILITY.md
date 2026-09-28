@@ -69,7 +69,24 @@ To deploy by hand (rarely needed): `pnpm run build`, then
 
 - API logs are JSON lines from `log()` in `functions/api/utils/logger.ts`. Every
   request gets a `requestId`, returned as the `X-Request-Id` header. ESLint rejects
-  direct `console.*` in `functions/`. Log ids, never emails or tokens.
+  direct `console.*` in `functions/`. Log ids, never emails, tokens, or client IP
+  addresses (the router keeps the IP in memory for rate limits only). As a backstop,
+  `log()` writes any field named `ip`, `email`, `password`, `token`,
+  `authorization`, or `cookie` as `"[redacted]"`, and a field cannot replace the
+  `level` or `message` (event name) of the line.
+- Better Auth's own logs go through `log()` as `better_auth` lines
+  (`functions/api/utils/better-auth-logger.ts`), because its default logger prints
+  raw emails (`User not found { email }` on every unknown sign-in or reset). The
+  text is kept in `detail` with email addresses replaced by `[email]`, objects it
+  passes are dropped, and an error keeps only its name and message, cut before
+  Drizzle's bound `params:`. Routine user mistakes (unknown email, wrong password,
+  repeat sign-up) are logged as `info`, not `error`.
+- The router logs each request's path through `sanitizeLogPath()`
+  (`functions/api/utils/log-path.ts`), which replaces the secrets some routes carry
+  in the URL with `:token`: `auth/reset-password/<token>`,
+  `checklists/shared/<shareToken>` and `teams/invites/<token>/accept`. Add any new
+  route with a secret in its path there. Cloudflare's own request metadata still
+  records the full URL, so limit who can read the runtime logs.
 - Production: Cloudflare runtime logs for the Pages project. There is no external
   log sink, metrics, traces, or alerting yet.
 - Local: `pnpm run dev:all` mirrors output to `tmp/logs/dev-all.log`; search for
@@ -131,6 +148,12 @@ Common failures:
   vi.mock("drizzle-orm/d1", () => ({ drizzle: vi.fn(() => dbMocks.db) }));
   ```
 
+- To test SQL guards or races, run the real handler against `SqliteD1` from
+  `tests/support/sqlite-d1.ts`: a node:sqlite database with every migration applied that
+  implements the D1 calls Drizzle makes. `beforeNextBatch()` commits a competing write
+  just before the handler's next `db.batch()`, and `queryPlan()` returns
+  `EXPLAIN QUERY PLAN` for a recorded statement. See
+  `tests/unit/functions/api/teams-sqlite.test.ts`.
 - Coverage settings live under `test.coverage` in `vitest.config.ts`
   (`pnpm run test:coverage`); `@vitest/coverage-v8` must match the Vitest version.
   If you override `test.exclude`, keep `node_modules`, `dist`,

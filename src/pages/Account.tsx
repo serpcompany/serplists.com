@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { toast } from 'sonner';
 import { ProfileSection } from '@/components/account/ProfileSection';
 import { authClient } from '@/lib/auth-client';
+import { getAuthErrorMessage } from '@/lib/auth/authErrors';
 import { SecuritySection } from '@/components/account/SecuritySection';
 import { BillingSection } from '@/components/account/BillingSection';
 import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
@@ -80,7 +81,7 @@ const Account = () => {
 
       const result = await authClient.updateUser(updates);
       if (result?.error) {
-        toast.error(result.error.message || 'Failed to update profile');
+        toast.error(getAuthErrorMessage(result.error, 'Failed to update profile'));
         return;
       }
 

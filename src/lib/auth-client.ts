@@ -1,6 +1,7 @@
 import { env } from "@/env";
 import { createAuthClient } from "better-auth/react";
 import { usernameClient } from "better-auth/client/plugins";
+import { AuthStatusError, parseRetryAfterSeconds } from "@/lib/auth/authErrors";
 
 const DEV_API_BASE_URL = env.VITE_API_URL ?? "http://localhost:8788/api";
 const API_BASE_URL = import.meta.env.DEV ? DEV_API_BASE_URL : env.VITE_API_URL ?? "/api";
@@ -30,7 +31,7 @@ export async function getAuthStatus(): Promise<{
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to load auth status: ${response.status}`);
+    throw new AuthStatusError(response.status, parseRetryAfterSeconds(response.headers.get("Retry-After")));
   }
 
   return (await response.json()) as { emailAuthAvailable: boolean };

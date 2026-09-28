@@ -177,6 +177,159 @@ describe("Teams handler", () => {
     expect(data.slug).toBe("equipe-cafe-strasse");
   });
 
+  it("rejects team creation with an explicitly requested slug that is taken", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: "other-team" }]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "Acme", slug: "acme" }),
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data).toEqual({ error: "Organization slug is already in use", code: "team_slug_exists" });
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+    expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
+  });
+
+  it("creates a team with an explicitly requested free slug unchanged", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "Acme", slug: "acme" }),
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.slug).toBe("acme");
+    expect(dbMocks.insertChain.values.mock.calls[0][0].slug).toBe("acme");
+  });
+
+  it("suffixes a name-derived slug that is taken", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: "other-team" }]).mockResolvedValueOnce([]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "Acme" }),
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.slug).toMatch(/^acme-[0-9a-f]{8}$/);
+    expect(dbMocks.insertChain.values.mock.calls[0][0].slug).toBe(data.slug);
+  });
+
+  describe("slug races between the check and the write", () => {
+    const slugViolation = () => new Error("D1_ERROR: UNIQUE constraint failed: teams.slug: SQLITE_CONSTRAINT");
+
+    function createRequest(body: unknown) {
+      return new Request("http://localhost/api/teams", { method: "POST", body: JSON.stringify(body) });
+    }
+
+    function createdAuditSlugs() {
+      return auditMocks.buildAuditEventValues.mock.calls
+        .map(([input]) => input)
+        .filter((input) => input.action === "team.created")
+        .map((input) => (input.after as { team: { slug: string } }).team.slug);
+    }
+
+    it("retries a name-derived slug that another request took and records the slug it wrote", async () => {
+      dbMocks.db.batch.mockRejectedValueOnce(slugViolation()).mockResolvedValueOnce([]);
+
+      const response = await handleTeams(createRequest({ name: "Marketing" }), mockEnv);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(dbMocks.db.batch).toHaveBeenCalledTimes(2);
+      expect(data.slug).toMatch(/^marketing-[0-9a-f]{8}$/);
+      const insertedTeams = dbMocks.insertChain.values.mock.calls
+        .map(([values]) => values)
+        .filter((values) => "billing_owner_user_id" in values);
+      expect(insertedTeams.map((team) => team.slug)).toEqual(["marketing", data.slug]);
+      expect(createdAuditSlugs()).toEqual(["marketing", data.slug]);
+    });
+
+    it("gives up with a 409 after a bounded number of slug collisions", async () => {
+      dbMocks.db.batch.mockRejectedValue(slugViolation());
+
+      const response = await handleTeams(createRequest({ name: "Marketing" }), mockEnv);
+      const data = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(data.code).toBe("team_slug_exists");
+      expect(dbMocks.db.batch).toHaveBeenCalledTimes(3);
+    });
+
+    it("returns 409 without retrying when a requested slug is taken between the check and the write", async () => {
+      dbMocks.db.batch.mockRejectedValueOnce(slugViolation());
+
+      const response = await handleTeams(createRequest({ name: "Marketing", slug: "marketing" }), mockEnv);
+      const data = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(data).toEqual({ error: "Organization slug is already in use", code: "team_slug_exists" });
+      expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ["another unique index", "D1_ERROR: UNIQUE constraint failed: team_members.team_id, team_members.user_id"],
+      ["a similarly named column", "D1_ERROR: UNIQUE constraint failed: teams.slug_history"],
+      ["any other failure", "D1_ERROR: database is locked"],
+    ])("rethrows %s instead of treating it as a slug conflict", async (_label, message) => {
+      dbMocks.db.batch.mockRejectedValueOnce(new Error(message));
+
+      await expect(handleTeams(createRequest({ name: "Marketing" }), mockEnv)).rejects.toThrow(message);
+      expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
+    });
+
+    it("recognizes the slug conflict when it is wrapped as the cause of another error", async () => {
+      dbMocks.db.batch.mockRejectedValueOnce(new Error("Failed query", { cause: slugViolation() }));
+
+      const response = await handleTeams(createRequest({ name: "Marketing", slug: "marketing" }), mockEnv);
+
+      expect(response.status).toBe(409);
+    });
+
+    function updateRequest(body: { name?: string; slug?: string }) {
+      dbMocks.selectChain.limit
+        .mockResolvedValueOnce([
+          { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
+        ])
+        .mockResolvedValueOnce([{ id: "team-1", name: "Old Team", slug: "old-team", archived_at: null }]);
+      if (body.slug) {
+        dbMocks.selectChain.limit.mockResolvedValueOnce([]); // the slug looks free when checked
+      }
+      return new Request("http://localhost/api/teams/team-1", { method: "PUT", body: JSON.stringify(body) });
+    }
+
+    it("returns 409 when another Organization saves the same new slug first", async () => {
+      dbMocks.db.batch.mockRejectedValueOnce(slugViolation());
+
+      const response = await handleTeams(updateRequest({ slug: "new-team" }), mockEnv);
+      const data = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(data).toEqual({ error: "Organization slug is already in use", code: "team_slug_exists" });
+    });
+
+    it("rethrows a slug error from an update that did not change the slug", async () => {
+      dbMocks.db.batch.mockRejectedValueOnce(slugViolation());
+
+      await expect(handleTeams(updateRequest({ name: "New Team" }), mockEnv)).rejects.toThrow("teams.slug");
+    });
+  });
+
   it("lists active team memberships", async () => {
     dbMocks.selectChain.orderBy.mockResolvedValueOnce([
       {
@@ -314,6 +467,60 @@ describe("Teams handler", () => {
     expect(data.code).toBe("team_slug_exists");
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
     expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ name: "Old Team", slug: "old-team" }],
+    [{ name: "  Old Team  " }],
+    [{ slug: "old-team" }],
+  ])("treats saving %o over identical Organization settings as a no-op success", async (body) => {
+    const team = {
+      id: "team-1",
+      name: "Old Team",
+      slug: "old-team",
+      billing_owner_user_id: "user-1",
+      created_by_user_id: "user-1",
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: null,
+      archived_at: null,
+    };
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
+      ])
+      .mockResolvedValueOnce([team]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams/team-1", {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toEqual({
+      success: true,
+      team: { ...team, membership: { id: "member-1", role: "admin", status: "active" } },
+    });
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+    expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
+  });
+
+  it("still rejects an Organization update that names no fields", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
+    ]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams/team-1", { method: "PUT", body: JSON.stringify({}) }),
+      mockEnv,
+    );
+
+    expect(response.status).toBe(400);
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
   });
 
   it("rejects team profile updates for non-admin team members", async () => {
@@ -506,6 +713,7 @@ describe("Teams handler", () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
+    expect(dbMocks.selectChain.limit).toHaveBeenLastCalledWith(10);
     expect(data).toEqual([
       expect.objectContaining({
         id: "event-1",
@@ -708,6 +916,62 @@ describe("Teams handler", () => {
     expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
   });
 
+  it("returns a conflict when the ownership transfer write changes nothing", async () => {
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        { id: "owner-member", team_id: "team-1", user_id: "owner-user", role: "owner", status: "active" },
+      ])
+      .mockResolvedValueOnce([
+        { id: "member-2", team_id: "team-1", user_id: "user-2", role: "admin", status: "active" },
+      ])
+      .mockResolvedValueOnce([]);
+    dbMocks.db.batch.mockResolvedValueOnce([
+      { meta: { changes: 0 } },
+      { meta: { changes: 0 } },
+      { meta: { changes: 0 } },
+      { meta: { changes: 0 } },
+    ]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams/team-1/owner", {
+        method: "PUT",
+        body: JSON.stringify({ memberId: "member-2" }),
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.code).toBe("owner_transfer_conflict");
+    expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+    expect(dbMocks.insertChain.select).toHaveBeenCalled();
+  });
+
+  it("returns a conflict when a member update write changes nothing", async () => {
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        { id: "admin-member", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
+      ])
+      .mockResolvedValueOnce([
+        { id: "member-2", team_id: "team-1", user_id: "user-2", role: "editor", status: "active" },
+      ]);
+    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams/team-1/members/member-2", {
+        method: "PUT",
+        body: JSON.stringify({ role: "viewer" }),
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.code).toBe("member_update_conflict");
+    expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+    expect(dbMocks.insertChain.select).toHaveBeenCalled();
+  });
+
   it("rejects invites for users who are already active members", async () => {
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([
@@ -769,6 +1033,9 @@ describe("Teams handler", () => {
       .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
       .mockResolvedValueOnce([{ email: "new@example.com" }])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "admin", status: "active" },
+      ])
       .mockResolvedValueOnce([{ id: "invite-1" }])
       .mockResolvedValueOnce([
         { id: "member-created", team_id: "team-1", user_id: "user-1", role: "editor", status: "active" },
@@ -827,6 +1094,9 @@ describe("Teams handler", () => {
       .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
       .mockResolvedValueOnce([{ email: "new@example.com" }])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "admin", status: "active" },
+      ])
       .mockResolvedValueOnce([{ id: "invite-1" }])
       .mockResolvedValueOnce([
         { id: "member-created", team_id: "team-1", user_id: "user-1", role: "viewer", status: "active" },
@@ -871,6 +1141,9 @@ describe("Teams handler", () => {
       .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
       .mockResolvedValueOnce([{ email: "new@example.com" }])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "admin", status: "active" },
+      ])
       .mockResolvedValueOnce([]);
 
     const response = await handleTeams(
@@ -886,7 +1159,7 @@ describe("Teams handler", () => {
     expect(dbMocks.insertChain.onConflictDoNothing).toHaveBeenCalled();
   });
 
-  it("accepts an invite without downgrading an already active member", async () => {
+  it("refuses an invite for an already active member without changing their role", async () => {
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([
         {
@@ -905,9 +1178,8 @@ describe("Teams handler", () => {
       .mockResolvedValueOnce([
         { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
       ])
-      .mockResolvedValueOnce([{ id: "invite-1" }])
       .mockResolvedValueOnce([
-        { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
+        { id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "admin", status: "active" },
       ]);
 
     const response = await handleTeams(
@@ -916,27 +1188,53 @@ describe("Teams handler", () => {
     );
     const data = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(data.role).toBe("admin");
-    expect(dbMocks.insertChain.values).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        team_id: "team-1",
-        user_id: "user-1",
-        role: "viewer",
-      }),
+    expect(response.status).toBe(409);
+    expect(data).toEqual(expect.objectContaining({
+      code: "team_member_exists",
+      details: { teamId: "team-1", role: "admin" },
+    }));
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalledWith(expect.objectContaining({ role: expect.anything() }));
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalledWith(expect.objectContaining({ accepted_at: expect.any(String) }));
+    expect(dbMocks.updateChain.set).toHaveBeenCalledWith({ revoked_at: expect.any(String), updated_at: expect.any(String) });
+    expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(expect.objectContaining({
+      action: "team_invite.revoked",
+      metadata: { reason: "invitee_already_member" },
+    }));
+    expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalledWith(expect.objectContaining({
+      action: "team_invite.accepted",
+    }));
+  });
+
+  it.each([
+    ["no longer an active member", []],
+    ["below admin", [{ id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "editor", status: "active" }]],
+  ])("refuses an invite whose inviter is %s", async (_label, inviterRows) => {
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        {
+          id: "invite-1",
+          team_id: "team-1",
+          email: "new@example.com",
+          role: "admin",
+          invited_by_user_id: "admin-1",
+          expires_at: new Date(Date.now() + 60_000).toISOString(),
+          accepted_at: null,
+          revoked_at: null,
+        },
+      ])
+      .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
+      .mockResolvedValueOnce([{ email: "new@example.com" }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(inviterRows);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams/invites/pending/invite-1/accept", { method: "POST" }),
+      mockEnv,
     );
-    expect(dbMocks.updateChain.set).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        role: "viewer",
-        status: "active",
-      }),
-    );
-    expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        accepted_by_user_id: "user-1",
-        accepted_at: expect.any(String),
-      }),
-    );
+
+    expect(response.status).toBe(404);
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
   });
 
   it("returns success when the same user retries an accepted invite", async () => {
@@ -1096,6 +1394,44 @@ describe("Teams handler", () => {
     expect(response.status).toBe(404);
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
     expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
+  });
+
+  it("reports a conflict instead of a revoke when the invite was accepted between read and write", async () => {
+    const pendingInvite = {
+      id: "invite-1",
+      team_id: "team-1",
+      email: "new@example.com",
+      role: "viewer",
+      token_hash: "hashed-token",
+      invited_by_user_id: "user-1",
+      accepted_by_user_id: null,
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      accepted_at: null,
+      revoked_at: null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: null,
+    };
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
+      ])
+      .mockResolvedValueOnce([pendingInvite])
+      .mockResolvedValueOnce([{ accepted_at: "2026-01-02T00:00:00.000Z" }]);
+    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams/team-1/invites/invite-1", {
+        method: "DELETE",
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.code).toBe("invite_already_accepted");
+    expect(data.success).toBeUndefined();
+    expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+    expect(dbMocks.insertChain.select).toHaveBeenCalled();
   });
 
   it("rejects self membership updates for team admins", async () => {

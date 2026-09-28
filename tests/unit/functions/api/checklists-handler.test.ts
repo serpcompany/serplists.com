@@ -1047,6 +1047,34 @@ describe('Checklists Handlers', () => {
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
   });
 
+  it('answers an unknown share token before reading the request body', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue(null);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([]);
+    let bodyPulled = false;
+    const body = new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          bodyPulled = true;
+          controller.enqueue(new TextEncoder().encode('{"sections":['));
+          controller.close();
+        },
+      },
+      { highWaterMark: 0 },
+    );
+
+    const request = new Request('http://localhost/api/checklists/shared/missing-run', {
+      method: 'PUT',
+      body,
+      duplex: 'half',
+    } as RequestInit);
+
+    const response = await handleChecklists(request, mockEnv);
+
+    expect(response.status).toBe(404);
+    expect(request.bodyUsed).toBe(false);
+    expect(bodyPulled).toBe(false);
+  });
+
   it('rejects stale private run writes before they can discard template evolution', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([

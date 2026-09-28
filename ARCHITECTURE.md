@@ -12,7 +12,7 @@ the top-level map. Request flow, routes, and the data model are in the
 | Domain | API (`functions/api/`) | App (`src/`) |
 | --- | --- | --- |
 | Identity and sessions | `better-auth.ts`, `handlers/auth.ts`, `utils/session.ts` | `contexts/CloudflareAuthContext.tsx`, `lib/auth/` |
-| Personal and Organization ownership | `handlers/teams.ts`, `utils/team-access.ts` | `contexts/WorkspaceContext.tsx`, `features/teams/` |
+| Personal and Organization ownership | `handlers/teams.ts`, `handlers/team-create.ts`, `handlers/team-membership.ts`, `utils/team-access.ts` | `contexts/WorkspaceContext.tsx`, `features/teams/` |
 | Templates | `handlers/templates.ts`, `utils/payloads.ts`, `utils/template-reconciliation.ts`, `utils/template-changes.ts`, `utils/template-portable.ts`, `utils/template-writes.ts`, `utils/history-queries.ts` | `contexts/TemplatesContext.tsx`, `features/template-*`, `lib/templates/` |
 | Runs | `handlers/checklists.ts`, `handlers/checklists-shared.ts`, `utils/checklist-runs.ts`, `utils/run-access.ts`, `utils/run-completion.ts`, `utils/shared-run-merge.ts`, `utils/share-link-actors.ts`, `utils/template-access.ts` | `features/run-execution/`, `features/dashboard-runs/` |
 | Billing and entitlements | `handlers/billing.ts`, `handlers/stripe.ts`, `utils/entitlements.ts`, `utils/active-run-limit.ts`, `utils/guarded-insert.ts`, `utils/limit-reached.ts` | `lib/billing.ts`, `pages/Pricing.tsx` |

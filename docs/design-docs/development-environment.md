@@ -61,7 +61,7 @@ Seeded users share the password `password123`:
 In development, `/login` has quick-fill buttons and `DevLoginBar` sits at the
 bottom of the app. `pnpm run db:reset:test-user-passwords` restores changed
 passwords. If sign-in fails, check the API is running, local D1 is seeded, and the
-browser calls the intended API URL. A `429` means the local auth rate limit (300
+browser calls the intended API URL. A `429` means the local sign-in rate limit (300
 per hour), not bad credentials.
 
 ## See the UI

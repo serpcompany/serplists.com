@@ -24,6 +24,7 @@ import {
   buildPublicCategoryPath,
   buildPublicFeaturePath,
   buildPublicProfilePath,
+  getCanonicalProfilePath,
   buildPublicTemplatesPath,
   buildPublicTemplatePath,
   buildSharePath,
@@ -242,5 +243,22 @@ describe('routes', () => {
         ownerProfile: { username: 'alice' },
       }),
     ).toBe('/profile/alice/template-1');
+  });
+});
+
+describe('getCanonicalProfilePath', () => {
+  it('sends a mixed-case profile URL to the stored lowercase username', () => {
+    expect(getCanonicalProfilePath('JohnDoe', 'johndoe')).toBe('/profile/johndoe');
+  });
+
+  it('stays on a URL that already uses the stored username', () => {
+    expect(getCanonicalProfilePath('johndoe', 'johndoe')).toBeNull();
+    // A legacy mixed-case username is its own canonical form.
+    expect(getCanonicalProfilePath('MixedCase', 'MixedCase')).toBeNull();
+  });
+
+  it('does nothing without both usernames', () => {
+    expect(getCanonicalProfilePath(undefined, 'johndoe')).toBeNull();
+    expect(getCanonicalProfilePath('JohnDoe', null)).toBeNull();
   });
 });

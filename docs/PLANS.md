@@ -22,6 +22,9 @@ have not been updated in 30 days.
   amplification.
 - [UI decoupling](exec-plans/active/ui-decoupling.md): screens consume feature state instead of
   transport code.
+- [Upload quota and ownership](exec-plans/active/upload-quota-and-ownership.md): record uploads
+  in D1 for a per-account quota, Organization-owned deletes and orphan cleanup, with the
+  proposed migrations.
 
 ## Completed
 
