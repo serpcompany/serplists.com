@@ -26,6 +26,9 @@ import {
 } from '@/lib/routes';
 import { buildDefaultRunName } from '@/lib/runs/runName';
 
+const TEMPLATE_NOT_FOUND_DESCRIPTION =
+  'The template you are looking for does not exist or is no longer public.';
+
 const PublicTemplate = () => {
   const { username, templateSlug } = useParams<{
     username: string;
@@ -179,9 +182,11 @@ const PublicTemplate = () => {
   }
 
   // A failed request is not a missing template: say so and let the visitor retry.
+  // No noindex here: a crawler that hits a brief outage must not drop a live page.
   if (loadError && !displayTemplate) {
     return (
       <PageContainer className="py-16" width="narrow">
+        <SEOHead title="Unable to load template" />
         <Surface className="text-center" padding="xl" tone="glass">
           <h1 className="text-4xl font-semibold text-foreground">
             Unable to load template
@@ -200,16 +205,21 @@ const PublicTemplate = () => {
     );
   }
 
+  // The page is served with HTTP 200, so noindex is what keeps a gone template out of search.
   if (notFound || !displayTemplate) {
     return (
       <PageContainer className="py-16" width="narrow">
+        <SEOHead
+          title="Template not found"
+          description={TEMPLATE_NOT_FOUND_DESCRIPTION}
+          robots="noindex, nofollow"
+        />
         <Surface className="text-center" padding="xl" tone="glass">
           <h1 className="text-4xl font-semibold text-foreground">
             Template not found
           </h1>
           <p className="mt-4 text-base leading-7 text-muted-foreground">
-            The template you are looking for does not exist or is no longer
-            public.
+            {TEMPLATE_NOT_FOUND_DESCRIPTION}
           </p>
           <Button asChild className="mt-6">
             <Link to={buildPublicTemplatesPath()}>

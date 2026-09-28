@@ -15,6 +15,7 @@ import {
 import { PublicPageContainer } from '@/components/layout/PublicPageLayout';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { SEOHead } from '@/components/shared/SEOHead';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import {
@@ -102,27 +103,16 @@ const getProfileWebsiteHref = (website: string) =>
 const formatWebsiteLabel = (website: string) =>
   website.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
-const UserProfile = () => {
-  const { username } = useParams<{ username: string }>();
-  const [result, setResult] = useState<LoadUserProfileResult | null>(null);
-  // Bumped by Try again; a retry starts from the loading state.
-  const [reloadKey, setReloadKey] = useState(0);
+type UserProfileContentProps = {
+  onRetry: () => void;
+  // Null while the profile loads.
+  result: LoadUserProfileResult | null;
+};
 
-  useEffect(() => {
-    let isCancelled = false;
-    setResult(null);
-
-    void loadUserProfile(username).then((nextResult) => {
-      if (!isCancelled) {
-        setResult(nextResult);
-      }
-    });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [reloadKey, username]);
-
+export const UserProfileContent = ({
+  onRetry,
+  result,
+}: UserProfileContentProps) => {
   const profile = result?.kind === 'ok' ? result.profile : null;
   const templates = result?.kind === 'ok' ? result.templates : NO_TEMPLATES;
   const stats = useMemo(() => calculateStats(templates), [templates]);
@@ -139,23 +129,31 @@ const UserProfile = () => {
     );
   }
 
+  // No noindex here: a crawler that hits a brief outage must not drop a live profile.
   if (result.kind === 'error') {
     return (
       <PublicPageContainer className="py-14">
+        <SEOHead title="Unable to load profile" />
         <EmptyState
           title="Unable to load profile"
           description={result.message}
           icon={Sparkles}
           className="min-h-0"
-          action={{ label: 'Try again', onClick: () => setReloadKey((key) => key + 1) }}
+          action={{ label: 'Try again', onClick: onRetry }}
         />
       </PublicPageContainer>
     );
   }
 
+  // The page is served with HTTP 200, so noindex is what keeps a gone profile out of search.
   if (!profile) {
     return (
       <PublicPageContainer className="py-14">
+        <SEOHead
+          title="Profile not found"
+          description="This profile does not exist."
+          robots="noindex, nofollow"
+        />
         <EmptyState
           title="User not found"
           description="This profile does not exist."
@@ -198,6 +196,10 @@ const UserProfile = () => {
 
   return (
     <PublicPageContainer className="pb-16 pt-8">
+      <SEOHead
+        title={getProfileDisplayName(profile)}
+        description={buildProfileSummary(profile, stats)}
+      />
       <div className="mx-auto max-w-4xl">
         <section className="mb-10">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">
@@ -352,6 +354,35 @@ const UserProfile = () => {
         </section>
       </div>
     </PublicPageContainer>
+  );
+};
+
+const UserProfile = () => {
+  const { username } = useParams<{ username: string }>();
+  const [result, setResult] = useState<LoadUserProfileResult | null>(null);
+  // Bumped by Try again; a retry starts from the loading state.
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let isCancelled = false;
+    setResult(null);
+
+    void loadUserProfile(username).then((nextResult) => {
+      if (!isCancelled) {
+        setResult(nextResult);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [reloadKey, username]);
+
+  return (
+    <UserProfileContent
+      result={result}
+      onRetry={() => setReloadKey((key) => key + 1)}
+    />
   );
 };
 

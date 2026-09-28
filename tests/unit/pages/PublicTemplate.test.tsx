@@ -602,6 +602,36 @@ describe('PublicTemplate load failures', () => {
     expect(html).toContain('Template not found');
     expect(html).not.toContain('Try again');
   });
+
+  it('tells search engines to drop a template that is gone', () => {
+    const { helmet } = renderPublishedRoute(publishedClipyTemplate, {
+      loadError: null,
+      notFound: true,
+      reload: vi.fn(),
+      template: null,
+    });
+
+    expect(helmet.meta.toString()).toContain('name="robots" content="noindex, nofollow"');
+    expect(helmet.title.toString()).toContain('Template not found');
+  });
+
+  it('keeps a template that failed to load indexable, since the failure may be temporary', () => {
+    const { helmet } = renderPublishedRoute(publishedClipyTemplate, {
+      loadError: 'HTTP 503',
+      reload: vi.fn(),
+      template: null,
+    });
+
+    expect(helmet.meta.toString()).not.toContain('noindex');
+    expect(helmet.title.toString()).toContain('Unable to load template');
+    expect(helmet.title.toString()).not.toContain('not found');
+  });
+
+  it('keeps a template that loaded indexable', () => {
+    const { helmet } = renderPublishedRoute(publishedClipyTemplate);
+
+    expect(helmet.meta.toString()).toContain('name="robots" content="index, follow"');
+  });
 });
 
 describe('PublicTemplate default run name', () => {
