@@ -60,9 +60,14 @@ and user-facing failure states when a supporting service is unavailable.
   treated as unknown (`src/lib/auth/sessionCheck.ts`): the current user is kept,
   the first check on page load retries with backoff, and if it still fails
   `RequireAuth` offers a retry instead of redirecting to `/login`.
-- Passwords: Better Auth enforces length (10 to 128) and rejects breached passwords;
-  `Register.tsx`, `ResetPassword.tsx`, and `SecuritySection.tsx` validate the same
-  policy client-side.
+- Passwords: at least 10 characters and at most 72 UTF-8 bytes (bcrypt ignores
+  anything longer; emoji are 4 bytes, accented letters 2). Better Auth enforces the
+  character minimum, a `hooks.before` (`functions/api/utils/password-length.ts`)
+  rejects longer new passwords at sign-up, change-password and reset-password, and
+  production also rejects breached passwords. Sign-in never checks the length, so
+  passwords set before the limit still work. `Register.tsx`, `ResetPassword.tsx`,
+  and `SecuritySection.tsx` validate the same limits client-side through
+  `src/lib/schemas/passwordLimits.ts`.
 - Profile: `name`, `username`, `avatar_url`; public lookup through
   `GET /api/profiles/by-username?username=...` and `GET /api/profiles/by-id?userId=...`.
   The username lookup trims the value and ignores its case: it matches the value as

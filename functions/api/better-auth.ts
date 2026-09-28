@@ -18,6 +18,8 @@ import { log } from "./utils/logger";
 import { assertNotBlockedTestEmail } from "./utils/test-email-block";
 import { buildUserProfileWritePolicy, validateUserProfileWrite } from "./utils/user-profile-validation";
 import { assertUsernameAvailableForUpdate, mapUsernameConflicts } from "./utils/username-conflict";
+import { rejectOverlongNewPassword } from "./utils/password-length";
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "../../src/lib/schemas/passwordLimits";
 
 function isSignUpRequest(request: Request | undefined): boolean {
   return request !== undefined && new URL(request.url).pathname.endsWith("/auth/sign-up/email");
@@ -89,8 +91,9 @@ export function createBetterAuth(env: Env, request: Request) {
         log("info", "password_reset_completed", { userId: user.id });
       },
       requireEmailVerification: authEmailPolicy.emailVerificationRequired,
-      minPasswordLength: 10,
-      maxPasswordLength: 128,
+      minPasswordLength: MIN_PASSWORD_LENGTH,
+      // bcrypt uses only the first 72 bytes; hooks.before enforces the byte limit.
+      maxPasswordLength: MAX_PASSWORD_LENGTH,
       password: {
         hash: async (password) => bcrypt.hash(password, 10),
         verify: async ({ hash, password }) => bcrypt.compare(password, hash),
@@ -126,6 +129,9 @@ export function createBetterAuth(env: Env, request: Request) {
       },
     },
     plugins,
+    hooks: {
+      before: rejectOverlongNewPassword,
+    },
     databaseHooks: {
       user: {
         // Better Auth accepts any value for name and image; check them on every

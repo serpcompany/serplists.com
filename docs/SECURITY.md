@@ -20,6 +20,14 @@
   are read from D1; enabling Better Auth's `session.cookieCache` would let revoked
   sessions live until the cache expires. Run Keys are separate credentials and are
   not revoked by a reset.
+- **New passwords are 10 characters to 72 UTF-8 bytes.** Passwords are hashed
+  with bcrypt, which ignores everything after 72 bytes, so a longer password
+  would be stored as its first 72 bytes. A Better Auth `hooks.before`
+  (`functions/api/utils/password-length.ts`) rejects a longer new password at
+  sign-up, change-password, reset-password and set-password on every host, before
+  anything is written. Sign-in is never limited: it would reveal which emails have
+  accounts, and passwords set before the limit keep working. The limits live in
+  `src/lib/schemas/passwordLimits.ts`, which the forms share.
 - **Production blocks known test-email domains** at sign-up and sign-in. The
   router checks the email in sign-up and sign-in bodies, and Better Auth's
   `databaseHooks` (`user.create` and `session.create`) enforce it for every other
