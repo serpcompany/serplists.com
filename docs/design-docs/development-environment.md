@@ -146,7 +146,7 @@ Testing conventions are in [RELIABILITY.md](../RELIABILITY.md#testing-convention
 
 ## Writing scripts
 
-Scripts under `scripts/` and `tests/e2e/` start tools through
+Scripts under `scripts/`, `tests/e2e/` and `tests/integration/` start tools through
 `scripts/lib/run-tool.mjs`: `execTool`/`spawnTool` run a dev dependency's bin script
 (wrangler, vite, tsx, concurrently, playwright, drizzle-kit) with the current Node,
 and `execPnpm` runs pnpm itself through the pnpm that launched the script. Never

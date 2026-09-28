@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -7,6 +6,7 @@ import { getPlatformProxy, type PlatformProxy } from "wrangler";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { handleAgentMcp } from "../../functions/api/handlers/agentMcp";
 import { createPersonalRunKeySecret } from "../../functions/api/utils/personal-run-key";
+import { execTool } from "../../scripts/lib/run-tool.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const migrationsDir = path.join(repoRoot, "db/migrations");
@@ -158,9 +158,8 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
         .map((name) => readFileSync(path.join(migrationsDir, name), "utf8"))
         .join("\n"),
     );
-    execFileSync("pnpm", [
-      "exec",
-      "wrangler",
+    // Through run-tool.mjs: spawning pnpm by name fails where pnpm is only a .cmd shim.
+    execTool("wrangler", [
       "d1",
       "execute",
       "serp-checklists-db",

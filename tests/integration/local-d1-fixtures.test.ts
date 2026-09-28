@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -32,6 +31,7 @@ import {
   users,
 } from "../../db/schema/index";
 import { withLocalD1, type LocalDb } from "../../scripts/data/local-d1";
+import { execTool } from "../../scripts/lib/run-tool.mjs";
 import { handleTemplates } from "../../functions/api/handlers/templates";
 import { getSessionUserId } from "../../functions/api/utils/session";
 
@@ -55,8 +55,10 @@ async function officialTemplateIds(db: LocalDb) {
   return rows.map(({ id }) => id).sort();
 }
 
+// Tools run through run-tool.mjs: spawning pnpm by name fails on Windows
+// installs where pnpm is only a .cmd shim.
 function runWrangler(args: string[]) {
-  execFileSync("pnpm", ["exec", "wrangler", ...args], {
+  execTool("wrangler", args, {
     cwd: repoRoot,
     env: { ...process.env, CI: "1" },
     stdio: "pipe",
@@ -64,11 +66,9 @@ function runWrangler(args: string[]) {
 }
 
 function runLocalData(command: "seed-test" | "seed-official-login" | "cleanup" | "reset-passwords") {
-  execFileSync(
-    "pnpm",
+  execTool(
+    "tsx",
     [
-      "exec",
-      "tsx",
       "scripts/data/local-d1-data.ts",
       command,
       "--persist-to",

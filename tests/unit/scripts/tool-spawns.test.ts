@@ -37,7 +37,7 @@ describe('tool spawns', () => {
   });
 
   it('launches pnpm, npx and local tools only through scripts/lib/run-tool.mjs', () => {
-    const files = [...listFiles('scripts'), ...listFiles('tests/e2e')].filter((file) => file !== HELPER);
+    const files = [...listFiles('scripts'), ...listFiles('tests/e2e'), ...listFiles('tests/integration')].filter((file) => file !== HELPER);
     const offenders = files.flatMap((file) =>
       findShimNames(readFileSync(path.join(repoRoot, file), 'utf8')).map((hit) => `${file} ${hit}`),
     );
