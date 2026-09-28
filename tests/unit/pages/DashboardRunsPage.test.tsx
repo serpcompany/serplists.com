@@ -162,7 +162,7 @@ describe('/dashboard/runs presentation', () => {
   it('renders the v0-style runs list instead of the old console dashboard body', () => {
     mockUseAuth.mockReturnValue({
       user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
-      logout: vi.fn(),
+      logout: vi.fn().mockResolvedValue({ ok: true }),
     });
     mockUseTemplates.mockReturnValue({
       templates,
@@ -210,7 +210,7 @@ describe('/dashboard/runs presentation', () => {
   it('keeps the runs route structure visible while data is loading', () => {
     mockUseAuth.mockReturnValue({
       user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
-      logout: vi.fn(),
+      logout: vi.fn().mockResolvedValue({ ok: true }),
     });
     mockUseTemplates.mockReturnValue({
       templates: [],
@@ -243,7 +243,7 @@ describe('/dashboard/runs presentation', () => {
   ])('shows %s instead of an empty runs list', (_name, runsError, action) => {
     mockUseAuth.mockReturnValue({
       user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
-      logout: vi.fn(),
+      logout: vi.fn().mockResolvedValue({ ok: true }),
     });
     mockUseTemplates.mockReturnValue({
       templates: [],
@@ -273,7 +273,7 @@ describe('/dashboard/runs presentation', () => {
   it('does not offer the guaranteed-to-fail revalidation action for shared snapshots', () => {
     mockUseAuth.mockReturnValue({
       user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
-      logout: vi.fn(),
+      logout: vi.fn().mockResolvedValue({ ok: true }),
     });
     mockUseTemplates.mockReturnValue({
       templates,

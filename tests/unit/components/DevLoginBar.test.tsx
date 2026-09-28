@@ -8,7 +8,7 @@ import { DevLoginBar } from '@/components/DevLoginBar';
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({
     login: vi.fn(),
-    logout: vi.fn(),
+    logout: vi.fn().mockResolvedValue({ ok: true }),
     user: null,
   }),
 }));

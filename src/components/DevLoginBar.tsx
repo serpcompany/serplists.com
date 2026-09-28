@@ -4,6 +4,7 @@ import { Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageContainer } from '@/components/layout/page-shell';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { signOutAndLeave } from '@/features/auth/signOut';
 import {
   DEV_TEST_USERS,
   DEV_TEST_USER_PASSWORD_RESET_COMMAND,
@@ -83,10 +84,20 @@ export function DevLoginBar(): JSX.Element | null {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    toast.success('Logged out');
-    navigate('/');
+  const handleLogout = async () => {
+    setIsLoading(true);
+    try {
+      await signOutAndLeave({
+        logout,
+        onSignedOut: () => {
+          toast.success('Logged out');
+          navigate('/');
+        },
+        onError: (message) => toast.error(message),
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -126,7 +137,7 @@ export function DevLoginBar(): JSX.Element | null {
               <Button
                 size="sm"
                 variant="destructive"
-                onClick={handleLogout}
+                onClick={() => void handleLogout()}
                 disabled={isLoading}
               >
                 Logout

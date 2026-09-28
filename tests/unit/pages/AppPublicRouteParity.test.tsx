@@ -30,7 +30,7 @@ vi.mock('@/hooks/useTemplateLibrary', () => ({
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
   useAuth: () => ({
-    logout: vi.fn(),
+    logout: vi.fn().mockResolvedValue({ ok: true }),
     user: null,
   }),
 }));

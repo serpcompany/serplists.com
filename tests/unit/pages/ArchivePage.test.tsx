@@ -25,7 +25,7 @@ vi.mock('react-router-dom', async () => {
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
   useAuth: () => ({
-    logout: vi.fn(),
+    logout: vi.fn().mockResolvedValue({ ok: true }),
     user: { id: 'user-1', email: 'user@example.com', name: 'User One' },
   }),
 }));

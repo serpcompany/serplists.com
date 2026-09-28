@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { useQueryClient } from '@tanstack/react-query';
 import { authClient } from '@/lib/auth-client';
 import { isUserSwitch, removeSignedOutUserQueries } from '@/lib/queryKeys';
+import { createSignOutRunner, type AuthActionResult } from './authSession';
 
 interface User {
   id: string;
@@ -9,14 +10,6 @@ interface User {
   name?: string;
   image?: string | null;
   username?: string;
-}
-
-type AuthErrorCode = "EMAIL_NOT_VERIFIED" | "UNKNOWN";
-
-interface AuthActionResult {
-  ok: boolean;
-  error?: string;
-  errorCode?: AuthErrorCode;
 }
 
 interface RegisterResult extends AuthActionResult {
@@ -30,7 +23,9 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<AuthActionResult>;
   register: (name: string, email: string, password: string) => Promise<RegisterResult>;
-  logout: () => void;
+  // Resolves { ok: false, error } and keeps the user signed in when the server did not sign
+  // them out (rate limit, server error, network). Navigate away only on { ok: true }.
+  logout: () => Promise<AuthActionResult>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -131,12 +126,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
-    authClient.signOut().finally(() => {
+  const signOutRef = useRef<(() => Promise<AuthActionResult>) | null>(null);
+  signOutRef.current ??= createSignOutRunner(
+    () => authClient.signOut(),
+    () => {
       setUser(null);
       setSession(null);
-    });
-  };
+    },
+  );
+  const logout = signOutRef.current;
 
   const refreshProfile = async () => {
     try {

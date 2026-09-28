@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   LayoutGrid,
   LogOut,
@@ -15,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { signOutAndLeave } from '@/features/auth/signOut';
 import {
   publicFooterGroups,
   publicHeaderLinks,
@@ -122,9 +124,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const content = children ?? <Outlet />;
   const shouldRenderFooter = publicTier !== 'minimal';
 
-  const handleLogout = () => {
-    logout();
-    navigate('/');
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleLogout = async () => {
+    setIsSigningOut(true);
+    try {
+      await signOutAndLeave({
+        logout,
+        onSignedOut: () => navigate('/'),
+        onError: (message) => toast.error(message),
+      });
+    } finally {
+      setIsSigningOut(false);
+    }
   };
 
   const userInitial =
@@ -192,11 +204,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onClick={handleLogout}
+          disabled={isSigningOut}
+          onClick={() => void handleLogout()}
           className="cursor-pointer rounded-md text-destructive focus:bg-destructive/10 focus:text-destructive"
         >
           <LogOut className="mr-2 h-4 w-4" />
-          Sign out
+          {isSigningOut ? 'Signing out...' : 'Sign out'}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

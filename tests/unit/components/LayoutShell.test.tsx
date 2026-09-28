@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { Layout } from '@/components/Layout';
 
-const logout = vi.fn();
+const logout = vi.fn().mockResolvedValue({ ok: true });
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({
