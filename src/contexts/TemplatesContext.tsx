@@ -33,7 +33,7 @@ import {
   mergePublicTemplateCollections,
   repoTemplates,
 } from "@/lib/repoTemplateCatalog";
-import { dropTemplateFromCatalog, refreshRunLists } from "./templateListCache";
+import { refreshAfterRunDelete, refreshAfterTemplateDelete, refreshRunLists } from "./templateListCache";
 import { createTemplateListFetcher, fetchRunList, shouldRetryListFetch, type TemplateListRequest } from "./templateListFetchers";
 
 
@@ -289,11 +289,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await api.deleteTemplate(id);
       return true;
     },
-    onSuccess: (_deleted, id) => {
-      dropTemplateFromCatalog(queryClient, id);
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-      queryClient.invalidateQueries({ queryKey: ['runs'] });
-    }
+    onSuccess: (_deleted, id) => refreshAfterTemplateDelete(queryClient, id),
   });
 
   const createRunMutation = useMutation({
@@ -399,9 +395,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await api.deleteChecklist(id);
       return true;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['runs'] });
-    }
+    onSuccess: () => refreshAfterRunDelete(queryClient),
   });
 
   const revalidateRunMutation = useMutation({

@@ -7,7 +7,7 @@ import { isAuthRequiredError } from '@/lib/api-errors';
 
 interface ListLoadErrorStateProps {
   error: unknown;
-  listName: 'templates' | 'runs';
+  listName: 'templates' | 'runs' | 'archived templates' | 'archived runs';
   onRetry: () => void;
 }
 

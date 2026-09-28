@@ -23,10 +23,12 @@ Canonical private routes:
 - Runs: `/dashboard/runs`
 - Run detail: `/dashboard/runs/:id`
 - Settings: `/dashboard/settings`
+- Archive: `/dashboard/archive`, linked from the console sidebar and mobile menu
 
 ## Templates
 
 - Users can create, edit, archive, restore, import, and export templates.
+- Deleting a template or run archives it (the API sets `deleted_at`). `/dashboard/archive` lists the active context's archived templates and runs and restores them. Restoring respects plan limits and Organization roles, and shows the API's reason when it refuses.
 - Template detail pages render a read-only preview first. Editing happens on `/dashboard/templates/:id/edit`.
 - Template content updates reconcile into matching active, private runs for the same Resource Owner. Stable section, item, and sub-item IDs preserve run completion and notes across renames and reordering; new work arrives incomplete, and retired work leaves readiness calculations while remaining in run history.
 - Public templates can be shared at `/profile/{username}/{templateSlug}`.

@@ -22,6 +22,7 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
+import Archive from './pages/Archive';
 import Templates from './pages/Templates';
 import TemplateImportExport from './pages/TemplateImportExport';
 import DashboardSettings from './pages/DashboardSettings';
@@ -44,6 +45,7 @@ import {
   LEGACY_ACCOUNT_PATH,
   LEGACY_CONSOLE_PROFILE_PATH,
   LEGACY_PUBLIC_LIBRARY_PATH,
+  buildConsoleArchivePath,
   buildConsoleHomePath,
   buildConsoleRunsPath,
   buildConsoleSettingsPath,
@@ -185,6 +187,10 @@ const App = () => {
                       <Route
                         path={buildConsoleSettingsPath()}
                         element={<DashboardSettings />}
+                      />
+                      <Route
+                        path={buildConsoleArchivePath()}
+                        element={<Archive />}
                       />
                       <Route
                         path={buildConsoleTemplatesPath()}

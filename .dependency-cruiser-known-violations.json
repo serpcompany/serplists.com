@@ -28,15 +28,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/components/dashboard/ArchiveRecoverySection.tsx",
-    "to": "src/lib/api.ts",
-    "rule": {
-      "severity": "error",
-      "name": "screens-do-not-call-transport"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/components/shared/AvatarUpload.tsx",
     "to": "src/lib/api.ts",
     "rule": {

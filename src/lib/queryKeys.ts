@@ -18,6 +18,10 @@ export const queryKeys = {
   archivedRuns: (userId: UserId, scopeId: string) => ['archived-runs', userKey(userId), scopeId] as const,
 };
 
+// Matches every key of one kind, for all users and contexts. Use it only to mark a kind stale
+// (invalidateQueries): inactive keys then refetch under their own user when a page reads them.
+export const queryKindPrefix = (kind: keyof typeof queryKeys): QueryKey => [queryKeys[kind]('', '')[0]];
+
 // The public catalog is the same for every visitor, so it survives a change of user.
 const isSharedQueryKey = (queryKey: QueryKey): boolean =>
   queryKey[0] === 'templates' && queryKey[1] === 'catalog';

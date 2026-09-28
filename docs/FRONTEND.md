@@ -39,6 +39,8 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
   include the user id; never show a Free or Pro label while status is loading.
   Build other private keys (invites, Organization members, Run Keys, archives) with
   `queryKeys` in `src/lib/queryKeys.ts`, and give those queries `enabled: Boolean(userId)`.
+  The archive lists load only on `/dashboard/archive`; deleting a Template or Run
+  marks them stale through `src/contexts/templateListCache.ts`.
 - Sign-out and sign-in are SPA navigations, so the QueryClient outlives a session.
   When the signed-in user changes, `AuthProvider` removes every cached query no
   mounted page reads, except the public catalog. Never call `refetchQueries` without

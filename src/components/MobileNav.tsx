@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
+  Archive,
   FileText,
   FolderOpen,
   Globe,
@@ -25,6 +26,7 @@ import {
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { cn } from '@/lib/utils';
 import {
+  buildConsoleArchivePath,
   buildConsoleHomePath,
   buildConsoleRunsPath,
   buildConsoleSettingsPath,
@@ -49,6 +51,7 @@ const navItems = [
   { href: buildConsoleRunsPath(), icon: Play, title: 'Runs' },
   { href: buildPublicTemplatesPath(), icon: Globe, title: 'Browse Templates' },
   { href: buildPublicCategoriesPath(), icon: FolderOpen, title: 'Categories' },
+  { href: buildConsoleArchivePath(), icon: Archive, title: 'Archive' },
   { href: buildConsoleSettingsPath(), icon: Settings, title: 'Settings' },
 ];
 

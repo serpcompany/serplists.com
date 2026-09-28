@@ -8,7 +8,7 @@ import { generateSlug } from '@/utils/urlHelpers';
 
 export type AppShell = 'public' | 'console';
 export type PublicRouteTier = 'marketing' | 'core' | 'secondary' | 'minimal';
-export type ConsoleSection = 'home' | 'templates' | 'runs' | 'account';
+export type ConsoleSection = 'home' | 'templates' | 'runs' | 'archive' | 'account';
 
 export const LEGACY_PUBLIC_LIBRARY_PATH = '/checklists';
 export const LEGACY_ACCOUNT_PATH = '/account';
@@ -122,6 +122,8 @@ export const buildRunUrl = (runId: string, origin: string): string =>
 
 export const buildConsoleSettingsPath = (): string => '/dashboard/settings';
 
+export const buildConsoleArchivePath = (): string => '/dashboard/archive';
+
 export const isBlankTemplateEditorRoute = (pathname: string): boolean => {
   const normalizedPath = pathname.trim().toLowerCase();
 
@@ -221,6 +223,13 @@ export const resolveConsoleSection = (
     normalizedPath.startsWith(LEGACY_CONSOLE_TEMPLATES_PATH)
   ) {
     return 'templates';
+  }
+
+  if (
+    normalizedPath === buildConsoleArchivePath() ||
+    normalizedPath === `${buildConsoleArchivePath()}/`
+  ) {
+    return 'archive';
   }
 
   if (

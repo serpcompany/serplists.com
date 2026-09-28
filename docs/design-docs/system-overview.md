@@ -50,6 +50,7 @@ Canonical private routes use `/dashboard/*`:
 - `/dashboard/runs`
 - `/dashboard/runs/:id`
 - `/dashboard/settings`
+- `/dashboard/archive`
 
 Public routes include:
 

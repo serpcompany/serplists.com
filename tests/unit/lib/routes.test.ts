@@ -9,6 +9,7 @@ import {
   LEGACY_CONSOLE_PROFILE_PATH,
   buildCategorySlug,
   buildCanonicalPublicTemplatePath,
+  buildConsoleArchivePath,
   buildConsoleHomePath,
   buildConsoleRunPath,
   buildConsoleRunsPath,
@@ -170,6 +171,8 @@ describe('routes', () => {
     expect(resolveConsoleSection('/dashboard/runs/run-1')).toBe('runs');
     expect(resolveConsoleSection('/dashboard/settings')).toBe('account');
     expect(resolveConsoleSection('/dashboard/profile')).toBe('account');
+    expect(buildConsoleArchivePath()).toBe('/dashboard/archive');
+    expect(resolveConsoleSection('/dashboard/archive')).toBe('archive');
     expect(resolveConsoleSection('/console')).toBe('home');
     expect(resolveConsoleSection('/account')).toBe('account');
     expect(resolveConsoleSection('/templates')).toBeNull();

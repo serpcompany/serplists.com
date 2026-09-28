@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import {
+  Archive,
   FileText,
   Globe,
   Import,
@@ -12,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
+  buildConsoleArchivePath,
   buildConsoleRunsPath,
   buildConsoleSettingsPath,
   buildConsoleTemplateCreatePath,
@@ -41,6 +43,11 @@ const navItems = [
 ];
 
 const secondaryNavItems = [
+  {
+    href: buildConsoleArchivePath(),
+    icon: Archive,
+    label: 'Archive',
+  },
   {
     href: buildConsoleSettingsPath(),
     icon: Settings,
