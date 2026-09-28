@@ -43,6 +43,7 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
       role: 'owner',
       type: 'personal',
     },
+    canEditTemplates: true,
     isWorkspaceLoading: false,
     selectWorkspace: vi.fn(),
     workspaces: [
@@ -126,6 +127,37 @@ describe('signed-in layout navigation', () => {
 });
 
 describe('buildDashboardTemplatesState', () => {
+  it('follows the Organization role instead of always offering to create', () => {
+    const allTemplates = [buildTemplate({ teamId: 'team-1', userId: 'someone-else' })];
+    const stateFor = (role?: 'viewer' | 'runner' | 'editor') =>
+      buildDashboardTemplatesState({ allTemplates, role, teamId: 'team-1', userId: 'user-1' });
+
+    expect(stateFor('viewer')).toMatchObject({
+      canCreateRun: false,
+      canCreateTemplate: false,
+      canEditTemplate: false,
+      canRunTemplate: false,
+    });
+    expect(stateFor('runner')).toMatchObject({
+      canCreateRun: true,
+      canCreateTemplate: false,
+      canEditTemplate: false,
+      canRunTemplate: true,
+    });
+    expect(stateFor('editor')).toMatchObject({
+      canCreateTemplate: true,
+      canEditTemplate: true,
+      canRunTemplate: true,
+    });
+    expect(stateFor(undefined).canRunTemplate).toBe(false);
+  });
+
+  it('keeps full rights in the Personal context', () => {
+    const state = buildDashboardTemplatesState({ allTemplates: [buildTemplate()], userId: 'user-1' });
+
+    expect(state).toMatchObject({ canCreateTemplate: true, canEditTemplate: true, canRunTemplate: true });
+  });
+
   it('returns only owned templates and dashboard CTA state', () => {
     const state = buildDashboardTemplatesState({
       allTemplates: [

@@ -11,6 +11,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { api, type TeamRole, type TeamSummary } from '@/lib/api';
+import {
+  getOrganizationPermissions,
+  getResourcePermissions,
+  type ResourcePermissions,
+} from '@/lib/organizationPermissions';
 
 const PERSONAL_WORKSPACE_ID = 'personal';
 const ACTIVE_WORKSPACE_STORAGE_KEY = 'serplists.activeWorkspaceId';
@@ -45,6 +50,9 @@ type WorkspaceContextValue = {
   canManageTeam: boolean;
   canRunTemplates: boolean;
   createTeam: (input: CreateTeamInput) => Promise<void>;
+  // Permissions on a resource owned by this Organization (Personal when teamId is empty),
+  // from the user's role there, whichever context is active.
+  getPermissions: (teamId?: string) => ResourcePermissions;
   isTeamWorkspace: boolean;
   isWorkspaceLoading: boolean;
   refreshTeams: () => Promise<TeamSummary[]>;
@@ -65,15 +73,6 @@ const personalWorkspace: Workspace = {
   role: 'owner',
   type: 'personal',
 };
-
-const canRoleEditTemplates = (role: TeamRole): boolean =>
-  role === 'owner' || role === 'admin' || role === 'editor';
-
-const canRoleRunTemplates = (role: TeamRole): boolean =>
-  canRoleEditTemplates(role) || role === 'runner';
-
-const canRoleManageTeam = (role: TeamRole): boolean =>
-  role === 'owner' || role === 'admin';
 
 const readStoredWorkspaceId = (): string => {
   if (typeof window === 'undefined') {
@@ -284,15 +283,22 @@ export function WorkspaceProvider({
   const isTeamWorkspace = activeWorkspace.type === 'team';
   const activeTeamId = isTeamWorkspace ? activeWorkspace.teamId : undefined;
   const teamRole = isTeamWorkspace ? activeWorkspace.role : undefined;
+  const activePermissions = getOrganizationPermissions(teamRole);
+  const getPermissions = useCallback(
+    (teamId?: string) =>
+      getResourcePermissions(teamId, (id) => teams.find((team) => team.id === id)?.role),
+    [teams],
+  );
 
   const value: WorkspaceContextValue = {
     activeTeamId,
     activeWorkspace,
     activeWorkspaceId: activeWorkspace.id,
-    canEditTemplates: teamRole ? canRoleEditTemplates(teamRole) : true,
-    canManageTeam: teamRole ? canRoleManageTeam(teamRole) : false,
-    canRunTemplates: teamRole ? canRoleRunTemplates(teamRole) : true,
+    canEditTemplates: teamRole ? activePermissions.canEditTemplates : true,
+    canManageTeam: teamRole ? activePermissions.canManage : false,
+    canRunTemplates: teamRole ? activePermissions.canRun : true,
     createTeam,
+    getPermissions,
     isTeamWorkspace,
     isWorkspaceLoading: isAuthLoading || teamsQuery.isLoading,
     refreshTeams,

@@ -37,6 +37,7 @@ import { RunHistorySection } from '@/components/run-execution/RunHistorySection'
 import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar';
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
 import { useTemplates } from '@/contexts/TemplatesContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { canFinishRun, getPrimaryTaskAction } from '@/features/run-execution/primaryTaskAction';
 import { confirmLeaveWithUnsavedNotes, useUnsavedNotesWarning } from '@/features/run-execution/noteDrafts';
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
@@ -53,6 +54,7 @@ const ChecklistRunPage = () => {
   const { id, shareToken } = useParams<{ id?: string; shareToken?: string }>();
   const navigate = useNavigate();
   const { updateRun } = useTemplates();
+  const { getPermissions } = useWorkspace();
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
@@ -299,6 +301,8 @@ const ChecklistRunPage = () => {
     );
   }
 
+  // Share links govern shared runs; private runs follow the role in the run's Organization.
+  const canUpdateRun = isSharedRun || getPermissions(displayRun.teamId).canRun;
   const activeItemId = selectedItemId ?? displayRun.sections[0]?.items[0]?.id ?? null;
   const flatItems = displayRun.sections.flatMap((section) =>
     section.items.map((item, itemIndex) => ({
@@ -328,7 +332,7 @@ const ChecklistRunPage = () => {
     };
   });
   // Stays available after the completion dialog is dismissed, a reload, or MCP ticks.
-  const finishRunButton = canFinishRun(displayRun) ? (
+  const finishRunButton = canUpdateRun && canFinishRun(displayRun) ? (
     <Button size="sm" onClick={() => setIsCompleteDialogOpen(true)}>
       <CheckCircle className="mr-2 h-4 w-4" />
       Complete run
@@ -340,7 +344,7 @@ const ChecklistRunPage = () => {
         <ArrowLeft className="mr-2 h-4 w-4" />
         Runs
       </Button>
-      {!isEditingTitle ? (
+      {!canUpdateRun ? null : !isEditingTitle ? (
         <Button
           size="sm"
           variant="ghost"
@@ -365,6 +369,7 @@ const ChecklistRunPage = () => {
       >
         {displayRun.status === 'completed' ? 'Completed' : 'In Progress'}
       </Badge>
+      {canUpdateRun ? null : <Badge variant="secondary">View only</Badge>}
       {finishRunButton}
       <div className="hidden min-w-[120px] xl:block">
         <div className="mb-2 h-2 overflow-hidden rounded-full bg-secondary">
@@ -375,15 +380,17 @@ const ChecklistRunPage = () => {
         </div>
         <div className="text-right text-sm font-medium">{displayProgress}%</div>
       </div>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={isCreatingShare}
-        onClick={() => void handleCreateShare()}
-      >
-        <Share2 className="mr-2 h-4 w-4" />
-        {isCreatingShare ? 'Creating link...' : 'Share'}
-      </Button>
+      {canUpdateRun ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isCreatingShare}
+          onClick={() => void handleCreateShare()}
+        >
+          <Share2 className="mr-2 h-4 w-4" />
+          {isCreatingShare ? 'Creating link...' : 'Share'}
+        </Button>
+      ) : null}
     </>
   );
   const privateRunTitle = isEditingTitle ? (
@@ -640,7 +647,8 @@ const ChecklistRunPage = () => {
                   }
                   hasNext={Boolean(nextEntry)}
                   hasPrev={Boolean(previousEntry)}
-                  primaryAction={getPrimaryTaskAction(displayRun, selectedEntry.item.id, Boolean(nextEntry))}
+                  primaryAction={getPrimaryTaskAction(displayRun, selectedEntry.item.id, Boolean(nextEntry), canUpdateRun)}
+                  readOnly={!canUpdateRun}
                   onFinishRun={() => setIsCompleteDialogOpen(true)}
                   onSelectTask={setSelectedItemId}
                 />

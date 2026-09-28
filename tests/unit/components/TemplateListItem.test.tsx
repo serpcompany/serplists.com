@@ -36,4 +36,29 @@ describe('TemplateListItem', () => {
     expect(html).toContain('href="/dashboard/templates/template-1/edit"');
     expect(html).toContain('Delete');
   });
+
+  it('shows no actions to members who cannot run, edit or delete Templates', () => {
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/">
+        <TemplateListItem canEdit={false} template={template} />
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('Website Launch Checklist');
+    expect(html).not.toContain('Start Run');
+    expect(html).not.toContain('/edit"');
+    expect(html).not.toContain('Delete');
+  });
+
+  it('lets a runner start a run without editing or deleting', () => {
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/">
+        <TemplateListItem canEdit={false} onStartRun={vi.fn()} template={template} />
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('Start Run');
+    expect(html).not.toContain('/edit"');
+    expect(html).not.toContain('Delete');
+  });
 });

@@ -12,6 +12,8 @@ interface RunNotesEditorProps {
   label: string;
   onDraftChange: (notes: string) => void;
   onSave: (notes: string) => Promise<boolean>;
+  // For members whose Organization role cannot update the run.
+  readOnly?: boolean;
   savedValue?: string;
 }
 
@@ -20,6 +22,7 @@ export function RunNotesEditor({
   label,
   onDraftChange,
   onSave,
+  readOnly = false,
   savedValue = '',
 }: RunNotesEditorProps): JSX.Element {
   const notes = draft ?? savedValue;
@@ -50,31 +53,34 @@ export function RunNotesEditor({
           onDraftChange(event.target.value);
           setShowSaved(false);
         }}
-        placeholder="Add links, outcomes, or context for this run..."
+        placeholder={readOnly ? undefined : 'Add links, outcomes, or context for this run...'}
+        readOnly={readOnly}
         rows={3}
         value={notes}
       />
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-muted-foreground" aria-live="polite">
-          {showSaved && !isDirty ? (
-            <span className="inline-flex items-center gap-1 text-success">
-              <Check className="h-3.5 w-3.5" /> Saved to this run
-            </span>
-          ) : (
-            'Only this run is updated.'
-          )}
-        </span>
-        <Button
-          disabled={isSaving || !isDirty}
-          onClick={() => void handleSave()}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          {isSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-          Save notes
-        </Button>
-      </div>
+      {readOnly ? null : (
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-muted-foreground" aria-live="polite">
+            {showSaved && !isDirty ? (
+              <span className="inline-flex items-center gap-1 text-success">
+                <Check className="h-3.5 w-3.5" /> Saved to this run
+              </span>
+            ) : (
+              'Only this run is updated.'
+            )}
+          </span>
+          <Button
+            disabled={isSaving || !isDirty}
+            onClick={() => void handleSave()}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {isSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+            Save notes
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

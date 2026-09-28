@@ -28,6 +28,8 @@ interface TaskExecutionPanelProps {
   hasNext: boolean;
   hasPrev: boolean;
   primaryAction: PrimaryTaskAction;
+  // Organization members whose role cannot update the run can only read it.
+  readOnly?: boolean;
 }
 
 export function TaskExecutionPanel({
@@ -47,6 +49,7 @@ export function TaskExecutionPanel({
   hasNext,
   hasPrev,
   primaryAction,
+  readOnly = false,
 }: TaskExecutionPanelProps) {
   const isTaskComplete = task.isCompleted === true;
   const primaryButton = getPrimaryTaskButton(primaryAction, {
@@ -70,6 +73,7 @@ export function TaskExecutionPanel({
 
           <div className="flex items-start gap-4">
             <button
+              disabled={readOnly}
               onClick={onToggleTask}
               className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors"
               type="button"
@@ -101,7 +105,7 @@ export function TaskExecutionPanel({
           {task.contents?.length ? (
             <ContentRenderer
               contents={task.contents}
-              disabled={false}
+              disabled={readOnly}
               onSubItemToggle={onToggleSubItem}
             />
           ) : (
@@ -118,6 +122,7 @@ export function TaskExecutionPanel({
             label="Task notes"
             onDraftChange={onNotesDraftChange}
             onSave={onSaveNotes}
+            readOnly={readOnly}
             savedValue={task.notes}
           />
         </div>

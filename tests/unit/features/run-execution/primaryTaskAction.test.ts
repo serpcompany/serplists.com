@@ -52,6 +52,14 @@ describe('getPrimaryTaskAction', () => {
   });
 });
 
+describe('getPrimaryTaskAction for members who cannot update the run', () => {
+  it('only navigates, and never offers to tick or finish', () => {
+    expect(getPrimaryTaskAction(buildRun([false, false]), 'item-1', true, false)).toEqual({ kind: 'next_task' });
+    expect(getPrimaryTaskAction(buildRun([true, true]), 'item-2', false, false)).toEqual({ kind: 'view_only' });
+    expect(getPrimaryTaskAction(buildRun([false, false]), 'item-2', false, false)).toEqual({ kind: 'view_only' });
+  });
+});
+
 describe('canFinishRun', () => {
   it('is true only for an in-progress run whose tasks are all done', () => {
     expect(canFinishRun(buildRun([true, true]))).toBe(true);
@@ -97,6 +105,7 @@ describe('getPrimaryTaskButton', () => {
       { kind: 'next_unfinished', itemId: 'item-1' },
       { kind: 'finish_run' },
       { kind: 'run_completed' },
+      { kind: 'view_only' },
     ];
 
     for (const action of actions) {

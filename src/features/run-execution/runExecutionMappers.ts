@@ -69,6 +69,8 @@ export const mapChecklistToRun = (
       new Date().toISOString(),
     completedAt: asString(checklist.completed_at),
     userId: asString(checklist.user_id) ?? '',
+    // The owning Organization decides what the viewer may do with the run.
+    teamId: asString(checklist.team_id) || undefined,
     templateVersion:
       typeof checklist.template_version === 'number'
         ? checklist.template_version

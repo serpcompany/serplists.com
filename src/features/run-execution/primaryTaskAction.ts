@@ -13,7 +13,8 @@ export type PrimaryTaskAction =
   | { kind: 'next_task' }
   | { kind: 'next_unfinished'; itemId: string }
   | { kind: 'finish_run' }
-  | { kind: 'run_completed' };
+  | { kind: 'run_completed' }
+  | { kind: 'view_only' };
 
 export type PrimaryTaskButton = {
   disabled: boolean;
@@ -41,7 +42,12 @@ export const getPrimaryTaskAction = (
   run: ChecklistRun,
   taskId: string,
   hasNext: boolean,
+  // False for Organization members whose role cannot update the run (viewers).
+  canUpdate = true,
 ): PrimaryTaskAction => {
+  if (!canUpdate) {
+    return hasNext ? { kind: 'next_task' } : { kind: 'view_only' };
+  }
   if (!getSelectedRunItem(run, taskId)?.item.isCompleted) {
     return { kind: 'complete_task' };
   }
@@ -77,5 +83,7 @@ export const getPrimaryTaskButton = (
       return { disabled: false, icon: null, label: 'Finish Run', onClick: handlers.onFinishRun };
     case 'run_completed':
       return { disabled: true, icon: null, label: 'Run completed' };
+    case 'view_only':
+      return { disabled: true, icon: null, label: 'View only' };
   }
 };

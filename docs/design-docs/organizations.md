@@ -86,6 +86,7 @@ The API response already uses a `delivery` object so email can be added later wi
 - Context state is managed by the legacy-named `src/contexts/WorkspaceContext.tsx`.
 - The remembered context is persisted under the legacy local-storage key `serplists.activeWorkspaceId`.
 - Templates and Runs invalidate React Query caches when the context changes.
+- The UI offers only the actions a member's role allows, using the role in the Organization that owns the Template or Run, whichever context is active. The matrix lives in `src/lib/organizationPermissions.ts`, and a unit test keeps it equal to `functions/api/utils/team-access.ts`, which stays the authority. Viewers get a read-only run page and no create, run, edit, share, or delete actions; runners can start and execute runs but not create, copy, edit, or delete Templates; deleting a run needs admin. A role that is still loading, or a membership that is gone, counts as read-only. Shared run links (`/share/:token`) are governed by the link, not by roles.
 - `/dashboard/settings` currently combines Account, Organization, member, invite, and billing controls; issue #206 tracks their explicit separation.
 - `/account` and `/dashboard/profile` are legacy redirects to `/dashboard/settings`.
 

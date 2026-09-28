@@ -60,6 +60,7 @@ Canonical private routes:
   - `editor`: edit Organization templates and start runs.
   - `runner`: start and execute runs.
   - `viewer`: read-only access.
+- The UI offers only the actions the member's role allows in the Organization that owns the Template or run ([Organizations](../design-docs/organizations.md#ui-flow)).
 - Organization management currently lives on `/dashboard/settings`.
 - Organization invites are link-based today. The legacy compatibility route `/team-invites/:token` and incoming invites on `/dashboard/settings` support acceptance.
 - Organization and Template changes are recorded in D1-backed audit/history tables.

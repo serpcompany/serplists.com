@@ -20,6 +20,17 @@ vi.mock('@/contexts/TemplatesContext', () => ({
   }),
 }));
 
+const workspaceRoles = vi.hoisted(() => ({ roles: {} as Record<string, 'viewer' | 'runner' | 'admin'> }));
+
+vi.mock('@/contexts/WorkspaceContext', async () => {
+  const { getResourcePermissions } = await import('@/lib/organizationPermissions');
+  return {
+    useWorkspace: () => ({
+      getPermissions: (teamId?: string) => getResourcePermissions(teamId, (id) => workspaceRoles.roles[id]),
+    }),
+  };
+});
+
 vi.mock('sonner', () => ({
   toast: {
     error: vi.fn(),
@@ -316,6 +327,48 @@ describe('ChecklistRunPage task notes', () => {
     });
 
     expect(html).toContain('>Guest note in progress</textarea>');
+  });
+});
+
+describe('ChecklistRunPage Organization roles', () => {
+  const organizationRun = (): ChecklistRun => ({ ...twoTaskRun([false, false]), teamId: 'acme' });
+
+  it('renders an Organization run read-only for a viewer, even from the Personal context', () => {
+    workspaceRoles.roles = { acme: 'viewer' };
+    const html = renderRunPage(organizationRun(), { selectedItemId: 'item-1' });
+
+    expect(html).toContain('View only');
+    expect(html).not.toContain('Mark Complete');
+    expect(html).not.toContain('Rename');
+    expect(html).not.toMatch(/>Share</);
+    expect(html).not.toContain('Save notes');
+    expect(html).toContain('readonly=""');
+  });
+
+  it('treats a run of an Organization the user is not (yet) known to belong to as read-only', () => {
+    workspaceRoles.roles = {};
+    const html = renderRunPage(organizationRun(), { selectedItemId: 'item-1' });
+
+    expect(html).not.toContain('Mark Complete');
+  });
+
+  it('lets a runner execute, rename and share the Organization run', () => {
+    workspaceRoles.roles = { acme: 'runner' };
+    const html = renderRunPage(organizationRun(), { selectedItemId: 'item-1' });
+
+    expect(html).toContain('Mark Complete');
+    expect(html).toContain('Rename');
+    expect(html).toMatch(/>Share</);
+    expect(html).toContain('Save notes');
+    expect(html).not.toContain('View only');
+  });
+
+  it('keeps the shared run editable for guests: the share link governs it, not roles', () => {
+    workspaceRoles.roles = {};
+    const html = renderRunPage(organizationRun(), { selectedItemId: 'item-1', shared: true });
+
+    expect(html).toContain('Save notes');
+    expect(html).not.toContain('View only');
   });
 });
 

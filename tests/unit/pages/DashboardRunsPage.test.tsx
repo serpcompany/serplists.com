@@ -20,6 +20,17 @@ vi.mock('@/contexts/TemplatesContext', () => ({
   useTemplateLists: () => mockUseTemplates(),
 }));
 
+const workspaceRoles = vi.hoisted(() => ({ roles: {} as Record<string, 'viewer' | 'editor' | 'admin'> }));
+
+vi.mock('@/contexts/WorkspaceContext', async () => {
+  const { getResourcePermissions } = await import('@/lib/organizationPermissions');
+  return {
+    useWorkspace: () => ({
+      getPermissions: (teamId?: string) => getResourcePermissions(teamId, (id) => workspaceRoles.roles[id]),
+    }),
+  };
+});
+
 vi.mock('sonner', () => ({
   toast: {
     error: vi.fn(),
@@ -319,6 +330,59 @@ describe('/dashboard/runs presentation', () => {
 
     expect(html).toContain('Shared snapshot is out of date');
     expect(html).not.toContain('>Revalidate<');
+  });
+
+  it('hides run actions an Organization viewer cannot use', () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, logout: vi.fn() });
+    workspaceRoles.roles = { acme: 'viewer' };
+    mockUseTemplates.mockReturnValue({
+      templates,
+      allTemplates,
+      templatesLoading: false,
+      runs: [{ ...runs[3], teamId: 'acme', isStale: true, isPublic: false }],
+      runsLoading: false,
+      updateRun: vi.fn(),
+      revalidateRun: vi.fn(),
+      deleteRun: vi.fn(),
+    });
+
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/dashboard/runs">
+        <Routes>
+          <Route path="*" element={<Dashboard />} />
+        </Routes>
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('Onboarding - Sarah Chen');
+    expect(html).not.toContain('>Revalidate<');
+    expect(html).not.toContain('aria-label="Run options"');
+  });
+
+  it('keeps the run options for members who can share or delete', () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, logout: vi.fn() });
+    workspaceRoles.roles = { acme: 'editor' };
+    mockUseTemplates.mockReturnValue({
+      templates,
+      allTemplates,
+      templatesLoading: false,
+      runs: [{ ...runs[3], teamId: 'acme', isStale: true, isPublic: false }],
+      runsLoading: false,
+      updateRun: vi.fn(),
+      revalidateRun: vi.fn(),
+      deleteRun: vi.fn(),
+    });
+
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/dashboard/runs">
+        <Routes>
+          <Route path="*" element={<Dashboard />} />
+        </Routes>
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('>Revalidate<');
+    expect(html).toContain('aria-label="Run options"');
   });
 
   it('creates real shared run URLs instead of exposing protected run URLs', async () => {

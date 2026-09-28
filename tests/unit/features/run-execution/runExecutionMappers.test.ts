@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getNextSelectedItemId } from '@/features/run-execution/runExecutionMappers';
+import { getNextSelectedItemId, mapChecklistToRun } from '@/features/run-execution/runExecutionMappers';
 import type { ChecklistRun } from '@/types/checklist';
 
 const run = (completed: string[]): ChecklistRun =>
@@ -27,3 +27,11 @@ describe('getNextSelectedItemId', () => {
     expect(getNextSelectedItemId(run(['a', 'b', 'c', 'd']), 'd')).toBe('d');
   });
 });
+
+describe('mapChecklistToRun', () => {
+  it('keeps the Organization that owns the run, so the page can check the member role', () => {
+    expect(mapChecklistToRun({ id: 'run-1', team_id: 'team-1', items: '[]' }, 'run-1').teamId).toBe('team-1');
+    expect(mapChecklistToRun({ id: 'run-2', team_id: null, items: '[]' }, 'run-2').teamId).toBeUndefined();
+  });
+});
+

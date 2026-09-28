@@ -85,6 +85,8 @@ import {
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
+import { getTemplateActionPermissions } from '@/lib/organizationPermissions';
+import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate, TemplateSavePayload } from '@/types/checklist';
 
 type TemplateMetrics = {
@@ -162,7 +164,7 @@ const TemplateDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
-  const { activeTeamId, canEditTemplates, isTeamWorkspace } = useWorkspace();
+  const { activeTeamId, getPermissions, isTeamWorkspace } = useWorkspace();
   const {
     createRun,
     createTemplate,
@@ -204,10 +206,17 @@ const TemplateDetail = () => {
   });
   const displayTemplate = template;
   const metrics = (displayTemplate as (ChecklistTemplate & TemplateMetrics) | null) ?? null;
-  const isOwner = user?.id === displayTemplate?.userId;
   const isActiveTeamTemplate =
     Boolean(activeTeamId) && displayTemplate?.teamId === activeTeamId;
-  const canEditTemplate = isOwner || (isActiveTeamTemplate && canEditTemplates);
+  // Offer only what the API allows for the user's role (see organizationPermissions.ts).
+  const { canCopy: canCopyTemplate, canEdit: canEditTemplate, canStartRun, isOwner } =
+    getTemplateActionPermissions({
+      activeTeamId,
+      isRepoTemplate: Boolean(displayTemplate && isRepoTemplate(displayTemplate)),
+      permissionsFor: getPermissions,
+      template: displayTemplate ?? { isPublic: false, userId: '' },
+      userId: user?.id,
+    });
   const canViewTemplateHistory = isOwner || isActiveTeamTemplate;
   const isPublic = visibilityOverride ?? displayTemplate?.isPublic ?? false;
   const totalTasks = displayTemplate?.sections.reduce(
@@ -514,22 +523,24 @@ const TemplateDetail = () => {
           </Button>
         </>
       ) : user ? (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleCloneTemplate}
-          disabled={isCloningTemplate || billingState.isLoading}
-          className="border-border"
-        >
-          <Copy className="mr-2 h-4 w-4" />
-          {isCloningTemplate
-            ? 'Copying...'
-            : billingState.isLoading
-              ? 'Checking plan...'
-              : !billingState.isPro
-                ? 'Upgrade to copy template'
-                : 'Copy to My Templates'}
-        </Button>
+        canCopyTemplate ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCloneTemplate}
+            disabled={isCloningTemplate || billingState.isLoading}
+            className="border-border"
+          >
+            <Copy className="mr-2 h-4 w-4" />
+            {isCloningTemplate
+              ? 'Copying...'
+              : billingState.isLoading
+                ? 'Checking plan...'
+                : !billingState.isPro
+                  ? 'Upgrade to copy template'
+                  : 'Copy to My Templates'}
+          </Button>
+        ) : null
       ) : (
         <Button asChild variant="outline" size="sm" className="border-border">
           <Link to="/login" state={{ from: location }}>
@@ -538,14 +549,16 @@ const TemplateDetail = () => {
         </Button>
       )}
 
-      <Button
-        size="sm"
-        onClick={() => setRunDialogOpen(true)}
-        className="bg-foreground text-background hover:bg-foreground/90"
-      >
-        <PlayCircle className="mr-2 h-4 w-4" />
-        Start Run
-      </Button>
+      {canStartRun || !user ? (
+        <Button
+          size="sm"
+          onClick={() => setRunDialogOpen(true)}
+          className="bg-foreground text-background hover:bg-foreground/90"
+        >
+          <PlayCircle className="mr-2 h-4 w-4" />
+          Start Run
+        </Button>
+      ) : null}
 
       {canEditTemplate ? (
         <DropdownMenu>

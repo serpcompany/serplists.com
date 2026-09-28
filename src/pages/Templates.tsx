@@ -147,10 +147,12 @@ const Templates = () => {
         title="My Templates"
         description={`${model.templates.length} templates in your library`}
         actions={
-        <Button type="button" onClick={model.openCreateTemplate}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Template
-        </Button>
+          model.canCreateTemplate ? (
+            <Button type="button" onClick={model.openCreateTemplate}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Template
+            </Button>
+          ) : null
         }
       />
 
@@ -237,7 +239,7 @@ const Templates = () => {
                   : 'Create your first template to get started'
               }
               action={
-                !searchQuery && filterVisibility === 'all' ? (
+                model.canCreateTemplate && !searchQuery && filterVisibility === 'all' ? (
                 <Button type="button" onClick={model.openCreateTemplate}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create Template
@@ -250,8 +252,9 @@ const Templates = () => {
               {filteredTemplates.map((template) => (
                 <TemplateCard
                   key={template.id}
-                  onDelete={setTemplateToDelete}
-                  onStartRun={model.openRunLauncher}
+                  canEdit={model.canEditTemplate}
+                  onDelete={model.canEditTemplate ? setTemplateToDelete : undefined}
+                  onStartRun={model.canRunTemplate ? model.openRunLauncher : undefined}
                   template={template}
                 />
               ))}
@@ -261,8 +264,9 @@ const Templates = () => {
               {filteredTemplates.map((template) => (
                 <TemplateListItem
                   key={template.id}
-                  onDelete={setTemplateToDelete}
-                  onStartRun={model.openRunLauncher}
+                  canEdit={model.canEditTemplate}
+                  onDelete={model.canEditTemplate ? setTemplateToDelete : undefined}
+                  onStartRun={model.canRunTemplate ? model.openRunLauncher : undefined}
                   template={template}
                 />
               ))}

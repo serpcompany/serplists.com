@@ -60,12 +60,16 @@ import {
   type RunSourceTemplate,
   type RunStatusFilter as StatusFilter,
 } from '@/features/dashboard-runs/runTemplateLookup';
+import { getRunRowActions } from '@/features/dashboard-runs/runRowActions';
+import type { ResourcePermissions } from '@/lib/organizationPermissions';
 
 interface RunsDashboardViewProps {
   runs: ChecklistRun[];
   // The public catalog and the active workspace's own list; see buildRunTemplateLookup.
   templates?: RunSourceTemplate[];
   workspaceTemplates?: RunSourceTemplate[];
+  // The viewer's permissions on a run: its Organization role, or full for Personal runs.
+  getRunPermissions: (run: ChecklistRun) => ResourcePermissions;
   onDeleteRun: (runId: string) => void | Promise<void>;
   onRevalidateRun?: (run: ChecklistRun) => void | Promise<void>;
   loading?: boolean;
@@ -94,6 +98,7 @@ export function RunsDashboardView({
   runs,
   templates = [],
   workspaceTemplates,
+  getRunPermissions,
   onDeleteRun,
   onRevalidateRun,
   loading = false,
@@ -225,6 +230,7 @@ export function RunsDashboardView({
               const isCompleted = run.status === 'completed';
               const { completed, total } = getTaskCounts(run);
               const template = findRunTemplate(templatesById, run.templateId);
+              const actions = getRunRowActions(run, getRunPermissions(run));
 
               return (
                 <div
@@ -307,7 +313,7 @@ export function RunsDashboardView({
                     className="flex flex-wrap items-center gap-2 opacity-100 transition-opacity xl:opacity-0 xl:group-hover:opacity-100 xl:focus-within:opacity-100"
                     data-run-actions="true"
                   >
-                    {run.isStale && !run.isPublic && onRevalidateRun ? (
+                    {actions.canRevalidate && onRevalidateRun ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -344,32 +350,38 @@ export function RunsDashboardView({
                       </Button>
                     )}
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          aria-label="Run options"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40">
-                        <DropdownMenuItem onClick={() => shareRun(run.id)}>
-                          <Share2 className="mr-2 h-4 w-4" />
-                          Share Run
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => setRunToDelete(run.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {actions.canShare || actions.canDelete ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            aria-label="Run options"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          {actions.canShare ? (
+                            <DropdownMenuItem onClick={() => shareRun(run.id)}>
+                              <Share2 className="mr-2 h-4 w-4" />
+                              Share Run
+                            </DropdownMenuItem>
+                          ) : null}
+                          {actions.canShare && actions.canDelete ? <DropdownMenuSeparator /> : null}
+                          {actions.canDelete ? (
+                            <DropdownMenuItem
+                              onClick={() => setRunToDelete(run.id)}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          ) : null}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : null}
                   </div>
                 </div>
               );

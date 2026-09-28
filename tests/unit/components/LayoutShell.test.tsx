@@ -15,8 +15,11 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   }),
 }));
 
+const workspaceState = vi.hoisted(() => ({ canEditTemplates: true }));
+
 vi.mock('@/contexts/WorkspaceContext', () => ({
   useWorkspace: () => ({
+    canEditTemplates: workspaceState.canEditTemplates,
     activeWorkspace: {
       id: 'personal',
       name: 'Personal',
@@ -64,6 +67,32 @@ describe('Layout shell selection', () => {
     expect(html).toContain('Switch to dark mode');
     expect(html).toContain('Import Templates');
     expect(html).toContain('Build repeatable checklists');
+  });
+
+  it('hides New Template from members whose Organization role cannot create Templates', () => {
+    workspaceState.canEditTemplates = false;
+    try {
+      const html = renderToStaticMarkup(
+        <StaticRouter location="/dashboard/templates">
+          <Routes>
+            <Route
+              path="*"
+              element={
+                <Layout>
+                  <div>Console child</div>
+                </Layout>
+              }
+            />
+          </Routes>
+        </StaticRouter>,
+      );
+
+      expect(html).toContain('data-app-shell="console"');
+      expect(html).not.toContain('New Template');
+      expect(html).not.toContain('href="/dashboard/templates/new"');
+    } finally {
+      workspaceState.canEditTemplates = true;
+    }
   });
 
   it('uses the shared public shell for discovery routes', () => {
