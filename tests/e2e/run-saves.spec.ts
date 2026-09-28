@@ -531,3 +531,83 @@ test('the run Changelog shows a save without a reload', async ({ page }) => {
 
   await deleteRun(page, runId);
 });
+
+// Completing a task moves on from it only if it is still selected when the save lands, so a
+// task opened while the save was in flight stays open (getSelectionAfterToggle).
+async function createFourTaskRun(page: Page, title: string) {
+  return page.evaluate(async ({ apiBaseUrl, runTitle }) => {
+    const response = await fetch(`${apiBaseUrl}/checklists`, {
+      body: JSON.stringify({
+        title: runTitle,
+        sections: [{ id: 'mv', title: 'Section', items: ['A', 'B', 'C', 'D'].map((name) => ({
+          id: `mv-${name.toLowerCase()}`,
+          title: `Task ${name}`,
+        })) }],
+      }),
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    return ((await response.json()) as { id: string }).id;
+  }, { apiBaseUrl: DEV_API_BASE_URL, runTitle: title });
+}
+
+// Holds every save of the run until it is released, one at a time and in order.
+async function holdEverySave(page: Page, runId: string) {
+  const held: Array<() => void> = [];
+  await page.route(`**/api/checklists/${runId}`, async (route) => {
+    if (route.request().method() === 'PUT') await new Promise<void>((resolve) => held.push(resolve));
+    await route.continue();
+  });
+  return async () => {
+    await expect.poll(() => held.length).toBeGreaterThan(0);
+    held.shift()?.();
+  };
+}
+
+test('a task opened while Mark Complete is saving stays open when the save lands', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createFourTaskRun(page, `Move on during save QA ${Date.now()}`);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const releaseNextSave = await holdEverySave(page, runId);
+  const notes = page.getByRole('textbox', { name: 'Task notes' });
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await page.getByRole('button', { name: 'Mark Complete' }).click();
+  await page.getByRole('navigation', { name: 'Run tasks' }).getByRole('button', { name: 'Task D' }).click();
+  await expect(page.getByRole('heading', { name: 'Task D' })).toBeVisible();
+  await notes.fill('Started on D');
+  await releaseNextSave();
+
+  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, false, false, false] });
+  await expect(page.getByRole('heading', { name: 'Task D' })).toBeVisible();
+  await expect(notes).toHaveValue('Started on D');
+
+  await deleteRun(page, runId);
+});
+
+test('queued Mark Complete saves never move back to an earlier task', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createFourTaskRun(page, `Queued move on QA ${Date.now()}`);
+  const releaseNextSave = await holdEverySave(page, runId);
+  const next = page.getByRole('button', { name: 'Next', exact: true });
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await page.getByRole('button', { name: 'Mark Complete' }).click();
+  await next.click();
+  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  await page.getByRole('button', { name: 'Mark Complete' }).click();
+  await next.click();
+  await expect(page.getByRole('heading', { name: 'Task C' })).toBeVisible();
+
+  await releaseNextSave();
+  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, false, false, false] });
+  await expect(page.getByRole('heading', { name: 'Task C' })).toBeVisible();
+  await releaseNextSave();
+  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, true, false, false] });
+  await expect(page.getByRole('heading', { name: 'Task C' })).toBeVisible();
+
+  await deleteRun(page, runId);
+});

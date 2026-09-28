@@ -15,8 +15,8 @@ import {
   countRunExecutionItems,
   findRunSubItem,
   getInitialSelectedItemId,
-  getNextSelectedItemId,
   getSelectedRunItem,
+  getSelectionAfterToggle,
   itemHasCompletion,
   mapChecklistToRun,
   setSubItemsCompletion,
@@ -681,15 +681,10 @@ export const useRunExecutionModel = (
     // isCompleted is the value the user clicked on the run they saw.
     toggleItem: async (itemId: string, isCompleted: boolean) => {
       const result = await enqueueSave(saves.toggleItem(itemId, isCompleted));
-      // Completing the selected task moves on to the next unfinished one.
-      if (
-        result.kind === 'ok' &&
-        result.run &&
-        itemId === selectedItemId &&
-        getSelectedRunItem(result.run, itemId)?.item.isCompleted
-      ) {
-        setSelectedItemId(getNextSelectedItemId(result.run, itemId));
-      }
+      // Completing the selected task moves on to the next unfinished one, judged on the
+      // selection when the save lands (an updater), not the one captured at the click.
+      const saved = result.kind === 'ok' ? result.run : undefined;
+      if (saved) setSelectedItemId((current) => getSelectionAfterToggle(saved, itemId, current));
       return result;
     },
     toggleSubItem: (itemId: string, contentIndex: number, subItemIndex: number, isCompleted: boolean) =>

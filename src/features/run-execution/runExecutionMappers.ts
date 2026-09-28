@@ -118,6 +118,20 @@ export const getNextSelectedItemId = (
   return next?.id ?? completedItemId;
 };
 
+// The selection once a task toggle's save lands. Completing a task moves on from it only
+// if it is still the selected task; a task the user opened while the save was in flight
+// (Next, Previous, the task list) is kept. Pass the selection at the moment the save lands
+// (a state updater's argument), never the one captured when the task was clicked.
+export const getSelectionAfterToggle = (
+  run: ChecklistRun,
+  toggledItemId: string,
+  currentSelectedItemId: string | null,
+): string | null => {
+  if (currentSelectedItemId !== toggledItemId) return currentSelectedItemId;
+  const toggled = run.sections.flatMap((section) => section.items).find((item) => item.id === toggledItemId);
+  return toggled?.isCompleted ? getNextSelectedItemId(run, toggledItemId) : currentSelectedItemId;
+};
+
 export const countRunExecutionItems = (
   run: ChecklistRun | null,
 ): {
