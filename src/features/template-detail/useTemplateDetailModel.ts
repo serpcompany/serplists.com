@@ -25,7 +25,7 @@ import {
   mapApiTemplateToChecklistTemplate,
 } from './templateDetailMappers';
 import { getTemplateHistoryQueryKey } from './templateHistoryTimeline';
-import { getTemplateDetailPermissions } from './templatePermissions';
+import { canCopyTemplate, getTemplateDetailPermissions } from './templatePermissions';
 import { setTemplateVisibility } from './templateVisibility';
 
 export type { TemplateDetailActionResult } from './templateDetailApi';
@@ -254,6 +254,12 @@ export const saveTemplateToAccount = async (params: {
 }): Promise<TemplateDetailActionResult> => {
   if (!params.template) {
     return { kind: 'error', message: 'Template not found.' };
+  }
+
+  // The API clones only public templates. Checked before the plan so a private
+  // template never sends anyone to checkout for a copy that cannot succeed.
+  if (!canCopyTemplate(params.template)) {
+    return { kind: 'error', message: 'Only public templates can be copied.' };
   }
 
   if (!params.isAuthenticated || !params.userId) {

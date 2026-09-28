@@ -56,3 +56,12 @@ export const getTemplateDetailPermissions = (params: {
     canViewHistory: isOwner,
   };
 };
+
+/**
+ * Whether another owner's template can be copied. The API clones only public templates
+ * (and library templates are copied from the bundle), so the copy button and the copy
+ * action both check this: a copy of a private Organization Template could only fail.
+ */
+export const canCopyTemplate = (
+  template: Pick<ChecklistTemplate, 'id' | 'isPublic' | 'userId'> | null,
+): boolean => Boolean(template && (isRepoTemplate(template) || template.isPublic));

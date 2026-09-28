@@ -155,8 +155,13 @@ describe('copying a public template into an Organization', () => {
 });
 
 describe('getCopyTemplateButton', () => {
-  const personal = { canEditTemplates: true, isCloning: false, isTeamWorkspace: false };
-  const organization = { canEditTemplates: true, isCloning: false, isTeamWorkspace: true };
+  const personal = {
+    canEditTemplates: true,
+    isCloning: false,
+    isTeamWorkspace: false,
+    template: buildTemplate(),
+  };
+  const organization = { ...personal, isTeamWorkspace: true };
 
   it('offers the copy in an Organization whatever its plan says', () => {
     for (const billingState of [

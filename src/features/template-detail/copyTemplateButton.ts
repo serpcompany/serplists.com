@@ -1,3 +1,6 @@
+import type { ChecklistTemplate } from '@/types/checklist';
+
+import { canCopyTemplate } from './templatePermissions';
 import type { TemplateDetailBillingState } from './useTemplateDetailModel';
 
 export type CopyTemplateButton = {
@@ -11,14 +14,20 @@ export type CopyTemplateButton = {
  * Personal copying is a Pro feature, so Personal shows the plan. An Organization's
  * limits are checked by the API (a Free Organization may copy within its Template
  * limit), so the button never pre-judges them, and it is hidden from roles that
- * cannot add Templates to the Organization.
+ * cannot add Templates to the Organization. The API clones only public templates, so
+ * the button is hidden on a private one in every context.
  */
 export const getCopyTemplateButton = (params: {
   billingState: TemplateDetailBillingState;
   canEditTemplates: boolean;
   isCloning: boolean;
   isTeamWorkspace: boolean;
+  template: Pick<ChecklistTemplate, 'id' | 'isPublic' | 'userId'> | null;
 }): CopyTemplateButton => {
+  if (!canCopyTemplate(params.template)) {
+    return { disabled: true, label: '', visible: false };
+  }
+
   if (params.isTeamWorkspace) {
     return {
       disabled: params.isCloning,

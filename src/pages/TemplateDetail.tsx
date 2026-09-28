@@ -161,6 +161,7 @@ const TemplateDetail = () => {
     canEditTemplates,
     isCloning: isCloningTemplate,
     isTeamWorkspace,
+    template: displayTemplate,
   });
   // The model's template is the only source: Share and the switch both keep it current.
   const isPublic = displayTemplate?.isPublic ?? false;
@@ -501,13 +502,13 @@ const TemplateDetail = () => {
             {copyButton.label}
           </Button>
         ) : null
-      ) : (
+      ) : copyButton.visible ? (
         <Button asChild variant="outline" size="sm" className="border-border">
           <Link to="/login" state={{ from: location }}>
             Log in to copy template
           </Link>
         </Button>
-      )}
+      ) : null}
 
       <Button
         size="sm"

@@ -242,6 +242,66 @@ describe('TemplateDetail copy into an Organization', () => {
   });
 });
 
+describe('TemplateDetail copy of a private Organization template', () => {
+  // The API only clones public templates, so a copy button here could only fail.
+  const privateOrganizationTemplate = (isPublic = false) => ({
+    ...buildV0DemoPrivateTemplate(),
+    isPublic,
+    teamId: 'team-1',
+    userId: 'someone-else',
+  });
+
+  it('offers no copy to a member viewing it from Personal', () => {
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      template: privateOrganizationTemplate(),
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(html).not.toContain('Copy to My Templates');
+    expect(html).not.toContain('Upgrade to copy template');
+    expect(html).toContain('Start Run');
+  });
+
+  it('offers no copy to a Free member, so nobody is sent to checkout for it', () => {
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      billingState: { billingEnabled: true, isLoading: false, isPro: false },
+      template: privateOrganizationTemplate(),
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(html).not.toContain('Upgrade to copy template');
+    expect(html).not.toContain('Copy to My Templates');
+  });
+
+  it('offers no copy from another Organization', () => {
+    workspaceState.activeTeamId = 'team-2';
+    workspaceState.isTeamWorkspace = true;
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      template: privateOrganizationTemplate(),
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(html).not.toContain('Copy to Organization');
+  });
+
+  it('keeps the copy once the template is public', () => {
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      template: privateOrganizationTemplate(true),
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(html).toContain('Copy to My Templates');
+  });
+});
+
 describe('TemplateDetail Duplicate', () => {
   const duplicateWithTitle = async (title: string) => {
     contextCreateTemplate.mockResolvedValue({ id: 'tpl-2' });
