@@ -247,6 +247,11 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
       allPageLocations.add(location);
     }
     expect(lastmods.every((value) => Number.isFinite(Date.parse(value)))).toBe(true);
+    if (childLocation.includes("/sitemaps/categories/")) {
+      // The index dates the categories shard from the same entries the shard serves.
+      const indexLastmod = Date.parse(shardLastmods.find(([loc]) => loc === childLocation)?.[1] ?? "");
+      expect(indexLastmod, childLocation).toBeGreaterThanOrEqual(Math.max(...lastmods.map((value) => Date.parse(value))));
+    }
     expect(childXml).not.toContain("<priority>");
     expect(childXml).not.toContain("<changefreq>");
     await expectSchemaValid(childXml, sitemapSchema, new URL(childLocation).pathname);

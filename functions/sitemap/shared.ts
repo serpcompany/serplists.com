@@ -351,10 +351,12 @@ export async function handleInMemoryPagedSitemap(
     : xmlResponse(request, renderUrlset(pageEntries));
 }
 
-export async function loadCategoryEntries(
-  env: Env,
-  inventoryLastmod?: string | null,
-): Promise<SitemapEntry[]> {
+// The index hashes this list to date the categories shard and the shard serves it, so it
+// takes nothing a caller could pass differently. The landing page lists every category,
+// so its lastmod follows every category revision, including the row of a category whose
+// last public Template just left. It ignores sitemap_revisions['categories'], which the
+// triggers bump on every public Template change, with or without a category.
+export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
   const db = createDb(env);
   const rows = await db
     .select({
@@ -400,12 +402,16 @@ export async function loadCategoryEntries(
       revised_at: sitemap_category_revisions.revised_at,
     })
     .from(sitemap_category_revisions);
-  categoryRevisions.forEach((row) => {
-    parseCategories(row.category).forEach((category) => {
-      const slug = categorySlug(category);
-      if (lastmodBySlug.has(slug)) addCategory(category, row.revised_at);
+  let categoryRevisedAt: string | null = null;
+  for (const row of categoryRevisions) {
+    const categories = parseCategories(row.category).filter((category) => categorySlug(category));
+    // Uncategorized Templates store '[]', and the triggers record that value too.
+    if (categories.length === 0) continue;
+    categoryRevisedAt = mostRecentLastmod(categoryRevisedAt, row.revised_at);
+    categories.forEach((category) => {
+      if (lastmodBySlug.has(categorySlug(category))) addCategory(category, row.revised_at);
     });
-  });
+  }
 
   const categoryEntries = Array.from(lastmodBySlug, ([slug, lastmod]) => ({
     path: `/categories/${encodeURIComponent(slug)}`,
@@ -418,7 +424,8 @@ export async function loadCategoryEntries(
       ...landingPage,
       lastmod: mostRecentLastmod(
         landingPage.lastmod,
-        inventoryLastmod,
+        bundledInventoryLastmod('categories'),
+        categoryRevisedAt,
         ...categoryEntries.map((entry) => entry.lastmod),
       ),
     },
