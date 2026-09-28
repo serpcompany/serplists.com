@@ -29,6 +29,7 @@ const defaultProps: AgentAccessSectionViewProps = {
   keys: [],
   keyName: '',
   mcpEndpoint: 'https://demo.serplists.test/api/mcp',
+  mcpHostMismatch: false,
   revokingKeyId: null,
   onCopyEndpoint: vi.fn(),
   onCopySecret: vi.fn(),
@@ -125,6 +126,58 @@ describe('AgentAccessSectionView', () => {
 });
 
 describe('AgentAccessSection', () => {
+  const renderSection = (queryClient: ReturnType<typeof createTestQueryClient>) =>
+    renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <AgentAccessSection />
+      </QueryClientProvider>,
+    );
+
+  it('shows the endpoint the server accepts, not the address the page was opened on', () => {
+    // A per-deployment URL such as https://3f2a1b9c.serp-checklists.pages.dev is not on the
+    // MCP host allowlist, so the server points agents at the canonical staging address.
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(['agent-keys'], []);
+    queryClient.setQueryData(['agent-mcp-connection'], {
+      mcpEndpoint: 'https://staging.serplists.com/api/mcp',
+      hostMismatch: true,
+    });
+
+    const html = renderSection(queryClient);
+
+    expect(html).toContain('value="https://staging.serplists.com/api/mcp"');
+    expect(html).toContain('url = &quot;https://staging.serplists.com/api/mcp&quot;');
+    expect(html).toContain('uses staging.serplists.com');
+    expect(html).not.toContain('localhost:8788/api/mcp');
+  });
+
+  it('shows the endpoint for the current address without a notice when the server accepts it', () => {
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(['agent-keys'], []);
+    queryClient.setQueryData(['agent-mcp-connection'], {
+      mcpEndpoint: 'https://staging.serplists.com/api/mcp',
+      hostMismatch: false,
+    });
+
+    const html = renderSection(queryClient);
+
+    expect(html).toContain('value="https://staging.serplists.com/api/mcp"');
+    expect(html).not.toContain('can&#x27;t connect through this address');
+  });
+
+  it('says MCP is unavailable instead of showing an endpoint the server rejects', () => {
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(['agent-keys'], []);
+    queryClient.setQueryData(['agent-mcp-connection'], { mcpEndpoint: null, hostMismatch: true });
+
+    const html = renderSection(queryClient);
+
+    expect(html).toContain('can&#x27;t connect through this address');
+    expect(html).not.toContain('Copy endpoint');
+    expect(html).not.toContain('[mcp_servers.serplists]');
+    expect(html).not.toContain('/api/mcp');
+  });
+
   it('does not report "No Run Keys yet." when loading the keys failed', () => {
     const queryClient = createTestQueryClient();
     seedQueryError(queryClient, ['agent-keys']);

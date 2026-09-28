@@ -146,6 +146,67 @@ describe("Personal run key management handler", () => {
     expect(JSON.stringify(body)).not.toContain("key_hash");
   });
 
+  describe("MCP connection", () => {
+    // The staging (preview) allowlist from wrangler.toml.
+    const previewEnv = {
+      ...mockEnv,
+      CORS_ALLOWED_ORIGINS: "https://staging.serplists.com,https://staging.serp-checklists.pages.dev",
+    };
+
+    const connection = async (url: string, env: typeof mockEnv & Record<string, string> = previewEnv) => {
+      const response = await handleAgentKeys(new Request(url), env);
+      return { status: response.status, body: await response.json() };
+    };
+
+    it("points a per-deployment URL at the canonical host the MCP server accepts", async () => {
+      await expect(connection("https://3f2a1b9c.serp-checklists.pages.dev/api/agent-keys/connection"))
+        .resolves.toEqual({
+          status: 200,
+          body: { mcpEndpoint: "https://staging.serplists.com/api/mcp", hostMismatch: true },
+        });
+      expect(dbMocks.db.select).not.toHaveBeenCalled();
+    });
+
+    it("prefers FRONTEND_URL as the canonical host", async () => {
+      await expect(connection("https://3f2a1b9c.serp-checklists.pages.dev/api/agent-keys/connection", {
+        ...previewEnv,
+        FRONTEND_URL: "https://staging.serp-checklists.pages.dev/",
+      })).resolves.toEqual({
+        status: 200,
+        body: { mcpEndpoint: "https://staging.serp-checklists.pages.dev/api/mcp", hostMismatch: true },
+      });
+    });
+
+    it("keeps an allowed or loopback host's own endpoint", async () => {
+      await expect(connection("https://staging.serp-checklists.pages.dev/api/agent-keys/connection"))
+        .resolves.toEqual({
+          status: 200,
+          body: { mcpEndpoint: "https://staging.serp-checklists.pages.dev/api/mcp", hostMismatch: false },
+        });
+      await expect(connection("http://localhost:8788/api/agent-keys/connection", mockEnv as never))
+        .resolves.toEqual({
+          status: 200,
+          body: { mcpEndpoint: "http://localhost:8788/api/mcp", hostMismatch: false },
+        });
+    });
+
+    it("returns no endpoint when a remote host has no configured origin", async () => {
+      await expect(connection("https://3f2a1b9c.serp-checklists.pages.dev/api/agent-keys/connection", mockEnv as never))
+        .resolves.toEqual({ status: 200, body: { mcpEndpoint: null, hostMismatch: true } });
+    });
+
+    it("requires an authenticated browser session", async () => {
+      sessionMocks.getSessionUserId.mockResolvedValue(null);
+
+      const response = await handleAgentKeys(
+        new Request("https://staging.serplists.com/api/agent-keys/connection"),
+        previewEnv,
+      );
+
+      expect(response.status).toBe(401);
+    });
+  });
+
   it("revokes only a key found under the current user", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: "key-1" }]);
 

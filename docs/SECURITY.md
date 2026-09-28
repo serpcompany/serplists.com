@@ -16,6 +16,14 @@
   Personal templates and listing, starting, reading, and updating Personal runs.
   Keys are stored hashed. The MCP routes are off on remote hosts unless
   `PERSONAL_RUN_MCP_ENABLED=true`.
+- **`/api/mcp` answers only known hosts** (DNS-rebinding defense in
+  `functions/api/utils/agent-mcp-host.ts`): loopback hosts and the hosts in
+  `FRONTEND_URL` and `CORS_ALLOWED_ORIGINS`; any other host gets `403 Invalid Host`.
+  Per-deployment URLs such as `https://<hash>.<project>.pages.dev` are never listed,
+  so Agent Access asks the server which endpoint to show
+  (`GET /api/agent-keys/connection`). On a host the check rejects, it shows the
+  endpoint on the first configured origin with a note, or no endpoint when none is
+  configured. Never widen the check to a `pages.dev` suffix.
 - **Uploads** are written under the uploader's key prefix, and deletes are
   restricted to that prefix.
 - **Invites** store only a token hash, never the raw token.
@@ -33,7 +41,7 @@ and `.env.local` are deprecated. Production values are Cloudflare Pages secrets.
 | `STRIPE_PORTAL_CONFIGURATION_ID` | Required for self-serve subscription management |
 | `RESEND_API_KEY` or `USESEND_API_KEY` | At least one, for verification and reset emails; otherwise auth-email actions return `503 auth_email_unavailable` |
 | `EMAIL_FROM` | Optional sender override (default `noreply@mail.auth.serp.co`) |
-| `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | Optional CORS allowlist |
+| `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | Optional CORS allowlist; also the remote hosts `/api/mcp` accepts. The first valid one (`FRONTEND_URL` first) is the MCP endpoint Agent Access shows on any other host |
 | `R2_PUBLIC_BASE_URL` | Optional public file URL base |
 | `ENTITLEMENTS_ADMIN_SECRET` | Optional; enables the admin override endpoint (below) |
 | `PERSONAL_RUN_MCP_ENABLED`, `VITE_PERSONAL_RUN_MCP_ENABLED` | Optional; enable Run Key and MCP routes on a remote host (on by default only for loopback hosts: `localhost`, `127.0.0.1`, `[::1]`; `false` turns them off there too) |

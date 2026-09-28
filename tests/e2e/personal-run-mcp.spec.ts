@@ -12,8 +12,9 @@ async function mcpRequest(
   method: string,
   params?: JsonRecord,
   id = 1,
+  endpoint = `${apiBaseUrl}/mcp`,
 ) {
-  const response = await fetch(`${apiBaseUrl}/mcp`, {
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       Accept: 'application/json, text/event-stream',
@@ -62,6 +63,15 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   });
   expect(initialized.response.status).toBe(200);
   expect((initialized.body.result as JsonRecord).protocolVersion).toBe(protocolVersion);
+
+  // The endpoint the page shows must be one the MCP host check accepts.
+  const shownEndpoint = await page.getByLabel('SERP Lists MCP endpoint').inputValue();
+  const shownInitialized = await mcpRequest(secret, 'initialize', {
+    protocolVersion,
+    capabilities: {},
+    clientInfo: { name: 'serplists-playwright', version: '1.0.0' },
+  }, 2, shownEndpoint);
+  expect(shownInitialized.response.status).toBe(200);
 
   // Model APIs reject a tool list whose schemas have a combinator at the root, so every
   // tool must advertise a plain object schema with top-level properties.

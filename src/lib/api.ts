@@ -1,5 +1,6 @@
 import { env } from "@/env";
 import { createApiError } from "@/lib/api-errors";
+import { agentMcpConnectionSchema, type AgentMcpConnection } from "@/lib/schemas/agentMcpConnection";
 import type { TemplateImportSummary } from "@/types/checklist";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
@@ -457,6 +458,12 @@ class ApiClient {
   // Personal agent access
   async getAgentKeys(): Promise<AgentKey[]> {
     return this.request('/agent-keys');
+  }
+
+  // The MCP endpoint the server accepts for this deployment, which can differ from the
+  // page's own origin (see getAgentMcpEndpoint, the fallback until this loads).
+  async getAgentMcpConnection(): Promise<AgentMcpConnection> {
+    return agentMcpConnectionSchema.parse(await this.request('/agent-keys/connection'));
   }
 
   async createAgentKey(name: string): Promise<CreatedAgentKey> {

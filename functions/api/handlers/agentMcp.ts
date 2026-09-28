@@ -1,6 +1,5 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { isLoopbackHostname } from "../../../src/lib/utils/loopbackHostname";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import {
@@ -9,6 +8,7 @@ import {
   insertRunUnderActiveRunLimit,
   personalActiveRunsWhere,
 } from "../utils/active-run-limit";
+import { requestHostIsSafe, requestOriginIsAllowed } from "../utils/agent-mcp-host";
 import { buildAuditEventValues } from "../utils/audit";
 import { getEntitlementsForUser } from "../utils/entitlements";
 import { describeErrorForLog, log } from "../utils/logger";
@@ -126,44 +126,6 @@ function acceptsMcpResponse(request: Request): boolean {
   if (!accept) return false;
   const values = accept.toLowerCase().split(",").map((value) => value.trim().split(";", 1)[0]);
   return values.includes("application/json") && values.includes("text/event-stream");
-}
-
-function configuredOrigins(env: Env): Set<string> {
-  const origins = new Set<string>();
-  for (const value of [env.FRONTEND_URL, ...(env.CORS_ALLOWED_ORIGINS?.split(",") ?? [])]) {
-    if (!value?.trim()) continue;
-    try {
-      origins.add(new URL(value.trim()).origin);
-    } catch {
-      // Invalid configuration never broadens access.
-    }
-  }
-  return origins;
-}
-
-function requestOriginIsAllowed(request: Request, env: Env): boolean {
-  const origin = request.headers.get("Origin");
-  if (!origin) return true;
-  try {
-    const normalized = new URL(origin).origin;
-    return normalized === new URL(request.url).origin || configuredOrigins(env).has(normalized);
-  } catch {
-    return false;
-  }
-}
-
-function requestHostIsSafe(request: Request, env: Env): boolean {
-  const host = request.headers.get("Host");
-  const requestUrl = new URL(request.url);
-  if (host && host.toLowerCase() !== requestUrl.host.toLowerCase()) return false;
-
-  if (isLoopbackHostname(requestUrl.hostname)) return true;
-
-  const allowedHosts = new Set(
-    Array.from(configuredOrigins(env), (origin) => new URL(origin).host.toLowerCase()),
-  );
-  if (allowedHosts.size > 0) return allowedHosts.has(requestUrl.host.toLowerCase());
-  return false;
 }
 
 function rateLimit(identity: PersonalRunKeyIdentity): { allowed: true } | { allowed: false; retryAfter: number } {
