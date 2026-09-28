@@ -68,6 +68,14 @@ and user-facing failure states when a supporting service is unavailable.
   served under `/api/uploads/` by this API or `R2_PUBLIC_BASE_URL`. Updates check
   only the fields they write. The limits live in `src/lib/schemas/userProfileSchema.ts`,
   which `Register.tsx` and `ProfileSection.tsx` use for `maxLength`.
+- Usernames are stored lowercase (the username plugin's normalizer) and are unique
+  (`idx_users_username`). The plugin's "already taken" check never runs on
+  `/update-user` in Better Auth 1.3.4, because it looks for a session before the
+  endpoint loads one, so `databaseHooks.user.update` repeats it with the caller's
+  session (`functions/api/utils/username-conflict.ts`). A write that still hits the
+  unique index, when two requests claim a name at once, is mapped to the same
+  `422 USERNAME_IS_ALREADY_TAKEN` instead of a bodyless 500. Re-saving your own
+  username in a different case is allowed.
 - Settings live at `/dashboard/settings`; `/account` and `/dashboard/profile`
   redirect there.
 

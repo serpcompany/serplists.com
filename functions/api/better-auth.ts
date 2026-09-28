@@ -17,6 +17,7 @@ import { deliverAuthEmail, discardUnsentPasswordResetToken } from "./utils/auth-
 import { log } from "./utils/logger";
 import { assertNotBlockedTestEmail } from "./utils/test-email-block";
 import { buildUserProfileWritePolicy, validateUserProfileWrite } from "./utils/user-profile-validation";
+import { assertUsernameAvailableForUpdate, mapUsernameConflicts } from "./utils/username-conflict";
 
 function isProductionHost(hostname: string): boolean {
   return hostname === "serplists.com" || hostname.endsWith(".serplists.com");
@@ -97,10 +98,12 @@ export function createBetterAuth(env: Env, request: Request) {
   return betterAuth({
     secret: authSecret,
     trustedOrigins: Array.from(trustedOrigins),
-    database: drizzleAdapter(db, {
-      provider: "sqlite",
-      schema,
-    }),
+    database: mapUsernameConflicts(
+      drizzleAdapter(db, {
+        provider: "sqlite",
+        schema,
+      })
+    ),
     emailAndPassword: {
       enabled: true,
       // Throttled per account (utils/auth-email-throttle.ts). A skipped send
@@ -170,7 +173,11 @@ export function createBetterAuth(env: Env, request: Request) {
         },
         update: {
           // Better Auth replaces the update with the returned data, so always return it.
-          before: async (user) => ({ data: validateUserProfileWrite(user, "update", userProfilePolicy) }),
+          before: async (user, context) => {
+            const data = validateUserProfileWrite(user, "update", userProfilePolicy);
+            await assertUsernameAvailableForUpdate(data, context);
+            return { data };
+          },
         },
       },
       // Every sign-in, whatever the endpoint (email, username) or body format,
