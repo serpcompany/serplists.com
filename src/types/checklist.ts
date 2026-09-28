@@ -78,6 +78,13 @@ export type TemplateSavePayload = {
   version?: number;
 };
 
+// What PUT /api/templates/:id reports back: the slug it stored (when one was sent) and
+// the template's version after the save, which the next save must send as expected_version.
+export type TemplateUpdateResult = {
+  slug?: string;
+  version?: number;
+};
+
 export type ChecklistRun = {
   id: string;
   templateId: string;
@@ -135,7 +142,7 @@ export interface TemplatesContextProps {
   getRunsForTemplate: (templateId: string) => ChecklistRun[];
   getAllPublicTemplates: () => ChecklistTemplate[];
   createTemplate: (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => Promise<ChecklistTemplate>;
-  updateTemplate: (template: TemplateSavePayload) => Promise<void>;
+  updateTemplate: (template: TemplateSavePayload) => Promise<TemplateUpdateResult>;
   deleteTemplate: (id: string) => Promise<void>;
   createRun: (params: { templateId: string; runName?: string; template?: ChecklistTemplate }) => Promise<ChecklistRun | null>;
   updateRun: (run: ChecklistRun) => Promise<ChecklistRun>;

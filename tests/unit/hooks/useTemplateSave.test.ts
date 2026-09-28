@@ -67,33 +67,63 @@ describe("persistTemplateSave", () => {
     expect(createResolved).toBe(true);
   });
 
-  it("waits for update success and preserves rules from the cached template", async () => {
+  it("sends the version the editor loaded, never the list cache's", async () => {
     const dependencies = buildDependencies({
+      // A background list refetch has already picked up another editor's save.
       getTemplate: vi.fn(() => ({
         id: "template-1",
-        title: "Old title",
-        description: "Old description",
+        title: "Newer title",
+        description: "",
         type: "checklist",
         sections: baseSections,
         isPublic: true,
+        version: 6,
         rules: [{ id: "rule-1", type: "required", path: "sections.0" }],
       })),
-    });
+    } as Partial<Parameters<typeof persistTemplateSave>[0]>);
 
     const result = await persistTemplateSave(
       dependencies,
-      buildInput({ id: "template-1", title: "Updated title" }),
+      buildInput({ id: "template-1", title: "Updated title", expectedVersion: 5 }),
     );
 
-    expect(result).toEqual({ success: true, errors: [] });
+    expect(result.success).toBe(true);
     expect(dependencies.updateTemplate).toHaveBeenCalledWith(
       expect.objectContaining({
         id: "template-1",
         title: "Updated title",
         slug: "template-title",
-        rules: [{ id: "rule-1", type: "required", path: "sections.0" }],
+        version: 5,
       }),
     );
+    // The editor does not edit rules, so the stored rules are left untouched.
+    expect(dependencies.updateTemplate.mock.calls[0][0]).not.toHaveProperty("rules");
+  });
+
+  it("returns the version the server saved so the next save can send it", async () => {
+    const dependencies = buildDependencies({
+      updateTemplate: vi.fn().mockResolvedValue({ success: true, version: 6 }),
+    });
+
+    const result = await persistTemplateSave(
+      dependencies,
+      buildInput({ id: "template-1", expectedVersion: 5 }),
+    );
+
+    expect(result).toEqual({ success: true, errors: [], version: 6 });
+  });
+
+  it("refuses to update without a loaded version instead of skipping the conflict check", async () => {
+    const dependencies = buildDependencies();
+
+    const result = await persistTemplateSave(
+      dependencies,
+      buildInput({ id: "template-1" }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.errors[0]?.message).toMatch(/reload/i);
+    expect(dependencies.updateTemplate).not.toHaveBeenCalled();
   });
 
   it("returns failure when create rejects", async () => {
@@ -116,7 +146,7 @@ describe("persistTemplateSave", () => {
 
     const result = await persistTemplateSave(
       dependencies,
-      buildInput({ id: "template-1" }),
+      buildInput({ id: "template-1", expectedVersion: 2 }),
     );
 
     expect(result).toEqual({

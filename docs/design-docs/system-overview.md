@@ -78,7 +78,11 @@ Organization scoping applies.
 Run responses include `template_version`, `current_template_version`, `revision`,
 and derived `is_stale`. Send `expected_revision` when updating a run and
 `expected_version` when updating a template; `POST /api/checklists/:id/revalidate`
-reconciles and reopens a completed private run.
+reconciles and reopens a completed private run. A template update that changes
+content (anything but visibility) without `expected_version` gets `409 edit_conflict`,
+and `PUT /api/templates/:id` returns the new `version` and `content_version`. The
+template editor sends the version it loaded, then the version each save returns,
+never the version in the cached template lists.
 
 ## Data Model
 

@@ -345,9 +345,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         slug: template.seoUrl?.trim() || template.slug?.trim() || undefined,
         expected_version: template.version,
       });
-      
-      if (!result) throw new Error('Failed to update template');
-      return undefined;
+      return result;
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['templates'] });

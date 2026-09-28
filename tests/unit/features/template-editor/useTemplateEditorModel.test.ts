@@ -134,6 +134,87 @@ describe("loadTemplateEditorData", () => {
   });
 });
 
+describe("loadTemplateEditorData versions", () => {
+  it("keeps the version of the cached snapshot the form was built from", async () => {
+    const result = await loadTemplateEditorData(
+      {
+        id: "template-1",
+        getCachedTemplate: vi.fn(() => buildTemplate({ version: 5 })),
+      },
+      { apiClient: { getTemplateById: vi.fn() } },
+    );
+
+    expect(result.version).toBe(5);
+  });
+
+  it("keeps the version of the API record when the template is not cached", async () => {
+    const result = await loadTemplateEditorData(
+      {
+        id: "template-2",
+        getCachedTemplate: vi.fn(() => undefined),
+      },
+      {
+        apiClient: {
+          getTemplateById: vi.fn().mockResolvedValue({
+            id: "template-2",
+            title: "API Template",
+            sections: [],
+            version: 7,
+          }),
+        },
+      },
+    );
+
+    expect(result.version).toBe(7);
+  });
+
+  it("has no version when the load fails", async () => {
+    const result = await loadTemplateEditorData(
+      {
+        id: "template-3",
+        getCachedTemplate: vi.fn(() => undefined),
+      },
+      {
+        apiClient: {
+          getTemplateById: vi.fn().mockRejectedValue(new Error("Not found")),
+        },
+      },
+    );
+
+    expect(result.version).toBeUndefined();
+  });
+});
+
+describe("saveTemplateEditorData versions", () => {
+  it("sends the version the editor loaded as the expected version", async () => {
+    const saveTemplate = vi.fn().mockResolvedValue({ success: true, errors: [], version: 6 });
+
+    await saveTemplateEditorData(
+      {
+        id: "template-1",
+        expectedVersion: 5,
+        values: {
+          title: "Existing Template",
+          description: "",
+          templateType: "checklist",
+          categories: [],
+          tags: [],
+          isPublic: true,
+          seoTitle: "",
+          seoDescription: "",
+          seoUrl: "",
+          sections: [],
+        },
+      },
+      { saveTemplate },
+    );
+
+    expect(saveTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "template-1", expectedVersion: 5 }),
+    );
+  });
+});
+
 describe("saveTemplateEditorData", () => {
   it("returns a pure create outcome after normalizing the payload", async () => {
     const saveTemplate = vi.fn().mockResolvedValue({

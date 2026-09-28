@@ -1,6 +1,7 @@
 import { env } from "@/env";
 import { createApiError } from "@/lib/api-errors";
-import type { TemplateImportSummary } from "@/types/checklist";
+import { z } from "zod";
+import type { TemplateImportSummary, TemplateUpdateResult } from "@/types/checklist";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 const DEV_API_BASE_URL = env.VITE_API_URL ?? 'http://localhost:8788/api';
@@ -181,6 +182,11 @@ export type CreatedAgentKey = {
   secret: string;
 };
 
+const templateUpdateResultSchema = z.object({
+  slug: z.string().optional(),
+  version: z.number().int().optional(),
+});
+
 class ApiClient {
   private async request(endpoint: string, options: RequestInit = {}) {
     const headers: HeadersInit = {
@@ -293,11 +299,12 @@ class ApiClient {
     is_public?: boolean;
     slug?: string;
     expected_version?: number;
-  }) {
-    return this.request(`/templates/${id}`, {
+  }): Promise<TemplateUpdateResult> {
+    const response = await this.request(`/templates/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
+    return templateUpdateResultSchema.parse(response);
   }
 
   async deleteTemplate(id: string) {

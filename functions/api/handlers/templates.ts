@@ -1415,7 +1415,10 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       syncedItems = JSON.stringify(stableSections);
       updates.items = syncedItems;
     }
-    if (typeof expected_version === 'number' && expected_version !== existingTemplate.version) {
+    // A content edit must say which version it was based on; without one the check
+    // would be skipped and a stale editor would overwrite newer work.
+    const versionRequired = shouldCreateTemplateVersion(rawBody, requestedSlugValue);
+    if (typeof expected_version === 'number' ? expected_version !== existingTemplate.version : versionRequired) {
       return jsonError('Template changed since it was loaded. Refresh before saving again.', 409, {
         code: 'edit_conflict',
         details: { expectedVersion: expected_version, currentVersion: existingTemplate.version },
@@ -1568,7 +1571,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       throw error;
     }
 
-    return json({ success: true, slug: typeof updates.slug === 'string' ? updates.slug : undefined });
+    return json({ success: true, slug: typeof updates.slug === 'string' ? updates.slug : undefined, version: nextVersion, content_version: nextContentVersion });
   }
 
   if (request.method === 'DELETE') {

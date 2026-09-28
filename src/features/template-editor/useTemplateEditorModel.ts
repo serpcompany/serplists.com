@@ -34,6 +34,7 @@ type LoadTemplateEditorDataOptions = {
 
 type SaveTemplateEditorDataOptions = {
   id?: string;
+  expectedVersion?: number;
   values: TemplateEditorFormValues;
 };
 
@@ -45,6 +46,9 @@ export type TemplateEditorLoadResult = {
   initialValues: TemplateEditorFormValues;
   loadError: string | null;
   templateSlug?: string;
+  // The version of the same snapshot initialValues came from. Saves send it as
+  // expected_version so a stale editor gets a conflict instead of overwriting.
+  version?: number;
 };
 
 export const buildDefaultTemplateEditorTemplate =
@@ -85,6 +89,7 @@ const buildLoadResult = (
   initialValues: buildTemplateEditorFormValues(template),
   loadError: null,
   templateSlug: template?.slug ?? template?.seoUrl,
+  version: template?.version,
 });
 
 const getApiClient = (
@@ -143,6 +148,7 @@ export const saveTemplateEditorData = async (
   const normalizedForm = normalizeTemplateEditorFormForSave(options.values);
   return dependencies.saveTemplate({
     id: options.id,
+    expectedVersion: options.expectedVersion,
     title: normalizedForm.title,
     description: normalizedForm.description,
     sections: normalizedForm.sections,
@@ -166,6 +172,8 @@ export const useTemplateEditorModel = (
     isSaving,
   } = useTemplateSave();
   const loadedTemplateIdRef = useRef<string | null>(null);
+  // Set only from the loaded record and from save responses, never from the lists.
+  const expectedVersionRef = useRef<number | undefined>(undefined);
   const baseGetTemplateRef = useRef(getTemplate);
   const apiClientRef = useRef<TemplateEditorApiClient | undefined>(
     dependencies?.apiClient,
@@ -190,6 +198,7 @@ export const useTemplateEditorModel = (
     const load = async () => {
       if (!options.id) {
         loadedTemplateIdRef.current = null;
+        expectedVersionRef.current = undefined;
         setInitialValues(
           buildTemplateEditorFormValues(buildDefaultTemplateEditorTemplate()),
         );
@@ -205,6 +214,7 @@ export const useTemplateEditorModel = (
       }
 
       setLoading(true);
+      expectedVersionRef.current = undefined;
 
       const result = await loadTemplateEditorData(
         {
@@ -222,6 +232,7 @@ export const useTemplateEditorModel = (
       }
 
       loadedTemplateIdRef.current = options.id;
+      expectedVersionRef.current = result.version;
       setInitialValues(result.initialValues);
       setLoadError(result.loadError);
       setTemplateSlug(result.templateSlug);
@@ -241,6 +252,7 @@ export const useTemplateEditorModel = (
     const result = await saveTemplateEditorData(
       {
         id: options.id,
+        expectedVersion: expectedVersionRef.current,
         values,
       },
       {
@@ -249,6 +261,7 @@ export const useTemplateEditorModel = (
     );
 
     if (result.success) {
+      expectedVersionRef.current = result.version;
       const savedState = buildTemplateEditorSavedState(values);
       setInitialValues(savedState.initialValues);
       setLoadError(null);

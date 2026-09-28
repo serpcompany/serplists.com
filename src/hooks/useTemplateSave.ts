@@ -1,18 +1,21 @@
 import { useState } from "react";
 import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { useTemplateValidation } from "@/hooks/useTemplateValidation";
-import { ChecklistSection, TemplateSavePayload } from "@/types/checklist";
+import { ChecklistSection, TemplateSavePayload, TemplateUpdateResult } from "@/types/checklist";
 import { ValidationError } from "@/hooks/useTemplateValidation";
 
 export type SaveTemplateResult = {
   success: boolean;
   errors: ValidationError[];
+  // The template's version after a successful update; the next save sends it.
+  version?: number;
 };
 
+// Never read the version from the template lists: they refetch in the background and
+// would report another editor's newer save as the version this form was built from.
 type SaveTemplateDependencies = {
-  getTemplate: (id: string) => TemplateSavePayload | undefined;
   createTemplate: (template: Omit<TemplateSavePayload, "id">) => Promise<unknown>;
-  updateTemplate: (template: TemplateSavePayload) => Promise<void>;
+  updateTemplate: (template: TemplateSavePayload) => Promise<TemplateUpdateResult | void>;
   applyDefaults: (
     title: string,
     sections: ChecklistSection[],
@@ -31,14 +34,18 @@ export type SaveTemplateInput = {
   categories: string[];
   tags: string[];
   isPublic: boolean;
+  // The version the editor loaded (or last saved). Required for updates.
+  expectedVersion?: number;
 };
+
+const MISSING_VERSION_MESSAGE =
+  "This template's saved version is unknown. Reload the editor before saving so newer changes are not overwritten.";
 
 export const persistTemplateSave = async (
   dependencies: SaveTemplateDependencies,
   input: SaveTemplateInput,
 ): Promise<SaveTemplateResult> => {
   const {
-    getTemplate,
     createTemplate,
     updateTemplate,
     applyDefaults,
@@ -55,13 +62,18 @@ export const persistTemplateSave = async (
     categories,
     tags,
     isPublic,
+    expectedVersion,
   } = input;
 
   const { title: finalTitle, sections: finalSections } = applyDefaults(title, sections);
 
   try {
     if (id) {
-      const existingTemplate = getTemplate(id);
+      if (typeof expectedVersion !== "number") {
+        return { success: false, errors: [{ type: "save", message: MISSING_VERSION_MESSAGE }] };
+      }
+
+      // Rules are not edited here; leaving them out keeps the stored rules.
       const updatePayload: TemplateSavePayload = {
         id,
         title: finalTitle,
@@ -75,12 +87,11 @@ export const persistTemplateSave = async (
         categories,
         tags,
         isPublic,
-        rules: existingTemplate?.rules,
-        version: existingTemplate?.version,
+        version: expectedVersion,
       };
 
-      await updateTemplate(updatePayload);
-      return { success: true, errors: [] };
+      const saved = await updateTemplate(updatePayload);
+      return { success: true, errors: [], version: saved?.version };
     }
 
     await createTemplate({
@@ -113,7 +124,7 @@ export const persistTemplateSave = async (
 };
 
 export const useTemplateSave = () => {
-  const { getTemplate, createTemplate, updateTemplate } = useTemplateLists();
+  const { createTemplate, updateTemplate } = useTemplateLists();
   const { applyDefaults } = useTemplateValidation();
   const [isSaving, setIsSaving] = useState(false);
 
@@ -125,7 +136,6 @@ export const useTemplateSave = () => {
     try {
       return await persistTemplateSave(
         {
-          getTemplate,
           createTemplate,
           updateTemplate,
           applyDefaults,
