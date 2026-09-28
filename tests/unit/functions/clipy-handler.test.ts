@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   handleGenerateTemplateFromClipy,
+  parseClipyWatchUrl,
 } from '../../../functions/api/handlers/clipy';
+import { withSerpListsClipyRef } from '@/lib/utils/clipyUrl';
+import { getVideoEmbedSource } from '@/utils/urlHelpers';
 
 const sourceUrl = 'https://clipy.online/video/8fptqlnappr6';
 
@@ -225,5 +228,92 @@ describe('Clipy template generation', () => {
       'https://cdn.clipy.online/key-moments/demo/second.jpg',
       'https://cdn.clipy.online/key-moments/demo/third.jpg',
     ]);
+  });
+});
+
+describe('Clipy link parsing', () => {
+  const id = '8fptqlnappr6';
+  const referredWatchUrl = `https://clipy.online/video/${id}?ref=m4d8e9p&utm_source=serplists.com`;
+
+  it.each([
+    `https://clipy.online/video/${id}`,
+    `https://clipy.online/video/${id}/`,
+    referredWatchUrl,
+    `https://clipy.online/video/${id}?fbclid=abc&ref=someone-else`,
+    `https://clipy.online/video/${id}#t=30`,
+    `https://clipy.online/video/${id}?#`,
+    `https://www.clipy.online/video/${id}`,
+    `https://clipy.online/embed/${id}`,
+    `https://clipy.online/embed/${id}?ref=m4d8e9p&autoplay=1`,
+    `https://CLIPY.online/video/${id}`,
+    `https://clipy.online:443/video/${id}`,
+    `  https://clipy.online/video/${id}  `,
+  ])('accepts %s and fetches only the fixed Clipy JSON endpoint', async (url) => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json(completeContext()));
+    const response = await handleGenerateTemplateFromClipy(request(url), {} as never, {
+      fetch: fetchMock,
+      getUserId: vi.fn().mockResolvedValue('user-1'),
+    });
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0][0]).toBe(`https://clipy.online/video/${id}.json`);
+    const payload = await response.json();
+    expect(payload.draft.sections[0].items[0].contents[0].value).toBe(referredWatchUrl);
+  });
+
+  it.each([
+    `http://clipy.online/video/${id}`,
+    `https://evil.clipy.online/video/${id}`,
+    `https://clipy.online.evil.com/video/${id}`,
+    `https://clipy.online./video/${id}`,
+    `https://clipyonline.com/video/${id}`,
+    `https://someone@clipy.online/video/${id}`,
+    `https://clipy.online:8443/video/${id}`,
+    `https://clipy.online/video/${id}.json`,
+    `https://clipy.online/video/${id}/extra`,
+    `https://clipy.online/video/%61bcdefg`,
+    'https://clipy.online/video/abc',
+    `https://clipy.online/video/${'a'.repeat(65)}`,
+    `https://clipy.online/watch/${id}`,
+    'not a url',
+  ])('rejects %s without making an outbound request', async (url) => {
+    const fetchMock = vi.fn();
+    const response = await handleGenerateTemplateFromClipy(request(url), {} as never, {
+      fetch: fetchMock,
+      getUserId: vi.fn().mockResolvedValue('user-1'),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: 'invalid_clipy_url' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects links that carry a password', () => {
+    const withPassword = new URL(`https://clipy.online/video/${id}`);
+    withPassword.password = 'not-a-secret';
+    expect(parseClipyWatchUrl(withPassword.toString())).toBeNull();
+  });
+
+  it('rejects links longer than 500 characters, even valid ones', () => {
+    expect(parseClipyWatchUrl(`https://clipy.online/video/${id}?${'a'.repeat(500)}`)).toBeNull();
+  });
+
+  it('accepts every Clipy link SERP Lists itself renders', () => {
+    const embed = getVideoEmbedSource(`https://clipy.online/video/${id}`);
+    const emitted = [
+      embed?.url,
+      embed?.outboundUrl,
+      withSerpListsClipyRef(`https://clipy.online/video/${id}`),
+      withSerpListsClipyRef(`https://www.clipy.online/embed/${id}`),
+      referredWatchUrl,
+    ];
+
+    for (const url of emitted) {
+      expect(parseClipyWatchUrl(url), url).toEqual({
+        id,
+        watchUrl: `https://clipy.online/video/${id}`,
+      });
+    }
   });
 });

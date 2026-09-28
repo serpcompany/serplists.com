@@ -1,7 +1,7 @@
 import type { Env } from '../types';
 import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
-import { withSerpListsClipyRef } from '../../../src/lib/utils/clipyUrl';
+import { clipyVideoId, withSerpListsClipyRef } from '../../../src/lib/utils/clipyUrl';
 
 const CLIPY_ORIGIN = 'https://clipy.online';
 const CLIPY_CDN_ORIGIN = 'https://cdn.clipy.online';
@@ -149,24 +149,19 @@ export function parseClipyWatchUrl(value: unknown): { id: string; watchUrl: stri
     return null;
   }
 
-  if (
-    parsed.protocol !== 'https:' ||
-    parsed.hostname !== 'clipy.online' ||
-    parsed.username ||
-    parsed.password ||
-    parsed.port ||
-    parsed.search ||
-    parsed.hash
-  ) {
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.port) {
     return null;
   }
 
-  const match = parsed.pathname.match(/^\/video\/([a-zA-Z0-9_-]{6,64})\/?$/);
-  if (!match?.[1] || !CLIPY_ID_PATTERN.test(match[1])) return null;
+  // Accept every Clipy link the app renders (www host, /embed/, SERP Lists' ?ref=, #t=).
+  // Only the id is used: the fetch and the draft's watch URL are rebuilt from it, so the
+  // link's query and hash never leave this function.
+  const id = clipyVideoId(parsed);
+  if (!id || !CLIPY_ID_PATTERN.test(id)) return null;
 
   return {
-    id: match[1],
-    watchUrl: `${CLIPY_ORIGIN}/video/${match[1]}`,
+    id,
+    watchUrl: `${CLIPY_ORIGIN}/video/${id}`,
   };
 }
 
