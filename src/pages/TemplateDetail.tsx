@@ -3,15 +3,14 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Archive,
   ArrowLeft,
-  BarChart3,
   Calendar,
   ChevronRight,
   Clock,
   Copy,
   Download,
-  Eye,
   Globe,
   History,
+  Layers,
   ListChecks,
   Lock,
   MoreHorizontal,
@@ -90,13 +89,6 @@ import {
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
-import type { ChecklistTemplate } from '@/types/checklist';
-
-type TemplateMetrics = {
-  copyCount?: number;
-  runCount?: number;
-  viewCount?: number;
-};
 
 const formatDate = (value?: string): string => {
   if (!value) {
@@ -187,7 +179,6 @@ const TemplateDetail = () => {
     workspaceTemplates,
   });
   const displayTemplate = template;
-  const metrics = (displayTemplate as (ChecklistTemplate & TemplateMetrics) | null) ?? null;
   // Organization Templates follow the viewer's role, never who created them.
   const { canEdit: canEditTemplate, canViewHistory: canViewTemplateHistory } = permissions;
   const copyButton = getCopyTemplateButton({
@@ -585,7 +576,7 @@ const TemplateDetail = () => {
       />
       <DashboardScrollArea>
         <div className="mx-auto max-w-6xl space-y-8">
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2">
           <Card className="border-border bg-card">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -606,45 +597,13 @@ const TemplateDetail = () => {
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <Eye className="h-5 w-5 text-foreground" />
+                  <Layers className="h-5 w-5 text-foreground" />
                 </div>
                 <div>
                   <p className="text-2xl font-semibold text-foreground">
-                    {metrics?.viewCount?.toLocaleString() ?? '0'}
+                    {displayTemplate.sections.length}
                   </p>
-                  <p className="text-xs text-muted-foreground">Views</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border bg-card">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <Copy className="h-5 w-5 text-foreground" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold text-foreground">
-                    {metrics?.copyCount?.toLocaleString() ?? '0'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Copies</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border bg-card">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <BarChart3 className="h-5 w-5 text-foreground" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold text-foreground">
-                    {metrics?.runCount?.toLocaleString() ?? '0'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Runs</p>
+                  <p className="text-xs text-muted-foreground">Sections</p>
                 </div>
               </div>
             </CardContent>

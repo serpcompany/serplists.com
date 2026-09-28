@@ -4,6 +4,7 @@ import { Route, Routes } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mapApiTemplateToChecklistTemplate } from '@/features/template-detail/templateDetailMappers';
 import TemplateDetail from '@/pages/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
 
@@ -239,6 +240,45 @@ describe('TemplateDetail visibility', () => {
   });
 });
 
+describe('TemplateDetail stats', () => {
+  // A row shaped like GET /api/templates/:id, mapped the way the model maps it.
+  const apiTemplate = () =>
+    mapApiTemplateToChecklistTemplate(
+      {
+        created_at: '2026-07-03T12:00:00.000Z',
+        id: 'tpl-1',
+        is_public: 0,
+        items: JSON.stringify([
+          { id: 's1', items: [{ id: 'i1', title: 'One' }, { id: 'i2', title: 'Two' }], title: 'First' },
+          { id: 's2', items: [{ id: 'i3', title: 'Three' }], title: 'Second' },
+        ]),
+        slug: 'launch',
+        title: 'Launch',
+        updated_at: '2026-07-04T12:00:00.000Z',
+        user_id: 'user-1',
+        version: 3,
+      },
+      'launch',
+    );
+  const statLabels = (html: string) =>
+    [...html.matchAll(/<p class="text-xs text-muted-foreground">([^<]+)<\/p>/g)].map(
+      (match) => match[1],
+    );
+
+  it('shows only metrics the loaded template really has, never placeholder zeros', () => {
+    mockUseTemplateDetailModel.mockReturnValue({ ...baseModel(), template: apiTemplate() });
+
+    const html = renderTemplateDetail();
+    const labels = statLabels(html);
+
+    expect(labels).toContain('Total Tasks');
+    expect(labels).not.toContain('Views');
+    expect(labels).not.toContain('Copies');
+    expect(labels).not.toContain('Runs');
+    expect(html).toMatch(/>3<\/p><p class="text-xs text-muted-foreground">Total Tasks</);
+  });
+});
+
 describe('TemplateDetail page', () => {
   it('looks templates up in the workspace list, which refreshes after edits, never the catalog', () => {
     mockUseTemplateDetailModel.mockReturnValue(baseModel());
@@ -301,9 +341,7 @@ describe('TemplateDetail page', () => {
     expect(html).toContain('data-dashboard-page-header="true"');
     expect(html).toContain('data-dashboard-scroll-area="true"');
     expect(html).toContain('Total Tasks');
-    expect(html).toContain('Views');
-    expect(html).toContain('Copies');
-    expect(html).toContain('Runs');
+    expect(html).toContain('Sections');
     expect(html).toContain('Template Structure');
     expect(html).toContain('Details');
     expect(html).toContain('Categories &amp; Tags');

@@ -324,11 +324,8 @@ export function buildV0DemoPublicTemplate(): DemoPublicTemplate {
   };
 }
 
-export function buildV0DemoPrivateTemplate(): ChecklistTemplate & {
-  copyCount: number;
-  runCount: number;
-  viewCount: number;
-} {
+// Only fields the API returns: no view, copy or run counts exist for a private template.
+export function buildV0DemoPrivateTemplate(): ChecklistTemplate {
   return {
     id: V0_DEMO_PRIVATE_TEMPLATE_ID,
     title: 'Product Launch Checklist',
@@ -346,9 +343,6 @@ export function buildV0DemoPrivateTemplate(): ChecklistTemplate & {
       'A comprehensive checklist covering pre-launch prep, launch day activities, and post-launch follow-up tasks.',
     categories: ['Product', 'Engineering'],
     tags: ['launch', 'release', 'product-management'],
-    viewCount: 1234,
-    copyCount: 89,
-    runCount: 342,
     ownerProfile: {
       full_name: 'Design Ops Team',
       username: V0_DEMO_PROFILE.username,
