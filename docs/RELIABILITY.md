@@ -70,6 +70,12 @@ To deploy by hand (rarely needed): `pnpm run build`, then
 - API logs are JSON lines from `log()` in `functions/api/utils/logger.ts`. Every
   request gets a `requestId`, returned as the `X-Request-Id` header. ESLint rejects
   direct `console.*` in `functions/`. Log ids, never emails or tokens.
+- The router logs each request's path through `sanitizeLogPath()`
+  (`functions/api/utils/log-path.ts`), which replaces the secrets some routes carry
+  in the URL with `:token`: `auth/reset-password/<token>`,
+  `checklists/shared/<shareToken>` and `teams/invites/<token>/accept`. Add any new
+  route with a secret in its path there. Cloudflare's own request metadata still
+  records the full URL, so limit who can read the runtime logs.
 - Production: Cloudflare runtime logs for the Pages project. There is no external
   log sink, metrics, traces, or alerting yet.
 - Local: `pnpm run dev:all` mirrors output to `tmp/logs/dev-all.log`; search for

@@ -2,6 +2,7 @@ import { Env } from './types';
 import { getApiEnv } from './env';
 import { applyCorsHeaders, buildCorsPreflightResponse } from './utils/cors';
 import { getClientIp, log } from './utils/logger';
+import { sanitizeLogPath } from './utils/log-path';
 import { checkAuthRateLimit } from './utils/auth-rate-limit';
 import { ROUTE_RATE_LIMIT_MESSAGES, checkRouteRateLimit } from './utils/route-rate-limit';
 import { createBetterAuth } from './better-auth';
@@ -75,6 +76,8 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
   const request = new Request(context.request, { headers: requestHeaders });
   const url = new URL(request.url);
   const path = url.pathname.replace('/api/', '');
+  // Some paths carry a secret token: log this copy, route on the raw path.
+  const logPath = sanitizeLogPath(path);
   const startMs = Date.now();
   const ip = getClientIp(request);
 
@@ -84,7 +87,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
     log('info', 'api_request', {
       requestId,
       method: request.method,
-      path,
+      path: logPath,
       status: resp.status,
       durationMs: Date.now() - startMs,
       ip: ip ?? undefined,
@@ -105,8 +108,8 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
     } catch (error) {
       log('error', 'env_validation_error', {
         requestId,
-        path,
-        message: error instanceof Error ? error.message : String(error),
+        path: logPath,
+        error: error instanceof Error ? error.message : String(error),
       });
       response = jsonError('Server configuration error', 500);
       return finalize(response);
@@ -170,7 +173,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
             : '';
         const blockedDomain = email ? blockedTestEmailDomain(email) : null;
         if (blockedDomain) {
-          log('warn', 'blocked_test_user_auth', { domain: blockedDomain, path });
+          log('warn', 'blocked_test_user_auth', { domain: blockedDomain, path: logPath });
           response = jsonError(TEST_ACCOUNTS_DISABLED_MESSAGE, 403);
           return finalize(response);
         }
@@ -229,7 +232,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       log('error', 'api_error', {
         requestId,
         method: request.method,
-        path,
+        path: logPath,
         ip: ip ?? undefined,
         error: error instanceof Error ? error.message : String(error),
       });
