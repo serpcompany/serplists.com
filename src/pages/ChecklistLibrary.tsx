@@ -24,7 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
-import { buildPublicCategoryPath, buildSiteUrl } from '@/lib/routes';
+import { buildPublicCategoryPathForSlug, buildSiteUrl } from '@/lib/routes';
 
 type ChecklistLibraryProps = {
   templateType?: 'checklist' | 'recipe';
@@ -174,7 +174,7 @@ const ChecklistLibrary = ({
 
         <SearchAndFilters
           categories={categories}
-          getCategoryPath={(category) => buildPublicCategoryPath(category.name)}
+          getCategoryPath={(category) => buildPublicCategoryPathForSlug(category.slug)}
           onCategoryChange={(categorySlug) => updateFilters({ categorySlug })}
           onSortChange={(sort) => updateFilters({ sort })}
           resultCount={filteredTemplates.length}
@@ -240,7 +240,7 @@ const ChecklistLibrary = ({
               return (
                 <Link
                   key={category.slug}
-                  to={buildPublicCategoryPath(category.name)}
+                  to={buildPublicCategoryPathForSlug(category.slug)}
                   className="group flex items-center justify-between rounded-lg border border-border bg-card p-4 transition-colors hover:border-muted-foreground/30"
                 >
                   <div>

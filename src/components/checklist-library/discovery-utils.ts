@@ -1,6 +1,7 @@
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { buildCategorySlug } from '@/lib/routes';
+import { generateSlug } from '@/utils/urlHelpers';
 
 export type DiscoverySort = 'popular' | 'trending' | 'recent';
 
@@ -109,7 +110,8 @@ export const filterAndSortTemplates = (
   },
 ): ChecklistTemplate[] => {
   const normalizedQuery = normalizeQuery(searchQuery ?? '');
-  const normalizedCategorySlug = normalizeQuery(categorySlug ?? '');
+  // No category means no filter. A category that slugs to '' ('!!!') matches nothing.
+  const normalizedCategorySlug = categorySlug?.trim() ? buildCategorySlug(categorySlug) : null;
 
   const filtered = templates.filter((template) => {
     const matchesSearch =
@@ -117,10 +119,11 @@ export const filterAndSortTemplates = (
       getTemplateSearchText(template).includes(normalizedQuery);
 
     const matchesCategory =
-      normalizedCategorySlug.length === 0 ||
-      template.categories?.some(
-        (category) => buildCategorySlug(category) === normalizedCategorySlug,
-      ) === true;
+      normalizedCategorySlug === null ||
+      (normalizedCategorySlug !== '' &&
+        template.categories?.some(
+          (category) => buildCategorySlug(category) === normalizedCategorySlug,
+        ) === true);
 
     return matchesSearch && matchesCategory;
   });
@@ -142,9 +145,12 @@ export const buildDiscoveryCategories = (
   const categoryCountsBySlug = new Map<string, number>();
   const categoryLabelBySlug = new Map<string, string>();
 
+  // A name with no letters or digits has no category page, so it gets no entry
+  // (they used to merge into one '' entry that linked to a 404).
   templates.forEach((template) => {
     template.categories?.forEach((category) => {
       const slug = buildCategorySlug(category);
+      if (!slug) return;
       categoryCountsBySlug.set(slug, (categoryCountsBySlug.get(slug) ?? 0) + 1);
       if (!categoryLabelBySlug.has(slug)) {
         categoryLabelBySlug.set(slug, category);
@@ -158,7 +164,7 @@ export const buildDiscoveryCategories = (
 
   sourceCategories.forEach((name) => {
     const slug = buildCategorySlug(name);
-    if (categoriesBySlug.has(slug)) {
+    if (!slug || categoriesBySlug.has(slug)) {
       return;
     }
 
@@ -178,4 +184,19 @@ export const buildDiscoveryCategories = (
 
       return compareText(left.name, right.name);
     });
+};
+
+// Category slugs used to keep only ASCII letters and digits ('Café Culture' was
+// 'caf-culture'). Returns the category an old link or sitemap entry like that meant, so
+// the page can redirect to its current slug.
+export const findCategoryByLegacySlug = (
+  categories: DiscoveryCategory[],
+  slug: string,
+): DiscoveryCategory | null => {
+  if (!slug) return null;
+  return (
+    categories.find(
+      (category) => category.slug !== slug && generateSlug(category.name.trim()) === slug,
+    ) ?? null
+  );
 };

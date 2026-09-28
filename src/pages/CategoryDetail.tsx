@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Grid3X3, List, Search } from 'lucide-react';
 
 import { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
@@ -10,6 +10,7 @@ import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import {
   buildDiscoveryCategories,
   filterAndSortTemplates,
+  findCategoryByLegacySlug,
   type DiscoverySort,
 } from '@/components/checklist-library/discovery-utils';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +28,7 @@ import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
-import { buildSiteUrl } from '@/lib/routes';
+import { buildCategorySlug, buildPublicCategoryPathForSlug, buildSiteUrl } from '@/lib/routes';
 
 type CategorySort = DiscoverySort | 'name';
 
@@ -75,7 +76,8 @@ const CategoryDetail = () => {
   const { allCategories, templates, loading, catalogError, retryCatalog } =
     useTemplateLibrary();
 
-  const slug = categorySlug ?? 'business';
+  // The param is decoded but may differ in case or Unicode normal form from the slug.
+  const slug = buildCategorySlug(categorySlug ?? 'business');
   const categories = useMemo(
     () => buildDiscoveryCategories(templates, allCategories),
     [allCategories, templates],
@@ -128,6 +130,10 @@ const CategoryDetail = () => {
           </main>
         </div>
       );
+    }
+    const legacyCategory = findCategoryByLegacySlug(categories, slug);
+    if (legacyCategory) {
+      return <Navigate replace to={buildPublicCategoryPathForSlug(legacyCategory.slug)} />;
     }
     return <NotFound />;
   }

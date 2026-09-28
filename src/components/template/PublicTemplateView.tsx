@@ -133,15 +133,26 @@ export function PublicTemplateView({
         <div className="mb-8">
           {template.categories?.length ? (
             <div className="mb-3 flex flex-wrap gap-2">
-              {template.categories.map((category) => (
-                <Link
-                  key={category}
-                  to={buildPublicCategoryPath(category)}
-                  className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  {category}
-                </Link>
-              ))}
+              {template.categories.map((category) => {
+                const categoryPath = buildPublicCategoryPath(category);
+                // A category with no letters or digits has no page to link to.
+                return categoryPath ? (
+                  <Link
+                    key={category}
+                    to={categoryPath}
+                    className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {category}
+                  </Link>
+                ) : (
+                  <span
+                    key={category}
+                    className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground"
+                  >
+                    {category}
+                  </span>
+                );
+              })}
             </div>
           ) : null}
 

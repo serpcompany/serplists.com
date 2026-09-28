@@ -7,7 +7,9 @@ import { StaticRouter } from 'react-router-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveCategoryPresentation } from '@/components/checklist-library/categoryPresentation';
+import { findCategoryByLegacySlug } from '@/components/checklist-library/discovery-utils';
 import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
+import { buildPublicCategoryPath } from '@/lib/routes';
 import CategoryDetail from '@/pages/CategoryDetail';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -126,3 +128,46 @@ describe('resolveCategoryPresentation', () => {
     });
   });
 });
+
+describe('CategoryDetail for categories in other scripts', () => {
+  beforeEach(() => {
+    mockUseTemplateLibrary.mockReset();
+  });
+
+  it.each(['日本語', 'Русский', 'Мой дом', '한국어 가이드', 'Café Culture'])(
+    'opens the page that the %s chip links to',
+    (name) => {
+      mockUseTemplateLibrary.mockReturnValue(
+        libraryState([template('guide', 'Guide Checklist', [name]), template('other', 'Other', ['Travel'])]),
+      );
+
+      const path = buildPublicCategoryPath(name);
+      expect(path).not.toBeNull();
+      const markup = renderCategoryPage(path!);
+
+      expect(markup).not.toContain('That page does not exist');
+      expect(markup).toContain('Guide Checklist');
+      expect(markup).not.toContain('>Other<');
+      expect(markup).toContain('1 templates');
+    },
+  );
+
+  it('opens the category from a decomposed (NFD) or upper-case URL', () => {
+    mockUseTemplateLibrary.mockReturnValue(libraryState([template('guide', 'Guide Checklist', ['Café Culture'])]));
+
+    expect(renderCategoryPage(`/categories/${encodeURIComponent('CAFÉ-culture')}`)).toContain('Guide Checklist');
+  });
+
+  it('sends an old ASCII-only slug to the category instead of the 404 page', () => {
+    mockUseTemplateLibrary.mockReturnValue(libraryState([template('guide', 'Guide Checklist', ['Café Culture'])]));
+
+    // <Navigate> renders nothing on the server; the redirect itself runs in the browser.
+    const markup = renderCategoryPage('/categories/caf-culture');
+
+    expect(markup).not.toContain('That page does not exist');
+    expect(findCategoryByLegacySlug([{ count: 1, name: 'Café Culture', slug: 'cafe-culture' }], 'caf-culture')?.slug).toBe(
+      'cafe-culture',
+    );
+  });
+});
+

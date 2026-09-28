@@ -22,7 +22,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
-import { buildPublicCategoryPath, buildSiteUrl } from '@/lib/routes';
+import { buildPublicCategoryPathForSlug, buildSiteUrl } from '@/lib/routes';
 import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 
 const categoryStyles = {
@@ -122,7 +122,7 @@ const Categories = () => {
               const meta = getCategoryMeta(category.slug);
               const Icon = meta.icon;
               return (
-                <Link key={category.slug} to={buildPublicCategoryPath(category.name)}>
+                <Link key={category.slug} to={buildPublicCategoryPathForSlug(category.slug)}>
                   <Card className="group h-full border-border bg-card transition-all hover:border-muted-foreground/50 hover:bg-card/80">
                     <CardContent className="p-6">
                       <div
@@ -153,7 +153,7 @@ const Categories = () => {
               const meta = getCategoryMeta(category.slug);
               const Icon = meta.icon;
               return (
-                <Link key={category.slug} to={buildPublicCategoryPath(category.name)}>
+                <Link key={category.slug} to={buildPublicCategoryPathForSlug(category.slug)}>
                   <Card className="group border-border bg-card transition-all hover:border-muted-foreground/50 hover:bg-card/80">
                     <CardContent className="flex items-center gap-4 p-4">
                       <div

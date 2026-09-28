@@ -113,4 +113,29 @@ describe('PublicTemplateView', () => {
     );
     expect(html).toContain('Run printf(hi\\n) and save to C:\\new_folder');
   });
+
+  it('links each category to its page and leaves one with no letters or digits unlinked', () => {
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/">
+        <PublicTemplateView
+          template={{ ...template, categories: ['日本語', '🚀'] }}
+          totalItems={1}
+          ownerSlug="devinschumacher"
+          ownerPath="/profile/devinschumacher"
+          isAuthenticated={false}
+          isBillingLoading={false}
+          isProUser={false}
+          isCreatingRun={false}
+          isSaving={false}
+          onStartRun={() => undefined}
+          onSaveTemplate={() => undefined}
+        />
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('href="/categories/%E6%97%A5%E6%9C%AC%E8%AA%9E"');
+    expect(html).toMatch(/<span[^>]*>🚀<\/span>/);
+    expect(html).not.toContain('href="/categories/%F0');
+  });
 });
+

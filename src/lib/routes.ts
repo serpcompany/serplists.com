@@ -4,7 +4,7 @@ import {
   REPO_TEMPLATE_OWNER_SLUG,
   REPO_TEMPLATE_USER_ID,
 } from '@/lib/repoTemplateCatalog';
-import { generateSlug } from '@/utils/urlHelpers';
+import { categorySlug } from '@/lib/categorySlug';
 
 export type AppShell = 'public' | 'console';
 export type PublicRouteTier = 'marketing' | 'core' | 'secondary' | 'minimal';
@@ -35,14 +35,17 @@ export const isPublicTemplatesDiscoveryPath = (pathname: string): boolean => {
   );
 };
 
+// Unicode-aware and shared with the sitemap; see src/lib/categorySlug.ts.
 export const buildCategorySlug = (categoryName: string): string =>
-  generateSlug(categoryName.trim());
+  categorySlug(categoryName);
 
+// The slug may come from a URL, so it is normalized the same way as the names.
 export const findCategoryNameBySlug = (
   categories: string[],
-  categorySlug: string,
+  slug: string,
 ): string | null => {
-  const normalizedSlug = categorySlug.trim().toLowerCase();
+  const normalizedSlug = buildCategorySlug(slug);
+  if (!normalizedSlug) return null;
   return (
     categories.find(
       (category) => buildCategorySlug(category) === normalizedSlug,
@@ -52,8 +55,14 @@ export const findCategoryNameBySlug = (
 
 export const buildPublicCategoriesPath = (): string => '/categories';
 
-export const buildPublicCategoryPath = (categoryName: string): string =>
-  `/categories/${encodeURIComponent(buildCategorySlug(categoryName) || categoryName.trim().toLowerCase())}`;
+export const buildPublicCategoryPathForSlug = (slug: string): string =>
+  `/categories/${encodeURIComponent(slug)}`;
+
+// Null for a name with no letters or digits ('!!!', emoji only): it has no category page.
+export const buildPublicCategoryPath = (categoryName: string): string | null => {
+  const slug = buildCategorySlug(categoryName);
+  return slug ? buildPublicCategoryPathForSlug(slug) : null;
+};
 
 export const resolveLegacyTemplatesCategoryRedirectPath = (
   searchParams: URLSearchParams,
