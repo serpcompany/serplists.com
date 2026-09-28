@@ -247,12 +247,13 @@ export const REQUIRED_D1_FOREIGN_KEYS = Object.freeze({
 export const REQUIRED_D1_INDEXES = Object.freeze({
   templates: [
     { name: "idx_templates_slug_unique", unique: true },
+    { name: "idx_templates_public_created_at" },
     { name: "idx_templates_owner" },
     { name: "idx_templates_team_id" },
   ],
   checklist_runs: [
     { name: "idx_checklist_runs_team_id" },
-    { name: "idx_checklist_runs_assigned_to_user_id" },
+    { name: "idx_checklist_runs_template_owner" },
   ],
   teams: [
     { name: "idx_teams_slug_unique", unique: true, partial: true },
@@ -272,11 +273,9 @@ export const REQUIRED_D1_INDEXES = Object.freeze({
   audit_events: [
     { name: "idx_audit_events_subject" },
     { name: "idx_audit_events_resource" },
-    { name: "idx_audit_events_actor" },
   ],
   template_versions: [
     { name: "idx_template_versions_template_version_unique", unique: true },
-    { name: "idx_template_versions_subject" },
   ],
   personal_run_keys: [
     { name: "idx_personal_run_keys_user_id" },

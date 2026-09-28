@@ -221,9 +221,10 @@ class ApiClient {
   }
 
   // Templates
-  async getTemplates(params?: { teamId?: string }) {
+  async getTemplates(params?: { teamId?: string; scope?: 'public' | 'personal' }) {
     const search = new URLSearchParams();
     if (params?.teamId) search.set('teamId', params.teamId);
+    if (params?.scope) search.set('scope', params.scope);
     const query = search.toString();
     return this.request(`/templates${query ? `?${query}` : ''}`);
   }

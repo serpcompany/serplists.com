@@ -17,6 +17,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 
 vi.mock('@/contexts/TemplatesContext', () => ({
   useTemplates: () => mockUseTemplates(),
+  useTemplateLists: () => mockUseTemplates(),
 }));
 
 vi.mock('sonner', () => ({

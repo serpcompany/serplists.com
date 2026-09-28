@@ -37,6 +37,14 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
   the user id and the active Ownership Context so Personal and Organization data
   never mix; switching context invalidates Template and Run queries. Billing keys
   include the user id; never show a Free or Pro label while status is loading.
+- Template and run lists load on demand. `TemplatesProvider` wraps every route but
+  never fetches them. A page that reads `templates` (the public catalog) calls
+  `useTemplateLists({ catalog: true, workspace: false })`, one that reads `allTemplates`
+  calls `useTemplateLists()`, and one that reads `runs` adds `runs: true`. The run page
+  fetches its own run by id. A catalog miss reads every public Template from D1
+  ([D1 cost](design-docs/d1-cost.md)), so pages that only need official templates use
+  the bundled `repoTemplates`. The catalog's query key has no user id because the
+  catalog is the same for everyone.
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.

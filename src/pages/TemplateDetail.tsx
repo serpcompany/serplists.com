@@ -67,7 +67,7 @@ import {
   DashboardScrollArea,
 } from '@/components/dashboard/DashboardContentShell';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
-import { useTemplates } from '@/contexts/TemplatesContext';
+import { useTemplateLists } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import {
@@ -169,7 +169,7 @@ const TemplateDetail = () => {
     deleteTemplate,
     getTemplate,
     updateTemplate,
-  } = useTemplates();
+  } = useTemplateLists();
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);

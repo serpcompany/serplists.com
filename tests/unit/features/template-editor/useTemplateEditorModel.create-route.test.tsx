@@ -4,11 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useTemplateEditorModel } from '@/features/template-editor/useTemplateEditorModel';
 
-vi.mock('@/contexts/TemplatesContext', () => ({
-  useTemplates: () => ({
+vi.mock('@/contexts/TemplatesContext', () => {
+  const useTemplates = () => ({
     getTemplate: vi.fn(() => undefined),
-  }),
-}));
+  });
+  return { useTemplates, useTemplateLists: useTemplates };
+});
 
 vi.mock('@/hooks/useTemplateSave', () => ({
   useTemplateSave: () => ({

@@ -26,6 +26,7 @@ lint rule, dependency rule, or check with an error message that explains the fix
 | --- | --- | --- |
 | Type-check everything under `strict` | Types are the fastest feedback loop an agent gets | `pnpm run typecheck` (`tsc -b` over app, node, and API projects) |
 | Parse data at boundaries; never guess shapes | Code built on guessed shapes breaks silently | API bodies arrive as `unknown` under strict TS and are parsed with Zod (`functions/api/utils/payloads.ts`). Client response parsing is [tracked debt](../exec-plans/tech-debt-tracker.md) |
+| Bound every D1 query and back it with a matching index | D1 bills rows scanned, so an unbounded or unindexed query costs more as the table grows | [D1 cost](d1-cost.md) rules; `pnpm run d1:profile` before merging query changes |
 | Respect layer boundaries | Keeps domains independently changeable | `pnpm run deps:check`; see [ARCHITECTURE.md](../../ARCHITECTURE.md) |
 | Log through the structured logger in the API; never log emails, tokens, or other personal data | Logs must be queryable JSON with a `requestId` | ESLint `no-restricted-syntax` on `console.*` in `functions/` |
 | Use [PRODUCT_SENSE.md](../PRODUCT_SENSE.md) vocabulary in user-visible text | Product language drifts fast | ESLint `no-restricted-syntax` on Team/Workspace copy in UI code |

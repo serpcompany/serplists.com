@@ -1,7 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import {
   sitemap_owner_revisions,
-  sitemap_revisions,
   templates,
   users,
 } from '../../../db/schema/index';
@@ -10,6 +9,7 @@ import type { Env } from '../../api/types';
 import {
   bundledTemplateEntries,
   bundledInventoryLastmod,
+  cachedSitemap,
   catalogPageEntry,
   handlePagedDatabaseSitemap,
   isValidTemplateSlug,
@@ -28,15 +28,11 @@ type TemplateRow = {
   owner_updated_at: string | null;
 };
 
-export const onRequest: PagesFunction<Env> = async ({ request, env, params }) => {
+export const onRequest: PagesFunction<Env> = async (context) => {
+  const { env, params } = context;
   const db = createDb(env);
-  const [revision] = await db
-    .select({ revised_at: sitemap_revisions.revised_at })
-    .from(sitemap_revisions)
-    .where(eq(sitemap_revisions.kind, 'templates'))
-    .limit(1);
   const landingPage = catalogPageEntry('/templates');
-  return handlePagedDatabaseSitemap<TemplateRow>({
+  return cachedSitemap(context, (request, revisions) => handlePagedDatabaseSitemap<TemplateRow>({
     request,
     params,
     prefixEntries: [
@@ -45,7 +41,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, params }) =>
         lastmod: mostRecentLastmod(
           landingPage.lastmod,
           bundledInventoryLastmod('templates'),
-          revision?.revised_at,
+          revisions.get('templates'),
         ),
       },
       ...bundledTemplateEntries(),
@@ -76,5 +72,5 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, params }) =>
         ),
       }) : null;
     },
-  });
+  }));
 };

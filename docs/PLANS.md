@@ -18,6 +18,8 @@ have not been updated in 30 days.
 
 - [Agent harness](exec-plans/active/agent-harness.md): mechanical checks, docs, and tooling that
   let agents work reliably in this repo.
+- [D1 cost](exec-plans/active/d1-cost.md): bound rows read per request and cut write
+  amplification.
 - [UI decoupling](exec-plans/active/ui-decoupling.md): screens consume feature state instead of
   transport code.
 
