@@ -31,7 +31,11 @@ and user-facing failure states when a supporting service is unavailable.
 - Verification and reset emails use `RESEND_API_KEY`, then `USESEND_API_KEY`.
   Callbacks await delivery so provider failures surface in the request.
   `GET /api/auth/status` reports whether email delivery is available.
-- Protected routes preserve the requested destination through login.
+- Protected routes preserve the requested destination through login, including its
+  query string and hash (`getLoginReturnPath` in `src/lib/auth/loginReturnPath.ts`),
+  so a signed-out return from Stripe keeps `?billing=success`. Only a same-origin
+  path (one leading `/`, not `//`) is followed; anything else goes to
+  `/dashboard/settings`.
 - Passwords: Better Auth enforces length (10 to 128) and rejects breached passwords;
   `Register.tsx`, `ResetPassword.tsx`, and `SecuritySection.tsx` validate the same
   policy client-side.

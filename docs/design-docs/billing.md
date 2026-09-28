@@ -183,7 +183,8 @@ Authenticated:
   Billing reads `billing=success` and polls Personal status (whichever context is
   selected) until the plan is Pro, then removes the parameter. Sessions created
   before this return URL send buyers to `/account?billing=...`, which redirects
-  with the query intact.
+  with the query intact. A buyer whose session ended while at Stripe signs in
+  and lands back on the same URL, query included.
 - `GET /api/billing/status` → returns `{ plan, limits, billingEnabled }` (`plan` is `free`, `pro`, or the legacy `team` for a paid Organization).
   In Personal context it also returns `subscriptionStatus` (the most urgent open
   subscription status, failed payments first, or `null`), `canManageBilling`

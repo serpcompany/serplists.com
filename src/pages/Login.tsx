@@ -15,6 +15,7 @@ import {
   DEV_TEST_USER_DEFAULT_PASSWORD,
   DEV_TEST_USER_PASSWORD_RESET_COMMAND,
 } from "@/lib/auth/devUsers";
+import { getLoginReturnPath } from "@/lib/auth/loginReturnPath";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +31,7 @@ const Login = () => {
   const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from?.pathname || "/account";
+  const from = getLoginReturnPath(location.state);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
