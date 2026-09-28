@@ -19,10 +19,7 @@ import {
   type SessionStatus,
   type SessionUser,
 } from './authSession';
-import { browserSessionSyncEnvironment, createSessionSync } from './sessionSync';
-
-/** How often a visible, signed-in tab asks whether its session keep-alive read is due. */
-const SESSION_KEEPALIVE_TICK_MS = 15 * 60 * 1000;
+import { browserSessionSyncEnvironment, createSessionSync, startSessionKeepAlive } from './sessionSync';
 
 const UNSAVED_WORK_LOST_MESSAGE = 'Your unsaved changes could not be kept.';
 
@@ -158,16 +155,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // keepAlive reads it at most once an hour (see sessionSync.ts). The answer is applied like
   // any re-check: a failure changes nothing, and a confirmed "no session" signs the tab out.
   useEffect(() => {
-    if (!isAuthenticated) return;
-    const keepAliveIfVisible = () => {
-      if (document.visibilityState === 'visible') sessionSync.keepAlive();
-    };
-    window.addEventListener('focus', keepAliveIfVisible);
-    const tick = window.setInterval(keepAliveIfVisible, SESSION_KEEPALIVE_TICK_MS);
-    return () => {
-      window.removeEventListener('focus', keepAliveIfVisible);
-      window.clearInterval(tick);
-    };
+    if (!isAuthenticated) return undefined;
+    return startSessionKeepAlive(sessionSync.keepAlive);
   }, [isAuthenticated, sessionSync]);
 
   const login = async (email: string, password: string): Promise<AuthActionResult> => {

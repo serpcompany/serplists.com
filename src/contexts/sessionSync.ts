@@ -33,6 +33,8 @@ export const SESSION_UNAUTHORIZED_RECHECK_INTERVAL_MS = 5_000;
 // day and resends the 7-day cookie, which only reaches the browser from that route. So a tab
 // left open (and visible) for days reads it at least this often (keepAlive()).
 export const SESSION_KEEPALIVE_INTERVAL_MS = 60 * 60 * 1000;
+// How often a visible, signed-in tab asks whether its keep-alive read is due.
+export const SESSION_KEEPALIVE_TICK_MS = 15 * 60 * 1000;
 
 export type SessionSyncChannel = {
   postMessage: (message: unknown) => void;
@@ -257,6 +259,38 @@ export function createSessionSync(deps: {
 }
 
 export type SessionSync = ReturnType<typeof createSessionSync>;
+
+export type SessionKeepAliveEnvironment = {
+  isVisible: () => boolean;
+  onFocus: (listener: () => void) => () => void;
+};
+
+const browserKeepAliveEnvironment = (): SessionKeepAliveEnvironment => ({
+  isVisible: () => document.visibilityState === 'visible',
+  onFocus: (listener) => {
+    window.addEventListener('focus', listener);
+    return () => window.removeEventListener('focus', listener);
+  },
+});
+
+// Asks keepAlive (SessionSync.keepAlive, which reads at most once per
+// SESSION_KEEPALIVE_INTERVAL_MS) when the tab regains focus and every
+// SESSION_KEEPALIVE_TICK_MS, while the tab is visible. AuthProvider runs it while a user is
+// signed in. Returns the function that stops it.
+export function startSessionKeepAlive(
+  keepAlive: () => unknown,
+  environment: SessionKeepAliveEnvironment = browserKeepAliveEnvironment(),
+): () => void {
+  const keepAliveIfVisible = () => {
+    if (environment.isVisible()) keepAlive();
+  };
+  const stopFocus = environment.onFocus(keepAliveIfVisible);
+  const tick = setInterval(keepAliveIfVisible, SESSION_KEEPALIVE_TICK_MS);
+  return () => {
+    stopFocus();
+    clearInterval(tick);
+  };
+}
 
 // The browser wiring for createSessionSync().connect(). Storage and BroadcastChannel can be
 // missing or blocked (private modes, site data blocked), so every access is guarded.

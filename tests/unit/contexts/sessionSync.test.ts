@@ -1,12 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionCheck, SessionState } from '@/contexts/authSession';
 import {
   SESSION_KEEPALIVE_INTERVAL_MS,
+  SESSION_KEEPALIVE_TICK_MS,
   SESSION_RECHECK_INTERVAL_MS,
   SESSION_UNAUTHORIZED_RECHECK_INTERVAL_MS,
   applySessionRecheck,
   createSessionSync,
+  startSessionKeepAlive,
   type SessionSyncChannel,
   type SessionSyncEnvironment,
 } from '@/contexts/sessionSync';
@@ -670,5 +672,72 @@ describe('profile changes made in another tab', () => {
     await flush();
 
     expect(tab1.state().user?.name).toBe('Alice Smith');
+  });
+});
+
+// The keep-alive only works if something asks it: a signed-in tab asks when it regains focus
+// and on a timer while it stays visible (AuthProvider starts this while signed in).
+describe('starting the session keep-alive', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const createEnvironment = () => {
+    const focusListeners = new Set<() => void>();
+    const environment = {
+      visible: true,
+      isVisible: () => environment.visible,
+      onFocus: (listener: () => void) => {
+        focusListeners.add(listener);
+        return () => focusListeners.delete(listener);
+      },
+      focus: () => focusListeners.forEach((listener) => listener()),
+      focusListeners,
+    };
+    return environment;
+  };
+
+  it('asks on focus and on every tick while the tab is visible', () => {
+    vi.useFakeTimers();
+    const keepAlive = vi.fn();
+    const environment = createEnvironment();
+    startSessionKeepAlive(keepAlive, environment);
+
+    environment.focus();
+    expect(keepAlive).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(SESSION_KEEPALIVE_TICK_MS - 1);
+    expect(keepAlive).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    expect(keepAlive).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(SESSION_KEEPALIVE_TICK_MS);
+    expect(keepAlive).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not ask while the tab is hidden', () => {
+    vi.useFakeTimers();
+    const keepAlive = vi.fn();
+    const environment = createEnvironment();
+    environment.visible = false;
+    startSessionKeepAlive(keepAlive, environment);
+
+    environment.focus();
+    vi.advanceTimersByTime(SESSION_KEEPALIVE_TICK_MS * 2);
+
+    expect(keepAlive).not.toHaveBeenCalled();
+  });
+
+  it('stops listening and ticking once stopped', () => {
+    vi.useFakeTimers();
+    const keepAlive = vi.fn();
+    const environment = createEnvironment();
+    const stop = startSessionKeepAlive(keepAlive, environment);
+
+    stop();
+    environment.focus();
+    vi.advanceTimersByTime(SESSION_KEEPALIVE_TICK_MS * 2);
+
+    expect(keepAlive).not.toHaveBeenCalled();
+    expect(environment.focusListeners.size).toBe(0);
   });
 });

@@ -70,7 +70,8 @@ and user-facing failure states when a supporting service is unavailable.
   while the new cookie is dropped, so the browser cookie would expire first. The app
   calls get-session on page load and on the re-checks below, and a signed-in tab
   that has not read it for an hour reads it when it regains focus or on a timer
-  while it stays visible (`keepAlive` in `src/contexts/sessionSync.ts`).
+  while it stays visible (`keepAlive` and `startSessionKeepAlive` in
+  `src/contexts/sessionSync.ts`, started by `AuthProvider` while a user is signed in).
 - A handler's session lookup (`getSessionUserId`) returns `null`, and the handler
   answers `401`, only when there is no valid session. If the lookup itself fails
   (a D1 outage, or Better Auth cannot be set up), it logs `session_lookup_failed`
