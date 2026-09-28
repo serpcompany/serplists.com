@@ -4,13 +4,23 @@ import { Route, Routes } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { templatePayloadSchema } from '../../../functions/api/utils/payloads';
 import { mapApiTemplateToChecklistTemplate } from '@/features/template-detail/templateDetailMappers';
 import TemplateDetail from '@/pages/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
 
 const mockUseTemplateDetailModel = vi.fn();
-const { contextUpdateTemplate, switchProps, workspaceState, workspaceTemplates } = vi.hoisted(() => ({
+const {
+  contextCreateTemplate,
+  contextUpdateTemplate,
+  menuItemProps,
+  switchProps,
+  workspaceState,
+  workspaceTemplates,
+} = vi.hoisted(() => ({
+  contextCreateTemplate: vi.fn(),
   contextUpdateTemplate: vi.fn(),
+  menuItemProps: [] as Array<Record<string, unknown>>,
   switchProps: [] as Array<Record<string, unknown>>,
   workspaceState: {
     activeTeamId: undefined as string | undefined,
@@ -59,7 +69,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 vi.mock('@/contexts/TemplatesContext', () => {
   const useTemplates = () => ({
     createRun: vi.fn(),
-    createTemplate: vi.fn(),
+    createTemplate: contextCreateTemplate,
     deleteTemplate: vi.fn(),
     getTemplate: vi.fn(),
     updateTemplate: contextUpdateTemplate,
@@ -85,6 +95,22 @@ vi.mock('@/components/ui/switch', async () => {
         role: 'switch',
       });
     },
+  };
+});
+
+// Renders the More menu open and captures each item's props so a test can pick one.
+vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/ui/dropdown-menu')>();
+  const { createElement } = await import('react');
+  return {
+    ...actual,
+    DropdownMenuContent: ({ children }: { children?: React.ReactNode }) =>
+      createElement('div', { role: 'menu' }, children),
+    DropdownMenuItem: (props: Record<string, unknown>) => {
+      menuItemProps.push(props);
+      return createElement('div', { role: 'menuitem' }, props.children as React.ReactNode);
+    },
+    DropdownMenuSeparator: () => createElement('hr'),
   };
 });
 
@@ -114,7 +140,9 @@ const baseModel = () => ({
 });
 
 beforeEach(() => {
+  contextCreateTemplate.mockReset();
   contextUpdateTemplate.mockReset();
+  menuItemProps.length = 0;
   mockUseTemplateDetailModel.mockReset();
   switchProps.length = 0;
   workspaceState.activeTeamId = undefined;
@@ -211,6 +239,38 @@ describe('TemplateDetail copy into an Organization', () => {
     expect(html).not.toContain('Copy to');
     expect(html).not.toContain('Upgrade to copy template');
     expect(html).toContain('Start Run');
+  });
+});
+
+describe('TemplateDetail Duplicate', () => {
+  const duplicateWithTitle = async (title: string) => {
+    contextCreateTemplate.mockResolvedValue({ id: 'tpl-2' });
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      template: { ...buildV0DemoPrivateTemplate(), title },
+    });
+
+    renderTemplateDetail();
+    const duplicate = menuItemProps.find((props) =>
+      [props.children].flat(Infinity).includes('Duplicate'),
+    );
+    await (duplicate?.onClick as () => Promise<void>)();
+
+    return contextCreateTemplate.mock.calls.at(-1)?.[0] as { title: string };
+  };
+
+  it('keeps the copy of a title near the limit within what the API accepts', async () => {
+    const payload = await duplicateWithTitle('a'.repeat(158));
+
+    expect(payload.title.length).toBeLessThanOrEqual(160);
+    expect(payload.title.endsWith(' Copy')).toBe(true);
+    expect(templatePayloadSchema.safeParse({ title: payload.title }).success).toBe(true);
+  });
+
+  it('names a short title copy "<title> Copy"', async () => {
+    const payload = await duplicateWithTitle('Launch');
+
+    expect(payload.title).toBe('Launch Copy');
   });
 });
 

@@ -85,6 +85,7 @@ import {
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
+import { buildDuplicateTemplateTitle } from '@/lib/templates/duplicateTemplateTitle';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 
 const formatDate = (value?: string): string => {
@@ -273,7 +274,7 @@ const TemplateDetail = () => {
           seoTitle: displayTemplate.seoTitle,
           seoUrl: '',
           tags: displayTemplate.tags ?? [],
-          title: `${displayTemplate.title} Copy`,
+          title: buildDuplicateTemplateTitle(displayTemplate.title),
           type: displayTemplate.type ?? 'checklist',
         });
 

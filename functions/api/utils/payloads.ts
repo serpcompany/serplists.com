@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { TEMPLATE_TITLE_MAX_LENGTH } from "../../../src/lib/schemas/templateLimits";
+
 const boundedOptionalString = (max: number) => z.string().trim().max(max).optional();
 const boundedRequiredString = (max: number) => z.string().trim().min(1).max(max);
 const stringListField = (maxItems: number, maxLength: number) =>
@@ -20,7 +22,7 @@ const templateRuleSchema = z.object({
 export const templatePayloadSchema = z.object({
   teamId: z.string().trim().min(1).optional(),
   team_id: z.string().trim().min(1).optional(),
-  title: boundedRequiredString(160).optional(),
+  title: boundedRequiredString(TEMPLATE_TITLE_MAX_LENGTH).optional(),
   description: boundedOptionalString(5000),
   type: z.enum(["checklist", "recipe"]).optional(),
   seoTitle: boundedOptionalString(160),
