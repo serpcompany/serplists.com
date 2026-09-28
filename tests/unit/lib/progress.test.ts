@@ -95,7 +95,13 @@ describe('run progress on large runs', () => {
     const run = { id: 'run-1', sections } as unknown as ChecklistRun;
 
     expect(calculateSectionsProgress(sections)).toBe(99);
-    expect(countRunExecutionItems(run)).toEqual({ completed: 199, progress: 99, total: 200 });
+    expect(countRunExecutionItems(run)).toEqual({
+      progress: 99,
+      subTasksCompleted: 159,
+      subTasksTotal: 160,
+      tasksCompleted: 40,
+      tasksTotal: 40,
+    });
     expect(calculateRunProgress(sections)).toBe(99);
   });
 
