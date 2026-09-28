@@ -236,8 +236,8 @@ type SitemapContext = Pick<EventContext<Env, string, unknown>, 'request' | 'env'
 // Building a database sitemap scans every public Template or User, and D1 bills every
 // row scanned. Cache each response in the data center under a key that changes when the
 // sitemap triggers bump `sitemap_revisions` or a deploy changes the bundled catalog, so a
-// repeat request reads only the revision rows (docs/design-docs/d1-cost.md). The query
-// string is left out of the key so crawlers cannot bypass the cache.
+// repeat request reads only the revision rows (docs/design-docs/d1-cost.md). The key drops
+// the query string and leading zeros in page numbers, so variants cannot bypass it.
 export async function cachedSitemap(
   context: SitemapContext,
   build: (request: Request, revisions: SitemapRevisions) => Promise<Response>,
@@ -247,7 +247,8 @@ export async function cachedSitemap(
   const revisions = await loadSitemapRevisions(context.env);
   const url = new URL(request.url);
   const version = await contentHash(JSON.stringify([[...revisions].sort(), bundledCatalogVersion]));
-  const key = new Request(`${url.origin}${url.pathname}?v=${version}`);
+  const path = url.pathname.replace(/\/0+(?=\d)/g, '/');
+  const key = new Request(`${url.origin}${path}?v=${version}`);
   const cache = typeof caches === 'undefined' ? undefined : caches.default;
 
   let response = await cache?.match(key);

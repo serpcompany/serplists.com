@@ -72,11 +72,14 @@ describe('cached sitemaps', () => {
     expect(build).toHaveBeenCalledOnce();
   });
 
-  it('ignores query strings so crawlers cannot bypass the cache', async () => {
+  it('ignores query strings and page-number padding so crawlers cannot bypass the cache', async () => {
     const build = builder();
     await serve(build, 'https://serplists.com/sitemaps/templates/1.xml?a=1');
     await serve(build, 'https://serplists.com/sitemaps/templates/1.xml?a=2');
+    await serve(build, 'https://serplists.com/sitemaps/templates/001.xml');
     expect(build).toHaveBeenCalledOnce();
+    await serve(build, 'https://serplists.com/sitemaps/templates/10.xml');
+    expect(build).toHaveBeenCalledTimes(2);
   });
 
   it('rejects unsupported methods before reading D1', async () => {

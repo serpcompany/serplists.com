@@ -21,10 +21,11 @@ describe('withEdgeCache', () => {
 
   const build = () => vi.fn(async () => new Response('[1]', { headers: { 'Content-Type': 'application/json' } }));
 
-  it('builds once, then serves the cached body with mutable headers', async () => {
+  it('builds once per key, then serves the cached body with mutable headers', async () => {
     const handler = build();
-    const first = await withEdgeCache(new Request('https://serplists.com/api/templates'), 300, handler);
-    const second = await withEdgeCache(new Request('https://serplists.com/api/templates?x=1'), 300, handler);
+    const key = '/api/templates?scope=public';
+    const first = await withEdgeCache(new Request('https://serplists.com/api/templates'), key, 300, handler);
+    const second = await withEdgeCache(new Request('https://serplists.com/api/templates/?x=1'), key, 300, handler);
 
     expect(handler).toHaveBeenCalledOnce();
     expect(await first.text()).toBe('[1]');
@@ -32,17 +33,17 @@ describe('withEdgeCache', () => {
     expect(second.headers.get('content-type')).toBe('application/json');
     expect(second.headers.get('cache-control')).toBeNull();
     second.headers.set('X-Request-Id', 'abc');
-    expect(store.get('https://serplists.com/api/templates')?.headers.get('cache-control')).toBe('public, s-maxage=300');
+    expect(store.get('https://serplists.com/api/templates?scope=public')?.headers.get('cache-control')).toBe('public, s-maxage=300');
   });
 
   it('does not cache errors or non-GET requests', async () => {
     const failing = vi.fn(async () => new Response('no', { status: 500 }));
-    await withEdgeCache(new Request('https://serplists.com/api/templates'), 300, failing);
-    await withEdgeCache(new Request('https://serplists.com/api/templates'), 300, failing);
+    await withEdgeCache(new Request('https://serplists.com/api/templates'), '/api/templates', 300, failing);
+    await withEdgeCache(new Request('https://serplists.com/api/templates'), '/api/templates', 300, failing);
     expect(failing).toHaveBeenCalledTimes(2);
 
     const handler = build();
-    await withEdgeCache(new Request('https://serplists.com/api/templates', { method: 'POST' }), 300, handler);
+    await withEdgeCache(new Request('https://serplists.com/api/templates', { method: 'POST' }), '/api/templates', 300, handler);
     expect(store.size).toBe(0);
   });
 });

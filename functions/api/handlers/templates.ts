@@ -992,7 +992,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     // The public catalog reads every public Template, so serve it from the edge for up to
     // 5 minutes (the app's client staleTime).
-    return publicCatalog ? withEdgeCache(request, 5 * 60, listTemplates) : listTemplates();
+    return publicCatalog ? withEdgeCache(request, '/api/templates?scope=public', 5 * 60, listTemplates) : listTemplates();
   }
 
   if (request.method === 'POST') {
