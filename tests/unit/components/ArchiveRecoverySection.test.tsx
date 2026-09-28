@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ArchiveRecoverySection } from '@/components/dashboard/ArchiveRecoverySection';
+import { queryKeys } from '@/lib/queryKeys';
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({
@@ -39,7 +40,7 @@ describe('ArchiveRecoverySection', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
-    queryClient.setQueryData(['archived-templates', 'personal'], [
+    queryClient.setQueryData(queryKeys.archivedTemplates('user-1', 'personal'), [
       {
         id: 'template-1',
         kind: 'template',
@@ -47,7 +48,7 @@ describe('ArchiveRecoverySection', () => {
         archivedAt: '2026-07-03T12:00:00.000Z',
       },
     ]);
-    queryClient.setQueryData(['archived-runs', 'personal'], [
+    queryClient.setQueryData(queryKeys.archivedRuns('user-1', 'personal'), [
       {
         id: 'run-1',
         kind: 'run',

@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Copy, Crown, Link2, Trash2, Users } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -19,6 +18,7 @@ import { api, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/li
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
+import { useTeamSettingsQueries } from '@/features/teams/useTeamSettingsQueries';
 
 type AssignableTeamRole = Exclude<TeamRole, 'owner'>;
 
@@ -145,46 +145,14 @@ export function TeamSettingsSection() {
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
   const [acceptingIncomingInviteId, setAcceptingIncomingInviteId] = useState<string | null>(null);
 
-  const membersQuery = useQuery({
-    queryKey: ['team-members', activeTeamId],
-    queryFn: () => api.getTeamMembers(activeTeamId as string),
-    enabled: Boolean(activeTeamId),
-    staleTime: 60 * 1000,
+  const { membersQuery, invitesQuery, activityQuery, incomingInvitesQuery, reload } = useTeamSettingsQueries({
+    activeTeamId,
+    canManageTeam,
   });
-
   const members = membersQuery.data ?? [];
-
-  const invitesQuery = useQuery({
-    queryKey: ['team-invites', activeTeamId],
-    queryFn: () => api.getTeamInvites(activeTeamId as string),
-    enabled: Boolean(activeTeamId && canManageTeam),
-    staleTime: 30 * 1000,
-  });
-
   const invites = invitesQuery.data ?? [];
-
-  const activityQuery = useQuery({
-    queryKey: ['team-activity', activeTeamId],
-    queryFn: () => api.getTeamActivity(activeTeamId as string),
-    enabled: Boolean(activeTeamId && canManageTeam),
-    staleTime: 30 * 1000,
-  });
-
   const activity = activityQuery.data ?? [];
-
-  const incomingInvitesQuery = useQuery({
-    queryKey: ['incoming-team-invites'],
-    queryFn: () => api.getIncomingTeamInvites(),
-    staleTime: 30 * 1000,
-  });
-
   const incomingInvites = incomingInvitesQuery.data ?? [];
-  const queryClient = useQueryClient();
-  // refetch() joins a first load still in flight, which predates the change; cancel it first.
-  const reload = async (query: { refetch: () => Promise<unknown> }, queryKey: unknown[]) => {
-    await queryClient.cancelQueries({ queryKey });
-    await query.refetch();
-  };
   const activeMemberId =
     isTeamWorkspace && 'memberId' in activeWorkspace
       ? activeWorkspace.memberId
@@ -253,7 +221,7 @@ export function TeamSettingsSection() {
         slug: slug || undefined,
       });
       await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload.activity();
       toast.success('Organization updated');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update Organization');
@@ -284,8 +252,8 @@ export function TeamSettingsSection() {
       });
       setInviteUrl(resolveCreatedInviteUrl(invite));
       setInviteEmail('');
-      await reload(invitesQuery, ['team-invites', activeTeamId]);
-      await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload.invites();
+      await reload.activity();
       toast.success('Invite link created');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create invite');
@@ -302,8 +270,8 @@ export function TeamSettingsSection() {
     setRevokingInviteId(inviteId);
     try {
       await api.revokeTeamInvite(activeTeamId, inviteId);
-      await reload(invitesQuery, ['team-invites', activeTeamId]);
-      await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload.invites();
+      await reload.activity();
       toast.success('Invite revoked');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to revoke invite');
@@ -323,7 +291,7 @@ export function TeamSettingsSection() {
 
       persistAcceptedWorkspace(acceptedInvite.teamId);
       selectWorkspace(acceptedInvite.teamId);
-      await reload(incomingInvitesQuery, ['incoming-team-invites']);
+      await reload.incomingInvites();
       void refreshTeams().catch(() => undefined);
       toast.success('Organization invite accepted');
     } catch (error) {
@@ -357,9 +325,9 @@ export function TeamSettingsSection() {
     setUpdatingMemberId(member.id);
     try {
       await api.updateTeamMember(activeTeamId, member.id, updates);
-      await reload(membersQuery, ['team-members', activeTeamId]);
+      await reload.members();
       await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload.activity();
       toast.success('Member updated');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update member');
@@ -384,9 +352,9 @@ export function TeamSettingsSection() {
     setTransferringOwnerMemberId(member.id);
     try {
       await api.transferTeamOwnership(activeTeamId, member.id);
-      await reload(membersQuery, ['team-members', activeTeamId]);
+      await reload.members();
       await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload.activity();
       toast.success('Organization ownership transferred');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to transfer ownership');

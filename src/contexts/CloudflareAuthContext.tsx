@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { authClient } from '@/lib/auth-client';
+import { isUserSwitch, removeSignedOutUserQueries } from '@/lib/queryKeys';
 
 interface User {
   id: string;
@@ -40,6 +42,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<unknown | null>(null);
 
   const isAuthenticated = !!user;
+  const queryClient = useQueryClient();
+  const settledUserIdRef = useRef<string | null>(null);
+
+  // Sign-out and sign-in are SPA navigations, so the QueryClient outlives the session. When the
+  // user changes, drop what the previous user loaded. This effect runs after its children's, so
+  // by now every mounted query has moved to the new user's keys.
+  useEffect(() => {
+    if (isLoading) return;
+    const nextUserId = user?.id ?? null;
+    if (isUserSwitch(settledUserIdRef.current, nextUserId)) {
+      removeSignedOutUserQueries(queryClient);
+    }
+    settledUserIdRef.current = nextUserId;
+  }, [isLoading, queryClient, user?.id]);
 
   useEffect(() => {
     authClient

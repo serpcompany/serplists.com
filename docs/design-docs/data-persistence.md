@@ -104,6 +104,12 @@ Billing query keys are also user-scoped. A session change must not reuse another
 user's cached entitlement response, and the UI should show a neutral loading
 state until the current user's plan is known.
 
+Invites, Organization members and activity, Run Keys, and archive lists use the
+user-scoped keys from `src/lib/queryKeys.ts`. When the signed-in user changes (sign-out,
+or a sign-in as someone else in the same tab), `AuthProvider` removes every cached query
+that no mounted page reads, except the shared public catalog, so nothing the previous
+user loaded is shown to or refetched for the next one.
+
 ## Import/Export
 
 Template backup and portable import/export are implemented through `src/lib/utils/templateBackup.ts` and the Template backup API routes. Organization imports/exports pass the legacy `teamId` parameter so imported Templates land in the selected Organization when authorized.

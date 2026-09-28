@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { queryKeys } from '@/lib/queryKeys';
 
 const workspaceMocks = vi.hoisted(() => ({
   activeWorkspace: {
@@ -29,6 +30,10 @@ const workspaceMocks = vi.hoisted(() => ({
       slug: 'acme-team',
     },
   ],
+}));
+
+vi.mock('@/contexts/CloudflareAuthContext', () => ({
+  useAuth: () => ({ user: { id: 'user-1', email: 'current@example.com' } }),
 }));
 
 vi.mock('@/contexts/WorkspaceContext', () => ({
@@ -69,9 +74,9 @@ function renderSectionWithMembers(members: unknown[]) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  queryClient.setQueryData(['team-members', 'team-1'], members);
-  queryClient.setQueryData(['team-invites', 'team-1'], []);
-  queryClient.setQueryData(['team-activity', 'team-1'], []);
+  queryClient.setQueryData(queryKeys.teamMembers('user-1', 'team-1'), members);
+  queryClient.setQueryData(queryKeys.teamInvites('user-1', 'team-1'), []);
+  queryClient.setQueryData(queryKeys.teamActivity('user-1', 'team-1'), []);
 
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>

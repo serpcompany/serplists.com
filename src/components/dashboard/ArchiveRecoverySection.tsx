@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 
 type ArchiveKind = 'template' | 'run';
 
@@ -115,7 +116,7 @@ export function ArchiveRecoverySection() {
   const enabled = Boolean(user);
 
   const archivedTemplatesQuery = useQuery({
-    queryKey: ['archived-templates', workspaceScopeId],
+    queryKey: queryKeys.archivedTemplates(user?.id, workspaceScopeId),
     queryFn: async () => {
       const templates = await api.getArchivedTemplates(queryParams);
       return templates.map((template: Record<string, unknown>) =>
@@ -127,7 +128,7 @@ export function ArchiveRecoverySection() {
   });
 
   const archivedRunsQuery = useQuery({
-    queryKey: ['archived-runs', workspaceScopeId],
+    queryKey: queryKeys.archivedRuns(user?.id, workspaceScopeId),
     queryFn: async () => {
       const runs = await api.getArchivedChecklists(queryParams);
       return runs.map((run: Record<string, unknown>) => toArchiveItem(run, 'run'));
@@ -140,7 +141,7 @@ export function ArchiveRecoverySection() {
     mutationFn: (templateId: string) => api.restoreTemplate(templateId),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['archived-templates'] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.archivedTemplates(user?.id, workspaceScopeId) }),
         queryClient.invalidateQueries({ queryKey: ['templates'] }),
         queryClient.invalidateQueries({ queryKey: ['runs'] }),
       ]);
@@ -155,7 +156,7 @@ export function ArchiveRecoverySection() {
     mutationFn: (runId: string) => api.restoreChecklist(runId),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['archived-runs'] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.archivedRuns(user?.id, workspaceScopeId) }),
         queryClient.invalidateQueries({ queryKey: ['runs'] }),
       ]);
       toast.success('Run restored');

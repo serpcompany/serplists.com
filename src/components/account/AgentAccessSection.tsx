@@ -19,10 +19,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { api, getAgentMcpEndpoint, type AgentKey, type CreatedAgentKey } from '@/lib/api';
 import { copyTextToClipboard } from '@/lib/clipboard';
-
-const agentKeysQueryKey = ['agent-keys'] as const;
+import { queryKeys } from '@/lib/queryKeys';
 
 const formatTimestamp = (value: string | null): string => {
   if (!value) return 'Never';
@@ -261,9 +261,11 @@ export function AgentAccessSection() {
   const [isCreating, setIsCreating] = useState(false);
   const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
 
+  const userId = useAuth().user?.id;
   const keysQuery = useQuery({
-    queryKey: agentKeysQueryKey,
+    queryKey: queryKeys.agentKeys(userId),
     queryFn: () => api.getAgentKeys(),
+    enabled: Boolean(userId),
     staleTime: 30 * 1000,
   });
   const mcpEndpoint = getAgentMcpEndpoint(
