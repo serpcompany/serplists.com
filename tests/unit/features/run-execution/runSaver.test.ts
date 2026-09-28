@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApiError } from '@/lib/api-errors';
 import type { ChecklistRun, ChecklistSection } from '@/types/checklist';
 
+import type { NoteDrafts } from '@/features/run-execution/noteDrafts';
 import type { RunExecutionActionResult } from '@/features/run-execution/runExecutionResult';
 import { createRunSaver, RUN_CHANGED_ELSEWHERE_MESSAGE, type RunSaverContext } from '@/features/run-execution/runSaver';
 import {
@@ -83,7 +84,12 @@ const createServer = (initial: ChecklistRun) => {
 };
 
 // Mirrors the hook: an ok result's run becomes the latest run the next save builds on.
-const createPage = (server: ReturnType<typeof createServer>, initial: ChecklistRun, shareToken?: string) => {
+const createPage = (
+  server: ReturnType<typeof createServer>,
+  initial: ChecklistRun,
+  shareToken?: string,
+  noteDrafts: NoteDrafts = {},
+) => {
   const page = { latest: initial as ChecklistRun | null, notFound: false };
   const dependencies = { apiClient: server.apiClient, updateRun: server.updateRun };
   const context: RunSaverContext = {
@@ -98,7 +104,7 @@ const createPage = (server: ReturnType<typeof createServer>, initial: ChecklistR
     reload: () => loadRunExecutionData({ runId: shareToken ? undefined : 'run-1', shareToken }, dependencies),
   };
   const saver = createRunSaver();
-  const saves = bindRunSaves({ dependencies, noteDrafts: () => ({}), shareToken });
+  const saves = bindRunSaves({ dependencies, noteDrafts: () => noteDrafts, shareToken });
   return { context, page, saver, saves };
 };
 
@@ -216,6 +222,20 @@ describe('a run page whose run was saved by another session', () => {
     ]);
   });
 
+  // The page moves on once Mark Complete lands, so its notes must be saved even when the
+  // retry finds the task already complete.
+  it('saves the task notes with Mark Complete when the other session already completed the task', async () => {
+    const server = createServer(buildRun(5));
+    const { context, saver, saves } = createPage(server, buildRun(5), undefined, { 'item-1': 'mine' });
+    server.edit((run) => ({ ...run, sections: sections({ 'item-1': true }) }));
+
+    const result = await saver(saves.toggleItem('item-1', true), context);
+
+    expect(result.kind).toBe('ok');
+    expect(server.sent.map((run) => run.revision)).toEqual([5, 6]);
+    expect(server.stored().sections[0]?.items[0]).toMatchObject({ isCompleted: true, notes: 'mine' });
+  });
+
   it('does not send completion again when the other session already completed the run', async () => {
     const allDone = { 'item-1': true, 'item-2': true, 'item-3': true, 'sub-1': true };
     const server = createServer(buildRun(5, allDone));
@@ -325,6 +345,19 @@ describe('toggles queued while an earlier save is in flight', () => {
     expect(task(page)).toEqual([true, true, true]);
     expect(server.stored().sections[0]?.items[1]?.isCompleted).toBe(true);
     expect(server.sent).toHaveLength(1);
+  });
+
+  it('ticking the last sub-task, then typing a note and Mark Complete, saves the note', async () => {
+    const server = createServer(twoSubTasks({ b: true }));
+    const { context, saver, saves } = createPage(server, twoSubTasks({ b: true }), undefined, { 'item-2': 'checked' });
+
+    await Promise.all([
+      saver(saves.toggleSubItem('item-2', 0, 0, true), context),
+      saver(saves.toggleItem('item-2', true), context),
+    ]);
+
+    expect(server.stored().sections[0]?.items[1]).toMatchObject({ isCompleted: true, notes: 'checked' });
+    expect(server.sent).toHaveLength(2);
   });
 
   it('applies an untick as an untick even when the task changed before it ran', async () => {

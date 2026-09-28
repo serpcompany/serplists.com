@@ -5,6 +5,7 @@ import {
   applyUnsavedNotesWarning,
   confirmLeaveWithUnsavedNotes,
   draftedNotesChanged,
+  hasNoteDraftFor,
   pruneNoteDrafts,
   RUN_NOTES_UNSAVED_MESSAGE,
   updateNoteDraft,
@@ -38,6 +39,17 @@ describe('updateNoteDraft', () => {
   it('drops the draft once it matches the saved notes again, treating undefined as empty', () => {
     expect(updateNoteDraft({ 'item-1': 'x' }, 'item-1', '', undefined)).toEqual({});
     expect(updateNoteDraft({ 'item-1': 'x' }, 'item-1', 'saved', 'saved')).toEqual({});
+  });
+});
+
+describe('hasNoteDraftFor', () => {
+  it('is true only for a draft that differs from the notes the run holds, treating undefined as empty', () => {
+    const run = buildRun({ 'item-1': 'saved', 'item-2': undefined });
+
+    expect(hasNoteDraftFor({ 'item-1': 'changed' }, run, 'item-1')).toBe(true);
+    expect(hasNoteDraftFor({ 'item-1': 'saved' }, run, 'item-1')).toBe(false);
+    expect(hasNoteDraftFor({ 'item-2': '' }, run, 'item-2')).toBe(false);
+    expect(hasNoteDraftFor({ 'item-2': 'new' }, run, 'item-1')).toBe(false);
   });
 });
 

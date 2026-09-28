@@ -33,6 +33,12 @@ export const pruneNoteDrafts = (drafts: NoteDrafts, run: ChecklistRun): NoteDraf
   return kept.length === Object.keys(drafts).length ? drafts : Object.fromEntries(kept);
 };
 
+// True when the task has a draft that differs from the notes this run holds for it.
+export const hasNoteDraftFor = (drafts: NoteDrafts, run: ChecklistRun, itemId: string): boolean => {
+  const draft = drafts[itemId];
+  return draft !== undefined && draft !== savedNotesById(run).get(itemId);
+};
+
 // True when someone else changed the saved notes of a drafted task between two versions
 // of the run, so saving the draft would overwrite their text.
 export const draftedNotesChanged = (

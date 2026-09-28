@@ -435,6 +435,69 @@ describe('unsaved task notes ride along with the save that would lose them', () 
     expect(sent.sections[0].items[1].notes).toBeUndefined();
   });
 
+  // A teammate's tick (reloaded after a 409) or a queued sub-task save can complete the task
+  // first. Mark Complete then changes no completion, but it still saves the task's notes;
+  // the page moves on to the next task afterwards.
+  const completedFirstItem = (notes?: string): ChecklistRun => {
+    const run = buildRun();
+    const [first, ...rest] = run.sections[0].items;
+    const done = {
+      ...first,
+      isCompleted: true,
+      notes,
+      contents: first.contents?.map((content) => ({
+        ...content,
+        subItems: content.subItems?.map((sub) => ({ ...sub, isCompleted: true })),
+      })),
+    };
+    return { ...run, sections: [{ ...run.sections[0], items: [done, ...rest] }] };
+  };
+
+  it('Mark Complete saves the draft notes of a task that is already complete', async () => {
+    const updateRun = vi.fn(async (run: ChecklistRun) => ({ ...run, revision: 2 }));
+
+    const result = await toggleRunItem(
+      { isCompleted: true, itemId: 'item-1', noteDrafts: { 'item-1': 'x' }, run: completedFirstItem() },
+      { apiClient: apiClient(), updateRun },
+    );
+
+    expect(updateRun).toHaveBeenCalledOnce();
+    const sent = updateRun.mock.calls[0][0];
+    expect(sent.revision).toBe(1);
+    expect(sent.sections[0].items[0]).toMatchObject({ isCompleted: true, notes: 'x' });
+    expect(sent.sections[0].items[0].contents?.[0]?.subItems?.every((sub) => sub.isCompleted)).toBe(true);
+    expect(result).toMatchObject({ kind: 'ok', run: { revision: 2 } });
+  });
+
+  it('saves the draft through a shared link when the task is already complete', async () => {
+    const client = { ...apiClient(), updateSharedChecklist: vi.fn(async () => ({ revision: 2 })) };
+
+    const result = await toggleRunItem(
+      { isCompleted: true, itemId: 'item-1', noteDrafts: { 'item-1': 'x' }, run: completedFirstItem(), shareToken: 'share-1' },
+      { apiClient: client, updateRun: vi.fn() },
+    );
+
+    expect(client.updateSharedChecklist).toHaveBeenCalledOnce();
+    expect(client.updateSharedChecklist.mock.calls[0]).toMatchObject([
+      'share-1',
+      { expected_revision: 1, sections: [{ items: [{ isCompleted: true, notes: 'x' }, {}] }] },
+    ]);
+    expect(result).toMatchObject({ kind: 'ok', run: { revision: 2 } });
+  });
+
+  it('sends nothing for a complete task whose draft matches its saved notes, or for another task', async () => {
+    const updateRun = vi.fn(async (run: ChecklistRun) => run);
+    const run = completedFirstItem('x');
+
+    const same = await toggleRunItem(
+      { isCompleted: true, itemId: 'item-1', noteDrafts: { 'item-1': 'x', 'item-2': 'other task' }, run },
+      { apiClient: apiClient(), updateRun },
+    );
+
+    expect(same).toMatchObject({ kind: 'ok', run });
+    expect(updateRun).not.toHaveBeenCalled();
+  });
+
   it('completing the run saves every draft before the page leaves', async () => {
     const updateRun = vi.fn(async (run: ChecklistRun) => run);
     const run = buildRun();

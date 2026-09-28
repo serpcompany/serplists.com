@@ -22,7 +22,7 @@ import {
   mapChecklistToRun,
   setSubItemsCompletion,
 } from './runExecutionMappers';
-import { applyNoteDrafts, draftedNotesChanged, pruneNoteDrafts, updateNoteDraft, type NoteDrafts } from './noteDrafts';
+import { applyNoteDrafts, draftedNotesChanged, hasNoteDraftFor, pruneNoteDrafts, updateNoteDraft, type NoteDrafts } from './noteDrafts';
 import {
   COMPLETED_RUN_FROZEN_MESSAGE,
   toErrorResult,
@@ -276,7 +276,10 @@ export const toggleRunItem = async (
 
       const { isCompleted } = params;
       if (itemHasCompletion(item, isCompleted)) {
-        return saveToggledRun(params.run, false, params.shareToken, dependencies);
+        // Completed elsewhere or by a queued save: still save the task's draft notes, since
+        // the page moves on after Mark Complete.
+        const notesChanged = hasNoteDraftFor(params.noteDrafts ?? {}, params.run, params.itemId);
+        return saveToggledRun(notesChanged ? nextRun : params.run, notesChanged, params.shareToken, dependencies);
       }
       item.isCompleted = isCompleted;
       item.contents = item.contents?.map((content) => {
