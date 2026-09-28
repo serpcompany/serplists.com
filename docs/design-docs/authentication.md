@@ -29,7 +29,9 @@ and user-facing failure states when a supporting service is unavailable.
   `AUTH_EMAIL_VERIFICATION_REQUIRED=true` (production). Login offers to resend the
   verification email when sign-in is blocked.
 - Verification and reset emails use `RESEND_API_KEY`, then `USESEND_API_KEY`.
-  Callbacks await delivery so provider failures surface in the request.
+  Callbacks await delivery so provider failures surface in the request. Each
+  account gets at most one email of each kind a minute and five an hour; extra
+  requests succeed without sending ([rate limits](../SECURITY.md#rate-limits)).
   `GET /api/auth/status` reports whether email delivery is available.
 - Protected routes preserve the requested destination through login.
 - A password reset revokes every session for the account, including the one in

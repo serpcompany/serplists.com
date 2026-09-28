@@ -6,6 +6,7 @@ import type { Env } from "./types";
 import { createDb, schema } from "./db";
 import { resolveAuthSecret } from "./utils/auth-secret";
 import { resolveConfiguredCorsOrigins } from "./utils/cors";
+import { discardUnsentPasswordResetToken, shouldSendAuthEmail } from "./utils/auth-email-throttle";
 import { log } from "./utils/logger";
 import { buildUserProfileWritePolicy, validateUserProfileWrite } from "./utils/user-profile-validation";
 
@@ -170,7 +171,13 @@ export function createBetterAuth(env: Env, request: Request) {
     }),
     emailAndPassword: {
       enabled: true,
-      sendResetPassword: async ({ user, url }) => {
+      // Throttled per account (utils/auth-email-throttle.ts). A skipped send
+      // returns normally, so the response is the same as for a sent email.
+      sendResetPassword: async ({ user, url, token }) => {
+        if (!(await shouldSendAuthEmail(env, "password-reset", user.id))) {
+          await discardUnsentPasswordResetToken(env, token);
+          return;
+        }
         await sendPasswordResetEmail(env, { to: user.email, url });
       },
       // A reset is how users recover a compromised account, so it must sign out
@@ -193,6 +200,11 @@ export function createBetterAuth(env: Env, request: Request) {
     emailVerification: {
       sendOnSignUp: authEmailPolicy.emailVerificationRequired,
       sendVerificationEmail: async ({ user, url }) => {
+        // Unauthenticated /send-verification-email accepts any registered
+        // address, verified or not. Change-email (not enabled) would pass the
+        // user with emailVerified false, so this skip would not affect it.
+        if (user.emailVerified) return;
+        if (!(await shouldSendAuthEmail(env, "email-verification", user.id))) return;
         await sendEmailVerificationEmail(env, { to: user.email, url });
       },
     },

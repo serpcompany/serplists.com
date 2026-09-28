@@ -101,6 +101,14 @@ Best-effort, per IP, in `functions/api/[[route]].ts`, before Better Auth dispatc
 - Sensitive writes (`POST`/`PUT`/`DELETE` under templates, checklists, uploads, the
   legacy Organization routes `teams`, and Run Key/MCP writes): 120 per minute.
 - MCP also limits each authenticated Run Key to 120 requests per minute.
+- Password-reset and verification emails are also limited per account, whatever
+  the IP: at most one of each kind a minute and five an hour
+  (`functions/api/utils/auth-email-throttle.ts`, called from the Better Auth send
+  callbacks). The count is one primary-key upsert in D1 (a `verification` row with
+  id `auth-email-throttle:<kind>:<userId>`), so it holds across edges and concurrent
+  requests. A skipped send returns the same response as a sent one, and the unused
+  reset token is deleted. Verification emails are never sent to an address that is
+  already verified. If D1 fails, the email is sent (fail open).
 
 The limiter is an in-memory map (`functions/api/utils/rate-limit.ts`), so it is not
 consistent across Cloudflare edges, and it is skipped when `CF-Connecting-IP` is

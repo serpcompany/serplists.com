@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createBetterAuth, getAuthEmailPolicy } from "@functions/api/better-auth";
 
-const { betterAuthMock, drizzleAdapterMock } = vi.hoisted(() => ({
+const { betterAuthMock, drizzleAdapterMock, emailThrottle } = vi.hoisted(() => ({
   betterAuthMock: vi.fn(() => ({ handler: vi.fn() })),
   drizzleAdapterMock: vi.fn(() => ({})),
+  emailThrottle: { shouldSend: vi.fn(), discardToken: vi.fn() },
 }));
 
 vi.mock("better-auth", () => ({
@@ -24,6 +25,12 @@ vi.mock("@functions/api/db", () => ({
   schema: {},
 }));
 
+// The throttle itself runs against SQLite in auth-email-throttle.test.ts.
+vi.mock("@functions/api/utils/auth-email-throttle", () => ({
+  shouldSendAuthEmail: emailThrottle.shouldSend,
+  discardUnsentPasswordResetToken: emailThrottle.discardToken,
+}));
+
 function buildEnv(overrides?: Record<string, unknown>) {
   return {
     BETTER_AUTH_SECRET: "better-auth-secret-with-32-characters!!",
@@ -39,6 +46,8 @@ describe("createBetterAuth config", () => {
     betterAuthMock.mockClear();
     drizzleAdapterMock.mockClear();
     vi.restoreAllMocks();
+    emailThrottle.shouldSend.mockReset().mockResolvedValue(true);
+    emailThrottle.discardToken.mockReset().mockResolvedValue(undefined);
   });
 
   it("enforces email verification and wires verification sender", () => {
@@ -221,6 +230,48 @@ describe("createBetterAuth config", () => {
         method: "POST",
       })
     );
+  });
+
+  it("skips a throttled reset email without failing and discards its unused token", async () => {
+    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    emailThrottle.shouldSend.mockResolvedValue(false);
+    const env = buildEnv();
+
+    createBetterAuth(env, new Request("https://serplists.com/api/auth/request-password-reset"));
+    const options = betterAuthMock.mock.calls[0]?.[0];
+
+    await expect(
+      options.emailAndPassword.sendResetPassword(
+        { user: { id: "u1", email: "existing-user@example.com" }, url: "https://serplists.com/r", token: "tok" },
+        new Request("https://serplists.com/api/auth/request-password-reset")
+      )
+    ).resolves.toBeUndefined();
+
+    expect(emailThrottle.shouldSend).toHaveBeenCalledWith(env, "password-reset", "u1");
+    expect(emailThrottle.discardToken).toHaveBeenCalledWith(env, "tok");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not send verification email to a verified address or past the throttle", async () => {
+    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/send-verification-email"));
+    const options = betterAuthMock.mock.calls[0]?.[0];
+    const send = (user: Record<string, unknown>) =>
+      options.emailVerification.sendVerificationEmail(
+        { user, url: "https://serplists.com/api/auth/verify-email?token=abc", token: "abc" },
+        new Request("https://serplists.com/api/auth/send-verification-email")
+      );
+
+    await send({ id: "u1", email: "verified@example.com", emailVerified: true });
+    expect(emailThrottle.shouldSend).not.toHaveBeenCalled();
+
+    emailThrottle.shouldSend.mockResolvedValue(false);
+    await send({ id: "u2", email: "new@example.com", emailVerified: false });
+    expect(emailThrottle.shouldSend).toHaveBeenCalledWith(expect.anything(), "email-verification", "u2");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("falls back to UseSend when RESEND_API_KEY is not configured", async () => {
