@@ -2,7 +2,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { cn } from '@/lib/utils';
-import { normalizeMarkdownDisplayText } from '@/lib/utils/markdownDisplay';
+import { expandLegacyEscapedNewlines } from '@/lib/utils/markdownDisplay';
 import { rehypeTrimBlockNewlines } from '@/lib/utils/markdownWhitespace';
 import { safeUrl } from '@/lib/utils/safeUrl';
 
@@ -28,7 +28,7 @@ export function MarkdownBlock({ value, className }: MarkdownBlockProps) {
         skipHtml
         urlTransform={safeUrl}
       >
-        {normalizeMarkdownDisplayText(value)}
+        {expandLegacyEscapedNewlines(value)}
       </ReactMarkdown>
     </div>
   );

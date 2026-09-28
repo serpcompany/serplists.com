@@ -84,7 +84,6 @@ import {
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
-import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistTemplate, TemplateSavePayload } from '@/types/checklist';
 
 type TemplateMetrics = {
@@ -586,9 +585,7 @@ const TemplateDetail = () => {
       <DashboardPageHeader
         title={displayTemplate.title}
         description={
-          (displayTemplate.description
-            ? normalizeDisplayText(displayTemplate.description)
-            : null) ||
+          displayTemplate.description ||
           'Review template structure, metadata, and run actions.'
         }
         actions={templateHeaderActions}
@@ -698,7 +695,7 @@ const TemplateDetail = () => {
                       </div>
                       {item.description ? (
                         <p className="mt-1 whitespace-pre-line pl-5 text-sm text-muted-foreground">
-                          {normalizeDisplayText(item.description)}
+                          {item.description}
                         </p>
                       ) : null}
                       {item.contents?.length ? (

@@ -44,7 +44,6 @@ import {
   buildConsoleRunsPath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
-import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { TemplateHistoryEvent } from '@/lib/api';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
 
@@ -543,7 +542,7 @@ const ChecklistRunPage = () => {
                             </h3>
                             {item.description ? (
                               <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
-                                {normalizeDisplayText(item.description)}
+                                {item.description}
                               </p>
                             ) : null}
                           </div>

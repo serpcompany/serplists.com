@@ -18,6 +18,20 @@ A video block holds a URL or pasted `<iframe>` code. `getVideoEmbedSource`
 Every iframe origin the helper can produce must be listed in `frame-src` in
 `public/_headers`; `tests/unit/security/headers.test.ts` checks this.
 
+## Text blocks and descriptions
+
+Text blocks are Markdown, rendered by `MarkdownBlock`; item and template descriptions
+are plain text. Both are shown exactly as saved, so a backslash followed by `n` (in
+code or a Windows path) stays as typed. Seeds and bundled packs store real line breaks;
+`tests/unit/db/officialTemplatesSeed.test.ts` checks the official seed.
+
+The one exception is legacy data: the official seed once stored text blocks as a single
+line with a literal backslash-n for each line break. `expandLegacyEscapedNewlines`
+(`src/lib/utils/markdownDisplay.ts`) still lays those out: for a text block with no real
+line break, it turns each literal backslash-n into a line break, except inside inline
+code and after an escaping backslash. It goes away once the stored rows are migrated
+(TD-16 in the [tech debt tracker](../exec-plans/tech-debt-tracker.md)).
+
 ## Adding a content type
 
 Example: a "link" type.

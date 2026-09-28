@@ -9,7 +9,6 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { buildPublicTemplateSectionId } from '@/components/template/publicTemplateSectionId';
 import { cn } from '@/lib/utils';
-import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import { safeUrl } from '@/lib/utils/safeUrl';
 import type {
   ChecklistItem,
@@ -162,7 +161,7 @@ export function PublicTemplateContent({
                   <div className="mt-3 space-y-3">
                     {hasDescription ? (
                       <p className="whitespace-pre-line text-sm leading-7 text-muted-foreground">
-                        {normalizeDisplayText(description)}
+                        {description}
                       </p>
                     ) : null}
 

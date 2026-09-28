@@ -19,7 +19,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { buildPublicCategoryPath, buildPublicTemplatesPath } from '@/lib/routes';
-import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistItem, ChecklistSection, ChecklistTemplate } from '@/types/checklist';
 
 interface PublicTemplateViewProps {
@@ -152,7 +151,7 @@ export function PublicTemplateView({
 
           {template.description ? (
             <p className="mb-6 whitespace-pre-line text-pretty text-base leading-relaxed text-muted-foreground">
-              {normalizeDisplayText(template.description)}
+              {template.description}
             </p>
           ) : null}
 
@@ -339,7 +338,7 @@ function TaskPreviewItem({ item, index }: { item: ChecklistItem; index: number }
         <p className="text-sm text-foreground">{item.title}</p>
         {item.description ? (
           <p className="mt-0.5 whitespace-pre-line text-xs leading-5 text-muted-foreground">
-            {normalizeDisplayText(item.description)}
+            {item.description}
           </p>
         ) : null}
         {item.contents?.length ? (

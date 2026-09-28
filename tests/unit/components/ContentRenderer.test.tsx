@@ -5,21 +5,28 @@ import { describe, expect, it } from 'vitest';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 
 describe('ContentRenderer accessibility', () => {
-  it('preserves authored line breaks in text content', () => {
-    const markup = renderToStaticMarkup(
-      <ContentRenderer
-        contents={[
-          {
-            id: 'text-1',
-            type: 'text',
-            value: 'Line one\nLine two\\nLine three',
-          },
-        ]}
-      />,
-    );
+  const renderText = (value: string) =>
+    renderToStaticMarkup(<ContentRenderer contents={[{ id: 'text-1', type: 'text', value }]} />);
+
+  it('preserves authored line breaks and shows a typed backslash-n as saved', () => {
+    const markup = renderText('Line one\nSave to C:\\new_folder\nLine three');
 
     expect(markup).toContain('whitespace-pre-line');
-    expect(markup).toContain('Line one\nLine two\nLine three');
+    expect(markup).toContain('Line one\nSave to C:\\new_folder\nLine three');
+  });
+
+  it('keeps a backslash-n inside inline and fenced code', () => {
+    const markup = renderText('Run `printf(hi\\n)` first\n\n```\nprintf(hi\\n);\n```');
+
+    expect(markup).toContain('<code>printf(hi\\n)</code>');
+    expect(markup).toContain('<pre><code>printf(hi\\n);\n</code></pre>');
+  });
+
+  it('still lays out legacy single-line seed text, leaving its inline code alone', () => {
+    const markup = renderText('- Verify `a\\nb` works.\\n- Confirm paths.');
+
+    expect(markup).toContain('<li>Verify <code>a\\nb</code> works.</li>');
+    expect(markup).toContain('<li>Confirm paths.</li>');
   });
 
   it('renders file, embed, and video content as keyboard-reachable elements with accessible names', () => {

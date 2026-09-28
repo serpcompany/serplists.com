@@ -70,14 +70,14 @@ describe('PublicTemplateView', () => {
     expect(html).not.toContain('Template details');
   });
 
-  it('preserves authored line breaks in template and task descriptions', () => {
+  it('shows template and task descriptions exactly as saved, line breaks and backslashes alike', () => {
     const html = renderToStaticMarkup(
       <StaticRouter location="/">
         <PublicTemplateView
           template={{
             ...template,
             description:
-              'Template description line one\nTemplate description line two\\nTemplate description line three',
+              'Template description line one\nSave exports to C:\\new_folder\nTemplate description line three',
             sections: [
               {
                 id: 'section-1',
@@ -86,7 +86,7 @@ describe('PublicTemplateView', () => {
                   {
                     id: 'item-1',
                     title: 'Set the budget and guest count',
-                    description: 'Task line one\nTask line two\\nTask line three',
+                    description: 'Run printf(hi\\n) and save to C:\\new_folder',
                     contents: [],
                   },
                 ],
@@ -109,8 +109,8 @@ describe('PublicTemplateView', () => {
 
     expect(html).toContain('whitespace-pre-line');
     expect(html).toContain(
-      'Template description line one\nTemplate description line two\nTemplate description line three',
+      'Template description line one\nSave exports to C:\\new_folder\nTemplate description line three',
     );
-    expect(html).toContain('Task line one\nTask line two\nTask line three');
+    expect(html).toContain('Run printf(hi\\n) and save to C:\\new_folder');
   });
 });

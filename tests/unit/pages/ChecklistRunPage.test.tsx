@@ -46,7 +46,7 @@ const baseRun: ChecklistRun = {
           id: 'item-1',
           title: 'Review all page content',
           description:
-            'Check for typos and broken links.\nThen verify redirects.\\nFinally submit the report.',
+            'Check for typos and broken links.\nThen save to C:\\new_folder\nFinally submit the report.',
           isCompleted: false,
           contents: [
             {
@@ -136,7 +136,7 @@ describe('ChecklistRunPage layout', () => {
     expect(html).not.toContain('Notes for Send the approval email');
     expect(html).toContain('whitespace-pre-line');
     expect(html).toContain(
-      'Check for typos and broken links.\nThen verify redirects.\nFinally submit the report.',
+      'Check for typos and broken links.\nThen save to C:\\new_folder\nFinally submit the report.',
     );
     expect(html).toContain('min-h-[calc(100dvh-3.5rem)]');
     expect(html).not.toContain('data-run-progress-sidebar="true"');
@@ -191,7 +191,7 @@ describe('ChecklistRunPage layout', () => {
     expect(html).toContain('Run progress');
     expect(html).toContain('whitespace-pre-line');
     expect(html).toContain(
-      'Check for typos and broken links.\nThen verify redirects.\nFinally submit the report.',
+      'Check for typos and broken links.\nThen save to C:\\new_folder\nFinally submit the report.',
     );
     expect(html).not.toContain('Create Your Own Copy');
     expect(html).toContain('max-w-[var(--layout-narrow-max)]');
