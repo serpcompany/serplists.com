@@ -40,6 +40,7 @@ Canonical private routes:
 ## Runs And Sharing
 
 - Users can start checklist runs from templates.
+- Run titles are limited to 160 characters, the same limit as template titles. A default run name is "<template title> - <date>"; when that would be too long, the template title is shortened with an ellipsis so the date stays. Run name fields stop typing at 160 characters.
 - Runs store progress independently from templates.
 - Runs record both the template content version last reconciled and a run revision. API responses expose `is_stale` when the source checklist structure is newer; metadata-only template edits do not stale runs.
 - Completed, archived, and publicly shared runs are frozen when a template changes. A completed private run can be explicitly reconciled and reopened with `POST /api/checklists/:id/revalidate`.

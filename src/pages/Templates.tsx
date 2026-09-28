@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/select';
 import { useDashboardTemplatesModel } from '@/features/dashboard-templates/useDashboardTemplatesModel';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
+import { buildDefaultRunName, RUN_TITLE_MAX_LENGTH } from '@/lib/runs/runName';
 
 type SortOption = 'recent' | 'alphabetical' | 'tasks';
 type VisibilityFilter = 'all' | 'public' | 'private';
@@ -55,7 +56,7 @@ const Templates = () => {
   const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
 
   const defaultRunName = model.selectedTemplate
-    ? `${model.selectedTemplate.title} - ${new Date().toLocaleString()}`
+    ? buildDefaultRunName(model.selectedTemplate.title, new Date().toLocaleString())
     : '';
 
   const filteredTemplates = useMemo(() => {
@@ -306,6 +307,7 @@ const Templates = () => {
                 value={runName}
                 onChange={(event) => setRunName(event.target.value)}
                 placeholder={defaultRunName}
+                maxLength={RUN_TITLE_MAX_LENGTH}
                 className="rounded-md"
               />
             </div>

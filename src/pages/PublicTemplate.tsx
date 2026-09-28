@@ -24,6 +24,7 @@ import {
   buildPublicTemplatesPath,
   resolvePublicTemplateOwnerSlug,
 } from '@/lib/routes';
+import { buildDefaultRunName } from '@/lib/runs/runName';
 
 const PublicTemplate = () => {
   const { username, templateSlug } = useParams<{
@@ -91,8 +92,9 @@ const PublicTemplate = () => {
     startRunInFlight.current = true;
     setIsCreatingRun(true);
     try {
+      // This page has no name field, so the default must always fit the run title limit.
       const result = await startRun(
-        `${template.title} - ${new Date().toLocaleDateString()}`,
+        buildDefaultRunName(template.title, new Date().toLocaleDateString()),
       );
 
       if (result.kind === 'login_required') {

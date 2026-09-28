@@ -589,3 +589,24 @@ describe('PublicTemplate load failures', () => {
     expect(html).not.toContain('Try again');
   });
 });
+
+describe('PublicTemplate default run name', () => {
+  beforeEach(() => {
+    mockUseTemplateDetailModel.mockReset();
+    mockViewProps.mockReset();
+    authState.isAuthenticated = true;
+    authState.user = { id: 'user-1' };
+    workspaceState.isWorkspaceLoading = false;
+  });
+
+  it('names the run within the API limit for a template title at the limit', async () => {
+    const startRun = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1' });
+    renderPublishedRoute({ ...publishedClipyTemplate, title: 'T'.repeat(160) }, { startRun });
+
+    await lastViewProps().onStartRun();
+
+    const runName = startRun.mock.calls[0]?.[0] as string;
+    expect(runName.length).toBeLessThanOrEqual(160);
+    expect(runName.startsWith('TTT')).toBe(true);
+  });
+});
