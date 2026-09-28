@@ -130,3 +130,30 @@ describe("getEntitlementsForUser with a manual override", () => {
     expect(entitlements.source).toBe("user_subscription");
   });
 });
+
+describe("getEntitlementsForUser for a seeded persona email", () => {
+  // Local personas get Pro from seeded entitlement_overrides rows, never from their
+  // address: anyone can register admin@test.com on a deployment without verification.
+  it.each([
+    ["admin@test.com", {}],
+    ["JANE@TEST.COM", {}],
+    ["jane@test.com", { STRIPE_SECRET_KEY: undefined, STRIPE_PRO_PRICE_ID: undefined }],
+  ])("does not grant Pro to %s without an override or subscription", async (email, envOverrides) => {
+    d1.sqlite.prepare("UPDATE users SET email = ? WHERE id = ?").run(email, USER_ID);
+
+    const entitlements = await getEntitlementsForUser(env(envOverrides), USER_ID);
+
+    expect(entitlements.plan).toBe("free");
+    expect(entitlements.source).toBe("free");
+  });
+
+  it("resolves the plan without reading the user's email", async () => {
+    const statements: string[] = [];
+    d1.setStatementHook((sql) => statements.push(sql));
+
+    await getEntitlementsForUser(env(), USER_ID);
+
+    expect(statements.length).toBeGreaterThan(0);
+    expect(statements.filter((sql) => /\bfrom\s+"users"/i.test(sql))).toEqual([]);
+  });
+});

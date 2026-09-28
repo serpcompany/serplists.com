@@ -82,7 +82,7 @@ Local seeds create these users:
 
 Password for all seeded users: `password123`.
 
-`admin@test.com` and `jane@test.com` are treated as Pro dev personas. `john@test.com` and `bob@test.com` remain Free. Local seeds also include Organization Memberships, pending invites, Organization entitlement overrides, and audit rows. The underlying fixtures retain legacy `team` implementation names.
+`admin@test.com` and `jane@test.com` are Pro dev personas through seeded Personal entitlement overrides; the API never grants a plan by email address. `john@test.com` and `bob@test.com` remain Free. Local seeds also include Organization Memberships, pending invites, Organization entitlement overrides, and audit rows. The underlying fixtures retain legacy `team` implementation names.
 
 ## Error Contract
 

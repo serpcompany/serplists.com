@@ -64,7 +64,7 @@ describe("getPersonalBillingAction", () => {
   });
 
   it("never sends Pro without a Stripe customer to a portal that cannot open", () => {
-    // A local test persona gets Pro outside Stripe and has no customer either.
+    // Pro that support granted without a managedBySupport flag (an older response).
     expect(getPersonalBillingAction({ plan: "pro", canManageBilling: false })).toBe("support");
   });
 });

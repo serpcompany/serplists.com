@@ -181,9 +181,9 @@ Authenticated:
   (a Stripe customer exists), and `managedBySupport` (a manual override sets the
   plan). Organization context never includes them. Billing shows Manage
   subscription, not Upgrade, whenever `plan` is `pro` or `subscriptionStatus` is
-  set. Under an override (Free or Pro), or for Pro without a Stripe customer (a
-  local test persona), it says support manages the plan and shows no Upgrade,
-  only Manage subscription for an existing customer.
+  set. Under an override (Free or Pro), or for Pro without a Stripe customer, it
+  says support manages the plan and shows no Upgrade, only Manage subscription
+  for an existing customer.
 
 Webhook:
 - `POST /api/stripe/webhook` (verifies `Stripe-Signature`, idempotent via `stripe_webhook_events`)

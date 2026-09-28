@@ -13,8 +13,7 @@ export type EntitlementSource =
   | "free"
   | "user_override"
   | "team_override"
-  | "user_subscription"
-  | "dev_test_user";
+  | "user_subscription";
 
 export type Entitlements = {
   plan: Plan;
@@ -24,8 +23,6 @@ export type Entitlements = {
     maxActiveRuns: number | null;
   };
 };
-
-const devProTestEmails = new Set(["admin@test.com", "jane@test.com"]);
 
 function isProSubscriptionStatus(status: string): boolean {
   return status === "active" || status === "trialing";
@@ -67,7 +64,7 @@ function teamOverrideEntitlements(plan: string): Entitlements {
 export async function getEntitlementsForUser(env: Env, userId: string): Promise<Entitlements> {
   const stripe = getStripeBillingConfig(env);
   const db = createDb(env);
-  const { entitlement_overrides, users } = schema;
+  const { entitlement_overrides } = schema;
   const nowSeconds = Math.floor(Date.now() / 1000);
 
   // Manual override takes priority (for comp/revoke / support).
@@ -89,19 +86,10 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
     }
   }
 
+  // Local Pro personas get Pro from seeded override rows (db/seeds/local.ts), never
+  // from their email: anyone can register those addresses on a deployed environment.
   if (override) {
     return userOverrideEntitlements(override.plan);
-  }
-
-  // Keep local seeded personas aligned with their visible labels before a reseed.
-  const [user] = await db
-    .select({ email: users.email })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  if (user?.email && devProTestEmails.has(user.email.toLowerCase())) {
-    return paidEntitlements("pro", "dev_test_user");
   }
 
   if (!stripe) {

@@ -37,8 +37,8 @@ const FAILED_PAYMENT_SUBSCRIPTION_STATUSES = new Set(["past_due", "unpaid"]);
  * Portal. Starting Checkout again would create a second subscription that Stripe bills.
  * When support manages the plan there is no self-serve action, except the portal for
  * an existing Stripe customer so a subscription can still be canceled. Pro without a
- * Stripe customer (a support override or a local test persona) has no portal to open,
- * so it is left to support too. A status without canManageBilling keeps the portal.
+ * Stripe customer has no portal to open, so it is left to support too. A status
+ * without canManageBilling keeps the portal.
  */
 export const getPersonalBillingAction = (status?: BillingStatus | null): "manage" | "upgrade" | "support" => {
   if (status?.managedBySupport) return "support";
