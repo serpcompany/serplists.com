@@ -1007,7 +1007,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return json({ success: true });
     }
 
-    // POST /api/templates/:id/clone (Pro only)
+    // POST /api/templates/:id/clone: Pro only into Personal; Organization copies follow the
+    // Organization's role and template limit (see pricing-and-entitlements.md).
     if (templatesSubpath[0] && templatesSubpath[1] === 'clone') {
       const sourceId = templatesSubpath[0];
       let visibility: 'preserve' | 'public' | 'private' = 'private';
@@ -1036,6 +1037,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       const entitlements = cloneTeamId
         ? await getEntitlementsForContext(env, { type: 'team', teamId: cloneTeamId, userId })
         : await getEntitlementsForUser(env, userId);
+      if (!cloneTeamId && entitlements.plan !== 'pro') {
+        return jsonError('Upgrade to Pro to copy public templates into Personal.', 403, { code: 'upgrade_required' });
+      }
       if (entitlements.limits.maxTemplates !== null) {
         const [existingCount] = await db
           .select({ count: sql<number>`count(*)` })

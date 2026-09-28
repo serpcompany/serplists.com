@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
@@ -1228,53 +1228,78 @@ describe('Templates Handlers', () => {
     expect(JSON.stringify(data)).not.toContain('SQLITE');
   });
 
-  it('should allow cloning templates for free users within template limit', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([{ count: 0 }])
-      .mockResolvedValueOnce([
-        {
-          id: 'template-1',
-          title: 'Public Template',
-          description: '',
-          items: JSON.stringify([]),
-          category: '[]',
-          tags: '[]',
-          user_id: 'other-user',
-          is_public: true,
-          slug: 'public-template',
-          created_at: new Date().toISOString(),
-          updated_at: null,
-          version: 1,
-        },
-      ]);
-
-    const request = new Request('http://localhost/api/templates/template-1/clone', {
+  describe('copying a public template', () => {
+    const publicSource = {
+      id: 'template-1',
+      title: 'Public Template',
+      description: '',
+      items: JSON.stringify([]),
+      category: '[]',
+      tags: '[]',
+      user_id: 'other-user',
+      is_public: true,
+      slug: 'public-template',
+      created_at: new Date().toISOString(),
+      updated_at: null,
+      version: 1,
+    };
+    const editor = { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'editor', status: 'active' };
+    const clone = (body: Record<string, unknown>) => handleTemplates(new Request('http://localhost/api/templates/template-1/clone', {
       method: 'POST',
-      body: JSON.stringify({ visibility: 'private' }),
+      body: JSON.stringify(body),
+    }), mockEnv);
+
+    // A rejected copy leaves its queued reads unused; drop them so they cannot leak into later tests.
+    afterEach(() => {
+      dbMocks.selectChain.limit.mockReset();
     });
 
-    const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    it.each([
+      ['a Free user', { plan: 'free' as const, source: 'free' as const }],
+      ['a user whose Personal override is not Pro', { plan: 'free' as const, source: 'user_override' as const }],
+    ])('asks %s to upgrade before copying into Personal, and reads or writes nothing', async (_label, entitlement) => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+      vi.mocked(getEntitlementsForUser).mockResolvedValue({ ...entitlement, limits: { maxTemplates: 1, maxActiveRuns: 3 } });
+      dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 0 }]).mockResolvedValueOnce([publicSource]);
 
-    expect(response.status).toBe(200);
-    expect(data.id).toBeDefined();
-  });
+      const response = await clone({ visibility: 'private' });
+      const data = await response.json();
 
-  it('should reject cloning templates when free user reaches template limit', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 1 }]);
-
-    const request = new Request('http://localhost/api/templates/template-1/clone', {
-      method: 'POST',
-      body: JSON.stringify({ visibility: 'private' }),
+      expect(response.status).toBe(403);
+      expect(data.code).toBe('upgrade_required');
+      expect(dbMocks.selectChain.limit).not.toHaveBeenCalled();
+      expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
     });
 
-    const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    it('lets a Free user copy into a Free Organization they edit while it is under its limit', async () => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+      dbMocks.selectChain.limit
+        .mockResolvedValueOnce([editor])
+        .mockResolvedValueOnce([{ count: 0 }])
+        .mockResolvedValueOnce([publicSource])
+        .mockResolvedValueOnce([]);
 
-    expect(response.status).toBe(403);
-    expect(data.code).toBe('limit_reached');
+      const response = await clone({ visibility: 'private', teamId: 'team-1' });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.id).toBeDefined();
+      expect(vi.mocked(getEntitlementsForUser)).not.toHaveBeenCalled();
+      expect(dbMocks.insertChain.values.mock.calls[0][0]).toEqual(expect.objectContaining({ owner_type: 'team', team_id: 'team-1' }));
+    });
+
+    it('stops a copy into a Free Organization at its template limit', async () => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+      dbMocks.selectChain.limit.mockResolvedValueOnce([editor]).mockResolvedValueOnce([{ count: 1 }]);
+
+      const response = await clone({ visibility: 'private', teamId: 'team-1' });
+      const data = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(data.code).toBe('limit_reached');
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    });
   });
 
   it('should clone a public template for pro users', async () => {
@@ -1283,7 +1308,7 @@ describe('Templates Handlers', () => {
       plan: 'pro',
       limits: { maxTemplates: null, maxActiveRuns: null },
     });
-    // limit() order: source lookup, template count check, base slug collision check.
+    // limit() order: source lookup, base slug collision check (Pro has no template count check).
     dbMocks.selectChain.limit.mockResolvedValueOnce([
       {
         id: 'template-1',
