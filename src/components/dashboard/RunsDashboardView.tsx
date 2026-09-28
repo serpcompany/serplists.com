@@ -53,6 +53,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 import { toast } from 'sonner';
+import { getRevalidateRunErrorMessage } from '@/lib/editConflicts';
 import { createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
 
 type StatusFilter = 'all' | 'in_progress' | 'completed';
@@ -339,7 +340,7 @@ export function RunsDashboardView({
                             await onRevalidateRun(run);
                             toast.success('Run revalidated against the latest template');
                           } catch (error) {
-                            toast.error(error instanceof Error ? error.message : 'Unable to revalidate run');
+                            toast.error(getRevalidateRunErrorMessage(error));
                           } finally {
                             setRevalidatingRunId(null);
                           }

@@ -21,6 +21,7 @@ import {
   Tag,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getTemplateChangeErrorMessage, isStaleRecordError } from '@/lib/editConflicts';
 
 import {
   AlertDialog,
@@ -188,6 +189,7 @@ const TemplateDetail = () => {
     loading,
     notFound,
     recordTemplateSave,
+    reloadTemplate,
     saveTemplate,
     shareTemplate,
     startRun,
@@ -397,11 +399,13 @@ const TemplateDetail = () => {
         nextIsPublic ? 'Template is now public' : 'Template is now private',
       );
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'Failed to update template visibility',
-      );
+      // A stale version: reload before re-enabling the switch, so the next toggle is built
+      // on the stored template instead of repeating the 409.
+      if (isStaleRecordError(error)) {
+        setVisibilityOverride(null);
+        await reloadTemplate();
+      }
+      toast.error(getTemplateChangeErrorMessage(error, 'Failed to update template visibility'));
     } finally {
       setIsUpdatingVisibility(false);
     }

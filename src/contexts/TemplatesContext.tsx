@@ -3,6 +3,7 @@ import { useAuth } from "./CloudflareAuthContext";
 import { useWorkspace } from "./WorkspaceContext";
 import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { isStaleRecordError } from "@/lib/editConflicts";
 import { prepareTemplatesForImport } from "@/lib/utils/templateBackup";
 import { 
   ChecklistTemplate, 
@@ -273,6 +274,10 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       });
     },
     onSuccess: () => refreshAfterTemplateSave(queryClient),
+    // A conflict means the cached copy is stale: lists reload when a page shows them again.
+    onError: (error) => {
+      if (isStaleRecordError(error)) void queryClient.invalidateQueries({ queryKey: ['templates'], refetchType: 'none' });
+    },
   });
 
   const deleteTemplateMutation = useMutation({
@@ -361,6 +366,11 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     },
     onSuccess: async () => {
       await refreshRunLists(queryClient);
+    },
+    // The runs page sent a stale revision: reload the list before rejecting, so the button
+    // re-enables on the current revision (or disappears) instead of repeating the conflict.
+    onError: async (error) => {
+      if (isStaleRecordError(error)) await refreshRunLists(queryClient);
     },
   });
 

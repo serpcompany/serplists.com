@@ -79,6 +79,7 @@ export function createTemplateDetailLoader(params: {
   let state = initialTemplateDetailViewState;
   let shownKey: string | null = null;
   let loadKey: string | null = null;
+  let lastSource: TemplateDetailSource | null = null;
   let request = 0;
 
   const update = (next: Partial<TemplateDetailViewState>) => {
@@ -86,8 +87,21 @@ export function createTemplateDetailLoader(params: {
     params.onChange(state);
   };
 
+  const load = (source: TemplateDetailSource, displayKey: string): Promise<void> => {
+    const current = ++request;
+    return params
+      .load(source)
+      .catch((): LoadResult => ({ notFound: true, template: null }))
+      .then((result) => {
+        if (current !== request) return;
+        shownKey = displayKey;
+        update({ loading: false, notFound: result.notFound, template: result.template });
+      });
+  };
+
   return {
     sync(source: TemplateDetailSource, viewerUserId?: string) {
+      lastSource = source;
       const nextLoadKey = getTemplateDetailLoadKey(source, viewerUserId);
       if (nextLoadKey === loadKey) {
         const refreshed = resolveTemplateDetailRefresh(state.template, findCachedCopy(source, state.template));
@@ -97,16 +111,18 @@ export function createTemplateDetailLoader(params: {
 
       loadKey = nextLoadKey;
       const displayKey = getTemplateDetailDisplayKey(source);
-      const current = ++request;
       if (displayKey !== shownKey && !state.loading) update({ loading: true, notFound: false });
-      void params
-        .load(source)
-        .catch((): LoadResult => ({ notFound: true, template: null }))
-        .then((result) => {
-          if (current !== request) return;
-          shownKey = displayKey;
-          update({ loading: false, notFound: result.notFound, template: result.template });
-        });
+      void load(source, displayKey);
+    },
+    // After a 409 edit conflict: load the shown template from the server again, in place and
+    // without the spinner. The list cache is skipped, because its copy is the stale one.
+    reload(): Promise<void> {
+      if (!lastSource) return Promise.resolve();
+      const fresh: TemplateDetailSource =
+        lastSource.mode === 'private'
+          ? { ...lastSource, getCachedTemplate: () => undefined }
+          : { ...lastSource, cachedTemplates: [] };
+      return load(fresh, getTemplateDetailDisplayKey(lastSource));
     },
     // For a change the page made itself, such as sharing the template.
     setTemplate(template: ChecklistTemplate) {
@@ -119,3 +135,5 @@ export function createTemplateDetailLoader(params: {
     },
   };
 }
+
+export type TemplateDetailLoader = ReturnType<typeof createTemplateDetailLoader>;

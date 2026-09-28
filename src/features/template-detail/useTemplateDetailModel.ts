@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { getAccessFailure } from '@/lib/api-errors';
+import { getTemplateChangeErrorMessage, isStaleRecordError } from '@/lib/editConflicts';
 import { api, type TemplateHistoryResponse } from '@/lib/api';
 import { getBillingStatusQueryKey } from '@/lib/billing';
 import {
@@ -13,7 +14,6 @@ import {
   buildCanonicalPublicTemplatePath,
   resolvePublicTemplateOwnerSlug,
 } from '@/lib/routes';
-import type { TemplateUpdateResult } from '@/lib/templateUpdateResult';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
 import {
@@ -22,11 +22,11 @@ import {
   resolveTemplateOwnerProfile,
 } from './templateDetailMappers';
 import {
-  applyTemplateSaveResult,
   createTemplateDetailLoader,
   initialTemplateDetailViewState,
   type TemplateDetailViewState,
 } from './templateDetailLoader';
+import { createTemplateDetailRefresh } from './templateDetailRefresh';
 
 type TemplateDetailApiClient = Pick<
   typeof api,
@@ -369,15 +369,12 @@ export const useTemplateDetailModel = (
     retry: false,
   });
 
-  const invalidateTemplates = async () => {
-    if (!options.userId) {
-      return;
-    }
-
-    await queryClient.invalidateQueries({
-      queryKey: ['templates', options.userId],
-    });
-  };
+  const { invalidateTemplates, recordTemplateSave, reloadTemplate } = createTemplateDetailRefresh({
+    loader,
+    queryClient,
+    template,
+    userId: options.userId,
+  });
 
   const startRun = async (runName?: string): Promise<TemplateDetailActionResult> =>
     startTemplateRun({
@@ -458,16 +455,15 @@ export const useTemplateDetailModel = (
         shareUrl: `${window.location.origin}${publicPath}`,
       };
     } catch (error) {
+      if (isStaleRecordError(error)) {
+        await reloadTemplate();
+        return { kind: 'error', message: getTemplateChangeErrorMessage(error, '') };
+      }
       return mapActionFailure(
         error,
         'Failed to create a share link for this template.',
       );
     }
-  };
-
-  // A save made on this page (the visibility switch): show the version the server stored.
-  const recordTemplateSave = (change: Partial<ChecklistTemplate>, saved: TemplateUpdateResult) => {
-    if (template) loader.setTemplate(applyTemplateSaveResult(template, change, saved));
   };
 
   return {
@@ -480,6 +476,7 @@ export const useTemplateDetailModel = (
     loading,
     notFound,
     recordTemplateSave,
+    reloadTemplate,
     saveTemplate,
     shareTemplate,
     startRun,

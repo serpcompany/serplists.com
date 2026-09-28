@@ -42,7 +42,7 @@ Canonical private routes:
 - Runs record both the template content version last reconciled and a run revision. API responses expose `is_stale` when the source checklist structure is newer; metadata-only template edits do not stale runs.
 - Completed, archived, and publicly shared runs are frozen when a template changes. A completed private run can be explicitly reconciled and reopened with `POST /api/checklists/:id/revalidate`.
 - Runs that predate stable identities are conservatively marked stale during migration. Their legacy IDs are backfilled deterministically, and their completion/notes remain intact until explicit reconciliation.
-- Run and template saves use optimistic revision/version markers. A stale editor receives `409 edit_conflict` instead of overwriting newer work.
+- Run and template saves use optimistic revision/version markers. A stale editor receives `409 edit_conflict` instead of overwriting newer work. Where the page can reload the record without losing the user's input, it does so before the control re-enables: Revalidate on the runs list reloads the list (also on `409 shared_run_conflict` or a `404`), and the template page's visibility switch and share action reload the template, so the next click sends the current revision or version. The template editor keeps the user's draft and only reports the conflict.
 - Run-level sharing creates public `/share/:token` links.
 - Guests can open shared runs without logging in and update checklist completion state.
 - Shared runs do not expose owner-only title editing or destructive actions.
@@ -93,6 +93,6 @@ Password for all seeded users: `password123`.
 - `403 Forbidden`: the user is signed in but lacks the required role or permission.
 - `503 billing_unavailable`: paid action cannot be started because billing config is unavailable.
 - `503 auth_email_unavailable`: auth email delivery is unavailable for flows that require outbound email.
-- `409 edit_conflict`: a template or run changed after the editor loaded it; refresh before retrying.
+- `409 edit_conflict`: a template or run changed after the editor loaded it; refresh before retrying (the runs list and the template page refresh by themselves, see `src/lib/editConflicts.ts`).
 
 The client preserves API `status`, `code`, and `details` so UI behavior does not depend on string matching generic error messages.
