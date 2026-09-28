@@ -16,6 +16,7 @@ import {
   normalizeMarkdownDisplayText,
 } from '@/lib/utils/markdownDisplay';
 import { getSectionDisplayTitle, getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
+import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
 import { safeUrl } from '@/lib/utils/safeUrl';
 import type {
   ChecklistItem,
@@ -80,26 +81,29 @@ export function PublicTemplateContent({
           </div>
         ) : null;
 
-      case 'embed':
+      case 'embed': {
+        // Shown as a link (a URL, or the src of pasted iframe code) or as text, never as HTML.
+        const embedLink = getEmbedLinkUrl(content.value);
         return content.value ? (
           <div className="mt-3 border-l-2 border-border/70 pl-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
-              <Link2 className="h-4 w-4" />
-              {safeUrl(content.value) ? (
+              <Link2 className="h-4 w-4 shrink-0" />
+              {embedLink ? (
                 <a
-                  href={safeUrl(content.value)}
+                  href={embedLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-foreground underline-offset-4 hover:underline"
+                  className="break-all text-foreground underline-offset-4 hover:underline"
                 >
-                  {content.value}
+                  {embedLink}
                 </a>
               ) : (
-                <span className="text-muted-foreground">Invalid link</span>
+                <span className="min-w-0 whitespace-pre-wrap break-words">{content.value}</span>
               )}
             </div>
           </div>
         ) : null;
+      }
 
       case 'subItems':
         return content.subItems?.length ? (

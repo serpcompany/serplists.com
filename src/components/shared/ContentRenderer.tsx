@@ -6,6 +6,7 @@ import { VideoEmbed } from './VideoEmbed';
 import { File, Code, ListCheck } from 'lucide-react';
 import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
 import { getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
+import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
 import { normalizeMarkdownDisplayText } from '@/lib/utils/markdownDisplay';
 import { safeUrl } from '@/lib/utils/safeUrl';
 
@@ -82,9 +83,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
           
           {content.type === "embed" && content.value && (
             <div className="border rounded-lg p-4 bg-muted/20">
-              {safeUrl(content.value) ? (
+              {getEmbedLinkUrl(content.value) ? (
                 <a 
-                  href={safeUrl(content.value)} 
+                  href={getEmbedLinkUrl(content.value)} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   aria-label="Open embedded content"

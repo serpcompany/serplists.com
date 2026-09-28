@@ -117,4 +117,29 @@ describe('templateMarkdown', () => {
     expect(html).toContain('class="content-block card"');
     expect(html).toContain('Launch Checklist');
   });
+
+  it('links an embed to its URL or iframe src in the html preview, and shows other code as text', () => {
+    const embedTemplate = normalizePortableTemplate({
+      title: 'Embeds',
+      sections: [{
+        title: 'Watch',
+        items: [{
+          title: 'Walkthrough',
+          contents: [
+            { type: 'embed', value: 'https://status.example.com' },
+            { type: 'embed', value: `<iframe src='https://www.youtube.com/embed/abc'></iframe>` },
+            { type: 'embed', value: '<script src="https://example.com/widget.js"></script>' },
+          ],
+        }],
+      }],
+    });
+
+    const html = renderTemplatePreviewHtml(embedTemplate);
+    const hrefs = Array.from(html.matchAll(/href="([^"]*)"/g), (match) => match[1]);
+
+    expect(hrefs).toEqual(['https://status.example.com', 'https://www.youtube.com/embed/abc']);
+    expect(html).toContain('&lt;script src=&quot;https://example.com/widget.js&quot;&gt;&lt;/script&gt;</pre>');
+    expect(html).not.toContain('<script src');
+    expect(html).not.toContain('<iframe');
+  });
 });

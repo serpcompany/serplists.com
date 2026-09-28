@@ -10,6 +10,7 @@ import {
   parseTemplateMarkdownBody,
   renderTemplateMarkdownBlock,
 } from "@/lib/templates/templateMarkdownBody";
+import { getEmbedLinkUrl } from "@/lib/utils/embedLink";
 
 const FRONTMATTER_DELIMITER = "---";
 const TEMPLATE_TITLE_PREFIX = "# ";
@@ -350,7 +351,12 @@ const renderPreviewCard = (content: NonNullable<PortableChecklistTemplate["secti
     return `<div class="content-block card file-card"><div class="card-label">File</div><div class="file-name">${escapeHtml(content.fileName || content.value)}</div><div class="card-meta"><a href="${escapeHtml(content.value)}">Open file</a>${content.fileSize ? ` <span>· ${escapeHtml(formatBytes(content.fileSize) || "")}</span>` : ""}</div></div>`;
   }
 
-  return `<div class="content-block card embed-card"><div class="card-label">${escapeHtml(inferEmbedProvider(content.value))}</div><div class="embed-url"><a href="${escapeHtml(content.value)}">${escapeHtml(content.value)}</a></div></div>`;
+  // Like the app: a link to the URL or to pasted iframe code's src, else the code as text.
+  const embedLink = getEmbedLinkUrl(content.value);
+  const embedBody = embedLink
+    ? `<a href="${escapeHtml(embedLink)}">${escapeHtml(embedLink)}</a>`
+    : `<pre style="white-space: pre-wrap; overflow-wrap: anywhere;">${escapeHtml(content.value)}</pre>`;
+  return `<div class="content-block card embed-card"><div class="card-label">${escapeHtml(inferEmbedProvider(content.value))}</div><div class="embed-url">${embedBody}</div></div>`;
 };
 
 export const renderTemplatePreviewHtml = (template: PortableChecklistTemplate) => {

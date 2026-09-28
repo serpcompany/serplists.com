@@ -87,3 +87,28 @@ describe('EmbedContentEditor', () => {
     expect(countMatches(markup, /<input\b/g)).toBe(0);
   });
 });
+
+// Viewers get a link to a URL or to the src of iframe code, and see anything else as
+// text, so the field must not promise script embeds and shows what viewers will get.
+describe('EmbedField help and preview', () => {
+  it('does not offer script embeds', () => {
+    expect(renderField('')).not.toMatch(/script/i);
+  });
+
+  it('previews the link viewers get for iframe code', () => {
+    const markup = renderField(`<iframe src='https://www.youtube.com/embed/abc'></iframe>`);
+
+    expect(markup).toContain('Embed URL: https://www.youtube.com/embed/abc');
+  });
+
+  it('says when a value has no link and will be shown as text', () => {
+    const markup = renderField('<script src="https://example.com/widget.js"></script>');
+
+    expect(markup).not.toContain('Embed URL:');
+    expect(markup).toContain('viewers will see it as text');
+  });
+
+  it('shows no note for an empty field', () => {
+    expect(renderField('')).not.toContain('viewers will see it as text');
+  });
+});

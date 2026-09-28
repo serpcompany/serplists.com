@@ -302,5 +302,8 @@ Supported types:
 - `image`
 - `video`
 - `file`
-- `embed` (URL or raw text)
+- `embed` (URL, iframe embed code, or raw text). Nothing renders the value as HTML:
+  the app and `preview.html` link to an absolute http(s) URL, or to the `src` of
+  iframe code, and show any other value (script tags, plain text) as text
+  (`src/lib/utils/embedLink.ts`).
 - `subItems` (nested checklist)

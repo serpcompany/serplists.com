@@ -3,6 +3,7 @@ import { Label } from './label';
 import { Textarea } from './textarea';
 import { Code } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
 
 interface EmbedFieldProps {
   value: string;
@@ -19,6 +20,8 @@ export const EmbedField: React.FC<EmbedFieldProps> = ({
 }) => {
   const fieldId = React.useId();
   const isUrl = URL_PREFIX.test(value.trimStart());
+  // What viewers get: a link to this URL (or to the src of iframe code), else the text.
+  const embedLink = getEmbedLinkUrl(value);
 
   // One textarea for both modes: swapping element types when the value crosses
   // "https://" would remount the control and drop focus, the caret and undo history.
@@ -48,17 +51,20 @@ export const EmbedField: React.FC<EmbedFieldProps> = ({
       />
 
       <p className="text-xs text-muted-foreground">
-        Enter an embed URL or HTML embed code (iframe, script, etc.)
+        Enter a URL or iframe embed code. Viewers get a link to the URL.
       </p>
 
-      {/* Preview for embed URLs */}
-      {value && isUrl && (
+      {embedLink ? (
         <div className="border rounded-lg p-2 bg-muted">
-          <p className="text-sm text-muted-foreground">
-            Embed URL: {value}
+          <p className="break-all text-sm text-muted-foreground">
+            Embed URL: {embedLink}
           </p>
         </div>
-      )}
+      ) : value.trim() ? (
+        <p className="text-xs text-muted-foreground">
+          No web address found, so viewers will see it as text.
+        </p>
+      ) : null}
     </div>
   );
 };
