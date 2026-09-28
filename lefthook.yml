@@ -1,27 +1,15 @@
+# Installed automatically by `pnpm install` (the `prepare` script).
+# Commit hooks stay fast (staged files only); push runs the full gate CI runs.
 pre-commit:
   parallel: true
   commands:
     secret-scan:
-      run: pnpm secret:scan
+      run: pnpm exec secretlint {staged_files}
     lint:
-      run: pnpm lint
-    typecheck:
-      run: pnpm typecheck
-    typecheck-env:
-      run: pnpm typecheck:env
-    unit-tests:
-      run: pnpm test:unit
+      glob: "*.{ts,tsx,js,mjs,cjs}"
+      run: pnpm exec eslint --no-warn-ignored --pass-on-unpruned-suppressions {staged_files}
 
 pre-push:
-  parallel: false
   commands:
-    secret-scan:
-      run: pnpm secret:scan
-    lint:
-      run: pnpm lint
-    typecheck:
-      run: pnpm typecheck
-    typecheck-env:
-      run: pnpm typecheck:env
-    unit-tests:
-      run: pnpm test:unit
+    verify:
+      run: pnpm run verify

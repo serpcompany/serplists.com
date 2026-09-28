@@ -1,4 +1,5 @@
-import { existsSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync } from "node:fs";
+import path from "node:path";
 import { spawn } from "node:child_process";
 import {
   buildDevAutoConfig,
@@ -13,6 +14,7 @@ import {
 } from "./dev-auto-lib.mjs";
 
 const DIST_INDEX_PATH = "dist/index.html";
+const LOG_DIR = "tmp/logs";
 
 function getMode() {
   const rawMode = process.argv[2] ?? "all";
@@ -123,6 +125,24 @@ function printStartupSummary({
   }
 }
 
+// Mirror dev server output into tmp/logs/dev-<mode>.log (ANSI stripped) so agents and
+// humans can search it after the fact, e.g. grep '"level":"error"' tmp/logs/dev-all.log
+function teeToLogFile(child, mode) {
+  mkdirSync(LOG_DIR, { recursive: true });
+  const logPath = path.join(LOG_DIR, `dev-${mode}.log`);
+  const logFile = createWriteStream(logPath, { flags: "w" });
+  const ansi = /\x1b\[[0-9;]*[A-Za-z]/g;
+  const forward = (source, target) => {
+    source.on("data", (chunk) => {
+      target.write(chunk);
+      logFile.write(chunk.toString().replace(ansi, ""));
+    });
+  };
+  forward(child.stdout, process.stdout);
+  forward(child.stderr, process.stderr);
+  console.log(`Logs: ${logPath}`);
+}
+
 async function main() {
   const mode = getMode();
   const fileEnv = parseEnvFile(".dev.vars");
@@ -163,9 +183,10 @@ async function main() {
   const command = buildCommands(mode, config);
   const child = spawn(command.executable, command.args, {
     cwd: process.cwd(),
-    env: childEnv,
-    stdio: "inherit",
+    env: { ...childEnv, FORCE_COLOR: childEnv.FORCE_COLOR ?? "1" },
+    stdio: ["inherit", "pipe", "pipe"],
   });
+  teeToLogFile(child, mode);
 
   const cleanupSession = () => {
     releaseDevSession({

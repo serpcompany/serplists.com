@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   exportTemplatesToJSON,
-  downloadBackupFile,
   parseBackupFile,
   parseTemplatesFromFile,
   parseTemplatesFromJSON,
@@ -15,7 +14,6 @@ const mockCreateElement = vi.fn();
 const mockAppendChild = vi.fn();
 const mockRemoveChild = vi.fn();
 const mockClick = vi.fn();
-const mockCreateObjectURL = vi.fn();
 const mockRevokeObjectURL = vi.fn();
 
 describe('Template Backup Utilities', () => {

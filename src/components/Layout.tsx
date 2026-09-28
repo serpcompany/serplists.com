@@ -150,7 +150,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       >
         <div className="px-3 py-2">
           <p className="font-medium text-popover-foreground">
-            {user?.name || 'Your workspace'}
+            {user?.name || 'Your account'}
           </p>
           <p className="text-sm text-muted-foreground">{user?.email}</p>
         </div>

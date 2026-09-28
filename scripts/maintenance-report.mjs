@@ -1,0 +1,133 @@
+#!/usr/bin/env node
+// Weekly repository maintenance report (Markdown on stdout). Run locally with
+// `pnpm run maintenance:report`; .github/workflows/maintenance.yml posts it as an issue.
+// Every signal here is deterministic; the checklist at the end is for the agent doing the work.
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const read = (file) => readFileSync(path.join(repoRoot, file), "utf8");
+const DAY = 24 * 60 * 60;
+const now = Math.floor(Date.now() / 1000);
+const MAX_LINES = 500;
+const STALE_PLAN_DAYS = 30;
+
+function lastCommitTime(file) {
+  const out = execFileSync("git", ["log", "-1", "--format=%ct", "--", file], { cwd: repoRoot, encoding: "utf8" }).trim();
+  return out ? Number(out) : null;
+}
+
+function walk(dir, predicate) {
+  return readdirSync(path.join(repoRoot, dir), { withFileTypes: true }).flatMap((entry) => {
+    const relative = path.posix.join(dir, entry.name);
+    if (entry.isDirectory()) return entry.name === "node_modules" ? [] : walk(relative, predicate);
+    return predicate(relative) ? [relative] : [];
+  });
+}
+
+function countBy(items, key) {
+  const counts = {};
+  for (const item of items) counts[key(item)] = (counts[key(item)] ?? 0) + 1;
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+}
+
+const sections = [];
+
+// 1. Docs check
+const docs = spawnSync("node", ["scripts/check-docs.mjs"], { cwd: repoRoot, encoding: "utf8" });
+sections.push(
+  "## Docs check",
+  docs.status === 0 ? `Passing. ${docs.stdout.trim()}` : `Failing:\n\n\`\`\`text\n${(docs.stderr || docs.stdout).trim()}\n\`\`\``,
+);
+
+// 2. Docs whose referenced code changed after the doc was last edited
+const docFiles = ["AGENTS.md", "ARCHITECTURE.md", ...walk("docs", (file) => file.endsWith(".md"))];
+const staleDocs = [];
+for (const doc of docFiles) {
+  const docTime = lastCommitTime(doc);
+  if (!docTime) continue;
+  const text = read(doc).replace(/^```[\s\S]*?^```/gm, "");
+  const refs = [...new Set([...text.matchAll(/`((?:src|functions|scripts|db)\/[^`\s*<>{}]+)`/g)].map((match) => match[1]))]
+    .filter((ref) => existsSync(path.join(repoRoot, ref)));
+  const changed = refs.filter((ref) => (lastCommitTime(ref) ?? 0) > docTime);
+  if (changed.length > 0) staleDocs.push({ doc, changed });
+}
+sections.push(
+  "## Docs to re-verify",
+  "Code these docs reference changed after the doc was last edited. Confirm each doc still matches the code.",
+  staleDocs.length === 0
+    ? "None."
+    : staleDocs.map(({ doc, changed }) => `- \`${doc}\`: ${changed.slice(0, 5).map((ref) => `\`${ref}\``).join(", ")}${changed.length > 5 ? `, +${changed.length - 5} more` : ""}`).join("\n"),
+);
+
+// 3. Recorded debt (ratchets)
+const knownViolations = JSON.parse(read(".dependency-cruiser-known-violations.json"));
+const suppressions = JSON.parse(read("eslint-suppressions.json"));
+const suppressionCounts = {};
+for (const rules of Object.values(suppressions)) {
+  for (const [rule, { count }] of Object.entries(rules)) suppressionCounts[rule] = (suppressionCounts[rule] ?? 0) + count;
+}
+sections.push(
+  "## Recorded debt",
+  "Burn these down; never add to them.",
+  "| Source | Rule | Count |\n| --- | --- | --- |\n" +
+    [
+      ...countBy(knownViolations, (violation) => violation.rule.name).map(([rule, count]) => `| dependency-cruiser | \`${rule}\` | ${count} |`),
+      ...Object.entries(suppressionCounts).map(([rule, count]) => `| ESLint suppressions | \`${rule}\` | ${count} |`),
+    ].join("\n"),
+);
+
+// 4. Oversized files
+const oversized = walk("src", (file) => /\.(ts|tsx)$/.test(file))
+  .concat(walk("functions", (file) => file.endsWith(".ts")))
+  .filter((file) => !file.startsWith("src/components/ui/") && !file.endsWith(".d.ts"))
+  .map((file) => ({ file, lines: read(file).split("\n").length }))
+  .filter(({ lines }) => lines > MAX_LINES)
+  .sort((a, b) => b.lines - a.lines);
+sections.push(
+  "## Oversized files",
+  `${oversized.length} files exceed ${MAX_LINES} lines. Split one; then lower its cap in \`eslint.config.js\`.`,
+  oversized.map(({ file, lines }) => `- \`${file}\`: ${lines}`).join("\n"),
+);
+
+// 5. Plans, tech debt, quality score
+const activePlans = walk("docs/exec-plans/active", (file) => file.endsWith(".md")).map((file) => {
+  const updated = read(file).match(/\*\*Last updated:\*\*\s*(\d{4}-\d{2}-\d{2})/)?.[1];
+  const age = updated ? Math.floor((now - Date.parse(updated) / 1000) / DAY) : null;
+  return { file, updated, age };
+});
+const debtRows = read("docs/exec-plans/tech-debt-tracker.md").split("\n").filter((line) => /^\| TD-\d+/.test(line));
+const graded = read("docs/QUALITY_SCORE.md").match(/\*\*Last graded:\*\*\s*(\d{4}-\d{2}-\d{2})/)?.[1] ?? "unknown";
+const STALE_DESIGN_DOC_DAYS = 90;
+const staleDesignDocs = read("docs/design-docs/index.md").split("\n")
+  .map((line) => line.split("|").map((cell) => cell.trim()))
+  .filter((cells) => /^\d{4}-\d{2}-\d{2}$/.test(cells[3] ?? "") && cells[2] !== "historical")
+  .map((cells) => ({ doc: cells[1], age: Math.floor((now - Date.parse(cells[3]) / 1000) / DAY) }))
+  .filter(({ age }) => age > STALE_DESIGN_DOC_DAYS);
+sections.push(
+  "## Plans and scores",
+  [
+    ...activePlans.map(({ file, updated, age }) =>
+      `- \`${file}\`: last updated ${updated ?? "unknown"}${age !== null && age > STALE_PLAN_DAYS ? ` (**${age} days; update or close it**)` : ""}`),
+    `- Tech debt tracker: ${debtRows.length} open items`,
+    `- Quality score last graded: ${graded}`,
+    ...staleDesignDocs.map(({ doc, age }) => `- Design doc ${doc} last verified ${age} days ago; re-verify it against the code`),
+  ].join("\n"),
+);
+
+// 6. Checklist
+sections.push(
+  "## This week's checklist",
+  [
+    "- [ ] Fix any docs-check failures and re-verify the docs listed above against the code.",
+    "- [ ] Pay down one recorded-debt item or oversized file in a small PR (prune the baseline it came from).",
+    "- [ ] Update or close stale active plans; move finished plans to `docs/exec-plans/completed/`.",
+    "- [ ] Re-grade `docs/QUALITY_SCORE.md` if the code in a domain changed materially.",
+    "- [ ] If a new failure pattern appeared in recent PRs, add it to `docs/design-docs/core-beliefs.md` and, where possible, a lint or check.",
+  ].join("\n"),
+  "See [agent workflow](docs/design-docs/agent-workflow.md#weekly-maintenance) for how to work this issue.",
+);
+
+console.log(`# Repository maintenance report\n\nGenerated ${new Date().toISOString().slice(0, 10)} by \`pnpm run maintenance:report\`.\n\n${sections.join("\n\n")}\n`);

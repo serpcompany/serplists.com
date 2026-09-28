@@ -6,9 +6,7 @@ import {
   PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION
 } from "@/lib/schemas/checklistSchema";
 import type { 
-  ChecklistTemplate, 
   ChecklistTemplateImport,
-  ChecklistSection,
   PortableChecklistTemplate,
   PortableTemplatePack,
   TemplateBackup
@@ -21,11 +19,17 @@ import {
   parseTemplateMarkdown,
   parseTemplateYaml,
 } from "@/lib/templates/templateMarkdown";
-import type { TemplateImportOptions } from "@/types/checklist";
+import type { ChecklistSection, ChecklistTemplate, TemplateImportOptions } from "@/types/checklist";
 
 export type TemplateImportWarning = {
   templateTitle: string;
   message: string;
+};
+
+// Backup built from in-app templates. Their content ids are optional, so this is not
+// guaranteed to satisfy the stricter `TemplateBackup` schema used when validating uploads.
+export type TemplateBackupExport = Omit<TemplateBackup, "templates"> & {
+  templates: ChecklistTemplate[];
 };
 
 export type TemplateImportResult = {
@@ -183,11 +187,11 @@ const collectAssetWarnings = (templates: ChecklistTemplate[]): TemplateImportWar
 export const exportTemplatesToJSON = (
   templates: ChecklistTemplate[], 
   exportedBy?: string
-): TemplateBackup => {
+): TemplateBackupExport => {
   const publicTemplates = templates.filter(t => t.isPublic);
   const privateTemplates = templates.filter(t => !t.isPublic);
 
-  const backup: TemplateBackup = {
+  const backup: TemplateBackupExport = {
     version: "1.0.0",
     exportedAt: new Date().toISOString(),
     exportedBy,
@@ -240,7 +244,7 @@ export const exportPortableTemplatesToJSON = (
  * Download backup as JSON file
  */
 export const downloadBackupFile = (
-  backup: TemplateBackup | PortableTemplatePack,
+  backup: TemplateBackupExport | PortableTemplatePack,
   filename?: string
 ): void => {
   const jsonString = JSON.stringify(backup, null, 2);
@@ -267,7 +271,7 @@ export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
-    reader.onload = (event: Event) => {
+    reader.onload = (event) => {
       try {
         const jsonString = event.target?.result as string;
         const data = JSON.parse(jsonString);
@@ -331,7 +335,7 @@ export const parseTemplatesFromData = (data: unknown): TemplateImportResult => {
 export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImportResult> => {
   const jsonString = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (event: Event) => resolve(event.target?.result as string);
+    reader.onload = (event) => resolve(event.target?.result as string);
     reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsText(file);
   });
@@ -350,7 +354,7 @@ export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImport
 export const parseTemplatesFromFile = async (file: File): Promise<TemplateImportResult> => {
   const sourceString = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (event: Event) => resolve(event.target?.result as string);
+    reader.onload = (event) => resolve(event.target?.result as string);
     reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsText(file);
   });

@@ -6,6 +6,7 @@ import type { Env } from "./types";
 import { createDb, schema } from "./db";
 import { resolveAuthSecret } from "./utils/auth-secret";
 import { resolveConfiguredCorsOrigins } from "./utils/cors";
+import { log } from "./utils/logger";
 
 const sendEmail = async (
   env: Env,
@@ -146,16 +147,17 @@ export function createBetterAuth(env: Env, request: Request) {
   const isSecure = origin.startsWith("https://");
 
   const db = createDb(env);
-  const plugins = [username()];
-
-  if (shouldCheckBreachedPassword(env, request)) {
-    plugins.push(
-      haveIBeenPwned({
-        customPasswordCompromisedMessage:
-          "Please choose a less common password.",
-      }),
-    );
-  }
+  const plugins = [
+    username(),
+    ...(shouldCheckBreachedPassword(env, request)
+      ? [
+          haveIBeenPwned({
+            customPasswordCompromisedMessage:
+              "Please choose a less common password.",
+          }),
+        ]
+      : []),
+  ];
 
   return betterAuth({
     secret: authSecret,
@@ -166,11 +168,11 @@ export function createBetterAuth(env: Env, request: Request) {
     }),
     emailAndPassword: {
       enabled: true,
-      sendResetPassword: async ({ user, url }, request) => {
+      sendResetPassword: async ({ user, url }) => {
         await sendPasswordResetEmail(env, { to: user.email, url });
       },
-      onPasswordReset: async ({ user }, request) => {
-        console.info(`Password reset completed for ${user.email}`);
+      onPasswordReset: async ({ user }) => {
+        log("info", "password_reset_completed", { userId: user.id });
       },
       requireEmailVerification: authEmailPolicy.emailVerificationRequired,
       minPasswordLength: 10,
@@ -182,7 +184,7 @@ export function createBetterAuth(env: Env, request: Request) {
     },
     emailVerification: {
       sendOnSignUp: authEmailPolicy.emailVerificationRequired,
-      sendVerificationEmail: async ({ user, url }, request) => {
+      sendVerificationEmail: async ({ user, url }) => {
         await sendEmailVerificationEmail(env, { to: user.email, url });
       },
     },

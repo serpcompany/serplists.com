@@ -14,8 +14,7 @@ import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { toast } from "sonner";
 import { downloadBackupFile, exportPortableTemplatesToJSON, parseTemplatesFromFile } from "@/lib/utils/templateBackup";
 import type { TemplateImportResult } from "@/lib/utils/templateBackup";
-import type { ChecklistTemplate } from "@/lib/schemas/checklistSchema";
-import type { TemplateImportOptions, TemplateImportSummary } from "@/types/checklist";
+import type { ChecklistTemplate, TemplateImportOptions, TemplateImportSummary } from "@/types/checklist";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
@@ -76,11 +75,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const plan = billing.data?.plan ?? "free";
   const billingEnabled = billing.data?.billingEnabled ?? true;
   const hasBackupAccess = plan === "pro" || plan === "team";
-  const workspaceTemplateLabel = isTeamWorkspace ? "Workspace Templates" : "My Templates";
+  const workspaceTemplateLabel = isTeamWorkspace ? "Organization Templates" : "My Templates";
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<TemplateImportResult | null>(null);
   const [lastImportSummary, setLastImportSummary] = useState<TemplateImportSummary | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [includePublicTemplates, setIncludePublicTemplates] = useState(false);
   const [importVisibility, setImportVisibility] = useState<ImportVisibility>("preserve");
 
@@ -98,7 +96,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 
   const handleUpgrade = async () => {
     if (isTeamWorkspace) {
-      toast.error("This team needs workspace import/export access.");
+      toast.error("Template import/export requires a paid Organization plan.");
       return;
     }
     await startBillingCheckout(billingEnabled);
@@ -109,7 +107,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       const failure = getAccessFailure(error, fallbackMessage);
       toast.error(
         failure.kind === "upgrade_required"
-          ? "This team needs workspace import/export access."
+          ? "Template import/export requires a paid Organization plan."
           : failure.message,
       );
       return;
@@ -128,7 +126,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     }
 
     if (!canEditTemplates) {
-      toast.error("You need editor access to export workspace templates.");
+      toast.error("You need editor access to export this Organization's templates.");
       return;
     }
 
@@ -170,7 +168,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       toast.error("Import file too large (max 2MB)");
       return;
     }
-    setSelectedFile(file);
     setLastImportSummary(null);
     setIsImporting(true);
     try {
@@ -188,7 +185,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     if (!importPreview || !user) return;
 
     if (!canEditTemplates) {
-      toast.error("You need editor access to import workspace templates.");
+      toast.error("You need editor access to import templates into this Organization.");
       return;
     }
 
@@ -226,7 +223,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
         toast.success(`Successfully imported ${result.imported}/${result.total} templates`);
       }
       setImportPreview(null);
-      setSelectedFile(null);
       // Reset file input
       const fileInput = document.getElementById('template-file-input') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
@@ -238,7 +234,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   };
   const handleCancelImport = () => {
     setImportPreview(null);
-    setSelectedFile(null);
     const fileInput = document.getElementById('template-file-input') as HTMLInputElement;
     if (fileInput) fileInput.value = '';
   };
@@ -388,10 +383,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
               <div className="flex items-start gap-3">
                 <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5" />
                 <div className="space-y-1">
-                  <div className="font-medium">{isTeamWorkspace ? "Workspace feature" : "Pro feature"}</div>
+                  <div className="font-medium">{isTeamWorkspace ? "Paid Organization feature" : "Pro feature"}</div>
                   <div className="text-sm text-muted-foreground">
                     {isTeamWorkspace
-                      ? "This team needs workspace import/export access."
+                      ? "Template import/export requires a paid Organization plan."
                       : billingEnabled
                         ? "Template import/export is available on Pro."
                         : "Billing is temporarily unavailable. Please contact support."}
@@ -413,7 +408,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                 <div className="space-y-1">
                   <div className="font-medium">Editor access required</div>
                   <div className="text-sm text-muted-foreground">
-                    You can view this workspace, but importing or exporting templates requires editor access.
+                    You can view this Organization, but importing or exporting templates requires editor access.
                   </div>
                 </div>
               </div>

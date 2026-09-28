@@ -1,12 +1,11 @@
 # SERP Lists
 
-This `README` is intentionally a pointer file.
+Reusable templates for SOPs, checklists, and audits, executed as trackable runs.
 
-Use the docs hub for everything project-related:
-- Documentation home: [docs/index.md](docs/index.md)
-- Product language: [CONTEXT.md](CONTEXT.md)
-- Architecture decisions: [docs/adr/](docs/adr/)
-- Local setup: [docs/getting-started/development-setup.md](docs/getting-started/development-setup.md)
-- Daily commands: [docs/getting-started/quick-reference.md](docs/getting-started/quick-reference.md)
-- Architecture: [docs/architecture/system-overview.md](docs/architecture/system-overview.md)
-- Operations and deploys: [docs/operations/operations-playbook.md](docs/operations/operations-playbook.md)
+This README is intentionally a pointer file:
+
+- Start here (humans and agents): [AGENTS.md](AGENTS.md), the map of the repository
+- Architecture, layers, and stack: [ARCHITECTURE.md](ARCHITECTURE.md)
+- Product principles and vocabulary: [docs/PRODUCT_SENSE.md](docs/PRODUCT_SENSE.md)
+- Local setup: [docs/design-docs/development-environment.md](docs/design-docs/development-environment.md)
+- Deploys and operations: [docs/RELIABILITY.md](docs/RELIABILITY.md)

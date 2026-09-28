@@ -13,7 +13,7 @@ async function registerAccount(page: Page, account: { email: string; name: strin
   await page.locator('#password').fill(PASSWORD);
   await page.locator('#confirmPassword').fill(PASSWORD);
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('button', { name: 'Switch workspace' })).toBeVisible({
+  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
     timeout: 30_000,
   });
 }
@@ -84,7 +84,7 @@ async function expectWorkspaceSelected(
   responses: string[],
 ) {
   try {
-    await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText(
+    await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(
       teamName,
       { timeout: 15_000 },
     );
@@ -118,9 +118,9 @@ test('@smoke team invite flow works through link and account settings', async ({
   await page.goto('/dashboard/settings');
   await page.locator('#team-name').fill(teamName);
   await page.locator('#team-slug').fill(`flow-${suffix.toLowerCase()}`);
-  await page.getByRole('button', { name: 'Create team' }).click();
+  await page.getByRole('button', { name: 'Create Organization' }).click();
 
-  await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText(
+  await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(
     teamName,
     { timeout: 15_000 },
   );
@@ -165,7 +165,7 @@ test('@smoke team invite flow works through link and account settings', async ({
   await settingsInviteePage
     .getByRole('button', { name: `Accept invite to ${teamName}` })
     .click();
-  await expect(settingsInviteePage.getByRole('button', { name: 'Switch workspace' })).toContainText(
+  await expect(settingsInviteePage.getByRole('button', { name: 'Switch context' })).toContainText(
     teamName,
     { timeout: 15_000 },
   );
@@ -175,7 +175,7 @@ test('@smoke team invite flow works through link and account settings', async ({
 
   await page.goto('/dashboard/settings');
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText(
+  await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(
     teamName,
     { timeout: 15_000 },
   );

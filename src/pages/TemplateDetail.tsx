@@ -228,7 +228,7 @@ const TemplateDetail = () => {
 
   const handleUpgradeRequired = async () => {
     if (isTeamWorkspace) {
-      toast.error('This team needs workspace access before using this feature.');
+      toast.error('This Organization needs a paid plan before using this feature.');
       return;
     }
 

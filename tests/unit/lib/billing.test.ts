@@ -22,7 +22,7 @@ describe("getBillingStatusQueryKey", () => {
   });
 
   it("does not treat an unknown billing plan as free", () => {
-    expect(getBillingPlanLabel("team")).toBe("Team");
+    expect(getBillingPlanLabel("team")).toBe("Paid");
     expect(getBillingPlanLabel("pro")).toBe("Pro");
     expect(getBillingPlanLabel("free")).toBe("Free");
     expect(getBillingPlanLabel()).toBeNull();

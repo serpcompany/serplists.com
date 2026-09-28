@@ -27,7 +27,7 @@ export function WorkspaceSwitcher() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          aria-label="Switch workspace"
+          aria-label="Switch context"
           className="h-9 max-w-[220px] justify-start gap-2 rounded-md px-2"
           variant="outline"
         >
@@ -41,7 +41,7 @@ export function WorkspaceSwitcher() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
-        <DropdownMenuLabel>Workspace</DropdownMenuLabel>
+        <DropdownMenuLabel>Personal and Organizations</DropdownMenuLabel>
         {workspaces.map((workspace) => {
           const Icon = workspace.type === 'team' ? Users : User;
           const selected = workspace.id === activeWorkspace.id;
@@ -75,7 +75,7 @@ export function WorkspaceSwitcher() {
         <DropdownMenuItem asChild>
           <Link to={buildConsoleSettingsPath()} className="gap-3">
             <Settings className="h-4 w-4 text-muted-foreground" />
-            Team settings
+            Settings
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
