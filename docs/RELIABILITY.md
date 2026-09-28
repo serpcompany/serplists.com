@@ -43,7 +43,12 @@ pass. The deploy workflow:
    `pnpm run verify:staging` for other branches
 3. builds with full git history (`fetch-depth: 0`), because sitemap `lastmod`
    values come from `git log`; a shallow clone would stamp every page with the
-   deploy date
+   deploy date, so `sitemap:generate` fails on one in CI. Each bundled Template is
+   dated by the newest commit on the built branch (first-parent) that changed its
+   content, read from the pack history (`scripts/lib/sitemapLastmod.ts`). The
+   committed `functions/sitemap/bundled-catalog.generated.json` is never trusted
+   for those dates, so a copy generated before an edit was committed cannot keep an
+   old date. Content that is not committed yet gets the local build time.
 4. runs `wrangler pages deploy ./dist --branch <branch>`
 5. probes the new deployment's `/api/health` (the Worker boots) and
    `/api/templates` (D1 is bound). A 5xx or no response fails the run; other
