@@ -7,6 +7,7 @@ import { calculateRunProgress } from '../utils/template-reconciliation';
 import { batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
 import { mergeSharedRunState, readStoredRunSections, sharedRunUpdateSchema } from '../utils/shared-run-merge';
 import { activeRunLimitResponse, findActiveRunLimitHit, isReopening } from '../utils/active-run-limit';
+import { canViewRun } from '../utils/run-access';
 
 // /api/checklists/shared/:token needs no login: holding the link is the only credential.
 // Guests may read the run and change completion state and task notes, nothing else.
@@ -110,8 +111,11 @@ export async function handleSharedChecklist(
   updates.updated_at = now;
 
   const runRecord = existingSharedRun as unknown as Record<string, unknown>;
+  // A signed-in visitor is named only if they already belong to the run's owner context
+  // (see share-link-actors.ts); anonymous saves skip the membership lookup.
+  const actorUserId = userId && (await canViewRun(env, runRecord, userId)) ? userId : null;
   const auditEvent = await buildAuditEventValues({
-    actorUserId: userId,
+    actorUserId,
     subject: getRunSubject(runRecord, typeof existingSharedRun.user_id === 'string' ? existingSharedRun.user_id : 'unknown'),
     resource: { type: 'checklist_run', id: existingSharedRun.id },
     action: 'checklist_run.shared_updated',

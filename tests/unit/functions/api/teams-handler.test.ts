@@ -504,6 +504,38 @@ describe("Teams handler", () => {
     ]);
   });
 
+  it("hides share-link editors who are not members of the Organization", async () => {
+    const shareEvent = (actor: string) => ({
+      id: `event-${actor}`,
+      actor_user_id: actor,
+      resource_type: "checklist_run",
+      resource_id: "run-1",
+      action: "checklist_run.shared_updated",
+      metadata_json: '{"source":"public_share"}',
+      request_id: null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      actorEmail: `${actor}@example.com`,
+      actorName: `Name ${actor}`,
+      actorUsername: actor,
+    });
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
+      ])
+      .mockResolvedValueOnce([shareEvent("outsider-1"), shareEvent("user-2")])
+      .mockResolvedValueOnce([{ user_id: "user-2" }]);
+    dbMocks.selectChain.orderBy.mockReturnValueOnce(dbMocks.selectChain);
+
+    const response = await handleTeams(new Request("http://localhost/api/teams/team-1/activity"), mockEnv);
+    const text = await response.text();
+    const data = JSON.parse(text) as Array<{ actor: Record<string, unknown> }>;
+
+    expect(response.status).toBe(200);
+    expect(data[0].actor).toEqual({ userId: null, email: null, name: null, username: null });
+    expect(text).not.toContain("outsider-1@example.com");
+    expect(data[1].actor).toEqual(expect.objectContaining({ userId: "user-2", email: "user-2@example.com" }));
+  });
+
   it("rejects team activity listing for non-admin team members", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([
       { id: "member-1", team_id: "team-1", user_id: "user-1", role: "viewer", status: "active" },

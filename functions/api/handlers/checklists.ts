@@ -6,7 +6,8 @@ import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
 import { buildAuditEventValues } from '../utils/audit';
 import { redactStoredAuditDiff } from '../utils/audit-compaction';
-import { canManageTeam, canRunTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
+import { canRunTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
+import { canDeleteRun, canRestoreRun, canUpdateRun, canViewRun, canViewRunHistory } from '../utils/run-access';
 import { z } from 'zod';
 import { calculateRunProgress, reconcileRunSections } from '../utils/template-reconciliation';
 import { batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
@@ -21,6 +22,7 @@ import {
   runInsertStatements,
 } from '../utils/active-run-limit';
 import { insertRowWhere, rowExistsSql } from '../utils/guarded-insert';
+import { findShareLinkOutsiders, HIDDEN_ACTOR } from '../utils/share-link-actors';
 import { handleSharedChecklist } from './checklists-shared';
 
 function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: URL): string | null {
@@ -67,54 +69,6 @@ function resetCompletionState(value: unknown): unknown {
   }
 
   return next;
-}
-
-async function canViewRun(env: Env, run: Record<string, unknown>, userId: string): Promise<boolean> {
-  if (typeof run.deleted_at === 'string' && run.deleted_at) return false;
-  if (typeof run.team_id === 'string' && run.team_id) {
-    const membership = await getActiveTeamMembership(env, run.team_id, userId);
-    return membership ? canViewTeam(normalizeTeamRole(membership.role)) : false;
-  }
-
-  return run.user_id === userId;
-}
-
-async function canViewRunHistory(env: Env, run: Record<string, unknown>, userId: string): Promise<boolean> {
-  if (typeof run.team_id === 'string' && run.team_id) {
-    const membership = await getActiveTeamMembership(env, run.team_id, userId);
-    return membership ? canViewTeam(normalizeTeamRole(membership.role)) : false;
-  }
-
-  return run.user_id === userId;
-}
-
-async function canUpdateRun(env: Env, run: Record<string, unknown>, userId: string): Promise<boolean> {
-  if (typeof run.deleted_at === 'string' && run.deleted_at) return false;
-  if (typeof run.team_id === 'string' && run.team_id) {
-    const membership = await getActiveTeamMembership(env, run.team_id, userId);
-    return membership ? canRunTeamTemplates(normalizeTeamRole(membership.role)) : false;
-  }
-
-  return run.user_id === userId;
-}
-
-async function canDeleteRun(env: Env, run: Record<string, unknown>, userId: string): Promise<boolean> {
-  if (typeof run.deleted_at === 'string' && run.deleted_at) return false;
-  if (typeof run.team_id === 'string' && run.team_id) {
-    const membership = await getActiveTeamMembership(env, run.team_id, userId);
-    return membership ? canManageTeam(normalizeTeamRole(membership.role)) : false;
-  }
-
-  return run.user_id === userId;
-}
-
-async function canRestoreRun(env: Env, run: Record<string, unknown>, userId: string): Promise<boolean> {
-  if (typeof run.team_id === 'string' && run.team_id) {
-    const membership = await getActiveTeamMembership(env, run.team_id, userId);
-    return membership ? canManageTeam(normalizeTeamRole(membership.role)) : false;
-  }
-
-  return run.user_id === userId;
 }
 
 async function assertTeamRunAccess(env: Env, teamId: string, userId: string): Promise<Response | null> {
@@ -251,6 +205,10 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
           .where(and(eq(audit_events.resource_type, 'checklist_run'), eq(audit_events.resource_id, checklistId)))
           .orderBy(desc(audit_events.created_at))
           .limit(historyLimit);
+        const outsiders = await findShareLinkOutsiders(env, {
+          userId: checklist.user_id,
+          teamId: checklist.team_id ?? null,
+        }, eventRows);
 
         return json({
           checklistId,
@@ -262,7 +220,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
             requestId: row.request_id,
             diff: redactStoredAuditDiff(parseOptionalJson(row.diff_json)),
             metadata: parseOptionalJson(row.metadata_json),
-            actor: {
+            actor: row.actor_user_id && outsiders.has(row.actor_user_id) ? HIDDEN_ACTOR : {
               userId: row.actor_user_id,
               email: row.actor_email,
               name: row.actor_name,

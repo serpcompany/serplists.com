@@ -3,7 +3,8 @@ import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
 
 // Against real local D1: stopping a share turns the link off for guests, writes exactly one
 // audit event, and lets a shared run that went stale be revalidated again. Shared runs count
-// toward the Free active-run limit like any other active run.
+// toward the Free active-run limit like any other active run. A signed-in visitor who edits
+// through a link is named in history only if they belong to the run's Organization.
 
 vi.mock("../../functions/api/utils/session", () => ({
   getSessionUserId: vi.fn(),
@@ -22,6 +23,15 @@ async function seed() {
   await db.batch([
     db.prepare("INSERT INTO users (id, email, name, email_verified, created_at) VALUES ('owner', 'owner@example.test', 'Owner', 1, ?)").bind(now),
     db.prepare("INSERT INTO users (id, email, name, email_verified, created_at) VALUES ('free', 'free@example.test', 'Free', 1, ?)").bind(now),
+    db.prepare("INSERT INTO users (id, email, name, email_verified, created_at) VALUES ('member', 'member@example.test', 'Member', 1, ?)").bind(now),
+    db.prepare("INSERT INTO teams (id, name, slug, billing_owner_user_id, created_by_user_id, created_at) VALUES ('org-1', 'Org', 'org', 'owner', 'owner', ?)").bind(now),
+    db.prepare("INSERT INTO team_members (id, team_id, user_id, role, status, created_at) VALUES ('m-owner', 'org-1', 'owner', 'owner', 'active', ?)").bind(now),
+    db.prepare("INSERT INTO team_members (id, team_id, user_id, role, status, created_at) VALUES ('m-member', 'org-1', 'member', 'viewer', 'active', ?)").bind(now),
+    db.prepare(`
+      INSERT INTO checklist_runs (id, user_id, team_id, template_id, title, items, status, started_at, created_at,
+        progress, template_version, revision, retired_items, is_public, share_token)
+      VALUES ('org-run', 'owner', 'org-1', NULL, 'Org run', ?, 'in_progress', ?, ?, 0, 1, 1, '[]', 1, 'org-token')
+    `).bind(runItems, now, now),
     db.prepare(`
       INSERT INTO templates (id, user_id, title, items, is_public, created_at, version, type, owner_type, team_id,
         created_by_user_id, content_version)
@@ -115,5 +125,30 @@ describe.sequential("run sharing against local D1", () => {
     expect(templateShare.status).toBe(404);
 
     expect(await freeRunCount()).toBe(3);
+  });
+
+  it("names a share-link editor only when they belong to the run's Organization", async () => {
+    const tick = async (userId: string, revision: number) => {
+      const response = await call("shared/org-token", "PUT", userId, { status: "in_progress", expected_revision: revision });
+      expect(response.status).toBe(200);
+    };
+    await tick("free", 1);
+    await tick("member", 2);
+    // A row written before the rule, naming an outsider.
+    await d1.env.DB.prepare(`
+      INSERT INTO audit_events (id, actor_user_id, subject_type, subject_id, resource_type, resource_id, action, metadata_json, created_at)
+      VALUES ('old-share-edit', 'free', 'team', 'org-1', 'checklist_run', 'org-run', 'checklist_run.shared_updated', '{"source":"public_share"}', '2026-01-01T00:00:00.000Z')
+    `).run();
+
+    const { results } = await d1.env.DB.prepare(
+      "SELECT actor_user_id FROM audit_events WHERE resource_id = 'org-run' AND id != 'old-share-edit' ORDER BY created_at",
+    ).all<{ actor_user_id: string | null }>();
+    expect(results.map((row) => row.actor_user_id)).toEqual([null, "member"]);
+
+    const history = await call("org-run/history", "GET", "member");
+    expect(history.status).toBe(200);
+    expect(JSON.stringify(history.body)).not.toContain("free@example.test");
+    const actors = (history.body.events as Array<{ actor: { userId: string | null } }>).map((event) => event.actor.userId);
+    expect(actors.sort()).toEqual([null, null, "member"].sort());
   });
 });

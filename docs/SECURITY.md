@@ -24,6 +24,11 @@
   the share page) never return it or its timestamps
   (`serializeChecklistRun`), and history redacts it. Only the share-creation
   responses hand out a link, and they require permission to update the run.
+  Link holders are guests: a signed-in visitor's edit is attributed to them only
+  if they already belong to the run's owner context (the Personal owner or an
+  active member of its Organization), and run history and the Organization
+  activity feed hide any other share-link actor, including on older rows
+  (`functions/api/utils/share-link-actors.ts`).
 - **Uploads** are written under the uploader's key prefix, and deletes are
   restricted to that prefix.
 - **Invites** store only a token hash, never the raw token.

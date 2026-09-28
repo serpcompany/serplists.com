@@ -14,7 +14,7 @@ the top-level map. Request flow, routes, and the data model are in the
 | Identity and sessions | `better-auth.ts`, `handlers/auth.ts`, `utils/session.ts` | `contexts/CloudflareAuthContext.tsx`, `lib/auth/` |
 | Personal and Organization ownership | `handlers/teams.ts`, `utils/team-access.ts` | `contexts/WorkspaceContext.tsx`, `features/teams/` |
 | Templates | `handlers/templates.ts`, `utils/payloads.ts`, `utils/template-reconciliation.ts`, `utils/template-writes.ts` | `contexts/TemplatesContext.tsx`, `features/template-*`, `lib/templates/` |
-| Runs | `handlers/checklists.ts`, `handlers/checklists-shared.ts`, `utils/checklist-runs.ts`, `utils/shared-run-merge.ts`, `utils/template-access.ts` | `features/run-execution/`, `features/dashboard-runs/` |
+| Runs | `handlers/checklists.ts`, `handlers/checklists-shared.ts`, `utils/checklist-runs.ts`, `utils/run-access.ts`, `utils/shared-run-merge.ts`, `utils/share-link-actors.ts`, `utils/template-access.ts` | `features/run-execution/`, `features/dashboard-runs/` |
 | Billing and entitlements | `handlers/billing.ts`, `handlers/stripe.ts`, `utils/entitlements.ts`, `utils/active-run-limit.ts`, `utils/guarded-insert.ts` | `lib/billing.ts`, `pages/Pricing.tsx` |
 | Agent access (Run Keys, MCP) | `handlers/agent-keys.ts`, `handlers/agentMcp.ts`, `utils/personal-run-key.ts` | `components/account/AgentAccessSection.tsx` |
 | Public discovery and SEO | `functions/sitemap*`, `functions/categories/` | public `pages/`, `data/` |
