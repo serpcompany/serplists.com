@@ -1,15 +1,15 @@
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
+import { execTool } from "../lib/run-tool.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const database = "serp-checklists-db";
 
-function run(command, args, options = {}) {
-  return execFileSync(command, args, {
+function run(tool, args, options = {}) {
+  return execTool(tool, args, {
     cwd: repoRoot,
     env: { ...process.env, CI: "1" },
     encoding: "utf8",
@@ -20,10 +20,8 @@ function run(command, args, options = {}) {
 
 function wranglerJson(persistPath, statement) {
   const output = run(
-    "pnpm",
+    "wrangler",
     [
-      "exec",
-      "wrangler",
       "d1",
       "execute",
       database,
@@ -54,10 +52,8 @@ function wranglerBatch(persistPath, statements) {
 
 function wranglerUnion(persistPath, statements) {
   const output = run(
-    "pnpm",
+    "wrangler",
     [
-      "exec",
-      "wrangler",
       "d1",
       "execute",
       database,
@@ -270,12 +266,12 @@ async function main() {
   const generatedOutput = path.join(root, "generated");
 
   try {
-    run("pnpm", [
-      "exec", "wrangler", "d1", "migrations", "apply", database,
+    run("wrangler", [
+      "d1", "migrations", "apply", database,
       "--local", "--persist-to", authoritativePersist,
     ], { capture: true });
-    run("pnpm", [
-      "exec", "drizzle-kit", "generate",
+    run("drizzle-kit", [
+      "generate",
       "--dialect", "sqlite",
       "--schema", "./db/schema/index.ts",
       "--out", generatedOutput,
@@ -284,8 +280,8 @@ async function main() {
     assert.equal(sqlFiles.length, 1, "expected exactly one generated baseline SQL file");
     const generatedSqlPath = path.join(generatedOutput, sqlFiles[0]);
     assert.ok(readFileSync(generatedSqlPath, "utf8").includes("CREATE TABLE"), "generated baseline SQL is empty");
-    run("pnpm", [
-      "exec", "wrangler", "d1", "execute", database,
+    run("wrangler", [
+      "d1", "execute", database,
       "--local", "--persist-to", generatedPersist, "--file", generatedSqlPath,
     ], { capture: true });
 

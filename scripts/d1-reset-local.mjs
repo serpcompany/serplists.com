@@ -1,11 +1,9 @@
-import { execFileSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execTool } from "./lib/run-tool.mjs";
 
 const DATABASE_NAME = "serp-checklists-db";
-const NPX_COMMAND = process.platform === "win32" ? "cmd.exe" : "npx";
-const NPX_ARGS_PREFIX = process.platform === "win32" ? ["/d", "/s", "/c", "npx"] : [];
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
@@ -19,8 +17,8 @@ if (!localD1StatePath.startsWith(path.join(repoRoot, ".wrangler"))) {
   throw new Error(`Refusing to reset unexpected D1 state path: ${localD1StatePath}`);
 }
 
-function run(command, args) {
-  execFileSync(command, args, {
+function run(tool, args) {
+  execTool(tool, args, {
     cwd: repoRoot,
     env: process.env,
     stdio: "inherit",
@@ -28,9 +26,7 @@ function run(command, args) {
 }
 
 function executeLocalSql(filePath) {
-  run(NPX_COMMAND, [
-    ...NPX_ARGS_PREFIX,
-    "wrangler",
+  run("wrangler", [
     "d1",
     "execute",
     DATABASE_NAME,
@@ -64,18 +60,16 @@ function resetLocalD1State() {
 
 try {
   resetLocalD1State();
-  run(NPX_COMMAND, [
-    ...NPX_ARGS_PREFIX,
-    "wrangler",
+  run("wrangler", [
     "d1",
     "migrations",
     "apply",
     DATABASE_NAME,
     "--local",
   ]);
-  run("pnpm", ["exec", "tsx", "scripts/data/local-d1-data.ts", "seed-test"]);
+  run("tsx", ["scripts/data/local-d1-data.ts", "seed-test"]);
   executeLocalSql("./db/seeds/official-templates.sql");
-  run("pnpm", ["exec", "tsx", "scripts/data/local-d1-data.ts", "seed-official-login"]);
+  run("tsx", ["scripts/data/local-d1-data.ts", "seed-official-login"]);
   console.log("Local D1 reset complete");
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import net from "node:net";
+import { buildShellCommandLine, buildToolInvocation } from "./lib/run-tool.mjs";
 
 export const DEFAULT_FRONTEND_PORT = 8080;
 export const DEFAULT_API_PORT = 8788;
@@ -102,6 +103,66 @@ export function buildDevAutoConfig({
       PORT: String(frontendPort),
       VITE_API_URL: apiUrl,
     },
+  };
+}
+
+/**
+ * The process dev-auto starts for a mode. Tools run as `node <bin script>` (no
+ * npx or pnpm shims, no shell), so Windows needs no .cmd resolution and values
+ * such as the auth secret reach Wrangler literally. dev:all hands concurrently
+ * one command line per server, quoted for the shell concurrently uses.
+ */
+export function buildDevCommands({
+  mode,
+  config,
+  hasDevVars = false,
+  platform = process.platform,
+  execPath = process.execPath,
+}) {
+  const vite = buildToolInvocation(
+    "vite",
+    ["--host", "localhost", "--port", String(config.frontendPort), "--strictPort"],
+    { execPath },
+  );
+  const wrangler = buildToolInvocation(
+    "wrangler",
+    [
+      "pages",
+      "dev",
+      "./dist",
+      "--local",
+      "--port",
+      String(config.apiPort),
+      ...(hasDevVars ? ["--env-file", ".dev.vars"] : []),
+      "--show-interactive-dev-session=false",
+      "-b",
+      `FRONTEND_URL=${config.frontendUrl}`,
+      "-b",
+      `CORS_ALLOWED_ORIGINS=${config.corsAllowedOrigins}`,
+      "-b",
+      `BETTER_AUTH_SECRET=${config.betterAuthSecret}`,
+    ],
+    { execPath },
+  );
+
+  if (mode === "frontend") return { ...vite, label: "Vite" };
+  if (mode === "api") return { ...wrangler, label: "Wrangler" };
+
+  return {
+    ...buildToolInvocation(
+      "concurrently",
+      [
+        "--kill-others-on-fail",
+        "--names",
+        "web,api",
+        "--prefix-colors",
+        "cyan,magenta",
+        buildShellCommandLine(vite, platform),
+        buildShellCommandLine(wrangler, platform),
+      ],
+      { execPath },
+    ),
+    label: "concurrently",
   };
 }
 

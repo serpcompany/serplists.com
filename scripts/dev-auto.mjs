@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import {
   buildDevAutoConfig,
+  buildDevCommands,
   DEFAULT_API_PORT,
   DEFAULT_FRONTEND_PORT,
   DEV_SESSION_PATH,
@@ -12,6 +13,7 @@ import {
   resolvePortPairForMode,
   storeDevSession,
 } from "./dev-auto-lib.mjs";
+import { describeSpawnError, killProcessTree } from "./lib/run-tool.mjs";
 
 const DIST_INDEX_PATH = "dist/index.html";
 const LOG_DIR = "tmp/logs";
@@ -24,63 +26,6 @@ function getMode() {
   }
 
   throw new Error(`Unsupported dev-auto mode "${rawMode}".`);
-}
-
-function buildCommands(mode, config) {
-  const frontendCommand = `pnpm exec vite --host localhost --port ${config.frontendPort} --strictPort`;
-  const devVarsArgs = existsSync(".dev.vars") ? ["--env-file", ".dev.vars"] : [];
-  const devVarsFlag = existsSync(".dev.vars") ? "--env-file .dev.vars " : "";
-  const apiCommand =
-    `npx wrangler pages dev ./dist --local --port ${config.apiPort} ${devVarsFlag}` +
-    `--show-interactive-dev-session=false ` +
-    `-b FRONTEND_URL=${config.frontendUrl} ` +
-    `-b CORS_ALLOWED_ORIGINS=${config.corsAllowedOrigins} ` +
-    `-b BETTER_AUTH_SECRET=${config.betterAuthSecret}`;
-
-  if (mode === "frontend") {
-    return {
-      executable: "pnpm",
-      args: ["exec", "vite", "--host", "localhost", "--port", String(config.frontendPort), "--strictPort"],
-    };
-  }
-
-  if (mode === "api") {
-    return {
-      executable: "npx",
-      args: [
-        "wrangler",
-        "pages",
-        "dev",
-        "./dist",
-        "--local",
-        "--port",
-        String(config.apiPort),
-        ...devVarsArgs,
-        "--show-interactive-dev-session=false",
-        "-b",
-        `FRONTEND_URL=${config.frontendUrl}`,
-        "-b",
-        `CORS_ALLOWED_ORIGINS=${config.corsAllowedOrigins}`,
-        "-b",
-        `BETTER_AUTH_SECRET=${config.betterAuthSecret}`,
-      ],
-    };
-  }
-
-  return {
-    executable: "pnpm",
-    args: [
-      "exec",
-      "concurrently",
-      "--kill-others-on-fail",
-      "--names",
-      "web,api",
-      "--prefix-colors",
-      "cyan,magenta",
-      frontendCommand,
-      apiCommand,
-    ],
-  };
 }
 
 function printStartupSummary({
@@ -180,8 +125,9 @@ async function main() {
     ...config.envOverrides,
   };
 
-  const command = buildCommands(mode, config);
-  const child = spawn(command.executable, command.args, {
+  const command = buildDevCommands({ mode, config, hasDevVars: existsSync(".dev.vars") });
+  const child = spawn(command.command, command.args, {
+    ...command.options,
     cwd: process.cwd(),
     env: { ...childEnv, FORCE_COLOR: childEnv.FORCE_COLOR ?? "1" },
     stdio: ["inherit", "pipe", "pipe"],
@@ -195,18 +141,15 @@ async function main() {
     });
   };
 
-  const shutdown = (signal) => {
-    if (!child.killed) {
-      child.kill(signal);
-    }
-  };
+  // On Windows this ends the whole tree, so Vite and workerd do not keep the ports.
+  const shutdown = (signal) => killProcessTree(child, signal);
 
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
 
   child.on("error", (error) => {
     cleanupSession();
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(describeSpawnError(error, command.label));
     process.exit(1);
   });
 

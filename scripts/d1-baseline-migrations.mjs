@@ -1,13 +1,11 @@
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execTool } from "./lib/run-tool.mjs";
 
 const PRODUCTION_DATABASE_NAME = "serp-checklists-db";
 const MIGRATION_FILE_PATTERN = /^\d{4}_.+\.sql$/;
-const NPX_COMMAND = process.platform === "win32" ? "cmd.exe" : "npx";
-const NPX_ARGS_PREFIX = process.platform === "win32" ? ["/d", "/s", "/c", "npx"] : [];
 
 function readArg(name) {
   const prefix = `${name}=`;
@@ -81,11 +79,9 @@ function runWranglerBaseline({ databaseName, isRemote, sql, usePreviewDatabase }
 
   try {
     writeFileSync(tempSqlPath, sql, "utf8");
-    execFileSync(
-      NPX_COMMAND,
+    execTool(
+      "wrangler",
       [
-        ...NPX_ARGS_PREFIX,
-        "wrangler",
         "d1",
         "execute",
         databaseName,

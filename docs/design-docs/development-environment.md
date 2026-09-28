@@ -133,3 +133,15 @@ Testing conventions are in [RELIABILITY.md](../RELIABILITY.md#testing-convention
 | Local D1 | `d1:profile`, `db:reset`, `db:seed`, `db:seed:official:local`, `db:migrate:d1:local`, `db:migrations:list:local`, `db:query`, `db:cleanup:local`, `db:reset:test-user-passwords`, `db:generate`, `check:db:drizzle-parity` |
 | Remote D1 | `verify:staging`, `verify:prod:d1`, `db:migrate:d1:staging`, `db:migrate:d1:prod`, `db:migrations:*`, `check:*:d1-schema`, `check:preview:d1-binding`, `db:seed:official:staging`, `db:seed:official:remote`, `db:cleanup:remote` |
 | Stripe (test mode) | `stripe:local:setup`, `stripe:local:listen`, `stripe:local:scrub-live`, `stripe:portal:configure` |
+
+## Writing scripts
+
+Scripts under `scripts/` and `tests/e2e/` start tools through
+`scripts/lib/run-tool.mjs`: `execTool`/`spawnTool` run a dev dependency's bin script
+(wrangler, vite, tsx, concurrently, playwright, drizzle-kit) with the current Node,
+and `execPnpm` runs pnpm itself through the pnpm that launched the script. Never
+spawn `npx` or `pnpm` by name: on Windows they are `.cmd` shims, so a spawn without a
+shell fails with `ENOENT` (or `EINVAL` for `npx.cmd`), and passing arguments through
+a shell lets `cmd.exe` reinterpret characters such as `&`, `^` and `%` in values like
+the auth secret. `tests/unit/scripts/tool-spawns.test.ts` fails when a script names
+`npx` or `pnpm` as a command.

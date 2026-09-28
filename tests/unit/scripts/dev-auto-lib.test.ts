@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCorsAllowedOrigins,
   buildDevAutoConfig,
+  buildDevCommands,
   buildDevSession,
   clearDevSessionRole,
   findOpenPortPair,
@@ -318,4 +319,65 @@ describe("clearDevSessionRole", () => {
       allPid: 3333,
     });
   });
+});
+
+describe("buildDevCommands", () => {
+  const config = buildDevAutoConfig({
+    frontendPort: 8081,
+    apiPort: 8789,
+    baseEnv: { BETTER_AUTH_SECRET: 'se cret&"%PATH%^!', CORS_ALLOWED_ORIGINS: "http://localhost:4173" },
+  });
+  const wranglerArgs = [
+    "pages",
+    "dev",
+    "./dist",
+    "--local",
+    "--port",
+    "8789",
+    "--env-file",
+    ".dev.vars",
+    "--show-interactive-dev-session=false",
+    "-b",
+    "FRONTEND_URL=http://localhost:8081",
+    "-b",
+    "CORS_ALLOWED_ORIGINS=http://localhost:4173,http://localhost:8081",
+    "-b",
+    'BETTER_AUTH_SECRET=se cret&"%PATH%^!',
+  ];
+
+  for (const platform of ["win32", "linux"]) {
+    it(`starts Wrangler with Node for dev:api on ${platform}, not through npx`, () => {
+      const command = buildDevCommands({ mode: "api", config, hasDevVars: true, platform, execPath: "node-bin" });
+
+      expect(command.command).toBe("node-bin");
+      expect(command.args[0]).toMatch(/[\\/]wrangler[\\/]bin[\\/]wrangler\.js$/);
+      expect(command.args.slice(1)).toEqual(wranglerArgs);
+    });
+
+    it(`starts Vite with Node for dev on ${platform}, not through pnpm`, () => {
+      const command = buildDevCommands({ mode: "frontend", config, hasDevVars: true, platform, execPath: "node-bin" });
+
+      expect(command.command).toBe("node-bin");
+      expect(command.args[0]).toMatch(/[\\/]vite[\\/]bin[\\/]vite\.js$/);
+      expect(command.args.slice(1)).toEqual(["--host", "localhost", "--port", "8081", "--strictPort"]);
+    });
+
+    it(`starts concurrently with Node for dev:all on ${platform}, with quoted command lines`, () => {
+      const command = buildDevCommands({ mode: "all", config, hasDevVars: false, platform, execPath: "node-bin" });
+
+      expect(command.command).toBe("node-bin");
+      expect(command.args[0]).toMatch(/[\\/]concurrently[\\/]dist[\\/]bin[\\/]concurrently\.js$/);
+      expect(command.args.slice(1, 6)).toEqual(["--kill-others-on-fail", "--names", "web,api", "--prefix-colors", "cyan,magenta"]);
+      const [frontendLine, apiLine] = command.args.slice(6);
+      expect(command.args).toHaveLength(8);
+      expect(frontendLine).toMatch(/^node-bin .*vite\.js/);
+      expect(apiLine).toMatch(/^node-bin .*wrangler\.js/);
+      expect(apiLine).not.toContain(".dev.vars");
+      expect(apiLine).toContain(
+        platform === "win32"
+          ? '^"BETTER_AUTH_SECRET=se^ cret^&\\^"^%PATH^%^^^!^"'
+          : "'BETTER_AUTH_SECRET=se cret&\"%PATH%^!'",
+      );
+    });
+  }
 });

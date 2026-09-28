@@ -10,20 +10,20 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildPnpmInvocation, buildToolInvocation } from "./lib/run-tool.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const devVarsPath = path.join(repoRoot, ".dev.vars");
 const localD1Path = path.join(repoRoot, ".wrangler/state/v3/d1/miniflare-D1DatabaseObject");
 const PLACEHOLDER = /xxx|replace-with|example\.com/;
 
-function run(label, command, args) {
+// No shell: tools run as `node <bin script>` (see scripts/lib/run-tool.mjs).
+function run(label, { command, args, options = {} }) {
   console.log(`\n> ${label}`);
-  execFileSync(command, args, {
-    cwd: repoRoot,
-    stdio: "inherit",
-    shell: process.platform === "win32",
-  });
+  execFileSync(command, args, { ...options, cwd: repoRoot, stdio: "inherit" });
 }
+
+const nodeScript = (script) => ({ command: process.execPath, args: [script] });
 
 function createDevVars() {
   if (existsSync(devVarsPath)) {
@@ -43,18 +43,21 @@ function createDevVars() {
 }
 
 createDevVars();
-run("Validate environment", "node", ["scripts/check-env.mjs"]);
+run("Validate environment", nodeScript("scripts/check-env.mjs"));
 
 if (existsSync(localD1Path)) {
-  run("Apply pending local D1 migrations", "pnpm", ["run", "db:migrate:d1:local"]);
+  run(
+    "Apply pending local D1 migrations",
+    buildToolInvocation("wrangler", ["d1", "migrations", "apply", "serp-checklists-db", "--local"]),
+  );
 } else {
-  run("Create and seed local D1", "node", ["scripts/d1-reset-local.mjs"]);
+  run("Create and seed local D1", nodeScript("scripts/d1-reset-local.mjs"));
 }
 
-run("Install the Playwright browser (no-op when present)", "pnpm", ["exec", "playwright", "install", "chromium"]);
+run("Install the Playwright browser (no-op when present)", buildToolInvocation("playwright", ["install", "chromium"]));
 
 if (!existsSync(path.join(repoRoot, "dist/index.html"))) {
-  run("Build dist/ for the API dev server", "pnpm", ["run", "build:dev"]);
+  run("Build dist/ for the API dev server", buildPnpmInvocation(["run", "build:dev"]));
 }
 
 console.log(`

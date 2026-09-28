@@ -1,15 +1,12 @@
-import { spawn } from "node:child_process";
-import { execFileSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findOpenPortPair } from "../../scripts/dev-auto-lib.mjs";
+import { execTool, spawnTool } from "../../scripts/lib/run-tool.mjs";
 
 const DEFAULT_SMOKE_FRONTEND_PORT = 4173;
 const DEFAULT_SMOKE_API_PORT = 8788;
 const DATABASE_NAME = "serp-checklists-db";
-const NPX_COMMAND = process.platform === "win32" ? "cmd.exe" : "npx";
-const NPX_ARGS_PREFIX = process.platform === "win32" ? ["/d", "/s", "/c", "npx"] : [];
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
 const smokePersistPath = path.join(".wrangler", "smoke-state");
@@ -24,8 +21,8 @@ function buildLocalUrl(port) {
   return `http://localhost:${port}`;
 }
 
-function run(command, args, options = {}) {
-  execFileSync(command, args, {
+function run(tool, args, options = {}) {
+  execTool(tool, args, {
     cwd: repoRoot,
     env: {
       ...process.env,
@@ -44,10 +41,8 @@ function prepareSmokeD1() {
 
   rmSync(smokePersistAbsolutePath, { recursive: true, force: true });
   run(
-    NPX_COMMAND,
+    "wrangler",
     [
-      ...NPX_ARGS_PREFIX,
-      "wrangler",
       "d1",
       "migrations",
       "apply",
@@ -63,10 +58,8 @@ function prepareSmokeD1() {
     },
   );
   run(
-    "pnpm",
+    "tsx",
     [
-      "exec",
-      "tsx",
       "scripts/data/local-d1-data.ts",
       "seed-test",
       "--persist-to",
@@ -127,13 +120,12 @@ if (env.PLAYWRIGHT_REUSE_EXISTING_SERVER !== "1") {
 const runAll = process.argv.includes("--all");
 const playwrightArgs = process.argv.slice(2).filter((arg) => arg !== "--all");
 
-const pnpmBin = "pnpm";
-const child = spawn(
-  pnpmBin,
-  ["exec", "playwright", "test", ...(runAll ? [] : ["--grep", "@smoke"]), ...playwrightArgs],
+const child = spawnTool(
+  "playwright",
+  ["test", ...(runAll ? [] : ["--grep", "@smoke"]), ...playwrightArgs],
   {
+    cwd: repoRoot,
     env,
-    shell: process.platform === "win32",
     stdio: "inherit",
   },
 );

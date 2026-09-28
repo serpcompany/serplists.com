@@ -5,7 +5,7 @@
 // Builds an isolated local D1 in .wrangler/d1-profile-state, runs the API with
 // D1_PROFILE=true, replays a scripted workload, and writes tmp/d1-profile/report.md.
 // Local D1 reports rows_read/rows_written with production semantics (rows scanned).
-import { spawn, execFileSync, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,13 +13,13 @@ import type { D1Database } from "@cloudflare/workers-types";
 import { getPlatformProxy } from "wrangler";
 import { createServer } from "node:net";
 import { z } from "zod";
+import { execPnpm, execTool, killProcessTree, spawnTool, type ToolName } from "./lib/run-tool.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const persistPath = ".wrangler/d1-profile-state";
 const outDir = path.join(repoRoot, "tmp", "d1-profile");
 const scaleArg = process.argv.indexOf("--scale");
 const scale = scaleArg >= 0 ? Number(process.argv[scaleArg + 1]) : 1;
-const isWindows = process.platform === "win32";
 const reuse = process.argv.includes("--reuse") && existsSync(path.join(repoRoot, persistPath));
 
 type QueryRecord = { sql: string; rowsRead: number; rowsWritten: number; rowsReturned: number; durationMs: number };
@@ -41,8 +41,8 @@ const resourceSchema = z.object({
   revision: z.number().optional(),
 });
 
-function run(command: string, args: string[]) {
-  execFileSync(command, args, { cwd: repoRoot, stdio: "inherit", shell: isWindows, env: { ...process.env, CI: "1" } });
+function run(tool: ToolName, args: string[]) {
+  execTool(tool, args, { cwd: repoRoot, stdio: "inherit", env: { ...process.env, CI: "1" } });
 }
 
 // ---------------------------------------------------------------- dataset
@@ -134,11 +134,11 @@ SELECT 'synthetic-event-' || i, ${syntheticUser("i")}, 'template_view', 'synthet
 function buildDatabase() {
   rmSync(path.join(repoRoot, persistPath), { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
-  run("pnpm", ["exec", "wrangler", "d1", "migrations", "apply", "serp-checklists-db", "--local", "--persist-to", persistPath]);
-  run("pnpm", ["exec", "tsx", "scripts/data/local-d1-data.ts", "seed-test", "--persist-to", persistPath]);
+  run("wrangler", ["d1", "migrations", "apply", "serp-checklists-db", "--local", "--persist-to", persistPath]);
+  run("tsx", ["scripts/data/local-d1-data.ts", "seed-test", "--persist-to", persistPath]);
   const sqlFile = path.join(outDir, "synthetic.sql");
   writeFileSync(sqlFile, syntheticSql);
-  run("pnpm", ["exec", "wrangler", "d1", "execute", "serp-checklists-db", "--local", "--persist-to", persistPath, "--file", sqlFile]);
+  run("wrangler", ["d1", "execute", "serp-checklists-db", "--local", "--persist-to", persistPath, "--file", sqlFile]);
 }
 
 // ---------------------------------------------------------------- workload
@@ -199,12 +199,12 @@ function scenarios(): Scenario[] {
 
 // ---------------------------------------------------------------- server + capture
 async function startServer(apiPort: number, origin: string, onRecord: (record: QueryRecord) => void) {
-  const child = spawn("pnpm", [
-    "exec", "wrangler", "pages", "dev", "./dist", "--local", "--port", String(apiPort), "--persist-to", persistPath,
+  const child = spawnTool("wrangler", [
+    "pages", "dev", "./dist", "--local", "--port", String(apiPort), "--persist-to", persistPath,
     "--show-interactive-dev-session=false",
     "-b", "D1_PROFILE=true", "-b", `FRONTEND_URL=${origin}`, "-b", `CORS_ALLOWED_ORIGINS=${origin}`,
     "-b", "BETTER_AUTH_SECRET=d1-profile-secret-at-least-32-characters",
-  ], { cwd: repoRoot, shell: isWindows, stdio: ["ignore", "pipe", "pipe"] });
+  ], { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] });
   let buffer = "";
   const serverLog = createWriteStream(path.join(outDir, "server.log"));
   const consume = (chunk: Buffer) => {
@@ -238,8 +238,7 @@ async function startServer(apiPort: number, origin: string, onRecord: (record: Q
 }
 
 function stop(child: ChildProcess) {
-  if (isWindows && child.pid) execFileSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
-  else child.kill("SIGTERM");
+  killProcessTree(child, "SIGTERM");
 }
 
 async function signIn(base: string, origin: string, email: string): Promise<string> {
@@ -286,7 +285,9 @@ async function explainPlans(sqls: string[]): Promise<Map<string, string>> {
 }
 
 async function main() {
-  if (!existsSync(path.join(repoRoot, "dist/index.html"))) run("pnpm", ["run", "build:dev"]);
+  if (!existsSync(path.join(repoRoot, "dist/index.html"))) {
+    execPnpm(["run", "build:dev"], { cwd: repoRoot, stdio: "inherit", env: { ...process.env, CI: "1" } });
+  }
   mkdirSync(outDir, { recursive: true });
   if (!reuse) {
     console.log(`Building synthetic D1 at scale ${scale}…`);

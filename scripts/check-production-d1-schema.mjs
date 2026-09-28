@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import {
   REQUIRED_D1_COLUMN_CONSTRAINTS,
   REQUIRED_D1_FOREIGN_KEYS,
@@ -17,6 +16,7 @@ import {
   mapTriggerResults,
   splitSchemaQueryResults,
 } from "./check-production-d1-schema-lib.mjs";
+import { execTool } from "./lib/run-tool.mjs";
 
 function readArg(name) {
   const prefix = `${name}=`;
@@ -34,16 +34,12 @@ const databaseName =
   readArg("--database") ?? process.env.D1_DATABASE_NAME ?? "serp-checklists-db";
 const environmentLabel = readArg("--label") ?? process.env.D1_ENVIRONMENT ?? "production";
 const usePreviewDatabase = process.argv.includes("--preview");
-const npxCommand = process.platform === "win32" ? "cmd.exe" : "npx";
-const npxArgsPrefix = process.platform === "win32" ? ["/d", "/s", "/c", "npx"] : [];
 const tableNames = Object.keys(REQUIRED_D1_SCHEMA);
 
 function runWranglerSchemaQuery() {
-  const stdout = execFileSync(
-    npxCommand,
+  const stdout = execTool(
+    "wrangler",
     [
-      ...npxArgsPrefix,
-      "wrangler",
       "d1",
       "execute",
       databaseName,
