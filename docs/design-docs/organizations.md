@@ -103,6 +103,7 @@ Invites are link-based today:
 3. The response includes `delivery.mode = "link"`, `invitePath`, and `inviteUrl`.
    The link is shown once. A manager who lost it uses **New link** on the pending invite, or **Create new link** when creating an invite for an email that already has one pending (`409 team_invite_exists` with `details.inviteId`); the previous link stops working.
    The link box names the invite's email and closes when that invite is revoked, or when a refreshed **Pending invites** list no longer has it (accepted, expired, or revoked elsewhere), so a dead link cannot be copied.
+   The link shows before the lists reload. Once they have, the **Invite email** field is cleared only if it still holds that link's email, so an address typed in the meantime is kept.
 4. Invitees can accept through the legacy compatibility route `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
 5. A signed-out invitee can **Log in to accept** or **Create an account**; both return to the invite link afterward, including through email verification.
    Opening the link while signed in to another account names that account and offers **Sign out and continue**, which waits for sign-out and then opens the login page with the invite as the return path. The preview is cached per account, so the next account never sees the previous one's answer.
