@@ -118,6 +118,12 @@ to load, shows a loading or retry state instead, so a real page never sends `noi
 Never render `NotFound` next to an `SEOHead`. Do not add a top-level `404.html`; it turns
 off the single-page app fallback.
 
+Pages with their own not-found message (a public template or profile) render
+`NotFoundHead` (`src/components/shared/NotFoundHead.tsx`) for the same title and
+`noindex` tag. Only an API 404 (`isNotFoundError` in `src/lib/api-errors.ts`) counts as
+settled. A network failure, 5xx or rate limit may be transient, so it shows a retry state
+without `noindex`; see `loadTemplateDetailData` and `loadPublicProfile`.
+
 ## Verifying UI changes
 
 Show the change working in the real app before opening a PR:

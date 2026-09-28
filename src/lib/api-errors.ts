@@ -44,6 +44,12 @@ export const getApiErrorMessage = (error: unknown, fallbackMessage: string): str
   return error instanceof Error && error.message ? error.message : fallbackMessage;
 };
 
+// A settled "does not exist" answer: the API returns 404 for a missing, deleted or private
+// resource. Anything else (network failure, 5xx, rate limit) may be transient.
+export const isNotFoundError = (error: unknown): error is ApiError => {
+  return isApiError(error) && error.status === 404;
+};
+
 export const isAuthRequiredError = (error: unknown): error is ApiError => {
   return isApiError(error) && error.status === 401;
 };

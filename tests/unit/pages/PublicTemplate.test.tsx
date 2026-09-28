@@ -355,3 +355,63 @@ describe('PublicTemplate canonical URL', () => {
     expect(SITE_ORIGIN).toBe(CANONICAL_ORIGIN);
   });
 });
+
+// Pages answers every path with index.html and a 200, so a missing template must mark itself
+// noindex. A failed lookup may be transient, so it must not: it offers a retry instead.
+function renderLookupState(state: { loadError: boolean; notFound: boolean }) {
+  mockUseTemplateDetailModel.mockReturnValue({
+    billingState: { billingEnabled: true, isLoading: false, isPro: false },
+    loading: false,
+    retry: vi.fn(),
+    saveTemplate: vi.fn(),
+    startRun: vi.fn(),
+    template: null,
+    totalItems: 0,
+    ...state,
+  });
+  const helmetContext: Record<string, unknown> = {};
+  const html = renderToStaticMarkup(
+    <HelmetProvider context={helmetContext}>
+      <StaticRouter location="/profile/alice/deleted-checklist">
+        <Routes>
+          <Route path="/profile/:username/:templateSlug" element={<PublicTemplate />} />
+        </Routes>
+      </StaticRouter>
+    </HelmetProvider>,
+  );
+  const helmet = helmetContext.helmet as {
+    link: { toString(): string };
+    meta: { toString(): string };
+    script: { toString(): string };
+    title: { toString(): string };
+  };
+  return { helmet, html };
+}
+
+describe('PublicTemplate lookup failures', () => {
+  it('marks a settled missing template noindex, with no canonical URL', () => {
+    const { helmet, html } = renderLookupState({ loadError: false, notFound: true });
+
+    expect(html).toContain('Template not found');
+    expect(helmet.meta.toString()).toMatch(/name="robots" content="noindex, follow"/);
+    expect(helmet.title.toString()).toContain('>Template not found | SERP Lists</title>');
+    expect(helmet.link.toString()).not.toContain('canonical');
+    expect(helmet.meta.toString()).not.toContain('og:url');
+    expect(helmet.script.toString()).not.toContain('ld+json');
+  });
+
+  it('offers a retry and stays indexable when the lookup failed', () => {
+    const { helmet, html } = renderLookupState({ loadError: true, notFound: false });
+
+    expect(html).toContain('Could not load this template');
+    expect(html).toContain('Try again');
+    expect(html).not.toContain('Template not found');
+    expect(helmet.meta.toString()).not.toContain('noindex');
+  });
+
+  it('leaves a found template indexable', () => {
+    const { helmet } = renderPublishedRoute(publishedClipyTemplate);
+
+    expect(helmet.meta.toString()).not.toContain('noindex');
+  });
+});

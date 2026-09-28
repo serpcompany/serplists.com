@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { getAccessFailure } from '@/lib/api-errors';
+import { getAccessFailure, isNotFoundError } from '@/lib/api-errors';
 import { api, type TemplateHistoryResponse } from '@/lib/api';
 import { getBillingStatusQueryKey } from '@/lib/billing';
 import {
@@ -87,10 +87,19 @@ export type TemplateDetailHistoryState = {
   isLoading: boolean;
 };
 
+// notFound is settled (the page may say so to crawlers); loadError may be transient.
 type LoadTemplateDetailResult = {
+  loadError: boolean;
   notFound: boolean;
   template: ChecklistTemplate | null;
 };
+
+const NOT_FOUND: LoadTemplateDetailResult = { loadError: false, notFound: true, template: null };
+const found = (template: ChecklistTemplate): LoadTemplateDetailResult => ({
+  loadError: false,
+  notFound: false,
+  template,
+});
 
 type TemplateDetailDependencies = {
   apiClient?: TemplateDetailApiClient;
@@ -149,12 +158,12 @@ export const loadTemplateDetailData = async (
   const apiClient = getApiClient(dependencies);
 
   if (!options.identifier) {
-    return { template: null, notFound: true };
+    return NOT_FOUND;
   }
 
   if (options.mode === 'public') {
     if (!options.ownerUsername) {
-      return { template: null, notFound: true };
+      return NOT_FOUND;
     }
 
     const cachedTemplate = findPublicTemplateByIdentifier(
@@ -164,7 +173,7 @@ export const loadTemplateDetailData = async (
     if (cachedTemplate) {
       const ownerSlug = resolvePublicTemplateOwnerSlug(cachedTemplate);
       if (ownerSlug?.toLowerCase() === options.ownerUsername.toLowerCase()) {
-        return { template: cachedTemplate, notFound: false };
+        return found(cachedTemplate);
       }
     }
 
@@ -185,18 +194,22 @@ export const loadTemplateDetailData = async (
         !mappedTemplate.isPublic ||
         ownerSlug?.toLowerCase() !== options.ownerUsername.toLowerCase()
       ) {
-        return { template: null, notFound: true };
+        return NOT_FOUND;
       }
 
-      return { template: mappedTemplate, notFound: false };
-    } catch {
-      return { template: null, notFound: true };
+      return found(mappedTemplate);
+    } catch (error) {
+      // The API answers 404 for a missing, deleted or private template. Any other failure may
+      // be transient, so the page offers a retry instead of telling crawlers it is gone.
+      return isNotFoundError(error)
+        ? NOT_FOUND
+        : { loadError: true, notFound: false, template: null };
     }
   }
 
   const cachedTemplate = options.getCachedTemplate(options.identifier);
   if (cachedTemplate) {
-    return { template: cachedTemplate, notFound: false };
+    return found(cachedTemplate);
   }
 
   try {
@@ -216,9 +229,9 @@ export const loadTemplateDetailData = async (
       apiClient,
     );
 
-    return { template: mappedTemplate, notFound: false };
+    return found(mappedTemplate);
   } catch {
-    return { template: null, notFound: true };
+    return NOT_FOUND;
   }
 };
 
@@ -308,6 +321,8 @@ export const useTemplateDetailModel = (
   const [template, setTemplate] = useState<ChecklistTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const queryClient = useQueryClient();
   const cachedTemplates =
     options.mode === 'public' ? options.cachedTemplates : null;
@@ -354,6 +369,7 @@ export const useTemplateDetailModel = (
     const loadTemplate = async () => {
       setLoading(true);
       setNotFound(false);
+      setLoadError(false);
 
       const result = await loadTemplateDetailData(
         options.mode === 'public'
@@ -377,6 +393,7 @@ export const useTemplateDetailModel = (
 
       setTemplate(result.template);
       setNotFound(result.notFound);
+      setLoadError(result.loadError);
       setLoading(false);
     };
 
@@ -388,6 +405,7 @@ export const useTemplateDetailModel = (
   }, [
     cachedTemplates,
     getCachedTemplate,
+    loadAttempt,
     options.identifier,
     options.mode,
     publicOwnerUsername,
@@ -496,8 +514,10 @@ export const useTemplateDetailModel = (
       isError: history.isError,
       isLoading: canLoadTemplateHistory && history.isLoading,
     } satisfies TemplateDetailHistoryState,
+    loadError,
     loading,
     notFound,
+    retry: () => setLoadAttempt((attempt) => attempt + 1),
     saveTemplate,
     shareTemplate,
     startRun,
