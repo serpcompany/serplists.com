@@ -26,7 +26,6 @@ async function loadRouter() {
   const handler = vi.fn(async () => Response.json({ ok: true }));
   vi.doMock('../../../../functions/api/better-auth', () => ({
     createBetterAuth: vi.fn(() => ({ handler })),
-    getAuthEmailPolicy: vi.fn(() => ({ emailAuthAvailable: true })),
   }));
   const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
   const send = (ip: string, method: string, path: string) =>

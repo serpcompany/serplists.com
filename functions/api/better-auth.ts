@@ -9,57 +9,22 @@ import { resolveAuthSecret } from "./utils/auth-secret";
 import { resolveTrustedOrigins } from "./utils/cors";
 import {
   AuthEmailDeliveryError,
-  isAuthEmailConfigured,
   sendEmailVerificationEmail,
   sendPasswordResetEmail,
 } from "./utils/auth-email";
+import { getAuthEmailPolicy, isProductionAuthPolicy } from "./utils/auth-policy";
 import { deliverAuthEmail, discardUnsentPasswordResetToken } from "./utils/auth-email-throttle";
 import { log } from "./utils/logger";
 import { assertNotBlockedTestEmail } from "./utils/test-email-block";
 import { buildUserProfileWritePolicy, validateUserProfileWrite } from "./utils/user-profile-validation";
 import { assertUsernameAvailableForUpdate, mapUsernameConflicts } from "./utils/username-conflict";
 
-function isProductionHost(hostname: string): boolean {
-  return hostname === "serplists.com" || hostname.endsWith(".serplists.com");
-}
-
-function isProductionAuthRequest(env: Env, request: Request): boolean {
-  const url = new URL(request.url);
-  if (isProductionHost(url.hostname)) {
-    return true;
-  }
-
-  if (env.FRONTEND_URL) {
-    try {
-      return isProductionHost(new URL(env.FRONTEND_URL).hostname);
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
-}
-
-export function getAuthEmailPolicy(env: Env, request: Request) {
-  const emailAuthAvailable = isAuthEmailConfigured(env);
-  const configuredRequirement = env.AUTH_EMAIL_VERIFICATION_REQUIRED;
-  const emailVerificationRequired = configuredRequirement
-    ? configuredRequirement === "true"
-    : emailAuthAvailable || isProductionAuthRequest(env, request);
-
-  return {
-    accountRegistrationAvailable: emailAuthAvailable || !emailVerificationRequired,
-    emailAuthAvailable,
-    emailVerificationRequired,
-  };
-}
-
 function isSignUpRequest(request: Request | undefined): boolean {
   return request !== undefined && new URL(request.url).pathname.endsWith("/auth/sign-up/email");
 }
 
 function shouldCheckBreachedPassword(env: Env, request: Request): boolean {
-  if (!isProductionAuthRequest(env, request)) {
+  if (!isProductionAuthPolicy(env)) {
     return false;
   }
 
@@ -73,13 +38,13 @@ function shouldCheckBreachedPassword(env: Env, request: Request): boolean {
 
 export function createBetterAuth(env: Env, request: Request) {
   const authSecret = resolveAuthSecret(env);
-  const authEmailPolicy = getAuthEmailPolicy(env, request);
+  const authEmailPolicy = getAuthEmailPolicy(env);
 
   const origin = new URL(request.url).origin;
   // The router's auth request guard checks Origin against the same set.
   const trustedOrigins = resolveTrustedOrigins(request, env);
   const isSecure = origin.startsWith("https://");
-  const blockTestAccounts = isProductionAuthRequest(env, request);
+  const blockTestAccounts = isProductionAuthPolicy(env);
   const userProfilePolicy = buildUserProfileWritePolicy(env, trustedOrigins);
 
   const db = createDb(env);

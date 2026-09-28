@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createBetterAuth, getAuthEmailPolicy } from "@functions/api/better-auth";
+import { createBetterAuth } from "@functions/api/better-auth";
+import { getAuthEmailPolicy } from "@functions/api/utils/auth-policy";
 
 const { betterAuthMock, drizzleAdapterMock, emailThrottle } = vi.hoisted(() => ({
   betterAuthMock: vi.fn(() => ({ handler: vi.fn() })),
@@ -31,8 +32,10 @@ vi.mock("@functions/api/utils/auth-email-throttle", () => ({
   discardUnsentPasswordResetToken: emailThrottle.discardToken,
 }));
 
+// Production, as wrangler.toml configures it; local and preview set "false".
 function buildEnv(overrides?: Record<string, unknown>) {
   return {
+    AUTH_EMAIL_VERIFICATION_REQUIRED: "true",
     BETTER_AUTH_SECRET: "better-auth-secret-with-32-characters!!",
     FRONTEND_URL: "https://app.serplists.com",
     RESEND_API_KEY: "re_test_123",
@@ -67,6 +70,7 @@ describe("createBetterAuth config", () => {
 
   it("allows non-production account creation without email delivery", () => {
     const env = buildEnv({
+      AUTH_EMAIL_VERIFICATION_REQUIRED: "false",
       FRONTEND_URL: undefined,
       RESEND_API_KEY: undefined,
       USESEND_API_KEY: undefined,
@@ -76,7 +80,7 @@ describe("createBetterAuth config", () => {
     createBetterAuth(env, request);
 
     const options = betterAuthMock.mock.calls[0]?.[0];
-    expect(getAuthEmailPolicy(env, request)).toEqual({
+    expect(getAuthEmailPolicy(env)).toEqual({
       accountRegistrationAvailable: true,
       emailAuthAvailable: false,
       emailVerificationRequired: false,
@@ -90,7 +94,7 @@ describe("createBetterAuth config", () => {
     ["production", buildEnv(), "https://serplists.com/api/auth/reset-password"],
     [
       "local",
-      buildEnv({ FRONTEND_URL: undefined, RESEND_API_KEY: undefined }),
+      buildEnv({ AUTH_EMAIL_VERIFICATION_REQUIRED: "false", FRONTEND_URL: undefined, RESEND_API_KEY: undefined }),
       "http://localhost:8788/api/auth/reset-password",
     ],
   ])("revokes every session when a password is reset (%s)", (_label, env, url) => {
@@ -133,6 +137,22 @@ describe("createBetterAuth config", () => {
     ]);
   });
 
+  it.each(["https://staging.serplists.com", "https://staging.serp-checklists.pages.dev"])(
+    "keeps production-only checks off under the preview policy on %s",
+    async (origin) => {
+      createBetterAuth(
+        buildEnv({ AUTH_EMAIL_VERIFICATION_REQUIRED: "false", FRONTEND_URL: origin }),
+        new Request(`${origin}/api/auth/sign-up/email`)
+      );
+
+      const options = betterAuthMock.mock.calls[0]?.[0];
+      expect(options.plugins).toEqual([{ id: "username" }]);
+      await expect(
+        options.databaseHooks.user.create.before({ email: "qa-bot@serplists.dev", name: "QA" })
+      ).resolves.toMatchObject({ data: { email: "qa-bot@serplists.dev" } });
+    }
+  );
+
   it("does not check breached passwords on production sign-in", () => {
     createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/sign-in/email"));
 
@@ -146,9 +166,8 @@ describe("createBetterAuth config", () => {
       RESEND_API_KEY: undefined,
       USESEND_API_KEY: undefined,
     });
-    const request = new Request("https://serplists.com/api/auth/sign-up/email");
 
-    expect(getAuthEmailPolicy(env, request)).toEqual({
+    expect(getAuthEmailPolicy(env)).toEqual({
       accountRegistrationAvailable: false,
       emailAuthAvailable: false,
       emailVerificationRequired: true,

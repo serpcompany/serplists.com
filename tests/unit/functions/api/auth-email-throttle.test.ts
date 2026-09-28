@@ -7,6 +7,7 @@ import {
   type AuthEmailKind,
 } from '@functions/api/utils/auth-email-throttle';
 import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { answeringPwnedPasswords } from '../../../fixtures/pwnedPasswords';
 
 // Runs the app's real Better Auth configuration and its Drizzle adapter against
 // a migrated SQLite database, with only the email provider (fetch) faked.
@@ -70,7 +71,7 @@ describe('auth email throttle', { timeout: 30_000 }, () => {
     sent = [];
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (_url: string, init?: RequestInit) => {
+      answeringPwnedPasswords(async (_url: string, init?: RequestInit) => {
         const payload = JSON.parse(String(init?.body));
         sent.push({ to: payload.to, subject: payload.subject });
         return new Response('{}', { status: 200 });

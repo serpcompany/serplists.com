@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createBetterAuth } from '@functions/api/better-auth';
 import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { answeringPwnedPasswords } from '../../../fixtures/pwnedPasswords';
 
 // Runs the app's real Better Auth configuration and Drizzle adapter against a
 // migrated SQLite database; only the email provider (fetch) is faked.
@@ -36,7 +37,7 @@ describe('sign-up when the verification email cannot be sent', { timeout: 30_000
       RESEND_API_KEY: 're_test_123',
     };
     provider = vi.fn(async () => new Response(`rate limited for ${EMAIL}`, { status: 429 }));
-    vi.stubGlobal('fetch', provider);
+    vi.stubGlobal('fetch', answeringPwnedPasswords(provider));
     logged = [];
     for (const level of ['info', 'warn', 'error'] as const) {
       vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {

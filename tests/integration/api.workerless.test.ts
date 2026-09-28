@@ -8,6 +8,11 @@ function buildEnv(overrides?: Record<string, unknown>) {
   } as any;
 }
 
+// The production auth policy comes from wrangler.toml, not the hostname.
+function productionEnv(overrides?: Record<string, unknown>) {
+  return buildEnv({ AUTH_EMAIL_VERIFICATION_REQUIRED: 'true', ...overrides });
+}
+
 describe('API Worker (no-wrangler integration)', () => {
   it('GET /api/health returns ok with CORS + request id', async () => {
     const response = await apiWorker.fetch(new Request('http://localhost/api/health'), buildEnv());
@@ -95,7 +100,7 @@ describe('API Worker (no-wrangler integration)', () => {
           name: "Blocked User",
         }),
       }),
-      buildEnv()
+      productionEnv()
     );
 
     expect(response.status).toBe(403);
@@ -113,7 +118,7 @@ describe('API Worker (no-wrangler integration)', () => {
           password: "password123456",
         }),
       }),
-      buildEnv()
+      productionEnv()
     );
 
     expect(response.status).toBe(403);
@@ -132,7 +137,7 @@ describe('API Worker (no-wrangler integration)', () => {
           name: "New User",
         }),
       }),
-      buildEnv({
+      productionEnv({
         RESEND_API_KEY: undefined,
         USESEND_API_KEY: undefined,
       })
@@ -224,7 +229,7 @@ describe('API Worker (no-wrangler integration)', () => {
   it('reports account registration unavailable on production when no auth email provider is configured', async () => {
     const response = await apiWorker.fetch(
       new Request('https://serplists.com/api/auth/status'),
-      buildEnv({
+      productionEnv({
         RESEND_API_KEY: undefined,
         USESEND_API_KEY: undefined,
       })
@@ -391,7 +396,7 @@ describe('API Worker auth request guard (no-wrangler integration)', () => {
         headers: { 'Content-Type': 'APPLICATION/JSON; charset=utf-8', ...headers },
         body: JSON.stringify(blockedCredentials),
       }),
-      buildEnv({ FRONTEND_URL: 'https://app.serplists.com' }),
+      productionEnv({ FRONTEND_URL: 'https://app.serplists.com' }),
     );
 
     expect(response.status).toBe(403);
@@ -405,7 +410,7 @@ describe('API Worker auth request guard (no-wrangler integration)', () => {
         headers: { 'Content-Type': 'application/json' },
         body: '{"email":',
       }),
-      buildEnv(),
+      productionEnv(),
     );
 
     expect(response.status).toBe(400);

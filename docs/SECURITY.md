@@ -10,7 +10,10 @@
   tokens; requests use `credentials: "include"`. Details:
   [authentication](design-docs/authentication.md).
 - **Email verification is required** before sign-in in production, and
-  breached passwords are rejected (`haveIBeenPwned` plugin).
+  breached passwords are rejected (`haveIBeenPwned` plugin). "Production" here is
+  the auth policy `AUTH_EMAIL_VERIFICATION_REQUIRED=true` from `wrangler.toml`
+  (`functions/api/utils/auth-policy.ts`), never the request hostname, so preview
+  domains such as `staging.serplists.com` get the preview policy.
 - **A password reset signs out every session** for the account
   (`revokeSessionsOnPasswordReset`), so recovering an account removes anyone
   holding a stolen session. This takes effect immediately only because sessions

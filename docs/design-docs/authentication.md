@@ -27,7 +27,10 @@ and user-facing failure states when a supporting service is unavailable.
 
 - Email verification is required before sign-in where
   `AUTH_EMAIL_VERIFICATION_REQUIRED=true` (production). Login offers to resend the
-  verification email when sign-in is blocked.
+  verification email when sign-in is blocked. The same setting, not the request
+  hostname, turns on the other production-only checks: breached-password lookups
+  and test-email blocking (`functions/api/utils/auth-policy.ts`). Preview sets it to
+  `false`, so `staging.serplists.com` and `*.pages.dev` previews behave the same.
 - Verification and reset emails use `RESEND_API_KEY`, then `USESEND_API_KEY`.
   Callbacks await delivery so provider failures surface in the request, with one
   exception: sign-up creates the account before it sends the verification email,

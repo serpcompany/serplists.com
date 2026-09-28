@@ -4,7 +4,8 @@ import { applyCorsHeaders, buildCorsPreflightResponse } from './utils/cors';
 import { getClientIp, log } from './utils/logger';
 import { checkAuthRateLimit } from './utils/auth-rate-limit';
 import { ROUTE_RATE_LIMIT_MESSAGES, checkRouteRateLimit } from './utils/route-rate-limit';
-import { createBetterAuth, getAuthEmailPolicy } from './better-auth';
+import { createBetterAuth } from './better-auth';
+import { getAuthEmailPolicy, isProductionAuthPolicy } from './utils/auth-policy';
 import { findOversizedBody } from './utils/body-limit';
 import { rejectUnsafeAuthRequest } from './utils/auth-request-guard';
 import { TEST_ACCOUNTS_DISABLED_MESSAGE, blockedTestEmailDomain } from './utils/test-email-block';
@@ -25,10 +26,6 @@ import { handleAgentMcp } from './handlers/agentMcp';
 import { jsonError } from './utils/response';
 import { isPersonalRunMcpEnabled, isPersonalRunMcpPath } from './utils/personal-run-mcp-feature';
 
-function isProductionHost(hostname: string): boolean {
-  return hostname === 'serplists.com' || hostname.endsWith('.serplists.com');
-}
-
 function isLocalRequest(url: URL): boolean {
   return (
     url.hostname === 'localhost' ||
@@ -37,11 +34,11 @@ function isLocalRequest(url: URL): boolean {
   );
 }
 
-function requiresConfiguredAuthEmail(path: string, isProdRequest: boolean, emailVerificationRequired: boolean): boolean {
+function requiresConfiguredAuthEmail(path: string, emailVerificationRequired: boolean): boolean {
   if (path === 'auth/sign-up/email') {
     // Sign-up creates the account before it sends the verification email, so
     // refuse it up front when that email cannot be sent.
-    return isProdRequest || emailVerificationRequired;
+    return emailVerificationRequired;
   }
 
   return (
@@ -145,23 +142,15 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       });
     } else if (path === 'auth/status' && request.method === 'GET') {
       response = new Response(
-        JSON.stringify(getAuthEmailPolicy(env, request)),
+        JSON.stringify(getAuthEmailPolicy(env)),
         {
           headers: { 'Content-Type': 'application/json' },
         }
       );
     } else if (path.startsWith('auth') && request.method === 'POST') {
-      let isProdRequest = isProductionHost(url.hostname);
-      if (!isProdRequest && env.FRONTEND_URL) {
-        try {
-          isProdRequest = isProductionHost(new URL(env.FRONTEND_URL).hostname);
-        } catch {
-          // Ignore malformed FRONTEND_URL.
-        }
-      }
-
+      // From wrangler.toml, never the hostname: staging.serplists.com is a preview.
       if (
-        isProdRequest &&
+        isProductionAuthPolicy(env) &&
         (path === 'auth/register' ||
           path === 'auth/login' ||
           path === 'auth/sign-up/email' ||
@@ -187,9 +176,9 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         }
       }
 
-      const emailPolicy = getAuthEmailPolicy(env, request);
+      const emailPolicy = getAuthEmailPolicy(env);
       if (
-        requiresConfiguredAuthEmail(path, isProdRequest, emailPolicy.emailVerificationRequired) &&
+        requiresConfiguredAuthEmail(path, emailPolicy.emailVerificationRequired) &&
         !emailPolicy.emailAuthAvailable
       ) {
         response = jsonError('Auth email is temporarily unavailable. Please contact support.', 503, {
