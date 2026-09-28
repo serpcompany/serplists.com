@@ -1,7 +1,16 @@
 import { toProgressPercent } from '../../../src/lib/progress';
 import { sanitizeStoredSections } from '../../../src/lib/schemas/storedSections';
+import {
+  assignMissingStableTemplateIdentities,
+  getArray,
+  getId,
+  getSubItems,
+  isRecord,
+  normalizeLegacySectionShape,
+  type JsonRecord,
+} from './template-identities';
 
-type JsonRecord = Record<string, unknown>;
+export { assignMissingStableTemplateIdentities, validateStableTemplateIdentities } from './template-identities';
 
 export type RetiredRunEntry =
   | { kind: 'section'; section: JsonRecord }
@@ -13,38 +22,6 @@ export type RetiredRunEntry =
       itemTitle?: string;
       subItem: JsonRecord;
     };
-
-const isRecord = (value: unknown): value is JsonRecord =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const getId = (value: unknown): string | null => {
-  if (!isRecord(value) || typeof value.id !== 'string' || value.id.trim() === '') {
-    return null;
-  }
-  return value.id;
-};
-
-const getArray = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
-
-function normalizeLegacySectionShape(values: unknown[]): JsonRecord[] {
-  const records = values.filter(isRecord);
-  if (records.length === 0) return [];
-  if (Array.isArray(records[0].items)) return records;
-
-  return [{
-    id: '1',
-    title: 'Checklist',
-    items: records,
-  }];
-}
-
-function getSubItems(item: JsonRecord): JsonRecord[] {
-  const direct = getArray(item.subItems).filter(isRecord);
-  const nested = getArray(item.contents)
-    .filter(isRecord)
-    .flatMap((content) => getArray(content.subItems).filter(isRecord));
-  return [...direct, ...nested];
-}
 
 // Runs saved before isCompleted existed store `completed`; the client reads it the same way.
 const wasCompleted = (runValue: JsonRecord | undefined): boolean =>
@@ -125,61 +102,93 @@ export function resetRunCompletionState(sections: unknown[]): unknown[] {
   ));
 }
 
-function reconcileSubItems(
-  templateSubItems: unknown[],
-  previousById: Map<string, JsonRecord>,
-  retainedIds: Set<string>,
-  earlierRetired: EarlierRetired,
-): JsonRecord[] {
-  return templateSubItems.filter(isRecord).map((templateSubItem) => {
-    const id = getId(templateSubItem);
-    if (id) retainedIds.add(id);
-    const previous = id ? previousById.get(id) ?? earlierRetired.take('subItem', id) : undefined;
-    return preserveRunState(templateSubItem, previous);
-  });
+function indexById(records: JsonRecord[]): Map<string, JsonRecord[]> {
+  const index = new Map<string, JsonRecord[]>();
+  for (const record of records) {
+    const id = getId(record);
+    const copies = id ? index.get(id) : undefined;
+    if (copies) copies.push(record);
+    else if (id) index.set(id, [record]);
+  }
+  return index;
+}
+
+// Matches Template records to the run's previous copies by id. Template ids are unique across
+// the whole Template, so a task or Sub-task that moved to another section or task is still the
+// same work. The copy under the same parent is tried first (legacy runs repeat ids across
+// sections), then the only copy anywhere in the run; an id the run holds more than once is
+// never guessed. Work an earlier reconcile retired comes back only for an id the run no longer
+// holds anywhere, so a stale retired copy never replaces live state.
+function createRunMatcher(kind: 'item' | 'subItem', previous: JsonRecord[], earlierRetired: EarlierRetired) {
+  const claimed = new Set<JsonRecord>();
+  const anywhere = indexById(previous);
+  const claimFirst = (copies: JsonRecord[] | undefined) => {
+    const copy = copies?.find((record) => !claimed.has(record));
+    if (copy) claimed.add(copy);
+    return copy;
+  };
+  return {
+    claimed,
+    // `parent`: the previous copies under the same section or task, by id.
+    underParent: (id: string | null, parent: Map<string, JsonRecord[]>) => (id ? claimFirst(parent.get(id)) : undefined),
+    elsewhere: (id: string | null) => {
+      if (!id) return undefined;
+      const copies = anywhere.get(id);
+      if (!copies) return earlierRetired.take(kind, id);
+      return copies.length === 1 ? claimFirst(copies) : undefined;
+    },
+  };
+}
+
+type RunMatcher = ReturnType<typeof createRunMatcher>;
+
+function withoutClaimed(records: unknown, claimed: Set<JsonRecord>): unknown[] {
+  return getArray(records).filter((record) => !(isRecord(record) && claimed.has(record)));
+}
+
+// A retired task without the Sub-tasks that moved to another task.
+function withoutMovedSubItems(item: JsonRecord, claimed: Set<JsonRecord>): JsonRecord {
+  if (!getSubItems(item).some((subItem) => claimed.has(subItem))) return item;
+  const next = { ...item };
+  if (Array.isArray(item.subItems)) next.subItems = withoutClaimed(item.subItems, claimed);
+  if (Array.isArray(item.contents)) {
+    next.contents = item.contents.map((content) => (
+      isRecord(content) && Array.isArray(content.subItems)
+        ? { ...content, subItems: withoutClaimed(content.subItems, claimed) }
+        : content
+    ));
+  }
+  return next;
+}
+
+// A removed section without the tasks and Sub-tasks that moved elsewhere; null when every
+// task it had moved, so nothing of its run state is left to keep.
+function withoutMovedWork(section: JsonRecord, items: RunMatcher, subItems: RunMatcher): JsonRecord | null {
+  const previousItems = getArray(section.items);
+  const kept = withoutClaimed(previousItems, items.claimed)
+    .map((item) => (isRecord(item) ? withoutMovedSubItems(item, subItems.claimed) : item));
+  if (previousItems.length > 0 && kept.length === 0) return null;
+  return kept.every((item, index) => item === previousItems[index]) && kept.length === previousItems.length
+    ? section
+    : { ...section, items: kept };
 }
 
 function reconcileItem(
   templateItem: JsonRecord,
   previousItem: JsonRecord | undefined,
-  retired: RetiredRunEntry[],
-  sectionId: string,
-  earlierRetired: EarlierRetired,
+  subItemMatches: Map<JsonRecord, JsonRecord | undefined>,
 ): JsonRecord {
   const next = preserveRunState(templateItem, previousItem);
-  const previousSubItems = previousItem ? getSubItems(previousItem) : [];
-  const previousSubItemsById = new Map(
-    previousSubItems.flatMap((subItem) => {
-      const id = getId(subItem);
-      return id ? [[id, subItem] as const] : [];
-    }),
-  );
-  const retainedSubItemIds = new Set<string>();
-  const context = {
-    sectionId,
-    itemId: getId(templateItem) ?? '',
-    itemTitle: typeof templateItem.title === 'string' ? templateItem.title : undefined,
-  };
+  const reconcileSubItems = (list: unknown[]) =>
+    list.filter(isRecord).map((subItem) => preserveRunState(subItem, subItemMatches.get(subItem)));
 
-  if (Array.isArray(templateItem.subItems)) {
-    next.subItems = reconcileSubItems(templateItem.subItems, previousSubItemsById, retainedSubItemIds, earlierRetired);
-  }
-
+  if (Array.isArray(templateItem.subItems)) next.subItems = reconcileSubItems(templateItem.subItems);
   if (Array.isArray(templateItem.contents)) {
-    next.contents = templateItem.contents.map((content) => {
-      if (!isRecord(content) || !Array.isArray(content.subItems)) return content;
-      return {
-        ...content,
-        subItems: reconcileSubItems(content.subItems, previousSubItemsById, retainedSubItemIds, earlierRetired),
-      };
-    });
-  }
-
-  for (const previousSubItem of previousSubItems) {
-    const id = getId(previousSubItem);
-    if (id && !retainedSubItemIds.has(id)) {
-      retired.push({ kind: 'subItem', ...context, subItem: previousSubItem });
-    }
+    next.contents = templateItem.contents.map((content) => (
+      isRecord(content) && Array.isArray(content.subItems)
+        ? { ...content, subItems: reconcileSubItems(content.subItems) }
+        : content
+    ));
   }
 
   // A task is complete exactly when all its Sub-tasks are, the rule the run page and Run
@@ -194,8 +203,9 @@ function reconcileItem(
 }
 
 /**
- * Applies the Template's sections to a run, keeping run state by stable id. Removed work
- * moves to `retired` (earlier entries first); `newlyRetired` is what this call retired.
+ * Applies the Template's sections to a run, keeping run state by stable id, also for work
+ * that moved to another section or task. Removed work moves to `retired` (earlier entries
+ * first); `newlyRetired` is what this call retired.
  */
 export function reconcileRunSections(
   previousSections: unknown[],
@@ -211,54 +221,86 @@ export function reconcileRunSections(
     previousSectionShape,
   );
   const earlierRetired = createEarlierRetiredLookup(previousRetired);
-  const retired: RetiredRunEntry[] = [];
   const previousById = new Map(
     normalizedPreviousSections.flatMap((section) => {
       const id = getId(section);
       return id ? [[id, section] as const] : [];
     }),
   );
-  const retainedSectionIds = new Set<string>();
+  const previousItems = normalizedPreviousSections.flatMap((section) => getArray(section.items).filter(isRecord));
+  const items = createRunMatcher('item', previousItems, earlierRetired);
+  const subItems = createRunMatcher('subItem', previousItems.flatMap(getSubItems), earlierRetired);
 
-  const sections = normalizedTemplateSections.map((templateSection) => {
-    const sectionId = getId(templateSection) ?? '';
-    retainedSectionIds.add(sectionId);
-    const previousSection = previousById.get(sectionId) ?? earlierRetired.take('section', sectionId);
-    const previousItems = getArray(previousSection?.items).filter(isRecord);
-    const previousItemsById = new Map(
-      previousItems.flatMap((item) => {
-        const id = getId(item);
-        return id ? [[id, item] as const] : [];
-      }),
-    );
-    const retainedItemIds = new Set<string>();
-    const items = getArray(templateSection.items).filter(isRecord).map((templateItem) => {
-      const itemId = getId(templateItem) ?? '';
-      retainedItemIds.add(itemId);
-      const previousItem = previousItemsById.get(itemId) ?? earlierRetired.take('item', itemId);
-      return reconcileItem(templateItem, previousItem, retired, sectionId, earlierRetired);
-    });
+  // Each section keeps its own previous copy (or one an earlier reconcile retired).
+  const matchedSections = normalizedTemplateSections.map((templateSection) => {
+    const id = getId(templateSection) ?? '';
+    const previous = previousById.get(id) ?? earlierRetired.take('section', id);
+    const previousItems = getArray(previous?.items).filter(isRecord);
+    return { templateSection, id, previousItems, parent: indexById(previousItems) };
+  });
+  const templateItems = matchedSections.flatMap(({ templateSection, parent }) =>
+    getArray(templateSection.items).filter(isRecord).map((templateItem) => ({ templateItem, parent })));
 
-    for (const previousItem of previousItems) {
-      const itemId = getId(previousItem);
-      if (itemId && !retainedItemIds.has(itemId)) {
+  // Every copy under the same parent is matched before any is looked for elsewhere, so the
+  // result does not depend on which way work moved.
+  const itemMatches = new Map<JsonRecord, JsonRecord | undefined>();
+  for (const { templateItem, parent } of templateItems) {
+    itemMatches.set(templateItem, items.underParent(getId(templateItem), parent));
+  }
+  for (const { templateItem } of templateItems) {
+    if (!itemMatches.get(templateItem)) itemMatches.set(templateItem, items.elsewhere(getId(templateItem)));
+  }
+  const subItemMatches = new Map<JsonRecord, JsonRecord | undefined>();
+  for (const { templateItem } of templateItems) {
+    const previousItem = itemMatches.get(templateItem);
+    const parent = indexById(previousItem ? getSubItems(previousItem) : []);
+    for (const subItem of getSubItems(templateItem)) {
+      subItemMatches.set(subItem, subItems.underParent(getId(subItem), parent));
+    }
+  }
+  for (const { templateItem } of templateItems) {
+    for (const subItem of getSubItems(templateItem)) {
+      if (!subItemMatches.get(subItem)) subItemMatches.set(subItem, subItems.elsewhere(getId(subItem)));
+    }
+  }
+
+  // Previous work nothing in the Template matched is retired.
+  const retired: RetiredRunEntry[] = [];
+  const sections = matchedSections.map(({ templateSection, id: sectionId, previousItems: sectionPreviousItems }) => {
+    const sectionItems = getArray(templateSection.items).filter(isRecord).map((templateItem) => {
+      const previousItem = itemMatches.get(templateItem);
+      for (const subItem of previousItem ? getSubItems(previousItem) : []) {
+        if (subItems.claimed.has(subItem) || !getId(subItem)) continue;
         retired.push({
-          kind: 'item',
+          kind: 'subItem',
           sectionId,
-          sectionTitle: typeof templateSection.title === 'string' ? templateSection.title : undefined,
-          item: previousItem,
+          itemId: getId(templateItem) ?? '',
+          itemTitle: typeof templateItem.title === 'string' ? templateItem.title : undefined,
+          subItem,
         });
       }
+      return reconcileItem(templateItem, previousItem, subItemMatches);
+    });
+
+    for (const previousItem of sectionPreviousItems) {
+      if (items.claimed.has(previousItem) || !getId(previousItem)) continue;
+      retired.push({
+        kind: 'item',
+        sectionId,
+        sectionTitle: typeof templateSection.title === 'string' ? templateSection.title : undefined,
+        item: withoutMovedSubItems(previousItem, subItems.claimed),
+      });
     }
 
-    return { ...templateSection, items };
+    return { ...templateSection, items: sectionItems };
   });
 
+  const retainedSectionIds = new Set(matchedSections.map(({ id }) => id));
   for (const previousSection of normalizedPreviousSections) {
     const sectionId = getId(previousSection);
-    if (sectionId && !retainedSectionIds.has(sectionId)) {
-      retired.push({ kind: 'section', section: previousSection });
-    }
+    if (!sectionId || retainedSectionIds.has(sectionId)) continue;
+    const section = withoutMovedWork(previousSection, items, subItems);
+    if (section) retired.push({ kind: 'section', section });
   }
 
   return { sections, retired: [...earlierRetired.remaining, ...retired], newlyRetired: retired };
@@ -318,180 +360,4 @@ export function findNonObjectTemplateEntry(sections: unknown[]): string | null {
     }
   }
   return null;
-}
-
-export function validateStableTemplateIdentities(sections: unknown[]): string | null {
-  const sectionIds = new Set<string>();
-  const itemIds = new Set<string>();
-  const subItemIds = new Set<string>();
-
-  for (const section of sections) {
-    const sectionId = getId(section);
-    if (!sectionId) return 'Every template section requires a stable id';
-    if (sectionIds.has(sectionId)) return `Duplicate section id: ${sectionId}`;
-    sectionIds.add(sectionId);
-
-    for (const item of getArray((section as JsonRecord).items)) {
-      const itemId = getId(item);
-      if (!itemId) return `Every item in section ${sectionId} requires a stable id`;
-      if (itemIds.has(itemId)) return `Duplicate item id: ${itemId}`;
-      itemIds.add(itemId);
-
-      for (const subItem of getSubItems(item as JsonRecord)) {
-        const subItemId = getId(subItem);
-        if (!subItemId) return `Every sub-item in item ${itemId} requires a stable id`;
-        if (subItemIds.has(subItemId)) return `Duplicate sub-item id: ${subItemId}`;
-        subItemIds.add(subItemId);
-      }
-    }
-  }
-
-  return null;
-}
-
-function matchSiblingIdentities(
-  currentRecords: JsonRecord[],
-  previousRaw: JsonRecord[],
-  previousNormalized: JsonRecord[],
-  fallbackId: (index: number) => string,
-): Array<{ id: string; previousIndex: number | null }> {
-  const matches: Array<{ id?: string; previousIndex: number | null }> = currentRecords.map(() => ({ previousIndex: null }));
-  const usedPrevious = new Set<number>();
-
-  currentRecords.forEach((current, currentIndex) => {
-    const currentId = getId(current);
-    if (!currentId) return;
-    const previousIndex = previousNormalized.findIndex(
-      (candidate, candidateIndex) => !usedPrevious.has(candidateIndex) && getId(candidate) === currentId,
-    );
-    if (previousIndex < 0) return;
-    matches[currentIndex] = { id: currentId, previousIndex };
-    usedPrevious.add(previousIndex);
-  });
-
-  currentRecords.forEach((current, currentIndex) => {
-    if (matches[currentIndex].id) return;
-    const title = typeof current.title === 'string' ? current.title : null;
-    if (!title || currentRecords.filter((candidate) => candidate.title === title).length !== 1) return;
-    const candidates = previousRaw.flatMap((candidate, candidateIndex) =>
-      !usedPrevious.has(candidateIndex) && candidate.title === title ? [candidateIndex] : []
-    );
-    if (candidates.length !== 1 || getId(previousRaw[candidates[0]])) return;
-    const previousIndex = candidates[0];
-    matches[currentIndex] = {
-      id: getId(previousNormalized[previousIndex]) ?? fallbackId(currentIndex),
-      previousIndex,
-    };
-    usedPrevious.add(previousIndex);
-  });
-
-  currentRecords.forEach((current, currentIndex) => {
-    if (matches[currentIndex].id) return;
-    if (
-      previousRaw[currentIndex]
-      && !usedPrevious.has(currentIndex)
-      && !getId(previousRaw[currentIndex])
-    ) {
-      matches[currentIndex] = {
-        id: getId(previousNormalized[currentIndex]) ?? fallbackId(currentIndex),
-        previousIndex: currentIndex,
-      };
-      usedPrevious.add(currentIndex);
-      return;
-    }
-    matches[currentIndex] = {
-      id: getId(current) ?? fallbackId(currentIndex),
-      previousIndex: null,
-    };
-  });
-
-  return matches.map((match, index) => ({
-    id: match.id ?? fallbackId(index),
-    previousIndex: match.previousIndex,
-  }));
-}
-
-function assignIdentities(sections: JsonRecord[], previousSections: JsonRecord[]): JsonRecord[] {
-  const previousNormalized = previousSections.length > 0
-    ? assignIdentities(previousSections, [])
-    : [];
-  const sectionMatches = matchSiblingIdentities(
-    sections,
-    previousSections,
-    previousNormalized,
-    (index) => `legacy-section-${index + 1}`,
-  );
-
-  return sections.map((section, sectionIndex) => {
-    const sectionMatch = sectionMatches[sectionIndex];
-    const sectionId = sectionMatch.id;
-    const previousSectionRaw = sectionMatch.previousIndex === null
-      ? undefined
-      : previousSections[sectionMatch.previousIndex];
-    const previousSectionNormalized = sectionMatch.previousIndex === null
-      ? undefined
-      : previousNormalized[sectionMatch.previousIndex];
-    const previousItemsRaw = getArray(previousSectionRaw?.items).filter(isRecord);
-    const previousItemsNormalized = getArray(previousSectionNormalized?.items).filter(isRecord);
-    const currentItems = getArray(section.items).filter(isRecord);
-    const itemMatches = matchSiblingIdentities(
-      currentItems,
-      previousItemsRaw,
-      previousItemsNormalized,
-      (index) => `legacy-item-${sectionIndex + 1}-${index + 1}`,
-    );
-
-    return {
-      ...section,
-      id: sectionId,
-      items: currentItems.map((item, itemIndex) => {
-        const itemMatch = itemMatches[itemIndex];
-        const itemId = itemMatch.id;
-        const previousItemRaw = itemMatch.previousIndex === null
-          ? undefined
-          : previousItemsRaw[itemMatch.previousIndex];
-        const previousItemNormalized = itemMatch.previousIndex === null
-          ? undefined
-          : previousItemsNormalized[itemMatch.previousIndex];
-        const previousSubItemsRaw = previousItemRaw ? getSubItems(previousItemRaw) : [];
-        const previousSubItemsNormalized = previousItemNormalized ? getSubItems(previousItemNormalized) : [];
-        const currentSubItems = getSubItems(item);
-        const subItemMatches = matchSiblingIdentities(
-          currentSubItems,
-          previousSubItemsRaw,
-          previousSubItemsNormalized,
-          (index) => `legacy-subitem-${sectionIndex + 1}-${itemIndex + 1}-${index + 1}`,
-        );
-        let subItemSequence = 0;
-        const assignSubItems = (subItems: unknown[]) => subItems.filter(isRecord).map((subItem) => ({
-          ...subItem,
-          id: subItemMatches[subItemSequence++].id,
-        }));
-
-        return {
-          ...item,
-          id: itemId,
-          ...(Array.isArray(item.subItems) ? { subItems: assignSubItems(item.subItems) } : {}),
-          ...(Array.isArray(item.contents)
-            ? {
-                contents: item.contents.map((content) => {
-                  if (!isRecord(content) || !Array.isArray(content.subItems)) return content;
-                  return { ...content, subItems: assignSubItems(content.subItems) };
-                }),
-              }
-            : {}),
-        };
-      }),
-    };
-  });
-}
-
-export function assignMissingStableTemplateIdentities(
-  sections: unknown[],
-  previousSections: unknown[] = [],
-): JsonRecord[] {
-  return assignIdentities(
-    normalizeLegacySectionShape(sections),
-    normalizeLegacySectionShape(previousSections),
-  );
 }

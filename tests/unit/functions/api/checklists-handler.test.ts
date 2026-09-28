@@ -1238,6 +1238,38 @@ describe('Checklists Handlers', () => {
     ]);
   });
 
+  it('revalidates a run whose task the template moved to another section without resetting it', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([{
+        id: 'run-1', user_id: 'user-123', team_id: null, template_id: 'template-1', title: 'Completed run',
+        items: JSON.stringify([
+          { id: 'A', title: 'Plan', items: [{ id: 'x', title: 'Call vendor', isCompleted: true, notes: 'called vendor' }] },
+          { id: 'B', title: 'Ship', items: [{ id: 'z', title: 'Publish', isCompleted: true }] },
+        ]),
+        retired_items: '[]', status: 'in_progress', template_version: 1, revision: 2, is_public: false,
+        started_at: new Date().toISOString(), created_at: new Date().toISOString(),
+      }])
+      .mockResolvedValueOnce([{
+        id: 'template-1', version: 2, owner_type: 'user', team_id: null, user_id: 'user-123', is_public: false,
+        items: JSON.stringify([
+          { id: 'A', title: 'Plan', items: [] },
+          { id: 'B', title: 'Ship', items: [{ id: 'z', title: 'Publish' }, { id: 'x', title: 'Call vendor' }] },
+        ]),
+      }]);
+
+    const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1/revalidate', {
+      method: 'POST',
+      body: JSON.stringify({ expected_revision: 2 }),
+    }), mockEnv);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(expect.objectContaining({ progress: 100 }));
+    const update = dbMocks.updateChain.set.mock.calls[0][0];
+    expect(JSON.parse(update.items)[1].items[1]).toEqual(expect.objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
+    expect(JSON.parse(update.retired_items)).toEqual([]);
+  });
+
   it('names the work a revalidate retired in its Changelog event', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit

@@ -734,6 +734,42 @@ describe('Templates Handlers', () => {
     expect(predicateColumns).toContain('deleted_at');
   });
 
+  it('keeps the run state of a task a save moves to another section', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const stored = [
+      { id: 'A', title: 'Plan', items: [{ id: 'x', title: 'Call vendor' }, { id: 'y', title: 'Draft brief' }] },
+      { id: 'B', title: 'Ship', items: [{ id: 'z', title: 'Publish' }] },
+    ];
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{
+      id: 'template-1', user_id: 'user-123', title: 'Launch', description: '', items: JSON.stringify(stored),
+      version: 1, is_public: false, slug: 'launch', created_at: new Date().toISOString(), updated_at: null,
+    }]);
+    const run = [
+      { id: 'A', title: 'Plan', items: [{ id: 'x', title: 'Call vendor', isCompleted: true, notes: 'called vendor' }, { id: 'y', title: 'Draft brief', isCompleted: false }] },
+      { id: 'B', title: 'Ship', items: [{ id: 'z', title: 'Publish', isCompleted: false }] },
+    ];
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+      { id: 'run-1', user_id: 'user-123', team_id: null, template_id: 'template-1', items: JSON.stringify(run), retired_items: '[]', status: 'in_progress', is_public: false, revision: 3 },
+    ]);
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+      method: 'PUT',
+      body: JSON.stringify({
+        sections: [
+          { id: 'A', title: 'Plan', items: [{ id: 'y', title: 'Draft brief' }] },
+          { id: 'B', title: 'Ship', items: [{ id: 'z', title: 'Publish' }, { id: 'x', title: 'Call vendor' }] },
+        ],
+        expected_version: 1,
+      }),
+    }), mockEnv);
+
+    expect(response.status).toBe(200);
+    const runUpdate = dbMocks.updateChain.set.mock.calls[1][0];
+    expect(JSON.parse(runUpdate.items)[1].items[1]).toEqual(expect.objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
+    expect(JSON.parse(runUpdate.retired_items)).toEqual([]);
+    expect(runUpdate.progress).toBe(33);
+  });
+
   it('rejects a stale template editor version before writing', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([
