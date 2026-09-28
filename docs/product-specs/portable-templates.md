@@ -138,6 +138,9 @@ because until then a stored Organization can still read as Personal; the counts
 show a dash meanwhile. The server alone decides whether there is anything to
 export: an empty pack reports "No templates available to export" and downloads
 nothing, so a list request that failed and looks empty never blocks an export.
+Only one export runs at a time: while it runs, the button reads "Exporting..."
+and it and the include-public switch are disabled, and further clicks are
+ignored, so a double click sends one request and downloads one file.
 
 Each file chosen in the picker replaces the previous preview, even when the new
 file is rejected (wrong type, over 2MB, or invalid), so Confirm Import only ever

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { exportTemplatePack } from '@/features/template-backup/exportTemplatePack';
+import { createSingleFlight } from '@/lib/utils/singleFlight';
 
 const pack = (templates: unknown[]) => ({
   kind: 'serplists-template-pack',
@@ -66,5 +67,29 @@ describe('exportTemplatePack', () => {
       exportTemplatePack({ includePublic: false }, dependencies),
     ).rejects.toThrow();
     expect(dependencies.download).not.toHaveBeenCalled();
+  });
+});
+
+describe('exportTemplatePack behind the page export guard', () => {
+  it('sends one request and downloads one file for a double click', async () => {
+    let resolveExport!: (value: unknown) => void;
+    const exportBackup = vi.fn(
+      () => new Promise<unknown>((resolve) => {
+        resolveExport = resolve;
+      }),
+    );
+    const download = vi.fn();
+    const flight = createSingleFlight();
+    const click = () =>
+      flight.run(() => exportTemplatePack({ includePublic: true }, { download, exportBackup }));
+
+    const first = click();
+    const second = click();
+    resolveExport(pack([{ title: 'Owned' }, { title: 'Public' }]));
+
+    await expect(first).resolves.toEqual({ kind: 'exported', count: 2 });
+    await expect(second).resolves.toBeUndefined();
+    expect(exportBackup).toHaveBeenCalledTimes(1);
+    expect(download).toHaveBeenCalledTimes(1);
   });
 });

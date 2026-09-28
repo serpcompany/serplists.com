@@ -16,6 +16,7 @@ type BillingQueryResult = {
 
 const mocks = vi.hoisted(() => ({
   billingQuery: null as unknown as BillingQueryResult,
+  exportRunning: false,
   templateListOptions: [] as unknown[],
   templateLists: {
     allTemplates: [] as Array<Record<string, unknown>>,
@@ -54,6 +55,14 @@ vi.mock('@/contexts/TemplatesContext', () => ({
   },
 }));
 
+// The page's export guard: tests set whether an export is in flight.
+vi.mock('@/hooks/useSingleFlight', () => ({
+  useSingleFlight: () => ({
+    isRunning: mocks.exportRunning,
+    run: <T,>(task: () => Promise<T> | T) => Promise.resolve(task()),
+  }),
+}));
+
 vi.mock('@/lib/api', () => ({
   api: {
     createBillingCheckout: vi.fn(),
@@ -86,6 +95,7 @@ const getTag = (html: string, pattern: RegExp): string => html.match(pattern)?.[
 const fileInput = (html: string) => getTag(html, /<input[^>]*id="template-file-input"[^>]*>/);
 const exportButton = (html: string) =>
   getTag(html, /<button(?:(?!<button).)*Export Portable Pack/);
+const exportingButton = (html: string) => getTag(html, /<button(?:(?!<button).)*Exporting\.\.\./);
 const includePublicSwitch = (html: string) => getTag(html, /<button[^>]*id="include-public-templates"[^>]*>/);
 const statValues = (html: string) =>
   Array.from(html.matchAll(/<div class="text-2xl font-bold[^"]*">([^<]*)<\/div>/g), (match) => match[1]);
@@ -196,5 +206,33 @@ describe('TemplateBackup while the template list loads', () => {
     expect(isDisabled(exportButton(html))).toBe(false);
     expect(isDisabled(includePublicSwitch(html))).toBe(false);
     expect(isDisabled(fileInput(html))).toBe(false);
+  });
+});
+
+describe('TemplateBackup while an export runs', () => {
+  afterEach(() => {
+    mocks.exportRunning = false;
+  });
+
+  it('disables Export and the include-public switch and says it is exporting', () => {
+    mocks.billingQuery = knownBillingQuery('pro');
+    mocks.exportRunning = true;
+
+    const html = renderToStaticMarkup(<TemplateBackup />);
+
+    expect(html).not.toContain('Export Portable Pack');
+    expect(isDisabled(exportingButton(html))).toBe(true);
+    expect(exportingButton(html)).toContain('aria-busy="true"');
+    expect(isDisabled(includePublicSwitch(html))).toBe(true);
+  });
+
+  it('enables Export again once the export has finished', () => {
+    mocks.billingQuery = knownBillingQuery('pro');
+
+    const html = renderToStaticMarkup(<TemplateBackup />);
+
+    expect(exportingButton(html)).toBe('');
+    expect(isDisabled(exportButton(html))).toBe(false);
+    expect(isDisabled(includePublicSwitch(html))).toBe(false);
   });
 });

@@ -21,6 +21,7 @@ import type { ImportPreview } from "@/features/template-backup/importFileSelecti
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
 import { getAccessFailure } from "@/lib/api-errors";
 import { useBillingStatus } from "@/hooks/useBillingStatus";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import { cn } from "@/lib/utils";
 import { ORGANIZATION_BACKUP_UPGRADE_MESSAGE, TemplateBackupPlanNotice } from "@/components/TemplateBackupPlanNotice";
 import { TemplateImportPreview } from "@/components/TemplateImportPreview";
@@ -78,6 +79,9 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   // Personal while it loads), so export and import wait and the counts show a dash.
   const backupControlsOff = !user || templatesLoading || !hasBackupAccess || !canEditTemplates;
   const formatCount = (count: number) => (templatesLoading ? "–" : count);
+  // One export at a time: a second click would scan every Template again and download a copy.
+  const exportFlight = useSingleFlight();
+  const isExporting = exportFlight.isRunning;
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [lastImportSummary, setLastImportSummary] = useState<TemplateImportSummary | null>(null);
@@ -117,7 +121,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     });
   };
 
-  const handleExportAll = async () => {
+  const exportAll = async () => {
     if (templatesLoading) return;
     if (!user) {
       toast.error("Log in to export your templates");
@@ -149,6 +153,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       await handleBackupFailure(error, "Failed to export templates");
     }
   };
+  const handleExportAll = () => void exportFlight.run(exportAll);
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) =>
     selectImportFile(event.currentTarget, {
       onError: (message) => toast.error(message),
@@ -410,12 +415,12 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                   id="include-public-templates"
                   checked={includePublicTemplates}
                   onCheckedChange={setIncludePublicTemplates}
-                  disabled={backupControlsOff}
+                  disabled={backupControlsOff || isExporting}
                 />
               </div>
-	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={backupControlsOff}>
+	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={backupControlsOff || isExporting} aria-busy={isExporting}>
 	              <Download className="h-4 w-4" />
-	              Export Portable Pack
+	              {isExporting ? "Exporting..." : "Export Portable Pack"}
 	            </Button>
 	          </div>
 
