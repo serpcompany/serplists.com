@@ -305,6 +305,8 @@ const ChecklistRunPage = () => {
 
   // Share links govern shared runs; private runs follow the role in the run's Organization.
   const canUpdateRun = isSharedRun || getPermissions(displayRun.teamId).canRun;
+  // Completed runs are frozen: their tasks can no longer be ticked or unticked.
+  const isRunCompleted = displayRun.status === 'completed';
   const activeItemId = selectedItemId ?? displayRun.sections[0]?.items[0]?.id ?? null;
   const flatItems = displayRun.sections.flatMap((section) =>
     section.items.map((item, itemIndex) => ({
@@ -523,6 +525,7 @@ const ChecklistRunPage = () => {
                         <div className="flex items-start gap-4 px-4 py-4">
                           <Checkbox
                             checked={item.isCompleted}
+                            disabled={isRunCompleted}
                             onCheckedChange={(checked) => void handleItemToggle(item.id, checked === true)}
                           />
                           <div className="min-w-0 flex-1">
@@ -546,7 +549,7 @@ const ChecklistRunPage = () => {
                           <div className="border-t border-border px-4 py-4">
                             <ContentRenderer
                               contents={item.contents}
-                              disabled={false}
+                              disabled={isRunCompleted}
                               onSubItemToggle={(contentIndex, subItemIndex, isCompleted) =>
                                 void handleSubItemToggle(item.id, contentIndex, subItemIndex, isCompleted)
                               }
@@ -640,6 +643,7 @@ const ChecklistRunPage = () => {
                   hasPrev={Boolean(previousEntry)}
                   primaryAction={getPrimaryTaskAction(displayRun, selectedEntry.item.id, Boolean(nextEntry), canUpdateRun)}
                   readOnly={!canUpdateRun}
+                  runCompleted={isRunCompleted}
                   onFinishRun={() => setIsCompleteDialogOpen(true)}
                   onSelectTask={setSelectedItemId}
                 />

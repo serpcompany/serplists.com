@@ -384,3 +384,23 @@ describe('toggle keys and no-op saves', () => {
     expect(updateRun).not.toHaveBeenCalled();
   });
 });
+
+describe('a run completed while a toggle waits in the queue', () => {
+  it('refuses the toggle once completion has landed, so the run never reads Completed with open tasks', async () => {
+    const allDone = { 'item-1': true, 'item-2': true, 'item-3': true, 'sub-1': true };
+    const server = createServer(buildRun(5, allDone));
+    const { context, page, saver, saves } = createPage(server, buildRun(5, allDone));
+
+    const [completed, untick] = await Promise.all([
+      saver(saves.complete, context),
+      saver(saves.toggleItem('item-1', false), context),
+    ]);
+
+    expect(completed.kind).toBe('ok');
+    expect(untick.kind).toBe('error');
+    expect(server.sent).toHaveLength(1);
+    expect(server.stored().status).toBe('completed');
+    expect(server.stored().sections[0]?.items.every((item) => item.isCompleted)).toBe(true);
+    expect(page.latest?.status).toBe('completed');
+  });
+});

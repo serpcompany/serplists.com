@@ -25,7 +25,11 @@ const textOf = (node: unknown): string => {
 // double click, 0 for keyboard activation.
 type Click = (event: { detail: number }) => void;
 
-const renderPanel = (task: ChecklistItem, primaryAction: PrimaryTaskAction) => {
+const renderPanel = (
+  task: ChecklistItem,
+  primaryAction: PrimaryTaskAction,
+  extra: Partial<Parameters<typeof TaskExecutionPanel>[0]> = {},
+) => {
   const onToggleTask = vi.fn();
   const onToggleSubItem = vi.fn();
   const onNavigateNext = vi.fn();
@@ -45,6 +49,7 @@ const renderPanel = (task: ChecklistItem, primaryAction: PrimaryTaskAction) => {
     task,
     taskIndex: 0,
     totalTasks: 1,
+    ...extra,
   });
   const click = (label: string, detail = 1) => {
     const [button] = findElements(tree, (element) => typeof element.props.onClick === 'function' && textOf(element) === label);
@@ -58,7 +63,7 @@ const renderPanel = (task: ChecklistItem, primaryAction: PrimaryTaskAction) => {
     const [renderer] = findElements(tree, (element) => typeof element.props.onSubItemToggle === 'function');
     return renderer?.props.onSubItemToggle as (contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
   };
-  return { click, onNavigateNext, onToggleSubItem, onToggleTask, subTaskHandler, taskCheckbox };
+  return { click, onNavigateNext, onToggleSubItem, onToggleTask, subTaskHandler, taskCheckbox, tree };
 };
 
 const openTask: ChecklistItem = {
@@ -129,5 +134,25 @@ describe('TaskExecutionPanel ignores the second click of a double click', () => 
     const done = renderPanel({ ...openTask, isCompleted: true }, { kind: 'next_task' });
     done.click('Next Task', 0);
     expect(done.onNavigateNext).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('TaskExecutionPanel on a completed run', () => {
+  it('locks the task and sub-task checkboxes, and keeps notes editable', () => {
+    const { tree } = renderPanel(openTask, { kind: 'run_completed' }, { runCompleted: true });
+    const [taskCheckbox] = findElements(tree, (element) => element.type === 'button');
+    const [renderer] = findElements(tree, (element) => typeof element.props.onSubItemToggle === 'function');
+    const [notes] = findElements(tree, (element) => element.props.label === 'Task notes');
+
+    expect(taskCheckbox?.props.disabled).toBe(true);
+    expect(renderer?.props.disabled).toBe(true);
+    expect(notes?.props.readOnly).toBe(false);
+  });
+
+  it('leaves an in-progress run tickable', () => {
+    const { tree } = renderPanel(openTask, { kind: 'complete_task' });
+    const [taskCheckbox] = findElements(tree, (element) => element.type === 'button');
+
+    expect(taskCheckbox?.props.disabled).toBe(false);
   });
 });

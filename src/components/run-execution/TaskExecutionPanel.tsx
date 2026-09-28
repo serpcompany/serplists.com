@@ -33,6 +33,9 @@ interface TaskExecutionPanelProps {
   primaryAction: PrimaryTaskAction;
   // Organization members whose role cannot update the run can only read it.
   readOnly?: boolean;
+  // A completed run is frozen: its tasks and sub-tasks cannot be ticked or unticked.
+  // Notes stay editable, as they do not change completion.
+  runCompleted?: boolean;
 }
 
 export function TaskExecutionPanel({
@@ -53,8 +56,10 @@ export function TaskExecutionPanel({
   hasPrev,
   primaryAction,
   readOnly = false,
+  runCompleted = false,
 }: TaskExecutionPanelProps) {
   const isTaskComplete = task.isCompleted === true;
+  const canTick = !readOnly && !runCompleted;
   const primaryButton = getPrimaryTaskButton(primaryAction, {
     onCompleteTask: () => onToggleTask(true),
     onFinishRun,
@@ -78,7 +83,7 @@ export function TaskExecutionPanel({
             {/* Completing the task moves on to the next one, so a double click would
                 also toggle that task: the second click is ignored. */}
             <button
-              disabled={readOnly}
+              disabled={!canTick}
               onClick={onSingleClick(() => onToggleTask(!isTaskComplete))}
               className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors"
               type="button"
@@ -110,7 +115,7 @@ export function TaskExecutionPanel({
           {task.contents?.length ? (
             <ContentRenderer
               contents={task.contents}
-              disabled={readOnly}
+              disabled={!canTick}
               onSubItemToggle={onToggleSubItem}
             />
           ) : (

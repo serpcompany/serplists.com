@@ -46,6 +46,11 @@ export const getPrimaryTaskAction = (
   // False for Organization members whose role cannot update the run (viewers).
   canUpdate = true,
 ): PrimaryTaskAction => {
+  // A completed run is frozen, even one saved with open tasks before that rule: it only
+  // navigates.
+  if (run.status === 'completed') {
+    return hasNext ? { kind: 'next_task' } : { kind: 'run_completed' };
+  }
   if (!canUpdate) {
     return hasNext ? { kind: 'next_task' } : { kind: 'view_only' };
   }

@@ -22,6 +22,7 @@ import {
 } from './runExecutionMappers';
 import { applyNoteDrafts, draftedNotesChanged, pruneNoteDrafts, updateNoteDraft, type NoteDrafts } from './noteDrafts';
 import {
+  COMPLETED_RUN_FROZEN_MESSAGE,
   toErrorResult,
   type RunExecutionActionResult,
   type RunExecutionLoadResult,
@@ -254,6 +255,10 @@ export const toggleRunItem = async (
   if (!params.run) {
     return { kind: 'not_found' };
   }
+  // Checked on the latest run in the queue, so a toggle queued behind completion is refused.
+  if (params.run.status === 'completed') {
+    return { kind: 'error', message: COMPLETED_RUN_FROZEN_MESSAGE };
+  }
 
   const nextRun = withClonedRun(
     applyNoteDrafts(params.run, params.noteDrafts ?? {}, [params.itemId]),
@@ -294,6 +299,9 @@ export const toggleRunSubItem = async (
 ): Promise<RunExecutionActionResult> => {
   if (!params.run) {
     return { kind: 'not_found' };
+  }
+  if (params.run.status === 'completed') {
+    return { kind: 'error', message: COMPLETED_RUN_FROZEN_MESSAGE };
   }
 
   const nextRun = withClonedRun(params.run);

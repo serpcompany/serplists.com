@@ -563,3 +563,64 @@ describe('saving the run title', () => {
     expect(updateRun).toHaveBeenCalledWith(expect.objectContaining({ title: 'Launch v2' }));
   });
 });
+
+// Completed runs are frozen (docs/product-specs/features.md). Unticking a task on one used
+// to save it as Completed with open tasks, and re-ticking never offered completion again.
+describe('a completed run', () => {
+  const completedRun = () =>
+    buildRun({
+      completedAt: '2026-04-20T00:00:00.000Z',
+      progress: 100,
+      sections: buildRun().sections.map((section) => ({
+        ...section,
+        items: section.items.map((item) => ({
+          ...item,
+          isCompleted: true,
+          contents: item.contents?.map((content) => ({
+            ...content,
+            subItems: content.subItems?.map((sub) => ({ ...sub, isCompleted: true })),
+          })),
+        })),
+      })),
+      status: 'completed',
+    });
+  const apiClient = () => ({
+    createChecklistRunShare: vi.fn(),
+    getChecklistById: vi.fn(),
+    getSharedChecklist: vi.fn(),
+    updateSharedChecklist: vi.fn(),
+  });
+
+  it('refuses to untick a task, privately or through a share link, and saves nothing', async () => {
+    const updateRun = vi.fn();
+    const client = apiClient();
+
+    const privateResult = await toggleRunItem(
+      { isCompleted: false, itemId: 'item-2', run: completedRun() },
+      { apiClient: client, updateRun },
+    );
+    const sharedResult = await toggleRunItem(
+      { isCompleted: false, itemId: 'item-2', run: completedRun(), shareToken: 'share-1' },
+      { apiClient: client, updateRun },
+    );
+
+    expect(privateResult.kind).toBe('error');
+    expect(sharedResult.kind).toBe('error');
+    expect(updateRun).not.toHaveBeenCalled();
+    expect(client.updateSharedChecklist).not.toHaveBeenCalled();
+  });
+
+  it('refuses to untick a sub-task and saves nothing', async () => {
+    const updateRun = vi.fn();
+    const client = apiClient();
+
+    const result = await toggleRunSubItem(
+      { contentIndex: 0, isCompleted: false, itemId: 'item-1', run: completedRun(), shareToken: 'share-1', subItemIndex: 0 },
+      { apiClient: client, updateRun },
+    );
+
+    expect(result.kind).toBe('error');
+    expect(updateRun).not.toHaveBeenCalled();
+    expect(client.updateSharedChecklist).not.toHaveBeenCalled();
+  });
+});

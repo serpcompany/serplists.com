@@ -463,3 +463,53 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
     await deleteRun(page, runId);
   });
 }
+
+// Completed runs are frozen: unticking a task used to leave the run labelled Completed
+// with open tasks. Notes stay editable.
+test('a completed run cannot be unticked, privately or through its share link', async ({ page, browser }) => {
+  await loginAsAdmin(page);
+  const runId = await createRunWithSubTasks(page, `Frozen run QA ${Date.now()}`, true);
+  await page.evaluate(async ({ id, apiBaseUrl }) => {
+    await fetch(`${apiBaseUrl}/checklists/${id}`, {
+      body: JSON.stringify({
+        completed_at: new Date().toISOString(),
+        expected_revision: 1,
+        progress: 100,
+        sections: [{ id: 'st', title: 'Section', items: [
+          { id: 'st-a', title: 'Task A', isCompleted: true, contents: [{ type: 'subItems', value: '', subItems: [
+            { id: 'st-a-1', title: 'Step one', isCompleted: true },
+            { id: 'st-a-2', title: 'Step two', isCompleted: true },
+          ] }] },
+          { id: 'st-b', title: 'Task B', isCompleted: true },
+        ] }],
+        status: 'completed',
+      }),
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    });
+  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  const saves = recordSaves(page, runId);
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await expect(stepCheckbox(page, 'Step one')).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Mark Complete' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Next Task' }).click();
+  await expect(page.getByRole('button', { name: 'Run completed' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Save notes' })).toBeVisible();
+  expect(saves).toEqual([]);
+
+  await page.getByRole('button', { name: 'Share' }).click();
+  const shareUrl = await page.getByRole('textbox', { name: 'Share link' }).inputValue();
+  const guest = await (await browser.newContext()).newPage();
+  await guest.goto(shareUrl);
+  await expect(guest.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  const guestBoxes = guest.getByRole('checkbox');
+  await expect(guestBoxes).toHaveCount(4);
+  for (const box of await guestBoxes.all()) await expect(box).toBeDisabled();
+  await guest.close();
+
+  expect(await readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
+  await deleteRun(page, runId);
+});

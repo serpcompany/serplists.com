@@ -47,6 +47,10 @@ describe('getPrimaryTaskAction', () => {
     ],
     ['completed run on the last task', buildRun([true, true], 'completed'), 'item-2', false, { kind: 'run_completed' }],
     ['completed run with a next task', buildRun([true, true], 'completed'), 'item-1', true, { kind: 'next_task' }],
+    // A completed run is frozen, even one saved with open tasks before this rule existed.
+    ['open task on a completed run', buildRun([false, true], 'completed'), 'item-1', true, { kind: 'next_task' }],
+    ['open last task on a completed run', buildRun([true, false], 'completed'), 'item-2', false, { kind: 'run_completed' }],
+    ['done last task on a completed run with an open task', buildRun([false, true], 'completed'), 'item-2', false, { kind: 'run_completed' }],
   ])('%s', (_label, run, taskId, hasNext, expected) => {
     expect(getPrimaryTaskAction(run, taskId, hasNext)).toEqual(expected);
   });
@@ -57,6 +61,7 @@ describe('getPrimaryTaskAction for members who cannot update the run', () => {
     expect(getPrimaryTaskAction(buildRun([false, false]), 'item-1', true, false)).toEqual({ kind: 'next_task' });
     expect(getPrimaryTaskAction(buildRun([true, true]), 'item-2', false, false)).toEqual({ kind: 'view_only' });
     expect(getPrimaryTaskAction(buildRun([false, false]), 'item-2', false, false)).toEqual({ kind: 'view_only' });
+    expect(getPrimaryTaskAction(buildRun([true, true], 'completed'), 'item-2', false, false)).toEqual({ kind: 'run_completed' });
   });
 });
 

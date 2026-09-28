@@ -310,6 +310,41 @@ describe('ChecklistRunPage completion', () => {
   });
 });
 
+// A completed run is frozen: unticking a task would leave it Completed with open tasks.
+describe('ChecklistRunPage on a completed run', () => {
+  const checkboxes = (html: string) => html.match(/<button[^>]*role="checkbox"[^>]*>/g) ?? [];
+  const completedRun = (): ChecklistRun => {
+    const run = twoTaskRun([true, true], 'completed');
+    run.sections[0].items[0].contents = [
+      { type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Step one', isCompleted: true }] },
+    ];
+    return run;
+  };
+
+  it('locks every task and sub-task checkbox in the private view and keeps notes editable', () => {
+    const html = renderRunPage(completedRun(), { selectedItemId: 'item-1' });
+
+    expect(html).not.toContain('Mark Complete');
+    expect(checkboxes(html).length).toBeGreaterThan(0);
+    expect(checkboxes(html).every((tag) => tag.includes('disabled=""'))).toBe(true);
+    expect(html).toContain('Save notes');
+  });
+
+  it('locks them in the shared view too', () => {
+    const html = renderRunPage(completedRun(), { selectedItemId: 'item-1', shared: true });
+
+    expect(checkboxes(html)).toHaveLength(3);
+    expect(checkboxes(html).every((tag) => tag.includes('disabled=""'))).toBe(true);
+    expect(html).toContain('Save notes');
+  });
+
+  it('leaves the checkboxes of an in-progress run enabled', () => {
+    const html = renderRunPage(twoTaskRun([false, false]), { selectedItemId: 'item-1', shared: true });
+
+    expect(checkboxes(html).some((tag) => tag.includes('disabled=""'))).toBe(false);
+  });
+});
+
 describe('ChecklistRunPage task notes', () => {
   it('shows the unsaved draft for the selected task after moving between tasks', () => {
     const run = twoTaskRun([true, false]);
