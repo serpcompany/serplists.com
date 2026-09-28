@@ -338,4 +338,71 @@ describe('template detail actions', () => {
 
     expect(result).toEqual({ kind: 'upgrade_required' });
   });
+
+  it('returns an error, not upgrade_required, when an Organization limit blocks a run', async () => {
+    const message =
+      'Active run limit reached. This Organization needs a paid plan to create more checklist runs.';
+    const result = await startTemplateRun({
+      createRun: vi.fn().mockRejectedValue(
+        createApiError(403, {
+          code: 'limit_reached',
+          error: message,
+          details: { limit: 1, current: 1, resource: 'active_runs', context: 'organization' },
+        }),
+      ),
+      isAuthenticated: true,
+      template: buildTemplate(),
+      runName: 'Trip Run',
+    });
+
+    expect(result).toEqual({ kind: 'error', message });
+  });
+
+  it('still returns upgrade_required when a Personal limit blocks a run', async () => {
+    const result = await startTemplateRun({
+      createRun: vi.fn().mockRejectedValue(
+        createApiError(403, {
+          code: 'limit_reached',
+          error: 'Active run limit reached. Upgrade to Pro to create more checklist runs.',
+          details: { limit: 1, current: 1, resource: 'active_runs', context: 'personal' },
+        }),
+      ),
+      isAuthenticated: true,
+      template: buildTemplate(),
+      runName: 'Trip Run',
+    });
+
+    expect(result).toEqual({ kind: 'upgrade_required' });
+  });
+
+  it('returns an error when an Organization template limit blocks a save', async () => {
+    const message =
+      'Template limit reached. This Organization needs a paid plan to create more templates.';
+    const apiClient = {
+      getBillingStatus: vi.fn(),
+      getTemplateById: vi.fn(),
+      getTemplateBySlug: vi.fn(),
+      getProfileById: vi.fn(),
+      clonePublicTemplate: vi.fn().mockRejectedValue(
+        createApiError(403, {
+          code: 'limit_reached',
+          error: message,
+          details: { limit: 3, current: 3, resource: 'templates', context: 'organization' },
+        }),
+      ),
+      updateTemplate: vi.fn(),
+    };
+
+    const result = await saveTemplateToAccount({
+      apiClient,
+      billingState: buildBillingState(),
+      createTemplate: vi.fn(),
+      isAuthenticated: true,
+      teamId: 'team-1',
+      template: buildTemplate(),
+      userId: 'user-1',
+    });
+
+    expect(result).toEqual({ kind: 'error', message });
+  });
 });

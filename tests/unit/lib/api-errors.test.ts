@@ -5,6 +5,7 @@ import {
   BILLING_UNAVAILABLE_MESSAGE,
   createApiError,
   getAccessFailure,
+  getLimitContext,
 } from "@/lib/api-errors";
 
 describe("api-errors", () => {
@@ -39,6 +40,44 @@ describe("api-errors", () => {
       kind: "upgrade_required",
       message: "Template limit reached",
     });
+  });
+
+  it("keeps a Personal limit, or one with no context, as upgrade_required", () => {
+    const personal = createApiError(403, {
+      error: "Active run limit reached. Upgrade to Pro to create more checklist runs.",
+      code: "limit_reached",
+      details: { limit: 1, current: 1, resource: "active_runs", context: "personal" },
+    });
+
+    expect(getAccessFailure(personal, "fallback")).toEqual({
+      kind: "upgrade_required",
+      message: "Active run limit reached. Upgrade to Pro to create more checklist runs.",
+    });
+    expect(getLimitContext(personal)).toBe("personal");
+    expect(getLimitContext(createApiError(403, { code: "limit_reached", details: { limit: 1 } }))).toBeNull();
+  });
+
+  it("maps an Organization limit to a plain error, never to a Pro checkout", () => {
+    const message = "Active run limit reached. This Organization needs a paid plan to create more checklist runs.";
+    const organization = createApiError(403, {
+      error: message,
+      code: "limit_reached",
+      details: { limit: 1, current: 1, resource: "active_runs", context: "organization" },
+    });
+
+    expect(getLimitContext(organization)).toBe("organization");
+    expect(getAccessFailure(organization, "fallback")).toEqual({ kind: "error", message });
+  });
+
+  it("ignores a malformed limit context", () => {
+    const error = createApiError(403, {
+      error: "Template limit reached",
+      code: "limit_reached",
+      details: { context: "workspace" },
+    });
+
+    expect(getLimitContext(error)).toBeNull();
+    expect(getAccessFailure(error, "fallback").kind).toBe("upgrade_required");
   });
 
   it("maps billing_unavailable explicitly", () => {

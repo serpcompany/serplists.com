@@ -110,7 +110,9 @@ instead of inferring access state from message text:
   (`active_runs` or `templates`) and `context` (`personal` or `organization`).
   Only a Personal limit tells the user to upgrade to Pro; an Organization limit
   says the Organization needs a paid plan, because Personal Pro never lifts it.
-  Clients pick the upgrade path from `details.context`, not from the message.
+  Clients pick the upgrade path from `details.context`, not from the message:
+  `getAccessFailure` in `src/lib/api-errors.ts` treats an Organization limit as a
+  plain error that shows the server message and never starts Personal Pro checkout.
   All of these responses come from `functions/api/utils/limit-reached.ts`.
 - `503 billing_unavailable` means checkout cannot currently be started.
 
