@@ -69,6 +69,10 @@ import {
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplateLists } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import {
+  exportTemplateFile,
+  getTemplateExportLabel,
+} from '@/features/template-detail/templateExport';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import {
   handleUpgradeRequired,
@@ -375,21 +379,22 @@ const TemplateDetail = () => {
     }
   };
 
-  const handleExport = () => {
-    if (!displayTemplate) {
-      return;
-    }
-
-    const blob = new Blob([JSON.stringify(displayTemplate, null, 2)], {
-      type: 'application/json',
+  const handleExport = async () => {
+    const result = exportTemplateFile({
+      billingState,
+      template: displayTemplate && { ...displayTemplate, isPublic },
     });
-    const url = window.URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${displayTemplate.slug ?? displayTemplate.id}.json`;
-    anchor.click();
-    window.URL.revokeObjectURL(url);
-    toast.success('Template exported as JSON');
+
+    if (result.kind === 'upgrade_required') {
+      await handleUpgrade();
+    } else if (result.kind === 'error') {
+      toast.error(result.message);
+    } else {
+      toast.success('Template exported as JSON');
+      if (result.assetWarnings > 0) {
+        toast.warning('Uploaded files are not included in JSON exports.');
+      }
+    }
   };
 
   const handleTogglePublic = async (nextIsPublic: boolean) => {
@@ -563,9 +568,9 @@ const TemplateDetail = () => {
               <Copy className="mr-2 h-4 w-4" />
               Duplicate
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleExport}>
+            <DropdownMenuItem onClick={handleExport} disabled={billingState.isLoading}>
               <Download className="mr-2 h-4 w-4" />
-              Export JSON
+              {getTemplateExportLabel(billingState)}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem

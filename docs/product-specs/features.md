@@ -28,6 +28,7 @@ Canonical private routes:
 
 - Users can create, edit, archive, restore, import, and export templates.
 - Template detail pages render a read-only preview first. Editing happens on `/dashboard/templates/:id/edit`.
+- Export JSON on the template detail page downloads that template as a portable template pack, the format Import Templates accepts, named after its slug (or its id when it has none). Like Import Templates, it needs a paid plan in the active ownership context; otherwise the item reads "Upgrade to export".
 - Template content updates reconcile into matching active, private runs for the same Resource Owner. Stable section, item, and sub-item IDs preserve run completion and notes across renames and reordering; new work arrives incomplete, and retired work leaves readiness calculations while remaining in run history.
 - Public templates can be shared at `/profile/{username}/{templateSlug}`. Share on the template detail page makes a private template public only after that URL resolves; an owner without a username is asked to set one and the template stays private.
 - Other Users can copy public templates into Personal or an authorized Organization when that ownership context's entitlement allows it.
