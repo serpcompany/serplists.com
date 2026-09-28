@@ -53,6 +53,13 @@ pid of a launcher that was killed. So a stale session file never makes `dev:all`
 skip starting, and `dev:stop` never kills an unrelated process: it skips (and
 reports) such pids and always clears the file.
 
+`dev` and `dev:api` join the pair of any launcher that is still running.
+`dev:all` treats `dev` plus `dev:api` on one pair as the full stack, but refuses
+(exit 1) while only one of them is running: a second pair would drop that launcher
+from the session, and `dev:stop` could no longer stop it. Start the missing half
+with the other single-role command, or run `dev:stop` first. The launcher never
+writes a session that forgets a launcher that is still running.
+
 Output is mirrored to `tmp/logs/dev-<mode>.log`. API logs are JSON lines with a
 `requestId` (also the `X-Request-Id` response header):
 

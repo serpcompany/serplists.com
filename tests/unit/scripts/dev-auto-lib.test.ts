@@ -1,19 +1,21 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildCorsAllowedOrigins,
   buildDevAutoConfig,
   buildDevCommands,
   buildDevSession,
   clearDevSessionRole,
+  describeDevSessionConflict,
   findOpenPortPair,
   isOwnedDevProcess,
   isProcessAlive,
   readDevSession,
   resolvePortPairForMode,
   stopDevSession,
+  storeDevSession,
   writeDevSession,
 } from "../../../scripts/dev-auto-lib.mjs";
 
@@ -184,6 +186,132 @@ describe("resolvePortPairForMode", () => {
       source: "open-pair",
       roleAlreadyRunning: false,
     });
+  });
+});
+
+describe("dev:all next to a running single-role launcher", () => {
+  const roles = ["all", "frontend", "api"] as const;
+  type Role = (typeof roles)[number];
+  const pidFor: Record<Role, number> = { all: 3333, frontend: 1111, api: 2222 };
+  const sessionWith = (live: Role[]) => ({
+    frontendPort: 8080,
+    apiPort: 8788,
+    frontendPid: live.includes("frontend") ? pidFor.frontend : null,
+    frontendStartedAt: live.includes("frontend") ? 1_000 : null,
+    apiPid: live.includes("api") ? pidFor.api : null,
+    apiStartedAt: live.includes("api") ? 2_000 : null,
+    allPid: live.includes("all") ? pidFor.all : null,
+    allStartedAt: live.includes("all") ? 3_000 : null,
+  });
+  // A live launcher holds its ports: dev:all and a dead launcher's pid hold none.
+  const checkers = (live: Role[]) => {
+    const livePids = new Set(live.map((role) => pidFor[role]));
+    const busyPorts = new Set<number>();
+    if (live.includes("all") || live.includes("frontend")) busyPorts.add(8080);
+    if (live.includes("all") || live.includes("api")) busyPorts.add(8788);
+    return {
+      processLivenessChecker: async (pid: number | null) => pid != null && livePids.has(pid),
+      portAvailabilityChecker: async (port: number) => !busyPorts.has(port),
+    };
+  };
+
+  it("refuses instead of choosing a new pair while `pnpm run dev` owns the session", async () => {
+    const actual = await resolvePortPairForMode({ mode: "all", existingSession: sessionWith(["frontend"]), ...checkers(["frontend"]) });
+
+    expect(actual).toEqual({
+      frontendPort: 8080,
+      apiPort: 8788,
+      source: "session",
+      roleAlreadyRunning: false,
+      conflict: { role: "frontend", pid: 1111 },
+    });
+  });
+
+  it("refuses instead of choosing a new pair while `pnpm run dev:api` owns the session", async () => {
+    const actual = await resolvePortPairForMode({ mode: "all", existingSession: sessionWith(["api"]), ...checkers(["api"]) });
+
+    expect(actual).toMatchObject({ frontendPort: 8080, apiPort: 8788, conflict: { role: "api", pid: 2222 } });
+  });
+
+  it("treats `dev` plus `dev:api` on one pair as the full stack already running", async () => {
+    const actual = await resolvePortPairForMode({
+      mode: "all",
+      existingSession: sessionWith(["frontend", "api"]),
+      ...checkers(["frontend", "api"]),
+    });
+
+    expect(actual).toEqual({ frontendPort: 8080, apiPort: 8788, source: "session", roleAlreadyRunning: true });
+  });
+
+  it("still starts a new pair when the recorded single-role launcher is gone", async () => {
+    const actual = await resolvePortPairForMode({ mode: "all", existingSession: sessionWith(["frontend"]), ...checkers([]) });
+
+    expect(actual).toEqual({ frontendPort: 8080, apiPort: 8788, source: "open-pair", roleAlreadyRunning: false });
+  });
+
+  it("names the running command, its pid and ports, and both ways out", () => {
+    const frontend = describeDevSessionConflict({ frontendPort: 8080, apiPort: 8788, conflict: { role: "frontend", pid: 1111 } });
+    const api = describeDevSessionConflict({ frontendPort: 8080, apiPort: 8788, conflict: { role: "api", pid: 2222 } });
+
+    expect(frontend).toContain("`pnpm run dev` (pid 1111) is already running on 8080/8788");
+    expect(frontend).toContain("`pnpm run dev:api`");
+    expect(frontend).toContain("`pnpm run dev:stop`");
+    expect(api).toContain("`pnpm run dev:api` (pid 2222) is already running on 8080/8788");
+    expect(api).toContain("`pnpm run dev`");
+  });
+
+  describe("storeDevSession", () => {
+    let directory = "";
+    let sessionPath = "";
+    beforeEach(() => {
+      directory = mkdtempSync(path.join(tmpdir(), "dev-session-"));
+      sessionPath = path.join(directory, "tmp", "dev-session.json");
+    });
+    afterEach(() => rmSync(directory, { recursive: true, force: true }));
+
+    it("refuses to overwrite a session whose launcher is still running", async () => {
+      writeDevSession(sessionWith(["frontend"]), sessionPath);
+
+      await expect(
+        storeDevSession({
+          role: "all",
+          pid: 4444,
+          startedAt: 4_000,
+          config: { frontendPort: 8081, apiPort: 8789 },
+          sessionPath,
+          processLivenessChecker: checkers(["frontend"]).processLivenessChecker,
+        }),
+      ).rejects.toThrow(/pnpm run dev` \(pid 1111\)/);
+      expect(readDevSession(sessionPath)).toEqual(sessionWith(["frontend"]));
+    });
+
+    const combinations: Role[][] = [[], ["all"], ["frontend"], ["api"], ["frontend", "api"], ["all", "frontend"], ["all", "api"], roles.slice()];
+    for (const mode of roles) {
+      for (const live of combinations) {
+        it(`${mode} with live [${live.join(", ")}] never writes a session without a live launcher`, async () => {
+          const existingSession = sessionWith(live);
+          writeDevSession(existingSession, sessionPath);
+          const { processLivenessChecker, portAvailabilityChecker } = checkers(live);
+
+          const selected = await resolvePortPairForMode({ mode, existingSession, processLivenessChecker, portAvailabilityChecker });
+          if ("conflict" in selected || selected.roleAlreadyRunning) {
+            expect(readDevSession(sessionPath)).toEqual(existingSession);
+            return;
+          }
+
+          const stored = await storeDevSession({
+            role: mode,
+            pid: 4444,
+            startedAt: 4_000,
+            config: { frontendPort: selected.frontendPort, apiPort: selected.apiPort },
+            sessionPath,
+            processLivenessChecker,
+          });
+          for (const role of live) expect(stored[`${role}Pid`]).toBe(pidFor[role]);
+          expect(stored[`${mode}Pid`]).toBe(4444);
+        });
+      }
+    }
   });
 });
 

@@ -7,6 +7,7 @@ import {
   DEFAULT_API_PORT,
   DEFAULT_FRONTEND_PORT,
   DEV_SESSION_PATH,
+  describeDevSessionConflict,
   parseEnvFile,
   readDevSession,
   releaseDevSession,
@@ -98,6 +99,14 @@ async function main() {
     mode,
     existingSession: readDevSession(),
   });
+
+  // Exits before touching the session file, so the running launcher stays in it
+  // and dev:stop can still stop it.
+  if (selectedPorts.conflict) {
+    console.error(`dev:all: ${describeDevSessionConflict(selectedPorts)}`);
+    process.exit(1);
+  }
+
   const config = buildDevAutoConfig({
     frontendPort: selectedPorts.frontendPort,
     apiPort: selectedPorts.apiPort,
@@ -117,7 +126,7 @@ async function main() {
 
   // The start time lets dev:stop and later launches tell this process from an
   // unrelated one that reuses its pid after it exits.
-  storeDevSession({
+  await storeDevSession({
     role: mode,
     pid: process.pid,
     startedAt: currentProcessStartedAt(),

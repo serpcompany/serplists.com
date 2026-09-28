@@ -290,6 +290,27 @@ export function removeDevSession(sessionPath = DEV_SESSION_PATH) {
   }
 }
 
+const ROLE_COMMANDS = { all: "pnpm run dev:all", frontend: "pnpm run dev", api: "pnpm run dev:api" };
+
+function describeRunningLauncher({ role, pid }, { frontendPort, apiPort }) {
+  return `\`${ROLE_COMMANDS[role]}\` (pid ${pid}) is already running on ${frontendPort}/${apiPort}`;
+}
+
+/** Why dev:all refused: a single-role launcher owns the session pair. */
+export function describeDevSessionConflict({ frontendPort, apiPort, conflict }) {
+  const missing = conflict.role === "frontend" ? { role: "api", name: "API" } : { role: "frontend", name: "frontend" };
+  return (
+    `${describeRunningLauncher(conflict, { frontendPort, apiPort })}. Run \`${ROLE_COMMANDS[missing.role]}\` ` +
+    `to add the ${missing.name} to that pair, or \`pnpm run dev:stop\` first and then \`pnpm run dev:all\`.`
+  );
+}
+
+/**
+ * The port pair a launcher should use. It joins the session's pair while a
+ * launcher recorded there is still running. dev:all instead returns a
+ * `conflict` when only `dev` or only `dev:api` is running: it must not start a
+ * second pair and so drop that launcher from the session.
+ */
 export async function resolvePortPairForMode({
   mode,
   existingSession = null,
@@ -301,41 +322,26 @@ export async function resolvePortPairForMode({
 } = {}) {
   const session = normalizeDevSession(existingSession);
 
-  if (session && mode === "all") {
-    const allActive = await processLivenessChecker(session.allPid, session.allStartedAt);
+  if (session) {
+    const [allActive, frontendActive, apiActive] = await Promise.all(
+      ROLES.map((role) => processLivenessChecker(session[`${role}Pid`], session[`${role}StartedAt`])),
+    );
+    const sessionPair = { frontendPort: session.frontendPort, apiPort: session.apiPort, source: "session" };
 
-    if (allActive) {
-      return {
-        frontendPort: session.frontendPort,
-        apiPort: session.apiPort,
-        source: "session",
-        roleAlreadyRunning: true,
-      };
-    }
-  }
-
-  if (session && mode !== "all") {
-    const [apiActive, allActive, frontendActive] = await Promise.all([
-      processLivenessChecker(session.apiPid, session.apiStartedAt),
-      processLivenessChecker(session.allPid, session.allStartedAt),
-      processLivenessChecker(session.frontendPid, session.frontendStartedAt),
-    ]);
-
-    const shouldReuse =
-      mode === "frontend"
-        ? frontendActive || apiActive || allActive
-        : apiActive || frontendActive || allActive;
-
-    if (shouldReuse) {
-      const roleAlreadyRunning =
-        mode === "frontend" ? frontendActive || allActive : apiActive || allActive;
-
-      return {
-        frontendPort: session.frontendPort,
-        apiPort: session.apiPort,
-        source: "session",
-        roleAlreadyRunning,
-      };
+    if (mode === "all") {
+      // `dev` plus `dev:api` on one pair is already the whole stack.
+      if (allActive || (frontendActive && apiActive)) {
+        return { ...sessionPair, roleAlreadyRunning: true };
+      }
+      // A new pair would drop the running single-role launcher from the session,
+      // and dev:stop could no longer stop it. dev-auto refuses instead.
+      if (frontendActive || apiActive) {
+        const role = frontendActive ? "frontend" : "api";
+        return { ...sessionPair, roleAlreadyRunning: false, conflict: { role, pid: session[`${role}Pid`] } };
+      }
+    } else if (allActive || frontendActive || apiActive) {
+      // A single-role launcher joins any live launcher's pair.
+      return { ...sessionPair, roleAlreadyRunning: allActive || (mode === "frontend" ? frontendActive : apiActive) };
     }
   }
 
@@ -414,20 +420,40 @@ export function clearDevSessionRole({
   return nextSession;
 }
 
-export function storeDevSession({
+/**
+ * Records this launcher in the session file. It refuses (throws) rather than
+ * write a session that forgets a launcher that is still running, because
+ * dev:stop stops only the launchers the file lists.
+ */
+export async function storeDevSession({
   role,
   pid,
   startedAt,
   config,
   sessionPath = DEV_SESSION_PATH,
+  processLivenessChecker = isOwnedDevProcess,
 }) {
+  const existingSession = readDevSession(sessionPath);
   const nextSession = buildDevSession({
-    existingSession: readDevSession(sessionPath),
+    existingSession,
     role,
     pid,
     startedAt,
     config,
   });
+
+  for (const droppedRole of ROLES) {
+    const droppedPid = existingSession?.[`${droppedRole}Pid`] ?? null;
+    if (droppedPid == null || nextSession[`${droppedRole}Pid`] === droppedPid) continue;
+
+    if (await processLivenessChecker(droppedPid, existingSession[`${droppedRole}StartedAt`])) {
+      throw new Error(
+        `${describeRunningLauncher({ role: droppedRole, pid: droppedPid }, existingSession)} and is recorded in ` +
+          `${sessionPath}. Run \`pnpm run dev:stop\` before starting another port pair.`,
+      );
+    }
+  }
+
   writeDevSession(nextSession, sessionPath);
   return nextSession;
 }
