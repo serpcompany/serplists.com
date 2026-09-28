@@ -52,8 +52,7 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={fullImageUrl} />
       
-      {/* Additional Meta Tags */}
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      {/* Additional Meta Tags. The viewport lives in index.html only. */}
       <meta name="robots" content={robots} />
       <link rel="canonical" href={url} />
       

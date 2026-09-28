@@ -93,6 +93,14 @@ Pages set their title and social tags with `SEOHead`
 `SEOHead` never keeps the previous page's title. Do not add a `titleTemplate`: `SEOHead`
 already adds the suffix.
 
+`index.html` keeps a static description, Open Graph and Twitter tags for crawlers that do
+not run JavaScript. Each carries `data-rh="true"`, so react-helmet-async owns it: a page's
+`SEOHead` replaces it by name or property instead of adding a second copy. The same tags
+are the defaults in `DocumentHeadProvider`, which puts them back when a page without
+`SEOHead` opens. Keep the two identical, and give any new static SEO tag `data-rh` and a
+matching default (`tests/unit/components/documentHeadMeta.test.tsx` checks both). The
+viewport and charset tags are global: they stay in `index.html` only, without `data-rh`.
+
 Cloudflare Pages serves `index.html` with a 200 for every unknown path, so the 404 page
 (`src/pages/NotFound.tsx`) marks itself `noindex` and declares no canonical URL. Render
 `NotFound` only once a lookup has settled: a page whose data is still loading, or failed

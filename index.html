@@ -43,15 +43,19 @@
     </script>
     <!-- End Google Tag Manager -->
     <title>SERP Lists</title>
-    <meta name="description" content="Create and run checklists for your processes." />
+    <!-- Crawlers that do not run JavaScript only see these. data-rh hands them to
+         react-helmet-async, so a page's SEOHead replaces them instead of adding a second
+         copy. Keep them identical to the defaults in DocumentHeadProvider.tsx
+         (tests/unit/components/documentHeadMeta.test.tsx). -->
+    <meta name="description" content="Create and run checklists for your processes." data-rh="true" />
 
-    <meta property="og:title" content="SERP Lists" />
-    <meta property="og:description" content="Create and run checklists for your processes." />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="/placeholder.svg" />
+    <meta property="og:title" content="SERP Lists" data-rh="true" />
+    <meta property="og:description" content="Create and run checklists for your processes." data-rh="true" />
+    <meta property="og:type" content="website" data-rh="true" />
+    <meta property="og:image" content="https://serplists.com/placeholder.svg" data-rh="true" />
 
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="/placeholder.svg" />
+    <meta name="twitter:card" content="summary_large_image" data-rh="true" />
+    <meta name="twitter:image" content="https://serplists.com/placeholder.svg" data-rh="true" />
 
     <script>
       (function () {
