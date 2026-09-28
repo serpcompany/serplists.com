@@ -1,29 +1,47 @@
 // Profiles D1 cost (rows read and written) per API request on a large synthetic dataset.
 //   pnpm run d1:profile                # default volume (about 150k rows)
 //   pnpm run d1:profile -- --scale 3   # 3x the volume
-//   pnpm run d1:profile -- --reuse     # reuse the last dataset (skips the rebuild)
+//   pnpm run d1:profile -- --reuse     # restore the last dataset instead of rebuilding
 // Builds an isolated local D1 in .wrangler/d1-profile-state, runs the API with
 // D1_PROFILE=true, replays a scripted workload, and writes tmp/d1-profile/report.md.
 // Local D1 reports rows_read/rows_written with production semantics (rows scanned).
+// After a build the dataset is copied to .wrangler/d1-profile-pristine; --reuse copies
+// it back, so every run replays the workload's writes on the same data. A request that
+// returns anything but its expected status is marked INVALID and fails the command.
 import type { ChildProcess } from "node:child_process";
-import { createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { D1Database } from "@cloudflare/workers-types";
 import { getPlatformProxy } from "wrangler";
 import { createServer } from "node:net";
-import { z } from "zod";
 import { execPnpm, execTool, killProcessTree, spawnTool, type ToolName } from "./lib/run-tool.mjs";
+import {
+  buildUpdateRunBody,
+  buildUpdateTemplateBody,
+  computeDatasetKey,
+  currentResourceSchema,
+  evaluateScenarioResults,
+  formatStatus,
+  readSnapshotMeta,
+  resolveDatasetPlan,
+  restoreSnapshot,
+  saveSnapshot,
+  scenarios,
+  type Scenario,
+  UPDATE_RUN,
+  UPDATE_TEMPLATE,
+} from "./d1-profile-lib";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const persistPath = ".wrangler/d1-profile-state";
+const snapshotPath = path.join(repoRoot, ".wrangler", "d1-profile-pristine");
 const outDir = path.join(repoRoot, "tmp", "d1-profile");
 const scaleArg = process.argv.indexOf("--scale");
 const scale = scaleArg >= 0 ? Number(process.argv[scaleArg + 1]) : 1;
-const reuse = process.argv.includes("--reuse") && existsSync(path.join(repoRoot, persistPath));
+const reuse = process.argv.includes("--reuse");
 
 type QueryRecord = { sql: string; rowsRead: number; rowsWritten: number; rowsReturned: number; durationMs: number };
-type Scenario = { name: string; actor: "anon" | "admin" | "john"; method?: string; path: string; body?: unknown };
 
 const freePort = () =>
   new Promise<number>((resolve, reject) => {
@@ -34,12 +52,6 @@ const freePort = () =>
       server.close(() => (typeof address === "object" && address ? resolve(address.port) : reject(new Error("No free port"))));
     });
   });
-
-const resourceSchema = z.object({
-  sections: z.array(z.unknown()).optional(),
-  version: z.number().optional(),
-  revision: z.number().optional(),
-});
 
 function run(tool: ToolName, args: string[]) {
   execTool(tool, args, { cwd: repoRoot, stdio: "inherit", env: { ...process.env, CI: "1" } });
@@ -141,60 +153,12 @@ function buildDatabase() {
   run("wrangler", ["d1", "execute", "serp-checklists-db", "--local", "--persist-to", persistPath, "--file", sqlFile]);
 }
 
-// ---------------------------------------------------------------- workload
-const personalTemplate = "synthetic-template-50"; // owned by user-1, private
-const organizationTemplate = "synthetic-template-40"; // owned by team-seed-growth, private
-const publicTemplateSlug = "synthetic-template-5"; // public, user-owned (synthetic ids equal slugs)
-const adminRun = "synthetic-run-40"; // owned by user-1
-const shareToken = "synthetic-share-50";
-
-function scenarios(): Scenario[] {
-  return [
-    { name: "public catalog (GET /api/templates)", actor: "anon", path: "/api/templates" },
-    { name: "public catalog (repeat)", actor: "anon", path: "/api/templates" },
-    { name: "public template by slug", actor: "anon", path: `/api/templates/slug/${publicTemplateSlug}` },
-    { name: "public profile templates", actor: "anon", path: "/api/templates/public?userId=synthetic-user-2" },
-    { name: "public profile by username", actor: "anon", path: "/api/profiles/by-username?username=synth_2" },
-    { name: "shared run", actor: "anon", path: `/api/checklists/shared/${shareToken}` },
-    { name: "sitemap index", actor: "anon", path: "/sitemap.xml" },
-    { name: "sitemap pages shard", actor: "anon", path: "/sitemaps/pages/1.xml" },
-    { name: "sitemap templates shard", actor: "anon", path: "/sitemaps/templates/1.xml" },
-    { name: "sitemap profiles shard", actor: "anon", path: "/sitemaps/profiles/1.xml" },
-    { name: "sitemap categories shard", actor: "anon", path: "/sitemaps/categories/1.xml" },
-    { name: "sitemap index (repeat)", actor: "anon", path: "/sitemap.xml" },
-    { name: "sitemap templates shard (repeat)", actor: "anon", path: "/sitemaps/templates/1.xml" },
-    { name: "session lookup", actor: "admin", path: "/api/auth/get-session" },
-    { name: "billing status", actor: "admin", path: "/api/billing/status" },
-    { name: "my Organizations", actor: "admin", path: "/api/teams" },
-    { name: "Personal templates (scope=personal)", actor: "admin", path: "/api/templates?scope=personal" },
-    { name: "signed-in catalog (scope=public, cached)", actor: "admin", path: "/api/templates?scope=public" },
-    { name: "legacy templates list (public OR mine)", actor: "admin", path: "/api/templates" },
-    { name: "dashboard templates (Organization)", actor: "admin", path: "/api/templates?teamId=team-seed-growth" },
-    { name: "archived templates", actor: "admin", path: "/api/templates/archived" },
-    { name: "dashboard runs (Personal)", actor: "admin", path: "/api/checklists" },
-    { name: "dashboard runs (Organization)", actor: "admin", path: "/api/checklists?teamId=team-seed-growth" },
-    { name: "archived runs", actor: "admin", path: "/api/checklists/archived" },
-    { name: "template detail", actor: "admin", path: `/api/templates/${personalTemplate}` },
-    { name: "template history", actor: "admin", path: `/api/templates/${personalTemplate}/history` },
-    { name: "run detail", actor: "admin", path: `/api/checklists/${adminRun}` },
-    { name: "run history", actor: "admin", path: `/api/checklists/${adminRun}/history` },
-    { name: "Organization detail", actor: "admin", path: "/api/teams/team-seed-growth" },
-    { name: "Organization members", actor: "admin", path: "/api/teams/team-seed-growth/members" },
-    { name: "Organization activity", actor: "admin", path: "/api/teams/team-seed-growth/activity" },
-    {
-      name: "create template (public)", actor: "admin", method: "POST", path: "/api/templates",
-      body: { title: "Profiled template", is_public: true, categories: ["SEO"], sections: [{ id: "s1", title: "Section", items: [{ id: "i1", title: "Task" }] }] },
-    },
-    { name: "start run", actor: "admin", method: "POST", path: "/api/checklists", body: { template_id: personalTemplate, title: "Profiled run", sections: [{ id: "s1", title: "Section", items: [{ id: "i1", title: "Task one" }, { id: "i2", title: "Task two" }] }] } },
-    { name: "update template (reconciles runs)", actor: "admin", method: "PUT", path: `/api/templates/${personalTemplate}`, body: "UPDATE_TEMPLATE" },
-    { name: "update Organization template (reconciles runs)", actor: "admin", method: "PUT", path: `/api/templates/${organizationTemplate}`, body: "UPDATE_TEMPLATE" },
-    { name: "update run progress", actor: "admin", method: "PUT", path: `/api/checklists/${adminRun}`, body: "UPDATE_RUN" },
-    { name: "share run", actor: "admin", method: "POST", path: `/api/checklists/run/${adminRun}/share`, body: {} },
-    { name: "member Personal templates", actor: "john", path: "/api/templates?scope=personal" },
-    { name: "member Organization templates", actor: "john", path: "/api/templates?teamId=team-seed-growth" },
-    { name: "member dashboard runs", actor: "john", path: "/api/checklists" },
-    { name: "start run (Free plan, counts active runs)", actor: "john", method: "POST", path: "/api/checklists", body: { template_id: publicTemplateSlug, title: "Profiled Free run", sections: [{ id: "s1", title: "Section", items: [{ id: "i1", title: "Task one" }] }] } },
-  ];
+// Everything the dataset is built from; a snapshot built from anything else is rebuilt.
+function datasetKey() {
+  const migrationsDir = path.join(repoRoot, "db", "migrations");
+  const migrations = readdirSync(migrationsDir).filter((file) => file.endsWith(".sql")).sort()
+    .map((file) => `${file}\n${readFileSync(path.join(migrationsDir, file), "utf8")}`);
+  return computeDatasetKey([...migrations, readFileSync(path.join(repoRoot, "db", "seeds", "local.ts"), "utf8"), syntheticSql]);
 }
 
 // ---------------------------------------------------------------- server + capture
@@ -289,28 +253,37 @@ async function main() {
     execPnpm(["run", "build:dev"], { cwd: repoRoot, stdio: "inherit", env: { ...process.env, CI: "1" } });
   }
   mkdirSync(outDir, { recursive: true });
-  if (!reuse) {
-    console.log(`Building synthetic D1 at scale ${scale}…`);
+  const key = datasetKey();
+  const statePath = path.join(repoRoot, persistPath);
+  const plan = resolveDatasetPlan({ reuse, snapshot: reuse ? readSnapshotMeta(snapshotPath) : null, scale, datasetKey: key });
+  console.log(`d1:profile: ${plan.reason}…`);
+  if (plan.action === "restore") {
+    restoreSnapshot({ snapshotPath, statePath });
+  } else {
     buildDatabase();
+    // Before the API server starts, so nothing holds the SQLite files open.
+    saveSnapshot({ statePath, snapshotPath, meta: { scale, datasetKey: key } });
   }
 
   const apiPort = await freePort();
   const origin = "http://localhost:4290";
   let current: QueryRecord[] = [];
   const { child, base } = await startServer(apiPort, origin, (record) => current.push(record));
-  const results: { scenario: Scenario; status: number; queries: QueryRecord[] }[] = [];
+  const results: { scenario: Scenario; status: number; responseBody?: string; queries: QueryRecord[] }[] = [];
+  const nonce = Date.now().toString(36);
   try {
     const cookies = { anon: "", admin: await signIn(base, origin, "admin@test.com"), john: await signIn(base, origin, "john@test.com") };
     for (const scenario of scenarios()) {
       await settle();
       let body = scenario.body;
-      if (body === "UPDATE_TEMPLATE" || body === "UPDATE_RUN") {
+      if (body === UPDATE_TEMPLATE || body === UPDATE_RUN) {
         current = []; // Keep the setup fetch out of the previous scenario's queries.
-        const kind = body === "UPDATE_TEMPLATE" ? "templates" : "checklists";
-        const currentValue = resourceSchema.parse(await (await fetch(`${base}${scenario.path}`, { headers: { Cookie: cookies.admin, Origin: origin } })).json());
-        body = kind === "templates"
-          ? { sections: [...(currentValue.sections ?? []), { id: "s-profiled", title: "Added", items: [{ id: "i-profiled", title: "New task" }] }], expected_version: currentValue.version }
-          : { progress: 75, expected_revision: currentValue.revision };
+        const setup = await fetch(`${base}${scenario.path}`, { headers: { Cookie: cookies.admin, Origin: origin } });
+        if (!setup.ok) {
+          throw new Error(`Setup GET ${scenario.path} for "${scenario.name}" returned ${setup.status}: ${(await setup.text()).slice(0, 500)}`);
+        }
+        const currentValue = currentResourceSchema.parse(await setup.json());
+        body = body === UPDATE_TEMPLATE ? buildUpdateTemplateBody(currentValue, nonce) : buildUpdateRunBody(currentValue);
         await settle();
       }
       current = [];
@@ -319,11 +292,12 @@ async function main() {
         headers: { Cookie: cookies[scenario.actor], Origin: origin, "Content-Type": "application/json" },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
-      await response.arrayBuffer();
+      const responseText = await response.text();
       await settle();
-      results.push({ scenario, status: response.status, queries: current });
+      const outcome = { scenario, status: response.status, queries: current };
+      results.push(response.status === scenario.expectedStatus ? outcome : { ...outcome, responseBody: responseText.slice(0, 500) });
       const read = current.reduce((sum, q) => sum + q.rowsRead, 0);
-      console.log(`${String(response.status).padEnd(4)} ${String(read).padStart(8)} rows read  ${scenario.name}`);
+      console.log(`${formatStatus(outcome).padEnd(4)} ${String(read).padStart(8)} rows read  ${scenario.name}`);
     }
   } finally {
     stop(child);
@@ -343,6 +317,7 @@ async function main() {
     }
   }
   const statements = [...byStatement.entries()].sort((a, b) => b[1].read - a[1].read);
+  const { failures, exitCode } = evaluateScenarioResults(results);
   const plans = await explainPlans(statements.map(([sql]) => sql));
 
   const lines = [
@@ -350,6 +325,14 @@ async function main() {
     "",
     `Scale ${scale}. Table sizes: ${plans.get("__counts__")}.`,
     "",
+    ...(failures.length > 0
+      ? [
+        `**INVALID: ${failures.length} request(s) returned an unexpected status, so their rows measure an error path.**`,
+        "",
+        ...failures.map((failure) => `- ${failure.name}: expected ${failure.expected}, got ${failure.actual}. ${failure.responseBody}`),
+        "",
+      ]
+      : []),
     "## Per request",
     "",
     "| Request | Status | Statements | Rows read | Rows written | Rows returned |",
@@ -362,7 +345,7 @@ async function main() {
         returned: queries.reduce((sum, q) => sum + q.rowsReturned, 0),
       }))
       .sort((a, b) => b.read - a.read)
-      .map((r) => `| ${r.scenario.name} | ${r.status} | ${r.queries.length} | ${r.read.toLocaleString()} | ${r.written.toLocaleString()} | ${r.returned.toLocaleString()} |`),
+      .map((r) => `| ${r.scenario.name} | ${formatStatus(r)} | ${r.queries.length} | ${r.read.toLocaleString()} | ${r.written.toLocaleString()} | ${r.returned.toLocaleString()} |`),
     "",
     "## Per statement",
     "",
@@ -382,8 +365,17 @@ async function main() {
     ].join("\n")),
   ];
   writeFileSync(path.join(outDir, "report.md"), `${lines.join("\n")}\n`);
-  writeFileSync(path.join(outDir, "report.json"), JSON.stringify(results, null, 2));
+  writeFileSync(
+    path.join(outDir, "report.json"),
+    JSON.stringify(results.map((result) => ({ ...result, valid: result.status === result.scenario.expectedStatus })), null, 2),
+  );
   console.log(`\nReport: ${path.join("tmp", "d1-profile", "report.md")}`);
+  if (exitCode !== 0) {
+    for (const failure of failures) {
+      console.error(`INVALID ${failure.name}: expected ${failure.expected}, got ${failure.actual}. ${failure.responseBody}`);
+    }
+    process.exitCode = exitCode;
+  }
 }
 
 await main();

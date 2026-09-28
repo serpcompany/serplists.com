@@ -23,8 +23,14 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
   anonymous, Personal, and Organization requests, and writes
   `tmp/d1-profile/report.md` with rows read and written per request and per
   statement, efficiency (rows returned / rows read), and `EXPLAIN QUERY PLAN`. Use
-  `-- --scale N` for more volume and `-- --reuse` to skip rebuilding. Local D1 reports
-  rows read with production semantics.
+  `-- --scale N` for more volume and `-- --reuse` to skip rebuilding: each build is
+  copied to `.wrangler/d1-profile-pristine`, and `--reuse` restores that copy, so the
+  workload's writes (new Runs, the template updates, john's Free-plan run count) never
+  carry over into the next run. It rebuilds when the snapshot is missing or was built
+  at another scale or from other migrations, seed or synthetic data. Every request
+  declares its expected status (`scripts/d1-profile-lib.ts`); a request that returns
+  anything else measured an error path, so the report marks it `INVALID` and the
+  command exits 1. Local D1 reports rows read with production semantics.
 - **Production:** `pnpm exec wrangler d1 insights serp-checklists-db --sort-by reads
   --time-period 31d --limit 25` (Cloudflare login required; analytics only).
 
