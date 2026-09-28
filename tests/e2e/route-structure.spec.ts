@@ -5,27 +5,23 @@ const PRODUCTION_ORIGIN = 'https://serplists.com';
 
 /**
  * SEOHead noindexes every host but serplists.com (src/lib/seo/siteOrigin.ts), so a
- * page's own robots rule only shows on the production host. This serves the local app
- * as https://serplists.com: Playwright answers that origin from the local dev server and
- * the local API itself (Chromium refuses a public origin's requests to localhost), and
- * aborts everything else (analytics, fonts), so nothing reaches the real site or reports
- * a visit to it. Register page mocks after this, so they answer first.
+ * page's own robots rule only shows on the production host. This serves the local
+ * wrangler Pages server (the built app, its page functions and the API, all on one
+ * origin like production) as https://serplists.com, and aborts every other request
+ * (analytics, fonts), so nothing reaches the real site or reports a visit to it.
+ * Register page mocks after this, so they answer first.
  */
-async function serveLocalAppAsProduction(page: Page, localOrigin: string | undefined) {
-  if (!localOrigin) throw new Error('baseURL is not set');
-  const apiOrigin = new URL(API_BASE_URL).origin;
-  // Vite's HMR socket follows the page's host.
-  await page.routeWebSocket(/.*/, () => {});
+async function serveLocalAppAsProduction(page: Page) {
+  const pagesOrigin = new URL(API_BASE_URL).origin;
+  await page.routeWebSocket(/.*/, (webSocket) => webSocket.close());
   await page.route(/.*/, async (route) => {
     const url = new URL(route.request().url());
-    if (url.origin === PRODUCTION_ORIGIN) {
-      const localUrl = new URL(`${url.pathname}${url.search}`, localOrigin).href;
-      await route.fulfill({ response: await route.fetch({ url: localUrl }) });
-    } else if (url.origin === apiOrigin) {
-      await route.fulfill({ response: await route.fetch() });
-    } else {
+    if (url.origin !== PRODUCTION_ORIGIN) {
       await route.abort();
+      return;
     }
+    const localUrl = new URL(`${url.pathname}${url.search}`, pagesOrigin).href;
+    await route.fulfill({ response: await route.fetch({ url: localUrl }) });
   });
 }
 
@@ -210,10 +206,10 @@ test.describe('route structure', () => {
     ).toBeVisible();
   });
 
-  test('not-found pages are noindexed and real pages are not', async ({ page, baseURL }) => {
+  test('not-found pages are noindexed and real pages are not', async ({ page }) => {
     // Pages answers unknown paths with index.html and a 200, so the robots tag is the
     // only thing that keeps a missing URL out of search results.
-    await serveLocalAppAsProduction(page, baseURL);
+    await serveLocalAppAsProduction(page);
     for (const path of [
       '/definitely-missing',
       '/categories/definitely-missing',
@@ -263,7 +259,6 @@ test.describe('route structure', () => {
 
   test('shared checklist pages use /share and render noindex,nofollow', async ({
     page,
-    baseURL,
   }) => {
     test.setTimeout(120_000);
 
@@ -318,7 +313,7 @@ test.describe('route structure', () => {
       return data.shareToken;
     }, API_BASE_URL);
 
-    await serveLocalAppAsProduction(page, baseURL);
+    await serveLocalAppAsProduction(page);
     await page.goto(`${PRODUCTION_ORIGIN}/share/${shareToken}`);
 
     await expect(page).toHaveURL(new RegExp(`/share/${shareToken}$`));
@@ -333,9 +328,8 @@ test.describe('route structure', () => {
 
   test('missing public profiles and templates render noindex,nofollow', async ({
     page,
-    baseURL,
   }) => {
-    await serveLocalAppAsProduction(page, baseURL);
+    await serveLocalAppAsProduction(page);
     await page.route('**/api/profiles/by-username**', (route) =>
       fulfillJson(route, { error: 'Profile not found' }, 404),
     );
@@ -366,9 +360,8 @@ test.describe('route structure', () => {
 
   test('a public template that fails to load stays indexable', async ({
     page,
-    baseURL,
   }) => {
-    await serveLocalAppAsProduction(page, baseURL);
+    await serveLocalAppAsProduction(page);
     await page.route('**/api/templates/slug/**', (route) =>
       fulfillJson(route, { error: 'Service unavailable' }, 503),
     );
