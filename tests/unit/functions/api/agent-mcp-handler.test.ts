@@ -39,6 +39,7 @@ vi.mock("@functions/api/utils/audit", async (importOriginal) => {
 });
 
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
+import { MAX_RUN_CONTENT_BYTES } from "@functions/api/handlers/agentMcpRuns";
 import { updateRunArgs } from "@functions/api/handlers/agentMcpTools";
 import { buildAuditEventValues } from "@functions/api/utils/audit";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
@@ -927,6 +928,37 @@ describe("personal run MCP handler", () => {
       expect(body.result.isError).toBeUndefined();
       expect(body.result.structuredContent.run).toEqual(expect.objectContaining({ id: "run-1", revision: 8 }));
       expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(RESULT_LIMIT_BYTES);
+      expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, identity);
+    });
+
+    it.each([
+      ["set_task_completed", { taskId: "task-1", completed: false }],
+      ["set_subtask_completed", { taskId: "task-1", subtaskId: "sub-1", completed: false }],
+    ])("allows unchecking with %s on a run already over the content cap", async (operation, fields) => {
+      // "isCompleted":false is one byte longer than "isCompleted":true, so unchecking
+      // grows the run slightly. It only flips booleans, so it must still commit.
+      const sections = largeSections(600 * 1024);
+      const task1 = (sections[0].items as JsonRecord[])[0];
+      task1.isCompleted = true;
+      for (const subtask of (task1.contents as JsonRecord[])[0].subItems as JsonRecord[]) subtask.isCompleted = true;
+      expect(byteLength(sections)).toBeGreaterThan(MAX_RUN_CONTENT_BYTES);
+      dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
+        items: JSON.stringify(sections),
+        progress: 1,
+        revision: 7,
+      })]);
+
+      const body = await toolBody(await handleAgentMcp(callTool("update_run", {
+        runId: "run-1",
+        expectedRevision: 7,
+        operation,
+        ...fields,
+      }), env));
+
+      expect(body.result.isError).toBeUndefined();
+      expect(dbMocks.db.batch).toHaveBeenCalledOnce();
+      expect(body.result.structuredContent.run).toEqual(expect.objectContaining({ id: "run-1", revision: 8 }));
+      expect(body.result.structuredContent.task).toEqual(expect.objectContaining({ id: "task-1", isCompleted: false }));
       expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, identity);
     });
 

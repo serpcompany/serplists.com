@@ -438,11 +438,13 @@ async function updateRun(
       updates.completed_by_user_id = identity.userId;
     }
   } else {
-    const currentBytes = jsonByteLength(sections);
+    // Only notes can grow the content. Completion toggles just flip booleans (unchecking
+    // adds a byte per task or subtask), so they stay allowed on a run over the cap.
+    const currentBytes = args.operation === "set_task_notes" ? jsonByteLength(sections) : null;
     applyRunOperation(sections, args);
     const items = JSON.stringify(sections);
     // Checked before the write, so an oversized update never commits.
-    assertRunContentFits(utf8ByteLength(items), currentBytes);
+    if (currentBytes !== null) assertRunContentFits(utf8ByteLength(items), currentBytes);
     updates.items = items;
     updates.progress = calculateRunProgress(sections);
   }

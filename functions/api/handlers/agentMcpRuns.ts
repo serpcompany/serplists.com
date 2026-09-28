@@ -87,7 +87,8 @@ export function summarizeRun(run: JsonRecord): JsonRecord {
  * Rejects a write whose run content would exceed MAX_RUN_CONTENT_BYTES. Call it before
  * db.batch so an oversized write never commits. A write that keeps or shrinks a run
  * already over the cap (a run created on the web) is allowed, so its owner can still
- * clear notes, complete tasks, or finish it through MCP.
+ * shorten or clear notes through MCP. update_run checks only set_task_notes: completion
+ * toggles and status changes never grow content materially, so they always go through.
  */
 export function assertRunContentFits(nextBytes: number, currentBytes = 0): void {
   if (nextBytes <= MAX_RUN_CONTENT_BYTES || nextBytes <= currentBytes) return;
