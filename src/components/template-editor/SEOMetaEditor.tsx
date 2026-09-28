@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -22,6 +23,14 @@ export const SEOMetaEditor = ({
   const seoDescription = useWatch({ control, name: "seoDescription" });
   const title = useWatch({ control, name: "title" });
   const description = useWatch({ control, name: "description" });
+  const fieldId = useId();
+  const ids = {
+    seoTitle: `${fieldId}-seo-title`,
+    seoTitleHint: `${fieldId}-seo-title-hint`,
+    seoUrl: `${fieldId}-seo-url`,
+    seoUrlHint: `${fieldId}-seo-url-hint`,
+    seoDescription: `${fieldId}-seo-description`,
+  };
 
   // The slug the template has now (the form's loaded value); left unedited, it is kept.
   const storedSlug = formState.defaultValues?.seoUrl;
@@ -53,8 +62,10 @@ export const SEOMetaEditor = ({
 
       <FieldGroup>
         <Field>
-          <FieldLabel>Search Title</FieldLabel>
+          <FieldLabel htmlFor={ids.seoTitle}>Search Title</FieldLabel>
           <Input
+            id={ids.seoTitle}
+            aria-describedby={ids.seoTitleHint}
             value={seoTitle || ""}
             maxLength={TEMPLATE_FIELD_LIMITS.seoTitle}
             onChange={(event) =>
@@ -63,14 +74,16 @@ export const SEOMetaEditor = ({
             placeholder="Title for search results..."
             className="bg-input"
           />
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-muted-foreground" id={ids.seoTitleHint}>
             Leave blank to use the template name
           </p>
         </Field>
 
         <Field>
-          <FieldLabel>URL Slug</FieldLabel>
+          <FieldLabel htmlFor={ids.seoUrl}>URL Slug</FieldLabel>
           <Input
+            id={ids.seoUrl}
+            aria-describedby={ids.seoUrlHint}
             value={seoUrl || ""}
             onChange={(event) =>
               setValue("seoUrl", event.target.value, { shouldDirty: true })
@@ -79,14 +92,15 @@ export const SEOMetaEditor = ({
             placeholder="my-template-slug"
             className="bg-input font-mono text-sm"
           />
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-muted-foreground" id={ids.seoUrlHint}>
             The URL-friendly identifier for this template
           </p>
         </Field>
 
         <Field>
-          <FieldLabel>Search Description</FieldLabel>
+          <FieldLabel htmlFor={ids.seoDescription}>Search Description</FieldLabel>
           <Textarea
+            id={ids.seoDescription}
             value={seoDescription || ""}
             maxLength={TEMPLATE_FIELD_LIMITS.seoDescription}
             onChange={(event) =>

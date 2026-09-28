@@ -102,6 +102,7 @@ export const TemplateHeader = ({
             <Button
               variant="ghost"
               size="icon"
+              aria-label="More actions"
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
               type="button"
             >

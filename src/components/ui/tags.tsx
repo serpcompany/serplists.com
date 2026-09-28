@@ -28,6 +28,8 @@ export interface TagOption {
 interface TagsProps {
   className?: string
   emptyMessage?: string
+  // Set on the trigger button, so a <label htmlFor> names the picker.
+  id?: string
   onSelectionChange: (selected: string[]) => void
   options: TagOption[]
   placeholder?: string
@@ -38,6 +40,7 @@ interface TagsProps {
 export function Tags({
   className,
   emptyMessage = 'No options found.',
+  id,
   onSelectionChange,
   options,
   placeholder = 'Select...',
@@ -84,6 +87,7 @@ export function Tags({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
+            id={id}
             variant="outline"
             role="combobox"
             aria-expanded={open}

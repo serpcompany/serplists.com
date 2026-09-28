@@ -4,18 +4,42 @@ import { useForm } from 'react-hook-form';
 import { describe, expect, it } from 'vitest';
 
 import { Form } from '@/components/ui/form';
+import { SectionEditor } from '@/components/template-editor/SectionEditor';
 import { SEOMetaEditor } from '@/components/template-editor/SEOMetaEditor';
 import { TemplateBasicInfo } from '@/components/template-editor/TemplateBasicInfo';
 import {
   buildTemplateEditorDetailsFormValues,
   type TemplateEditorDetailsFormValues,
 } from '@/lib/forms/templateEditorDetailsForm';
+import { buildTemplateEditorFormValues, type TemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
+
+import {
+  accessibleDescription,
+  findDanglingLabels,
+  findDuplicateIds,
+  findUnnamedControls,
+  getByAccessibleName,
+} from './accessibleMarkup';
 
 function TemplateFormHarness(props: {
   children: React.ReactNode;
+  tags?: string[];
 }): JSX.Element {
   const form = useForm<TemplateEditorDetailsFormValues>({
-    defaultValues: buildTemplateEditorDetailsFormValues(),
+    defaultValues: { ...buildTemplateEditorDetailsFormValues(), tags: props.tags ?? [] },
+  });
+
+  return <Form {...form}>{props.children}</Form>;
+}
+
+function SectionFormHarness(props: { children: React.ReactNode }): JSX.Element {
+  const form = useForm<TemplateEditorFormValues>({
+    defaultValues: buildTemplateEditorFormValues({
+      sections: [
+        { id: 'section-1', title: 'Prep', items: [] },
+        { id: 'section-2', title: 'Launch', items: [] },
+      ],
+    }),
   });
 
   return <Form {...form}>{props.children}</Form>;
@@ -50,5 +74,75 @@ describe('Template form panels', () => {
     expect(html).toContain('Search Description');
     expect(html).toContain('Preview');
     expect(html).toContain('example.com/templates/');
+  });
+});
+
+// Screen readers announce a control by its accessible name. Without a linked label these
+// fields fell back to their placeholders, the Public Template switch (which publishes the
+// template) was announced as just 'switch, on', and the tag remove button as 'button'.
+describe('Template form panels name every control', () => {
+  it('links each Template Settings label to its control', () => {
+    const html = renderToStaticMarkup(
+      <TemplateFormHarness tags={['onboarding']}>
+        <TemplateBasicInfo />
+      </TemplateFormHarness>,
+    );
+
+    expect(findUnnamedControls(html)).toEqual([]);
+    expect(findDanglingLabels(html)).toEqual([]);
+    expect(getByAccessibleName(html, 'Template Name')?.tag).toBe('input');
+    expect(getByAccessibleName(html, 'Goal / Summary')?.tag).toBe('textarea');
+    expect(getByAccessibleName(html, 'Template Type')?.attrs.role).toBe('combobox');
+    expect(getByAccessibleName(html, 'Categories')?.attrs.role).toBe('combobox');
+    expect(getByAccessibleName(html, 'Tags')?.tag).toBe('input');
+    expect(getByAccessibleName(html, 'Remove tag onboarding')?.tag).toBe('button');
+  });
+
+  it('names the Public Template switch and describes what it does', () => {
+    const html = renderToStaticMarkup(
+      <TemplateFormHarness>
+        <TemplateBasicInfo />
+      </TemplateFormHarness>,
+    );
+
+    const publicSwitch = getByAccessibleName(html, 'Public Template');
+    expect(publicSwitch?.attrs.role).toBe('switch');
+    expect(accessibleDescription(html, publicSwitch!)).toBe(
+      'Make this template visible in the public library',
+    );
+  });
+
+  it('links each Search & SEO label and hint to its field', () => {
+    const html = renderToStaticMarkup(
+      <TemplateFormHarness>
+        <SEOMetaEditor />
+      </TemplateFormHarness>,
+    );
+
+    expect(findUnnamedControls(html)).toEqual([]);
+    expect(findDanglingLabels(html)).toEqual([]);
+    const searchTitle = getByAccessibleName(html, 'Search Title');
+    const slug = getByAccessibleName(html, 'URL Slug');
+    expect(searchTitle?.tag).toBe('input');
+    expect(slug?.tag).toBe('input');
+    expect(getByAccessibleName(html, 'Search Description')?.tag).toBe('textarea');
+    expect(accessibleDescription(html, searchTitle!)).toBe('Leave blank to use the template name');
+    expect(accessibleDescription(html, slug!)).toBe('The URL-friendly identifier for this template');
+  });
+
+  it('links the Section Title label, with ids unique across panels shown together', () => {
+    const html = renderToStaticMarkup(
+      <SectionFormHarness>
+        <TemplateBasicInfo />
+        <SEOMetaEditor />
+        <SectionEditor sectionIndex={0} />
+        <SectionEditor sectionIndex={1} />
+      </SectionFormHarness>,
+    );
+
+    expect(findUnnamedControls(html)).toEqual([]);
+    expect(findDanglingLabels(html)).toEqual([]);
+    expect(findDuplicateIds(html)).toEqual([]);
+    expect(getByAccessibleName(html, 'Section Title')?.attrs.value).toBe('Prep');
   });
 });

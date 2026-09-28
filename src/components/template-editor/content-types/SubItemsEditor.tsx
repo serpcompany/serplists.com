@@ -70,6 +70,7 @@ export function SubItemsEditor({
         {subItemsFieldArray.fields.map((subItemField, subItemIndex) => (
           <div className="flex items-center gap-2" key={subItemField.fieldId}>
             <Input
+              aria-label={`Sub-task ${subItemIndex + 1}`}
               className="flex-grow"
               data-subtask-content={contentIndex}
               data-subtask-item={itemIndex}
@@ -86,6 +87,7 @@ export function SubItemsEditor({
               value={subItems[subItemIndex]?.title ?? ""}
             />
             <Button
+              aria-label={`Remove sub-task ${subItemIndex + 1}`}
               disabled={subItems.length === 1}
               onClick={() => subItemsFieldArray.remove(subItemIndex)}
               size="icon"

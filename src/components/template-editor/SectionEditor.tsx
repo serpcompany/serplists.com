@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -14,6 +15,7 @@ export function SectionEditor({
   showIntro = true,
 }: SectionEditorProps): JSX.Element {
   const { control, setValue } = useFormContext<TemplateEditorFormValues>();
+  const titleInputId = useId();
   const section = useWatch({
     control,
     name: `sections.${sectionIndex}` as const,
@@ -34,8 +36,9 @@ export function SectionEditor({
 
       <FieldGroup>
         <Field>
-          <FieldLabel>Section Title</FieldLabel>
+          <FieldLabel htmlFor={titleInputId}>Section Title</FieldLabel>
           <Input
+            id={titleInputId}
             value={section?.title ?? ""}
             onChange={(event) =>
               setValue(`sections.${sectionIndex}.title`, event.target.value, {

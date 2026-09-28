@@ -191,6 +191,7 @@ export function ContentEditor({
                   {contentTypeLabels[contents[contentIndex]?.type ?? "text"]}
                 </span>
                 <Button
+                  aria-label={`Remove ${contentTypeLabels[contents[contentIndex]?.type ?? "text"]} block`}
                   className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
                   onClick={() => contentsFieldArray.remove(contentIndex)}
                   size="icon"

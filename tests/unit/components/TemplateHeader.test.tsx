@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { TemplateHeader } from '@/components/template-editor/TemplateHeader';
 
+import { findUnnamedControls, getByAccessibleName } from './accessibleMarkup';
+
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({
     user: null,
@@ -68,5 +70,24 @@ describe('TemplateHeader while a file uploads', () => {
 
     expect(html).not.toContain('Uploading...');
     expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Save<\/button>/);
+  });
+});
+
+describe('TemplateHeader accessible names', () => {
+  it('names every button, including the icon-only back and more-actions buttons', () => {
+    const html = renderToStaticMarkup(
+      <TemplateHeader
+        isEditing
+        isSaving={false}
+        title="New Employee Onboarding"
+        onCancel={() => undefined}
+        onPreview={() => undefined}
+        onSave={() => undefined}
+      />,
+    );
+
+    expect(findUnnamedControls(html)).toEqual([]);
+    expect(getByAccessibleName(html, 'Back to templates')?.tag).toBe('button');
+    expect(getByAccessibleName(html, 'More actions')?.tag).toBe('button');
   });
 });

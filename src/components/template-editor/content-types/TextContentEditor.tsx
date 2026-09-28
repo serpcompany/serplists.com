@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,9 +15,10 @@ interface TextContentEditorProps {
 }
 
 export const TextContentEditor = ({ value, onChange }: TextContentEditorProps) => {
+  const textareaId = useId();
   return (
     <div>
-      <Label className="flex items-center gap-2 mb-3">
+      <Label className="flex items-center gap-2 mb-3" htmlFor={textareaId}>
         <FileText className="h-4 w-4" /> Text Content
       </Label>
       <Tabs defaultValue="edit">
@@ -25,6 +28,7 @@ export const TextContentEditor = ({ value, onChange }: TextContentEditorProps) =
         </TabsList>
         <TabsContent value="edit">
           <Textarea
+            id={textareaId}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder="Enter text or markdown content"
