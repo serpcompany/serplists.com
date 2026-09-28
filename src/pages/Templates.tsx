@@ -40,6 +40,7 @@ import {
   useDashboardTemplatesModel,
 } from '@/features/dashboard-templates/useDashboardTemplatesModel';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
+import { compareTemplatesByRecent } from '@/lib/templates/templateRecency';
 import {
   handleUpgradeRequiredForContext,
   navigateToLoginWithReturnPath,
@@ -106,9 +107,7 @@ const Templates = () => {
           return rightTasks - leftTasks;
         }
 
-        return (
-          new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
-        );
+        return compareTemplatesByRecent(left, right);
       });
   }, [filterVisibility, model.templates, searchQuery, sortBy]);
 

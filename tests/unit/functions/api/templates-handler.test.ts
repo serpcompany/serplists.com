@@ -194,6 +194,9 @@ describe('Templates Handlers', () => {
     expect(Array.isArray(storedItems)).toBe(true);
     expect(storedItems[0].items).toHaveLength(1);
     expect(inserted.version).toBe(1);
+    // A new template's last activity is its creation, so "Most Recent" can sort it.
+    expect(inserted.updated_at).toEqual(expect.any(String));
+    expect(inserted.updated_at).toBe(inserted.created_at);
     expect(personalLimitColumns).toContain('owner_type');
     expect(personalLimitColumns).toContain('user_id');
     expect(personalLimitColumns).toContain('team_id');
@@ -953,6 +956,11 @@ describe('Templates Handlers', () => {
         resource_type: 'template',
       }),
     );
+    const importedTemplate = dbMocks.insertChain.values.mock.calls
+      .map(([values]) => values)
+      .find((values) => values?.title === 'Imported' && 'slug' in values);
+    expect(importedTemplate?.updated_at).toEqual(expect.any(String));
+    expect(importedTemplate?.updated_at).toBe(importedTemplate?.created_at);
   });
 
   it('should return per-template partial import results when some templates fail', async () => {
@@ -1121,5 +1129,10 @@ describe('Templates Handlers', () => {
 
     expect(response.status).toBe(200);
     expect(data.id).toBeDefined();
+    const clonedTemplate = dbMocks.insertChain.values.mock.calls
+      .map(([values]) => values)
+      .find((values) => values?.id === data.id && 'slug' in values);
+    expect(clonedTemplate?.updated_at).toEqual(expect.any(String));
+    expect(clonedTemplate?.updated_at).toBe(clonedTemplate?.created_at);
   });
 });

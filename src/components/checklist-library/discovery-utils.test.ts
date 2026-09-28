@@ -60,6 +60,22 @@ describe('discovery-utils', () => {
     expect(filtered.map((template) => template.id)).toEqual(['gamma', 'alpha']);
   });
 
+  it('sorts never-edited templates by creation date under recent', () => {
+    const neverEdited: ChecklistTemplate = {
+      ...templates[0],
+      id: 'delta',
+      title: 'Delta Fresh',
+      createdAt: '2024-05-01T00:00:00Z',
+      updatedAt: '',
+    };
+    const input = [templates[0], neverEdited, templates[1], templates[2]];
+
+    for (const ordering of [input, [...input].reverse()]) {
+      const filtered = filterAndSortTemplates(ordering, { sortBy: 'recent' });
+      expect(filtered.map((template) => template.id)).toEqual(['delta', 'gamma', 'beta', 'alpha']);
+    }
+  });
+
   it('sorts by structural popularity when requested', () => {
     const filtered = filterAndSortTemplates(templates, {
       sortBy: 'popular',

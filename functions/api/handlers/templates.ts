@@ -693,6 +693,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
             team_id: backupTeamId,
             created_by_user_id: userId,
             created_at: now,
+            updated_at: now,
           };
           const subject: AuditSubject = backupTeamId ? { type: 'team', id: backupTeamId } : { type: 'user', id: userId };
 
@@ -1171,6 +1172,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         team_id: cloneTeamId,
         created_by_user_id: userId,
         created_at: now,
+        updated_at: now,
       };
       const subject: AuditSubject = cloneTeamId ? { type: 'team', id: cloneTeamId } : { type: 'user', id: userId };
 
@@ -1284,6 +1286,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       team_id: requestedTeamId,
       created_by_user_id: userId,
       created_at: now,
+      updated_at: now,
     };
     const subject: AuditSubject = requestedTeamId ? { type: 'team', id: requestedTeamId } : { type: 'user', id: userId };
 
