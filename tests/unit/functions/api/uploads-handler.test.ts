@@ -152,6 +152,27 @@ describe('Uploads Handler size and type limits', () => {
   });
 });
 
+describe('Uploads Handler storage', () => {
+  // formData() already holds the file; copying it into an ArrayBuffer would hold
+  // a 50MB upload twice, close to the isolate's 128MB memory limit.
+  it('streams the parsed file to R2 without copying it into a second buffer', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env = uploadEnv();
+    const file = new File([new Uint8Array(1024)], 'clip.mp4', { type: 'video/mp4' });
+    const arrayBuffer = vi.spyOn(file, 'arrayBuffer');
+
+    const response = await handleUploads(rawFormUpload('template-videos', file), env);
+
+    expect(response.status).toBe(200);
+    expect(arrayBuffer).not.toHaveBeenCalled();
+    expect(env.R2_UPLOADS.put).toHaveBeenCalledWith(
+      expect.stringMatching(/^template-videos\/user-123\/.+\.mp4$/),
+      file,
+      expect.objectContaining({ httpMetadata: expect.objectContaining({ contentType: 'video/mp4' }) }),
+    );
+  });
+});
+
 const FILE_KEY = 'template-videos/user-123/clip.mp4';
 const FILE_SIZE = 100;
 const FILE_ETAG = '"etag-1"';

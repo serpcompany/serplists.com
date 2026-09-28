@@ -156,7 +156,9 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
 
     const key = `${bucket}/${userId}/${crypto.randomUUID()}${ext ? `.${ext}` : ''}`;
 
-    await env.R2_UPLOADS.put(key, await file.arrayBuffer(), {
+    // Pass the File itself: copying it into an ArrayBuffer would hold a 50MB
+    // upload twice, close to the isolate's 128MB memory limit.
+    await env.R2_UPLOADS.put(key, file, {
       httpMetadata: {
         contentType,
         contentDisposition: bucket === 'template-files' ? `attachment; filename="${filename}"` : undefined,
