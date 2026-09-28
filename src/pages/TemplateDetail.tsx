@@ -112,6 +112,7 @@ const TemplateDetail = () => {
     loading,
     notFound,
     permissions,
+    refetchBilling,
     reload,
     saveTemplate,
     setVisibility,
@@ -309,6 +310,9 @@ const TemplateDetail = () => {
       billingState,
       template: displayTemplate,
     });
+    if (billingState.isError) {
+      refetchBilling();
+    }
 
     if (result.kind === 'upgrade_required') {
       await handleUpgrade();

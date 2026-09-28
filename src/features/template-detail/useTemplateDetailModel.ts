@@ -283,6 +283,8 @@ export const useTemplateDetailModel = (
 
   return {
     billingState,
+    // Checks the plan again after a failed check, so the next attempt can go through.
+    refetchBilling: billing.refetch,
     history: {
       data: history.data ?? null,
       isError: history.isError,

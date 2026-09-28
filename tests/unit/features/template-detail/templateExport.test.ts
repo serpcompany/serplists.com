@@ -57,6 +57,7 @@ const billing = (
   overrides: Partial<TemplateDetailBillingState> = {},
 ): TemplateDetailBillingState => ({
   billingEnabled: true,
+  isError: false,
   isLoading: false,
   isPro: true,
   ...overrides,
@@ -139,6 +140,22 @@ describe('template detail export', () => {
       }).kind,
     ).toBe('error');
     expect(download).not.toHaveBeenCalled();
+  });
+
+  it('asks for a retry, never an upgrade, when the plan check failed', () => {
+    const download = vi.fn();
+
+    expect(
+      exportTemplateFile({
+        billingState: billing({ isError: true, isPro: false }),
+        download,
+        template: buildTemplate(),
+      }),
+    ).toEqual({ kind: 'error', message: "Couldn't check your plan. Try again." });
+    expect(download).not.toHaveBeenCalled();
+    expect(getTemplateExportLabel(billing({ isError: true, isPro: false }))).toBe(
+      'Export JSON',
+    );
   });
 
   it('labels the menu item for the plan', () => {

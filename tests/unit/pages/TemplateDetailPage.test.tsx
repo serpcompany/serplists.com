@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { templatePayloadSchema } from '../../../functions/api/utils/payloads';
 import { mapApiTemplateToChecklistTemplate } from '@/features/template-detail/templateDetailMappers';
+import { handleUpgradeRequiredForContext } from '@/lib/access-flow';
 import TemplateDetail from '@/pages/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
 
@@ -335,6 +336,28 @@ describe('TemplateDetail Duplicate', () => {
     const payload = await duplicateWithTitle('Launch');
 
     expect(payload.title).toBe('Launch Copy');
+  });
+});
+
+describe('TemplateDetail export after a failed plan check', () => {
+  it('offers Export JSON, not an upgrade, and checks the plan again on click', async () => {
+    vi.mocked(handleUpgradeRequiredForContext).mockClear();
+    const refetchBilling = vi.fn();
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      billingState: { billingEnabled: true, isError: true, isLoading: false, isPro: false },
+      refetchBilling,
+    });
+
+    const html = renderTemplateDetail();
+    const exportItem = menuItemProps.find((props) =>
+      [props.children].flat(Infinity).includes('Export JSON'),
+    );
+    await (exportItem?.onClick as () => Promise<void>)();
+
+    expect(html).not.toContain('Upgrade to export');
+    expect(refetchBilling).toHaveBeenCalledTimes(1);
+    expect(handleUpgradeRequiredForContext).not.toHaveBeenCalled();
   });
 });
 

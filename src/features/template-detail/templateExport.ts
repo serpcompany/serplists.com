@@ -39,7 +39,9 @@ export type TemplateExportResult =
   | { kind: 'error'; message: string };
 
 // Template export is a paid feature (docs/product-specs/portable-templates.md),
-// decided by the active ownership context's plan, like Import Templates.
+// decided by the active ownership context's plan, like Import Templates. The pack is
+// built in the browser, so no server check can decide for it: a failed plan check asks
+// for a retry, never an upgrade, because it is not the Free plan.
 export const exportTemplateFile = (params: {
   billingState: TemplateDetailBillingState;
   download?: (pack: PortableTemplatePack, filename: string) => void;
@@ -51,6 +53,10 @@ export const exportTemplateFile = (params: {
 
   if (params.billingState.isLoading) {
     return { kind: 'error', message: 'Checking your plan. Try again in a moment.' };
+  }
+
+  if (params.billingState.isError) {
+    return { kind: 'error', message: "Couldn't check your plan. Try again." };
   }
 
   if (!params.billingState.isPro) {
@@ -70,5 +76,5 @@ export const getTemplateExportLabel = (
     return 'Checking plan...';
   }
 
-  return billingState.isPro ? 'Export JSON' : 'Upgrade to export';
+  return billingState.isPro || billingState.isError ? 'Export JSON' : 'Upgrade to export';
 };

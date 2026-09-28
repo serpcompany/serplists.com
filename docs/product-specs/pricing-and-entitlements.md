@@ -114,7 +114,8 @@ Feature gates read the plan through `useBillingStatus` (`src/hooks/useBillingSta
 which reports `loading`, `error` or `known`. Only a `known` Free plan shows an
 upgrade prompt or starts checkout. When the status check fails, offer a retry
 and no upgrade prompt: import/export lets the action through for the server to
-decide, and copying a public Template asks the user to try again.
+decide, while copying a public Template and exporting one from its detail page
+(a pack built in the browser) ask the user to try again and check the plan again.
 
 ### Manual personal-plan overrides
 
