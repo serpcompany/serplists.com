@@ -51,6 +51,9 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
 - Surface API failures by their structured code, not message text: `401` means sign
   in (keep the return path), `403 upgrade_required` and `403 limit_reached` mean a
   plan gate, `503 billing_unavailable` means checkout is down.
+- `authClient` (Better Auth) calls resolve with `{ data, error }` on HTTP failures
+  instead of throwing. Check `result.error` before reporting success or doing any
+  follow-up that assumes the change was saved, such as deleting the old avatar file.
 
 ## Template editor forms
 

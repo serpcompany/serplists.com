@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { handleUploads } from '@functions/api/handlers/uploads';
+import { AVATAR_MIME_TYPES } from '@/lib/schemas/uploadTypes';
 
 vi.mock('@functions/api/utils/session', () => ({
   getSessionUserId: vi.fn(),
@@ -88,5 +89,42 @@ describe('Uploads Handler DELETE', () => {
 
     expect(response.status).toBeGreaterThanOrEqual(400);
     expect(env.R2_UPLOADS.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('Uploads Handler avatar types', () => {
+  function uploadRequest(file: File): Request {
+    const form = new FormData();
+    form.set('bucket', 'avatars');
+    form.set('file', file);
+    return new Request('http://localhost/api/uploads', { method: 'POST', body: form });
+  }
+
+  it.each([...AVATAR_MIME_TYPES])('stores %s avatars, which the avatar picker offers', async (type) => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env: any = {
+      BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
+      R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
+    };
+
+    const response = await handleUploads(uploadRequest(new File(['x'], 'a', { type })), env);
+
+    expect(response.status).toBe(200);
+  });
+
+  it('refuses SVG avatars, which the avatar picker does not offer', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env: any = {
+      BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
+      R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
+    };
+
+    const response = await handleUploads(
+      uploadRequest(new File(['<svg/>'], 'a.svg', { type: 'image/svg+xml' })),
+      env,
+    );
+
+    expect(response.status).toBe(415);
+    expect(AVATAR_MIME_TYPES).not.toContain('image/svg+xml');
   });
 });

@@ -1,5 +1,6 @@
 import type { Env } from '../types';
 import { getSessionUserId } from '../utils/session';
+import { AVATAR_MIME_TYPES } from '../../../src/lib/schemas/uploadTypes';
 
 type UploadBucket = 'avatars' | 'template-images' | 'template-videos' | 'template-files';
 
@@ -13,7 +14,7 @@ function json(data: unknown, status = 200): Response {
 }
 
 const allowedMimeTypesByBucket: Record<UploadBucket, Set<string>> = {
-  avatars: new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+  avatars: new Set(AVATAR_MIME_TYPES),
   'template-images': new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
   'template-videos': new Set(['video/mp4', 'video/webm', 'video/quicktime']),
   'template-files': new Set([
