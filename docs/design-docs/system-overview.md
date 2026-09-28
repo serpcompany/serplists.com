@@ -112,7 +112,7 @@ JSON fields:
 - `templates.category` stores a JSON array of category strings.
 - `templates.tags` stores a JSON array of tag strings.
 - `templates.rules` stores template rule metadata.
-- `checklist_runs.items` stores the current sectioned run content plus completion state. `retired_items` stores removed sections/items/sub-items for history without counting them toward readiness.
+- `checklist_runs.items` stores the current sectioned run content plus completion state. `retired_items` stores removed sections/items/sub-items for history without counting them toward readiness. It is server-owned (only reconciliation and Revalidate write it), shown read-only on the private run page and in MCP `get_run`, and stripped from shared-run responses.
 - Template changes reconcile only active private runs by stable section/item/sub-item ID. Completed, archived, and shared runs keep their snapshot and become stale when their `template_version` trails the source template.
 - `audit_events.before_json`, `after_json`, `diff_json`, and `metadata_json` store structured audit payloads.
 - `template_versions.snapshot_json` stores a point-in-time template snapshot.

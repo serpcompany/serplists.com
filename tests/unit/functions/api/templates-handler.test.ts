@@ -10,6 +10,7 @@ const dbMocks = vi.hoisted(() => {
   };
   const insertChain = {
     values: vi.fn(),
+    select: vi.fn(),
   };
   const updateChain = {
     set: vi.fn(),
@@ -42,7 +43,10 @@ vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForContext: vi.fn(),
 }));
 
+import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
+import type { SQL } from 'drizzle-orm';
 import { handleTemplates } from '@functions/api/handlers/templates';
+import { reconcileRunSections } from '@functions/api/utils/template-reconciliation';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 
@@ -73,6 +77,7 @@ describe('Templates Handlers', () => {
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockResolvedValue(undefined);
+    dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
     dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
     dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
     dbMocks.deleteChain.where.mockResolvedValue(undefined);
@@ -1273,6 +1278,53 @@ describe('Templates Handlers', () => {
       expect(JSON.parse(dbMocks.updateChain.set.mock.calls[0][0].items)[0].items.map((item: { id: string }) => item.id))
         .toEqual(['item-2', 'item-1']);
       expect(dbMocks.updateChain.set.mock.calls[1][0]).toEqual(expect.objectContaining({ template_version: 3, revision: 2 }));
+    });
+    it('records a reconciled event on each run whose work changed, naming what it retired', async () => {
+      const withoutPublish = editorSections.map((section) => ({
+        ...section,
+        items: section.items.filter((item) => item.id !== 'item-2'),
+      }));
+      const annotatedRun = JSON.parse(JSON.stringify(storedSections));
+      annotatedRun[0].items[1] = { ...annotatedRun[0].items[1], isCompleted: true, notes: 'Registrar login is in vault X' };
+      // A run that already matches the new structure has nothing to record.
+      const unaffectedRun = reconcileRunSections(storedSections, withoutPublish, []).sections;
+      dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+        { id: 'run-1', items: JSON.stringify(annotatedRun), retired_items: '[]', status: 'in_progress', is_public: false, revision: 4 },
+        { id: 'run-2', items: JSON.stringify(unaffectedRun), retired_items: '[]', status: 'in_progress', is_public: false, revision: 2 },
+      ]);
+      const changed = { meta: { changes: 1 } };
+      dbMocks.db.batch.mockResolvedValueOnce([changed, changed, changed, changed, changed, { meta: { changes: 0 } }]);
+
+      const response = await put({ ...editorPayload, sections: withoutPublish });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.reconciledRuns).toBe(1);
+      const dialect = new SQLiteSyncDialect();
+      const guardedInserts = dbMocks.insertChain.select.mock.calls.map(([query]) => dialect.sqlToQuery(query as SQL));
+      expect(guardedInserts).toHaveLength(1);
+      const { sql: insertSql, params } = guardedInserts[0];
+      expect(params).toEqual(expect.arrayContaining(['checklist_run.reconciled', 'run-1', 'user-123']));
+      const metadata = JSON.parse(params.find((param) => typeof param === 'string' && param.includes('"retired"')) as string);
+      expect(metadata).toEqual(expect.objectContaining({
+        templateId: 'template-1',
+        templateVersion: 3,
+        fromRevision: 4,
+        toRevision: 5,
+        retired: [{ kind: 'item', id: 'item-2', title: 'Publish' }],
+      }));
+      // The event names the retired work; the notes stay in the run's retired_items only.
+      expect(JSON.stringify(params)).not.toContain('vault X');
+      // Guarded by the run update's own WHERE clause, so a missed update records nothing.
+      expect(insertSql).toMatch(/where exists \(select 1 from "checklist_runs" where .*"checklist_runs"\."revision" = \?/);
+      expect(params).toContain(4);
+      const statements = dbMocks.db.batch.mock.calls[0][0];
+      expect(statements).toHaveLength(6);
+      expect(statements[3]).toEqual({ kind: 'conditional-insert' });
+      expect(statements[4]).toBe(dbMocks.updateChain);
+      expect(JSON.parse(dbMocks.updateChain.set.mock.calls[1][0].retired_items)).toEqual([
+        expect.objectContaining({ kind: 'item', item: expect.objectContaining({ id: 'item-2', notes: 'Registrar login is in vault X' }) }),
+      ]);
     });
   });
 

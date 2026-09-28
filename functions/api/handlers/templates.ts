@@ -20,6 +20,7 @@ import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/enti
 import {
   buildAuditEventValues,
   buildTemplateVersionValues,
+  insertAuditEventWhen,
   type AuditSubject,
 } from '../utils/audit';
 import {
@@ -36,6 +37,7 @@ import {
   assignMissingStableTemplateIdentities,
   calculateRunProgress,
   reconcileRunSections,
+  summarizeRetiredEntries,
   validateStableTemplateIdentities,
 } from '../utils/template-reconciliation';
 import {
@@ -132,30 +134,44 @@ async function insertTemplateWithHistoryFallback(
   }
 }
 
+type ReconciledRunUpdate = {
+  items: string;
+  retiredItems: string;
+  progress: number;
+  templateVersion: number;
+  revision: number;
+  whereClause: SQL | undefined;
+  updatedAt: string;
+  // Written only when the reconcile changed the run, guarded by the run update's WHERE clause.
+  auditEvent?: AuditEventValues;
+};
+
 async function updateTemplateWithHistoryFallback(
   db: ReturnType<typeof createDb>,
   values: TemplateUpdateValues,
   whereClause: SQL | undefined,
   auditEventValues: AuditEventValues,
   versionValues?: TemplateVersionValues,
-  reconciledRunUpdates: Array<{
-    items: string;
-    retiredItems: string;
-    progress: number;
-    templateVersion: number;
-    revision: number;
-    whereClause: SQL | undefined;
-    updatedAt: string;
-  }> = [],
-): Promise<readonly unknown[]> {
+  reconciledRunUpdates: ReconciledRunUpdate[] = [],
+): Promise<{ templateResult: unknown; runResults: unknown[] }> {
   const { audit_events, checklist_runs, template_versions, templates } = schema;
+  const runResultIndexes: number[] = [];
+  let nextIndex = versionValues ? 3 : 2;
+  for (const runUpdate of reconciledRunUpdates) {
+    if (runUpdate.auditEvent) nextIndex += 1;
+    runResultIndexes.push(nextIndex);
+    nextIndex += 1;
+  }
 
   const runBatch = (templateValues: TemplateUpdateValues) => {
     const statements = [
       db.update(templates).set(templateValues).where(whereClause),
       ...(versionValues ? [db.insert(template_versions).values(versionValues)] : []),
       db.insert(audit_events).values(auditEventValues),
-      ...reconciledRunUpdates.map((runUpdate) =>
+      ...reconciledRunUpdates.flatMap((runUpdate) => [
+        ...(runUpdate.auditEvent
+          ? [insertAuditEventWhen(db, runUpdate.auditEvent, sql`exists (select 1 from ${checklist_runs} where ${runUpdate.whereClause})`)]
+          : []),
         db
           .update(checklist_runs)
           .set({
@@ -167,21 +183,23 @@ async function updateTemplateWithHistoryFallback(
             updated_at: runUpdate.updatedAt,
           })
           .where(runUpdate.whereClause),
-      ),
+      ]),
     ] as const;
 
     return db.batch(statements);
   };
 
+  let results: readonly unknown[];
   try {
-    return await runBatch(values);
+    results = await runBatch(values);
   } catch (error) {
     if (!isMissingRulesColumnError(error)) {
       throw error;
     }
 
-    return await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateUpdateValues);
+    results = await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateUpdateValues);
   }
+  return { templateResult: results[0], runResults: runResultIndexes.map((index) => results[index]) };
 }
 
 function batchUpdateMissed(result: unknown): boolean {
@@ -1420,14 +1438,16 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     );
 
     const nextTemplateSections = syncedItems === null ? [] : (parseJsonArray(syncedItems) ?? []);
-    const reconciledRunUpdates = activeRuns.map((run) => {
+    const reconciledRunUpdates = await Promise.all(activeRuns.map(async (run): Promise<ReconciledRunUpdate> => {
       const previousSections = parseJsonArray(run.items) ?? [];
       const previousRetired = parseJsonArray(run.retired_items) ?? [];
       const reconciled = reconcileRunSections(previousSections, nextTemplateSections, previousRetired);
       const revision = typeof run.revision === 'number' ? run.revision : 1;
+      const items = JSON.stringify(reconciled.sections);
+      const runChanged = reconciled.newlyRetired.length > 0 || items !== JSON.stringify(previousSections);
 
       return {
-        items: JSON.stringify(reconciled.sections),
+        items,
         retiredItems: JSON.stringify(reconciled.retired),
         progress: calculateRunProgress(reconciled.sections),
         templateVersion: nextContentVersion,
@@ -1440,12 +1460,31 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
           isNull(checklist_runs.deleted_at),
         ),
+        // The run's Changelog records the save. The event names retired work by id and
+        // title; its notes stay in the run's retired_items.
+        auditEvent: runChanged
+          ? await buildAuditEventValues({
+            actorUserId: userId,
+            subject,
+            resource: { type: 'checklist_run', id: run.id },
+            action: 'checklist_run.reconciled',
+            metadata: {
+              templateId,
+              templateVersion: nextContentVersion,
+              fromRevision: revision,
+              toRevision: revision + 1,
+              retired: summarizeRetiredEntries(reconciled.newlyRetired),
+            },
+            request,
+            createdAt: now,
+          })
+          : undefined,
       };
-    });
+    }));
 
     let reconciledRuns = 0;
     try {
-      const batchResults = await updateTemplateWithHistoryFallback(
+      const { templateResult, runResults } = await updateTemplateWithHistoryFallback(
         db,
         templateValues as TemplateUpdateValues,
         templateUpdateWhere,
@@ -1453,14 +1492,12 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         versionValues,
         reconciledRunUpdates,
       );
-      if (batchUpdateMissed(batchResults[0])) {
+      if (batchUpdateMissed(templateResult)) {
         return jsonError('Template changed while it was being saved. Refresh before saving again.', 409, {
           code: 'edit_conflict',
         });
       }
-      // Run updates follow the template update, version insert, and audit insert.
-      const runResults = batchResults.slice(versionValues ? 3 : 2);
-      reconciledRuns = reconciledRunUpdates.filter((_, index) => !batchUpdateMissed(runResults[index])).length;
+      reconciledRuns = runResults.filter((result) => !batchUpdateMissed(result)).length;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (/unique constraint failed:.*template_versions|template_versions.*unique/i.test(message)) {

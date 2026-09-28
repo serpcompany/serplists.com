@@ -563,6 +563,23 @@ describe("personal run MCP handler", () => {
     expect(Number(limited.headers.get("Retry-After"))).toBeGreaterThan(0);
   });
 
+  it("returns retired work from get_run but keeps list_runs small", async () => {
+    const retired = [
+      { kind: "item", sectionId: "section-1", item: { id: "task-dns", title: "Check DNS", isCompleted: true, notes: "TTL lowered" } },
+    ];
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ retired_items: JSON.stringify(retired) })]);
+
+    const getResponse = await handleAgentMcp(callTool("get_run", { runId: "run-1" }), env);
+    const getBody = await getResponse.json() as any;
+    expect(getBody.result.structuredContent.run.retiredItems).toEqual(retired);
+
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([personalRun({ retired_items: JSON.stringify(retired) })]);
+    const listResponse = await handleAgentMcp(callTool("list_runs"), env);
+    const listBody = await listResponse.json() as any;
+    expect(listBody.result.structuredContent.runs[0]).not.toHaveProperty("retiredItems");
+    expect(listBody.result.structuredContent.runs[0]).not.toHaveProperty("sections");
+  });
+
   it("hides a personal run owned by another user", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ user_id: "user-2" })]);
 

@@ -8,6 +8,7 @@ import type {
   ChecklistSection,
   ChecklistSubItem,
 } from '@/types/checklist';
+import { parseRetiredRunItems } from '@/features/run-execution/retiredRunItems';
 
 type ApiRecord = Record<string, unknown>;
 
@@ -76,6 +77,8 @@ export const mapChecklistToRun = (
     revision: typeof checklist.revision === 'number' ? checklist.revision : 1,
     isStale: checklist.is_stale === true,
     isPublic: checklist.is_public === true || checklist.is_public === 1,
+    // Read-only: kept out of `sections`, so progress and task selection never see it.
+    retiredItems: parseRetiredRunItems(checklist.retired_items),
   };
 };
 

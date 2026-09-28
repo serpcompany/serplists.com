@@ -60,15 +60,39 @@ function preserveRunState(templateValue: JsonRecord, runValue: JsonRecord | unde
   return next;
 }
 
+type EarlierRetired = ReturnType<typeof createEarlierRetiredLookup>;
+
+// Work an earlier reconcile retired comes back with its run state when the Template brings
+// its id back (for example, restoring an older Template version). A live copy wins; the
+// newest retired copy of an id is used first.
+function createEarlierRetiredLookup(previousRetired: unknown[]) {
+  const remaining = previousRetired.filter(isRecord) as RetiredRunEntry[];
+  const take = (kind: RetiredRunEntry['kind'], id: string): JsonRecord | undefined => {
+    for (let index = remaining.length - 1; index >= 0; index -= 1) {
+      const entry = remaining[index];
+      if (entry.kind !== kind) continue;
+      const record = entry.kind === 'section' ? entry.section : entry.kind === 'item' ? entry.item : entry.subItem;
+      if (isRecord(record) && getId(record) === id) {
+        remaining.splice(index, 1);
+        return record;
+      }
+    }
+    return undefined;
+  };
+  return { take, remaining };
+}
+
 function reconcileSubItems(
   templateSubItems: unknown[],
   previousById: Map<string, JsonRecord>,
   retainedIds: Set<string>,
+  earlierRetired: EarlierRetired,
 ): JsonRecord[] {
   return templateSubItems.filter(isRecord).map((templateSubItem) => {
     const id = getId(templateSubItem);
     if (id) retainedIds.add(id);
-    return preserveRunState(templateSubItem, id ? previousById.get(id) : undefined);
+    const previous = id ? previousById.get(id) ?? earlierRetired.take('subItem', id) : undefined;
+    return preserveRunState(templateSubItem, previous);
   });
 }
 
@@ -77,6 +101,7 @@ function reconcileItem(
   previousItem: JsonRecord | undefined,
   retired: RetiredRunEntry[],
   sectionId: string,
+  earlierRetired: EarlierRetired,
 ): JsonRecord {
   const next = preserveRunState(templateItem, previousItem);
   const previousSubItems = previousItem ? getSubItems(previousItem) : [];
@@ -94,7 +119,7 @@ function reconcileItem(
   };
 
   if (Array.isArray(templateItem.subItems)) {
-    next.subItems = reconcileSubItems(templateItem.subItems, previousSubItemsById, retainedSubItemIds);
+    next.subItems = reconcileSubItems(templateItem.subItems, previousSubItemsById, retainedSubItemIds, earlierRetired);
   }
 
   if (Array.isArray(templateItem.contents)) {
@@ -102,7 +127,7 @@ function reconcileItem(
       if (!isRecord(content) || !Array.isArray(content.subItems)) return content;
       return {
         ...content,
-        subItems: reconcileSubItems(content.subItems, previousSubItemsById, retainedSubItemIds),
+        subItems: reconcileSubItems(content.subItems, previousSubItemsById, retainedSubItemIds, earlierRetired),
       };
     });
   }
@@ -125,11 +150,15 @@ function reconcileItem(
   return next;
 }
 
+/**
+ * Applies the Template's sections to a run, keeping run state by stable id. Removed work
+ * moves to `retired` (earlier entries first); `newlyRetired` is what this call retired.
+ */
 export function reconcileRunSections(
   previousSections: unknown[],
   templateSections: unknown[],
   previousRetired: unknown[],
-): { sections: JsonRecord[]; retired: RetiredRunEntry[] } {
+): { sections: JsonRecord[]; retired: RetiredRunEntry[]; newlyRetired: RetiredRunEntry[] } {
   const previousSectionShape = normalizeLegacySectionShape(previousSections);
   const templateSectionShape = normalizeLegacySectionShape(templateSections);
   const normalizedPreviousSections = assignMissingStableTemplateIdentities(previousSectionShape);
@@ -137,7 +166,8 @@ export function reconcileRunSections(
     templateSectionShape,
     previousSectionShape,
   );
-  const retired = previousRetired.filter(isRecord) as RetiredRunEntry[];
+  const earlierRetired = createEarlierRetiredLookup(previousRetired);
+  const retired: RetiredRunEntry[] = [];
   const previousById = new Map(
     normalizedPreviousSections.flatMap((section) => {
       const id = getId(section);
@@ -149,7 +179,7 @@ export function reconcileRunSections(
   const sections = normalizedTemplateSections.map((templateSection) => {
     const sectionId = getId(templateSection) ?? '';
     retainedSectionIds.add(sectionId);
-    const previousSection = previousById.get(sectionId);
+    const previousSection = previousById.get(sectionId) ?? earlierRetired.take('section', sectionId);
     const previousItems = getArray(previousSection?.items).filter(isRecord);
     const previousItemsById = new Map(
       previousItems.flatMap((item) => {
@@ -161,7 +191,8 @@ export function reconcileRunSections(
     const items = getArray(templateSection.items).filter(isRecord).map((templateItem) => {
       const itemId = getId(templateItem) ?? '';
       retainedItemIds.add(itemId);
-      return reconcileItem(templateItem, previousItemsById.get(itemId), retired, sectionId);
+      const previousItem = previousItemsById.get(itemId) ?? earlierRetired.take('item', itemId);
+      return reconcileItem(templateItem, previousItem, retired, sectionId, earlierRetired);
     });
 
     for (const previousItem of previousItems) {
@@ -186,7 +217,21 @@ export function reconcileRunSections(
     }
   }
 
-  return { sections, retired };
+  return { sections, retired: [...earlierRetired.remaining, ...retired], newlyRetired: retired };
+}
+
+export type RetiredRunSummary = { kind: RetiredRunEntry['kind']; id: string; title: string };
+
+/** Names retired work by kind, id and title (never notes), for a run's audit event. */
+export function summarizeRetiredEntries(entries: RetiredRunEntry[]): RetiredRunSummary[] {
+  return entries.map((entry) => {
+    const record = entry.kind === 'section' ? entry.section : entry.kind === 'item' ? entry.item : entry.subItem;
+    return {
+      kind: entry.kind,
+      id: getId(record) ?? '',
+      title: typeof record.title === 'string' ? record.title : '',
+    };
+  });
 }
 
 export function calculateRunProgress(sections: unknown[]): number {

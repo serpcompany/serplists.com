@@ -305,6 +305,26 @@ describe('Checklists Handlers', () => {
     expect(data.error).toMatch(/No fields to update/i);
   });
 
+  it('never lets a client write retired work: only reconciliation and Revalidate do', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      { id: 'run-1', user_id: 'user-123', team_id: null, title: 'Run', items: '[]', status: 'in_progress', revision: 1 },
+    ]);
+    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+
+    const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1', {
+      method: 'PUT',
+      body: JSON.stringify({ title: 'Renamed', retired_items: '[]', retiredItems: [] }),
+    }), mockEnv);
+
+    expect(response.status).toBe(200);
+    expect(dbMocks.updateChain.set).toHaveBeenCalled();
+    for (const [values] of dbMocks.updateChain.set.mock.calls) {
+      expect(values).not.toHaveProperty('retired_items');
+      expect(values).not.toHaveProperty('retiredItems');
+    }
+  });
+
   it('should update team-owned checklist runs for team runners', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit
@@ -840,6 +860,30 @@ describe('Checklists Handlers', () => {
     expect(data.current_template_version).toBe(2);
   });
 
+  it('leaves retired work out of shared runs: its notes were written while the run was private', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue(null);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      {
+        id: 'shared-run',
+        title: 'Shared Run',
+        status: 'in_progress',
+        items: '[]',
+        retired_items: JSON.stringify([
+          { kind: 'item', sectionId: 's1', item: { id: 'item-dns', title: 'Check DNS', notes: 'Registrar login is in vault X' } },
+        ]),
+        share_token: 'shared-run',
+        is_public: true,
+      },
+    ]);
+
+    const response = await handleChecklists(new Request('http://localhost/api/checklists/shared/shared-run'), mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).not.toHaveProperty('retired_items');
+    expect(JSON.stringify(data)).not.toContain('vault X');
+  });
+
   it('should update shared checklist runs', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue(null);
     dbMocks.selectChain.limit.mockResolvedValueOnce([
@@ -1028,6 +1072,48 @@ describe('Checklists Handlers', () => {
     expect(JSON.parse(update.items)[0].items).toEqual([
       expect.objectContaining({ id: 'item-1', title: 'Renamed', isCompleted: true, notes: 'Preserve' }),
       expect.objectContaining({ id: 'item-2', isCompleted: false }),
+    ]);
+  });
+
+  it('names the work a revalidate retired in its Changelog event', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([{
+        id: 'run-1',
+        user_id: 'user-123',
+        team_id: null,
+        template_id: 'template-1',
+        items: JSON.stringify([{ id: 'section-1', title: 'Launch', items: [
+          { id: 'item-dns', title: 'Check DNS', isCompleted: true, notes: 'Registrar login is in vault X' },
+          { id: 'item-copy', title: 'Write copy' },
+        ] }]),
+        retired_items: '[]',
+        status: 'in_progress',
+        template_version: 1,
+        revision: 2,
+      }])
+      .mockResolvedValueOnce([{
+        id: 'template-1',
+        version: 2,
+        items: JSON.stringify([{ id: 'section-1', title: 'Launch', items: [{ id: 'item-copy', title: 'Write copy' }] }]),
+      }]);
+
+    const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1/revalidate', {
+      method: 'POST',
+      body: JSON.stringify({ expected_revision: 2 }),
+    }), mockEnv);
+
+    expect(response.status).toBe(200);
+    const auditEvent = dbMocks.insertChain.values.mock.calls
+      .map(([values]) => values)
+      .find((values) => values.action === 'checklist_run.revalidated');
+    expect(JSON.parse(auditEvent.metadata_json)).toEqual({
+      templateId: 'template-1',
+      templateVersion: 2,
+      retired: [{ kind: 'item', id: 'item-dns', title: 'Check DNS' }],
+    });
+    expect(JSON.parse(dbMocks.updateChain.set.mock.calls[0][0].retired_items)).toEqual([
+      expect.objectContaining({ item: expect.objectContaining({ id: 'item-dns', notes: 'Registrar login is in vault X' }) }),
     ]);
   });
 

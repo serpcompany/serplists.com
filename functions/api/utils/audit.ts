@@ -1,4 +1,5 @@
-import { schema } from "../db";
+import { getTableColumns, sql, type SQL } from "drizzle-orm";
+import { schema, type createDb } from "../db";
 import { sha256Hex } from "./crypto";
 
 export type AuditSubject = {
@@ -103,4 +104,19 @@ export async function buildTemplateVersionValues(
     change_summary: input.changeSummary ?? null,
     created_at: input.createdAt ?? new Date().toISOString(),
   };
+}
+
+/**
+ * Inserts `auditEvent` only when `condition` holds. Batch it just before the write it records,
+ * guarded by that write's own WHERE clause, so a write that misses records nothing.
+ */
+export function insertAuditEventWhen(
+  db: ReturnType<typeof createDb>,
+  auditEvent: typeof schema.audit_events.$inferInsert,
+  condition: SQL,
+) {
+  const values = auditEvent as Record<string, unknown>;
+  // Insert-select lists every column in table order, the order Drizzle's insert names them.
+  const columns = Object.keys(getTableColumns(schema.audit_events)).map((key) => sql`${values[key] ?? null}`);
+  return db.insert(schema.audit_events).select(sql`select ${sql.join(columns, sql`, `)} where ${condition}`);
 }

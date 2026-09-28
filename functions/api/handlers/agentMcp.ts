@@ -350,6 +350,8 @@ function serializeRun(run: JsonRecord): JsonRecord {
     templateId: run.template_id,
     title: run.title,
     sections: parseStoredSections(run.items),
+    // Work a Template change removed from the run, with its completion and notes.
+    retiredItems: (parseJsonArray(run.retired_items) ?? []).filter(isRecord),
     status: run.status ?? "in_progress",
     progress: typeof run.progress === "number" ? run.progress : 0,
     revision: typeof run.revision === "number" ? run.revision : 1,
@@ -364,6 +366,7 @@ function serializeRun(run: JsonRecord): JsonRecord {
 function summarizeRun(run: JsonRecord): JsonRecord {
   const serialized = serializeRun(run);
   delete serialized.sections;
+  delete serialized.retiredItems;
   return serialized;
 }
 

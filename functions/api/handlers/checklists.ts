@@ -9,7 +9,7 @@ import { buildAuditEventValues, type AuditSubject } from '../utils/audit';
 import { parseHistoryLimit, selectAuditEventHistory, serializeHistoryEvent } from '../utils/history-queries';
 import { canManageTeam, canRunTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { z } from 'zod';
-import { calculateRunProgress, reconcileRunSections } from '../utils/template-reconciliation';
+import { calculateRunProgress, reconcileRunSections, summarizeRetiredEntries } from '../utils/template-reconciliation';
 
 function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: URL): string | null {
   return parsed.teamId ?? parsed.team_id ?? url.searchParams.get('teamId');
@@ -228,7 +228,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         return jsonError('Shared run not found', 404);
       }
 
-      return json(serializeChecklistRun(checklist as unknown as Record<string, unknown>));
+      // Retired work stays with the owner: its notes may predate the share link.
+      const { retired_items: _retiredItems, ...sharedRun } = checklist;
+      return json(serializeChecklistRun(sharedRun as unknown as Record<string, unknown>));
     }
 
     if (request.method === 'PUT') {
@@ -598,6 +600,11 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         before: existingRun as unknown as Record<string, unknown>,
         after: { ...(existingRun as unknown as Record<string, unknown>), ...updates },
         diff: updates,
+        metadata: {
+          templateId: sourceTemplate.id,
+          templateVersion: updates.template_version,
+          retired: summarizeRetiredEntries(reconciled.newlyRetired),
+        },
         request,
         createdAt: now,
       });

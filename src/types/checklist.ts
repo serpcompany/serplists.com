@@ -78,6 +78,24 @@ export type TemplateSavePayload = {
   version?: number;
 };
 
+// Work a Template change removed from a Run. It keeps its completion and notes, stays
+// read-only, and never counts toward progress (parsed in features/run-execution).
+export type RetiredRunSubTask = {
+  id: string;
+  title: string;
+  isCompleted: boolean;
+};
+
+export type RetiredRunTask = RetiredRunSubTask & {
+  notes?: string;
+  subTasks: RetiredRunSubTask[];
+};
+
+export type RetiredRunItem =
+  | { kind: "section"; id: string; title: string; tasks: RetiredRunTask[] }
+  | { kind: "item"; id: string; sectionTitle?: string; task: RetiredRunTask }
+  | { kind: "subItem"; id: string; itemTitle?: string; subTask: RetiredRunSubTask };
+
 export type ChecklistRun = {
   id: string;
   templateId: string;
@@ -93,6 +111,7 @@ export type ChecklistRun = {
   isStale?: boolean;
   isPublic?: boolean;
   teamId?: string;
+  retiredItems?: RetiredRunItem[];
 };
 
 export type TemplateImportOptions = {
