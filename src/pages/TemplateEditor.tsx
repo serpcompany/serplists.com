@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  getTemplateSaveSuccessMessage,
+  resolveTemplateSaveFeedback,
   useTemplateEditorModel,
 } from "@/features/template-editor/useTemplateEditorModel";
 import { useTemplateEditorState } from "@/hooks/useTemplateEditorState";
@@ -108,14 +108,19 @@ const TemplateEditor = () => {
     }
 
     const result = await model.save(templateForm.getValues());
-    const successMessage = getTemplateSaveSuccessMessage({ id, result });
-    if (successMessage) {
-      toast.success(successMessage);
+    const feedback = resolveTemplateSaveFeedback({ id, result });
+    if (feedback.successMessage) {
+      toast.success(feedback.successMessage);
     }
-    if (shouldNavigateToTemplatesAfterSave({ id, result })) {
+    if (feedback.errorMessage) {
+      toast.error(feedback.errorMessage);
+    }
+    if (feedback.navigateToTemplates) {
       navigate(buildConsoleTemplatesPath());
     }
-    setErrors(result.errors);
+    if (feedback.inlineErrors) {
+      setErrors(feedback.inlineErrors);
+    }
   };
 
   if (model.loading) {

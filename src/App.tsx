@@ -28,7 +28,7 @@ import Archive from './pages/Archive';
 import Templates from './pages/Templates';
 import TemplateImportExport from './pages/TemplateImportExport';
 import DashboardSettings from './pages/DashboardSettings';
-import TemplateEditor from './pages/TemplateEditor';
+import TemplateEditorRoute from './pages/TemplateEditorRoute';
 import TemplateDetail from './pages/TemplateDetail';
 import ChecklistRun from './pages/ChecklistRun';
 import PublicTemplate from './pages/PublicTemplate';
@@ -205,7 +205,7 @@ const App = () => {
                       />
                       <Route
                         path={buildConsoleTemplateCreatePath()}
-                        element={<TemplateEditor />}
+                        element={<TemplateEditorRoute />}
                       />
                       <Route
                         path="/dashboard/templates/:id"
@@ -213,7 +213,7 @@ const App = () => {
                       />
                       <Route
                         path="/dashboard/templates/:id/edit"
-                        element={<TemplateEditor />}
+                        element={<TemplateEditorRoute />}
                       />
                       <Route
                         path="/dashboard/runs/:id"
@@ -231,7 +231,7 @@ const App = () => {
                       />
                       <Route
                         path="/console/templates/:id/edit"
-                        element={<TemplateEditor />}
+                        element={<TemplateEditorRoute />}
                       />
                       <Route
                         path="/console/runs/:id"

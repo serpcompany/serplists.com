@@ -124,6 +124,11 @@ container must reset that element too.
   template save only marks the Template lists stale (`refreshAfterTemplateSave`), so
   Save never waits for a list download; the detail page's visibility switch applies
   the returned version itself.
+- Editor routes render `TemplateEditorRoute`, which keys the editor by template id
+  (`new` for the create form), so errors, selection, and save state never carry over
+  from one template to another or to the new-template form. A save that finishes
+  after the user moved on still reports its outcome as a toast, but never updates
+  the form, shows inline errors, or navigates (`resolveTemplateSaveFeedback`).
 - Adding a content type or editor tab: [template content types](design-docs/template-content-types.md).
 
 ## Rendering user content

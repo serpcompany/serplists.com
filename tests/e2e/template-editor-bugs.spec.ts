@@ -543,3 +543,84 @@ test.describe("template editor regressions", () => {
     await deleteTemplate(page, createdTemplateId);
   });
 });
+
+// The edit and new-template routes used to share one editor instance, so a failed save's
+// error, or a save that finished after "New Template" was clicked, landed on the blank form.
+test.describe("template editor route switches", () => {
+  async function openNewTemplateEditor(page: Page) {
+    const title = `Route switch QA ${uniqueSuffix()}`;
+    const templateId = await page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
+      const response = await fetch(`${apiBaseUrl}/templates`, {
+        body: JSON.stringify({
+          title: templateTitle,
+          sections: [{ id: "route-section", title: "Section", items: [{ id: "route-task", title: "Task" }] }],
+        }),
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
+      return ((await response.json()) as { id: string }).id;
+    }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+    await page.goto(`/dashboard/templates/${templateId}/edit`);
+    await expect(page.getByPlaceholder("Enter template name...")).toHaveValue(title);
+    return { templateId, title };
+  }
+
+  test("a failed save does not follow the user to the new-template form", async ({ page }) => {
+    await loginAsSeedUser(page);
+    const { templateId } = await openNewTemplateEditor(page);
+    await page.route(`**/api/templates/${templateId}`, (route) =>
+      route.request().method() === "PUT"
+        ? route.fulfill({
+            status: 409,
+            json: { error: "Template changed since it was loaded. Refresh before saving again.", code: "edit_conflict" },
+          })
+        : route.continue(),
+    );
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("Template changed since it was loaded.")).toBeVisible();
+    await page.getByRole("link", { name: "New Template" }).first().click();
+
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+    await expect(page.getByPlaceholder("Enter template name...")).toHaveValue("");
+    await expect(page.getByText("Template changed since it was loaded.")).toHaveCount(0);
+    await page.unroute(`**/api/templates/${templateId}`);
+    await deleteTemplate(page, templateId);
+  });
+
+  test("a save that finishes after New Template does not fill the new form", async ({ page }) => {
+    await loginAsSeedUser(page);
+    const { templateId } = await openNewTemplateEditor(page);
+    let releaseSave: () => void = () => {};
+    const saveHeld = new Promise<void>((resolve) => {
+      releaseSave = resolve;
+    });
+    await page.route(`**/api/templates/${templateId}`, async (route) => {
+      if (route.request().method() !== "PUT") return route.continue();
+      await saveHeld;
+      return route.continue();
+    });
+    const creates: string[] = [];
+    page.on("request", (request) => {
+      if (request.method() === "POST" && new URL(request.url()).pathname.endsWith("/api/templates")) creates.push(request.url());
+    });
+
+    const saved = page.waitForResponse(
+      (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === "PUT",
+    );
+    await page.getByRole("button", { name: "Save" }).click();
+    await page.getByRole("link", { name: "New Template" }).first().click();
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+    releaseSave();
+    expect((await saved).status()).toBe(200);
+
+    await expect(page.getByText("Template saved")).toBeVisible();
+    await expect(page.getByPlaceholder("Enter template name...")).toHaveValue("");
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+    expect(creates).toEqual([]);
+    await page.unroute(`**/api/templates/${templateId}`);
+    await deleteTemplate(page, templateId);
+  });
+});

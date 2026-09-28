@@ -110,6 +110,52 @@ export const getTemplateSaveSuccessMessage = (params: {
   return params.id ? "Template saved" : "Template created";
 };
 
+// A save result belongs to the editor that started it. The user may have moved on while it
+// was saving ("New Template", another template, another page): the write still counts, but
+// its form state, errors and navigation must not reach the page they moved to.
+export const shouldApplyTemplateEditorSaveResult = (params: {
+  requestedId?: string;
+  currentId?: string;
+  mounted: boolean;
+}): boolean => params.mounted && params.requestedId === params.currentId;
+
+export type TemplateEditorSaveResult = SaveTemplateResult & {
+  // The editor moved on before the save finished; see shouldApplyTemplateEditorSaveResult.
+  stale?: boolean;
+};
+
+export type TemplateSaveFeedback = {
+  successMessage: string | null;
+  errorMessage: string | null;
+  navigateToTemplates: boolean;
+  // Null leaves the form's errors as they are.
+  inlineErrors: SaveTemplateResult["errors"] | null;
+};
+
+// What the editor page does with a save result. A stale save still reports its outcome as a
+// toast (a failure must not be silent), but never touches the form or navigates.
+export const resolveTemplateSaveFeedback = (params: {
+  id?: string;
+  result: TemplateEditorSaveResult;
+}): TemplateSaveFeedback => {
+  const successMessage = getTemplateSaveSuccessMessage(params);
+  if (params.result.stale) {
+    const failure = params.result.success ? null : params.result.errors[0]?.message ?? "Failed to save template";
+    return {
+      successMessage,
+      errorMessage: failure ? `Template not saved: ${failure}` : null,
+      navigateToTemplates: false,
+      inlineErrors: null,
+    };
+  }
+  return {
+    successMessage,
+    errorMessage: null,
+    navigateToTemplates: shouldNavigateToTemplatesAfterSave(params),
+    inlineErrors: params.result.errors,
+  };
+};
+
 const buildLoadResult = (
   template?: Partial<ChecklistTemplate>,
 ): TemplateEditorLoadResult => ({
@@ -197,6 +243,8 @@ export const useTemplateEditorModel = (
   } = useTemplateSave();
   const loadedTemplateIdRef = useRef<string | null>(null);
   const baselineRef = useRef<TemplateEditorBaseline>({});
+  const currentIdRef = useRef(options.id);
+  const mountedRef = useRef(false);
   const apiClientRef = useRef<TemplateEditorApiClient | undefined>(
     dependencies?.apiClient,
   );
@@ -208,6 +256,14 @@ export const useTemplateEditorModel = (
   const [templateSlug, setTemplateSlug] = useState<string | undefined>();
 
   apiClientRef.current = dependencies?.apiClient;
+  currentIdRef.current = options.id;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -262,10 +318,11 @@ export const useTemplateEditorModel = (
 
   const save = async (
     values: TemplateEditorFormValues,
-  ): Promise<SaveTemplateResult> => {
+  ): Promise<TemplateEditorSaveResult> => {
+    const requestedId = options.id;
     const result = await saveTemplateEditorData(
       {
-        id: options.id,
+        id: requestedId,
         values,
         baseline: baselineRef.current,
       },
@@ -273,6 +330,16 @@ export const useTemplateEditorModel = (
         saveTemplate: dependencies?.saveTemplate ?? persistTemplateSave,
       },
     );
+
+    if (
+      !shouldApplyTemplateEditorSaveResult({
+        requestedId,
+        currentId: currentIdRef.current,
+        mounted: mountedRef.current,
+      })
+    ) {
+      return { ...result, stale: true };
+    }
 
     if (result.success) {
       // Kept before isSaving clears, so a quick second save sends the stored version.

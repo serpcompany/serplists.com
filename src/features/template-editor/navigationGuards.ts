@@ -34,3 +34,8 @@ export const applyTemplateBeforeUnloadWarning = (
   event.preventDefault();
   event.returnValue = '';
 };
+
+// The editor remounts for each template and for the new-template form (TemplateEditorRoute),
+// so errors, selection, save state and in-flight saves never carry over between them.
+export const templateEditorRouteKey = (id: string | undefined): string =>
+  id ? `edit:${id}` : 'new';
