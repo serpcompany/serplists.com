@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ZodError } from 'zod';
 
-import { exportTemplatePack } from '@/features/template-backup/exportTemplatePack';
+import {
+  EXPORT_PACK_UNREADABLE_MESSAGE,
+  exportTemplatePack,
+} from '@/features/template-backup/exportTemplatePack';
+import { getAccessFailure } from '@/lib/api-errors';
 import { createSingleFlight } from '@/lib/utils/singleFlight';
 
 const pack = (templates: unknown[]) => ({
@@ -60,12 +65,20 @@ describe('exportTemplatePack', () => {
     expect(result).toEqual({ kind: 'exported', count: 2 });
   });
 
-  it('rejects a response that is not a template pack', async () => {
+  it('rejects a response that is not a template pack with a readable message', async () => {
     const dependencies = buildDependencies({ error: 'unexpected' });
 
-    await expect(
-      exportTemplatePack({ includePublic: false }, dependencies),
-    ).rejects.toThrow();
+    const error = await exportTemplatePack({ includePublic: false }, dependencies).then(
+      () => null,
+      (reason: unknown) => reason,
+    );
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(ZodError);
+    // The page toasts this message as-is (getAccessFailure falls back to it).
+    const { message } = getAccessFailure(error, 'Failed to export templates');
+    expect(message).toBe(EXPORT_PACK_UNREADABLE_MESSAGE);
+    expect(message).not.toMatch(/[{}[\]\n]/);
     expect(dependencies.download).not.toHaveBeenCalled();
   });
 });

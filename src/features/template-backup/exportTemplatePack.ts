@@ -21,6 +21,9 @@ export type ExportTemplatePackResult =
 
 const defaultExportBackup: ExportBackup = (params) => api.exportTemplateBackup(params);
 
+/** Shown when the server answers with something that is not a template pack. */
+export const EXPORT_PACK_UNREADABLE_MESSAGE = 'The export could not be read. Try again.';
+
 /**
  * Exports the active context's Templates, plus public ones when asked. The server
  * builds the pack, so the page never needs the public catalog, and the count it
@@ -36,7 +39,14 @@ export const exportTemplatePack = async (
     includePublic: options.includePublic,
     teamId: options.teamId,
   });
-  const pack = exportedPackSchema.parse(response);
+  const parsed = exportedPackSchema.safeParse(response);
+
+  // The page toasts the error message as-is, so never throw the raw ZodError text.
+  if (!parsed.success) {
+    throw new Error(EXPORT_PACK_UNREADABLE_MESSAGE);
+  }
+
+  const pack = parsed.data;
 
   if (pack.templates.length === 0) {
     return { kind: 'empty' };
