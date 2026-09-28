@@ -175,7 +175,7 @@ test('changing a member status reloads pending invites so revoked ones disappear
   const revokeButton = page.getByRole('button', { name: 'Revoke invite for editor@example.com' });
   await expect(revokeButton).toBeVisible();
 
-  await page.getByRole('combobox', { name: 'Member status' }).nth(1).click();
+  await page.getByRole('combobox', { name: 'Status for Editor User (editor@example.com)' }).click();
   await page.getByRole('option', { name: 'Active' }).click();
 
   await expect(page.getByText('Member updated')).toBeVisible();
