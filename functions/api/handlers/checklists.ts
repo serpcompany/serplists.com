@@ -9,7 +9,8 @@ import { buildAuditEventValues, type AuditSubject } from '../utils/audit';
 import { canManageTeam, canRunTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { z } from 'zod';
 import { calculateRunProgress, reconcileRunSections } from '../utils/template-reconciliation';
-import { batchUpdateMissed, checklistRunSelect, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
+import { batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
+import { canUseTemplateAsRunSource } from '../utils/template-access';
 import { handleSharedChecklist } from './checklists-shared';
 
 function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: URL): string | null {
@@ -153,11 +154,12 @@ async function resolveTemplateRunSource(
     : null;
   const sourceIsPublic = Boolean(sourceTemplate.is_public);
   const isPrivateTeamTemplate = sourceTemplate.owner_type === 'team' && sourceTeamId && !sourceIsPublic;
+  const effectiveTeamId = isPrivateTeamTemplate ? sourceTeamId : requestedTeamId;
 
   if (isPrivateTeamTemplate && requestedTeamId && requestedTeamId !== sourceTeamId) {
     return { error: jsonError('Template not found', 404) };
   }
-  if (!isPrivateTeamTemplate && !sourceIsPublic && sourceTemplate.user_id !== userId) {
+  if (!canUseTemplateAsRunSource(sourceTemplate, { userId, runTeamId: effectiveTeamId })) {
     return { error: jsonError('Template not found', 404) };
   }
 
@@ -168,7 +170,7 @@ async function resolveTemplateRunSource(
 
   return {
     source: {
-      effectiveTeamId: isPrivateTeamTemplate ? sourceTeamId : requestedTeamId,
+      effectiveTeamId,
       sections: resetCompletionState(normalizedSections.sections) as unknown[],
       title: sourceTemplate.title || '',
       version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
@@ -281,7 +283,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         }
 
         const checklists = await db
-          .select(checklistRunSelect)
+          .select(checklistRunSelectFor(userId))
           .from(checklist_runs)
           .where(and(eq(checklist_runs.team_id, teamId), isNotNull(checklist_runs.deleted_at)))
           .orderBy(desc(checklist_runs.updated_at));
@@ -290,7 +292,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
 
       const checklists = await db
-        .select(checklistRunSelect)
+        .select(checklistRunSelectFor(userId))
         .from(checklist_runs)
         .where(and(eq(checklist_runs.user_id, userId), isNull(checklist_runs.team_id), isNotNull(checklist_runs.deleted_at)))
         .orderBy(desc(checklist_runs.updated_at));
@@ -302,7 +304,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     if (checklistsSubpath[0]) {
       const checklistId = checklistsSubpath[0];
       const [checklist] = await db
-        .select(checklistRunSelect)
+        .select(checklistRunSelectFor(userId))
         .from(checklist_runs)
         .where(and(eq(checklist_runs.id, checklistId), isNull(checklist_runs.deleted_at)))
         .limit(1);
@@ -322,7 +324,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
 
       const checklists = await db
-        .select(checklistRunSelect)
+        .select(checklistRunSelectFor(userId))
         .from(checklist_runs)
         .where(and(eq(checklist_runs.team_id, teamId), isNull(checklist_runs.deleted_at)))
         .orderBy(desc(checklist_runs.created_at));
@@ -331,7 +333,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     }
 
     const checklists = await db
-      .select(checklistRunSelect)
+      .select(checklistRunSelectFor(userId))
       .from(checklist_runs)
       .where(and(eq(checklist_runs.user_id, userId), isNull(checklist_runs.team_id), isNull(checklist_runs.deleted_at)))
       .orderBy(desc(checklist_runs.created_at));
@@ -468,11 +470,21 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
 
       const [sourceTemplate] = await db
-        .select({ id: templates.id, items: templates.items, version: templates.content_version })
+        .select({
+          id: templates.id,
+          items: templates.items,
+          version: templates.content_version,
+          is_public: templates.is_public,
+          owner_type: templates.owner_type,
+          team_id: templates.team_id,
+          user_id: templates.user_id,
+        })
         .from(templates)
         .where(and(eq(templates.id, existingRun.template_id), isNull(templates.deleted_at)))
         .limit(1);
-      if (!sourceTemplate) {
+      // Same answer whether the template is gone or no longer usable here, so the
+      // response does not reveal that a private template exists.
+      if (!sourceTemplate || !canUseTemplateAsRunSource(sourceTemplate, { userId, runTeamId: existingRun.team_id ?? null })) {
         return jsonError('Source template not found', 404);
       }
 
@@ -590,7 +602,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         if (accessError) return accessError;
         effectiveTeamId = sourceTeamId;
       } else {
-        if (!sourceIsPublic && sourceTemplate.user_id !== userId) {
+        if (!canUseTemplateAsRunSource(sourceTemplate, { userId, runTeamId: requestedTeamId })) {
           return jsonError('Template not found', 404);
         }
 

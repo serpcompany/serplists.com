@@ -4,7 +4,7 @@ import { createDb, schema } from '../db';
 import { json, jsonError } from '../utils/response';
 import { buildAuditEventValues } from '../utils/audit';
 import { calculateRunProgress } from '../utils/template-reconciliation';
-import { batchUpdateMissed, checklistRunSelect, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
+import { batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
 import { mergeSharedRunState, readStoredRunSections, sharedRunUpdateSchema } from '../utils/shared-run-merge';
 
 // /api/checklists/shared/:token needs no login: holding the link is the only credential.
@@ -25,7 +25,7 @@ export async function handleSharedChecklist(
   );
 
   if (request.method === 'GET') {
-    const [checklist] = await db.select(checklistRunSelect).from(checklist_runs).where(activeShare).limit(1);
+    const [checklist] = await db.select(checklistRunSelectFor(null)).from(checklist_runs).where(activeShare).limit(1);
 
     if (!checklist) {
       return jsonError('Shared run not found', 404);

@@ -996,6 +996,10 @@ describe('Checklists Handlers', () => {
         {
           id: 'template-1',
           version: 3,
+          owner_type: 'user',
+          team_id: null,
+          user_id: 'user-123',
+          is_public: false,
           items: JSON.stringify([
             {
               id: 'section-1',

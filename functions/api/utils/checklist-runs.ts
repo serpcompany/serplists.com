@@ -1,15 +1,25 @@
 import { getTableColumns, sql } from 'drizzle-orm';
 import { schema } from '../db';
 import type { AuditSubject } from './audit';
+import { runSourceTemplateUsableSql } from './template-access';
 
 // Helpers shared by the checklist run handlers (private and share-link routes).
 
-export const checklistRunSelect = {
-  ...getTableColumns(schema.checklist_runs),
-  current_template_version: sql<number | null>`(
-    SELECT content_version FROM templates WHERE templates.id = ${schema.checklist_runs.template_id}
-  )`,
-};
+/**
+ * Run columns plus the source template's current content version, read only when `userId`
+ * (null for share-link guests) may still use that template as a run source. Otherwise it is
+ * NULL and the run is not stale, so nobody is offered a revalidation that would copy content
+ * they cannot see. The lookup stays a primary-key read.
+ */
+export function checklistRunSelectFor(userId: string | null) {
+  return {
+    ...getTableColumns(schema.checklist_runs),
+    current_template_version: sql<number | null>`(
+      SELECT content_version FROM templates
+      WHERE templates.id = ${schema.checklist_runs.template_id} AND ${runSourceTemplateUsableSql(userId)}
+    )`,
+  };
+}
 
 export function serializeChecklistRun(run: Record<string, unknown>) {
   const templateVersion = typeof run.template_version === 'number' ? run.template_version : 1;

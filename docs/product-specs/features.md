@@ -39,6 +39,7 @@ Canonical private routes:
 - Runs store progress independently from templates.
 - Runs record both the template content version last reconciled and a run revision. API responses expose `is_stale` when the source checklist structure is newer; metadata-only template edits do not stale runs.
 - Completed, archived, and publicly shared runs are frozen when a template changes. A completed private run can be explicitly reconciled and reopened with `POST /api/checklists/:id/revalidate`.
+- A run copies template content (at creation, sharing, and revalidation) only from a source the caller may still use: a public template, the caller's own Personal template, or a template of the run's own Organization. A run whose source is no longer usable (made private by its owner, or archived) is not reported stale for that caller, and revalidating it returns `404`.
 - Runs that predate stable identities are conservatively marked stale during migration. Their legacy IDs are backfilled deterministically, and their completion/notes remain intact until explicit reconciliation.
 - Run and template saves use optimistic revision/version markers. A stale editor receives `409 edit_conflict` instead of overwriting newer work.
 - Run-level sharing creates public `/share/:token` links.
