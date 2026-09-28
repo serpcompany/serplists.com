@@ -36,6 +36,7 @@ Canonical private routes:
 ## Runs And Sharing
 
 - Users can start checklist runs from templates.
+- Run titles are limited to 160 characters, counted after trimming (`src/lib/schemas/nameLimits.ts`, matching the API). The Start Run name field and the rename boxes stop at the limit, and a longer title gets a clear message instead of the API's schema error. A Start Run that fails keeps the typed name for the retry.
 - Runs store progress independently from templates.
 - A task with sub-tasks is done when every sub-task in all of its Sub-tasks blocks is ticked, and unticking any of them reopens the task. Mark Complete ticks or unticks all of them. The web app and the agent API use the same rule.
 - Run task counts ("2 of 5 tasks finished", the task list, "Task N of M", the runs list) count tasks only, never sub-tasks. The progress percentage and its bars weigh every task and sub-task equally, the same value the API stores as the run's progress.
@@ -69,6 +70,7 @@ Canonical private routes:
   - `viewer`: read-only access.
 - The UI offers only the actions the member's role allows in the Organization that owns the Template or run ([Organizations](../design-docs/organizations.md#ui-flow)).
 - Organization management currently lives on `/dashboard/settings`.
+- Organization names are limited to 120 characters, counted after trimming (`src/lib/schemas/nameLimits.ts`, matching the API). The Organization name fields stop at the limit, and a longer name gets a clear message instead of the API's schema error.
 - Organization invites are link-based today. The legacy compatibility route `/team-invites/:token` and incoming invites on `/dashboard/settings` support acceptance.
 - Organization and Template changes are recorded in D1-backed audit/history tables.
 

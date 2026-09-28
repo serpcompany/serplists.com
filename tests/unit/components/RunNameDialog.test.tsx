@@ -25,6 +25,7 @@ vi.mock('react', async (importOriginal) => {
 });
 
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
+import { RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
 
 type AnyElement = React.ReactElement<Record<string, unknown>>;
 type DialogProps = Parameters<typeof RunNameDialog>[0];
@@ -106,6 +107,11 @@ describe('RunNameDialog', () => {
 
     expect(dialog.onConfirm).toHaveBeenCalledWith(expect.stringMatching(/^Vendor onboarding - /));
     expect(dialog.render().input?.props.value).toBe('   ');
+  });
+
+  // The API refuses a longer run title with a raw schema error.
+  it('stops typing at the run title limit', () => {
+    expect(mountDialog().render().input?.props.maxLength).toBe(RUN_TITLE_MAX);
   });
 
   it('locks the field and ignores another submit while the run is starting', () => {

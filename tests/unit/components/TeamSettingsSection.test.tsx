@@ -116,6 +116,14 @@ describe('TeamSettingsSection', () => {
     await expect(copyTextToClipboard('https://serplists.com/team-invites/token')).resolves.toBe(false);
   });
 
+  // The API refuses a longer Organization name with a raw schema error.
+  it('stops typing an Organization name at the limit the API accepts', () => {
+    const html = renderSectionWithMembers([]);
+
+    expect(html).toMatch(/<input[^>]*id="team-name"[^>]*maxLength="120"|<input[^>]*maxLength="120"[^>]*id="team-name"/);
+    expect(html).toMatch(/<input[^>]*id="team-settings-name"[^>]*maxLength="120"|<input[^>]*maxLength="120"[^>]*id="team-settings-name"/);
+  });
+
   it('marks the current member row and renders its controls disabled', () => {
     const html = renderSectionWithMembers([
       {

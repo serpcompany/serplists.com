@@ -562,6 +562,27 @@ describe('saving the run title', () => {
     expect(updateRun).toHaveBeenCalledTimes(1);
     expect(updateRun).toHaveBeenCalledWith(expect.objectContaining({ title: 'Launch v2' }));
   });
+
+  // The API caps run titles at 160 characters after trimming; a longer one used to reach it
+  // and come back as a raw schema error ("String must contain at most 160 character(s)").
+  it('refuses a title over the limit with a clear message and sends nothing', async () => {
+    const updateRun = vi.fn(async (run: ChecklistRun) => run);
+
+    const result = await saveRunExecutionTitle({ run: buildRun(), title: 'a'.repeat(161) }, { updateRun });
+
+    expect(result).toEqual({ kind: 'error', message: 'Run title must be 160 characters or fewer.' });
+    expect(updateRun).not.toHaveBeenCalled();
+  });
+
+  it('accepts a title at the limit, measured after trimming', async () => {
+    const updateRun = vi.fn(async (run: ChecklistRun) => run);
+    const title = 'a'.repeat(160);
+
+    const result = await saveRunExecutionTitle({ run: buildRun(), title: `  ${title}  ` }, { updateRun });
+
+    expect(result.kind).toBe('ok');
+    expect(updateRun).toHaveBeenCalledWith(expect.objectContaining({ title }));
+  });
 });
 
 // Completed runs are frozen (docs/product-specs/features.md). Unticking a task on one used

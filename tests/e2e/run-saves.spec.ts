@@ -634,3 +634,29 @@ test('a completed task can be found and unticked by its named checkbox', async (
 
   await deleteRun(page, runId);
 });
+
+// The API caps run titles at 160 characters. A longer rename used to come back as a raw
+// schema error ("String must contain at most 160 character(s)") with the editor still open.
+test('the run title editor stops at the length the API accepts, and the save goes through', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createRun(page, `Title limit QA ${Date.now()}`);
+  const longTitle = 'Quarterly vendor onboarding '.repeat(7);
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await page.getByRole('button', { name: 'Rename' }).click();
+  const titleInput = page.getByRole('textbox', { name: 'Run title' });
+  await titleInput.clear();
+  await titleInput.pressSequentially(longTitle.slice(0, 170));
+  await expect(titleInput).toHaveValue(longTitle.slice(0, 160));
+  await page.getByRole('button', { name: 'Save title' }).click();
+  await expect(page.getByText('Run title updated')).toBeVisible();
+  await expect(page.getByText(/String must contain/)).toHaveCount(0);
+
+  const title = await page.evaluate(async ({ id, apiBaseUrl }) => {
+    const response = await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include' });
+    return ((await response.json()) as { title: string }).title;
+  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  expect(title).toBe(longTitle.slice(0, 160).trim());
+
+  await deleteRun(page, runId);
+});

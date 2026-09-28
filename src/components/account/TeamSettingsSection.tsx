@@ -18,6 +18,7 @@ import { Separator } from '@/components/ui/separator';
 import { api, type TeamActivityEvent, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/lib/api';
 import { formatAuditAction, getAuditActorName, ORGANIZATION_ACTIVITY_LABELS } from '@/lib/auditLabels';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { getOrganizationNameError, ORGANIZATION_NAME_MAX } from '@/lib/schemas/nameLimits';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
 
@@ -182,8 +183,9 @@ export function TeamSettingsSection() {
     event.preventDefault();
 
     const name = teamName.trim();
-    if (!name) {
-      toast.error('Organization name is required');
+    const nameError = getOrganizationNameError(name);
+    if (nameError) {
+      toast.error(nameError);
       return;
     }
 
@@ -213,8 +215,9 @@ export function TeamSettingsSection() {
 
     const name = editTeamName.trim();
     const slug = editTeamSlug.trim();
-    if (!name) {
-      toast.error('Organization name is required');
+    const nameError = getOrganizationNameError(name);
+    if (nameError) {
+      toast.error(nameError);
       return;
     }
 
@@ -419,6 +422,7 @@ export function TeamSettingsSection() {
             <Label htmlFor="team-name">Organization name</Label>
             <Input
               id="team-name"
+              maxLength={ORGANIZATION_NAME_MAX}
               value={teamName}
               onChange={(event) => setTeamName(event.target.value)}
               placeholder="Agency operations"
@@ -494,6 +498,7 @@ export function TeamSettingsSection() {
                   <Label htmlFor="team-settings-name">Organization name</Label>
                   <Input
                     id="team-settings-name"
+                    maxLength={ORGANIZATION_NAME_MAX}
                     value={editTeamName}
                     onChange={(event) => setEditTeamName(event.target.value)}
                     placeholder="Agency operations"

@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RUN_TITLE_MAX } from "@/lib/schemas/nameLimits";
 
 interface RunNameDialogProps {
   open: boolean;
@@ -63,6 +64,7 @@ export const RunNameDialog: React.FC<RunNameDialogProps> = ({
                 value={runName}
                 onChange={(e) => setRunName(e.target.value)}
                 placeholder={defaultName}
+                maxLength={RUN_TITLE_MAX}
                 disabled={loading}
                 autoFocus
               />

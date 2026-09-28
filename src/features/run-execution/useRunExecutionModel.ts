@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
 import { api, type ChecklistRunHistoryResponse } from '@/lib/api';
 import { markRunShared, queryKeys, refreshRunHistory } from '@/lib/queryCache';
+import { getRunTitleError } from '@/lib/schemas/nameLimits';
 import { buildSharePath } from '@/lib/routes';
 import { calculateSectionsProgress } from '@/lib/utils/checklistSections';
 import type { ChecklistRun } from '@/types/checklist';
@@ -377,9 +378,9 @@ export const saveRunExecutionTitle = async (
   }
 
   const title = params.title.trim();
-  if (!title) {
-    return { kind: 'error', message: 'Run title cannot be empty.' };
-  }
+  // Empty or over the API's limit: say so rather than send it and show a raw schema error.
+  const titleError = getRunTitleError(title);
+  if (titleError) return { kind: 'error', message: titleError };
   // Compared with the latest run in the queue: an unchanged title sends nothing.
   if (!isRunTitleChange(title, params.run.title)) {
     return { kind: 'ok', run: params.run };

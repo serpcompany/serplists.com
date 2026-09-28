@@ -45,6 +45,7 @@ import {
   buildConsoleRunsPath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
+import { RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
 import { countRunTasks } from '@/lib/utils/checklistSections';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import { onSingleClick } from '@/lib/utils/repeatClick';
@@ -404,6 +405,7 @@ const ChecklistRunPage = () => {
   const privateRunTitle = isEditingTitle ? (
     <Input
       aria-label="Run title"
+      maxLength={RUN_TITLE_MAX}
       value={editTitle}
       onChange={(event) => setEditTitle(event.target.value)}
       onKeyDown={(event) => {

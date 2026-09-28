@@ -43,6 +43,7 @@ import {
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
+import { getRunTitleError, RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -160,6 +161,11 @@ const Dashboard = () => {
     if (!editTitle.trim()) {
       return;
     }
+    const titleError = getRunTitleError(editTitle);
+    if (titleError) {
+      toast.error(titleError);
+      return;
+    }
 
     const runToUpdate = runs.find((run) => run.id === runId);
     if (!runToUpdate) {
@@ -208,6 +214,7 @@ const Dashboard = () => {
               {editingRunId === run.id ? (
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
+                    maxLength={RUN_TITLE_MAX}
                     value={editTitle}
                     onChange={(event) => setEditTitle(event.target.value)}
                     onKeyDown={(event) => {
