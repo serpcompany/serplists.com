@@ -77,6 +77,7 @@ import {
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
+import { formatAuditAction, TEMPLATE_HISTORY_LABELS } from '@/lib/auditLabels';
 import { getTemplateActionPermissions } from '@/lib/organizationPermissions';
 import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate, TemplateSavePayload } from '@/types/checklist';
@@ -106,20 +107,11 @@ const formatDateTime = (value?: string): string => {
   });
 };
 
-const historyActionLabels: Record<string, string> = {
-  'template.created': 'Created template',
-  'template.updated': 'Updated template',
-  'template.imported': 'Imported template',
-  'template.cloned': 'Copied template',
-  'template.deleted': 'Archived template',
-  'template.versioned': 'Saved template version',
-};
-
 const formatHistoryAction = (
   action: string,
   version?: number,
 ): string => {
-  const label = historyActionLabels[action] ?? action;
+  const label = formatAuditAction(TEMPLATE_HISTORY_LABELS, action);
   return typeof version === 'number' ? `${label} v${version}` : label;
 };
 

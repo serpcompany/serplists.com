@@ -1,3 +1,4 @@
+import type { AuditAction, TemplateVersionAction } from "../../../src/lib/schemas/auditActions";
 import { schema } from "../db";
 import { sha256Hex } from "./crypto";
 
@@ -17,7 +18,8 @@ export type AuditEventInput = {
   actorUserId: string | null;
   subject: AuditSubject;
   resource: AuditResource;
-  action: string;
+  // Add a new action to src/lib/schemas/auditActions.ts, then label it in src/lib/auditLabels.ts.
+  action: AuditAction;
   before?: JsonValue;
   after?: JsonValue;
   diff?: JsonValue;
@@ -32,7 +34,7 @@ export type TemplateVersionInput = {
   changedByUserId: string;
   subject: AuditSubject;
   snapshot: JsonValue;
-  changeSummary?: string;
+  changeSummary?: TemplateVersionAction;
   createdAt?: string;
 };
 

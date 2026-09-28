@@ -1,16 +1,7 @@
 import { History } from 'lucide-react';
 
-import type { TemplateHistoryEvent } from '@/lib/api';
+import { formatAuditAction, getAuditActorName, RUN_HISTORY_LABELS } from '@/lib/auditLabels';
 import type { RunExecutionHistoryState } from '@/features/run-execution/useRunExecutionModel';
-
-const runHistoryActionLabels: Record<string, string> = {
-  'checklist_run.created': 'Created run',
-  'checklist_run.updated': 'Updated run',
-  'checklist_run.deleted': 'Archived run',
-};
-
-const formatRunHistoryAction = (action: string): string =>
-  runHistoryActionLabels[action] ?? action;
 
 const formatRunHistoryTime = (value?: string): string => {
   if (!value) {
@@ -21,25 +12,6 @@ const formatRunHistoryTime = (value?: string): string => {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const getRunHistoryActorName = (entry: TemplateHistoryEvent): string => {
-  const humanName = entry.actor?.name || entry.actor?.username || entry.actor?.email || 'Unknown user';
-  const metadata = entry.metadata;
-
-  if (
-    isRecord(metadata)
-    && metadata.source === 'mcp'
-    && typeof metadata.personalRunKeyName === 'string'
-    && metadata.personalRunKeyName.trim()
-  ) {
-    return `${metadata.personalRunKeyName.trim()} via MCP · authorized by ${humanName}`;
-  }
-
-  return humanName;
 };
 
 export function RunHistorySection({ history }: { history?: RunExecutionHistoryState }) {
@@ -71,10 +43,10 @@ export function RunHistorySection({ history }: { history?: RunExecutionHistorySt
               >
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    {formatRunHistoryAction(entry.action)}
+                    {formatAuditAction(RUN_HISTORY_LABELS, entry.action)}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {getRunHistoryActorName(entry)}
+                    {getAuditActorName(entry.actor, entry.metadata)}
                   </p>
                 </div>
                 <time className="text-xs text-muted-foreground">

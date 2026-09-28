@@ -132,6 +132,7 @@ Production history is DB-backed:
 - Organization create/update/invite/member/owner actions write `audit_events`.
 - Template changes write `template_versions` and `audit_events`.
 - Audit events include actor id, subject, resource, action, optional before/after/diff JSON, request id, hashed IP, user agent, and timestamp.
+- The actions are listed once in `src/lib/schemas/auditActions.ts`. The audit builder accepts only those, and each history view (run and Template Changelogs, Organization activity) labels them from typed maps in `src/lib/auditLabels.ts`, so a new action needs a label before it type-checks. A guest's edit through a run's share link has no actor and shows as "Guest via shared link".
 
 Do not use git history for user-generated Template or Organization history. Git only tracks code and migration history.
 
