@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { getTableColumns } from 'drizzle-orm';
 
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
@@ -52,6 +53,7 @@ vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
   };
 });
 
+import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
@@ -744,6 +746,57 @@ describe('Checklists Handlers', () => {
     expect(data.is_stale).toBe(true);
     expect(data.template_version).toBe(1);
     expect(data.current_template_version).toBe(2);
+  });
+
+  // Anyone holding a share link could read the owner's and members' user ids (which
+  // /api/profiles/by-id turns into names and avatars), the Organization id, and notes on
+  // retired tasks. Guests get only what the share page shows and needs to save.
+  it('gives share-link guests only the run fields the share page needs', async () => {
+    const sharedRunKeys = [
+      'completed_at', 'current_template_version', 'id', 'is_public', 'is_stale', 'items', 'progress',
+      'revision', 'started_at', 'status', 'template_version', 'title',
+    ];
+    const everyColumn = Object.fromEntries(
+      Object.keys(getTableColumns(schema.checklist_runs)).map((column) => [column, `value-${column}`]),
+    );
+    const privateValues = {
+      user_id: 'owner-secret-id',
+      team_id: 'org-secret-id',
+      template_id: 'template-secret-id',
+      created_by_user_id: 'creator-secret-id',
+      assigned_to_user_id: 'assignee-secret-id',
+      started_by_user_id: 'starter-secret-id',
+      completed_by_user_id: 'completer-secret-id',
+      retired_items: JSON.stringify([{ id: 'retired-1', title: 'Old task', notes: 'retired-secret-note' }]),
+    };
+    vi.mocked(getSessionUserId).mockResolvedValue(null);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{
+      ...everyColumn,
+      ...privateValues,
+      title: 'Shared Run',
+      items: '[{"id":"item-1","title":"Item 1","isCompleted":false}]',
+      status: 'in_progress',
+      progress: 0,
+      is_public: true,
+      completed_at: null,
+      revision: 4,
+      template_version: 1,
+      current_template_version: 2,
+    }]);
+
+    const response = await handleChecklists(new Request('http://localhost/api/checklists/shared/shared-run'), mockEnv);
+    const text = await response.text();
+    const data = JSON.parse(text);
+
+    expect(response.status).toBe(200);
+    // An exact key set, so a column added to checklist_runs later stays private until someone allows it.
+    expect(Object.keys(data).sort()).toEqual(sharedRunKeys);
+    for (const value of Object.values(privateValues)) expect(text).not.toContain(value);
+    expect(text).not.toContain('retired-secret-note');
+    expect(data).toMatchObject({ revision: 4, template_version: 1, current_template_version: 2, is_stale: true, is_public: true });
+    // The private columns are not even read from D1.
+    const selected = Object.keys((dbMocks.db.select.mock.calls[0] as unknown[])[0] as object);
+    expect(selected.sort()).toEqual(sharedRunKeys.filter((key) => key !== 'is_stale' && key !== 'is_public'));
   });
 
   it('should update completion on shared checklist runs without changing their tasks', async () => {

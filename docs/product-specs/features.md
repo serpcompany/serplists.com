@@ -45,7 +45,7 @@ Canonical private routes:
 - Run-level sharing creates public `/share/:token` links (`POST /api/checklists/run/:id/share`). Sharing again mints a new link, and the previous one stops working.
 - Stop sharing (`DELETE /api/checklists/run/:id/share`, in the runs list menu) makes the run private and turns its link off; progress and tasks are kept. Anyone who may update the run can share it or stop sharing it. The runs list marks shared runs, and a shared run that went stale offers "Stop sharing to update", after which it can be revalidated.
 - Guests can open shared runs without logging in and update checklist completion state: task and sub-item completion, task notes (up to 5,000 characters), and the run's status. The server merges only those fields onto the stored run by task id; titles, descriptions, contents, and the task list itself always come from the stored run, and progress and completion time are computed on the server.
-- Shared runs do not expose owner-only title editing or destructive actions.
+- Shared runs do not expose owner-only title editing or destructive actions, and the guest view does not reveal who owns or worked on the run.
 - Current run gating is plan-limit based through active-run limits.
 
 ## Personal And Organization Contexts

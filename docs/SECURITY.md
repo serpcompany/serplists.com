@@ -24,6 +24,11 @@
   the share page) never return it or its timestamps
   (`serializeChecklistRun`), and history redacts it. Only the share-creation
   responses hand out a link, and they require permission to update the run.
+  `GET /api/checklists/shared/:token` selects and returns a fixed field list
+  (`sharedChecklistRunSelect` / `serializeSharedChecklistRun`): title, tasks,
+  status, progress, timestamps, revision, and staleness. It never returns owner,
+  member, Organization, or template ids (user ids resolve to names through
+  `/api/profiles/by-id`) or notes on retired tasks.
   Link holders are guests: a signed-in visitor's edit is attributed to them only
   if they already belong to the run's owner context (the Personal owner or an
   active member of its Organization), and run history and the Organization

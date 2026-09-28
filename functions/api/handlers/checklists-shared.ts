@@ -4,7 +4,13 @@ import { createDb, schema } from '../db';
 import { json, jsonError } from '../utils/response';
 import { buildAuditEventValues } from '../utils/audit';
 import { calculateRunProgress } from '../utils/template-reconciliation';
-import { auditedRunUpdate, batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
+import {
+  auditedRunUpdate,
+  batchUpdateMissed,
+  getRunSubject,
+  serializeSharedChecklistRun,
+  sharedChecklistRunSelect,
+} from '../utils/checklist-runs';
 import { mergeSharedRunState, readStoredRunSections, sharedRunUpdateSchema } from '../utils/shared-run-merge';
 import { activeRunLimitResponse, findActiveRunLimitHit, isReopening } from '../utils/active-run-limit';
 import { canViewRun } from '../utils/run-access';
@@ -27,13 +33,13 @@ export async function handleSharedChecklist(
   );
 
   if (request.method === 'GET') {
-    const [checklist] = await db.select(checklistRunSelectFor(null)).from(checklist_runs).where(activeShare).limit(1);
+    const [checklist] = await db.select(sharedChecklistRunSelect()).from(checklist_runs).where(activeShare).limit(1);
 
     if (!checklist) {
       return jsonError('Shared run not found', 404);
     }
 
-    return json(serializeChecklistRun(checklist as unknown as Record<string, unknown>));
+    return json(serializeSharedChecklistRun(checklist as unknown as Record<string, unknown>));
   }
 
   if (request.method !== 'PUT') {

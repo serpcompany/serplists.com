@@ -22,18 +22,36 @@ function runResponseColumns() {
 }
 
 /**
- * Run columns plus the source template's current content version, read only when `userId`
- * (null for share-link guests) may still use that template as a run source. Otherwise it is
- * NULL and the run is not stale, so nobody is offered a revalidation that would copy content
- * they cannot see. The lookup stays a primary-key read.
+ * The source template's current content version, read only when `userId` (null for
+ * share-link guests) may still use that template as a run source. Otherwise it is NULL and
+ * the run is not stale, so nobody is offered a revalidation that would copy content they
+ * cannot see. The lookup stays a primary-key read.
  */
+function currentTemplateVersionSql(userId: string | null) {
+  return sql<number | null>`(
+    SELECT content_version FROM templates
+    WHERE templates.id = ${schema.checklist_runs.template_id} AND ${runSourceTemplateUsableSql(userId)}
+  )`;
+}
+
+/** Run columns plus the source template's current content version for `userId`. */
 export function checklistRunSelectFor(userId: string | null) {
   return {
     ...runResponseColumns(),
-    current_template_version: sql<number | null>`(
-      SELECT content_version FROM templates
-      WHERE templates.id = ${schema.checklist_runs.template_id} AND ${runSourceTemplateUsableSql(userId)}
-    )`,
+    current_template_version: currentTemplateVersionSql(userId),
+  };
+}
+
+function templateVersions(row: Record<string, unknown>) {
+  const templateVersion = typeof row.template_version === 'number' ? row.template_version : 1;
+  const currentTemplateVersion = typeof row.current_template_version === 'number'
+    ? row.current_template_version
+    : templateVersion;
+
+  return {
+    template_version: templateVersion,
+    current_template_version: currentTemplateVersion,
+    is_stale: currentTemplateVersion > templateVersion,
   };
 }
 
@@ -41,15 +59,46 @@ export function checklistRunSelectFor(userId: string | null) {
 export function serializeChecklistRun(row: Record<string, unknown>) {
   const run = { ...row };
   for (const column of SHARE_SECRET_COLUMNS) delete run[column];
-  const templateVersion = typeof run.template_version === 'number' ? run.template_version : 1;
-  const currentTemplateVersion = typeof run.current_template_version === 'number'
-    ? run.current_template_version
-    : templateVersion;
+  const { current_template_version, is_stale } = templateVersions(run);
 
+  return { ...run, current_template_version, is_stale };
+}
+
+/**
+ * The columns a share-link guest may read: what the share page shows and needs to save
+ * (`revision` for expected_revision). Never owner, member, Organization or template ids,
+ * notes on retired tasks, or share and archive state: holding a link is not membership.
+ */
+export function sharedChecklistRunSelect() {
+  const { checklist_runs } = schema;
   return {
-    ...run,
-    current_template_version: currentTemplateVersion,
-    is_stale: currentTemplateVersion > templateVersion,
+    id: checklist_runs.id,
+    title: checklist_runs.title,
+    items: checklist_runs.items,
+    status: checklist_runs.status,
+    progress: checklist_runs.progress,
+    started_at: checklist_runs.started_at,
+    completed_at: checklist_runs.completed_at,
+    template_version: checklist_runs.template_version,
+    revision: checklist_runs.revision,
+    current_template_version: currentTemplateVersionSql(null),
+  };
+}
+
+/** A shared run for a guest, built only from the sharedChecklistRunSelect fields. */
+export function serializeSharedChecklistRun(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    title: row.title,
+    items: row.items,
+    status: row.status,
+    progress: row.progress,
+    started_at: row.started_at,
+    completed_at: row.completed_at ?? null,
+    revision: typeof row.revision === 'number' ? row.revision : 1,
+    ...templateVersions(row),
+    // Only active shares are served.
+    is_public: true,
   };
 }
 
