@@ -19,7 +19,7 @@ import {
 import { cachedSitemap, type SitemapRevisions } from './sitemap/cache';
 
 export const onRequest: PagesFunction<Env> = async (context) =>
-  cachedSitemap(context, (request, revisions) => buildSitemapIndex(request, context.env, revisions));
+  cachedSitemap(context, (request, revisions) => buildSitemapIndex(request, context.env, revisions), 'index');
 
 async function buildSitemapIndex(request: Request, env: Env, revisions: SitemapRevisions): Promise<Response> {
   const db = createDb(env);

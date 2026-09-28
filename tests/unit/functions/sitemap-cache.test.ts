@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cachedSitemap } from '../../../functions/sitemap/cache';
 import { parsePage, xmlResponse } from '../../../functions/sitemap/shared';
+import { onRequest as sitemapIndex } from '../../../functions/sitemap.xml';
 import { onRequest as categoriesShard } from '../../../functions/sitemaps/categories/[page].xml';
 import { onRequest as profilesShard } from '../../../functions/sitemaps/profiles/[page].xml';
 import { onRequest as templatesShard } from '../../../functions/sitemaps/templates/[page].xml';
@@ -31,6 +32,7 @@ const env = {
           return [];
         },
         all: async () => ({ results: [] }),
+        run: async () => ({ success: true, meta: {}, results: [] }),
       };
       return statement;
     },
@@ -45,18 +47,43 @@ function context(url: string, method = 'GET') {
   };
 }
 
-type Shard = Parameters<typeof cachedSitemap>[2];
+type Sitemap = Parameters<typeof cachedSitemap>[2];
 
 async function serve(
   build: ReturnType<typeof vi.fn>,
   url = 'https://serplists.com/sitemap.xml',
   method = 'GET',
-  shard?: Shard,
+  sitemap: Sitemap = 'index',
 ) {
   const { ctx, settled } = context(url, method);
-  const response = await cachedSitemap(ctx, build, shard);
+  const response = await cachedSitemap(ctx, build, sitemap);
   await settled();
   return response;
+}
+
+const allKinds = ['categories', 'profiles', 'templates'] as const;
+type RevisionKind = (typeof allKinds)[number];
+
+// Each family, the route that serves it, and the revision kinds its output depends on.
+const families: Array<{ name: string; handler: PagesFunction<Env>; path: string; deps: readonly RevisionKind[] }> = [
+  { name: 'index', handler: sitemapIndex as PagesFunction<Env>, path: '/sitemap.xml', deps: allKinds },
+  { name: 'categories', handler: categoriesShard, path: '/sitemaps/categories/1.xml', deps: ['categories'] },
+  { name: 'profiles', handler: profilesShard, path: '/sitemaps/profiles/1.xml', deps: ['profiles'] },
+  { name: 'templates', handler: templatesShard, path: '/sitemaps/templates/1.xml', deps: ['templates'] },
+];
+
+// Serves a family's real route and reports whether it rebuilt: every build reads
+// `users` or `templates`, and a cache hit reads only the revision rows.
+async function rebuilds(family: (typeof families)[number]): Promise<boolean> {
+  statements = [];
+  const { ctx, settled } = context(`https://serplists.com${family.path}`);
+  await family.handler({ ...ctx, params: { page: '1' } } as never);
+  await settled();
+  return statements.some((sql) => /from "(users|templates)"/.test(sql));
+}
+
+function setRevision(kind: RevisionKind, revisedAt: string) {
+  revisions = [...revisions.filter(([existing]) => existing !== kind), [kind, revisedAt]];
 }
 
 async function serveRoute(handler: PagesFunction<Env>, kind: string, page: string, method = 'GET') {
@@ -176,6 +203,36 @@ describe('cached sitemaps', () => {
     publishedShards.push(['templates', 2]);
     expect((await serve(build, 'https://serplists.com/sitemaps/templates/2.xml', 'GET', shard)).status).toBe(200);
     expect(build).toHaveBeenCalledOnce();
+  });
+
+  it.each(allKinds)('rebuilds only the sitemaps that list %s after a change to that kind alone', async (kind) => {
+    revisions = allKinds.map((each) => [each, '2030-01-01 00:00:00.000']);
+    for (const family of families) expect(await rebuilds(family), family.name).toBe(true);
+    for (const family of families) expect(await rebuilds(family), family.name).toBe(false);
+
+    setRevision(kind, '2030-01-02 00:00:00.000');
+    const rebuilt: string[] = [];
+    for (const family of families) if (await rebuilds(family)) rebuilt.push(family.name);
+
+    expect(rebuilt).toEqual(families.filter((family) => family.deps.includes(kind)).map((family) => family.name));
+  });
+
+  it('keys a missing revision row as a stable value that a new row replaces', async () => {
+    const categories = families.find((family) => family.name === 'categories')!;
+    revisions = [['profiles', '2030-01-01 00:00:00.000'], ['templates', '2030-01-01 00:00:00.000']];
+    expect(await rebuilds(categories)).toBe(true);
+    expect(await rebuilds(categories)).toBe(false);
+
+    setRevision('categories', '2030-01-01 00:00:00.000');
+    expect(await rebuilds(categories)).toBe(true);
+    expect(await rebuilds(categories)).toBe(false);
+  });
+
+  it('passes each build only the revisions its key depends on', async () => {
+    revisions = allKinds.map((each) => [each, `2030-01-0${allKinds.indexOf(each) + 1} 00:00:00.000`]);
+    const build = builder();
+    await serve(build, 'https://serplists.com/sitemaps/templates/1.xml', 'GET', { kind: 'templates', page: '1' });
+    expect([...build.mock.calls[0][1]]).toEqual([['templates', '2030-01-03 00:00:00.000']]);
   });
 
   it('rejects unsupported methods before reading D1', async () => {
