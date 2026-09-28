@@ -90,7 +90,12 @@ Rules:
 - `pnpm run typecheck:env` and the runtime validate env the same way, with
   `@t3-oss/env-core` and Zod (`functions/api/env.ts`, `src/env.ts` for `VITE_`
   client variables, `emptyStringAsUndefined: true`). URL values are strictly
-  validated so a malformed value cannot weaken CORS.
+  validated so a malformed value cannot weaken CORS: `FRONTEND_URL` and every
+  comma-separated `CORS_ALLOWED_ORIGINS` entry must be an `http(s)` URL with a real
+  host (`functions/api/utils/origin-list.ts`, mirrored for the script in
+  `scripts/lib/origin-list.mjs`). A bare host (`serplists.com`), `host:port` with no
+  scheme, a wildcard, or a list with no entries fails every request with the
+  configuration `500`. Empty entries (a trailing comma) are ignored.
 - Invalid runtime configuration returns a structured JSON `500`, never an uncaught
   Cloudflare `1101`.
 - Stripe live keys never enter `.dev.vars`: env validation rejects `sk_live_`
@@ -112,7 +117,12 @@ Applied in `functions/api/[[route]].ts` through `functions/api/utils/cors.ts`:
   the request `Origin` with `Access-Control-Allow-Credentials: true` when one is
   present (needed for cookies in local dev).
 - With `FRONTEND_URL` and/or `CORS_ALLOWED_ORIGINS` set, only matching origins are
-  reflected, and `OPTIONS` preflights from other origins get `403`.
+  reflected, and `OPTIONS` preflights from other origins get `403`. This holds even
+  when the values are malformed and yield no valid origin: preflights skip env
+  validation, so `cors.ts` fails closed on its own rather than treating the empty
+  result as "no allowlist".
+- `Origin: null` (sandboxed frames, `file:` pages) is never reflected, and the opaque
+  `null` origin is never added to the allowlist or Better Auth's trusted origins.
 - `X-Request-Id` is exposed to the client for correlation.
 
 Locally, the dev launcher keeps the frontend origin and the allowlist in sync when

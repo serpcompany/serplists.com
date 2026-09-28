@@ -50,6 +50,31 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(data.error).toBe('Server configuration error');
   });
 
+  it.each([
+    ['CORS_ALLOWED_ORIGINS has no scheme', { CORS_ALLOWED_ORIGINS: 'serplists.com' }],
+    ['CORS_ALLOWED_ORIGINS has a bad entry', { CORS_ALLOWED_ORIGINS: 'https://ok.com,localhost:8080' }],
+    ['FRONTEND_URL is host:port', { FRONTEND_URL: 'localhost:8080' }],
+  ])('fails closed without credentialed CORS when %s', async (_label, overrides) => {
+    const env = buildEnv(overrides);
+    const response = await apiWorker.fetch(
+      new Request('http://localhost/api/health', { headers: { Origin: 'https://evil.example' } }),
+      env
+    );
+
+    expect(response.status).toBe(500);
+    expect((await response.json()).error).toBe('Server configuration error');
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(response.headers.get('Access-Control-Allow-Credentials')).toBeNull();
+
+    const preflight = await apiWorker.fetch(
+      new Request('http://localhost/api/health', { method: 'OPTIONS', headers: { Origin: 'https://evil.example' } }),
+      env
+    );
+    expect(preflight.status).toBe(403);
+    expect(preflight.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(preflight.headers.get('Access-Control-Allow-Credentials')).toBeNull();
+  });
+
   it('GET /api/health fails closed when R2_PUBLIC_BASE_URL is malformed', async () => {
     const response = await apiWorker.fetch(
       new Request('http://localhost/api/health'),
