@@ -144,3 +144,40 @@ test('a rejected owner transfer reloads the member list', async ({ page }) => {
   await expect(makeOwner).toHaveCount(0);
   expect(countRequests(state, 'GET', '/api/teams/team-1/members')).toBeGreaterThan(memberLoads);
 });
+
+test('changing a member status reloads pending invites so revoked ones disappear', async ({ page }) => {
+  const staleInvite = {
+    id: 'invite-editor',
+    team_id: 'team-1',
+    email: 'editor@example.com',
+    role: 'admin',
+    invited_by_user_id: 'user-owner',
+    expires_at: '2099-01-01T00:00:00.000Z',
+    created_at: '2026-07-01T00:00:00.000Z',
+    inviterEmail: 'owner@example.com',
+    inviterName: 'Owner User',
+  };
+  const state: MockState = {
+    members: [ownerMember, { ...editorMember, status: 'disabled' }],
+    invites: [staleInvite],
+    requests: [],
+    respond: (method, path) => {
+      if (method !== 'PUT' || path !== '/api/teams/team-1/members/member-editor') return null;
+      // The API revokes the member's pending invites when their status changes.
+      state.members = [ownerMember, editorMember];
+      state.invites = [];
+      return { status: 200, body: { success: true } };
+    },
+  };
+  await mockOrganizationApi(page, state);
+  await openOrganizationSettings(page);
+
+  const revokeButton = page.getByRole('button', { name: 'Revoke invite for editor@example.com' });
+  await expect(revokeButton).toBeVisible();
+
+  await page.getByRole('combobox', { name: 'Member status' }).nth(1).click();
+  await page.getByRole('option', { name: 'Active' }).click();
+
+  await expect(page.getByText('Member updated')).toBeVisible();
+  await expect(revokeButton).toHaveCount(0);
+});

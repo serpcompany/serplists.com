@@ -669,7 +669,7 @@ describe("Teams handler", () => {
     const response = await handleTeams(
       new Request("http://localhost/api/teams/team-1/members/member-2", {
         method: "PUT",
-        body: JSON.stringify({ status: "disabled" }),
+        body: JSON.stringify({ role: "viewer" }),
       }),
       mockEnv,
     );

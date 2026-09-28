@@ -198,4 +198,91 @@ describe("Organization membership writes against SQLite", () => {
       expect(auditActions("team_member.updated")).toHaveLength(0);
     });
   });
+
+  describe("member status changes and pending invites", () => {
+    async function inviteMember(role = "editor") {
+      const created = await asUser("admin-user", "POST", "/team-1/invites", { email: "member@example.test", role });
+      expect(created.status).toBe(200);
+      return created.data?.id as string;
+    }
+
+    function invite(id: string) {
+      return d1.rows<{ revoked_at: string | null; accepted_at: string | null }>(
+        "SELECT revoked_at, accepted_at FROM team_invites WHERE id = ?",
+        id,
+      )[0];
+    }
+
+    function revokedInviteAudits() {
+      return d1.rows<{ resource_id: string; metadata_json: string | null }>(
+        "SELECT resource_id, metadata_json FROM audit_events WHERE action = 'team_invite.revoked'",
+      );
+    }
+
+    it("does not let a disabled member rejoin through an invite made before a re-enable", async () => {
+      await asUser("admin-user", "PUT", "/team-1/members/member-m", { status: "disabled" });
+      const inviteId = await inviteMember();
+
+      expect((await asUser("admin-user", "PUT", "/team-1/members/member-m", { status: "active" })).status).toBe(200);
+      expect(invite(inviteId).revoked_at).not.toBeNull();
+      expect(revokedInviteAudits()).toEqual([
+        { resource_id: inviteId, metadata_json: JSON.stringify({ reason: "member_status_changed" }) },
+      ]);
+      expect((await asUser("admin-user", "PUT", "/team-1/members/member-m", { status: "disabled" })).status).toBe(200);
+
+      const pending = await asUser("member-user", "GET", "/invites/pending");
+      const accepted = await asUser("member-user", "POST", `/invites/pending/${inviteId}/accept`);
+
+      expect(pending.data).toEqual([]);
+      expect(accepted.status).toBe(404);
+      expect(member("member-m")).toEqual({ role: "editor", status: "disabled" });
+    });
+
+    it("revokes a member's pending invites, whatever their stored case, when the member is disabled", async () => {
+      d1.run(
+        `INSERT INTO team_invites (id, team_id, email, role, token_hash, invited_by_user_id, expires_at, created_at)
+         VALUES ('legacy-invite', 'team-1', 'Member@Example.TEST', 'admin', 'legacy-hash', 'admin-user', ?, ?)`,
+        new Date(Date.now() + 60_000).toISOString(),
+        createdAt,
+      );
+
+      await asUser("admin-user", "PUT", "/team-1/members/member-m", { status: "disabled" });
+
+      expect(invite("legacy-invite").revoked_at).not.toBeNull();
+      expect(revokedInviteAudits().map(({ resource_id }) => resource_id)).toEqual(["legacy-invite"]);
+    });
+
+    it("keeps pending invites on role changes and on updates that repeat the current status", async () => {
+      await asUser("admin-user", "PUT", "/team-1/members/member-m", { status: "disabled" });
+      const inviteId = await inviteMember();
+
+      await asUser("admin-user", "PUT", "/team-1/members/member-m", { role: "viewer" });
+      await asUser("admin-user", "PUT", "/team-1/members/member-m", { status: "disabled" });
+
+      expect(invite(inviteId).revoked_at).toBeNull();
+      expect(revokedInviteAudits()).toEqual([]);
+    });
+
+    it("still lets a disabled member rejoin with an invite created after they were disabled", async () => {
+      await asUser("admin-user", "PUT", "/team-1/members/member-m", { status: "disabled" });
+      const inviteId = await inviteMember("runner");
+
+      const accepted = await asUser("member-user", "POST", `/invites/pending/${inviteId}/accept`);
+
+      expect(accepted.status).toBe(200);
+      expect(member("member-m")).toEqual({ role: "runner", status: "active" });
+    });
+
+    it("revokes nothing when the status change itself loses a race", async () => {
+      await asUser("admin-user", "PUT", "/team-1/members/member-m", { status: "disabled" });
+      const inviteId = await inviteMember();
+      d1.beforeNextBatch(() => d1.run("UPDATE team_members SET role = 'viewer' WHERE id = 'admin-member'"));
+
+      const result = await asUser("admin-user", "PUT", "/team-1/members/member-m", { status: "active" });
+
+      expect(result.status).toBe(409);
+      expect(invite(inviteId).revoked_at).toBeNull();
+      expect(revokedInviteAudits()).toEqual([]);
+    });
+  });
 });

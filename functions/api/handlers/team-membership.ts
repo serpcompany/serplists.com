@@ -8,6 +8,7 @@ import { z } from "zod";
 import { schema, type createDb } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
 import { batchWriteMissed, insertAuditEventWhere } from "../utils/guarded-writes";
+import { buildInviteRevocation, selectPendingInvitesForUser } from "../utils/team-invite-revocation";
 import { normalizeTeamRole, type TeamMembership } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
 
@@ -278,6 +279,23 @@ export async function updateTeamMember(
     ),
   );
 
+  // A status change settles access, so revoke pending invites for the member's email: an
+  // invite made while they were disabled must not re-enable them after a later disable.
+  const statusChanged = typeof parsed.data.status !== "undefined" && parsed.data.status !== targetMember.status;
+  const staleInvites = statusChanged ? await selectPendingInvitesForUser(db, teamId, targetMember.user_id, now) : [];
+  const inviteRevocations = await Promise.all(
+    staleInvites.map((invite) =>
+      buildInviteRevocation({
+        db,
+        invite,
+        actorUserId: userId,
+        request,
+        now,
+        metadata: { reason: "member_status_changed" },
+        guard: memberUpdatedNow,
+      })),
+  );
+
   const [updateResult] = await db.batch([
     db
       .update(team_members)
@@ -292,6 +310,7 @@ export async function updateTeamMember(
         ),
       ),
     insertAuditEventWhere(db, auditEvent, memberUpdatedNow),
+    ...inviteRevocations.flat(),
   ]);
 
   if (batchWriteMissed(updateResult)) {

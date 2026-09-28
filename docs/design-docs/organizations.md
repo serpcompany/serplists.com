@@ -61,7 +61,7 @@ Organization operations use legacy `/api/teams` route identifiers and require a 
 - `GET /api/teams/:teamId`: read Organization details for a member.
 - `PUT /api/teams/:teamId`: update an Organization name or slug. Requires `owner` or `admin`.
 - `GET /api/teams/:teamId/members`: list members. Managers can see inactive rows; non-managers see active members.
-- `PUT /api/teams/:teamId/members/:memberId`: update role or status. Requires `owner` or `admin`; owners cannot be changed through this route.
+- `PUT /api/teams/:teamId/members/:memberId`: update role or status. Requires `owner` or `admin`; owners cannot be changed through this route. A status change also revokes the member's pending invites to that Organization.
 - `PUT /api/teams/:teamId/owner`: transfer the Organization's `owner` role. Requires current `owner`.
 - `GET /api/teams/:teamId/invites`: list pending invites. Requires `owner` or `admin`.
 - `POST /api/teams/:teamId/invites`: create a link invite. Requires `owner` or `admin`.
@@ -91,6 +91,13 @@ Invites are link-based today:
 2. The API stores only `token_hash`, never the raw invite token.
 3. The response includes `delivery.mode = "link"`, `invitePath`, and `inviteUrl`.
 4. Invitees can accept through the legacy compatibility route `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
+
+Accepting an invite reactivates a disabled membership with the invite's role. Changing a
+member's status (disable or re-enable) revokes that member's pending invites to the
+Organization in the same batch, with a `team_invite.revoked` audit event whose metadata
+is `{ "reason": "member_status_changed" }`. An invite made while a member was disabled
+therefore cannot re-enable them after an admin re-enables and disables them again; to
+re-admit a disabled member, create a new invite after disabling them.
 
 The API response already uses a `delivery` object so email can be added later without changing the UI contract. A future email implementation should keep the link accept route and switch delivery from `link` to a queued/sent email mode.
 

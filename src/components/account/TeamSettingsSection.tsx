@@ -354,6 +354,7 @@ export function TeamSettingsSection() {
       await api.updateTeamMember(activeTeamId, member.id, updates);
       await refreshTeams();
       await reload(activityQuery, ['team-activity', activeTeamId]);
+      await reload(invitesQuery, ['team-invites', activeTeamId]); // status changes revoke their invites
       toast.success('Member updated');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update member');
