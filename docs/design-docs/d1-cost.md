@@ -62,7 +62,13 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
    some plans and worsen others, so profile before and after.
 7. **Request data only where it is shown.** Rows are billed per request, so a provider
    that loads a list on every route multiplies its cost by page views. Template lists
-   load on demand ([FRONTEND.md](../FRONTEND.md)).
+   load on demand ([FRONTEND.md](../FRONTEND.md)). The same goes for columns and
+   limits: the Changelog cards ask for `HISTORY_DISPLAY_LIMIT` (8) entries
+   (`src/lib/history.ts`), history lists never return audit `diff_json` (a template or
+   run update diff holds the whole template or run), and template history orders by
+   `version` so the unique `(template_id, version)` index stops at `LIMIT`
+   (`functions/api/utils/history-queries.ts`, plans checked by
+   `tests/unit/functions/api/history-query-plan.test.ts`).
 
 ## Hotspots (2026-09-27)
 

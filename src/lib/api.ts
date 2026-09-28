@@ -1,5 +1,6 @@
 import { env } from "@/env";
 import { createApiError } from "@/lib/api-errors";
+import { HISTORY_DISPLAY_LIMIT } from "@/lib/history";
 import type { TemplateImportSummary } from "@/types/checklist";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
@@ -146,7 +147,6 @@ export type TemplateHistoryEvent = {
   action: string;
   createdAt: string;
   requestId?: string | null;
-  diff?: unknown;
   metadata?: unknown;
   actor: TemplateHistoryActor;
 };
@@ -259,7 +259,7 @@ class ApiClient {
   }
 
   async getTemplateHistory(id: string): Promise<TemplateHistoryResponse> {
-    return this.request(`/templates/${encodeURIComponent(id)}/history`);
+    return this.request(`/templates/${encodeURIComponent(id)}/history?limit=${HISTORY_DISPLAY_LIMIT}`);
   }
 
   async getTemplateBySlug(slug: string) {
@@ -372,7 +372,7 @@ class ApiClient {
   }
 
   async getChecklistHistory(id: string): Promise<ChecklistRunHistoryResponse> {
-    return this.request(`/checklists/${encodeURIComponent(id)}/history`);
+    return this.request(`/checklists/${encodeURIComponent(id)}/history?limit=${HISTORY_DISPLAY_LIMIT}`);
   }
 
   async createChecklist(checklist: {

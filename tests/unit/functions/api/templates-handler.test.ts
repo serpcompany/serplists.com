@@ -626,9 +626,7 @@ describe('Templates Handlers', () => {
 
   it('should return template history for active team members', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.orderBy
-      .mockReturnValueOnce(dbMocks.selectChain)
-      .mockReturnValueOnce(dbMocks.selectChain);
+    dbMocks.selectChain.orderBy.mockReturnValueOnce(dbMocks.selectChain);
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([
         {
@@ -663,27 +661,9 @@ describe('Templates Handlers', () => {
           actor_name: 'Editor Example',
           actor_username: 'editor',
         },
-      ])
-      .mockResolvedValueOnce([
-        {
-          id: 'audit-1',
-          actor_user_id: 'user-123',
-          subject_type: 'team',
-          subject_id: 'team-1',
-          resource_type: 'template',
-          resource_id: 'template-1',
-          action: 'template.updated',
-          diff_json: '{"title":"Team Template"}',
-          metadata_json: '{"source":"test"}',
-          request_id: 'req-1',
-          created_at: '2026-07-03T12:00:00.000Z',
-          actor_email: 'editor@example.com',
-          actor_name: 'Editor Example',
-          actor_username: 'editor',
-        },
       ]);
 
-    const request = new Request('http://localhost/api/templates/template-1/history', { method: 'GET' });
+    const request = new Request('http://localhost/api/templates/template-1/history?limit=8', { method: 'GET' });
     const response = await handleTemplates(request, mockEnv);
     const data = await response.json();
 
@@ -696,7 +676,46 @@ describe('Templates Handlers', () => {
         actor: expect.objectContaining({ name: 'Editor Example' }),
       }),
     );
-    expect(data.events[0].diff).toEqual({ title: 'Team Template' });
+    // Versions exist, so the audit-event fallback is never queried.
+    expect(data.events).toEqual([]);
+    expect(dbMocks.selectChain.limit).toHaveBeenCalledTimes(3);
+    expect(dbMocks.selectChain.limit).toHaveBeenLastCalledWith(8);
+    // Ordering by version lets the unique (template_id, version) index stop at LIMIT.
+    const versionOrder = collectSqlColumnNames(dbMocks.selectChain.orderBy.mock.calls[0][0]);
+    expect(versionOrder).toContain('version');
+    expect(versionOrder).not.toContain('created_at');
+  });
+
+  it('falls back to audit events without diffs for templates that have no versions', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    dbMocks.selectChain.orderBy
+      .mockReturnValueOnce(dbMocks.selectChain)
+      .mockReturnValueOnce(dbMocks.selectChain);
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([{ id: 'template-1', title: 'Legacy', items: '[]', version: 1, user_id: 'user-123', owner_type: 'user', team_id: null, is_public: false }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 'audit-1',
+          actor_user_id: 'user-123',
+          action: 'template.updated',
+          diff_json: JSON.stringify({ items: 'x'.repeat(200_000) }),
+          metadata_json: '{"source":"test"}',
+          request_id: 'req-1',
+          created_at: '2026-07-03T12:00:00.000Z',
+          actor_name: 'Owner',
+        },
+      ]);
+
+    const response = await handleTemplates(new Request('http://localhost/api/templates/template-1/history?limit=', { method: 'GET' }), mockEnv);
+    const body = await response.text();
+    const data = JSON.parse(body);
+
+    expect(response.status).toBe(200);
+    expect(data.events).toEqual([expect.objectContaining({ id: 'audit-1', metadata: { source: 'test' } })]);
+    expect(data.events[0]).not.toHaveProperty('diff');
+    expect(body.length).toBeLessThan(2_000);
+    expect(dbMocks.selectChain.limit).toHaveBeenNthCalledWith(2, 50);
   });
 
   it('should not expose public template history to non-owners', async () => {

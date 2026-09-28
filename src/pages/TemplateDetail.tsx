@@ -86,6 +86,7 @@ import {
 } from '@/lib/routes';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { HISTORY_DISPLAY_LIMIT } from '@/lib/history';
 
 type TemplateMetrics = {
   copyCount?: number;
@@ -197,7 +198,7 @@ const TemplateDetail = () => {
     history?.data?.versions.length
       ? history.data.versions
       : history?.data?.events ?? []
-  ).slice(0, 8);
+  ).slice(0, HISTORY_DISPLAY_LIMIT);
 
   const handleUpgradeRequired = async () => {
     if (isTeamWorkspace) {

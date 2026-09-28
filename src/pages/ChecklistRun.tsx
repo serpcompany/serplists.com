@@ -46,6 +46,7 @@ import {
 } from '@/lib/routes';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import type { TemplateHistoryEvent } from '@/lib/api';
+import { HISTORY_DISPLAY_LIMIT } from '@/lib/history';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
 
 const runHistoryActionLabels: Record<string, string> = {
@@ -428,7 +429,7 @@ const ChecklistRunPage = () => {
     displayRun.title
   );
   const privateRunDescription = `${counts.completed} of ${counts.total} tasks finished`;
-  const runHistoryEntries = (history?.data?.events ?? []).slice(0, 8);
+  const runHistoryEntries = (history?.data?.events ?? []).slice(0, HISTORY_DISPLAY_LIMIT);
 
   return (
     <div className="min-h-screen bg-background">

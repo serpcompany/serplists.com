@@ -22,6 +22,12 @@ import {
   buildTemplateVersionValues,
   type AuditSubject,
 } from '../utils/audit';
+import {
+  parseHistoryLimit,
+  selectAuditEventHistory,
+  selectTemplateVersionHistory,
+  serializeHistoryEvent,
+} from '../utils/history-queries';
 import { canEditTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { z } from 'zod';
 import { portableTemplateRuleSchema } from '../../../src/lib/schemas/checklistSchema';
@@ -277,16 +283,6 @@ function isMissingHistoryReadTableError(error: unknown): boolean {
   return /no such table: (audit_events|template_versions)/i.test(message);
 }
 
-function parseOptionalJson(value: unknown): unknown {
-  if (typeof value !== 'string' || value.length === 0) return null;
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
 function getTemplateSubject(template: Record<string, unknown>, fallbackUserId: string): AuditSubject {
   if (template.owner_type === 'team' && typeof template.team_id === 'string' && template.team_id) {
     return { type: 'team', id: template.team_id };
@@ -424,7 +420,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
   const pathParts = url.pathname.split('/').filter(Boolean); // ["api", "templates", ...]
   const templatesSubpath = pathParts.slice(2); // after /api/templates
   const db = createDb(env);
-  const { templates, users, checklist_runs, audit_events, template_versions } = schema;
+  const { templates, users, checklist_runs, audit_events } = schema;
 
   // Pro-only: export/import templates as JSON backup
   // GET  /api/templates/backup?includePublic=1&teamId=...
@@ -779,10 +775,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       }
 
       const templateId = templatesSubpath[0];
-      const requestedLimit = Number(url.searchParams.get('limit') ?? '50');
-      const historyLimit = Number.isFinite(requestedLimit)
-        ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
-        : 50;
+      const historyLimit = parseHistoryLimit(url.searchParams.get('limit'));
       const [template] = await withRulesColumnFallback((includeRules) =>
         db
           .select(getTemplateSelectColumns(includeRules))
@@ -796,48 +789,11 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       }
 
       try {
-        const versionRows = await db
-          .select({
-            id: template_versions.id,
-            version: template_versions.version,
-            changed_by_user_id: template_versions.changed_by_user_id,
-            subject_type: template_versions.subject_type,
-            subject_id: template_versions.subject_id,
-            content_hash: template_versions.content_hash,
-            change_summary: template_versions.change_summary,
-            created_at: template_versions.created_at,
-            actor_email: users.email,
-            actor_name: users.name,
-            actor_username: users.username,
-          })
-          .from(template_versions)
-          .leftJoin(users, eq(users.id, template_versions.changed_by_user_id))
-          .where(eq(template_versions.template_id, templateId))
-          .orderBy(desc(template_versions.created_at))
-          .limit(historyLimit);
-
-        const eventRows = await db
-          .select({
-            id: audit_events.id,
-            actor_user_id: audit_events.actor_user_id,
-            subject_type: audit_events.subject_type,
-            subject_id: audit_events.subject_id,
-            resource_type: audit_events.resource_type,
-            resource_id: audit_events.resource_id,
-            action: audit_events.action,
-            diff_json: audit_events.diff_json,
-            metadata_json: audit_events.metadata_json,
-            request_id: audit_events.request_id,
-            created_at: audit_events.created_at,
-            actor_email: users.email,
-            actor_name: users.name,
-            actor_username: users.username,
-          })
-          .from(audit_events)
-          .leftJoin(users, eq(users.id, audit_events.actor_user_id))
-          .where(and(eq(audit_events.resource_type, 'template'), eq(audit_events.resource_id, templateId)))
-          .orderBy(desc(audit_events.created_at))
-          .limit(historyLimit);
+        const versionRows = await selectTemplateVersionHistory(db, templateId, historyLimit);
+        // Audit events are only a fallback for templates created before versioning.
+        const eventRows = versionRows.length > 0
+          ? []
+          : await selectAuditEventHistory(db, 'template', templateId, historyLimit);
 
         return json({
           templateId,
@@ -855,20 +811,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
               username: row.actor_username,
             },
           })),
-          events: eventRows.map((row) => ({
-            id: row.id,
-            action: row.action,
-            createdAt: row.created_at,
-            requestId: row.request_id,
-            diff: parseOptionalJson(row.diff_json),
-            metadata: parseOptionalJson(row.metadata_json),
-            actor: {
-              userId: row.actor_user_id,
-              email: row.actor_email,
-              name: row.actor_name,
-              username: row.actor_username,
-            },
-          })),
+          events: eventRows.map(serializeHistoryEvent),
         });
       } catch (error) {
         if (isMissingHistoryReadTableError(error)) {

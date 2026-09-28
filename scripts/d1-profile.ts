@@ -63,7 +63,9 @@ const categories = `CASE i % 6 WHEN 0 THEN '["Marketing"]' WHEN 1 THEN '["SEO"]'
 const syntheticUser = (expr: string) => `'synthetic-user-' || ((${expr}) % ${counts.users} + 1)`;
 
 // Every 20th template belongs to the seeded Organization and every 50th to admin@test.com
-// (user-1), so the signed-in scenarios see realistic volumes of their own data.
+// (user-1), so the signed-in scenarios see realistic volumes of their own data. The profiled
+// Personal template and admin run also get 300 versions and 300 run updates, so history
+// reads are measured on a heavily edited template and run.
 const syntheticSql = `
 ${numbers(counts.users)}
 INSERT INTO users (id, email, name, username, email_verified, created_at, updated_at)
@@ -124,6 +126,16 @@ ${numbers(counts.templateVersions)}
 INSERT INTO template_versions (id, template_id, version, changed_by_user_id, subject_type, subject_id, snapshot_json, created_at)
 SELECT 'synthetic-version-' || i, 'synthetic-template-' || (i % ${counts.templates} + 1), i / ${counts.templates} + 1,
   ${syntheticUser("i")}, 'user', ${syntheticUser("i")}, '{}', datetime('now', '-' || (i % 200) || ' days') FROM n;
+
+${numbers(300)}
+INSERT INTO template_versions (id, template_id, version, changed_by_user_id, subject_type, subject_id, snapshot_json, created_at)
+SELECT 'synthetic-hot-version-' || i, 'synthetic-template-50', i + 1, 'user-1', 'user', 'user-1', '{}',
+  datetime('now', '-' || i || ' minutes') FROM n;
+
+${numbers(300)}
+INSERT INTO audit_events (id, actor_user_id, subject_type, subject_id, resource_type, resource_id, action, diff_json, created_at)
+SELECT 'synthetic-hot-audit-' || i, 'user-1', 'user', 'user-1', 'checklist_run', 'synthetic-run-40', 'checklist_run.updated',
+  '{"items":"' || printf('%.2000c', 'x') || '"}', datetime('now', '-' || i || ' minutes') FROM n;
 
 ${numbers(counts.analytics)}
 INSERT INTO usage_analytics (id, user_id, action, resource_id, created_at)

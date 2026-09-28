@@ -387,9 +387,11 @@ describe('Checklists Handlers', () => {
       expect.objectContaining({
         action: 'checklist_run.updated',
         actor: expect.objectContaining({ name: 'Runner Example' }),
-        diff: { status: 'completed' },
+        metadata: { source: 'test' },
       }),
     );
+    // Run update diffs hold the whole run; the history list never ships them.
+    expect(data.events[0]).not.toHaveProperty('diff');
   });
 
   it('should not expose personal checklist run history to other users', async () => {

@@ -6,6 +6,7 @@ import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
 import { buildAuditEventValues, type AuditSubject } from '../utils/audit';
+import { parseHistoryLimit, selectAuditEventHistory, serializeHistoryEvent } from '../utils/history-queries';
 import { canManageTeam, canRunTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { z } from 'zod';
 import { calculateRunProgress, reconcileRunSections } from '../utils/template-reconciliation';
@@ -17,16 +18,6 @@ function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: 
 function isMissingHistoryReadTableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /no such table: audit_events/i.test(message);
-}
-
-function parseOptionalJson(value: unknown): unknown {
-  if (typeof value !== 'string' || value.length === 0) return null;
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
 }
 
 const checklistRunSelect = {
@@ -216,7 +207,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
   const pathParts = url.pathname.split('/').filter(Boolean); // ["api", "checklists", ...]
   const checklistsSubpath = pathParts.slice(2); // after /api/checklists
   const db = createDb(env);
-  const { audit_events, checklist_runs, templates, users } = schema;
+  const { audit_events, checklist_runs, templates } = schema;
   const shareToken = checklistsSubpath[1];
   const userId = await getSessionUserId(request, env);
   const isSharedRoute = checklistsSubpath[0] === 'shared';
@@ -346,10 +337,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     // GET /api/checklists/:id/history
     if (checklistsSubpath[0] && checklistsSubpath[1] === 'history') {
       const checklistId = checklistsSubpath[0];
-      const requestedLimit = Number(url.searchParams.get('limit') ?? '50');
-      const historyLimit = Number.isFinite(requestedLimit)
-        ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
-        : 50;
+      const historyLimit = parseHistoryLimit(url.searchParams.get('limit'));
       const [checklist] = await db
         .select()
         .from(checklist_runs)
@@ -361,46 +349,12 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
 
       try {
-        const eventRows = await db
-          .select({
-            id: audit_events.id,
-            actor_user_id: audit_events.actor_user_id,
-            subject_type: audit_events.subject_type,
-            subject_id: audit_events.subject_id,
-            resource_type: audit_events.resource_type,
-            resource_id: audit_events.resource_id,
-            action: audit_events.action,
-            diff_json: audit_events.diff_json,
-            metadata_json: audit_events.metadata_json,
-            request_id: audit_events.request_id,
-            created_at: audit_events.created_at,
-            actor_email: users.email,
-            actor_name: users.name,
-            actor_username: users.username,
-          })
-          .from(audit_events)
-          .leftJoin(users, eq(users.id, audit_events.actor_user_id))
-          .where(and(eq(audit_events.resource_type, 'checklist_run'), eq(audit_events.resource_id, checklistId)))
-          .orderBy(desc(audit_events.created_at))
-          .limit(historyLimit);
+        const eventRows = await selectAuditEventHistory(db, 'checklist_run', checklistId, historyLimit);
 
         return json({
           checklistId,
           subject: getRunSubject(checklist as unknown as Record<string, unknown>, userId),
-          events: eventRows.map((row) => ({
-            id: row.id,
-            action: row.action,
-            createdAt: row.created_at,
-            requestId: row.request_id,
-            diff: parseOptionalJson(row.diff_json),
-            metadata: parseOptionalJson(row.metadata_json),
-            actor: {
-              userId: row.actor_user_id,
-              email: row.actor_email,
-              name: row.actor_name,
-              username: row.actor_username,
-            },
-          })),
+          events: eventRows.map(serializeHistoryEvent),
         });
       } catch (error) {
         if (isMissingHistoryReadTableError(error)) {
