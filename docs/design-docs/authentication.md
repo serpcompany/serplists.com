@@ -65,6 +65,11 @@ and user-facing failure states when a supporting service is unavailable.
   policy client-side.
 - Profile: `name`, `username`, `avatar_url`; public lookup through
   `GET /api/profiles/by-username?username=...` and `GET /api/profiles/by-id?userId=...`.
+  The username lookup trims the value and ignores its case: it matches the value as
+  given (usernames saved before Better Auth may be mixed case) or its lowercase
+  form, preferring an exact match, with an `IN` list that stays on
+  `idx_users_username`. `/profile/JohnDoe` then replaces the URL with the stored
+  `/profile/johndoe`, and Account settings previews the lowercase URL.
   Better Auth does not validate `name` or `image`, so `databaseHooks.user` checks
   them on every user write (`functions/api/utils/user-profile-validation.ts`): the
   name is trimmed and must be 1-100 characters, and the avatar must be an upload

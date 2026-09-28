@@ -29,4 +29,21 @@ describe('ProfileSection', () => {
 
     expect(html).toMatch(new RegExp(`<input[^>]*id="fullName"[^>]*maxLength="${USER_NAME_MAX_LENGTH}"`));
   });
+
+  it('previews the lowercase profile URL the saved username will have', () => {
+    const html = renderToStaticMarkup(
+      <StaticRouter location="/dashboard/settings">
+        <ProfileSection
+          profileData={{ email: 'john@test.com', fullName: 'John', username: 'JohnDoe', avatar_url: '' }}
+          loading={false}
+          onProfileDataChange={vi.fn()}
+          onProfileUpdate={vi.fn()}
+          onAvatarUpdate={vi.fn()}
+        />
+      </StaticRouter>,
+    );
+
+    expect(html).toContain('href="/profile/johndoe"');
+    expect(html).not.toContain('/profile/JohnDoe');
+  });
 });

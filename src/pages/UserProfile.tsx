@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowUpRight,
   CalendarDays,
@@ -27,6 +27,7 @@ import {
 import {
   buildCanonicalPublicTemplatePath,
   buildPublicTemplatesPath,
+  getCanonicalProfilePath,
 } from '@/lib/routes';
 import { normalizeSections } from '@/lib/utils/checklistSections';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -225,6 +226,7 @@ const formatWebsiteLabel = (website: string) =>
 
 const UserProfile = () => {
   const { username } = useParams<{ username: string }>();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileSurfaceRecord | null>(null);
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -232,6 +234,7 @@ const UserProfile = () => {
 
   useEffect(() => {
     let isCancelled = false;
+    let isRedirecting = false;
 
     const fetchProfile = async () => {
       if (!username) {
@@ -249,6 +252,15 @@ const UserProfile = () => {
         )) as UserProfileRecord;
 
         if (isCancelled) return;
+
+        // /profile/JohnDoe found @johndoe: move to the one canonical URL, which
+        // loads again from there.
+        const canonicalPath = getCanonicalProfilePath(username, profileData.username);
+        if (canonicalPath) {
+          isRedirecting = true;
+          navigate(canonicalPath, { replace: true });
+          return;
+        }
 
         const decoratedProfile = profileData;
         let resolvedTemplates: ChecklistTemplate[] = [];
@@ -299,7 +311,7 @@ const UserProfile = () => {
         setTemplates([]);
         setError('User not found');
       } finally {
-        if (!isCancelled) {
+        if (!isCancelled && !isRedirecting) {
           setLoading(false);
         }
       }
@@ -310,7 +322,7 @@ const UserProfile = () => {
     return () => {
       isCancelled = true;
     };
-  }, [username]);
+  }, [username, navigate]);
 
   const stats = useMemo(() => calculateStats(templates), [templates]);
 

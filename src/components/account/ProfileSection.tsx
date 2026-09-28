@@ -107,15 +107,16 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             Public profile URL:{' '}
+            {/* Usernames are saved lowercase, so preview the URL that will exist. */}
             {profileData.username ? (
               <Link
-                to={buildPublicProfilePath(profileData.username)}
+                to={buildPublicProfilePath(profileData.username.toLowerCase())}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-primary hover:underline"
               >
                 {origin}
-                {buildPublicProfilePath(profileData.username)}
+                {buildPublicProfilePath(profileData.username.toLowerCase())}
                 <ExternalLink className="h-3 w-3" />
               </Link>
             ) : (
