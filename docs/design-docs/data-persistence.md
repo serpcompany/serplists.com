@@ -90,6 +90,7 @@ Main server handlers:
 - `functions/api/handlers/stripe.ts`
 - `functions/api/handlers/templates.ts`
 - `functions/api/handlers/checklists.ts`
+- `functions/api/handlers/checklists-shared.ts` (the `/share/:token` guest route)
 - `functions/api/handlers/teams.ts`
 - `functions/api/handlers/admin.ts`
 - `functions/api/handlers/uploads.ts`
@@ -127,7 +128,9 @@ round-trip, and structured import-result contracts.
 Sharing is run-scoped. Each share action mints a fresh token for the current
 run and deactivates any previously active shared run for the same user/template
 so older guest links do not remain active or count toward active-run limits.
-The public guest URL is `/share/:token`. When sharing fails, distinguish an
+The public guest URL is `/share/:token`. Guest saves never replace the run's
+structure: the server copies only completion and notes from the payload onto the
+stored sections, matched by the ids the share page uses. When sharing fails, distinguish an
 entitlement `limit_reached` response from schema/migration failures before
 changing sharing logic.
 

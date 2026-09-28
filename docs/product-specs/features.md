@@ -42,7 +42,7 @@ Canonical private routes:
 - Runs that predate stable identities are conservatively marked stale during migration. Their legacy IDs are backfilled deterministically, and their completion/notes remain intact until explicit reconciliation.
 - Run and template saves use optimistic revision/version markers. A stale editor receives `409 edit_conflict` instead of overwriting newer work.
 - Run-level sharing creates public `/share/:token` links.
-- Guests can open shared runs without logging in and update checklist completion state.
+- Guests can open shared runs without logging in and update checklist completion state: task and sub-item completion, task notes (up to 5,000 characters), and the run's status. The server merges only those fields onto the stored run by task id; titles, descriptions, contents, and the task list itself always come from the stored run, and progress and completion time are computed on the server.
 - Shared runs do not expose owner-only title editing or destructive actions.
 - Current run gating is plan-limit based through active-run limits.
 

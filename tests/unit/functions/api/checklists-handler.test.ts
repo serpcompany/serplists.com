@@ -838,7 +838,7 @@ describe('Checklists Handlers', () => {
     expect(data.current_template_version).toBe(2);
   });
 
-  it('should update shared checklist runs', async () => {
+  it('should update completion on shared checklist runs without changing their tasks', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue(null);
     dbMocks.selectChain.limit.mockResolvedValueOnce([
       {
@@ -860,7 +860,7 @@ describe('Checklists Handlers', () => {
     const request = new Request('http://localhost/api/checklists/shared/shared-run', {
       method: 'PUT',
       body: JSON.stringify({
-        sections: [{ id: '1', title: 'Checklist', items: [] }],
+        sections: [{ id: '1', title: 'Renamed', items: [{ id: 'item-1', title: 'Renamed item', isCompleted: true }] }],
         status: 'completed',
         expected_revision: 3,
       }),
@@ -872,7 +872,11 @@ describe('Checklists Handlers', () => {
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
     expect(data.revision).toBe(4);
-    expect(dbMocks.updateChain.set).toHaveBeenCalled();
+    const update = dbMocks.updateChain.set.mock.calls[0][0];
+    expect(JSON.parse(update.items)).toEqual([
+      { id: '1', title: 'Checklist', items: [{ id: 'item-1', title: 'Item 1', isCompleted: true }] },
+    ]);
+    expect(update).toEqual(expect.objectContaining({ status: 'completed', progress: 100 }));
     const batchStatements = dbMocks.db.batch.mock.calls[0][0];
     expect(batchStatements).toHaveLength(2);
     expect(batchStatements[0]).toBe(dbMocks.updateChain);
@@ -894,6 +898,7 @@ describe('Checklists Handlers', () => {
       method: 'PUT',
       body: JSON.stringify({
         sections: [{ id: '1', title: 'Checklist', items: [] }],
+        expected_revision: 1,
       }),
     });
 

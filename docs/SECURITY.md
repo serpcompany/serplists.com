@@ -16,6 +16,10 @@
   Personal templates and listing, starting, reading, and updating Personal runs.
   Keys are stored hashed. The MCP routes are off on remote hosts unless
   `PERSONAL_RUN_MCP_ENABLED=true`.
+- **Share links** (`/share/:token`) need no login, so the token is the only
+  credential. `PUT /api/checklists/shared/:token` requires `expected_revision` and
+  applies only completion, task notes, and status onto the stored run
+  (`functions/api/utils/shared-run-merge.ts`); every other field is ignored.
 - **Uploads** are written under the uploader's key prefix, and deletes are
   restricted to that prefix.
 - **Invites** store only a token hash, never the raw token.
