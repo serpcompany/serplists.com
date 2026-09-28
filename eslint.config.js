@@ -14,7 +14,7 @@ const LEGACY_MAX_LINES = {
   "functions/api/handlers/templates.ts": 1650,
   "functions/api/handlers/checklists.ts": 1200,
   "functions/api/handlers/teams.ts": 1100,
-  "src/pages/TemplateDetail.tsx": 950,
+  "src/pages/TemplateDetail.tsx": 900,
   "functions/api/handlers/agentMcp.ts": 900,
   "src/lib/templates/templateMarkdown.ts": 800,
   "src/components/account/TeamSettingsSection.tsx": 800,

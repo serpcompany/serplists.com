@@ -73,15 +73,12 @@ import {
   exportTemplateFile,
   getTemplateExportLabel,
 } from '@/features/template-detail/templateExport';
+import { buildTemplateHistoryTimeline } from '@/features/template-detail/templateHistoryTimeline';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import {
   handleUpgradeRequired,
   navigateToLoginWithReturnPath,
 } from '@/lib/access-flow';
-import type {
-  TemplateHistoryEvent,
-  TemplateHistoryVersion,
-} from '@/lib/api';
 import {
   buildConsoleRunPath,
   buildConsoleTemplateEditPath,
@@ -108,31 +105,6 @@ const formatDateTime = (value?: string): string => {
     timeStyle: 'short',
   });
 };
-
-const historyActionLabels: Record<string, string> = {
-  'template.created': 'Created template',
-  'template.updated': 'Updated template',
-  'template.imported': 'Imported template',
-  'template.cloned': 'Copied template',
-  'template.deleted': 'Archived template',
-  'template.versioned': 'Saved template version',
-};
-
-const formatHistoryAction = (
-  action: string,
-  version?: number,
-): string => {
-  const label = historyActionLabels[action] ?? action;
-  return typeof version === 'number' ? `${label} v${version}` : label;
-};
-
-const getHistoryActorName = (
-  actor?: TemplateHistoryEvent['actor'] | TemplateHistoryVersion['actor'],
-): string => actor?.name || actor?.username || actor?.email || 'Unknown user';
-
-const isHistoryVersion = (
-  entry: TemplateHistoryEvent | TemplateHistoryVersion,
-): entry is TemplateHistoryVersion => 'version' in entry;
 
 const TemplateDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -199,11 +171,8 @@ const TemplateDetail = () => {
   ) ?? 0;
   const createdDate = formatDate(displayTemplate?.createdAt);
   const updatedDate = formatDate(displayTemplate?.updatedAt ?? displayTemplate?.createdAt);
-  const historyEntries = (
-    history?.data?.versions.length
-      ? history.data.versions
-      : history?.data?.events ?? []
-  ).slice(0, 8);
+  // Versions and the events no version records (archive, restore, Share), newest first.
+  const historyEntries = buildTemplateHistoryTimeline(history?.data);
 
   const handleUpgrade = () =>
     handleUpgradeRequired({
@@ -799,30 +768,24 @@ const TemplateDetail = () => {
                   </p>
                 ) : historyEntries.length > 0 ? (
                   <div className="divide-y divide-border">
-                    {historyEntries.map((entry) => {
-                      const version = isHistoryVersion(entry)
-                        ? entry.version
-                        : undefined;
-
-                      return (
-                        <div
-                          key={`${isHistoryVersion(entry) ? 'version' : 'event'}-${entry.id}`}
-                          className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-foreground">
-                              {formatHistoryAction(entry.action, version)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {getHistoryActorName(entry.actor)}
-                            </p>
-                          </div>
-                          <time className="text-xs text-muted-foreground">
-                            {formatDateTime(entry.createdAt)}
-                          </time>
+                    {historyEntries.map((entry) => (
+                      <div
+                        key={entry.key}
+                        className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {entry.label}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {entry.actorName}
+                          </p>
                         </div>
-                      );
-                    })}
+                        <time className="text-xs text-muted-foreground">
+                          {formatDateTime(entry.createdAt)}
+                        </time>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">

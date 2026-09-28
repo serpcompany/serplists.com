@@ -24,6 +24,7 @@ import {
   countTemplateItems,
   mapApiTemplateToChecklistTemplate,
 } from './templateDetailMappers';
+import { getTemplateHistoryQueryKey } from './templateHistoryTimeline';
 import { getTemplateDetailPermissions } from './templatePermissions';
 import { setTemplateVisibility } from './templateVisibility';
 
@@ -337,12 +338,7 @@ export const useTemplateDetailModel = (
     options.isAuthenticated && permissions.canViewHistory;
 
   const history = useQuery({
-    queryKey: [
-      'template-history',
-      template?.id ?? 'none',
-      options.userId ?? 'guest',
-      options.teamId ?? 'personal',
-    ],
+    queryKey: getTemplateHistoryQueryKey(template?.id, options.userId, options.teamId),
     queryFn: () => api.getTemplateHistory(template?.id ?? ''),
     enabled: canLoadTemplateHistory,
     retry: false,
@@ -400,7 +396,8 @@ export const useTemplateDetailModel = (
       return;
     }
 
-    // ['templates'] also covers the public catalog, which Share changes.
+    // ['templates'] also covers the public catalog, which Share changes, and the
+    // Changelog, which shows the visibility change.
     await queryClient.invalidateQueries({ queryKey: ['templates'] });
   };
 

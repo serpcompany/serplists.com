@@ -35,7 +35,7 @@ Canonical private routes:
 - Public templates can be shared at `/profile/{username}/{templateSlug}`. Share on the template detail page makes a private template public only after that URL resolves; an owner without a username is asked to set one and the template stays private. The visibility switch changes only visibility; the badge and switch always show what the server holds after either one, and neither can start while the other is saving.
 - Other Users can copy public templates into Personal or an authorized Organization when that ownership context's entitlement allows it. Copying into Personal is a Pro feature, so the browser checks the Personal plan first. In an Organization the API decides: a Free Organization may copy within its Template limit, the template detail page labels the button "Copy to Organization", and roles that cannot add Templates to the Organization do not see it.
 - The public template page uses the active ownership context for its plan check, Save, and Start Run. Save opens the new copy. When an Organization's plan blocks the action, the page explains that the Organization needs a paid plan instead of starting a Personal checkout.
-- Template history is stored in `template_versions`; related actor/action history is stored in `audit_events`.
+- Template history is stored in `template_versions`; related actor/action history is stored in `audit_events`. The template detail Changelog shows both as one list, newest first (the latest 8 entries): every version, plus the changes that create no version, such as archive, restore, and making a template public or private. A version and the audit event recorded with it appear once. The Changelog refreshes after any template change.
 
 ## Runs And Sharing
 

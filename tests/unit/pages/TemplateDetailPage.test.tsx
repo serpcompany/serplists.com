@@ -274,6 +274,63 @@ describe('TemplateDetail load failures', () => {
   });
 });
 
+describe('TemplateDetail Changelog', () => {
+  it('shows a restore and a Share next to the versions, without repeating a version', () => {
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      history: {
+        data: {
+          events: [
+            {
+              action: 'template.restored',
+              actor: { name: 'Bob Editor' },
+              createdAt: '2026-07-05T12:00:00.000Z',
+              diff: { deleted_at: null, is_public: false },
+              id: 'event-3',
+            },
+            {
+              action: 'template.updated',
+              actor: { name: 'John Example' },
+              createdAt: '2026-07-04T12:00:00.000Z',
+              diff: { is_public: true },
+              id: 'event-2',
+            },
+            {
+              action: 'template.created',
+              actor: { name: 'John Example' },
+              createdAt: '2026-07-03T12:00:00.000Z',
+              id: 'event-1',
+            },
+          ],
+          subject: { id: 'user-1', type: 'user' },
+          templateId: 'tpl-1',
+          versions: [
+            {
+              action: 'template.created',
+              actor: { name: 'John Example' },
+              createdAt: '2026-07-03T12:00:00.000Z',
+              id: 'version-1',
+              version: 1,
+            },
+          ],
+        },
+        isError: false,
+        isLoading: false,
+      },
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(html).toContain('Restored template');
+    expect(html).toContain('Bob Editor');
+    expect(html).toContain('Made template public');
+    expect(html).toContain('Created template v1');
+    expect(html.match(/Created template/g)).toHaveLength(1);
+    expect(html.indexOf('Restored template')).toBeLessThan(html.indexOf('Made template public'));
+    expect(html.indexOf('Made template public')).toBeLessThan(html.indexOf('Created template v1'));
+  });
+});
+
 describe('TemplateDetail stats', () => {
   // A row shaped like GET /api/templates/:id, mapped the way the model maps it.
   const apiTemplate = () =>
