@@ -23,19 +23,14 @@ export const uploadFile = async (
 ): Promise<UploadResult> => {
   try {
     let fileToUpload = file;
-    
-    // Optimize images before upload
-    if (isImageFile(file)) {
+
+    // Only Image blocks are optimized. A file attached to a File block keeps its bytes.
+    if (bucket === 'template-images' && isImageFile(file)) {
       try {
         fileToUpload = await optimizeImage(file, {
           maxWidth: 1920,
           maxHeight: 1080,
           quality: 0.8
-        });
-        console.log('Image optimized:', { 
-          original: file.size, 
-          optimized: fileToUpload.size, 
-          savings: Math.round((1 - fileToUpload.size / file.size) * 100) + '%' 
         });
       } catch (optimizationError) {
         console.warn('Image optimization failed, uploading original:', optimizationError);
@@ -51,8 +46,8 @@ export const uploadFile = async (
     return {
       success: true,
       url: result.url,
-      fileName: result.fileName || file.name,
-      fileSize: result.fileSize || file.size,
+      fileName: result.fileName || fileToUpload.name,
+      fileSize: result.fileSize || fileToUpload.size,
     };
   } catch (error) {
     console.error('Upload error:', error);

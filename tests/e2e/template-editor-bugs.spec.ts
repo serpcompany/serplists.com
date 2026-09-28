@@ -694,6 +694,52 @@ test.describe("template editor regressions", () => {
     }
   });
 
+  test("uploads a transparent PNG and an animated GIF in their own formats", async ({ page }) => {
+    const transparentPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYGD4DwABBAEAHnOcQAAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    const animatedGif = Buffer.from(
+      "R0lGODlhAQABAPAAAP8AAAAA/yH/C05FVFNDQVBFMi4wAwEAAAAh+QQACgAAACwAAAAAAQABAAACAkQBACH5BAAKAAAALAAAAAABAAEAgAAA/wAAAAICRAEAOw==",
+      "base64",
+    );
+    const uploads: Array<{ body: Buffer; name: string }> = [];
+
+    // Capture what the browser sends; storage itself is stubbed.
+    await page.route("**/api/uploads", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.fallback();
+        return;
+      }
+      const body = route.request().postDataBuffer() ?? Buffer.alloc(0);
+      const name = /filename="([^"]+)"/.exec(body.toString("latin1"))?.[1] ?? "";
+      uploads.push({ body, name });
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ url: `/api/uploads/file?key=template-images/e2e/${name}`, fileName: name }),
+      });
+    });
+
+    await loginAsSeedUser(page);
+    await page.goto("/dashboard/templates/new");
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+
+    for (const upload of [
+      { name: "logo.png", mimeType: "image/png", buffer: transparentPng },
+      { name: "steps.gif", mimeType: "image/gif", buffer: animatedGif },
+    ]) {
+      await page.getByRole("button", { name: "Add Block" }).last().click();
+      await page.getByRole("button", { name: "Image", exact: true }).last().click();
+      await page.locator('input[type="file"][accept="image/*"]').last().setInputFiles(upload);
+      await expect(page.getByText(upload.name, { exact: true })).toBeVisible();
+    }
+
+    expect(uploads.map((upload) => upload.name)).toEqual(["logo.png", "steps.gif"]);
+    expect(uploads[0]?.body.toString("latin1")).toContain("Content-Type: image/png");
+    expect(uploads[1]?.body.toString("latin1")).toContain("Content-Type: image/gif");
+    expect(uploads[1]?.body.includes(animatedGif)).toBe(true);
+  });
+
   test("adds tags and categories before save and persists them", async ({ page }) => {
     const templateTitle = `QA Tags ${Date.now()}`;
     const tagName = `tag-${Date.now()}`;

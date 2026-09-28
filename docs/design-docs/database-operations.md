@@ -156,6 +156,13 @@ writes keys under per-user prefixes:
 - `template-videos/<userId>/<uuid>.<ext>`
 - `template-files/<userId>/<uuid>.<ext>`
 
+Before an Image block upload, the browser shrinks the image
+(`src/lib/imageOptimization.ts`) without changing what it shows: GIFs are sent
+untouched (a canvas keeps one frame), PNG and WebP stay PNG and WebP (JPEG has no
+transparency), other decodable types become PNG, a small image within 1920x1080 is
+sent as it is, and the original is kept when re-encoding does not make it smaller.
+Files attached to File blocks are never re-encoded.
+
 Uploads are not reference-counted. A template upload's URL is copied into the
 saved template, its `template_versions` snapshots, every run started from it, and
 duplicates and clones, so deleting the object breaks all of them.
