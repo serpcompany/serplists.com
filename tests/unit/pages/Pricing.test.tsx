@@ -53,6 +53,7 @@ describe('Pricing', () => {
     const html = renderPricing({ plan: 'pro', billingEnabled: true, subscriptionStatus: 'active' });
 
     expect(html).toContain('Manage Pro');
+    expect(html).toContain('href="/dashboard/settings"');
     expect(html).not.toContain('Upgrade — $9/month');
   });
 

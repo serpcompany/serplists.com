@@ -120,6 +120,12 @@ Authenticated:
   Customer Portal on `subscription_needs_attention`. An active manual override
   returns `409 plan_managed_by_support` before any Stripe call.
 - `POST /api/billing/portal` → returns `{ url }` to redirect user to Stripe Customer Portal
+- Stripe returns the user to `/dashboard/settings?billing=success` or
+  `?billing=cancel` after Checkout, and to `/dashboard/settings` from the Portal.
+  Billing reads `billing=success` and polls Personal status (whichever context is
+  selected) until the plan is Pro, then removes the parameter. Sessions created
+  before this return URL send buyers to `/account?billing=...`, which redirects
+  with the query intact.
 - `GET /api/billing/status` → returns `{ plan, limits, billingEnabled }` (`plan` is `free`, `pro`, or the legacy `team` for a paid Organization).
   In Personal context it also returns `subscriptionStatus` (the most urgent open
   subscription status, failed payments first, or `null`), `canManageBilling`

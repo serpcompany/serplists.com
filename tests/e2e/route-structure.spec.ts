@@ -120,6 +120,37 @@ test.describe('route structure', () => {
     await expect(page).toHaveURL(/\/dashboard\/settings$/);
   });
 
+  test('legacy redirects keep the query string and hash', async ({ page }) => {
+    await mockAuthenticatedRouteApi(page);
+
+    await page.goto('/dashboard/profile?foo=1#top');
+    await expect(page).toHaveURL(/\/dashboard\/settings\?foo=1#top$/);
+
+    await page.goto('/account?billing=cancel');
+    await expect(page.getByText('Upgrade canceled.')).toBeVisible();
+    await expect(page).toHaveURL(/\/dashboard\/settings$/);
+  });
+
+  test('returning from Checkout through /account confirms Pro once it activates', async ({ page }) => {
+    await mockAuthenticatedRouteApi(page);
+    let statusReads = 0;
+    // Registered last, so it answers before the generic mock: Free first, then Pro.
+    await page.route('**/api/billing/status**', async (route) => {
+      statusReads += 1;
+      await fulfillJson(route, {
+        billingEnabled: true,
+        plan: statusReads >= 2 ? 'pro' : 'free',
+        subscriptionStatus: statusReads >= 2 ? 'active' : null,
+        canManageBilling: true,
+        managedBySupport: false,
+      });
+    });
+
+    await page.goto('/account?billing=success');
+    await expect(page.getByText('Welcome to Pro!')).toBeVisible({ timeout: 20_000 });
+    await expect(page).toHaveURL(/\/dashboard\/settings$/);
+  });
+
   test('canonical dashboard resolves to the templates dashboard surface', async ({
     page,
   }) => {

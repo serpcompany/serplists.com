@@ -12,6 +12,11 @@ type StripeCustomer = { id: string };
 type StripeCheckoutSession = { id: string; url: string | null };
 type StripePortalSession = { id: string; url: string };
 
+// The SPA's settings page (buildConsoleSettingsPath() in src/lib/routes.ts, which the
+// API cannot import). Stripe returns here directly: Billing reads ?billing= on it, and
+// a redirecting legacy path such as /account could drop that query.
+const SETTINGS_PATH = "/dashboard/settings";
+
 function getAppOrigin(request: Request, env: Env): string {
   if (env.FRONTEND_URL) {
     try {
@@ -138,8 +143,8 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
       }
     }
 
-    const successUrl = `${origin}/account?billing=success`;
-    const cancelUrl = `${origin}/account?billing=cancel`;
+    const successUrl = `${origin}${SETTINGS_PATH}?billing=success`;
+    const cancelUrl = `${origin}${SETTINGS_PATH}?billing=cancel`;
 
     const session = await stripePostForm<StripeCheckoutSession>(
       secretKey,
@@ -188,7 +193,7 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
       return jsonError("No Stripe customer found for user", 400);
     }
 
-    const returnUrl = `${origin}/account`;
+    const returnUrl = `${origin}${SETTINGS_PATH}`;
     const portal = await stripePostForm<StripePortalSession>(secretKey, "/v1/billing_portal/sessions", {
       customer: existingCustomer.stripe_customer_id,
       return_url: returnUrl,

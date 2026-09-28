@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
@@ -12,6 +12,7 @@ import {
   PLAN_MANAGED_BY_SUPPORT_MESSAGE,
   PRO_MONTHLY_PRICE_LABEL,
 } from "@/lib/billing";
+import { fetchPersonalBillingStatus, waitForPersonalPro } from "@/lib/billing-return";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -29,7 +30,8 @@ export function BillingSection() {
     enabled: !!user,
     retry: false,
   });
-  const { refetch: refetchBilling } = billing;
+  const queryClient = useQueryClient();
+  const userId = user?.id;
 
   const plan = billing.data?.plan;
   const planLabel = getBillingPlanLabel(plan);
@@ -41,57 +43,38 @@ export function BillingSection() {
     : "Personal subscriptions are managed from Personal.";
 
   useEffect(() => {
-    if (billingReturn === "cancel") {
-      toast.message("Upgrade canceled.");
+    const clearBillingReturn = () => {
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.delete("billing");
         return next;
       }, { replace: true });
+    };
+
+    if (billingReturn === "cancel") {
+      toast.message("Upgrade canceled.");
+      clearBillingReturn();
       return;
     }
 
-    if (billingReturn !== "success") return;
+    if (billingReturn !== "success" || !userId) return;
 
-    let stopped = false;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    let attempts = 0;
+    let cancelled = false;
     toast.message("Payment received. Activating Pro…");
+    // Checkout is Personal-only, so poll Personal status even if an Organization is selected.
+    void waitForPersonalPro(() => fetchPersonalBillingStatus(queryClient, userId), {
+      isCancelled: () => cancelled,
+    }).then((result) => {
+      if (result === "cancelled") return;
+      if (result === "pro") toast.success("Welcome to Pro!");
+      else toast.info("Your payment is processing. Pro will appear here shortly.");
+      clearBillingReturn();
+    });
 
-    const refreshPlan = async () => {
-      attempts += 1;
-      const result = await refetchBilling();
-      if (stopped) return;
-
-      if (result.data?.plan === "pro") {
-        toast.success("Welcome to Pro!");
-        setSearchParams((current) => {
-          const next = new URLSearchParams(current);
-          next.delete("billing");
-          return next;
-        }, { replace: true });
-        return;
-      }
-
-      if (attempts < 10) {
-        timeoutId = setTimeout(refreshPlan, 1_500);
-        return;
-      }
-
-      toast.info("Your payment is processing. Pro will appear here shortly.");
-      setSearchParams((current) => {
-        const next = new URLSearchParams(current);
-        next.delete("billing");
-        return next;
-      }, { replace: true });
-    };
-
-    void refreshPlan();
     return () => {
-      stopped = true;
-      if (timeoutId) clearTimeout(timeoutId);
+      cancelled = true;
     };
-  }, [billingReturn, refetchBilling, setSearchParams]);
+  }, [billingReturn, queryClient, setSearchParams, userId]);
 
   const handleUpgrade = async () => {
     if (isTeamWorkspace) {

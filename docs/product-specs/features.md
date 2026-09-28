@@ -8,7 +8,8 @@
 - Protected routes preserve the originally requested destination and return users there after sign-in.
 - Password strength rules are enforced for registration and password changes.
 - `/dashboard/settings` is the canonical settings/account page.
-- `/account` and `/dashboard/profile` redirect to `/dashboard/settings`.
+- `/account` and `/dashboard/profile` redirect to `/dashboard/settings`, keeping the
+  query string and hash (legacy redirects use `LegacyRedirect`).
 - Public profiles remain available at `/profile/:username`.
 
 ## Dashboard Navigation

@@ -15,6 +15,7 @@ import {
   PLAN_MANAGED_BY_SUPPORT_MESSAGE,
   PRO_MONTHLY_PRICE_LABEL,
 } from '@/lib/billing';
+import { buildConsoleSettingsPath } from '@/lib/routes';
 
 const Pricing = () => {
   const { user } = useAuth();
@@ -113,7 +114,7 @@ const Pricing = () => {
                   <p className="text-sm text-muted-foreground">{PLAN_MANAGED_BY_SUPPORT_MESSAGE}</p>
                 ) : personalAction === 'manage' ? (
                   <Button asChild>
-                    <Link to="/account">{billing.data?.plan === 'pro' ? 'Manage Pro' : 'Manage subscription'}</Link>
+                    <Link to={buildConsoleSettingsPath()}>{billing.data?.plan === 'pro' ? 'Manage Pro' : 'Manage subscription'}</Link>
                   </Button>
                 ) : (
                   <Button
