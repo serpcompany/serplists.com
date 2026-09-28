@@ -17,6 +17,7 @@ const workspaceMocks = vi.hoisted(() => ({
   },
   canManageTeam: true,
   createTeam: vi.fn(),
+  patchTeam: vi.fn(),
   rememberTeam: vi.fn(),
   refreshTeams: vi.fn(),
   selectWorkspace: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
     canManageTeam: workspaceMocks.canManageTeam,
     createTeam: workspaceMocks.createTeam,
     isTeamWorkspace: true,
+    patchTeam: workspaceMocks.patchTeam,
     rememberTeam: workspaceMocks.rememberTeam,
     refreshTeams: workspaceMocks.refreshTeams,
     selectWorkspace: workspaceMocks.selectWorkspace,
@@ -63,6 +65,7 @@ vi.mock('sonner', () => ({
   toast: {
     error: vi.fn(),
     success: vi.fn(),
+    warning: vi.fn(),
   },
 }));
 

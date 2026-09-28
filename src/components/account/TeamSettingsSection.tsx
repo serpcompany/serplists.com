@@ -18,6 +18,7 @@ import { Separator } from '@/components/ui/separator';
 import { api, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/lib/api';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
+import { runTeamWrite } from '@/features/teams/runTeamWrite';
 import { formatTeamActivityAction } from '@/components/account/teamActivityLabels';
 import { TeamInvitesPanel } from '@/components/account/TeamInvitesPanel';
 import { assignableRoles, formatInviteExpiration, formatRole } from '@/components/account/teamSettingsFormat';
@@ -48,6 +49,9 @@ const formatActivityTime = (value: string): string => {
   });
 };
 
+const errorMessage = (error: unknown, fallback: string): string =>
+  error instanceof Error && error.message ? error.message : fallback;
+
 const getActivityActorName = (actor: {
   email?: string | null;
   name?: string | null;
@@ -62,6 +66,7 @@ export function TeamSettingsSection() {
     canManageTeam,
     createTeam,
     isTeamWorkspace,
+    patchTeam,
     refreshTeams,
     rememberTeam,
     selectWorkspace,
@@ -107,6 +112,17 @@ export function TeamSettingsSection() {
   const reload = async (query: { refetch: () => Promise<unknown> }, queryKey: unknown[]) => {
     await queryClient.cancelQueries({ queryKey });
     await query.refetch();
+  };
+  const memberChangeRefreshes = (teamId: string) => [
+    () => reload(membersQuery, ['team-members', teamId]),
+    refreshTeams,
+    () => reload(activityQuery, ['team-activity', teamId]),
+  ];
+  // The change is saved; only the follow-up refresh failed. Mark the
+  // Organization list stale so it refetches on the next focus or visit.
+  const warnRefreshFailed = () => {
+    void queryClient.invalidateQueries({ queryKey: ['teams'], refetchType: 'none' });
+    toast.warning('Saved, but refreshing failed. Reload to see the latest state.');
   };
   const activeMemberId =
     isTeamWorkspace && 'memberId' in activeWorkspace
@@ -165,17 +181,21 @@ export function TeamSettingsSection() {
       return;
     }
 
+    const teamId = activeTeamId;
     setIsUpdatingTeam(true);
     try {
-      await api.updateTeam(activeTeamId, {
-        name,
-        slug: slug || undefined,
+      await runTeamWrite({
+        write: () => api.updateTeam(teamId, { name, slug: slug || undefined }),
+        onSaved: (result) => {
+          // The response has the saved name and slug (the server may adjust the slug).
+          const team = result?.team;
+          if (team) patchTeam(teamId, { name: team.name, slug: team.slug ?? null });
+          toast.success('Organization updated');
+        },
+        refreshes: [refreshTeams, () => reload(activityQuery, ['team-activity', teamId])],
+        onRefreshFailed: warnRefreshFailed,
+        onWriteFailed: (error) => toast.error(errorMessage(error, 'Failed to update Organization')),
       });
-      await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
-      toast.success('Organization updated');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update Organization');
     } finally {
       setIsUpdatingTeam(false);
     }
@@ -210,15 +230,16 @@ export function TeamSettingsSection() {
       return;
     }
 
+    const teamId = activeTeamId;
     setUpdatingMemberId(member.id);
     try {
-      await api.updateTeamMember(activeTeamId, member.id, updates);
-      await reload(membersQuery, ['team-members', activeTeamId]);
-      await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
-      toast.success('Member updated');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update member');
+      await runTeamWrite({
+        write: () => api.updateTeamMember(teamId, member.id, updates),
+        onSaved: () => toast.success('Member updated'),
+        refreshes: memberChangeRefreshes(teamId),
+        onRefreshFailed: warnRefreshFailed,
+        onWriteFailed: (error) => toast.error(errorMessage(error, 'Failed to update member')),
+      });
     } finally {
       setUpdatingMemberId(null);
     }
@@ -237,15 +258,21 @@ export function TeamSettingsSection() {
       return;
     }
 
+    const teamId = activeTeamId;
     setTransferringOwnerMemberId(member.id);
     try {
-      await api.transferTeamOwnership(activeTeamId, member.id);
-      await reload(membersQuery, ['team-members', activeTeamId]);
-      await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
-      toast.success('Organization ownership transferred');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to transfer ownership');
+      await runTeamWrite({
+        write: () => api.transferTeamOwnership(teamId, member.id),
+        onSaved: () => {
+          // The previous owner is now an admin. Apply it now so the owner-only
+          // controls go away even if the Organization list cannot be refetched.
+          patchTeam(teamId, { role: 'admin' });
+          toast.success('Organization ownership transferred');
+        },
+        refreshes: memberChangeRefreshes(teamId),
+        onRefreshFailed: warnRefreshFailed,
+        onWriteFailed: (error) => toast.error(errorMessage(error, 'Failed to transfer ownership')),
+      });
     } finally {
       setTransferringOwnerMemberId(null);
     }

@@ -94,6 +94,7 @@ The API response already uses a `delivery` object so email can be added later wi
 - Context state is managed by the legacy-named `src/contexts/WorkspaceContext.tsx`.
 - The remembered context is persisted under the legacy local-storage key `serplists.activeWorkspaceId`.
 - Templates and Runs invalidate React Query caches when the context changes.
+- Organization, member, and ownership changes on `/dashboard/settings` report success once the write succeeds (`src/features/teams/runTeamWrite.ts`). A refresh that fails afterwards shows "Saved, but refreshing failed" rather than an error; the confirmed change (an Organization's new name, or the previous owner becoming `admin`) is applied to the cached Organization list so owner-only controls do not linger.
 - `/dashboard/settings` currently combines Account, Organization, member, invite, and billing controls; issue #206 tracks their explicit separation.
 - `/account` and `/dashboard/profile` are legacy redirects to `/dashboard/settings`.
 
