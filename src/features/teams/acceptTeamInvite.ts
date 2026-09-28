@@ -9,7 +9,6 @@ export type AcceptTeamInviteDependencies = {
   acceptTeamInvite?: (token: string) => Promise<AcceptTeamInviteResult>;
   refreshTeams: () => Promise<TeamSummary[]>;
   rememberTeam?: (team: TeamSummary) => void;
-  selectWorkspace: (workspaceId: string) => void;
 };
 
 export function persistAcceptedWorkspace(workspaceId: string): void {
@@ -21,6 +20,12 @@ export function persistAcceptedWorkspace(workspaceId: string): void {
   safeLocalStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, workspaceId);
 }
 
+/**
+ * Accepts an invite link and adds the Organization to the context list. It does
+ * not switch the active context: the invite page offers "Switch to" as a
+ * separate choice, so new Templates and Runs never land in an Organization the
+ * user did not pick.
+ */
 export async function acceptTeamInviteForWorkspace(
   token: string,
   dependencies: AcceptTeamInviteDependencies,
@@ -30,15 +35,10 @@ export async function acceptTeamInviteForWorkspace(
 
   if (result.team) {
     dependencies.rememberTeam?.(result.team);
-    persistAcceptedWorkspace(result.teamId);
-    dependencies.selectWorkspace(result.teamId);
     void dependencies.refreshTeams().catch(() => undefined);
     return result;
   }
 
   await dependencies.refreshTeams();
-  persistAcceptedWorkspace(result.teamId);
-  dependencies.selectWorkspace(result.teamId);
-
   return result;
 }

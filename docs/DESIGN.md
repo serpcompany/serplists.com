@@ -46,6 +46,11 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
 - Every icon-only button has an `aria-label`, toggles expose `aria-pressed`, and
   inputs have a `Label`. The template grid/list toggle in `src/pages/Templates.tsx`
   is the reference.
+- A `Label` names its control through `htmlFor` and a matching `id`, including a
+  `Switch`, and helper text is linked with `aria-describedby`. Controls repeated on
+  each row of a list name the row in their accessible name ("Role for Alice
+  (alice@example.com)"), so no two share one; `src/components/account/SecuritySection.tsx`
+  and the member list in `TeamSettingsSection.tsx` are the reference.
 - Show a neutral loading state rather than a guessed value (for example, never
   render a plan label before billing status loads).
 - Check layouts at desktop and mobile widths with `pnpm run ui:snap` (`--mobile`).

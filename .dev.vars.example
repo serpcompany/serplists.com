@@ -29,6 +29,8 @@ EMAIL_FROM=SERP Lists <support@example.com>
 STRIPE_SECRET_KEY=sk_test_xxx
 STRIPE_WEBHOOK_SECRET=whsec_xxx
 STRIPE_PRO_PRICE_ID=price_xxx
+# Earlier Pro prices that still grant Pro after a price change (comma-separated)
+# STRIPE_PRO_LEGACY_PRICE_IDS=price_old
 STRIPE_PORTAL_CONFIGURATION_ID=bpc_xxx
 
 # Optional admin/ops

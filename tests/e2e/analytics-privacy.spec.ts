@@ -58,7 +58,8 @@ test.describe('analytics privacy', () => {
 
     await expect(page.getByLabel('Email')).toHaveValue('analytics-e2e@example.com');
     await expect(page).not.toHaveURL(/email=analytics/);
-    await expect(page).toHaveURL(/\/login\?verify_email=1$/);
+    // The one-shot verify_email notice parameter goes too, so a reload does not replay it.
+    await expect(page).toHaveURL(/\/login$/);
   });
 
   test('still loads the container on public pages', async ({ page }) => {

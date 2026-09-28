@@ -771,6 +771,40 @@ describe("Teams handler", () => {
     );
   });
 
+  it.each([
+    ["an invite link", "http://localhost/api/teams/invites/invite-token/accept"],
+    ["an incoming invite", "http://localhost/api/teams/invites/pending/invite-1/accept"],
+  ])("tells a different account that %s is for another email, without naming it", async (_label, url) => {
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        {
+          id: "invite-1",
+          team_id: "team-1",
+          email: "work@acme.example",
+          role: "editor",
+          invited_by_user_id: "admin-1",
+          expires_at: new Date(Date.now() + 60_000).toISOString(),
+          accepted_at: null,
+          revoked_at: null,
+        },
+      ])
+      .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
+      .mockResolvedValueOnce([{ email: "personal@example.com" }]);
+
+    const response = await handleTeams(new Request(url, { method: "POST" }), mockEnv);
+    const body = await response.text();
+
+    expect(response.status).toBe(403);
+    expect(JSON.parse(body)).toEqual(
+      expect.objectContaining({
+        error: "Invite is for a different email address",
+        code: "invite_email_mismatch",
+      }),
+    );
+    expect(body).not.toContain("work@acme.example");
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+  });
+
   it("returns a conflict when invite acceptance is lost during the write", async () => {
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([

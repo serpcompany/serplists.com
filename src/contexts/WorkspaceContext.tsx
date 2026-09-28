@@ -10,6 +10,7 @@ import React, {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { patchTeamSummary } from '@/features/teams/teamSummaries';
 import { api, type TeamRole, type TeamSummary } from '@/lib/api';
 import { safeLocalStorage } from '@/lib/browserStorage';
 import {
@@ -56,6 +57,8 @@ type WorkspaceContextValue = {
   getPermissions: (teamId?: string) => ResourcePermissions;
   isTeamWorkspace: boolean;
   isWorkspaceLoading: boolean;
+  /** Applies a confirmed change to one cached Organization without refetching. */
+  patchTeam: (teamId: string, patch: Partial<Omit<TeamSummary, 'id'>>) => void;
   refreshTeams: () => Promise<TeamSummary[]>;
   rememberTeam: (team: TeamSummary) => void;
   selectWorkspace: (workspaceId: string) => void;
@@ -240,6 +243,19 @@ export function WorkspaceProvider({
     [queryClient, user?.id],
   );
 
+  const patchTeam = useCallback(
+    (teamId: string, patch: Partial<Omit<TeamSummary, 'id'>>) => {
+      setOptimisticTeams((currentTeams) => patchTeamSummary(currentTeams, teamId, patch));
+
+      if (user?.id) {
+        queryClient.setQueryData<TeamSummary[]>(['teams', user.id], (currentTeams) =>
+          currentTeams ? patchTeamSummary(currentTeams, teamId, patch) : currentTeams,
+        );
+      }
+    },
+    [queryClient, user?.id],
+  );
+
   const refreshTeams = useCallback(async () => {
     if (!user?.id) {
       return [];
@@ -283,6 +299,7 @@ export function WorkspaceProvider({
     getPermissions,
     isTeamWorkspace,
     isWorkspaceLoading: isAuthLoading || teamsQuery.isLoading,
+    patchTeam,
     refreshTeams,
     rememberTeam,
     selectWorkspace,

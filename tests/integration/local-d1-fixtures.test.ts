@@ -186,6 +186,15 @@ describe("local Drizzle fixture commands", () => {
         const testAccounts = await db.select().from(account).where(inArray(account.userId, TEST_USER_IDS));
 
         expect(admin).toMatchObject({ email: "admin@test.com", name: "Admin (Pro)" });
+        // The API never grants Pro by email, so the Pro personas depend on these rows.
+        const personaOverrides = await db
+          .select({ userId: entitlement_overrides.user_id, plan: entitlement_overrides.plan })
+          .from(entitlement_overrides)
+          .where(inArray(entitlement_overrides.user_id, ["user-1", "user-3"]));
+        expect(personaOverrides.sort((a, b) => a.userId.localeCompare(b.userId))).toEqual([
+          { userId: "user-1", plan: "pro" },
+          { userId: "user-3", plan: "pro" },
+        ]);
         expect(admin.auth_created_at?.getTime() % 1000).toBe(0);
         expect(admin.auth_updated_at?.getTime() % 1000).toBe(0);
         expect(teamRun).toMatchObject({ progress: 33, assigned_to_user_id: "user-4" });

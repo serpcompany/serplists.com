@@ -4,6 +4,7 @@ import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { createInviteToken, sha256Hex } from "../utils/crypto";
 import { buildAuditEventValues } from "../utils/audit";
+import { insertAuditEventWhen } from "../utils/conditional-audit";
 import { getSessionUserId } from "../utils/session";
 import { generateSlug } from "../utils/slug";
 import { buildTeamInviteDelivery } from "../utils/team-invite-delivery";
@@ -13,6 +14,14 @@ import {
   normalizeTeamRole,
 } from "../utils/team-access";
 import { json, jsonError } from "../utils/response";
+import { reissueTeamInviteLink } from "./team-invite-links";
+import {
+  declineTeamInvite,
+  getCurrentUserEmail,
+  inviteEmailMismatch,
+  leaveTeam,
+  previewTeamInvite,
+} from "./team-self-service";
 
 const createTeamBodySchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -77,14 +86,6 @@ async function generateUniqueTeamSlug(env: Env, name: string, teamId: string, re
   return `${base}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-async function getCurrentUserEmail(env: Env, userId: string): Promise<string | null> {
-  const db = createDb(env);
-  const { users } = schema;
-
-  const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
-  return user?.email ?? null;
-}
-
 function parseOptionalJson(value: string | null): unknown {
   if (!value) return null;
   try {
@@ -135,27 +136,7 @@ function insertAuditEventWhenInviteAccepted(
   userId: string,
   acceptedAt: string,
 ) {
-  const { audit_events } = schema;
-
-  return db.insert(audit_events).select(sql`
-    select
-      ${auditEvent.id},
-      ${auditEvent.actor_user_id},
-      ${auditEvent.subject_type},
-      ${auditEvent.subject_id},
-      ${auditEvent.resource_type},
-      ${auditEvent.resource_id},
-      ${auditEvent.action},
-      ${auditEvent.before_json},
-      ${auditEvent.after_json},
-      ${auditEvent.diff_json},
-      ${auditEvent.metadata_json},
-      ${auditEvent.request_id},
-      ${auditEvent.ip_hash},
-      ${auditEvent.user_agent},
-      ${auditEvent.created_at}
-    where ${acceptedInviteExistsSql(inviteId, userId, acceptedAt)}
-  `);
+  return insertAuditEventWhen(db, auditEvent, acceptedInviteExistsSql(inviteId, userId, acceptedAt));
 }
 
 async function acceptTeamInviteRecord({
@@ -188,7 +169,7 @@ async function acceptTeamInviteRecord({
 
   const userEmail = await getCurrentUserEmail(env, userId);
   if (!userEmail || userEmail.toLowerCase() !== invite.email.toLowerCase()) {
-    return jsonError("Invite is for a different email address", 403);
+    return inviteEmailMismatch();
   }
 
   const [existingMembership] = await db
@@ -501,6 +482,15 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     return json(rows);
   }
 
+  if (teamsSubpath[0] === "invites" && teamsSubpath[1] && teamsSubpath[1] !== "pending") {
+    if (request.method === "GET" && teamsSubpath.length === 2) {
+      return previewTeamInvite({ db, env, token: teamsSubpath[1], userId });
+    }
+    if (request.method === "POST" && teamsSubpath.length === 3 && teamsSubpath[2] === "decline") {
+      return declineTeamInvite({ db, env, request, token: teamsSubpath[1], userId });
+    }
+  }
+
   if (request.method === "POST" && teamsSubpath[0] === "invites" && teamsSubpath[1] === "pending" && teamsSubpath[3] === "accept") {
     const inviteId = teamsSubpath[2];
     if (!inviteId) {
@@ -526,6 +516,10 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
   }
 
   const role = normalizeTeamRole(membership.role);
+
+  if (request.method === "POST" && teamsSubpath.length === 2 && teamsSubpath[1] === "leave") {
+    return leaveTeam({ db, memberId: membership.id, membership, request, teamId, userId });
+  }
 
   if (request.method === "GET" && teamsSubpath.length === 1) {
     const [team] = await db.select().from(teams).where(and(eq(teams.id, teamId), isNull(teams.archived_at))).limit(1);
@@ -816,7 +810,15 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     return json(rows);
   }
 
-  if (request.method === "POST" && teamsSubpath[1] === "invites") {
+  if (request.method === "POST" && teamsSubpath[1] === "invites" && teamsSubpath[3] === "link" && teamsSubpath.length === 4) {
+    if (!canManageTeam(role)) {
+      return jsonError("Forbidden", 403);
+    }
+
+    return reissueTeamInviteLink({ db, env, inviteId: teamsSubpath[2], request, teamId, userId });
+  }
+
+  if (request.method === "POST" && teamsSubpath[1] === "invites" && teamsSubpath.length === 2) {
     if (!canManageTeam(role)) {
       return jsonError("Forbidden", 403);
     }

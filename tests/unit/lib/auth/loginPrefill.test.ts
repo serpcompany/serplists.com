@@ -21,8 +21,6 @@ describe('readLoginPrefill', () => {
   it('prefills the email from router state after sign-up', () => {
     expect(readLoginPrefill('?verify_email=1', { email: 'alice@example.com' })).toEqual({
       email: 'alice@example.com',
-      verifyEmailNotice: true,
-      verifiedNotice: false,
       searchWithoutEmail: null,
     });
   });
@@ -30,8 +28,6 @@ describe('readLoginPrefill', () => {
   it('still reads old links that carry the email in the URL, and asks for it to be removed', () => {
     expect(readLoginPrefill('?verify_email=1&email=alice%40example.com', null)).toEqual({
       email: 'alice@example.com',
-      verifyEmailNotice: true,
-      verifiedNotice: false,
       searchWithoutEmail: '?verify_email=1',
     });
     expect(readLoginPrefill('?email=a%40b.c', { from: { pathname: '/account' } })).toMatchObject({
@@ -43,7 +39,6 @@ describe('readLoginPrefill', () => {
   it('removes email parameters in any letter case', () => {
     expect(readLoginPrefill('?Email=a%40b.c&verified=1', null)).toMatchObject({
       searchWithoutEmail: '?verified=1',
-      verifiedNotice: true,
     });
   });
 
@@ -51,10 +46,9 @@ describe('readLoginPrefill', () => {
     expect(readLoginPrefill('', { from: { pathname: '/team-invites/x' } }).email).toBeNull();
     expect(readLoginPrefill('', { email: 42 }).email).toBeNull();
     expect(readLoginPrefill('', { email: '   ' }).email).toBeNull();
+    expect(readLoginPrefill('?email=%20', null).email).toBeNull();
     expect(readLoginPrefill('', undefined)).toEqual({
       email: null,
-      verifyEmailNotice: false,
-      verifiedNotice: false,
       searchWithoutEmail: null,
     });
   });

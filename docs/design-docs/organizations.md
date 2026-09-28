@@ -50,13 +50,17 @@ Organization operations use legacy `/api/teams` route identifiers and require a 
 - `GET /api/teams/:teamId/members`: list members. Managers can see inactive rows; non-managers see active members.
 - `PUT /api/teams/:teamId/members/:memberId`: update role or status. Requires `owner` or `admin`; owners cannot be changed through this route.
 - `PUT /api/teams/:teamId/owner`: transfer the Organization's `owner` role. Requires current `owner`.
+- `POST /api/teams/:teamId/leave`: leave the Organization. Any active member except the `owner` (who gets `400 owner_must_transfer`); deletes the membership row so a manager cannot re-activate it, and records `team_member.left`. If the membership changed after it was read (ownership moved to the member, or they already left in another tab), nothing is deleted or recorded and the route returns `409 membership_changed`.
 - `GET /api/teams/:teamId/invites`: list pending invites. Requires `owner` or `admin`.
 - `POST /api/teams/:teamId/invites`: create a link invite. Requires `owner` or `admin`.
+- `POST /api/teams/:teamId/invites/:inviteId/link`: replace a pending invite's link. Requires `owner` or `admin`. Stores a new `token_hash` (the previous link stops working), restarts the 7-day expiry, optionally sets a new `role`, records `team_invite.link_reissued` (never the token or its hash), and returns the same shape as create. Returns `404` for an invite that is not pending in this Organization, including one accepted or revoked during the write.
 - `DELETE /api/teams/:teamId/invites/:inviteId`: revoke a pending invite. Requires `owner` or `admin`.
 - `GET /api/teams/:teamId/activity`: read Organization audit history. Requires `owner` or `admin`.
 - `GET /api/teams/invites/pending`: list pending invites for the current user's email.
 - `POST /api/teams/invites/pending/:inviteId/accept`: accept from the settings page.
-- `POST /api/teams/invites/:token/accept`: accept from a link.
+- `GET /api/teams/invites/:token`: read-only preview of a link invite (Organization, inviter, role, expiry, and `status` `pending` or `already_member`). Only the invited email sees it: another account gets `403 invite_email_mismatch` with no Organization details; revoked, used, or archived invites return `404`, expired ones `410`.
+- `POST /api/teams/invites/:token/accept`: accept from a link. Both accept routes return `403 invite_email_mismatch`, without the invited email, to another account.
+- `POST /api/teams/invites/:token/decline`: the invited email revokes its own pending invite and records `team_invite.declined`. If the invite was accepted or revoked after it was read, nothing is recorded and the route returns `404`.
 
 Template and Run routes accept the legacy `teamId` parameter where Organization scoping is supported:
 
@@ -77,7 +81,13 @@ Invites are link-based today:
 1. A manager creates an invite from `/dashboard/settings`.
 2. The API stores only `token_hash`, never the raw invite token.
 3. The response includes `delivery.mode = "link"`, `invitePath`, and `inviteUrl`.
+   The link is shown once. A manager who lost it uses **New link** on the pending invite, or **Create new link** when creating an invite for an email that already has one pending (`409 team_invite_exists` with `details.inviteId`); the previous link stops working.
+   The link box names the invite's email and closes when that invite is revoked, or when a refreshed **Pending invites** list no longer has it (accepted, expired, or revoked elsewhere), so a dead link cannot be copied.
 4. Invitees can accept through the legacy compatibility route `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
+5. A signed-out invitee can **Log in to accept** or **Create an account**; both return to the invite link afterward, including through email verification.
+   Opening the link while signed in to another account names that account and offers **Sign out and continue**, which waits for sign-out and then opens the login page with the invite as the return path. The preview is cached per account, so the next account never sees the previous one's answer.
+6. Opening `/team-invites/:token` never joins anyone. The page loads the read-only preview and shows the Organization, inviter, and role with **Accept invite** and **Decline**; only a click accepts. Accepting leaves the active context unchanged and offers **Switch to <Organization>**, so a link from another site cannot quietly move a User's new Templates and Runs into an Organization.
+7. Members other than the `owner` can leave from **Leave Organization** on `/dashboard/settings`, which returns them to Personal.
 
 The API response already uses a `delivery` object so email can be added later without changing the UI contract. A future email implementation should keep the link accept route and switch delivery from `link` to a queued/sent email mode.
 
@@ -87,12 +97,15 @@ The API response already uses a `delivery` object so email can be added later wi
 - The remembered context is persisted under the legacy local-storage key `serplists.activeWorkspaceId`.
 - Templates and Runs invalidate React Query caches when the context changes.
 - The UI offers only the actions a member's role allows, using the role in the Organization that owns the Template or Run, whichever context is active. The matrix lives in `src/lib/organizationPermissions.ts`, and a unit test keeps it equal to `functions/api/utils/team-access.ts`, which stays the authority. Viewers get a read-only run page and no create, run, edit, share, or delete actions; runners can start and execute runs but not create, copy, edit, or delete Templates; deleting a run needs admin. A role that is still loading, or a membership that is gone, counts as read-only. Shared run links (`/share/:token`) are governed by the link, not by roles.
+- Organization, member, and ownership changes on `/dashboard/settings` report success once the write succeeds (`src/features/teams/runTeamWrite.ts`). A refresh that fails afterwards shows "Saved, but refreshing failed" rather than an error; the confirmed change (an Organization's new name, or the previous owner becoming `admin`) is applied to the cached Organization list so owner-only controls do not linger.
 - `/dashboard/settings` currently combines Account, Organization, member, invite, and billing controls; issue #206 tracks their explicit separation.
 - `/account` and `/dashboard/profile` are legacy redirects to `/dashboard/settings`.
 
 ## Audit And History
 
 Organization changes write to `audit_events` with actor, subject, resource, action, before/after/diff JSON, request id, hashed IP, user agent, and timestamp.
+
+Every action string is listed in `src/lib/schemas/auditActions.ts`, shared by the API and the app. `buildAuditEventValues` accepts only those, and the Activity list on `/dashboard/settings` has a label for each (`ORGANIZATION_ACTIVITY_LABELS` in `src/lib/auditLabels.ts`); an action it does not know (for example from an older deploy) is shown as words with product terms (`src/components/account/teamActivityLabels.ts`), never as a dotted id. Stored action strings are never renamed.
 
 Template changes write both:
 

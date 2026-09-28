@@ -21,6 +21,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
+import {
+  buildEmailVerifiedCallbackURL,
+  getLoginNotice,
+  stripLoginNoticeParams,
+} from "@/lib/auth/loginNotice";
+import { buildAuthLinkState, getReturnPath, withReturnPath } from "@/lib/auth/returnPath";
+import { buildConsoleSettingsPath } from "@/lib/routes";
+
+function getVerificationFailure(search: string): string | null {
+  const notice = getLoginNotice(search);
+  return notice?.kind === "verification_failed" ? notice.message : null;
+}
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -32,41 +44,58 @@ const Login = () => {
   const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from?.pathname || "/account";
+  // Read from the URL during the first render so the resend option shows
+  // immediately; it stays after the one-shot params are removed.
+  const [verificationFailure, setVerificationFailure] = useState<string | null>(() =>
+    getVerificationFailure(location.search),
+  );
+  // Where the user was headed (with its query and hash), from router state or
+  // the `next` parameter that survives the email verification link.
+  const returnPath = getReturnPath(location);
+  const from = returnPath ?? buildConsoleSettingsPath();
+  const showResendVerification = Boolean(unverifiedEmail || verificationFailure);
 
   useEffect(() => {
     const prefill = readLoginPrefill(location.search, location.state);
-
-    if (prefill.searchWithoutEmail !== null) {
-      // An old link with ?email=: move the address into router state so it leaves the URL.
-      // The effect runs again for the cleaned location and shows the notices once.
-      const state = typeof location.state === "object" && location.state !== null ? location.state : {};
-      navigate(
-        { pathname: location.pathname, search: prefill.searchWithoutEmail, hash: location.hash },
-        { replace: true, state: prefill.email ? { ...state, email: prefill.email } : state },
-      );
-      return;
-    }
+    const notice = getLoginNotice(location.search);
 
     if (prefill.email) {
       setEmail(prefill.email);
       setUnverifiedEmail(prefill.email);
     }
 
-    if (prefill.verifyEmailNotice) {
-      toast.info("Verify your email first, then sign in.");
+    // Stable ids keep a StrictMode double effect from stacking duplicate toasts.
+    if (notice?.kind === "verification_failed") {
+      setVerificationFailure(notice.message);
+      toast.error(notice.message, { id: "email-verification-failed" });
+    } else if (notice?.kind === "verified") {
+      toast.success(notice.message, { id: "email-verified" });
+    } else if (notice?.kind === "verify_email") {
+      toast.info(notice.message, { id: "verify-email-first" });
     }
 
-    if (prefill.verifiedNotice) {
-      toast.success("Email verified. You can sign in now.");
+    // Drop the one-shot params so a reload or back navigation does not replay
+    // the notice. An email address from an old ?email= link moves into router
+    // state so it leaves the URL (in any letter case) but still prefills the form.
+    // The rerun that follows finds no params and does nothing.
+    const remainingSearch =
+      stripLoginNoticeParams(prefill.searchWithoutEmail ?? location.search) ?? prefill.searchWithoutEmail;
+    if (remainingSearch !== null) {
+      const state = typeof location.state === "object" && location.state !== null ? location.state : {};
+      navigate(
+        { pathname: location.pathname, search: remainingSearch, hash: location.hash },
+        { replace: true, state: prefill.email ? { ...state, email: prefill.email } : location.state },
+      );
     }
   }, [location.hash, location.pathname, location.search, location.state, navigate]);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
       // Returning to an invite link after sign-in: if analytics tags run in this document,
-      // load the invite as a new page so they never see its token.
-      if (needsFullPageLoad(from, "", window)) {
+      // load the invite as a new page so they never see its token. The return path
+      // keeps its query and hash, so check both parts.
+      const target = new URL(from, window.location.origin);
+      if (needsFullPageLoad(target.pathname, target.search, window)) {
         window.location.replace(from);
         return;
       }
@@ -120,7 +149,7 @@ const Login = () => {
 
       const result = await authClient.sendVerificationEmail({
         email: targetEmail,
-        callbackURL: "/login?verified=1",
+        callbackURL: buildEmailVerifiedCallbackURL(returnPath),
       });
 
       if (result?.error) {
@@ -145,7 +174,8 @@ const Login = () => {
         <>
           Don&apos;t have an account?{" "}
           <Link
-            to="/register"
+            to={withReturnPath("/register", returnPath)}
+            state={buildAuthLinkState(returnPath)}
             className="font-medium text-primary hover:underline"
           >
             Sign up
@@ -230,9 +260,12 @@ const Login = () => {
             </div>
           ) : null}
 
-          {unverifiedEmail ? (
-            <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
-              Verify your email before signing in.
+          {showResendVerification ? (
+            <div
+              role="status"
+              className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100"
+            >
+              {verificationFailure ?? "Verify your email before signing in."}
             </div>
           ) : null}
 
@@ -291,7 +324,7 @@ const Login = () => {
             </div>
           </div>
 
-          {unverifiedEmail ? (
+          {showResendVerification ? (
             <Button
               type="button"
               variant="outline"

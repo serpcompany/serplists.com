@@ -5,10 +5,11 @@
 
 - Better Auth is the canonical session layer for email sign-up, sign-in, sign-out, password changes, password reset, email verification, session lookup, and session revocation.
 - Browser auth state uses Better Auth httpOnly cookies. The client does not store auth tokens.
-- Protected routes preserve the originally requested destination and return users there after sign-in.
+- Protected routes preserve the originally requested destination, including its query string and hash, and return users there after sign-in. With no saved destination, sign-in goes to `/dashboard/settings`.
 - Password strength rules are enforced for registration and password changes.
 - `/dashboard/settings` is the canonical settings/account page.
-- `/account` and `/dashboard/profile` redirect to `/dashboard/settings`.
+- `/account` and `/dashboard/profile` redirect to `/dashboard/settings`, keeping the
+  query string and hash (legacy redirects use `LegacyRedirect`).
 - Public profiles remain available at `/profile/:username`.
 
 ## Dashboard Navigation
@@ -75,7 +76,8 @@ Canonical private routes:
 - The UI offers only the actions the member's role allows in the Organization that owns the Template or run ([Organizations](../design-docs/organizations.md#ui-flow)).
 - Organization management currently lives on `/dashboard/settings`.
 - Organization names are limited to 120 characters, counted after trimming (`src/lib/schemas/nameLimits.ts`, matching the API). The Organization name fields stop at the limit, and a longer name gets a clear message instead of the API's schema error.
-- Organization invites are link-based today. The legacy compatibility route `/team-invites/:token` and incoming invites on `/dashboard/settings` support acceptance.
+- Organization invites are link-based today. A link is shown once; managers can replace a lost one with **New link** on the pending invite, which stops the previous link from working. The legacy compatibility route `/team-invites/:token` and incoming invites on `/dashboard/settings` support acceptance. The link page shows the Organization, inviter, and role and waits for **Accept invite** or **Decline**; accepting does not switch the active context.
+- Members other than the owner can leave an Organization from `/dashboard/settings`.
 - Organization and Template changes are recorded in D1-backed audit/history tables.
 
 ## Entitlements
@@ -98,7 +100,7 @@ Local seeds create these users:
 
 Password for all seeded users: `password123`.
 
-`admin@test.com` and `jane@test.com` are treated as Pro dev personas. `john@test.com` and `bob@test.com` remain Free. Local seeds also include Organization Memberships, pending invites, Organization entitlement overrides, and audit rows. The underlying fixtures retain legacy `team` implementation names.
+`admin@test.com` and `jane@test.com` are Pro dev personas through seeded Personal entitlement overrides; the API never grants a plan by email address. `john@test.com` and `bob@test.com` remain Free. Local seeds also include Organization Memberships, pending invites, Organization entitlement overrides, and audit rows. The underlying fixtures retain legacy `team` implementation names.
 
 ## Error Contract
 

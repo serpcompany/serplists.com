@@ -18,10 +18,9 @@ export const buildVerifyEmailLoginRedirect = (email: string): VerifyEmailLoginRe
   state: { email },
 });
 
+// The notices that /login shows from its query come from src/lib/auth/loginNotice.ts.
 export interface LoginPrefill {
   email: string | null;
-  verifyEmailNotice: boolean;
-  verifiedNotice: boolean;
   /** The search to replace the URL with when it still carries an email address. */
   searchWithoutEmail: string | null;
 }
@@ -44,8 +43,6 @@ export function readLoginPrefill(search: string, state: unknown): LoginPrefill {
 
   return {
     email: parsedState.success ? parsedState.data.email : legacyEmail,
-    verifyEmailNotice: params.get('verify_email') === '1',
-    verifiedNotice: params.get('verified') === '1',
     searchWithoutEmail,
   };
 }

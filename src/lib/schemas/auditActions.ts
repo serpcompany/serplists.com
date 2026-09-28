@@ -2,6 +2,7 @@
 // AuditEventInput.action (functions/api/utils/audit.ts) takes only these, and the history
 // label maps (src/lib/auditLabels.ts) are typed by them, so a new action cannot ship
 // without a label in each history view.
+// Never rename an entry: stored rows keep the string they were written with.
 
 export const RUN_AUDIT_ACTIONS = [
   'checklist_run.created',
@@ -28,7 +29,10 @@ export const ORGANIZATION_AUDIT_ACTIONS = [
   'team.owner_transferred',
   'team_invite.created',
   'team_invite.accepted',
+  'team_invite.declined',
+  'team_invite.link_reissued',
   'team_invite.revoked',
+  'team_member.left',
   'team_member.updated',
 ] as const;
 

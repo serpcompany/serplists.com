@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Copy, Crown, Link2, Trash2, Users } from 'lucide-react';
+import { Crown, Users } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
@@ -16,20 +16,20 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { api, type TeamActivityEvent, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/lib/api';
-import { formatAuditAction, getAuditActorName, ORGANIZATION_ACTIVITY_LABELS } from '@/lib/auditLabels';
-import { copyTextToClipboard } from '@/lib/clipboard';
+import { getAuditActorName } from '@/lib/auditLabels';
 import { getOrganizationNameError, ORGANIZATION_NAME_MAX } from '@/lib/schemas/nameLimits';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
-
-type AssignableTeamRole = Exclude<TeamRole, 'owner'>;
-
-const assignableRoles: AssignableTeamRole[] = [
-  'admin',
-  'editor',
-  'runner',
-  'viewer',
-];
+import { runTeamWrite } from '@/features/teams/runTeamWrite';
+import { formatTeamActivityAction } from '@/components/account/teamActivityLabels';
+import { TeamInvitesPanel } from '@/components/account/TeamInvitesPanel';
+import {
+  assignableRoles,
+  describeMemberForControls,
+  formatInviteExpiration,
+  formatRole,
+} from '@/components/account/teamSettingsFormat';
+import type { AssignableTeamRole } from '@/features/teams/teamInviteLinks';
 
 const memberStatuses: TeamMemberStatus[] = ['active', 'disabled'];
 
@@ -41,24 +41,8 @@ const roleDescriptions: Record<TeamRole, string> = {
   viewer: 'Views shared templates and runs.',
 };
 
-const formatRole = (role: TeamRole): string =>
-  role.charAt(0).toUpperCase() + role.slice(1);
-
 const formatMemberStatus = (status: TeamMemberStatus): string =>
   status.charAt(0).toUpperCase() + status.slice(1);
-
-const formatInviteExpiration = (value: string): string => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return 'Unknown expiration';
-  }
-
-  return `Expires ${date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })}`;
-};
 
 const formatActivityTime = (value: string): string => {
   const date = new Date(value);
@@ -72,24 +56,11 @@ const formatActivityTime = (value: string): string => {
   });
 };
 
+const errorMessage = (error: unknown, fallback: string): string =>
+  error instanceof Error && error.message ? error.message : fallback;
+
 const getActivityActorName = (event: TeamActivityEvent): string =>
   getAuditActorName(event.actor, event.metadata, event.actor.userId || undefined);
-
-const resolveCreatedInviteUrl = (
-  invite: Awaited<ReturnType<typeof api.createTeamInvite>>,
-): string => {
-  if (invite.delivery?.mode === 'link') {
-    return invite.delivery.inviteUrl;
-  }
-
-  if (invite.inviteUrl) {
-    return invite.inviteUrl;
-  }
-
-  return typeof window === 'undefined'
-    ? invite.invitePath
-    : `${window.location.origin}${invite.invitePath}`;
-};
 
 export function TeamSettingsSection() {
   const {
@@ -98,6 +69,7 @@ export function TeamSettingsSection() {
     canManageTeam,
     createTeam,
     isTeamWorkspace,
+    patchTeam,
     refreshTeams,
     rememberTeam,
     selectWorkspace,
@@ -107,15 +79,10 @@ export function TeamSettingsSection() {
   const [teamSlug, setTeamSlug] = useState('');
   const [editTeamName, setEditTeamName] = useState('');
   const [editTeamSlug, setEditTeamSlug] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<AssignableTeamRole>('viewer');
-  const [inviteUrl, setInviteUrl] = useState('');
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
   const [isUpdatingTeam, setIsUpdatingTeam] = useState(false);
-  const [isCreatingInvite, setIsCreatingInvite] = useState(false);
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
   const [transferringOwnerMemberId, setTransferringOwnerMemberId] = useState<string | null>(null);
-  const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
   const [acceptingIncomingInviteId, setAcceptingIncomingInviteId] = useState<string | null>(null);
 
   const membersQuery = useQuery({
@@ -126,15 +93,6 @@ export function TeamSettingsSection() {
   });
 
   const members = membersQuery.data ?? [];
-
-  const invitesQuery = useQuery({
-    queryKey: ['team-invites', activeTeamId],
-    queryFn: () => api.getTeamInvites(activeTeamId as string),
-    enabled: Boolean(activeTeamId && canManageTeam),
-    staleTime: 30 * 1000,
-  });
-
-  const invites = invitesQuery.data ?? [];
 
   const activityQuery = useQuery({
     queryKey: ['team-activity', activeTeamId],
@@ -158,15 +116,22 @@ export function TeamSettingsSection() {
     await queryClient.cancelQueries({ queryKey });
     await query.refetch();
   };
+  const memberChangeRefreshes = (teamId: string) => [
+    () => reload(membersQuery, ['team-members', teamId]),
+    refreshTeams,
+    () => reload(activityQuery, ['team-activity', teamId]),
+  ];
+  // The change is saved; only the follow-up refresh failed. Mark the
+  // Organization list stale so it refetches on the next focus or visit.
+  const warnRefreshFailed = () => {
+    void queryClient.invalidateQueries({ queryKey: ['teams'], refetchType: 'none' });
+    toast.warning('Saved, but refreshing failed. Reload to see the latest state.');
+  };
   const activeMemberId =
     isTeamWorkspace && 'memberId' in activeWorkspace
       ? activeWorkspace.memberId
       : null;
   const canTransferOwnership = isTeamWorkspace && activeWorkspace.role === 'owner';
-
-  useEffect(() => {
-    setInviteUrl('');
-  }, [activeTeamId]);
 
   useEffect(() => {
     if (!isTeamWorkspace) {
@@ -221,69 +186,23 @@ export function TeamSettingsSection() {
       return;
     }
 
+    const teamId = activeTeamId;
     setIsUpdatingTeam(true);
     try {
-      await api.updateTeam(activeTeamId, {
-        name,
-        slug: slug || undefined,
+      await runTeamWrite({
+        write: () => api.updateTeam(teamId, { name, slug: slug || undefined }),
+        onSaved: (result) => {
+          // The response has the saved name and slug (the server may adjust the slug).
+          const team = result?.team;
+          if (team) patchTeam(teamId, { name: team.name, slug: team.slug ?? null });
+          toast.success('Organization updated');
+        },
+        refreshes: [refreshTeams, () => reload(activityQuery, ['team-activity', teamId])],
+        onRefreshFailed: warnRefreshFailed,
+        onWriteFailed: (error) => toast.error(errorMessage(error, 'Failed to update Organization')),
       });
-      await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
-      toast.success('Organization updated');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update Organization');
     } finally {
       setIsUpdatingTeam(false);
-    }
-  };
-
-  const handleCreateInvite = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!activeTeamId) {
-      toast.error('Select an Organization before inviting members');
-      return;
-    }
-
-    const email = inviteEmail.trim();
-    if (!email) {
-      toast.error('Email is required');
-      return;
-    }
-
-    setIsCreatingInvite(true);
-    try {
-      const invite = await api.createTeamInvite(activeTeamId, {
-        email,
-        role: inviteRole,
-      });
-      setInviteUrl(resolveCreatedInviteUrl(invite));
-      setInviteEmail('');
-      await reload(invitesQuery, ['team-invites', activeTeamId]);
-      await reload(activityQuery, ['team-activity', activeTeamId]);
-      toast.success('Invite link created');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create invite');
-    } finally {
-      setIsCreatingInvite(false);
-    }
-  };
-
-  const handleRevokeInvite = async (inviteId: string) => {
-    if (!activeTeamId) {
-      return;
-    }
-
-    setRevokingInviteId(inviteId);
-    try {
-      await api.revokeTeamInvite(activeTeamId, inviteId);
-      await reload(invitesQuery, ['team-invites', activeTeamId]);
-      await reload(activityQuery, ['team-activity', activeTeamId]);
-      toast.success('Invite revoked');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to revoke invite');
-    } finally {
-      setRevokingInviteId(null);
     }
   };
 
@@ -308,19 +227,6 @@ export function TeamSettingsSection() {
     }
   };
 
-  const handleCopyInvite = async () => {
-    if (!inviteUrl) {
-      return;
-    }
-
-    if (await copyTextToClipboard(inviteUrl)) {
-      toast.success('Invite link copied');
-      return;
-    }
-
-    toast.error('Unable to copy invite link');
-  };
-
   const handleUpdateMember = async (
     member: TeamMember,
     updates: { role?: AssignableTeamRole; status?: TeamMemberStatus },
@@ -329,15 +235,16 @@ export function TeamSettingsSection() {
       return;
     }
 
+    const teamId = activeTeamId;
     setUpdatingMemberId(member.id);
     try {
-      await api.updateTeamMember(activeTeamId, member.id, updates);
-      await reload(membersQuery, ['team-members', activeTeamId]);
-      await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
-      toast.success('Member updated');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update member');
+      await runTeamWrite({
+        write: () => api.updateTeamMember(teamId, member.id, updates),
+        onSaved: () => toast.success('Member updated'),
+        refreshes: memberChangeRefreshes(teamId),
+        onRefreshFailed: warnRefreshFailed,
+        onWriteFailed: (error) => toast.error(errorMessage(error, 'Failed to update member')),
+      });
     } finally {
       setUpdatingMemberId(null);
     }
@@ -356,15 +263,21 @@ export function TeamSettingsSection() {
       return;
     }
 
+    const teamId = activeTeamId;
     setTransferringOwnerMemberId(member.id);
     try {
-      await api.transferTeamOwnership(activeTeamId, member.id);
-      await reload(membersQuery, ['team-members', activeTeamId]);
-      await refreshTeams();
-      await reload(activityQuery, ['team-activity', activeTeamId]);
-      toast.success('Organization ownership transferred');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to transfer ownership');
+      await runTeamWrite({
+        write: () => api.transferTeamOwnership(teamId, member.id),
+        onSaved: () => {
+          // The previous owner is now an admin. Apply it now so the owner-only
+          // controls go away even if the Organization list cannot be refetched.
+          patchTeam(teamId, { role: 'admin' });
+          toast.success('Organization ownership transferred');
+        },
+        refreshes: memberChangeRefreshes(teamId),
+        onRefreshFailed: warnRefreshFailed,
+        onWriteFailed: (error) => toast.error(errorMessage(error, 'Failed to transfer ownership')),
+      });
     } finally {
       setTransferringOwnerMemberId(null);
     }
@@ -521,108 +434,11 @@ export function TeamSettingsSection() {
               </form>
             ) : null}
 
-            {canManageTeam ? (
-              <form className="grid gap-3 md:grid-cols-[1fr_160px_auto]" onSubmit={handleCreateInvite}>
-                <div className="space-y-2">
-                  <Label htmlFor="team-invite-email">Invite email</Label>
-                  <Input
-                    id="team-invite-email"
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(event) => setInviteEmail(event.target.value)}
-                    placeholder="teammate@example.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="team-invite-role">Role</Label>
-                  <Select
-                    value={inviteRole}
-                    onValueChange={(value) => setInviteRole(value as AssignableTeamRole)}
-                  >
-                    <SelectTrigger id="team-invite-role">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {assignableRoles.map((role) => (
-                        <SelectItem key={role} value={role}>
-                          {formatRole(role)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end">
-                  <Button type="submit" disabled={isCreatingInvite} className="w-full">
-                    <Link2 className="mr-2 h-4 w-4" />
-                    {isCreatingInvite ? 'Creating...' : 'Create link'}
-                  </Button>
-                </div>
-              </form>
-            ) : null}
-
-            {inviteUrl ? (
-              <div className="flex items-center gap-2">
-                <Input aria-label="Invite link" readOnly value={inviteUrl} />
-                <Button
-                  aria-label="Copy invite link"
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={handleCopyInvite}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : null}
+            {canManageTeam && activeTeamId ? <TeamInvitesPanel teamId={activeTeamId} /> : null}
 
             {!canManageTeam ? (
               <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
                 Owners and admins manage Organization settings, invites, and activity.
-              </div>
-            ) : null}
-
-            {canManageTeam ? (
-              <div className="space-y-3">
-                <div className="text-sm font-medium text-foreground">Pending invites</div>
-                {invitesQuery.isLoading ? (
-                  <div className="text-sm text-muted-foreground">Loading invites...</div>
-                ) : invites.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No pending invites.</div>
-                ) : (
-                  <div className="divide-y rounded-md border border-border">
-                    {invites.map((invite) => (
-                      <div
-                        key={invite.id}
-                        className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_120px_160px_auto]"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-foreground">
-                            {invite.email}
-                          </div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            Invited by {invite.inviterName || invite.inviterEmail || 'an Organization admin'}
-                          </div>
-                        </div>
-                        <div className="text-sm capitalize text-muted-foreground">
-                          {formatRole(invite.role)}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {formatInviteExpiration(invite.expires_at)}
-                        </div>
-                        <Button
-                          aria-label={`Revoke invite for ${invite.email}`}
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          disabled={revokingInviteId === invite.id}
-                          onClick={() => void handleRevokeInvite(invite.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             ) : null}
 
@@ -639,6 +455,7 @@ export function TeamSettingsSection() {
                     const isCurrentMember = member.id === activeMemberId;
                     const controlsDisabled =
                       isOwner || isCurrentMember || updatingMemberId === member.id;
+                    const memberLabel = describeMemberForControls(member);
 
                     return (
                       <div
@@ -668,7 +485,7 @@ export function TeamSettingsSection() {
                               })
                             }
                           >
-                            <SelectTrigger aria-label="Member role">
+                            <SelectTrigger aria-label={`Role for ${memberLabel}`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -697,7 +514,7 @@ export function TeamSettingsSection() {
                               })
                             }
                           >
-                            <SelectTrigger aria-label="Member status">
+                            <SelectTrigger aria-label={`Status for ${memberLabel}`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -716,6 +533,7 @@ export function TeamSettingsSection() {
                         <div className="flex items-center justify-end">
                           {canTransferOwnership && !isOwner && !isCurrentMember && member.status === 'active' ? (
                             <Button
+                              aria-label={`Make owner: ${memberLabel}`}
                               type="button"
                               variant="outline"
                               size="sm"
@@ -750,7 +568,7 @@ export function TeamSettingsSection() {
                       >
                         <div className="min-w-0">
                           <div className="truncate text-sm font-medium text-foreground">
-                            {formatAuditAction(ORGANIZATION_ACTIVITY_LABELS, event.action)}
+                            {formatTeamActivityAction(event.action)}
                           </div>
                           <div className="truncate text-xs text-muted-foreground">
                             {getActivityActorName(event)}

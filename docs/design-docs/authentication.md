@@ -28,15 +28,38 @@ and user-facing failure states when a supporting service is unavailable.
 - Email verification is required before sign-in where
   `AUTH_EMAIL_VERIFICATION_REQUIRED=true` (production). Login offers to resend the
   verification email when sign-in is blocked.
+- Verification emails return to `/login?verified=1`. Links expire after Better
+  Auth's default of one hour; a failed link (expired, invalid, or for a deleted
+  account) returns to the same URL with `&error=<code>` appended. Login checks
+  `error` before `verified`, explains the failure, and offers to resend
+  (`src/lib/auth/loginNotice.ts`), then removes the one-shot parameters from the
+  URL. Better Auth puts the callback into the email link unencoded, so it must
+  not contain a raw `&`; `buildEmailVerifiedCallbackURL` encodes an extra `next`
+  parameter one more time so it survives the link.
 - Verification and reset emails use `RESEND_API_KEY`, then `USESEND_API_KEY`.
   Callbacks await delivery so provider failures surface in the request.
   `GET /api/auth/status` reports whether email delivery is available.
-- Protected routes preserve the requested destination through login.
+- Protected routes preserve the requested destination (path, query, and hash)
+  through login and sign-up (`src/lib/auth/returnPath.ts`), so a signed-out
+  return from Stripe keeps `?billing=success`. It travels as router state `from`
+  and as a `next` query parameter, which Login, Register, and the verification
+  callback carry forward so a new account returns to the page that sent it, such
+  as an Organization invite. Only same-origin, non-auth paths are accepted (one
+  leading `/`, not `//`); without one, Login goes to `/dashboard/settings`.
+- `logout()` from `useAuth` returns a promise that resolves once the session is
+  cleared in the app, even if the server call failed (`src/lib/auth/signOut.ts`).
+  A page that sends the user to `/login` after signing out must await it: Login
+  redirects a signed-in visitor straight to the return path.
 - Passwords: Better Auth enforces length (10 to 128) and rejects breached passwords;
   `Register.tsx`, `ResetPassword.tsx`, and `SecuritySection.tsx` validate the same
   policy client-side.
 - Profile: `name`, `username`, `avatar_url`; public lookup through
   `GET /api/profiles/by-username?username=...` and `GET /api/profiles/by-id?userId=...`.
+  Public profile and Template share URLs use the username, so Account Settings
+  lets a saved username change but not be cleared (`src/pages/accountProfileUpdates.ts`).
+  Saving a new username or name refreshes the cached Template lists, which embed
+  the owner's username, and Share always builds the link from the signed-in owner's
+  current username. Links shared under an old username stop working after a rename.
 - Settings live at `/dashboard/settings`; `/account` and `/dashboard/profile`
   redirect there.
 

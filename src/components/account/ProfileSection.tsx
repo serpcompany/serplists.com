@@ -19,7 +19,8 @@ interface ProfileData {
 interface ProfileSectionProps {
   profileData: ProfileData;
   loading: boolean;
-  onProfileDataChange: (data: ProfileData) => void;
+  // Takes an updater so a keystroke never overwrites a concurrent avatar change.
+  onProfileDataChange: React.Dispatch<React.SetStateAction<ProfileData>>;
   onProfileUpdate: () => void;
   onAvatarUpdate: (url: string) => void;
 }
@@ -75,12 +76,10 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
             <Input
               id="fullName"
               value={profileData.fullName}
-              onChange={(e) =>
-                onProfileDataChange({
-                  ...profileData,
-                  fullName: e.target.value,
-                })
-              }
+              onChange={(e) => {
+                const fullName = e.target.value;
+                onProfileDataChange((current) => ({ ...current, fullName }));
+              }}
               placeholder="Enter your full name"
             />
           </div>
@@ -93,12 +92,10 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
             <Input
               id="username"
               value={profileData.username}
-              onChange={(e) =>
-                onProfileDataChange({
-                  ...profileData,
-                  username: e.target.value.replace(/[^a-zA-Z0-9]/g, ''),
-                })
-              }
+              onChange={(e) => {
+                const username = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
+                onProfileDataChange((current) => ({ ...current, username }));
+              }}
               placeholder="Enter your username"
               className="flex-1"
             />

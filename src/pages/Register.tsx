@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -9,9 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { getAuthStatus } from "@/lib/auth-client";
-import { buildVerifyEmailLoginRedirect } from "@/lib/auth/loginPrefill";
+import { buildEmailVerifiedCallbackURL } from "@/lib/auth/loginNotice";
 import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
-import { buildConsoleHomePath } from "@/lib/routes";
+import {
+  buildAuthLinkState,
+  getPostRegisterDestination,
+  getReturnPath,
+  withReturnPath,
+} from "@/lib/auth/returnPath";
 
 const Register = () => {
   const [name, setName] = useState("");
@@ -23,6 +28,10 @@ const Register = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Carried from the page that sent the user here (for example an invite link)
+  // so a new account lands back there, including after email verification.
+  const returnPath = getReturnPath(location);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -46,16 +55,18 @@ const Register = () => {
         return;
       }
 
-      const result = await register(name, email, password);
+      const result = await register(name, email, password, buildEmailVerifiedCallbackURL(returnPath));
       if (result.ok) {
-        if (result.requiresEmailVerification || authStatus.emailVerificationRequired) {
-          toast.success("Account created. Check your email to verify your address before signing in.");
-          const redirect = buildVerifyEmailLoginRedirect(email);
-          navigate(redirect.to, { replace: true, state: redirect.state });
-        } else {
-          toast.success("Registration successful");
-          navigate(buildConsoleHomePath());
-        }
+        const requiresEmailVerification = Boolean(
+          result.requiresEmailVerification || authStatus.emailVerificationRequired,
+        );
+        const destination = getPostRegisterDestination({ email, requiresEmailVerification, returnPath });
+        toast.success(
+          requiresEmailVerification
+            ? "Account created. Check your email to verify your address before signing in."
+            : "Registration successful",
+        );
+        navigate(destination.to, { replace: true, state: destination.state });
       } else {
         toast.error(result.error ?? "Registration failed.");
       }
@@ -74,7 +85,11 @@ const Register = () => {
       footer={
         <>
           Already have an account?{" "}
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link
+            to={withReturnPath("/login", returnPath)}
+            state={buildAuthLinkState(returnPath)}
+            className="font-medium text-primary hover:underline"
+          >
             Sign in
           </Link>
         </>

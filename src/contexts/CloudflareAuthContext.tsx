@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authClient } from '@/lib/auth-client';
+import { EMAIL_VERIFIED_CALLBACK_URL } from '@/lib/auth/loginNotice';
+import { endSession } from '@/lib/auth/signOut';
 
 interface User {
   id: string;
@@ -27,8 +29,14 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<AuthActionResult>;
-  register: (name: string, email: string, password: string) => Promise<RegisterResult>;
-  logout: () => void;
+  register: (
+    name: string,
+    email: string,
+    password: string,
+    callbackURL?: string,
+  ) => Promise<RegisterResult>;
+  /** Resolves once the user is signed out here, even if the server call failed. */
+  logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -93,9 +101,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const register = async (name: string, email: string, password: string): Promise<RegisterResult> => {
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    callbackURL: string = EMAIL_VERIFIED_CALLBACK_URL,
+  ): Promise<RegisterResult> => {
     try {
-      const callbackURL = "/login?verified=1";
       const result = await authClient.signUp.email({ name, email, password, callbackURL });
       if (result?.error) {
         return { ok: false, error: result.error.message ?? "Registration failed", errorCode: "UNKNOWN" };
@@ -115,12 +127,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
-    authClient.signOut().finally(() => {
-      setUser(null);
-      setSession(null);
-    });
-  };
+  const logout = () =>
+    endSession(
+      () => authClient.signOut(),
+      () => {
+        setUser(null);
+        setSession(null);
+      },
+    );
 
   const refreshProfile = async () => {
     try {

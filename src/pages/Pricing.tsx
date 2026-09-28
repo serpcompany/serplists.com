@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -8,18 +8,34 @@ import { PageHero, PageSection, Surface } from '@/components/layout/page-shell';
 import { Button } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { usePageRestoredFromCache, useRedirectPending } from '@/hooks/useRedirectPending';
 import { api } from '@/lib/api';
-import { getBillingStatusQueryKey, PRO_MONTHLY_PRICE_LABEL } from '@/lib/billing';
+import { isOpenSubscriptionConflictError } from '@/lib/api-errors';
+import {
+  BILLING_STATUS_QUERY_PREFIX,
+  getBillingStatusQueryKey,
+  getPersonalBillingAction,
+  PLAN_MANAGED_BY_SUPPORT_MESSAGE,
+  PRO_MONTHLY_PRICE_LABEL,
+} from '@/lib/billing';
+import { buildConsoleSettingsPath } from '@/lib/routes';
 
 const Pricing = () => {
   const { user } = useAuth();
-  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+  // Stays set until the browser leaves for Stripe, and clears when Back restores the page.
+  const [isStartingCheckout, setIsStartingCheckout] = useRedirectPending();
   const billing = useQuery({
     queryKey: getBillingStatusQueryKey(user?.id),
     queryFn: () => api.getBillingStatus(),
     enabled: Boolean(user),
     retry: false,
   });
+  const queryClient = useQueryClient();
+  // The plan may have changed at Stripe before the user pressed Back.
+  usePageRestoredFromCache(useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: BILLING_STATUS_QUERY_PREFIX });
+  }, [queryClient]));
+  const personalAction = getPersonalBillingAction(billing.data);
 
   const handleUpgrade = async () => {
     setIsStartingCheckout(true);
@@ -29,6 +45,10 @@ const Pricing = () => {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to start checkout');
       setIsStartingCheckout(false);
+      // Show the subscription checkout found, so Manage replaces Upgrade.
+      if (isOpenSubscriptionConflictError(error)) {
+        void queryClient.invalidateQueries({ queryKey: getBillingStatusQueryKey(user?.id) });
+      }
     }
   };
 
@@ -102,9 +122,11 @@ const Pricing = () => {
                   <Button asChild>
                     <Link to="/register">Get Started</Link>
                   </Button>
-                ) : billing.data?.plan === 'pro' ? (
+                ) : personalAction === 'support' ? (
+                  <p className="text-sm text-muted-foreground">{PLAN_MANAGED_BY_SUPPORT_MESSAGE}</p>
+                ) : personalAction === 'manage' ? (
                   <Button asChild>
-                    <Link to="/account">Manage Pro</Link>
+                    <Link to={buildConsoleSettingsPath()}>{billing.data?.plan === 'pro' ? 'Manage Pro' : 'Manage subscription'}</Link>
                   </Button>
                 ) : (
                   <Button

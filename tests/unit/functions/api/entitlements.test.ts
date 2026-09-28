@@ -53,9 +53,6 @@ describe("getEntitlementsForUser", () => {
     dbMocks.selectChain.limit.mockRejectedValueOnce(
       new Error("D1_ERROR: no such table: entitlement_overrides"),
     );
-    dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { email: "new-user@example.com" },
-    ]);
 
     const env: any = { DB: {} };
     const entitlements = await getEntitlementsForUser(env, "user-1");

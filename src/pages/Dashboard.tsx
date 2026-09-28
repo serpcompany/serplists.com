@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Link,
   useLocation,
   useNavigate,
-  useSearchParams,
 } from 'react-router-dom';
 import {
   ArrowRight,
@@ -62,7 +61,6 @@ const Dashboard = () => {
     deleteRun,
   } = useTemplateLists({ catalog: true, runs: true });
   const { getPermissions } = useWorkspace();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeletingRun, setIsDeletingRun] = useState(false);
@@ -72,14 +70,6 @@ const Dashboard = () => {
   const workspaceTemplates = allTemplates ?? templates;
 
   const isRunsRoute = resolveConsoleSection(location.pathname) === 'runs';
-
-  useEffect(() => {
-    const checkout = searchParams.get('checkout');
-    if (checkout === 'success') {
-      toast.success('Checkout complete.');
-      setSearchParams({});
-    }
-  }, [searchParams, setSearchParams]);
 
   const templateLookup = useMemo(
     () => new Map(workspaceTemplates.map((template) => [template.id, template])),

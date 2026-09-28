@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getBillingPlanLabel, getBillingStatusQueryKey } from "@/lib/billing";
+import {
+  getBillingPlanLabel,
+  getBillingStatusQueryKey,
+  getPersonalBillingAction,
+  getSubscriptionAttentionMessage,
+} from "@/lib/billing";
 
 describe("getBillingStatusQueryKey", () => {
   it("scopes the billing query to the current user", () => {
@@ -27,5 +32,57 @@ describe("getBillingStatusQueryKey", () => {
     expect(getBillingPlanLabel("free")).toBe("Free");
     expect(getBillingPlanLabel()).toBeNull();
     expect(getBillingPlanLabel(null)).toBeNull();
+  });
+});
+
+describe("getPersonalBillingAction", () => {
+  it("offers checkout only when there is no Pro plan and no open subscription", () => {
+    expect(getPersonalBillingAction({ plan: "free", subscriptionStatus: null })).toBe("upgrade");
+    expect(getPersonalBillingAction({ plan: "free" })).toBe("upgrade");
+    expect(getPersonalBillingAction(undefined)).toBe("upgrade");
+  });
+
+  it.each(["active", "trialing", "past_due", "unpaid", "paused", "incomplete"])(
+    "manages an open %s subscription instead of starting a second one",
+    (subscriptionStatus) => {
+      expect(getPersonalBillingAction({ plan: "free", subscriptionStatus })).toBe("manage");
+    },
+  );
+
+  it("manages Pro", () => {
+    expect(getPersonalBillingAction({ plan: "pro", canManageBilling: true })).toBe("manage");
+    // A response from before canManageBilling existed keeps the portal.
+    expect(getPersonalBillingAction({ plan: "pro" })).toBe("manage");
+  });
+
+  it("leaves a plan that support manages to support, never to checkout", () => {
+    expect(getPersonalBillingAction({ plan: "free", managedBySupport: true })).toBe("support");
+    expect(getPersonalBillingAction({ plan: "free", managedBySupport: true, subscriptionStatus: "active" }))
+      .toBe("support");
+    expect(getPersonalBillingAction({ plan: "pro", managedBySupport: true, canManageBilling: false })).toBe("support");
+    expect(getPersonalBillingAction({ plan: "pro", managedBySupport: true, canManageBilling: true })).toBe("support");
+  });
+
+  it("never sends Pro without a Stripe customer to a portal that cannot open", () => {
+    // Pro that support granted without a managedBySupport flag (an older response).
+    expect(getPersonalBillingAction({ plan: "pro", canManageBilling: false })).toBe("support");
+  });
+});
+
+describe("getSubscriptionAttentionMessage", () => {
+  it("explains a failed payment", () => {
+    expect(getSubscriptionAttentionMessage("past_due")).toContain("payment failed");
+    expect(getSubscriptionAttentionMessage("unpaid")).toContain("payment failed");
+  });
+
+  it("flags other open subscriptions that are not paid up", () => {
+    expect(getSubscriptionAttentionMessage("paused")).toContain("needs attention");
+    expect(getSubscriptionAttentionMessage("incomplete")).toContain("needs attention");
+  });
+
+  it("says nothing for a paid-up or missing subscription", () => {
+    expect(getSubscriptionAttentionMessage("active")).toBeNull();
+    expect(getSubscriptionAttentionMessage("trialing")).toBeNull();
+    expect(getSubscriptionAttentionMessage(null)).toBeNull();
   });
 });
