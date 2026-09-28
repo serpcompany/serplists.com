@@ -59,4 +59,28 @@ describe('ContentRenderer accessibility', () => {
     expect(markup).toContain('rel="nofollow noopener noreferrer"');
     expect(markup).toContain('href="/api/uploads/file?key=template-files/launch-plan.pdf"');
   });
+
+  it('names every sub-task checkbox after its sub-task, never blank', () => {
+    const markup = renderToStaticMarkup(
+      <ContentRenderer
+        contents={[
+          {
+            type: 'subItems',
+            value: '',
+            subItems: [
+              { id: 'a', title: 'Send the approval email', isCompleted: true },
+              { id: 'b', title: '  ', isCompleted: false },
+            ],
+          },
+        ]}
+        onSubItemToggle={() => undefined}
+      />,
+    );
+    const checkboxes = markup.match(/<button[^>]*role="checkbox"[^>]*>/g) ?? [];
+
+    expect(checkboxes).toHaveLength(2);
+    expect(checkboxes[0]).toContain('aria-label="Send the approval email"');
+    expect(checkboxes[0]).toContain('aria-checked="true"');
+    expect(checkboxes[1]).toContain('aria-label="Sub-task 2"');
+  });
 });

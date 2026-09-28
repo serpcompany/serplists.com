@@ -611,3 +611,26 @@ test('queued Mark Complete saves never move back to an earlier task', async ({ p
 
   await deleteRun(page, runId);
 });
+
+// Once a task is done its footer button moves on, so the task checkbox is the only way to
+// untick it: it must be found and read by its role, name and checked state.
+test('a completed task can be found and unticked by its named checkbox', async ({ page }) => {
+  await loginAsAdmin(page);
+  const runId = await createRun(page, `Task checkbox QA ${Date.now()}`);
+
+  await page.goto(`/dashboard/runs/${runId}`);
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  const taskA = page.getByRole('checkbox', { name: 'Mark "Task A" complete' });
+  await expect(taskA).not.toBeChecked();
+  await page.getByRole('button', { name: 'Mark Complete' }).click();
+  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Previous' }).click();
+  await expect(taskA).toBeChecked();
+  await taskA.click();
+  await expect(taskA).not.toBeChecked();
+  await expect(page.getByRole('button', { name: 'Mark Complete' })).toBeVisible();
+  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'in_progress', completed: [false, false] });
+
+  await deleteRun(page, runId);
+});

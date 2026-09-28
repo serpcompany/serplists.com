@@ -2,7 +2,6 @@ import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { normalizeDisplayText } from '@/lib/utils/markdownDisplay';
 import { onSingleClick } from '@/lib/utils/repeatClick';
 import type { ChecklistItem, ChecklistSection } from '@/types/checklist';
@@ -11,6 +10,7 @@ import {
   getPrimaryTaskButton,
   type PrimaryTaskAction,
 } from '@/features/run-execution/primaryTaskAction';
+import { getTaskCheckboxLabel } from '@/features/run-execution/taskCheckboxLabel';
 
 interface TaskExecutionPanelProps {
   section: ChecklistSection;
@@ -81,19 +81,27 @@ export function TaskExecutionPanel({
 
           <div className="flex items-start gap-4">
             {/* Completing the task moves on to the next one, so a double click would
-                also toggle that task: the second click is ignored. */}
+                also toggle that task: the second click is ignored. Once the task is done
+                the footer button moves on, so this is the only way to untick it: it is a
+                named checkbox with its checked state. */}
             <button
+              aria-checked={isTaskComplete}
+              aria-label={getTaskCheckboxLabel(task.title, taskIndex + 1)}
               disabled={!canTick}
               onClick={onSingleClick(() => onToggleTask(!isTaskComplete))}
-              className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors"
+              className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              role="checkbox"
               type="button"
             >
               {isTaskComplete ? (
-                <span className="flex h-6 w-6 items-center justify-center rounded-md border-success bg-success text-success-foreground">
+                <span
+                  aria-hidden="true"
+                  className="flex h-6 w-6 items-center justify-center rounded-md border-success bg-success text-success-foreground"
+                >
                   <Check className="h-4 w-4" />
                 </span>
               ) : (
-                <span className="h-6 w-6 rounded-md border-2 border-muted-foreground/30" />
+                <span aria-hidden="true" className="h-6 w-6 rounded-md border-2 border-muted-foreground/30" />
               )}
             </button>
             <div className="flex-1">
@@ -120,7 +128,8 @@ export function TaskExecutionPanel({
             />
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Checkbox checked={false} disabled className="mb-3 h-5 w-5" />
+              {/* Decorative: an empty box, not a control. */}
+              <span aria-hidden="true" className="mb-3 h-5 w-5 shrink-0 rounded-sm border border-primary opacity-50" />
               <p className="text-sm text-muted-foreground">
                 No additional content for this task
               </p>

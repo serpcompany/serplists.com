@@ -463,3 +463,27 @@ describe('ChecklistRunPage task counts', () => {
     expect(html).not.toMatch(/of 12/);
   });
 });
+
+describe('ChecklistRunPage task checkboxes', () => {
+  const taskCheckboxes = (html: string) =>
+    (html.match(/<button[^>]*role="checkbox"[^>]*>/g) ?? []).filter((tag) => /aria-label="Mark /.test(tag));
+
+  it('names the task checkbox and shows its state in the private view', () => {
+    const html = renderRunPage(twoTaskRun([true, false]), { selectedItemId: 'item-1' });
+
+    expect(taskCheckboxes(html)).toHaveLength(1);
+    expect(taskCheckboxes(html)[0]).toContain('aria-label="Mark &quot;First task&quot; complete"');
+    expect(taskCheckboxes(html)[0]).toContain('aria-checked="true"');
+  });
+
+  it('names every task checkbox in the shared view', () => {
+    const html = renderRunPage(twoTaskRun([true, false]), { selectedItemId: 'item-1', shared: true });
+    const [first, last] = taskCheckboxes(html);
+
+    expect(taskCheckboxes(html)).toHaveLength(2);
+    expect(first).toContain('aria-label="Mark &quot;First task&quot; complete"');
+    expect(first).toContain('aria-checked="true"');
+    expect(last).toContain('aria-label="Mark &quot;Last task&quot; complete"');
+    expect(last).toContain('aria-checked="false"');
+  });
+});

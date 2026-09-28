@@ -110,6 +110,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
                 {content.subItems.map((subItem: ChecklistSubItem, subItemIndex: number) => (
                   <div key={subItem.id} className="flex items-center gap-3 rounded-md border border-border/70 p-3">
                     <Checkbox
+                      aria-label={subItem.title?.trim() || `Sub-task ${subItemIndex + 1}`}
                       checked={!!subItem.isCompleted}
                       disabled={disabled || !onSubItemToggle}
                       className={disabled || !onSubItemToggle ? "opacity-50" : ""}

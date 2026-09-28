@@ -1,4 +1,5 @@
 import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
@@ -154,5 +155,45 @@ describe('TaskExecutionPanel on a completed run', () => {
     const [taskCheckbox] = findElements(tree, (element) => element.type === 'button');
 
     expect(taskCheckbox?.props.disabled).toBe(false);
+  });
+});
+
+// The task toggle is the only control that unticks a completed task (the footer button
+// becomes Next Task), so assistive technology must hear its name and its checked state.
+describe('TaskExecutionPanel task checkbox is accessible', () => {
+  const toggleOf = (tree: unknown) => findElements(tree, (element) => element.props.role === 'checkbox');
+  const namelessButtons = (html: string) =>
+    (html.match(/<button[^>]*>(?:(?!<\/button>).)*<\/button>/gs) ?? []).filter(
+      (button) => !/aria-label="[^"]+"/.test(button) && !/aria-labelledby="[^"]+"/.test(button) && button.replace(/<[^>]*>/g, '').trim() === '',
+    );
+
+  it('is a checkbox named after the task that shows it is not done', () => {
+    const { tree } = renderPanel({ ...openTask, title: 'Review all page content' }, { kind: 'complete_task' });
+    const [toggle] = toggleOf(tree);
+
+    expect(toggle?.type).toBe('button');
+    expect(toggle?.props['aria-checked']).toBe(false);
+    expect(toggle?.props['aria-label']).toBe('Mark "Review all page content" complete');
+  });
+
+  it('shows that a completed task is checked, under the same name', () => {
+    const { tree } = renderPanel({ ...openTask, title: 'Review all page content', isCompleted: true }, { kind: 'next_task' });
+    const [toggle] = toggleOf(tree);
+
+    expect(toggle?.props['aria-checked']).toBe(true);
+    expect(toggle?.props['aria-label']).toBe('Mark "Review all page content" complete');
+  });
+
+  it('never has a blank name, even for an untitled task', () => {
+    const { tree } = renderPanel({ ...openTask, title: '   ' }, { kind: 'complete_task' }, { taskIndex: 2 });
+    expect(toggleOf(tree)[0]?.props['aria-label']).toBe('Mark "Task 3" complete');
+  });
+
+  it('renders no button without a name', () => {
+    for (const task of [openTask, { ...openTask, isCompleted: true }, { ...openTask, contents: [] }]) {
+      const html = renderToStaticMarkup(renderPanel(task, { kind: 'complete_task' }).tree);
+      expect(html).toContain('role="checkbox"');
+      expect(namelessButtons(html)).toEqual([]);
+    }
   });
 });

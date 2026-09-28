@@ -34,6 +34,7 @@ import { useTemplates } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { canFinishRun, getPrimaryTaskAction } from '@/features/run-execution/primaryTaskAction';
 import { confirmLeaveWithUnsavedNotes, useUnsavedNotesWarning } from '@/features/run-execution/noteDrafts';
+import { getTaskCheckboxLabel } from '@/features/run-execution/taskCheckboxLabel';
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
 import { isRunTitleChange } from '@/features/run-execution/runTitle';
 import { cn } from '@/lib/utils';
@@ -514,13 +515,14 @@ const ChecklistRunPage = () => {
                     </span>
                   </div>
                   <div className="space-y-3 p-4">
-                    {section.items.map((item) => (
+                    {section.items.map((item, itemIndex) => (
                       <div
                         key={item.id}
                         className="rounded-[var(--layout-card-radius)] border border-border bg-background"
                       >
                         <div className="flex items-start gap-4 px-4 py-4">
                           <Checkbox
+                            aria-label={getTaskCheckboxLabel(item.title, itemIndex + 1)}
                             checked={item.isCompleted}
                             disabled={isRunCompleted}
                             onCheckedChange={(checked) => void handleItemToggle(item.id, checked === true)}
