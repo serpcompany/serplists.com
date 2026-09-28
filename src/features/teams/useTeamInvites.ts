@@ -4,8 +4,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createSingleFlight } from '@/features/teams/singleFlight';
 import {
   createInviteLink,
+  isInviteGoneError,
   reissueInviteLink,
   visibleInviteLink,
+  withoutRevokedLink,
   type AssignableTeamRole,
   type InviteLink,
   type PendingInviteConflict,
@@ -88,20 +90,43 @@ export function useTeamInvites(activeTeamId: string | null | undefined, canManag
       }
     });
 
+  // Hide the revoked invite's link (and any offer to replace it) before the
+  // reloads, so a failed reload cannot leave a dead link on screen.
+  const forgetInvite = (inviteId: string) => {
+    setLink((current) => withoutRevokedLink(current, inviteId));
+    setConflict((current) => (current?.inviteId === inviteId ? null : current));
+  };
+
   const revokeInvite = async (teamId: string, inviteId: string) => {
     setRevokingInviteId(inviteId);
     try {
-      await api.revokeTeamInvite(teamId, inviteId);
+      try {
+        await api.revokeTeamInvite(teamId, inviteId);
+      } catch (error) {
+        if (isInviteGoneError(error)) {
+          forgetInvite(inviteId);
+          void reloadInvitesAndActivity(teamId);
+        }
+        throw error;
+      }
+      forgetInvite(inviteId);
       await reloadInvitesAndActivity(teamId);
     } finally {
       setRevokingInviteId(null);
     }
   };
 
+  const invites = invitesQuery.data ?? [];
+  const pendingSnapshot = {
+    inviteIds: invites.map((invite) => invite.id),
+    updatedAt: invitesQuery.dataUpdatedAt,
+    isSettled: invitesQuery.isSuccess && !invitesQuery.isFetching,
+  };
+
   return {
-    invites: invitesQuery.data ?? [],
+    invites,
     isLoadingInvites: invitesQuery.isLoading,
-    link: visibleInviteLink(link, activeTeamId),
+    link: visibleInviteLink(link, activeTeamId, pendingSnapshot),
     conflict: conflict && conflict.teamId === activeTeamId ? conflict : null,
     dismissConflict: () => setConflict(null),
     isCreating,

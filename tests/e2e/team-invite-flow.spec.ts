@@ -308,3 +308,39 @@ test('a manager who lost an invite link can replace it, and the old link stops w
   await expect(inviteePage.getByText('Invite accepted.')).toBeVisible({ timeout: 30_000 });
   await inviteeContext.close();
 });
+
+test('revoking an invite removes its link, and only its link, from the page', async ({ page }) => {
+  test.setTimeout(120_000);
+
+  const suffix = uniqueSuffix();
+  const teamName = `Revoke Team ${suffix}`;
+  const typoEmail = `bob+${suffix}@exmaple.com`;
+  const keptEmail = `kept+${suffix}@e2e.local`;
+
+  await registerAccount(page, { email: `owner+${suffix}@e2e.local`, name: 'Owner User' });
+  await page.goto('/dashboard/settings');
+  await page.locator('#team-name').fill(teamName);
+  await page.getByRole('button', { name: 'Create Organization' }).click();
+  await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(teamName, {
+    timeout: 15_000,
+  });
+
+  const inviteLink = page.getByRole('textbox', { name: 'Invite link' });
+  const copyButton = page.getByRole('button', { name: 'Copy invite link' });
+
+  await createLinkInvite(page, typoEmail);
+  await expect(page.getByText(`Invite link for ${typoEmail}`)).toBeVisible();
+  const revokeTypo = page.getByRole('button', { name: `Revoke invite for ${typoEmail}` });
+  await revokeTypo.click();
+  await expect(revokeTypo).toHaveCount(0, { timeout: 15_000 });
+  await expect(inviteLink).toHaveCount(0);
+  await expect(copyButton).toHaveCount(0);
+
+  // Revoking a different invite keeps the link that is on screen.
+  await createLinkInvite(page, typoEmail);
+  const keptUrl = await createLinkInvite(page, keptEmail);
+  await revokeTypo.click();
+  await expect(revokeTypo).toHaveCount(0, { timeout: 15_000 });
+  await expect(inviteLink).toHaveValue(keptUrl);
+  await expect(page.getByText(`Invite link for ${keptEmail}`)).toBeVisible();
+});

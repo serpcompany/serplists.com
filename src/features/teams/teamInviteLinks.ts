@@ -13,6 +13,15 @@ export type InviteLink = {
   teamId: string;
   email: string;
   url: string;
+  /** When the link was received (ms); a pending list fetched before then cannot hide it. */
+  issuedAt: number;
+};
+
+/** What the pending-invites query knows: the invite ids, when they were fetched, and whether that is final. */
+export type PendingInvitesSnapshot = {
+  inviteIds: readonly string[];
+  updatedAt: number;
+  isSettled: boolean;
 };
 
 /** Creating an invite found one already pending for that email. */
@@ -42,6 +51,7 @@ const toInviteLink = (teamId: string, invite: CreatedTeamInvite, origin?: string
   teamId,
   email: invite.email,
   url: resolveInviteLinkUrl(invite, origin),
+  issuedAt: Date.now(),
 });
 
 /** The pending invite named by a 409 `team_invite_exists` error, or null for any other error. */
@@ -95,7 +105,30 @@ export async function reissueInviteLink(
   return toInviteLink(teamId, invite, origin);
 }
 
-/** The link to show under the active Organization; a late reply for another one is hidden. */
-export function visibleInviteLink(link: InviteLink | null, activeTeamId: string | null | undefined) {
-  return link && link.teamId === activeTeamId ? link : null;
+/**
+ * The link to show under the active Organization. A late reply for another
+ * Organization is hidden, and so is a link whose invite has left the pending
+ * list (revoked here or elsewhere, accepted, or expired), since copying it
+ * would hand out a dead link. A list fetched before the link was issued, or
+ * one still loading, cannot hide it.
+ */
+export function visibleInviteLink(
+  link: InviteLink | null,
+  activeTeamId: string | null | undefined,
+  pending?: PendingInvitesSnapshot,
+): InviteLink | null {
+  if (!link || link.teamId !== activeTeamId) {
+    return null;
+  }
+
+  const inviteLeftPendingList =
+    pending?.isSettled && pending.updatedAt > link.issuedAt && !pending.inviteIds.includes(link.inviteId);
+  return inviteLeftPendingList ? null : link;
 }
+
+/** Drops the shown link when its invite was just revoked; a newer link for another invite stays. */
+export const withoutRevokedLink = (link: InviteLink | null, inviteId: string): InviteLink | null =>
+  link?.inviteId === inviteId ? null : link;
+
+/** Revoking answered 404: the invite was already revoked, accepted, or expired, so its link is dead. */
+export const isInviteGoneError = (error: unknown): boolean => isApiError(error) && error.status === 404;

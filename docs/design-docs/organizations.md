@@ -82,6 +82,7 @@ Invites are link-based today:
 2. The API stores only `token_hash`, never the raw invite token.
 3. The response includes `delivery.mode = "link"`, `invitePath`, and `inviteUrl`.
    The link is shown once. A manager who lost it uses **New link** on the pending invite, or **Create new link** when creating an invite for an email that already has one pending (`409 team_invite_exists` with `details.inviteId`); the previous link stops working.
+   The link box names the invite's email and closes when that invite is revoked, or when a refreshed **Pending invites** list no longer has it (accepted, expired, or revoked elsewhere), so a dead link cannot be copied.
 4. Invitees can accept through the legacy compatibility route `/team-invites/:token` or from incoming invites on `/dashboard/settings`.
 5. A signed-out invitee can **Log in to accept** or **Create an account**; both return to the invite link afterward, including through email verification.
 6. Opening `/team-invites/:token` never joins anyone. The page loads the read-only preview and shows the Organization, inviter, and role with **Accept invite** and **Decline**; only a click accepts. Accepting leaves the active context unchanged and offers **Switch to <Organization>**, so a link from another site cannot quietly move a User's new Templates and Runs into an Organization.

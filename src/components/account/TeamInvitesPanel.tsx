@@ -145,17 +145,20 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
       ) : null}
 
       {link ? (
-        <div className="flex items-center gap-2">
-          <Input aria-label="Invite link" readOnly value={link.url} />
-          <Button
-            aria-label="Copy invite link"
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => void handleCopyInvite(link.url)}
-          >
-            <Copy className="h-4 w-4" />
-          </Button>
+        <div className="space-y-2">
+          <div className="text-sm text-muted-foreground">Invite link for {link.email}</div>
+          <div className="flex items-center gap-2">
+            <Input aria-label="Invite link" readOnly value={link.url} />
+            <Button
+              aria-label="Copy invite link"
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => void handleCopyInvite(link.url)}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       ) : null}
 

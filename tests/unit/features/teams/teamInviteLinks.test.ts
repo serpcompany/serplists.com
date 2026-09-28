@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createInviteLink,
   getPendingInviteConflict,
+  isInviteGoneError,
   reissueInviteLink,
   visibleInviteLink,
+  withoutRevokedLink,
 } from '@/features/teams/teamInviteLinks';
 import { ApiError } from '@/lib/api-errors';
 
@@ -70,6 +72,7 @@ describe('createInviteLink', () => {
         teamId: 'team-1',
         email: 'newhire@example.com',
         url: 'https://serplists.com/team-invites/token-2',
+        issuedAt: expect.any(Number),
       },
     });
   });
@@ -106,6 +109,7 @@ describe('reissueInviteLink', () => {
       teamId: 'team-1',
       email: 'newhire@example.com',
       url: 'https://serplists.com/team-invites/token-2',
+      issuedAt: expect.any(Number),
     });
   });
 
@@ -129,17 +133,70 @@ describe('reissueInviteLink', () => {
 });
 
 describe('visibleInviteLink', () => {
+  const issuedAt = 1_000;
   const link = {
     inviteId: 'invite-1',
     teamId: 'team-1',
     email: 'newhire@example.com',
     url: 'https://serplists.com/team-invites/token-2',
+    issuedAt,
   };
+  const pending = (inviteIds: string[], overrides: Record<string, unknown> = {}) => ({
+    inviteIds,
+    updatedAt: issuedAt + 500,
+    isSettled: true,
+    ...overrides,
+  });
 
   it('shows a link only under the Organization it belongs to', () => {
     expect(visibleInviteLink(link, 'team-1')).toBe(link);
     // A response that arrives after switching Organization is not shown under the new one.
     expect(visibleInviteLink(link, 'team-2')).toBeNull();
     expect(visibleInviteLink(null, 'team-1')).toBeNull();
+  });
+
+  it('shows the link while its invite is still pending', () => {
+    expect(visibleInviteLink(link, 'team-1', pending(['invite-1', 'invite-2']))).toBe(link);
+  });
+
+  it('hides a dead link once the pending list no longer has its invite', () => {
+    // Revoked (here or in another tab), accepted, or expired: copying it would hand out a dead link.
+    expect(visibleInviteLink(link, 'team-1', pending(['invite-2']))).toBeNull();
+  });
+
+  it('keeps a new link while the list that predates it is shown or reloading', () => {
+    expect(visibleInviteLink(link, 'team-1', pending([], { updatedAt: issuedAt - 1 }))).toBe(link);
+    expect(visibleInviteLink(link, 'team-1', pending([], { isSettled: false }))).toBe(link);
+  });
+});
+
+describe('withoutRevokedLink', () => {
+  const link = {
+    inviteId: 'invite-1',
+    teamId: 'team-1',
+    email: 'bob@exmaple.com',
+    url: 'https://serplists.com/team-invites/token-1',
+    issuedAt: 1_000,
+  };
+
+  it('drops the link of the invite that was revoked', () => {
+    expect(withoutRevokedLink(link, 'invite-1')).toBeNull();
+  });
+
+  it('keeps the link when another invite was revoked', () => {
+    expect(withoutRevokedLink(link, 'invite-2')).toBe(link);
+    expect(withoutRevokedLink(null, 'invite-1')).toBeNull();
+  });
+});
+
+describe('isInviteGoneError', () => {
+  it('treats a 404 from revoking as an invite that is already gone', () => {
+    expect(isInviteGoneError(new ApiError({ status: 404, message: 'Invite not found' }))).toBe(true);
+  });
+
+  it('keeps the link for other failures', () => {
+    expect(isInviteGoneError(new ApiError({ status: 500, message: 'Server error' }))).toBe(false);
+    expect(isInviteGoneError(new ApiError({ status: 403, message: 'Forbidden' }))).toBe(false);
+    expect(isInviteGoneError(new Error('Failed to fetch'))).toBe(false);
   });
 });
