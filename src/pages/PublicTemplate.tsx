@@ -9,9 +9,11 @@ import { PublicTemplateView } from '@/components/template/PublicTemplateView';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import { analytics } from '@/lib/analytics';
 import {
+  handleUpgradeRequiredForContext,
   navigateToLoginWithReturnPath,
   startBillingCheckout,
 } from '@/lib/access-flow';
@@ -34,6 +36,7 @@ const PublicTemplate = () => {
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
   const { createRun, createTemplate, templates } = useTemplates();
+  const { isTeamWorkspace } = useWorkspace();
   const [isCreatingRun, setIsCreatingRun] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const {
@@ -86,7 +89,12 @@ const PublicTemplate = () => {
       }
 
       if (result.kind === 'upgrade_required') {
-        await startBillingCheckout(billingState.billingEnabled);
+        // The run starts in the active context, so an Organization at its limit
+        // needs an Organization plan; a Personal checkout cannot lift it.
+        await handleUpgradeRequiredForContext({
+          billingEnabled: billingState.billingEnabled,
+          isTeamWorkspace,
+        });
         return;
       }
 

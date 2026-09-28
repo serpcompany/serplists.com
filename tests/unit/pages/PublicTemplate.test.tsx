@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { HelmetProvider } from 'react-helmet-async';
 import { Route, Routes } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import PublicTemplate from '@/pages/PublicTemplate';
 
@@ -15,10 +15,45 @@ import { resolvePublicTemplateOwnerSlug } from '@/lib/routes';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 const mockUseTemplateDetailModel = vi.fn();
+const mocks = vi.hoisted(() => ({
+  handleUpgradeRequiredForContext: vi.fn(),
+  isTeamWorkspace: false,
+  navigateToLoginWithReturnPath: vi.fn(),
+  startBillingCheckout: vi.fn(),
+  viewProps: null as null | {
+    onSaveTemplate: () => Promise<void> | void;
+    onStartRun: () => Promise<void> | void;
+  },
+}));
 
 vi.mock('@/features/template-detail/useTemplateDetailModel', () => ({
   useTemplateDetailModel: (...args: unknown[]) => mockUseTemplateDetailModel(...args),
 }));
+
+vi.mock('@/contexts/WorkspaceContext', () => ({
+  useWorkspace: () => ({ isTeamWorkspace: mocks.isTeamWorkspace }),
+}));
+
+vi.mock('@/lib/access-flow', () => ({
+  handleUpgradeRequiredForContext: mocks.handleUpgradeRequiredForContext,
+  navigateToLoginWithReturnPath: mocks.navigateToLoginWithReturnPath,
+  startBillingCheckout: mocks.startBillingCheckout,
+}));
+
+// Render the real view, but keep its handlers so tests can press its buttons.
+vi.mock('@/components/template/PublicTemplateView', async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import('@/components/template/PublicTemplateView')
+  >();
+  return {
+    PublicTemplateView: (
+      props: React.ComponentProps<typeof actual.PublicTemplateView>,
+    ) => {
+      mocks.viewProps = props;
+      return React.createElement(actual.PublicTemplateView, props);
+    },
+  };
+});
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ isAuthenticated: false, user: null }),
@@ -189,7 +224,10 @@ const publishedClipyTemplate: ChecklistTemplate = {
   tags: ['Clipy'],
 };
 
-function renderPublishedRoute(template: ChecklistTemplate) {
+function renderPublishedRoute(
+  template: ChecklistTemplate,
+  model: Record<string, unknown> = {},
+) {
   mockUseTemplateDetailModel.mockReturnValue({
     billingState: { billingEnabled: true, isLoading: false, isPro: false },
     loading: false,
@@ -198,6 +236,7 @@ function renderPublishedRoute(template: ChecklistTemplate) {
     startRun: vi.fn(),
     template,
     totalItems: 0,
+    ...model,
   });
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
@@ -246,5 +285,56 @@ describe('PublicTemplate rendered route', () => {
 
     expect(helmet.title.toString()).toContain('Reviewed Clipy Checklist');
     expect(helmet.meta.toString()).toContain('content="Persisted Clipy summary."');
+  });
+});
+
+describe('PublicTemplate plan limits', () => {
+  afterEach(() => {
+    mocks.handleUpgradeRequiredForContext.mockReset();
+    mocks.startBillingCheckout.mockReset();
+    mocks.isTeamWorkspace = false;
+    mocks.viewProps = null;
+  });
+
+  it('shows the Organization-plan flow, not a Personal checkout, when an Organization run hits its limit', async () => {
+    mocks.isTeamWorkspace = true;
+    renderPublishedRoute(publishedClipyTemplate, {
+      startRun: vi.fn().mockResolvedValue({ kind: 'upgrade_required' }),
+    });
+
+    await mocks.viewProps?.onStartRun();
+
+    expect(mocks.handleUpgradeRequiredForContext).toHaveBeenCalledTimes(1);
+    expect(mocks.handleUpgradeRequiredForContext).toHaveBeenCalledWith({
+      billingEnabled: true,
+      isTeamWorkspace: true,
+    });
+    expect(mocks.startBillingCheckout).not.toHaveBeenCalled();
+  });
+
+  it('sends a Personal run limit through the same context-aware upgrade flow', async () => {
+    renderPublishedRoute(publishedClipyTemplate, {
+      startRun: vi.fn().mockResolvedValue({ kind: 'upgrade_required' }),
+    });
+
+    await mocks.viewProps?.onStartRun();
+
+    expect(mocks.handleUpgradeRequiredForContext).toHaveBeenCalledWith({
+      billingEnabled: true,
+      isTeamWorkspace: false,
+    });
+    expect(mocks.startBillingCheckout).not.toHaveBeenCalled();
+  });
+
+  it('keeps Save on the Personal checkout, since the copy goes to Personal', async () => {
+    mocks.isTeamWorkspace = true;
+    renderPublishedRoute(publishedClipyTemplate, {
+      saveTemplate: vi.fn().mockResolvedValue({ kind: 'upgrade_required' }),
+    });
+
+    await mocks.viewProps?.onSaveTemplate();
+
+    expect(mocks.startBillingCheckout).toHaveBeenCalledWith(true);
+    expect(mocks.handleUpgradeRequiredForContext).not.toHaveBeenCalled();
   });
 });

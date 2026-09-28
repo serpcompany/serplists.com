@@ -98,7 +98,11 @@ Route `upgrade_required` and `limit_reached` through
 `handleUpgradeRequiredForContext` in `src/lib/access-flow.ts` so every page
 answers them the same way: Personal starts the Pro checkout, and an Organization
 shows the Organization-plan message without starting a Personal checkout, since
-Personal Pro does not lift Organization limits. Report each failure once.
+Personal Pro does not lift Organization limits. Report each failure once. Start
+Run follows this on My Templates, template detail and the public template page,
+because a run always starts in the active context. Saving a public template to
+your account is gated on the Personal plan, so that prompt starts the Personal
+checkout.
 
 Billing status query keys must include the current user id (or an explicit
 guest marker). Never reuse a cached plan between accounts, and do not render a
