@@ -22,6 +22,7 @@ import { getAccessFailure } from "@/lib/api-errors";
 import { getBillingStatusQueryKey } from "@/lib/billing";
 import { formatImportFailure, formatImportSummaryMessage, getImportSummaryFromError } from "@/lib/templates/templateImportSummary";
 import { addPublicTemplatesToPack, selectPublicTemplatesForExport } from "@/lib/templates/portableExport";
+import { isPersonalTemplateOf } from "@/lib/templates/templateOwnership";
 import { cn } from "@/lib/utils";
 
 interface TemplateBackupProps {
@@ -88,9 +89,11 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const ownedTemplates = activeTeamId
     ? allTemplates.filter(t => t.teamId === activeTeamId)
     : user
-      ? allTemplates.filter(t => t.userId === user.id && !t.teamId)
+      ? allTemplates.filter(t => isPersonalTemplateOf(t, user.id))
       : [];
-  const communityTemplates = selectPublicTemplatesForExport(templates, { userId: user?.id, teamId: activeTeamId });
+  const communityTemplates = selectPublicTemplatesForExport(templates, {
+    userId: user?.id, teamId: activeTeamId, ownedTemplateIds: ownedTemplates.map((t) => t.id),
+  });
   const templatesToExport = includePublicTemplates
     ? [...ownedTemplates, ...communityTemplates]
     : ownedTemplates;

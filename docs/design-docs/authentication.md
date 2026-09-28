@@ -37,6 +37,8 @@ and user-facing failure states when a supporting service is unavailable.
   policy client-side.
 - Profile: `name`, `username`, `avatar_url`; public lookup through
   `GET /api/profiles/by-username?username=...` and `GET /api/profiles/by-id?userId=...`.
+  Both resolve only Users who have a username; `by-id` returns 404 for anyone else, so an
+  id from a public response never turns into the name of someone without a public profile.
 - Settings live at `/dashboard/settings`; `/account` and `/dashboard/profile`
   redirect there.
 

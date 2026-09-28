@@ -92,6 +92,14 @@ describe('template detail mappers', () => {
     ]);
   });
 
+  it('keeps the owner type, which public responses send instead of team_id', () => {
+    const base = { id: 'template-1', title: 'Plan', sections: [], user_id: 'user-1', is_public: true };
+
+    expect(mapApiTemplateToChecklistTemplate({ ...base, owner_type: 'team' }, 'plan').ownerType).toBe('team');
+    expect(mapApiTemplateToChecklistTemplate({ ...base, owner_type: 'user' }, 'plan').ownerType).toBe('user');
+    expect(mapApiTemplateToChecklistTemplate(base, 'plan').ownerType).toBeUndefined();
+  });
+
   it('wraps legacy flat items into a single checklist section', () => {
     const mapped = mapApiTemplateToChecklistTemplate(
       {

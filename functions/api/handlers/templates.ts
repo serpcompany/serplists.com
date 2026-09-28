@@ -59,6 +59,7 @@ import {
   type TemplateInsertValues,
   type TemplateVersionValues,
 } from '../utils/template-insert';
+import { isOwnPersonalTemplateRow, toPublicTemplate } from '../utils/template-public';
 
 const junkTemplateTitles = new Set(['Test Template', 'Updated Template Title']);
 
@@ -283,13 +284,22 @@ async function canViewTemplate(env: Env, template: Record<string, unknown>, user
   return template.user_id === userId;
 }
 
-async function canViewTemplateHistory(env: Env, template: Record<string, unknown>, userId: string): Promise<boolean> {
+// The owner of a Personal template, or a member of the Organization that owns it.
+async function canViewPrivateTemplate(env: Env, template: Record<string, unknown>, userId: string): Promise<boolean> {
   if (template.owner_type === 'team' && typeof template.team_id === 'string' && template.team_id) {
     const membership = await getActiveTeamMembership(env, template.team_id, userId);
     return membership ? canViewTeam(normalizeTeamRole(membership.role)) : false;
   }
 
   return template.user_id === userId;
+}
+
+// The whole row for its owner or an Organization member. Anyone else who may view it (a
+// public template) gets only PUBLIC_TEMPLATE_FIELDS; null means not found for this viewer.
+async function serializeTemplateForViewer(env: Env, row: Record<string, unknown>, userId: string | null) {
+  if (typeof row.deleted_at === 'string' && row.deleted_at) return null;
+  if (userId && (await canViewPrivateTemplate(env, row, userId))) return parseTemplateRow(row);
+  return row.is_public === true || row.is_public === 1 ? toPublicTemplate(parseTemplateRow(row)) : null;
 }
 
 async function canEditTemplate(env: Env, template: Record<string, unknown>, userId: string): Promise<boolean> {
@@ -703,7 +713,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           .orderBy(desc(templates.created_at)),
       );
 
-      return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
+      return json(rows.map((t) => toPublicTemplate(parseTemplateRow(t as unknown as Record<string, unknown>))));
     }
 
     // GET /api/templates/slug/:slug
@@ -715,11 +725,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           .limit(1),
       );
 
-      if (!template || !(await canViewTemplate(env, template as unknown as Record<string, unknown>, userId))) {
-        return jsonError('Template not found', 404);
-      }
-
-      return json(parseTemplateRow(template as unknown as Record<string, unknown>));
+      const body = template ? await serializeTemplateForViewer(env, template as unknown as Record<string, unknown>, userId) : null;
+      return body ? json(body) : jsonError('Template not found', 404);
     }
 
     // GET /api/templates/archived?teamId=...
@@ -769,7 +776,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           .limit(1),
       );
 
-      if (!template || !(await canViewTemplateHistory(env, template as unknown as Record<string, unknown>, userId))) {
+      if (!template || !(await canViewPrivateTemplate(env, template as unknown as Record<string, unknown>, userId))) {
         return jsonError('Template not found', 404);
       }
 
@@ -821,11 +828,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           .limit(1),
       );
 
-      if (!template || !(await canViewTemplate(env, template as unknown as Record<string, unknown>, userId))) {
-        return jsonError('Template not found', 404);
-      }
-
-      return json(parseTemplateRow(template as unknown as Record<string, unknown>));
+      const body = template ? await serializeTemplateForViewer(env, template as unknown as Record<string, unknown>, userId) : null;
+      return body ? json(body) : jsonError('Template not found', 404);
     }
 
     // GET /api/templates (list)
@@ -866,12 +870,18 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           .where(whereClause)
           .orderBy(desc(templates.created_at)),
       );
-      return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
+      // Only the user's own Personal rows are sent whole. The catalog is one body for every
+      // visitor, so it always carries public fields only, even the user's own templates.
+      return json(rows.map((t) => {
+        const row = t as unknown as Record<string, unknown>;
+        return !publicCatalog && isOwnPersonalTemplateRow(row, userId) ? parseTemplateRow(row) : toPublicTemplate(parseTemplateRow(row));
+      }));
     };
 
     // The public catalog reads every public Template, so serve it from the edge for up to
-    // 5 minutes (the app's client staleTime).
-    return publicCatalog ? withEdgeCache(request, '/api/templates?scope=public', 5 * 60, listTemplates) : listTemplates();
+    // 5 minutes (the app's client staleTime). The key names the response shape, so a deploy
+    // that changes the shape never serves the previous one from the edge.
+    return publicCatalog ? withEdgeCache(request, '/api/templates?scope=public&fields=public', 5 * 60, listTemplates) : listTemplates();
   }
 
   if (request.method === 'POST') {
@@ -895,7 +905,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       );
       const templateRecord = existingTemplate as unknown as Record<string, unknown>;
 
-      if (!existingTemplate || !(await canViewTemplateHistory(env, templateRecord, userId))) {
+      if (!existingTemplate || !(await canViewPrivateTemplate(env, templateRecord, userId))) {
         return jsonError('Template not found', 404);
       }
       if (!(await canEditTemplate(env, templateRecord, userId))) {

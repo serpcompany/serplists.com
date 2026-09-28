@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { buildCreateRunRequest } from '@/contexts/TemplatesContext';
+import { buildCreateRunRequest, mapApiTemplate } from '@/contexts/TemplatesContext';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -362,5 +362,18 @@ describe('run titles taken from long template titles', () => {
 
     expect(request.title.length).toBeLessThanOrEqual(160);
     expect(request.apiPayload.title).toBe(request.title);
+  });
+});
+
+describe('mapApiTemplate', () => {
+  // Public catalog rows carry owner_type but no team_id, so the owner type is what tells an
+  // Organization template apart from a Personal one.
+  it('keeps the owner type of a public catalog row', () => {
+    const base = { id: 't1', title: 'Plan', sections: [], user_id: 'user-1', is_public: true };
+
+    expect(mapApiTemplate({ ...base, owner_type: 'team' })).toMatchObject({ ownerType: 'team', teamId: undefined });
+    expect(mapApiTemplate({ ...base, owner_type: 'user' }).ownerType).toBe('user');
+    expect(mapApiTemplate({ ...base, owner_type: 'other' }).ownerType).toBeUndefined();
+    expect(mapApiTemplate({ ...base, owner_type: 'team', team_id: 'org-1' }).teamId).toBe('org-1');
   });
 });

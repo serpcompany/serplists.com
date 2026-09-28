@@ -19,6 +19,11 @@
 - **Uploads** are written under the uploader's key prefix, and deletes are
   restricted to that prefix.
 - **Invites** store only a token hash, never the raw token.
+- **Public responses are allowlisted, not spread from a row.** Public Template
+  responses use the fields in `functions/api/utils/template-public.ts`, so they
+  never name an Organization or the members who edited a Template. The
+  `/api/profiles/by-id` lookup resolves only Users who have a username
+  ([system overview](design-docs/system-overview.md)).
 
 ## Secrets and environment
 

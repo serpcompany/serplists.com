@@ -59,6 +59,8 @@ export type ChecklistTemplate = {
     username?: string;
   };
   teamId?: string;
+  // Public catalog rows carry no teamId, so this is what marks an Organization template there.
+  ownerType?: "user" | "team";
 };
 
 export type TemplateSavePayload = {

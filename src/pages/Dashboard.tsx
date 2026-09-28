@@ -42,6 +42,7 @@ import {
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
 } from '@/lib/routes';
+import { isPersonalTemplateOf } from '@/lib/templates/templateOwnership';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -100,7 +101,7 @@ const Dashboard = () => {
       workspaceTemplates.filter(
         (template) =>
           template.teamId ||
-          (template.userId === user?.id && !template.id.startsWith('repo:')),
+          (isPersonalTemplateOf(template, user?.id) && !template.id.startsWith('repo:')),
       ),
     [workspaceTemplates, user?.id],
   );

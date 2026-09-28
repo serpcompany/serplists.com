@@ -204,6 +204,21 @@ describe('buildDashboardTemplatesState', () => {
     expect(state.isEmpty).toBe(false);
     expect(state.canCreateRun).toBe(false);
   });
+
+  // Public catalog rows leave out team_id, so an Organization template the user created
+  // is recognised by its owner type and stays out of Personal.
+  it('leaves an Organization template from the public catalog out of Personal', () => {
+    const state = buildDashboardTemplatesState({
+      allTemplates: [
+        buildTemplate({ id: 'personal', ownerType: 'user' }),
+        buildTemplate({ id: 'org-from-catalog', ownerType: 'team', isPublic: true }),
+        buildTemplate({ id: 'org-from-workspace', teamId: 'org-1' }),
+      ],
+      userId: 'user-1',
+    });
+
+    expect(state.templates.map((template) => template.id)).toEqual(['personal']);
+  });
 });
 
 describe('dashboard template lane actions', () => {

@@ -21,11 +21,13 @@ const template = (id: string, overrides: Partial<ChecklistTemplate> = {}): Check
 });
 
 describe('adding public templates to an export', () => {
+  // Catalog rows carry owner_type but no team_id: the API leaves Organization ids out of
+  // public responses.
   const catalog = [
-    template('community'),
-    template('mine-personal', { userId: 'user-1' }),
-    template('mine-in-org', { userId: 'user-1', teamId: 'org-1' }),
-    template('other-org', { teamId: 'org-2' }),
+    template('community', { ownerType: 'user' }),
+    template('mine-personal', { userId: 'user-1', ownerType: 'user' }),
+    template('mine-in-org', { userId: 'user-1', ownerType: 'team' }),
+    template('other-org', { ownerType: 'team' }),
     template('repo:library', { userId: 'repo-template-catalog' }),
     template('private', { isPublic: false }),
   ];
@@ -37,8 +39,15 @@ describe('adding public templates to an export', () => {
   });
 
   it('in an Organization, leaves out that Organization\'s templates and keeps the user\'s public Personal ones', () => {
-    expect(ids(selectPublicTemplatesForExport(catalog, { userId: 'user-1', teamId: 'org-1' })))
+    expect(ids(selectPublicTemplatesForExport(catalog, { userId: 'user-1', teamId: 'org-1', ownedTemplateIds: ['mine-in-org'] })))
       .toEqual(['community', 'mine-personal', 'other-org']);
+  });
+
+  it('still recognises Organization templates by team id when a row has one', () => {
+    const withTeamIds = [template('mine-in-org', { teamId: 'org-1' }), template('other-org', { teamId: 'org-2' })];
+
+    expect(ids(selectPublicTemplatesForExport(withTeamIds, { userId: 'user-1', teamId: 'org-1' }))).toEqual(['other-org']);
+    expect(ids(selectPublicTemplatesForExport(withTeamIds, { userId: 'user-1' }))).toEqual(['mine-in-org', 'other-org']);
   });
 
   it('never adds the bundled library or a private template', () => {

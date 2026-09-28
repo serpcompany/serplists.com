@@ -17,7 +17,11 @@ vi.mock('drizzle-orm/d1', () => ({
   drizzle: vi.fn(() => dbMocks.db),
 }));
 
+import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
+import type { SQL } from 'drizzle-orm';
 import { handleProfileById, handleProfileByUsername } from '@functions/api/handlers/auth';
+
+const renderWhere = () => new SQLiteSyncDialect().sqlToQuery(dbMocks.selectChain.where.mock.calls[0][0] as SQL).sql;
 
 describe('Profiles Handlers', () => {
   let mockEnv: any;
@@ -26,6 +30,7 @@ describe('Profiles Handlers', () => {
     dbMocks.db.select.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    dbMocks.selectChain.where.mockClear();
     dbMocks.selectChain.limit.mockReset();
 
     mockEnv = {
@@ -64,6 +69,33 @@ describe('Profiles Handlers', () => {
     expect(response.status).toBe(200);
     expect(data.id).toBe('user-1');
     expect(data.username).toBe('test');
+  });
+
+  // An id taken from a public response must not turn into the name and avatar of someone
+  // who never chose a public username (for example an Organization member who edited a
+  // public template).
+  it('GET /api/profiles/by-id only resolves users with a public username', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([]);
+
+    const request = new Request('http://localhost/api/profiles/by-id?userId=member-2');
+    const response = await handleProfileById(request, mockEnv);
+
+    expect(response.status).toBe(404);
+    expect(renderWhere()).toMatch(/"users"\."id" = \?/);
+    expect(renderWhere()).toMatch(/"users"\."username" is not null/);
+  });
+
+  it('GET /api/profiles/by-id returns the public profile of a user with a username', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
+      { id: 'user-1', full_name: 'Test User', username: 'test', avatar_url: null, created_at: '2026-01-01T00:00:00.000Z' },
+    ]);
+
+    const request = new Request('http://localhost/api/profiles/by-id?userId=user-1');
+    const response = await handleProfileById(request, mockEnv);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toMatchObject({ id: 'user-1', username: 'test' });
   });
 });
 

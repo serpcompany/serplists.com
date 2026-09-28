@@ -144,8 +144,9 @@ Do not use git history for user-generated Template or Organization history. Git 
 ## Public And Private Data
 
 - `GET /api/templates?scope=public` returns the public catalog, identical for every visitor and edge-cached for 5 minutes. `?scope=personal` returns the signed-in User's Personal Templates, and `?teamId=...` the authorized Organization's. With no parameter it returns public Templates plus the User's Personal Templates, for clients loaded before scopes existed (TD-15). Template list and detail responses carry the checklist as parsed `sections` only; the raw `items` column is not sent.
+- Public template responses carry only the allowlisted fields in `functions/api/utils/template-public.ts`. That covers the catalog, Public Profile lists, the public rows of the unscoped list, and slug or id reads by anyone other than the owner or a member of the owning Organization. They leave out `team_id`, `created_by_user_id`, `updated_by_user_id`, `deleted_at` and `content_version`, so they never reveal which Organization owns a Template or which members edited it. The creator stays attributed through `user_id` and the owner fields, and `owner_type` marks an Organization Template. Owners and Organization members still get the whole row.
 - Public template detail routes are available through `/profile/:username/:templateSlug`.
-- Public profiles are available through `/api/profiles/by-username` and `/api/profiles/by-id`.
+- Public profiles are available through `/api/profiles/by-username` and `/api/profiles/by-id`, for Users who have a username only.
 - Shared run links use `/share/:shareToken` and do not expose template editing.
 
 ## Deployment Environments
