@@ -1,6 +1,7 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   getStripeBillingConfig,
+  isMissingStripeCustomer,
   StripeApiError,
   stripeGet,
   stripePostForm,
@@ -109,6 +110,34 @@ describe("stripeGet", () => {
     expect(url).toBe("https://api.stripe.com/v1/subscriptions/sub_1");
     expect(options.method).toBe("GET");
     expect(options.headers.Authorization).toBe("Bearer sk_test_example");
+  });
+
+  it("parses Stripe's error type, code, and param, and keeps its message text out of logs", async () => {
+    const body = {
+      error: {
+        type: "invalid_request_error",
+        code: "resource_missing",
+        param: "customer",
+        message: "No such customer: 'cus_1'; a similar object exists in test mode",
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 400 })));
+
+    const error = await stripeGet("sk_test_example", "/v1/subscriptions?customer=cus_1").catch((err: unknown) => err);
+
+    expect(error).toMatchObject({ status: 400, type: "invalid_request_error", code: "resource_missing", param: "customer" });
+    expect(isMissingStripeCustomer(error)).toBe(true);
+    expect((error as Error).message).toBe("Stripe API error (400): invalid_request_error resource_missing (customer)");
+  });
+
+  it("throws a StripeApiError with only the status for a body that is not JSON", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("<html>Bad gateway</html>", { status: 502 })));
+
+    const error = await stripeGet("sk_test_example", "/v1/subscriptions/sub_1").catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(StripeApiError);
+    expect(error).toMatchObject({ status: 502, code: undefined, param: undefined });
+    expect(isMissingStripeCustomer(error)).toBe(false);
   });
 
   it("throws a StripeApiError carrying the HTTP status", async () => {

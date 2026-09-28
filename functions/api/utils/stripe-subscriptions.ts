@@ -249,6 +249,19 @@ export function upsertStripeCustomer(db: Db, userId: string, stripeCustomerId: s
     });
 }
 
+/**
+ * Maps the customer to the user only when the user has no customer yet. An ended
+ * subscription uses this, so its late event cannot move the user back to a customer
+ * that checkout already replaced.
+ */
+export function linkStripeCustomerIfUnmapped(db: Db, userId: string, stripeCustomerId: string, nowIso: string) {
+  const { stripe_customers } = schema;
+  return db
+    .insert(stripe_customers)
+    .values({ user_id: userId, stripe_customer_id: stripeCustomerId, created_at: nowIso, updated_at: nowIso })
+    .onConflictDoNothing();
+}
+
 export function upsertStripeSubscription(
   db: Db,
   userId: string,

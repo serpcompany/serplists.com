@@ -6,6 +6,8 @@ import { log } from "../utils/logger";
 import { json, jsonError } from "../utils/response";
 import { assertStripeWebhookConfigured, verifyStripeWebhookSignature } from "../utils/stripe";
 import {
+  isTerminalSubscriptionStatus,
+  linkStripeCustomerIfUnmapped,
   loadCurrentSubscription,
   parseSubscriptionSnapshot,
   retrieveSubscription,
@@ -67,8 +69,11 @@ async function subscriptionWrites(
 ): Promise<BatchItem<"sqlite">[]> {
   // A deleted user's subscription row would fail its foreign key on every retry.
   if (!(await userExists(db, userId))) return logSkippedEvent(event, "user_deleted");
+  const linkCustomer = isTerminalSubscriptionStatus(subscription.status)
+    ? linkStripeCustomerIfUnmapped
+    : upsertStripeCustomer;
   return [
-    upsertStripeCustomer(db, userId, subscription.customerId, nowIso),
+    linkCustomer(db, userId, subscription.customerId, nowIso),
     upsertStripeSubscription(db, userId, subscription, nowIso),
   ];
 }

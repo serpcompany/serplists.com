@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { Env } from "../types";
 
 export type StripeConfig = {
@@ -81,15 +82,54 @@ function encodeForm(body: Record<string, string | number | boolean | undefined |
   return params.toString();
 }
 
-/** A non-2xx response from the Stripe API. `status` is the HTTP status code. */
+const stripeErrorBodySchema = z.object({
+  error: z
+    .object({
+      type: z.string().optional(),
+      code: z.string().optional(),
+      param: z.string().optional(),
+    })
+    .passthrough(),
+});
+
+function parseStripeErrorBody(text: string): { type?: string; code?: string; param?: string } {
+  try {
+    const parsed = stripeErrorBodySchema.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data.error : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * A non-2xx response from the Stripe API: the HTTP status plus Stripe's error type,
+ * code, and param when the body has them. Stripe's message text can echo request data
+ * such as an email address, so it stays out of the error message that gets logged.
+ */
 export class StripeApiError extends Error {
   readonly status: number;
+  readonly type?: string;
+  readonly code?: string;
+  readonly param?: string;
 
   constructor(status: number, body: string) {
-    super(`Stripe API error (${status}): ${body}`);
+    const { type, code, param } = parseStripeErrorBody(body);
+    const detail = [type, code].filter(Boolean).join(" ");
+    super(`Stripe API error (${status})${detail ? `: ${detail}` : ""}${param ? ` (${param})` : ""}`);
     this.name = "StripeApiError";
     this.status = status;
+    this.type = type;
+    this.code = code;
+    this.param = param;
   }
+}
+
+/**
+ * Stripe has no such customer in this mode: it was deleted, or the stored id belongs
+ * to the other mode's keys ("a similar object exists in test mode").
+ */
+export function isMissingStripeCustomer(error: unknown): error is StripeApiError {
+  return error instanceof StripeApiError && error.code === "resource_missing" && error.param === "customer";
 }
 
 async function readStripeResponse(resp: Response): Promise<unknown> {

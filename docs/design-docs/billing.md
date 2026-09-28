@@ -149,7 +149,14 @@ Authenticated:
   customer's subscriptions in Stripe (`GET /v1/subscriptions?customer=...`),
   stores them, and applies the same rules. If Stripe cannot answer, checkout
   fails closed with `503 billing_unavailable` and creates no session.
-- `POST /api/billing/portal` → returns `{ url }` to redirect user to Stripe Customer Portal
+  A stored customer that Stripe no longer has (deleted in the Dashboard, or
+  created with the other mode's keys) is replaced: when Stripe answers
+  `resource_missing` for `customer`, checkout creates a new customer (with an
+  idempotency key, so a double click creates one), swaps the mapping only if it
+  still holds the missing id, and retries once. Other Stripe errors never
+  replace the customer. The Checkout idempotency key includes the customer id.
+- `POST /api/billing/portal` → returns `{ url }` to redirect user to Stripe Customer Portal,
+  or `409 billing_customer_missing` when Stripe no longer has the stored customer
 - Stripe returns the user to `/dashboard/settings?billing=success` or
   `?billing=cancel` after Checkout, and to `/dashboard/settings` from the Portal.
   Billing reads `billing=success` and polls Personal status (whichever context is
@@ -186,7 +193,9 @@ rather than retried. Subscription events upsert their customer mapping together
 with subscription state; checkout completion may use `metadata.userId` when
 `client_reference_id` is absent. A completed subscription-mode Checkout also
 reads its subscription from Stripe and stores it, so Pro does not wait on a late
-or lost `customer.subscription.*` event.
+or lost `customer.subscription.*` event. An event for a `canceled` or
+`incomplete_expired` subscription maps its customer only when the user has none,
+so a late event for a replaced customer cannot restore the old mapping.
 
 Stripe does not deliver events in order, and a retried event carries its original,
 possibly stale, snapshot. So `customer.subscription.*` events are only a trigger:

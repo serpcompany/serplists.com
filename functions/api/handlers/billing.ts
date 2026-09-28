@@ -2,7 +2,8 @@ import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { eq } from "drizzle-orm";
 import { json, jsonError } from "../utils/response";
-import { getStripeBillingConfig, stripePostForm } from "../utils/stripe";
+import { getStripeBillingConfig, isMissingStripeCustomer, stripePostForm } from "../utils/stripe";
+import { createStripeCustomer, replaceMissingStripeCustomer } from "../utils/stripe-customers";
 import { getSessionUserId } from "../utils/session";
 import { getEntitlementsForContext, getEntitlementsForUser } from "../utils/entitlements";
 import { log } from "../utils/logger";
@@ -13,7 +14,6 @@ import {
 } from "../utils/stripe-subscriptions";
 import { canViewTeam, getActiveTeamMembership, normalizeTeamRole } from "../utils/team-access";
 
-type StripeCustomer = { id: string };
 type StripeCheckoutSession = { id: string; url: string | null };
 type StripePortalSession = { id: string; url: string };
 
@@ -120,7 +120,7 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
 
     const nowIso = new Date().toISOString();
     const db = createDb(env);
-    const { stripe_customers, users } = schema;
+    const { stripe_customers } = schema;
 
     const [existingCustomer] = await db
       .select()
@@ -128,33 +128,35 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
       .where(eq(stripe_customers.user_id, userId))
       .limit(1);
 
-    let stripeCustomerId: string | null = existingCustomer?.stripe_customer_id ?? null;
+    let stripeCustomerId: string;
+    // A stored customer can be gone from Stripe (deleted, or from the other mode's keys).
+    // It is replaced at most once per request, and only when Stripe says it is missing.
+    let canReplaceCustomer = false;
 
-    if (stripeCustomerId) {
+    if (existingCustomer?.stripe_customer_id) {
+      stripeCustomerId = existingCustomer.stripe_customer_id;
+      canReplaceCustomer = true;
       // D1 learns about subscriptions from webhooks, which can lag or fail, so ask
       // Stripe too. Fail closed: a missed subscription would be billed twice.
-      let stripeOpenStatus: string | null;
+      let stripeOpenStatus: string | null = null;
       try {
         stripeOpenStatus = await syncCustomerSubscriptions(env, secretKey, userId, stripeCustomerId);
       } catch (error) {
-        log("error", "stripe_subscription_check_failed", {
-          userId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return billingUnavailable();
+        if (!isMissingStripeCustomer(error)) {
+          log("error", "stripe_subscription_check_failed", {
+            userId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return billingUnavailable();
+        }
+        // A customer Stripe does not have holds no subscription in this mode.
+        stripeCustomerId = await replaceMissingStripeCustomer(db, secretKey, userId, stripeCustomerId);
+        canReplaceCustomer = false;
       }
       const stripeConflict = openSubscriptionConflict(stripeOpenStatus);
       if (stripeConflict) return stripeConflict;
     } else {
-      const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
-      const email = user?.email;
-
-      const customer = await stripePostForm<StripeCustomer>(secretKey, "/v1/customers", {
-        email: email ?? undefined,
-        "metadata[userId]": userId,
-      });
-
-      stripeCustomerId = customer.id;
+      stripeCustomerId = await createStripeCustomer(db, secretKey, userId);
 
       try {
         await db.insert(stripe_customers).values({
@@ -174,27 +176,40 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
     const successUrl = `${origin}${SETTINGS_PATH}?billing=success`;
     const cancelUrl = `${origin}${SETTINGS_PATH}?billing=cancel`;
 
-    const session = await stripePostForm<StripeCheckoutSession>(
-      secretKey,
-      "/v1/checkout/sessions",
-      {
-        mode: "subscription",
-        customer: stripeCustomerId,
-        client_reference_id: userId,
-        "line_items[0][price]": proPriceId,
-        "line_items[0][quantity]": 1,
-        success_url: successUrl,
-        cancel_url: cancelUrl,
-        "metadata[userId]": userId,
-        "subscription_data[metadata][userId]": userId,
-        allow_promotion_codes: true,
-      },
-      {
-        // Reuse a Checkout Session when a client retries or double-submits in the
-        // same five-minute window. A later attempt can still start a fresh session.
-        idempotencyKey: `checkout-${userId}-${Math.floor(Date.now() / 300_000)}`,
-      },
-    );
+    const createSession = (customerId: string) =>
+      stripePostForm<StripeCheckoutSession>(
+        secretKey,
+        "/v1/checkout/sessions",
+        {
+          mode: "subscription",
+          customer: customerId,
+          client_reference_id: userId,
+          "line_items[0][price]": proPriceId,
+          "line_items[0][quantity]": 1,
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+          "metadata[userId]": userId,
+          "subscription_data[metadata][userId]": userId,
+          allow_promotion_codes: true,
+        },
+        {
+          // Reuse a Checkout Session when a client retries or double-submits in the
+          // same five-minute window. A later attempt can still start a fresh session.
+          // The customer is part of the key: Stripe rejects a reused key whose
+          // parameters changed, as they do after a customer is replaced.
+          idempotencyKey: `checkout-${userId}-${customerId}-${Math.floor(Date.now() / 300_000)}`,
+        },
+      );
+
+    let session: StripeCheckoutSession;
+    try {
+      session = await createSession(stripeCustomerId);
+    } catch (error) {
+      // A deleted customer can still list subscriptions (none) but cannot check out.
+      if (!canReplaceCustomer || !isMissingStripeCustomer(error)) throw error;
+      stripeCustomerId = await replaceMissingStripeCustomer(db, secretKey, userId, stripeCustomerId);
+      session = await createSession(stripeCustomerId);
+    }
 
     if (!session.url) return jsonError("Stripe session missing URL", 500);
     return json({ url: session.url });
@@ -218,11 +233,21 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
     }
 
     const returnUrl = `${origin}${SETTINGS_PATH}`;
-    const portal = await stripePostForm<StripePortalSession>(secretKey, "/v1/billing_portal/sessions", {
-      customer: existingCustomer.stripe_customer_id,
-      return_url: returnUrl,
-      configuration: env.STRIPE_PORTAL_CONFIGURATION_ID,
-    });
+    let portal: StripePortalSession;
+    try {
+      portal = await stripePostForm<StripePortalSession>(secretKey, "/v1/billing_portal/sessions", {
+        customer: existingCustomer.stripe_customer_id,
+        return_url: returnUrl,
+        configuration: env.STRIPE_PORTAL_CONFIGURATION_ID,
+      });
+    } catch (error) {
+      if (!isMissingStripeCustomer(error)) throw error;
+      // Checkout replaces the missing customer; the portal has nothing to show for one.
+      log("warn", "stripe_customer_missing", { userId, stripeCustomerId: existingCustomer.stripe_customer_id });
+      return jsonError("Your billing account could not be found. Contact support.", 409, {
+        code: "billing_customer_missing",
+      });
+    }
 
     return json({ url: portal.url });
   }
