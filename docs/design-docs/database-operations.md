@@ -93,6 +93,15 @@ pnpm run db:migrate:d1:prod
 pnpm run check:prod:d1-schema
 ```
 
+A remote baseline needs exactly one of `--preview` (staging, as
+`db:migrations:baseline:staging` passes) or `--allow-production` (production). The
+script resolves the target the way Wrangler does: `DB` and `serp-checklists-db`
+both mean production unless `--preview` is set, so `--database DB` without
+`--preview` is refused. `--allow-production` is refused for anything that does not
+resolve to production, a name outside `wrangler.toml` is refused, and so is any
+remote run while `CLOUDFLARE_ENV` is set. The dry run prints the resolved database
+UUID.
+
 Use `--through 0021` only if the legacy-named `teams`/audit migration was already
 applied outside Wrangler. Never baseline past a migration whose objects are not
 already in the database: baselining only records ledger rows, and
