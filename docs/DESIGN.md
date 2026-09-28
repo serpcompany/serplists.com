@@ -20,6 +20,10 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
   `DashboardContentShell`, `DashboardPageHeader`, `DashboardToolbar`,
   `DashboardScrollArea`, `DashboardEmptyState`, and `DashboardMetricCard`. New
   console screens compose these instead of new page chrome.
+- **Public header on phones:** below `md` the public shell hides its nav links, Log in
+  and the theme switch, and `src/components/layout/PublicMobileNav.tsx` shows them in a
+  menu built from `publicHeaderLinks`, so a new header link reaches phones too. The
+  console shell uses its own `MobileNav` instead.
 
 ## Conventions
 
