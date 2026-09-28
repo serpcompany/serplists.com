@@ -78,6 +78,10 @@ function pendingInviteWhere(db: ReturnType<typeof createDb>, invite: TeamInvite,
 
   return and(
     eq(team_invites.id, invite.id),
+    // The invite as read: a new link made meanwhile (a new token, maybe a new role) leaves
+    // it unaccepted, so neither the old link nor the old role is ever applied.
+    eq(team_invites.token_hash, invite.token_hash),
+    eq(team_invites.role, invite.role),
     isNull(team_invites.accepted_at),
     isNull(team_invites.revoked_at),
     gt(team_invites.expires_at, now),

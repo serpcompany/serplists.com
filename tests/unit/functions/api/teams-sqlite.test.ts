@@ -454,6 +454,78 @@ describe("Organization membership writes against SQLite", () => {
     });
   });
 
+  // A manager's new link replaces the old one and can change the role. An accept that read
+  // the invite before the new link was made must not apply the old role or the old link.
+  describe("an invite whose link is reissued while it is being accepted", () => {
+    async function inviteNewUser(role = "admin") {
+      const created = await asUser("admin-user", "POST", "/team-1/invites", { email: "new@example.test", role });
+      expect(created.status).toBe(200);
+      return { id: created.data?.id as string, token: created.data?.inviteToken as string };
+    }
+
+    function inviteRow(id: string) {
+      return d1.rows<{ role: string; accepted_at: string | null }>("SELECT role, accepted_at FROM team_invites WHERE id = ?", id)[0];
+    }
+
+    function newUserMembership() {
+      return d1.rows("SELECT role, status FROM team_members WHERE team_id = 'team-1' AND user_id = 'new-user'");
+    }
+
+    function reissueBeforeTheAccept(inviteId: string, role: string) {
+      let newToken = "";
+      d1.beforeNextBatch(async () => {
+        const reissued = await asUser("owner-user", "POST", `/team-1/invites/${inviteId}/link`, { role });
+        expect(reissued.status).toBe(200);
+        newToken = reissued.data?.inviteToken as string;
+      });
+      return () => newToken;
+    }
+
+    it.each([
+      ["the old link", (invite: { token: string }) => `/invites/${invite.token}/accept`],
+      ["the incoming list", (invite: { id: string }) => `/invites/pending/${invite.id}/accept`],
+    ])("never grants the old role through %s", async (_label, acceptPath) => {
+      const invite = await inviteNewUser("admin");
+      const newToken = reissueBeforeTheAccept(invite.id, "viewer");
+
+      const accepted = await asUser("new-user", "POST", acceptPath(invite));
+
+      expect(accepted.status).toBe(409);
+      expect(accepted.data?.code).toBe("invite_acceptance_conflict");
+      expect(inviteRow(invite.id)).toEqual({ role: "viewer", accepted_at: null });
+      expect(newUserMembership()).toEqual([]);
+      expect(auditActions("team_invite.accepted")).toHaveLength(0);
+
+      // The old link stays dead; the new one, or the refreshed incoming list, grants the new role.
+      expect((await asUser("new-user", "POST", `/invites/${invite.token}/accept`)).status).toBe(404);
+      expect((await asUser("new-user", "POST", `/invites/${newToken()}/accept`)).status).toBe(200);
+      expect(newUserMembership()).toEqual([{ role: "viewer", status: "active" }]);
+    });
+
+    it("never re-enables a disabled member with the old role", async () => {
+      d1.run(
+        `INSERT INTO team_members (id, team_id, user_id, role, status, joined_at, created_at, updated_at)
+         VALUES ('member-new', 'team-1', 'new-user', 'viewer', 'disabled', ?, ?, ?)`,
+        createdAt, createdAt, createdAt,
+      );
+      const invite = await inviteNewUser("admin");
+      reissueBeforeTheAccept(invite.id, "viewer");
+
+      const accepted = await asUser("new-user", "POST", `/invites/pending/${invite.id}/accept`);
+
+      expect(accepted.status).toBe(409);
+      expect(member("member-new")).toEqual({ role: "viewer", status: "disabled" });
+      expect(auditActions("team_invite.accepted")).toHaveLength(0);
+    });
+
+    it("still grants the invite's role when no new link is made", async () => {
+      const invite = await inviteNewUser("editor");
+
+      expect((await asUser("new-user", "POST", `/invites/${invite.token}/accept`)).status).toBe(200);
+      expect(newUserMembership()).toEqual([{ role: "editor", status: "active" }]);
+    });
+  });
+
   describe("invites whose inviter left the Organization", () => {
     async function inviteNewUser(inviterUserId = "admin-user") {
       const created = await asUser(inviterUserId, "POST", "/team-1/invites", { email: "new@example.test", role: "editor" });
