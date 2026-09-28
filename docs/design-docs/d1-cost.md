@@ -35,13 +35,19 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
 2. **Match one index to the filter and the sort.** Use composite or partial indexes that
    cover `WHERE` and `ORDER BY` together. Avoid `OR` across different columns, and
    avoid single-column indexes on low-cardinality columns (`is_public`, `status`); the
-   planner picks them and scans half the table.
+   planner picks them and scans half the table. When such an index still beats a better
+   one, write the term as ``sql`+${column} = 1` ``: unary `+` stops SQLite using an index
+   for that term (the public profile query does this).
 3. **Never write on a read path.** Make upserts conditional so an unchanged value writes
    nothing.
 4. **Every index costs a write.** Each insert writes one row per index, and updates do
    the same for indexed columns they change. Drop unused indexes, and keep
    write-amplified tables (audit, history) lean.
 5. **Cache public, anonymous responses** at the edge. A cache hit reads nothing.
+   Sitemaps use `cachedSitemap()` (`functions/sitemap/shared.ts`): the Cache API key
+   includes the trigger-maintained `sitemap_revisions` and the bundled catalog, so a hit
+   reads 3 rows and any content change or deploy misses. Locally the cache persists in
+   `.wrangler/state/v3/cache`; delete it to see uncommitted sitemap code changes.
 6. **Check the plan after changing indexes.** Planner statistics (`PRAGMA optimize`) fix
    some plans and worsen others, so profile before and after.
 
@@ -52,40 +58,54 @@ statistics (production has none). Production traffic today is tiny (the top 25
 statements read about 104k rows in 31 days), so these are growth risks: each row
 below grows linearly with the table.
 
+Open, all unbounded lists:
+
 | Request | Rows read | Cause |
 | --- | --- | --- |
-| Sitemap index | 41,449 | Loads every public template and user in memory to compute shard `lastmod`s |
-| Update a template | 26,685 | Run reconciliation picks the `status` index and scans all in-progress runs (the `template_id` index exists but is not chosen) |
-| Sitemap templates shard | 19,417 | Loads every entry, then slices one page |
 | Signed-in dashboard templates | 19,219 | One query returns all public templates *or* the user's own, unbounded |
-| Sitemap categories shard | 19,025 | Scans all public templates |
-| Public catalog (`GET /api/templates`) | 19,012 | Unbounded list of every public template, sorted in a temporary B-tree |
-| Organization runs | 10,407 | Unbounded, plus a correlated template subquery per run |
-| Public profile templates | 7,005 | Picks the `is_public` index instead of the owner index |
+| Public catalog (`GET /api/templates`) | 13,009 | Unbounded list of every public template |
+| Organization runs | 12,007 | Unbounded, plus a correlated template subquery per run |
 | Organization templates | 3,007 | Unbounded |
-| Sitemap profiles shard | 3,008 | Scans users |
 | Personal and archived runs | about 1,000 each | Unbounded; archived filters `deleted_at IS NOT NULL` after reading every run |
+| Sitemap cache miss | 41,449 (index), 19,419 (templates shard) | Builds every entry; now only after a content change or deploy, once per data center |
 
-Everything else (session, detail pages, history, members, billing) reads under 20 rows.
+Everything else (session, detail pages, history, members, billing, run starts, template
+updates, cached sitemaps) reads under 25 rows.
 
-Writes per request:
+Fixed in step 1 of the plan (rows read before, after):
 
-| Request | Rows written | Cause |
-| --- | --- | --- |
-| Create a public template | 23 | Template row plus 8 index entries, sitemap triggers, a version row, and an audit event |
-| Start a run | 13 | Run row plus 7 index entries, and an audit event |
-| Update run progress (each checkbox) | 6 | 1 run row and 5 for its audit event (row plus 4 indexes) |
-| Sitemap index (a GET) | 8 | Upserts shard hashes on every request, even when unchanged |
+| Request | Before | After | Fix |
+| --- | --- | --- | --- |
+| Update a template (run reconciliation) | 26,685 | 15 | `idx_checklist_runs_template_owner (template_id, team_id, user_id)`; dropped the `status` index the planner preferred |
+| Start a run on the Free plan (active run count) | 26,676 | 6 | Same `status` index drop; the count now uses the owner index |
+| Update an Organization template | 4,010 | 9 | Same composite index |
+| Public profile templates | 7,005 | 12 | Unary `+` on `is_public`, so `idx_templates_owner` wins |
+| Public catalog | 19,012 | 13,009 | `idx_templates_public_created_at (is_public, created_at)` also covers the sort |
+| Repeat sitemap index / shard | 41,456 / 19,417 | 3 / 3 | Cache API keyed by sitemap revisions |
 
-`PRAGMA optimize` (planner statistics) on the same data: updating a template dropped to
-3 rows read and public profile templates to 12, but the sitemap index rose to 65k and
-the template and category shards to 31k each.
+Writes per request after step 1 (dropped `idx_templates_slug`, `idx_templates_user_id`,
+`idx_templates_category`, `idx_checklist_runs_assigned_to_user_id`,
+`idx_audit_events_actor`, and `idx_template_versions_subject`, none of which any query
+used):
 
-Unused by the profiled workload and by any code filter: `idx_templates_slug` (duplicates
-`idx_templates_slug_unique`), `idx_templates_user_id` (every filter pairs `user_id` with
-`owner_type`, covered by `idx_templates_owner`), `idx_templates_category` (categories
-are JSON arrays), `idx_checklist_runs_assigned_to_user_id`, `idx_audit_events_actor`,
-and `idx_template_versions_subject`. `usage_analytics` is neither read nor written by
-the app.
+| Request | Rows written | Before | Cause |
+| --- | --- | --- | --- |
+| Create a public template | 18 | 23 | Template row plus 4 index entries, sitemap triggers, a version row, and an audit event |
+| Start a run | 10 | 13 | Run row plus 5 index entries, and an audit event |
+| Update run progress (each checkbox) | 5 | 6 | 1 run row and 4 for its audit event (row plus 3 indexes) |
+| Sitemap index after a content change | 8 | 8 | Upserts the changed shard hashes; unchanged shards and cache hits write nothing |
+
+Dropping an index on a foreign key column makes deleting a user scan that table. User
+deletion already scans `templates` and `checklist_runs` for their unindexed
+`created_by_user_id`-style columns, and it is rare, so the saved write on every insert
+wins.
+
+`PRAGMA optimize` (planner statistics) on the pre-step-1 data: updating a template
+dropped to 3 rows read and public profile templates to 12, but the sitemap index rose to
+65k and the template and category shards to 31k each. Re-check after the remaining
+steps.
+
+`usage_analytics` is neither read nor written by the app; dropping it deletes data, so
+it needs a human decision.
 
 The fixes, in order, are tracked in the [D1 cost plan](../exec-plans/active/d1-cost.md).
