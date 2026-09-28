@@ -13,7 +13,6 @@ type JsonRecord = Record<string, unknown>;
 const MAX_AUDIT_COLUMN_BYTES = 64 * 1024;
 export const MAX_AUDIT_USER_AGENT_LENGTH = 512;
 const MAX_LISTED_IDS = 50;
-const CONTENT_KEYS = ['items', 'retired_items'] as const;
 const REDACTED = '[redacted]';
 
 const isRecord = (value: unknown): value is JsonRecord =>
@@ -116,17 +115,6 @@ export function compactAuditDiff<T>(diff: T, before: unknown): T | JsonRecord {
   if ('retired_items' in next) {
     const retired = parseJsonArray(next.retired_items);
     next.retired_items = retired ? { count: retired.length } : { omitted: true };
-  }
-  if (typeof next.share_token === 'string') next.share_token = REDACTED;
-  return next;
-}
-
-/** For history reads: older rows still hold full content copies and share tokens in their diff. */
-export function redactStoredAuditDiff(diff: unknown): unknown {
-  if (!isRecord(diff)) return diff;
-  const next: JsonRecord = { ...diff };
-  for (const key of CONTENT_KEYS) {
-    if (typeof next[key] === 'string' || Array.isArray(next[key])) next[key] = { omitted: true };
   }
   if (typeof next.share_token === 'string') next.share_token = REDACTED;
   return next;

@@ -170,7 +170,7 @@ describe('run audit rows stay small', () => {
     expect(JSON.parse(audit.diff_json).retired_items).toEqual({ count: 0 });
   });
 
-  it('and history responses drop the full copies that older rows still hold', async () => {
+  it('and history responses never return the full copies that older rows still hold', async () => {
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([largeRun()])
       .mockResolvedValueOnce([{
@@ -182,14 +182,13 @@ describe('run audit rows stay small', () => {
       }]);
 
     const response = await send('run-1/history', 'GET', undefined);
-    const data = await response.json() as { events: Array<{ diff: Record<string, unknown> }> };
+    const text = await response.text();
+    const data = JSON.parse(text) as { events: Array<Record<string, unknown>> };
 
     expect(response.status).toBe(200);
-    expect(data.events[0].diff).toEqual({
-      items: { omitted: true },
-      retired_items: { omitted: true },
-      share_token: '[redacted]',
-      status: 'completed',
-    });
+    // History lists do not return diffs at all (see history-queries.ts).
+    expect(data.events[0]).not.toHaveProperty('diff');
+    expect(text).not.toContain('old-token');
+    expect(text).not.toContain('section-1');
   });
 });

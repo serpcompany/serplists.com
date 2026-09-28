@@ -22,7 +22,8 @@
   (`functions/api/utils/shared-run-merge.ts`); every other field is ignored.
   Because the token grants write access, run reads (lists, detail, archived,
   the share page) never return it or its timestamps
-  (`serializeChecklistRun`), and history redacts it. Only the share-creation
+  (`serializeChecklistRun`), and history lists never return the audit diffs
+  where older rows may still hold it. Only the share-creation
   responses hand out a link, and they require permission to update the run.
   `GET /api/checklists/shared/:token` selects and returns a fixed field list
   (`sharedChecklistRunSelect` / `serializeSharedChecklistRun`): title, tasks,
