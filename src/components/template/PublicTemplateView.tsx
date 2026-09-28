@@ -35,7 +35,8 @@ interface PublicTemplateViewProps {
   // Save and Start Run wait until the active ownership context is known.
   isWorkspaceLoading: boolean;
   onStartRun: () => void;
-  onSaveTemplate: () => void;
+  // Resolves true only when the template was saved.
+  onSaveTemplate: () => Promise<boolean>;
 }
 
 const getInitials = (value: string) => value.match(/[A-Za-z0-9]/)?.[0]?.toUpperCase() ?? 'U';
@@ -44,6 +45,7 @@ export function PublicTemplateView({
   template,
   totalItems,
   ownerPath,
+  isBillingLoading,
   isCreatingRun,
   isSaving,
   isWorkspaceLoading,
@@ -79,9 +81,13 @@ export function PublicTemplateView({
   };
 
   const handleSave = async () => {
-    await Promise.resolve(onSaveTemplate());
-    setIsSaved(true);
+    const saved = await onSaveTemplate().catch(() => false);
+    if (saved) {
+      setIsSaved(true);
+    }
   };
+  // Signed-out visitors are never loading a plan, so they can still click Save to sign in.
+  const isSaveDisabled = isSaving || isBillingLoading || isWorkspaceLoading;
 
   return (
     <div className="min-h-screen bg-background">
@@ -111,7 +117,7 @@ export function PublicTemplateView({
               onClick={() => void handleSave()}
               className="gap-2"
               type="button"
-              disabled={isSaving || isWorkspaceLoading}
+              disabled={isSaveDisabled}
             >
               {isSaved ? (
                 <>
@@ -268,7 +274,7 @@ export function PublicTemplateView({
             <Button
               variant="outline"
               onClick={() => void handleSave()}
-              disabled={isSaving || isWorkspaceLoading}
+              disabled={isSaveDisabled}
               type="button"
               className="gap-2"
             >

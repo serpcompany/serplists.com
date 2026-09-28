@@ -480,3 +480,57 @@ describe('PublicTemplate Start Run', () => {
     expect(mockNavigate).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('PublicTemplate Save', () => {
+  beforeEach(() => {
+    mockCreateBillingCheckout.mockReset();
+    mockCreateBillingCheckout.mockResolvedValue({ url: 'https://checkout.stripe.com/c/pay/test' });
+    mockNavigate.mockReset();
+    mockToastError.mockReset();
+    mockUseTemplateDetailModel.mockReset();
+    mockViewProps.mockReset();
+    authState.isAuthenticated = true;
+    authState.user = { id: 'user-1' };
+    workspaceState.activeTeamId = undefined;
+    workspaceState.isTeamWorkspace = false;
+    workspaceState.isWorkspaceLoading = false;
+  });
+
+  it.each([
+    ['an error', { kind: 'error', message: 'Checking your plan. Try again in a moment.' }, true],
+    ['an upgrade that redirects to checkout', { kind: 'upgrade_required' }, true],
+    ['an upgrade while billing is unavailable', { kind: 'upgrade_required' }, false],
+    ['a login redirect', { kind: 'login_required' }, true],
+  ])('reports %s as not saved', async (_label, result, billingEnabled) => {
+    const saveTemplate = vi.fn().mockResolvedValue(result);
+    renderPublishedRoute(publishedClipyTemplate, {
+      billingState: { billingEnabled, isLoading: false, isPro: false },
+      saveTemplate,
+    });
+
+    await expect(lastViewProps().onSaveTemplate()).resolves.toBe(false);
+    expect(saveTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a successful save as saved', async () => {
+    const saveTemplate = vi.fn().mockResolvedValue({ kind: 'ok', templateId: 'clone-1' });
+    renderPublishedRoute(publishedClipyTemplate, { saveTemplate });
+
+    await expect(lastViewProps().onSaveTemplate()).resolves.toBe(true);
+  });
+
+  it('saves once when Save is clicked twice before the first finishes', async () => {
+    const pending = deferred<{ kind: 'ok'; templateId: string }>();
+    const saveTemplate = vi.fn().mockReturnValue(pending.promise);
+    renderPublishedRoute(publishedClipyTemplate, { saveTemplate });
+    const { onSaveTemplate } = lastViewProps();
+
+    const first = onSaveTemplate();
+    const second = onSaveTemplate();
+    pending.resolve({ kind: 'ok', templateId: 'clone-1' });
+
+    await expect(first).resolves.toBe(true);
+    await expect(second).resolves.toBe(false);
+    expect(saveTemplate).toHaveBeenCalledTimes(1);
+  });
+});

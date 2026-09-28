@@ -23,7 +23,7 @@ const renderView = (overrides: Partial<ViewProps> = {}) =>
         isSaving={false}
         isWorkspaceLoading={false}
         onStartRun={() => undefined}
-        onSaveTemplate={() => undefined}
+        onSaveTemplate={async () => false}
         {...overrides}
       />
     </StaticRouter>,
@@ -81,7 +81,7 @@ describe('PublicTemplateView', () => {
           isSaving={false}
           isWorkspaceLoading={false}
           onStartRun={() => undefined}
-          onSaveTemplate={() => undefined}
+          onSaveTemplate={async () => false}
         />
       </StaticRouter>,
     );
@@ -133,7 +133,7 @@ describe('PublicTemplateView', () => {
           isSaving={false}
           isWorkspaceLoading={false}
           onStartRun={() => undefined}
-          onSaveTemplate={() => undefined}
+          onSaveTemplate={async () => false}
         />
       </StaticRouter>,
     );
@@ -165,5 +165,36 @@ describe('PublicTemplateView', () => {
     for (const button of buttons) {
       expect(button).not.toMatch(/<button[^>]*disabled=""/);
     }
+  });
+
+  it('disables Save and Copy to Library while a signed-in plan is loading', () => {
+    const buttons = findButtons(
+      renderView({ isAuthenticated: true, isBillingLoading: true }),
+      /^(Save|Copy to Library)$/,
+    );
+
+    expect(buttons).toHaveLength(2);
+    for (const button of buttons) {
+      expect(button).toMatch(/<button[^>]*disabled=""/);
+    }
+  });
+
+  it('lets signed-out visitors click Save so they can sign in', () => {
+    const buttons = findButtons(
+      renderView({ isAuthenticated: false, isBillingLoading: false }),
+      /^(Save|Copy to Library)$/,
+    );
+
+    expect(buttons).toHaveLength(2);
+    for (const button of buttons) {
+      expect(button).not.toMatch(/<button[^>]*disabled=""/);
+    }
+  });
+
+  it('never shows the saved state before a save succeeds', () => {
+    const html = renderView({ isSaving: true });
+
+    expect(html).toContain('Saving...');
+    expect(html).not.toContain('Saved');
   });
 });

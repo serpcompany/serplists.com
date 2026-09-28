@@ -40,6 +40,7 @@ const PublicTemplate = () => {
   // Set synchronously, so a second click before the re-render cannot create a second run.
   const startRunInFlight = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
+  const saveInFlight = useRef(false);
   const {
     billingState,
     loading,
@@ -118,26 +119,28 @@ const PublicTemplate = () => {
     }
   };
 
-  const handleSaveTemplate = async () => {
-    if (!template || isWorkspaceLoading) return;
+  // Resolves true only when the template was saved; every other outcome is false.
+  const handleSaveTemplate = async (): Promise<boolean> => {
+    if (!template || isWorkspaceLoading || saveInFlight.current) return false;
 
+    saveInFlight.current = true;
     setIsSaving(true);
     try {
       const result = await saveTemplate();
 
       if (result.kind === 'login_required') {
         navigateToLoginWithReturnPath(navigate, location);
-        return;
+        return false;
       }
 
       if (result.kind === 'upgrade_required') {
         await handleUpgrade();
-        return;
+        return false;
       }
 
       if (result.kind === 'error') {
         toast.error(result.message);
-        return;
+        return false;
       }
 
       toast.success('Template saved to your account');
@@ -147,7 +150,9 @@ const PublicTemplate = () => {
           ? buildConsoleTemplatePath(result.templateId)
           : buildConsoleTemplatesPath(),
       );
+      return true;
     } finally {
+      saveInFlight.current = false;
       setIsSaving(false);
     }
   };
@@ -206,6 +211,8 @@ const PublicTemplate = () => {
         publishedTime={displayTemplate.createdAt}
       />
       <PublicTemplateView
+        // A new template gets fresh view state (expanded sections, Saved).
+        key={displayTemplate.id}
         template={displayTemplate}
         totalItems={displayTotalItems}
         ownerSlug={ownerSlug}

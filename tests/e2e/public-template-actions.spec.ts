@@ -40,3 +40,31 @@ test('a double click on the header Start Run creates one run', async ({ page }) 
     await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
   }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
 });
+
+test('a failed Save keeps the Save button instead of showing Saved', async ({ page }) => {
+  await loginAsAdmin(page);
+  let templateCreates = 0;
+  // The library template is copied with POST /api/templates; fail it like a server error.
+  await page.route('**/api/templates', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+    templateCreates += 1;
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Simulated save failure' }),
+    });
+  });
+
+  await openPublicTemplate(page);
+  const headerSave = page.getByRole('button', { name: 'Save', exact: true });
+  await headerSave.dblclick();
+
+  await expect(page.getByText('Simulated save failure').first()).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`${PUBLIC_TEMPLATE_PATH}$`));
+  await expect(headerSave).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Saved' })).toHaveCount(0);
+  expect(templateCreates).toBe(1);
+});
