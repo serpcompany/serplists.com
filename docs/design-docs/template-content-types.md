@@ -42,6 +42,72 @@ line break, it turns each literal backslash-n into a line break, except inside i
 code and after an escaping backslash. It goes away once the stored rows are migrated
 (TD-16 in the [tech debt tracker](../exec-plans/tech-debt-tracker.md)).
 
+### Migrating the legacy seed rows (proposal, needs human approval)
+
+The fixed seed uses `INSERT OR IGNORE`, so re-running it does not repair rows that
+already exist. This data change writes to staging and production D1, so a human
+approves and applies it; nothing below exists as a migration file. Run it on
+`serp-checklists-staging-db` first, then `serp-checklists-db`, after recording a
+restore point with `npx wrangler d1 time-travel info <database>`.
+
+1. **Read** (a one-off Node script, read-only queries). All three use an index:
+   the primary key, `idx_template_versions_template_version_unique` and
+   `idx_checklist_runs_template_owner`.
+
+   ```sql
+   -- The five official templates the seed created.
+   SELECT id, items FROM templates
+   WHERE user_id = 'serp-user'
+     AND id IN ('serp-template-technical-seo-audit', 'serp-template-keyword-research-mapping',
+                'serp-template-content-refresh', 'serp-template-local-seo-gbp',
+                'serp-template-serp-features');
+   SELECT id, snapshot_json FROM template_versions WHERE template_id IN (<the five ids>);
+   SELECT id, items, retired_items FROM checklist_runs WHERE template_id IN (<the five ids>);
+   ```
+
+2. **Rewrite in Node, not with SQL `REPLACE`.** `JSON.parse` each column. A
+   `snapshot_json` is a template row, so also parse its `items` string. Walk every
+   `sections[].items[].contents[]` entry whose `type` is `text` and whose `value` is a
+   string, then `JSON.stringify` the result and skip rows that did not change.
+   - Templates and version snapshots: `value = expandLegacyEscapedNewlines(value)`.
+     Because this is the display shim itself, what people see does not change. Record
+     each changed pair as a legacy-to-fixed map.
+   - Runs: replace a value only when it is byte-identical to a key of that map. Any
+     other text stays exactly as stored.
+
+3. **Write**: the script emits `tmp/legacy-newlines/<database>.sql` for review. It has
+   one guarded statement per changed row, with values inlined as SQL string literals
+   (single quotes doubled). The `WHERE` on the old value skips a row that changed after
+   the read.
+
+   ```sql
+   UPDATE templates SET items = '<new items>'
+   WHERE id = '<id>' AND user_id = 'serp-user' AND items = '<old items>';
+   UPDATE template_versions
+   SET snapshot_json = '<new snapshot>', content_hash = '<sha256 hex of new snapshot>'
+   WHERE id = '<id>' AND snapshot_json = '<old snapshot>';
+   UPDATE checklist_runs
+   SET items = '<new items>', retired_items = '<new retired>', revision = revision + 1
+   WHERE id = '<id>' AND items = '<old items>' AND retired_items = '<old retired>';
+   ```
+
+   A human applies the file with
+   `npx wrangler d1 execute <database> --remote --file tmp/legacy-newlines/<database>.sql`.
+   `content_hash` is recomputed the way `buildTemplateVersionValues` computes it. Runs
+   get `revision + 1`, so a run page opened before the change gets `409 edit_conflict`
+   and reloads instead of saving the old text back. Template `version` is left alone,
+   because nobody can sign in as `serp-user`, so no editor holds a stale copy.
+
+4. **Verify**: run steps 1 and 2 again. They must produce no changes.
+
+The script must not touch user-authored rows: templates not owned by `serp-user`,
+version snapshots and runs of other templates, and any text in a matched run that is
+not byte-identical to a seeded block. Copies saved to an account ("Save to my
+account") are user-owned rows that no column links to their source, so they keep the
+legacy shape. Remove the shim only after a human decides what happens to those copies:
+either approve the same exact-match rewrite for them (a full scan of `templates`), or
+accept that they show a literal backslash-n.
+
 ## Adding a content type
 
 Example: a "link" type.
