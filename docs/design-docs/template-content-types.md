@@ -87,6 +87,12 @@ Update `ContentRenderer` to display the new content type in the checklist view.
 
 #### 7. Consider uploads
 If the type needs file uploads, reuse the existing buckets in `functions/api/handlers/uploads.ts` and the helpers in `src/lib/utils/fileUpload.ts`.
+An upload finishes after the render that started it, so apply its result as one write
+built from the current form values: find the block with `findTemplateEditorContentPath`
+(by id, since blocks can move or be removed meanwhile) and never spread the
+render-time `useWatch` snapshot, which still holds the old value (see
+`handleFileChange` in `ContentEditor`). Never delete the previous file: templates,
+runs, and copies may still use it ([R2 uploads](database-operations.md#r2-uploads)).
 
 ## Editor tabs
 

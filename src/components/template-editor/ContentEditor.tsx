@@ -8,9 +8,10 @@ import { MediaContentEditor } from "@/components/template-editor/content-types/M
 import { SubItemsEditor } from "@/components/template-editor/content-types/SubItemsEditor";
 import { TextContentEditor } from "@/components/template-editor/content-types/TextContentEditor";
 import { Button } from "@/components/ui/button";
+import type { FileUploadChange } from "@/components/ui/file-upload";
 import {
   createTemplateEditorContent,
-  type TemplateEditorContent,
+  findTemplateEditorContentPath,
   type TemplateEditorContentType,
   type TemplateEditorFormValues,
 } from "@/lib/forms/templateEditorForm";
@@ -26,7 +27,7 @@ export function ContentEditor({
   itemIndex,
   sectionIndex,
 }: ContentEditorProps): JSX.Element {
-  const { control, setValue } = useFormContext<TemplateEditorFormValues>();
+  const { control, getValues, setValue } = useFormContext<TemplateEditorFormValues>();
   const [activeAddPanel, setActiveAddPanel] = useState<ActiveAddPanel>(null);
   const contentsFieldArray = useFieldArray({
     control,
@@ -58,20 +59,22 @@ export function ContentEditor({
     );
   }
 
-  function handleContentMetaChange(
-    contentIndex: number,
-    updates: Partial<TemplateEditorContent>,
-  ): void {
-    const currentContent = contents[contentIndex];
-    if (!currentContent) {
+  // An upload finishes after the render that started it, so never spread the
+  // render-time `contents` snapshot here: it still holds the old URL. Find the block
+  // by id in the current form values and write the whole change at once.
+  function handleFileChange(contentId: string, change: FileUploadChange): void {
+    const path = findTemplateEditorContentPath(getValues("sections"), contentId);
+    if (!path) {
+      // The block was removed while the upload was running.
       return;
     }
 
     setValue(
-      `sections.${sectionIndex}.items.${itemIndex}.contents.${contentIndex}`,
+      path,
       {
-        ...currentContent,
-        ...updates,
+        ...getValues(path),
+        ...change,
+        uploadType: change.fileName ? "upload" : undefined,
       },
       { shouldDirty: true },
     );
@@ -97,9 +100,7 @@ export function ContentEditor({
         return (
           <MediaContentEditor
             fileName={content.fileName}
-            onFileInfoChange={(fileName, fileSize) =>
-              handleContentMetaChange(contentIndex, { fileName, fileSize })
-            }
+            onFileChange={(change) => handleFileChange(content.id, change)}
             onValueChange={(value) => handleContentValueChange(contentIndex, value)}
             type={content.type}
             value={content.value}

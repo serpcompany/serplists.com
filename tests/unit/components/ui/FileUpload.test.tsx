@@ -64,14 +64,13 @@ describe('FileUpload', () => {
   });
 
   it('clears an uploaded file without deleting the stored object', async () => {
-    const onValueChange = vi.fn();
-    const onFileInfoChange = vi.fn();
+    const onFileChange = vi.fn();
     const tree = FileUpload({
       type: 'image',
       value: EXISTING_URL,
       fileName: 'a.png',
-      onValueChange,
-      onFileInfoChange,
+      onValueChange: vi.fn(),
+      onFileChange,
     });
 
     const removeButton = findElement(
@@ -82,8 +81,12 @@ describe('FileUpload', () => {
 
     await (removeButton!.props.onClick as () => unknown)();
 
-    expect(onValueChange).toHaveBeenCalledWith('');
-    expect(onFileInfoChange).toHaveBeenCalledWith(undefined, undefined);
+    expect(onFileChange).toHaveBeenCalledTimes(1);
+    expect(onFileChange).toHaveBeenCalledWith({
+      value: '',
+      fileName: undefined,
+      fileSize: undefined,
+    });
     expect(api.deleteFromR2).not.toHaveBeenCalled();
   });
 
@@ -93,13 +96,12 @@ describe('FileUpload', () => {
       fileName: 'b.png',
       fileSize: 10,
     });
-    const onValueChange = vi.fn();
-    const onFileInfoChange = vi.fn();
+    const onFileChange = vi.fn();
     const tree = FileUpload({
       type: 'image',
       value: EXISTING_URL,
-      onValueChange,
-      onFileInfoChange,
+      onValueChange: vi.fn(),
+      onFileChange,
     });
 
     const fileInput = findElement(tree, (element) => element.props.type === 'file');
@@ -110,9 +112,12 @@ describe('FileUpload', () => {
       target: { files: [file] },
     });
 
-    expect(onValueChange).toHaveBeenCalledWith(
-      '/api/uploads/file?key=template-images%2Fu1%2Fb.png',
-    );
+    expect(onFileChange).toHaveBeenCalledTimes(1);
+    expect(onFileChange).toHaveBeenCalledWith({
+      value: '/api/uploads/file?key=template-images%2Fu1%2Fb.png',
+      fileName: 'b.png',
+      fileSize: 10,
+    });
     expect(api.deleteFromR2).not.toHaveBeenCalled();
   });
 });

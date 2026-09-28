@@ -55,6 +55,30 @@ export type TemplateEditorContent = z.infer<typeof templateEditorContentSchema>;
 export type TemplateEditorSubItem = z.infer<typeof templateEditorSubItemSchema>;
 export type TemplateEditorContentType = TemplateEditorContent["type"];
 
+export type TemplateEditorContentPath =
+  `sections.${number}.items.${number}.contents.${number}`;
+
+// Finds a content block by its stable id in the current form values. Work that
+// finishes later (an upload) must use this, not indexes captured when it started:
+// blocks, tasks, and sections can move or be removed in the meantime.
+export function findTemplateEditorContentPath(
+  sections: TemplateEditorSection[],
+  contentId: string,
+): TemplateEditorContentPath | null {
+  for (const [sectionIndex, section] of sections.entries()) {
+    for (const [itemIndex, item] of section.items.entries()) {
+      const contentIndex = (item.contents ?? []).findIndex(
+        (content) => content.id === contentId,
+      );
+      if (contentIndex >= 0) {
+        return `sections.${sectionIndex}.items.${itemIndex}.contents.${contentIndex}`;
+      }
+    }
+  }
+
+  return null;
+}
+
 function createTemplateEditorId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `${prefix}_${crypto.randomUUID()}`;

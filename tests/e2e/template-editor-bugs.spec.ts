@@ -461,6 +461,68 @@ test.describe("template editor regressions", () => {
     }
   });
 
+  test("keeps an uploaded image URL in the block and saves it", async ({ page }) => {
+    const stamp = Date.now();
+    const templateTitle = `QA Upload ${stamp}`;
+    const uploadedUrl = `/api/uploads/file?key=${encodeURIComponent(`template-images/e2e/${stamp}.png`)}`;
+    const onePixelPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+      "base64",
+    );
+
+    // Stub storage so the test checks the editor, not R2.
+    await page.route("**/api/uploads", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ url: uploadedUrl, fileName: "photo.png", fileSize: onePixelPng.length }),
+      });
+    });
+
+    await registerAccount(page);
+    await page.goto("/dashboard/templates/new");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await page.getByLabel("Task Title").fill(`Task with image ${stamp}`);
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("button", { name: "Image", exact: true }).last().click();
+
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+      name: "photo.png",
+      mimeType: "image/png",
+      buffer: onePixelPng,
+    });
+
+    await expect(page.getByText("photo.png", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Image URL")).toHaveValue(uploadedUrl);
+
+    await page.getByRole("button", { name: "Remove uploaded image" }).click();
+    await expect(page.getByLabel("Image URL")).toHaveValue("");
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+      name: "photo.png",
+      mimeType: "image/png",
+      buffer: onePixelPng,
+    });
+    await expect(page.getByLabel("Image URL")).toHaveValue(uploadedUrl);
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    expect(savedTemplate).toBeTruthy();
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    expect(sections[0]?.items[0]?.contents).toEqual([
+      expect.objectContaining({ type: "image", value: uploadedUrl }),
+    ]);
+
+    if (savedTemplate && typeof savedTemplate.id === "string") {
+      await deleteTemplate(page, savedTemplate.id);
+    }
+  });
+
   test("adds tags and categories before save and persists them", async ({ page }) => {
     const templateTitle = `QA Tags ${Date.now()}`;
     const tagName = `tag-${Date.now()}`;

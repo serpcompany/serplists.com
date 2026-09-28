@@ -13,12 +13,21 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
 
+// An upload or a clear, reported as one change so the URL and the file details are
+// never written separately (a second write could restore a stale URL).
+export type FileUploadChange = {
+  value: string;
+  fileName?: string;
+  fileSize?: number;
+};
+
 interface FileUploadProps {
   type: 'image' | 'video' | 'file';
   value: string;
   fileName?: string;
+  // Typing or pasting in the URL field.
   onValueChange: (value: string) => void;
-  onFileInfoChange: (fileName?: string, fileSize?: number) => void;
+  onFileChange: (change: FileUploadChange) => void;
   className?: string;
 }
 
@@ -27,7 +36,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   value,
   fileName,
   onValueChange,
-  onFileInfoChange,
+  onFileChange,
   className = ''
 }) => {
   const [isUploading, setIsUploading] = useState(false);
@@ -83,8 +92,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       // The previous upload is never deleted here: the saved template, its runs,
       // versions, and copies may still reference it, and this change is unsaved.
       if (result.success && result.url) {
-        onValueChange(result.url);
-        onFileInfoChange(result.fileName, result.fileSize);
+        onFileChange({ value: result.url, fileName: result.fileName, fileSize: result.fileSize });
         toast({
           title: "Upload successful",
           description: `${file.name} has been uploaded.`
@@ -113,8 +121,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   // Clearing only changes the form. The stored object stays, because the saved
   // template, its runs, versions, and copies may still reference it.
   const handleClear = () => {
-    onValueChange('');
-    onFileInfoChange(undefined, undefined);
+    onFileChange({ value: '', fileName: undefined, fileSize: undefined });
   };
 
   return (
