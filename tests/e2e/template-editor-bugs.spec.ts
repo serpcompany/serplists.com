@@ -549,6 +549,53 @@ test.describe("template editor regressions", () => {
     }
   });
 
+  test("keeps focus while an embed URL is typed across the https:// prefix", async ({ page }) => {
+    const stamp = Date.now();
+    const templateTitle = `QA Embed ${stamp}`;
+    const embedUrl = "https://www.loom.com/share/abc";
+
+    await registerAccount(page);
+    await page.goto("/dashboard/templates/new");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await page.getByLabel("Task Title").fill(`Task with embed ${stamp}`);
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("button", { name: "Embed", exact: true }).last().click();
+
+    const field = page.getByLabel("Embed Code or URL");
+    await field.click();
+    // Type one key at a time: fill() sets the whole value in one change and hides the bug.
+    await field.pressSequentially(embedUrl);
+    await expect(field).toHaveValue(embedUrl);
+    await expect(field).toBeFocused();
+    await expect(page.getByText(`Embed URL: ${embedUrl}`)).toBeVisible();
+
+    await field.press("End");
+    for (let i = 0; i < embedUrl.length - "https:/".length; i += 1) {
+      await field.press("Backspace");
+    }
+    await expect(field).toHaveValue("https:/");
+    await expect(field).toBeFocused();
+
+    await field.pressSequentially("/www.loom.com/share/abc");
+    await expect(field).toHaveValue(embedUrl);
+    await expect(field).toBeFocused();
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    expect(savedTemplate).toBeTruthy();
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    expect(sections[0]?.items[0]?.contents).toEqual([
+      expect.objectContaining({ type: "embed", value: embedUrl }),
+    ]);
+
+    if (savedTemplate && typeof savedTemplate.id === "string") {
+      await deleteTemplate(page, savedTemplate.id);
+    }
+  });
+
   test("waits for a file upload before saving or leaving", async ({ page }) => {
     const stamp = Date.now();
     const templateTitle = `QA Held upload ${stamp}`;
