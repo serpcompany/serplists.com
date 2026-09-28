@@ -143,7 +143,8 @@ function buildDatabase() {
 
 // ---------------------------------------------------------------- workload
 const personalTemplate = "synthetic-template-50"; // owned by user-1, private
-const publicTemplateSlug = "synthetic-template-5"; // public, user-owned
+const organizationTemplate = "synthetic-template-40"; // owned by team-seed-growth, private
+const publicTemplateSlug = "synthetic-template-5"; // public, user-owned (synthetic ids equal slugs)
 const adminRun = "synthetic-run-40"; // owned by user-1
 const shareToken = "synthetic-share-50";
 
@@ -159,6 +160,8 @@ function scenarios(): Scenario[] {
     { name: "sitemap templates shard", actor: "anon", path: "/sitemaps/templates/1.xml" },
     { name: "sitemap profiles shard", actor: "anon", path: "/sitemaps/profiles/1.xml" },
     { name: "sitemap categories shard", actor: "anon", path: "/sitemaps/categories/1.xml" },
+    { name: "sitemap index (repeat)", actor: "anon", path: "/sitemap.xml" },
+    { name: "sitemap templates shard (repeat)", actor: "anon", path: "/sitemaps/templates/1.xml" },
     { name: "session lookup", actor: "admin", path: "/api/auth/get-session" },
     { name: "billing status", actor: "admin", path: "/api/billing/status" },
     { name: "my Organizations", actor: "admin", path: "/api/teams" },
@@ -181,11 +184,13 @@ function scenarios(): Scenario[] {
     },
     { name: "start run", actor: "admin", method: "POST", path: "/api/checklists", body: { template_id: personalTemplate, title: "Profiled run", sections: [{ id: "s1", title: "Section", items: [{ id: "i1", title: "Task one" }, { id: "i2", title: "Task two" }] }] } },
     { name: "update template (reconciles runs)", actor: "admin", method: "PUT", path: `/api/templates/${personalTemplate}`, body: "UPDATE_TEMPLATE" },
+    { name: "update Organization template (reconciles runs)", actor: "admin", method: "PUT", path: `/api/templates/${organizationTemplate}`, body: "UPDATE_TEMPLATE" },
     { name: "update run progress", actor: "admin", method: "PUT", path: `/api/checklists/${adminRun}`, body: "UPDATE_RUN" },
     { name: "share run", actor: "admin", method: "POST", path: `/api/checklists/run/${adminRun}/share`, body: {} },
     { name: "member dashboard templates", actor: "john", path: "/api/templates" },
     { name: "member Organization templates", actor: "john", path: "/api/templates?teamId=team-seed-growth" },
     { name: "member dashboard runs", actor: "john", path: "/api/checklists" },
+    { name: "start run (Free plan, counts active runs)", actor: "john", method: "POST", path: "/api/checklists", body: { template_id: publicTemplateSlug, title: "Profiled Free run", sections: [{ id: "s1", title: "Section", items: [{ id: "i1", title: "Task one" }] }] } },
   ];
 }
 
@@ -296,6 +301,7 @@ async function main() {
       await settle();
       let body = scenario.body;
       if (body === "UPDATE_TEMPLATE" || body === "UPDATE_RUN") {
+        current = []; // Keep the setup fetch out of the previous scenario's queries.
         const kind = body === "UPDATE_TEMPLATE" ? "templates" : "checklists";
         const currentValue = resourceSchema.parse(await (await fetch(`${base}${scenario.path}`, { headers: { Cookie: cookies.admin, Origin: origin } })).json());
         body = kind === "templates"
