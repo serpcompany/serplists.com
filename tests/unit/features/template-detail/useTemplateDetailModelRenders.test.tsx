@@ -3,6 +3,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createApiError } from '@/lib/api-errors';
+
 // Drives the real template detail model (its template query and its effects) through the
 // re-renders the app causes. Only the API is faked.
 
@@ -220,5 +222,64 @@ describe('template detail page across re-renders', () => {
     expect(apiMock.getTemplateById).toHaveBeenCalledTimes(2);
     expect(latest().template?.id).toBe('template-2');
     expect(showedSpinnerSince(loadedAt)).toBe(true);
+  });
+});
+
+// H223: after a 409 the page kept its stale copy, so every retry of the visibility switch
+// sent the same version and failed the same way until the page was reloaded.
+describe('template detail visibility switch after an edit conflict', () => {
+  // The server's copy: a PUT must send the version it holds (expected_version).
+  let stored: ReturnType<typeof serverRow>;
+
+  beforeEach(() => {
+    stored = serverRow({ version: 3 });
+    apiMock.getTemplateById.mockImplementation(async () => ({ ...stored }));
+    apiMock.updateTemplate.mockImplementation(
+      async (_id: string, body: { expected_version: number; is_public: boolean }) => {
+        if (body.expected_version !== stored.version) {
+          throw createApiError(409, { code: 'edit_conflict', error: 'Template changed since it was loaded' });
+        }
+        stored = { ...stored, is_public: body.is_public };
+        return { success: true, id: stored.id, version: stored.version, slug: stored.slug };
+      },
+    );
+  });
+
+  it('reloads the stored template in place, so the retry succeeds', async () => {
+    await render(privateOptions());
+    await settle();
+    // Another member saves the template.
+    stored = { ...stored, title: 'Launch Checklist v4', version: 4 };
+    const loadedAt = renders.length;
+    const reload = deferred<ReturnType<typeof serverRow>>();
+    apiMock.getTemplateById.mockReturnValueOnce(reload.promise);
+
+    let conflict: Promise<unknown> | undefined;
+    await act(async () => {
+      conflict = latest().setVisibility(true);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    // The reload is in flight: the page keeps what it shows, with no spinner.
+    expect(apiMock.getTemplateById).toHaveBeenCalledTimes(2);
+    expect(latest()).toMatchObject({ loading: false, template: { version: 3 } });
+
+    await act(async () => reload.resolve({ ...stored }));
+    await expect(conflict).resolves.toEqual({
+      kind: 'error',
+      message: 'This template changed elsewhere. It was reloaded; try again.',
+    });
+    await settle();
+
+    expect(latest().template).toMatchObject({ title: 'Launch Checklist v4', version: 4, isPublic: false });
+    expect(showedSpinnerSince(loadedAt)).toBe(false);
+
+    await act(async () => {
+      await expect(latest().setVisibility(true)).resolves.toEqual({ kind: 'ok' });
+    });
+    expect(apiMock.updateTemplate.mock.calls.map(([, body]) => body)).toEqual([
+      { expected_version: 3, is_public: true },
+      { expected_version: 4, is_public: true },
+    ]);
+    expect(apiMock.getTemplates).not.toHaveBeenCalled();
   });
 });
