@@ -3,6 +3,21 @@
 Checklist items hold typed content blocks (text, image, video, file, embed,
 sub-items). This doc shows how to add a content type and how editor tabs work.
 
+## Video blocks
+
+A video block holds a URL or pasted `<iframe>` code. `getVideoEmbedSource`
+(`src/utils/urlHelpers.ts`) decides how `VideoEmbed` shows it:
+
+- YouTube links on youtu.be, youtube.com and its subdomains (www, m, music) or
+  youtube-nocookie.com, in watch, share, Shorts, live or embed form, become a
+  `https://www.youtube.com/embed/<id>` iframe. A YouTube link with no video id (a
+  channel or playlist) shows "Invalid video URL or embed code".
+- Clipy watch and embed links become a Clipy iframe.
+- Any other http(s) URL plays in the native `<video>` player.
+
+Every iframe origin the helper can produce must be listed in `frame-src` in
+`public/_headers`; `tests/unit/security/headers.test.ts` checks this.
+
 ## Adding a content type
 
 Example: a "link" type.
