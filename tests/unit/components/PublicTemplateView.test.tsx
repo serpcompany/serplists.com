@@ -50,6 +50,7 @@ describe('PublicTemplateView', () => {
           isProUser={false}
           isCreatingRun={false}
           isSaving={false}
+          isWorkspaceLoading={false}
           onStartRun={() => undefined}
           onSaveTemplate={() => undefined}
         />
@@ -101,6 +102,7 @@ describe('PublicTemplateView', () => {
           isProUser={false}
           isCreatingRun={false}
           isSaving={false}
+          isWorkspaceLoading={false}
           onStartRun={() => undefined}
           onSaveTemplate={() => undefined}
         />

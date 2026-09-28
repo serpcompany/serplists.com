@@ -124,7 +124,7 @@ describe("repo template catalog", () => {
       },
     });
 
-    const payload = buildRepoTemplateCreatePayload(template);
+    const payload = buildRepoTemplateCreatePayload(template, undefined);
 
     expect(payload).toMatchObject({
       title: "Portable Checklist",

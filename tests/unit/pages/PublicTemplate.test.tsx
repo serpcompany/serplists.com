@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { HelmetProvider } from 'react-helmet-async';
 import { Route, Routes } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PublicTemplate from '@/pages/PublicTemplate';
 
@@ -11,17 +11,47 @@ import {
   REPO_TEMPLATE_OWNER_SLUG,
   REPO_TEMPLATE_USER_ID,
 } from '@/lib/repoTemplateCatalog';
-import { resolvePublicTemplateOwnerSlug } from '@/lib/routes';
+import {
+  buildConsoleTemplatePath,
+  resolvePublicTemplateOwnerSlug,
+} from '@/lib/routes';
 import type { ChecklistTemplate } from '@/types/checklist';
 
-const mockUseTemplateDetailModel = vi.fn();
+const {
+  authState,
+  mockCreateBillingCheckout,
+  mockNavigate,
+  mockToastError,
+  mockUseTemplateDetailModel,
+  mockViewProps,
+  workspaceState,
+} = vi.hoisted(() => ({
+  authState: {
+    isAuthenticated: false,
+    user: null as { id: string } | null,
+  },
+  mockCreateBillingCheckout: vi.fn(),
+  mockNavigate: vi.fn(),
+  mockToastError: vi.fn(),
+  mockUseTemplateDetailModel: vi.fn(),
+  mockViewProps: vi.fn(),
+  workspaceState: {
+    activeTeamId: undefined as string | undefined,
+    isTeamWorkspace: false,
+    isWorkspaceLoading: false,
+  },
+}));
 
 vi.mock('@/features/template-detail/useTemplateDetailModel', () => ({
   useTemplateDetailModel: (...args: unknown[]) => mockUseTemplateDetailModel(...args),
 }));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ isAuthenticated: false, user: null }),
+  useAuth: () => authState,
+}));
+
+vi.mock('@/contexts/WorkspaceContext', () => ({
+  useWorkspace: () => workspaceState,
 }));
 
 vi.mock('@/contexts/TemplatesContext', () => ({
@@ -35,6 +65,34 @@ vi.mock('@/contexts/TemplatesContext', () => ({
 vi.mock('@/lib/analytics', () => ({
   analytics: { trackTemplateView: vi.fn() },
 }));
+
+vi.mock('@/lib/api', () => ({
+  api: { createBillingCheckout: mockCreateBillingCheckout },
+}));
+
+vi.mock('sonner', () => ({
+  toast: { error: mockToastError, success: vi.fn() },
+}));
+
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-router-dom')>()),
+  useNavigate: () => mockNavigate,
+}));
+
+vi.mock('@/components/template/PublicTemplateView', async (importOriginal) => {
+  const { createElement } = await import('react');
+  const actual = await importOriginal<
+    typeof import('@/components/template/PublicTemplateView')
+  >();
+  return {
+    PublicTemplateView: (
+      props: React.ComponentProps<typeof actual.PublicTemplateView>,
+    ) => {
+      mockViewProps(props);
+      return createElement(actual.PublicTemplateView, props);
+    },
+  };
+});
 
 const mockTemplates: ChecklistTemplate[] = [
   {
@@ -189,7 +247,10 @@ const publishedClipyTemplate: ChecklistTemplate = {
   tags: ['Clipy'],
 };
 
-function renderPublishedRoute(template: ChecklistTemplate) {
+function renderPublishedRoute(
+  template: ChecklistTemplate,
+  modelOverrides: Record<string, unknown> = {},
+) {
   mockUseTemplateDetailModel.mockReturnValue({
     billingState: { billingEnabled: true, isLoading: false, isPro: false },
     loading: false,
@@ -198,6 +259,7 @@ function renderPublishedRoute(template: ChecklistTemplate) {
     startRun: vi.fn(),
     template,
     totalItems: 0,
+    ...modelOverrides,
   });
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
@@ -246,5 +308,115 @@ describe('PublicTemplate rendered route', () => {
 
     expect(helmet.title.toString()).toContain('Reviewed Clipy Checklist');
     expect(helmet.meta.toString()).toContain('content="Persisted Clipy summary."');
+  });
+});
+
+type CapturedViewProps = {
+  isCreatingRun: boolean;
+  isSaving: boolean;
+  onSaveTemplate: () => unknown;
+  onStartRun: () => unknown;
+};
+
+const lastViewProps = (): CapturedViewProps =>
+  mockViewProps.mock.calls[mockViewProps.mock.calls.length - 1]?.[0] as CapturedViewProps;
+
+const ORGANIZATION_UPGRADE_MESSAGE =
+  'This Organization needs a paid plan before using this feature.';
+
+describe('PublicTemplate ownership context', () => {
+  beforeEach(() => {
+    mockCreateBillingCheckout.mockReset();
+    mockCreateBillingCheckout.mockResolvedValue({ url: 'https://checkout.stripe.com/c/pay/test' });
+    mockNavigate.mockReset();
+    mockToastError.mockReset();
+    mockUseTemplateDetailModel.mockReset();
+    mockViewProps.mockReset();
+    authState.isAuthenticated = true;
+    authState.user = { id: 'user-1' };
+    workspaceState.activeTeamId = 'team-1';
+    workspaceState.isTeamWorkspace = true;
+    workspaceState.isWorkspaceLoading = false;
+  });
+
+  it('loads billing, clone and run targets for the active Organization', () => {
+    renderPublishedRoute(publishedClipyTemplate);
+
+    expect(mockUseTemplateDetailModel).toHaveBeenCalledWith(
+      expect.objectContaining({ teamId: 'team-1', userId: 'user-1' }),
+    );
+  });
+
+  it('keeps Personal as the context when no Organization is active', () => {
+    workspaceState.activeTeamId = undefined;
+    workspaceState.isTeamWorkspace = false;
+
+    renderPublishedRoute(publishedClipyTemplate);
+
+    const options = mockUseTemplateDetailModel.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(options).toHaveProperty('teamId', undefined);
+  });
+
+  it('shows the Organization plan message instead of Personal checkout when a run hits the Organization limit', async () => {
+    const startRun = vi.fn().mockResolvedValue({ kind: 'upgrade_required' });
+    renderPublishedRoute(publishedClipyTemplate, { startRun });
+
+    await lastViewProps().onStartRun();
+
+    expect(startRun).toHaveBeenCalledTimes(1);
+    expect(mockCreateBillingCheckout).not.toHaveBeenCalled();
+    expect(mockToastError).toHaveBeenCalledWith(ORGANIZATION_UPGRADE_MESSAGE);
+  });
+
+  it('shows the Organization plan message instead of Personal checkout when Save needs a paid Organization', async () => {
+    const saveTemplate = vi.fn().mockResolvedValue({ kind: 'upgrade_required' });
+    renderPublishedRoute(publishedClipyTemplate, { saveTemplate });
+
+    await lastViewProps().onSaveTemplate();
+
+    expect(saveTemplate).toHaveBeenCalledTimes(1);
+    expect(mockCreateBillingCheckout).not.toHaveBeenCalled();
+    expect(mockToastError).toHaveBeenCalledWith(ORGANIZATION_UPGRADE_MESSAGE);
+  });
+
+  it('still starts Personal checkout when Personal is active', async () => {
+    workspaceState.activeTeamId = undefined;
+    workspaceState.isTeamWorkspace = false;
+    const startRun = vi.fn().mockResolvedValue({ kind: 'upgrade_required' });
+    renderPublishedRoute(publishedClipyTemplate, { startRun });
+
+    await lastViewProps().onStartRun();
+
+    expect(mockCreateBillingCheckout).toHaveBeenCalledTimes(1);
+    expect(mockToastError).not.toHaveBeenCalledWith(ORGANIZATION_UPGRADE_MESSAGE);
+  });
+
+  it('opens the saved copy so the user lands where it was saved', async () => {
+    const saveTemplate = vi.fn().mockResolvedValue({ kind: 'ok', templateId: 'clone-1' });
+    renderPublishedRoute(publishedClipyTemplate, { saveTemplate });
+
+    await lastViewProps().onSaveTemplate();
+
+    expect(mockNavigate).toHaveBeenCalledWith(buildConsoleTemplatePath('clone-1'));
+  });
+
+  it('ignores Start Run and Save until the active Organization is known', async () => {
+    workspaceState.activeTeamId = undefined;
+    workspaceState.isTeamWorkspace = false;
+    workspaceState.isWorkspaceLoading = true;
+    const startRun = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1' });
+    const saveTemplate = vi.fn().mockResolvedValue({ kind: 'ok', templateId: 'clone-1' });
+    const { html } = renderPublishedRoute(publishedClipyTemplate, { saveTemplate, startRun });
+
+    await lastViewProps().onStartRun();
+    await lastViewProps().onSaveTemplate();
+
+    expect(startRun).not.toHaveBeenCalled();
+    expect(saveTemplate).not.toHaveBeenCalled();
+    const actionButtons = html.match(/<button[^>]*>(?:(?!<\/button>).)*(?:Start Run|Save|Copy to Library)(?:(?!<\/button>).)*<\/button>/g) ?? [];
+    expect(actionButtons.length).toBeGreaterThanOrEqual(4);
+    for (const button of actionButtons) {
+      expect(button).toContain('disabled=""');
+    }
   });
 });

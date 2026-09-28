@@ -61,7 +61,8 @@ type TemplateDetailCommonOptions = {
   createRun: CreateRun;
   createTemplate: CreateTemplate;
   isAuthenticated: boolean;
-  teamId?: string;
+  // Required so every page decides the ownership context: undefined is Personal.
+  teamId: string | undefined;
   userId?: string;
   username?: string;
 };
@@ -284,7 +285,7 @@ export const saveTemplateToAccount = async (params: {
   try {
     if (isRepoTemplate(params.template)) {
       const createdTemplate = await params.createTemplate(
-        buildRepoTemplateCreatePayload(params.template),
+        buildRepoTemplateCreatePayload(params.template, params.teamId),
       );
       return { kind: 'ok', templateId: createdTemplate.id };
     }

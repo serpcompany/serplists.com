@@ -21,6 +21,7 @@ type RepoTemplateCreatePayload = {
   isPublic: boolean;
   categories?: string[];
   tags?: string[];
+  teamId?: string;
 };
 
 const repoTemplateModules = import.meta.glob(
@@ -142,8 +143,11 @@ export const isRepoTemplate = (
   );
 };
 
+// teamId is required so every caller decides the ownership context: undefined
+// means Personal, an id means that Organization.
 export const buildRepoTemplateCreatePayload = (
   template: ChecklistTemplate,
+  teamId: string | undefined,
 ): RepoTemplateCreatePayload => ({
   title: template.title,
   description: template.description || '',
@@ -156,6 +160,7 @@ export const buildRepoTemplateCreatePayload = (
   isPublic: false,
   categories: template.categories || [],
   tags: template.tags || [],
+  teamId,
 });
 
 export const repoTemplates = normalizeRepoTemplateSources(repoTemplateModules);

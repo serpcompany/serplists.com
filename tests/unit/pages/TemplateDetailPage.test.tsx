@@ -44,8 +44,8 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
 }));
 
 vi.mock('@/lib/access-flow', () => ({
+  handleUpgradeRequired: vi.fn(),
   navigateToLoginWithReturnPath: vi.fn(),
-  startBillingCheckout: vi.fn(),
 }));
 
 describe('TemplateDetail page', () => {

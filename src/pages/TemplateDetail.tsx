@@ -71,8 +71,8 @@ import { useTemplateLists } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import {
+  handleUpgradeRequired,
   navigateToLoginWithReturnPath,
-  startBillingCheckout,
 } from '@/lib/access-flow';
 import type {
   TemplateHistoryEvent,
@@ -226,14 +226,11 @@ const TemplateDetail = () => {
     setVisibilityOverride(null);
   }, [displayTemplate?.id]);
 
-  const handleUpgradeRequired = async () => {
-    if (isTeamWorkspace) {
-      toast.error('This Organization needs a paid plan before using this feature.');
-      return;
-    }
-
-    await startBillingCheckout(billingState.billingEnabled);
-  };
+  const handleUpgrade = () =>
+    handleUpgradeRequired({
+      billingEnabled: billingState.billingEnabled,
+      isTeamWorkspace,
+    });
 
   const handleStartRun = async (runName: string) => {
     setIsCreatingRun(true);
@@ -246,7 +243,7 @@ const TemplateDetail = () => {
       }
 
       if (result.kind === 'upgrade_required') {
-        await handleUpgradeRequired();
+        await handleUpgrade();
         return;
       }
 
@@ -280,7 +277,7 @@ const TemplateDetail = () => {
       }
 
       if (result.kind === 'upgrade_required') {
-        await handleUpgradeRequired();
+        await handleUpgrade();
         return;
       }
 
@@ -354,7 +351,7 @@ const TemplateDetail = () => {
       }
 
       if (result.kind === 'upgrade_required') {
-        await handleUpgradeRequired();
+        await handleUpgrade();
         return;
       }
 

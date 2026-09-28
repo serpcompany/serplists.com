@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createApiError } from '@/lib/api-errors';
+import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import {
@@ -319,6 +320,82 @@ describe('template detail actions', () => {
 
     expect(result).toEqual({ kind: 'upgrade_required' });
     expect(apiClient.clonePublicTemplate).not.toHaveBeenCalled();
+  });
+
+  it('saves library and API templates into the same Organization', async () => {
+    const apiClient = {
+      getTemplateById: vi.fn(),
+      getTemplateBySlug: vi.fn(),
+      getProfileById: vi.fn(),
+      clonePublicTemplate: vi.fn().mockResolvedValue({ id: 'clone-1' }),
+      updateTemplate: vi.fn(),
+    };
+    const createTemplate = vi.fn().mockResolvedValue(buildTemplate({ id: 'created-1' }));
+
+    const libraryResult = await saveTemplateToAccount({
+      apiClient,
+      billingState: buildBillingState(),
+      createTemplate,
+      isAuthenticated: true,
+      teamId: 'team-1',
+      template: buildTemplate({ id: 'repo:camping', userId: REPO_TEMPLATE_USER_ID }),
+      userId: 'user-1',
+    });
+    const apiResult = await saveTemplateToAccount({
+      apiClient,
+      billingState: buildBillingState(),
+      createTemplate,
+      isAuthenticated: true,
+      teamId: 'team-1',
+      template: buildTemplate(),
+      userId: 'user-1',
+    });
+
+    expect(libraryResult).toEqual({ kind: 'ok', templateId: 'created-1' });
+    expect(createTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ teamId: 'team-1', isPublic: false }),
+    );
+    expect(apiResult).toEqual({ kind: 'ok', templateId: 'clone-1' });
+    expect(apiClient.clonePublicTemplate).toHaveBeenCalledWith('template-1', {
+      teamId: 'team-1',
+      visibility: 'private',
+    });
+  });
+
+  it('saves library and API templates into Personal when no Organization is active', async () => {
+    const apiClient = {
+      getTemplateById: vi.fn(),
+      getTemplateBySlug: vi.fn(),
+      getProfileById: vi.fn(),
+      clonePublicTemplate: vi.fn().mockResolvedValue({ id: 'clone-1' }),
+      updateTemplate: vi.fn(),
+    };
+    const createTemplate = vi.fn().mockResolvedValue(buildTemplate({ id: 'created-1' }));
+
+    await saveTemplateToAccount({
+      apiClient,
+      billingState: buildBillingState(),
+      createTemplate,
+      isAuthenticated: true,
+      teamId: undefined,
+      template: buildTemplate({ id: 'repo:camping', userId: REPO_TEMPLATE_USER_ID }),
+      userId: 'user-1',
+    });
+    await saveTemplateToAccount({
+      apiClient,
+      billingState: buildBillingState(),
+      createTemplate,
+      isAuthenticated: true,
+      teamId: undefined,
+      template: buildTemplate(),
+      userId: 'user-1',
+    });
+
+    expect(createTemplate.mock.calls[0]?.[0]?.teamId).toBeUndefined();
+    expect(apiClient.clonePublicTemplate).toHaveBeenCalledWith('template-1', {
+      teamId: undefined,
+      visibility: 'private',
+    });
   });
 
   it('maps access failures into typed action results', async () => {

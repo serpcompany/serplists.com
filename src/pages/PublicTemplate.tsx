@@ -9,13 +9,13 @@ import { PublicTemplateView } from '@/components/template/PublicTemplateView';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
 import { analytics } from '@/lib/analytics';
 import {
+  handleUpgradeRequired,
   navigateToLoginWithReturnPath,
-  startBillingCheckout,
 } from '@/lib/access-flow';
-import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
 import {
   buildConsoleRunPath,
   buildConsoleTemplatePath,
@@ -33,6 +33,8 @@ const PublicTemplate = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
+  // Billing, Save and Start Run all use the active ownership context.
+  const { activeTeamId, isTeamWorkspace, isWorkspaceLoading } = useWorkspace();
   const { createRun, createTemplate, templates } = useTemplates();
   const [isCreatingRun, setIsCreatingRun] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -52,6 +54,7 @@ const PublicTemplate = () => {
     isAuthenticated,
     mode: 'public',
     ownerUsername: username,
+    teamId: activeTeamId,
     userId: user?.id,
   });
   const displayTemplate = template;
@@ -71,8 +74,15 @@ const PublicTemplate = () => {
     analytics.trackTemplateView(displayTemplate.id, displayTemplate.title);
   }, [displayTemplate]);
 
+  const handleUpgrade = () =>
+    handleUpgradeRequired({
+      billingEnabled: billingState.billingEnabled,
+      isTeamWorkspace,
+    });
+
   const handleStartRun = async () => {
-    if (!template) return;
+    // Until the stored Organization is restored, a click would land in Personal.
+    if (!template || isWorkspaceLoading) return;
 
     setIsCreatingRun(true);
     try {
@@ -86,7 +96,7 @@ const PublicTemplate = () => {
       }
 
       if (result.kind === 'upgrade_required') {
-        await startBillingCheckout(billingState.billingEnabled);
+        await handleUpgrade();
         return;
       }
 
@@ -105,7 +115,7 @@ const PublicTemplate = () => {
   };
 
   const handleSaveTemplate = async () => {
-    if (!template) return;
+    if (!template || isWorkspaceLoading) return;
 
     setIsSaving(true);
     try {
@@ -117,7 +127,7 @@ const PublicTemplate = () => {
       }
 
       if (result.kind === 'upgrade_required') {
-        await startBillingCheckout(billingState.billingEnabled);
+        await handleUpgrade();
         return;
       }
 
@@ -127,12 +137,12 @@ const PublicTemplate = () => {
       }
 
       toast.success('Template saved to your account');
-      if (isRepoTemplate(template) && result.templateId) {
-        navigate(buildConsoleTemplatePath(result.templateId));
-        return;
-      }
-
-      navigate(buildConsoleTemplatesPath());
+      // Open the copy itself: it lives in the context it was saved to.
+      navigate(
+        result.templateId
+          ? buildConsoleTemplatePath(result.templateId)
+          : buildConsoleTemplatesPath(),
+      );
     } finally {
       setIsSaving(false);
     }
@@ -201,6 +211,7 @@ const PublicTemplate = () => {
         isProUser={billingState.isPro}
         isCreatingRun={isCreatingRun}
         isSaving={isSaving}
+        isWorkspaceLoading={isWorkspaceLoading}
         onStartRun={handleStartRun}
         onSaveTemplate={handleSaveTemplate}
       />

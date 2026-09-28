@@ -32,6 +32,8 @@ interface PublicTemplateViewProps {
   isProUser: boolean;
   isCreatingRun: boolean;
   isSaving: boolean;
+  // Save and Start Run wait until the active ownership context is known.
+  isWorkspaceLoading: boolean;
   onStartRun: () => void;
   onSaveTemplate: () => void;
 }
@@ -44,6 +46,7 @@ export function PublicTemplateView({
   ownerPath,
   isCreatingRun,
   isSaving,
+  isWorkspaceLoading,
   onStartRun,
   onSaveTemplate,
 }: PublicTemplateViewProps) {
@@ -108,7 +111,7 @@ export function PublicTemplateView({
               onClick={() => void handleSave()}
               className="gap-2"
               type="button"
-              disabled={isSaving}
+              disabled={isSaving || isWorkspaceLoading}
             >
               {isSaved ? (
                 <>
@@ -122,7 +125,13 @@ export function PublicTemplateView({
                 </>
               )}
             </Button>
-            <Button size="sm" onClick={onStartRun} className="gap-2" type="button">
+            <Button
+              size="sm"
+              onClick={onStartRun}
+              className="gap-2"
+              type="button"
+              disabled={isWorkspaceLoading}
+            >
               <Play className="h-3.5 w-3.5" />
               {isCreatingRun ? 'Starting...' : 'Start Run'}
             </Button>
@@ -259,7 +268,7 @@ export function PublicTemplateView({
             <Button
               variant="outline"
               onClick={() => void handleSave()}
-              disabled={isSaving}
+              disabled={isSaving || isWorkspaceLoading}
               type="button"
               className="gap-2"
             >
@@ -268,7 +277,7 @@ export function PublicTemplateView({
             </Button>
             <Button
               onClick={onStartRun}
-              disabled={isCreatingRun}
+              disabled={isCreatingRun || isWorkspaceLoading}
               type="button"
               className="gap-2"
             >
