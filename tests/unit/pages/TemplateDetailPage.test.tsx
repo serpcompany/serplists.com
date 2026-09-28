@@ -77,7 +77,7 @@ vi.mock('@/contexts/TemplatesContext', () => {
   // Records the lists a page asks for; a detail page must not load any.
   const useTemplateLists = (options?: Record<string, unknown>) => {
     mockUseTemplateLists(options);
-    return { ...useTemplates(), workspaceTemplates: [] };
+    return useTemplates();
   };
   return { useTemplates, useTemplateLists };
 });
