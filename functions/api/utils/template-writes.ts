@@ -2,7 +2,7 @@ import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import type { Env } from '../types';
 import { insertRowWhere, rowExistsSql } from './guarded-insert';
-import { jsonError } from './response';
+import { limitReachedResponse } from './limit-reached';
 
 // Template inserts and the template-count limit. Create, clone and restore pre-check the
 // count for a clear error, then repeat the check inside the write so concurrent requests
@@ -49,11 +49,14 @@ export function templateCapacityAvailableSql({ owner, limit }: TemplateCapacity)
   return sql`(select count(*) from ${schema.templates} where ${templatesInContext(owner)}) < ${limit}`;
 }
 
-export function templateLimitResponse(message: string, limit: number, current: number): Response {
-  return jsonError(message, 403, {
-    code: 'limit_reached',
-    details: { limit, current, resource: 'templates' },
-  });
+/** The 403 a template write returns when `owner`'s context is at its template limit. */
+export function templateLimitResponse(
+  owner: TemplateOwnerContext,
+  action: 'create' | 'restore' | 'save',
+  limit: number,
+  current: number,
+): Response {
+  return limitReachedResponse({ resource: 'templates', teamId: owner.teamId, action, limit, current });
 }
 
 /**

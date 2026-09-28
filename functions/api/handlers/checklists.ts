@@ -311,7 +311,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       const capacity = runRecord.status === 'in_progress'
         ? await checkActiveRunCapacity(env, owner, userId)
         : { limit: null, hit: null };
-      if (capacity.hit) return activeRunLimitResponse(capacity.hit, 'restore');
+      if (capacity.hit) return activeRunLimitResponse(owner, capacity.hit, 'restore');
 
       const now = new Date().toISOString();
       const restoreUpdates = {
@@ -345,7 +345,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       if (batchUpdateMissed(batchResults[1])) {
         if (capacity.limit !== null) {
           const current = await countActiveRuns(env, owner);
-          if (current >= capacity.limit) return activeRunLimitResponse({ limit: capacity.limit, current }, 'restore');
+          if (current >= capacity.limit) return activeRunLimitResponse(owner, { limit: capacity.limit, current }, 'restore');
         }
         // A concurrent request restored it first.
         return jsonError('Checklist is not archived', 400);
@@ -416,8 +416,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       }
       // Revalidation always leaves the run in_progress, which reopens a completed run.
       if (isReopening(existingRun.status, 'in_progress')) {
-        const limitHit = await findActiveRunLimitHit(env, { userId: existingRun.user_id, teamId: existingRun.team_id ?? null }, userId);
-        if (limitHit) return activeRunLimitResponse(limitHit, 'reopen');
+        const runOwner = { userId: existingRun.user_id, teamId: existingRun.team_id ?? null };
+        const limitHit = await findActiveRunLimitHit(env, runOwner, userId);
+        if (limitHit) return activeRunLimitResponse(runOwner, limitHit, 'reopen');
       }
 
       const previousSections = parseJsonArray(existingRun.items) ?? [];
@@ -557,7 +558,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
 
     const owner = { userId, teamId: effectiveTeamId };
     const capacity = await checkActiveRunCapacity(env, owner, userId);
-    if (capacity.hit) return activeRunLimitResponse(capacity.hit, 'create');
+    if (capacity.hit) return activeRunLimitResponse(owner, capacity.hit, 'create');
 
     const checklistId = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -597,7 +598,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     });
     const batchResults = await db.batch(runInsertStatements(db, insertedRun, auditEvent, owner, capacity.limit));
     if (capacity.limit !== null && batchUpdateMissed(batchResults[0])) {
-      return activeRunLimitResponse({ limit: capacity.limit, current: await countActiveRuns(env, owner) }, 'create');
+      return activeRunLimitResponse(owner, { limit: capacity.limit, current: await countActiveRuns(env, owner) }, 'create');
     }
 
     return json({ id: checklistId });
@@ -674,8 +675,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     }
     // Only a real reopen counts: the run page sends the current status with every save.
     if (isReopening(existingRun.status, status)) {
-      const limitHit = await findActiveRunLimitHit(env, { userId: existingRun.user_id, teamId: existingRun.team_id ?? null }, userId);
-      if (limitHit) return activeRunLimitResponse(limitHit, 'reopen');
+      const runOwner = { userId: existingRun.user_id, teamId: existingRun.team_id ?? null };
+      const limitHit = await findActiveRunLimitHit(env, runOwner, userId);
+      if (limitHit) return activeRunLimitResponse(runOwner, limitHit, 'reopen');
     }
 
     const now = new Date().toISOString();

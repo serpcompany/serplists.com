@@ -68,7 +68,7 @@ describe('limit-guarded writes that lose the race', () => {
     const data = await response.json() as Record<string, unknown>;
 
     expect(response.status).toBe(403);
-    expect(data).toEqual(expect.objectContaining({ code: 'limit_reached', details: { limit: 3, current: 3, resource: 'active_runs' } }));
+    expect(data).toEqual(expect.objectContaining({ code: 'limit_reached', details: { limit: 3, current: 3, resource: 'active_runs', context: 'personal' } }));
     expect(dbMocks.db.batch.mock.calls[0][0]).toEqual([{ kind: 'guarded-insert' }, { kind: 'guarded-insert' }]);
     expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
   });
@@ -99,7 +99,7 @@ describe('limit-guarded writes that lose the race', () => {
     const data = await response.json() as Record<string, unknown>;
 
     expect(response.status).toBe(403);
-    expect(data).toEqual(expect.objectContaining({ code: 'limit_reached', details: { limit: 1, current: 1, resource: 'templates' } }));
+    expect(data).toEqual(expect.objectContaining({ code: 'limit_reached', details: { limit: 1, current: 1, resource: 'templates', context: 'personal' } }));
     expect(data).not.toHaveProperty('id');
     expect(dbMocks.db.batch.mock.calls[0][0]).toEqual([{ kind: 'guarded-insert' }, { kind: 'guarded-insert' }, { kind: 'guarded-insert' }]);
   });

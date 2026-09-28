@@ -3,7 +3,7 @@ import { createDb, schema } from '../db';
 import type { Env } from '../types';
 import { getEntitlementsForContext, getEntitlementsForUser } from './entitlements';
 import { insertRowWhere, rowExistsSql } from './guarded-insert';
-import { jsonError } from './response';
+import { limitReachedResponse } from './limit-reached';
 
 // The Free plan's active-run limit. Every write that adds an in_progress run to a context
 // (create, restore, and reopening a completed run through revalidate, PUT status, the share
@@ -94,12 +94,13 @@ export function runInsertStatements(
   ] as const;
 }
 
-/** The 403 every web route returns at the limit; `action` completes "Upgrade to Pro to ...". */
-export function activeRunLimitResponse(hit: ActiveRunLimitHit, action: 'create' | 'restore' | 'reopen'): Response {
-  return jsonError(`Active run limit reached. Upgrade to Pro to ${action} more checklist runs.`, 403, {
-    code: 'limit_reached',
-    details: { limit: hit.limit, current: hit.current, resource: 'active_runs' },
-  });
+/** The 403 every web route returns when `owner`'s context is at the limit. */
+export function activeRunLimitResponse(
+  owner: RunOwnerContext,
+  hit: ActiveRunLimitHit,
+  action: 'create' | 'restore' | 'reopen',
+): Response {
+  return limitReachedResponse({ resource: 'active_runs', teamId: owner.teamId, action, ...hit });
 }
 
 /** True when a write moves a run from any other status into in_progress. */

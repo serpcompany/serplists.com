@@ -105,7 +105,13 @@ instead of inferring access state from message text:
 
 - `401` means the user must sign in; preserve the requested return path.
 - `403 upgrade_required` means the active context needs a paid entitlement.
-- `403 limit_reached` means the active plan limit has been reached.
+- `403 limit_reached` means the plan limit of the context that owns the Template or
+  Run has been reached. `details` holds `limit`, `current`, `resource`
+  (`active_runs` or `templates`) and `context` (`personal` or `organization`).
+  Only a Personal limit tells the user to upgrade to Pro; an Organization limit
+  says the Organization needs a paid plan, because Personal Pro never lifts it.
+  Clients pick the upgrade path from `details.context`, not from the message.
+  All of these responses come from `functions/api/utils/limit-reached.ts`.
 - `503 billing_unavailable` means checkout cannot currently be started.
 
 Billing status query keys must include the current user id (or an explicit

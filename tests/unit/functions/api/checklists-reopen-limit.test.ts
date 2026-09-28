@@ -94,10 +94,13 @@ async function send(path: string, method: string, body: unknown) {
   return { response, data: await response.json() as Record<string, unknown> };
 }
 
-function expectLimitReached(result: { response: Response; data: Record<string, unknown> }) {
+function expectLimitReached(
+  result: { response: Response; data: Record<string, unknown> },
+  context: 'personal' | 'organization' = 'personal',
+) {
   expect(result.response.status).toBe(403);
   expect(result.data.code).toBe('limit_reached');
-  expect(result.data.details).toEqual({ limit: 3, current: 3, resource: 'active_runs' });
+  expect(result.data.details).toEqual({ limit: 3, current: 3, resource: 'active_runs', context });
   expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
   expect(dbMocks.db.batch).not.toHaveBeenCalled();
 }
@@ -185,7 +188,7 @@ describe('reopening a run respects the active-run limit', () => {
       .mockResolvedValueOnce([membership])
       .mockResolvedValueOnce([{ count: 3 }]);
 
-    expectLimitReached(await send('run-1', 'PUT', { status: 'in_progress', expected_revision: 2 }));
+    expectLimitReached(await send('run-1', 'PUT', { status: 'in_progress', expected_revision: 2 }), 'organization');
     expect(getEntitlementsForContext).toHaveBeenCalledWith(env, expect.objectContaining({ type: 'team', teamId: 'team-1' }));
     expect(getEntitlementsForUser).not.toHaveBeenCalled();
   });

@@ -82,7 +82,7 @@ export async function handleSharedChecklist(
   if (isReopening(existingSharedRun.status, status)) {
     const owner = { userId: existingSharedRun.user_id, teamId: existingSharedRun.team_id ?? null };
     const limitHit = await findActiveRunLimitHit(env, owner, userId);
-    if (limitHit) return activeRunLimitResponse(limitHit, 'reopen');
+    if (limitHit) return activeRunLimitResponse(owner, limitHit, 'reopen');
   }
 
   const storedSections = readStoredRunSections(existingSharedRun.items);

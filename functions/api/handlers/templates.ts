@@ -1015,10 +1015,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         : await getEntitlementsForUser(env, userId);
       const owner = { userId, teamId };
       const limit = entitlements.plan === 'free' && entitlements.limits.maxTemplates ? entitlements.limits.maxTemplates : null;
-      const restoreLimitMessage = 'Template limit reached. Upgrade to Pro to restore more templates.';
       if (limit !== null) {
         const currentCount = await countTemplates(env, owner);
-        if (currentCount >= limit) return templateLimitResponse(restoreLimitMessage, limit, currentCount);
+        if (currentCount >= limit) return templateLimitResponse(owner, 'restore', limit, currentCount);
       }
 
       const now = new Date().toISOString();
@@ -1053,7 +1052,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       if (batchUpdateMissed(restoreResults[1])) {
         if (limit !== null) {
           const currentCount = await countTemplates(env, owner);
-          if (currentCount >= limit) return templateLimitResponse(restoreLimitMessage, limit, currentCount);
+          if (currentCount >= limit) return templateLimitResponse(owner, 'restore', limit, currentCount);
         }
         // A concurrent request restored it first.
         return jsonError('Template is not archived', 400);
@@ -1094,10 +1093,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       const cloneCapacity = entitlements.limits.maxTemplates !== null
         ? { owner: { userId, teamId: cloneTeamId }, limit: entitlements.limits.maxTemplates }
         : undefined;
-      const cloneLimitMessage = 'Template limit reached. Upgrade to Pro to save more templates.';
       if (cloneCapacity) {
         const currentCount = await countTemplates(env, cloneCapacity.owner);
-        if (currentCount >= cloneCapacity.limit) return templateLimitResponse(cloneLimitMessage, cloneCapacity.limit, currentCount);
+        if (currentCount >= cloneCapacity.limit) return templateLimitResponse(cloneCapacity.owner, 'save', cloneCapacity.limit, currentCount);
       }
 
       const [source] = await withRulesColumnFallback((includeRules) =>
@@ -1160,7 +1158,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         createdAt: now,
       });
       if (!(await insertTemplateWithHistoryFallback(db, clonedTemplate, versionValues, auditEvent, cloneCapacity)) && cloneCapacity) {
-        return templateLimitResponse(cloneLimitMessage, cloneCapacity.limit, await countTemplates(env, cloneCapacity.owner));
+        return templateLimitResponse(cloneCapacity.owner, 'save', cloneCapacity.limit, await countTemplates(env, cloneCapacity.owner));
       }
 
       return json({ id: templateId, slug });
@@ -1190,10 +1188,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
     const createCapacity = entitlements.limits.maxTemplates
       ? { owner: { userId, teamId: requestedTeamId }, limit: entitlements.limits.maxTemplates }
       : undefined;
-    const createLimitMessage = 'Template limit reached. Upgrade to create more templates.';
     if (createCapacity) {
       const currentCount = await countTemplates(env, createCapacity.owner);
-      if (currentCount >= createCapacity.limit) return templateLimitResponse(createLimitMessage, createCapacity.limit, currentCount);
+      if (currentCount >= createCapacity.limit) return templateLimitResponse(createCapacity.owner, 'create', createCapacity.limit, currentCount);
     }
 
     const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
@@ -1263,7 +1260,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       createdAt: now,
     });
     if (!(await insertTemplateWithHistoryFallback(db, insertedTemplate, versionValues, auditEvent, createCapacity)) && createCapacity) {
-      return templateLimitResponse(createLimitMessage, createCapacity.limit, await countTemplates(env, createCapacity.owner));
+      return templateLimitResponse(createCapacity.owner, 'create', createCapacity.limit, await countTemplates(env, createCapacity.owner));
     }
 
     return json({ id: templateId, slug });
