@@ -4,6 +4,7 @@ import {
   areAllRunItemsCompleted,
   countRunExecutionItems,
   getNextSelectedItemId,
+  mapChecklistRuns,
   mapChecklistToRun,
 } from '@/features/run-execution/runExecutionMappers';
 import type { ChecklistRun } from '@/types/checklist';
@@ -147,5 +148,37 @@ describe('mapChecklistToRun retired work', () => {
     expect(countRunExecutionItems(run)).toEqual({ completed: 0, progress: 0, total: 1 });
     expect(areAllRunItemsCompleted(run)).toBe(false);
     expect(getNextSelectedItemId(run, 'copy')).toBe('copy');
+  });
+});
+
+describe('mapChecklistRuns', () => {
+  const valid = { id: 'run-ok', title: 'Launch', items: JSON.stringify([{ id: 's1', title: 'S', items: [{ id: 'a', title: 'A', isCompleted: true }] }]) };
+  const malformed = {
+    id: 'run-bad',
+    title: 'Revalidated',
+    team_id: 'org-1',
+    items: JSON.stringify([{ id: 's1', title: 'S', items: [{ id: 'b', title: 'B', contents: [{ type: 'subItems', value: '', subItems: 'x' }] }] }]),
+  };
+
+  it('maps a run with malformed content instead of throwing (the run page showed "Unable to load run")', () => {
+    const run = mapChecklistToRun(malformed, 'run-bad');
+
+    expect(run.sections[0].items[0].contents).toEqual([{ type: 'subItems', value: '', subItems: [] }]);
+    expect(run.progress).toBe(0);
+  });
+
+  it('keeps every run listed when one run holds malformed content', () => {
+    const runs = mapChecklistRuns([malformed, valid]);
+
+    expect(runs.map((run) => run.id)).toEqual(['run-bad', 'run-ok']);
+    expect(runs[0]).toEqual(expect.objectContaining({ teamId: 'org-1', progress: 0 }));
+    expect(runs[1]).toEqual(expect.objectContaining({ progress: 100 }));
+  });
+
+  it('keeps a run whose items column is not even JSON, with no tasks, so it can still be deleted', () => {
+    const runs = mapChecklistRuns([{ id: 'run-broken', title: 'Broken', items: '{not json' }, valid, 'x']);
+
+    expect(runs.map((run) => run.id)).toEqual(['run-broken', 'run-ok']);
+    expect(runs[0]).toEqual(expect.objectContaining({ sections: [], progress: 0 }));
   });
 });

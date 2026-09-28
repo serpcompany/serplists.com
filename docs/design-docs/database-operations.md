@@ -100,6 +100,15 @@ applied outside Wrangler. Fresh staging databases need no baseline.
   there is a deliberate test-data plan.
 - Production: never seed test Users or Organization fixtures.
 
+## Checking stored checklist content
+
+Saves check section content against `src/lib/schemas/storedSections.ts`, but rows
+written before that check can still hold malformed content. The app and API make it
+safe when they read or copy it. To review what is stored,
+`db/maintenance/find-malformed-checklist-content.sql` lists each malformed path in
+`templates.items` and `checklist_runs.items`. It is read-only but scans both tables,
+and any repair write against staging or production goes to a human first.
+
 ## Release checklists
 
 Preview/staging:

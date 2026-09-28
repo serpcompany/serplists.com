@@ -1062,6 +1062,92 @@ describe('Templates Handlers', () => {
     );
   });
 
+  describe('malformed checklist content', () => {
+    const sectionsWith = (content: unknown) => [{ id: 's1', title: 'Launch', items: [{ id: 'i1', title: 'Task', contents: [content] }] }];
+    const malformed: Array<[string, unknown, string]> = [
+      ['a string Sub-task list', { type: 'subItems', value: '', subItems: 'x' }, 'sections[0].items[0].contents[0].subItems'],
+      ['an object Sub-task list', { type: 'subItems', value: '', subItems: {} }, 'sections[0].items[0].contents[0].subItems'],
+      ['an object value', { type: 'text', value: {} }, 'sections[0].items[0].contents[0].value'],
+      ['an unknown type', { type: 'poll', value: 'x' }, 'sections[0].items[0].contents[0].type'],
+    ];
+
+    it.each(malformed)('POST rejects %s, naming the field, and stores nothing', async (_label, content, path) => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+      dbMocks.selectChain.limit.mockResolvedValue([]);
+
+      const response = await handleTemplates(new Request('http://localhost/api/templates', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Launch plan', sections: sectionsWith(content) }),
+      }), mockEnv);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error.startsWith(`${path}: `)).toBe(true);
+      expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    });
+
+    it.each(malformed)('PUT rejects %s before any template or run is written', async (_label, content, path) => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+
+      const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+        method: 'PUT',
+        body: JSON.stringify({ sections: sectionsWith(content), expected_version: 1 }),
+      }), mockEnv);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error.startsWith(`${path}: `)).toBe(true);
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+      expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+    });
+
+    it('still accepts a title-only save of a template whose stored content is malformed', async () => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+      dbMocks.selectChain.limit.mockResolvedValueOnce([{
+        id: 'template-1',
+        user_id: 'user-123',
+        owner_type: 'user',
+        team_id: null,
+        title: 'Old title',
+        items: JSON.stringify(sectionsWith({ type: 'subItems', value: '', subItems: 'x' })),
+        version: 1,
+        content_version: 1,
+        slug: 'old-title',
+      }]);
+
+      const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
+        method: 'PUT',
+        body: JSON.stringify({ title: 'New title', expected_version: 1 }),
+      }), mockEnv);
+
+      expect(response.status).toBe(200);
+    });
+
+    it('fails only the imported template with malformed content, naming the field', async () => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+      vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } });
+      dbMocks.selectChain.limit.mockResolvedValue([]);
+
+      const response = await handleTemplates(new Request('http://localhost/api/templates/backup', {
+        method: 'POST',
+        body: JSON.stringify({ templates: [
+          { title: 'Broken', sections: sectionsWith({ type: 'subItems', value: '', subItems: 'x' }) },
+          { title: 'Fine', sections: sectionsWith({ type: 'subItems', value: '', subItems: [{ title: 'Short' }] }) },
+        ] }),
+      }), mockEnv);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.imported).toBe(1);
+      expect(data.failed).toEqual([expect.objectContaining({
+        title: 'Broken',
+        code: 'invalid_sections',
+        reason: 'sections[0].items[0].contents[0].subItems: Expected array, received string',
+      })]);
+    });
+  });
+
   it('should allow cloning templates for free users within template limit', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit

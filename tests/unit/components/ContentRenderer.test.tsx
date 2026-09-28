@@ -3,8 +3,20 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
+import type { ChecklistItemContent } from '@/types/checklist';
 
 describe('ContentRenderer accessibility', () => {
+  it('renders malformed stored content without throwing', () => {
+    const contents = [
+      { type: 'text', value: {} },
+      { type: 'embed', value: ['x'] },
+      { type: 'subItems', value: '', subItems: 'x' },
+      { type: 'subItems', value: '', subItems: [{ id: 'a', title: { en: 'x' } }, null] },
+    ] as unknown as ChecklistItemContent[];
+
+    expect(() => renderToStaticMarkup(<ContentRenderer contents={contents} />)).not.toThrow();
+  });
+
   it('preserves authored line breaks in text content', () => {
     const markup = renderToStaticMarkup(
       <ContentRenderer

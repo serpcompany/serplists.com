@@ -10,7 +10,6 @@ item, delete its row and mention the ID in the PR. When you take a shortcut, add
 | --- | --- | --- | --- | --- |
 | TD-1 | Types | `tests/` is not type-checked (about 460 errors under `strict`). | Add a tsconfig for `tests/` to the `tsc -b` references and fix one directory at a time. | None |
 | TD-2 | Boundaries | `src/lib/api.ts` returns `response.json()` as the declared type without parsing, so client code trusts guessed shapes. | Let the request helper take an optional Zod schema; convert template and run endpoints first. | None |
-| TD-3 | Boundaries | API payload schemas accept `sections`/`items` as `z.unknown()` and normalize them by hand. | Parse with the shared checklist schemas in `src/lib/schemas/`. | None |
 | TD-5 | Vocabulary | Code identifiers, tables, and routes still use `team`/`team_id`/`workspace` for Organization ([ADR 0001](../design-docs/personal-and-organization-contexts.md)). | Rename in separately scoped, migration-safe changes. | None |
 | TD-6 | Architecture | 9 pages/components call `src/lib/api.ts` directly. | Continue the [UI decoupling plan](active/ui-decoupling.md). | `.dependency-cruiser-known-violations.json` |
 | TD-8 | Size | 15 files exceed 500 lines; the API handlers are the largest (`templates.ts` about 1,600 lines). | Split handlers by route family into modules under `functions/api/handlers/`; lower caps. | `eslint.config.js` caps |

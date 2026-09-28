@@ -164,6 +164,87 @@ describe('Checklists Handlers', () => {
     expect(inserted.revision).toBe(1);
   });
 
+  describe('malformed checklist content', () => {
+    const malformedSections = [{
+      id: 's1',
+      title: 'Launch',
+      items: [{ id: 'i1', title: 'Task', contents: [{ type: 'subItems', value: '', subItems: 'x' }] }],
+    }];
+    const path = 'sections[0].items[0].contents[0].subItems: Expected array, received string';
+
+    it('POST rejects it, naming the field', async () => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+
+      const response = await handleChecklists(new Request('http://localhost/api/checklists', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Run', sections: malformedSections }),
+      }), mockEnv);
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toBe(path);
+      expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+    });
+
+    it('PUT rejects it, naming the field', async () => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+
+      const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1', {
+        method: 'PUT',
+        body: JSON.stringify({ sections: malformedSections, expected_revision: 1 }),
+      }), mockEnv);
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toBe(path);
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    });
+
+    it('the shared-run PUT rejects it, naming the field', async () => {
+      const response = await handleChecklists(new Request('http://localhost/api/checklists/shared/token-1', {
+        method: 'PUT',
+        body: JSON.stringify({ sections: malformedSections }),
+      }), mockEnv);
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toBe(path);
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    });
+
+    it('starts a run from a Template stored before the check with the content made safe', async () => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+      dbMocks.selectChain.limit
+        .mockResolvedValueOnce([{
+          id: 'template-1',
+          user_id: 'user-123',
+          owner_type: 'user',
+          team_id: null,
+          title: 'Stored before the check',
+          items: JSON.stringify([{
+            id: 's1',
+            title: 'Launch',
+            items: [{ id: 'i1', title: 'Task', contents: [
+              { type: 'subItems', value: '', subItems: 'x' },
+              { type: 'text', value: {} },
+            ] }],
+          }]),
+          is_public: false,
+          version: 2,
+        }])
+        .mockResolvedValueOnce([{ count: 0 }]);
+
+      const response = await handleChecklists(new Request('http://localhost/api/checklists', {
+        method: 'POST',
+        body: JSON.stringify({ template_id: 'template-1', title: 'Run' }),
+      }), mockEnv);
+
+      expect(response.status).toBe(200);
+      const stored = JSON.parse(dbMocks.insertChain.values.mock.calls[0][0].items);
+      expect(stored[0].items[0].contents).toEqual([
+        { type: 'subItems', value: '', subItems: [] },
+        { type: 'text', value: '' },
+      ]);
+    });
+  });
+
   it('should reject checklist runs from inaccessible private templates', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([

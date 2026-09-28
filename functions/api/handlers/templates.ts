@@ -7,6 +7,7 @@ import {
   normalizeSectionsPayload,
   normalizeStringArray,
   parseJsonArray,
+  parseSectionsPayload,
   templateImportFieldsSchema,
   templatePayloadSchema,
   templateUpdatePayloadSchema,
@@ -586,7 +587,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           });
           continue;
         }
-        const normalizedSections = normalizeSectionsPayload(template.sections ?? template.items);
+        const normalizedSections = parseSectionsPayload(template.sections ?? template.items);
         if (normalizedSections.error) {
           summary.failed.push({
             index,
@@ -1153,7 +1154,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
 
     const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
 
-    const normalizedSections = normalizeSectionsPayload(sections ?? bodyItems);
+    const normalizedSections = parseSectionsPayload(sections ?? bodyItems);
     if (normalizedSections.error) {
       return jsonError(normalizedSections.error, 400);
     }
@@ -1278,7 +1279,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       updates.rules = Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null;
     }
     if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
-      const normalizedSections = normalizeSectionsPayload(sections ?? bodyItems);
+      const normalizedSections = parseSectionsPayload(sections ?? bodyItems);
       if (normalizedSections.error) {
         return jsonError(normalizedSections.error, 400);
       }

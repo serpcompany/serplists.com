@@ -9,6 +9,7 @@ import {
   TEMPLATE_SLUG_MAX,
   TEMPLATE_TITLE_MAX,
 } from "../../../src/lib/schemas/templateLimits";
+import { findStoredSectionsIssue } from "../../../src/lib/schemas/storedSections";
 
 const boundedOptionalString = (max: number) => z.string().trim().max(max).optional();
 const boundedRequiredString = (max: number) => z.string().trim().min(1).max(max);
@@ -117,6 +118,18 @@ export function normalizeStringArray(value: unknown): string[] {
   }
   if (typeof value === "string" && value.trim()) return [value.trim()];
   return [];
+}
+
+/**
+ * normalizeSectionsPayload for writes: also checks every section, task, content block and
+ * Sub-task against storedSectionsSchema, so stored content never breaks a reader. The
+ * error names the first bad path.
+ */
+export function parseSectionsPayload(input: unknown): { sections: unknown[]; error?: string } {
+  const normalized = normalizeSectionsPayload(input);
+  if (normalized.error) return normalized;
+  const issue = findStoredSectionsIssue(normalized.sections);
+  return issue ? { sections: [], error: issue } : normalized;
 }
 
 export function normalizeSectionsPayload(input: unknown): { sections: unknown[]; error?: string } {

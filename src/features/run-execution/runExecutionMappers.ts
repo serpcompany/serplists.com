@@ -77,10 +77,29 @@ export const mapChecklistToRun = (
     revision: typeof checklist.revision === 'number' ? checklist.revision : 1,
     isStale: checklist.is_stale === true,
     isPublic: checklist.is_public === true || checklist.is_public === 1,
+    teamId: asString(checklist.team_id),
     // Read-only: kept out of `sections`, so progress and task selection never see it.
     retiredItems: parseRetiredRunItems(checklist.retired_items),
   };
 };
+
+/**
+ * Maps GET /api/checklists rows for the Runs list. A run that still fails to map is listed
+ * with no tasks, so one bad row never empties the list and the run can still be deleted.
+ */
+export const mapChecklistRuns = (checklists: unknown): ChecklistRun[] =>
+  (Array.isArray(checklists) ? checklists : []).flatMap((checklist): ChecklistRun[] => {
+    if (typeof checklist !== 'object' || checklist === null || typeof (checklist as ApiRecord).id !== 'string') {
+      return [];
+    }
+    const record = checklist as ApiRecord;
+    try {
+      return [mapChecklistToRun(record, record.id as string)];
+    } catch (error) {
+      console.error('Unable to read run content', { runId: record.id, error });
+      return [mapChecklistToRun({ ...record, items: '[]', sections: undefined, retired_items: '[]' }, record.id as string)];
+    }
+  });
 
 export const cloneRunSections = (
   sections: ChecklistRun['sections'],
@@ -140,7 +159,7 @@ export const countRunExecutionItems = (
       }
 
       item.contents?.forEach((content) => {
-        if (content.type !== 'subItems' || !content.subItems) {
+        if (content.type !== 'subItems' || !Array.isArray(content.subItems)) {
           return;
         }
 

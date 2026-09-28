@@ -1,3 +1,5 @@
+import { sanitizeStoredSections } from '../../../src/lib/schemas/storedSections';
+
 type JsonRecord = Record<string, unknown>;
 
 export type RetiredRunEntry =
@@ -160,7 +162,8 @@ export function reconcileRunSections(
   previousRetired: unknown[],
 ): { sections: JsonRecord[]; retired: RetiredRunEntry[]; newlyRetired: RetiredRunEntry[] } {
   const previousSectionShape = normalizeLegacySectionShape(previousSections);
-  const templateSectionShape = normalizeLegacySectionShape(templateSections);
+  // A Template stored before content was checked must not copy malformed blocks into runs.
+  const templateSectionShape = sanitizeStoredSections(normalizeLegacySectionShape(templateSections));
   const normalizedPreviousSections = assignMissingStableTemplateIdentities(previousSectionShape);
   const normalizedTemplateSections = assignMissingStableTemplateIdentities(
     templateSectionShape,

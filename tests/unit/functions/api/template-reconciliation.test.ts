@@ -335,6 +335,38 @@ describe('template run reconciliation', () => {
   });
 });
 
+describe('malformed Template content', () => {
+  it('never copies a malformed Sub-task list or value into a run', () => {
+    const previous = [{ id: 's1', title: 'Launch', items: [{ id: 'i1', title: 'Task', isCompleted: true, notes: 'Keep' }] }];
+    const template = [{
+      id: 's1',
+      title: 'Launch',
+      items: [{
+        id: 'i1',
+        title: 'Task',
+        subItems: 'x',
+        contents: [
+          { type: 'subItems', value: '', subItems: 'x' },
+          { type: 'subItems', value: '', subItems: { a: 1 } },
+          { type: 'text', value: {} },
+          { type: 'poll', value: 'x' },
+          'x',
+        ],
+      }],
+    }];
+
+    const [item] = reconcileRunSections(previous, template, []).sections[0].items as Array<Record<string, unknown>>;
+
+    expect(item.contents).toEqual([
+      { type: 'subItems', value: '', subItems: [] },
+      { type: 'subItems', value: '', subItems: [] },
+      { type: 'text', value: '' },
+    ]);
+    expect(item.subItems).toEqual([]);
+    expect(item).toEqual(expect.objectContaining({ isCompleted: true, notes: 'Keep' }));
+  });
+});
+
 describe('retired run work', () => {
   const section = (items: unknown[]) => [{ id: 'section-1', title: 'Launch', items }];
   const dns = { id: 'item-dns', title: 'Check DNS', isCompleted: true, notes: 'TTL lowered to 300' };

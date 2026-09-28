@@ -1,7 +1,8 @@
 import { Env } from '../types';
 import { and, desc, eq, getTableColumns, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { createDb, schema } from '../db';
-import { checklistPayloadSchema, normalizeSectionsPayload, parseJsonArray } from '../utils/payloads';
+import { checklistPayloadSchema, normalizeSectionsPayload, parseJsonArray, parseSectionsPayload } from '../utils/payloads';
+import { sanitizeStoredSections } from '../../../src/lib/schemas/storedSections';
 import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
@@ -195,7 +196,7 @@ async function resolveTemplateRunSource(
   return {
     source: {
       effectiveTeamId: isPrivateTeamTemplate ? sourceTeamId : requestedTeamId,
-      sections: resetCompletionState(normalizedSections.sections) as unknown[],
+      sections: resetCompletionState(sanitizeStoredSections(normalizedSections.sections)) as unknown[],
       title: sourceTemplate.title || '',
       version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
     },
@@ -251,7 +252,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
 
       const updates: Record<string, unknown> = {};
       if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
-        const normalizedSections = normalizeSectionsPayload(sections ?? items);
+        const normalizedSections = parseSectionsPayload(sections ?? items);
         if (normalizedSections.error) {
           return jsonError(normalizedSections.error, 400);
         }
@@ -758,7 +759,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         team_id: effectiveTeamId,
         template_id: templateId,
         title: runName,
-        items: JSON.stringify(normalizedSections.sections),
+        items: JSON.stringify(sanitizeStoredSections(normalizedSections.sections)),
         status: 'in_progress',
         started_at: now,
         created_by_user_id: userId,
@@ -932,7 +933,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
 
     const normalizedSections = templateRunSource.source
       ? { sections: templateRunSource.source.sections }
-      : normalizeSectionsPayload(sections ?? items);
+      : parseSectionsPayload(sections ?? items);
     if (normalizedSections.error) {
       return jsonError(normalizedSections.error, 400);
     }
@@ -1000,7 +1001,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       updates.title = title;
     }
     if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
-      const normalizedSections = normalizeSectionsPayload(sections ?? items);
+      const normalizedSections = parseSectionsPayload(sections ?? items);
       if (normalizedSections.error) {
         return jsonError(normalizedSections.error, 400);
       }

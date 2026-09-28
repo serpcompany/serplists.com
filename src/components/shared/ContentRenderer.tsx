@@ -8,6 +8,26 @@ import { ChecklistItemContent, ChecklistSubItem } from '@/types/checklist';
 import { normalizeMarkdownDisplayText } from '@/lib/utils/markdownDisplay';
 import { safeUrl } from '@/lib/utils/safeUrl';
 
+type LooseRecord = Record<string, unknown>;
+
+// Callers pass content already made safe by normalizeSections; this keeps one malformed
+// block from breaking the page if one slips through. Indexes are kept, since Sub-task
+// toggles address blocks and Sub-tasks by position.
+const toRenderableContent = (content: unknown): ChecklistItemContent => {
+  const record: LooseRecord = typeof content === 'object' && content !== null ? (content as LooseRecord) : {};
+  return {
+    ...record,
+    value: typeof record.value === 'string' ? record.value : '',
+    fileName: typeof record.fileName === 'string' ? record.fileName : undefined,
+    subItems: Array.isArray(record.subItems)
+      ? record.subItems.map((subItem: unknown) => {
+          const entry: LooseRecord = typeof subItem === 'object' && subItem !== null ? (subItem as LooseRecord) : {};
+          return { ...entry, title: typeof entry.title === 'string' ? entry.title : '' } as ChecklistSubItem;
+        })
+      : undefined,
+  } as ChecklistItemContent;
+};
+
 interface ContentRendererProps {
   contents: ChecklistItemContent[];
   disabled?: boolean;
@@ -30,7 +50,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
 
   return (
     <div className="space-y-6">
-      {contents.map((content, contentIndex: number) => (
+      {contents.map((rawContent, contentIndex: number) => {
+        const content = toRenderableContent(rawContent);
+        return (
         <div key={contentIndex} className="space-y-3">
           {content.type === "text" && content.value && (
             <div className="prose prose-sm max-w-none whitespace-pre-line">
@@ -124,7 +146,8 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
             </div>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 };

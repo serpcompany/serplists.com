@@ -28,7 +28,8 @@ export type {
 } from "@/types/checklist";
 
 import { generateSlug } from "@/utils/urlHelpers";
-import { calculateSectionsProgress, isSectionsShape, normalizeSections, resetSectionsCompletion } from "@/lib/utils/checklistSections";
+import { normalizeSections, resetSectionsCompletion } from "@/lib/utils/checklistSections";
+import { mapChecklistRuns } from "@/features/run-execution/runExecutionMappers";
 import {
   isRepoTemplate,
   mergeAccountTemplateCollections,
@@ -114,8 +115,6 @@ export function buildCreateRunRequest(params: {
     title,
   };
 }
-
-// calculateSectionsProgress is imported from lib/utils/checklistSections
 
 export const useTemplates = () => {
   const context = useContext(TemplatesContext);
@@ -223,35 +222,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         const checklistsData = await api.getChecklists(
           activeTeamId ? { teamId: activeTeamId } : undefined,
         );
-        // Transform to run format
-        const transformedRuns = checklistsData.map((checklist: Record<string, unknown>) => {
-          const sections = (() => {
-            const raw = typeof checklist.items === 'string' ? JSON.parse(checklist.items) : (checklist.items || []);
-            if (isSectionsShape(raw)) return raw as ChecklistSection[];
-            return [{ id: '1', title: 'Checklist', items: raw }];
-          })();
-
-          return ({
-          id: checklist.id,
-          templateId: checklist.template_id || '',
-          title: checklist.title,
-          status: (checklist.status || 'in_progress') as "in_progress" | "completed",
-          sections: normalizeSections(sections),
-          startedAt: checklist.started_at || checklist.created_at,
-          completedAt: checklist.completed_at || undefined,
-          userId: checklist.user_id || '',
-          teamId: typeof checklist.team_id === 'string' ? checklist.team_id : undefined,
-          templateVersion: typeof checklist.template_version === 'number' ? checklist.template_version : 1,
-          revision: typeof checklist.revision === 'number' ? checklist.revision : 1,
-          isStale: checklist.is_stale === true,
-          isPublic: checklist.is_public === true || checklist.is_public === 1,
-        });
-        });
-
-        return transformedRuns.map((r: ChecklistRun) => ({
-          ...r,
-          progress: calculateSectionsProgress(r.sections),
-        }));
+        // Each run maps on its own, so one malformed run never empties the list.
+        return mapChecklistRuns(checklistsData);
       } catch (error) {
         console.error('Error fetching runs:', error);
         return [];

@@ -10,6 +10,7 @@ import {
   type PersonalRunKeyIdentity,
 } from "../utils/personal-run-key";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
+import { sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import { calculateRunProgress } from "../utils/template-reconciliation";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
@@ -315,7 +316,7 @@ function rateLimit(identity: PersonalRunKeyIdentity): { allowed: true } | { allo
 
 function parseStoredSections(value: unknown): JsonRecord[] {
   const normalized = normalizeSectionsPayload(parseJsonArray(value) ?? []);
-  return normalized.sections.filter(isRecord);
+  return sanitizeStoredSections(normalized.sections);
 }
 
 function resetCompletionState(value: unknown): unknown {
@@ -502,7 +503,7 @@ async function startRun(
     team_id: null,
     template_id: template.id,
     title: parsed.data.title ?? template.title,
-    items: JSON.stringify(resetCompletionState(normalized.sections)),
+    items: JSON.stringify(resetCompletionState(sanitizeStoredSections(normalized.sections))),
     status: "in_progress",
     progress: 0,
     started_at: now,

@@ -1,4 +1,10 @@
+import { sanitizeStoredItem } from "@/lib/schemas/storedSections";
 import type { ChecklistItemContent, ChecklistSection } from "@/types/checklist";
+
+type JsonRecord = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is JsonRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 export function isSectionsShape(value: unknown): value is ChecklistSection[] {
   if (!Array.isArray(value)) return false;
@@ -7,49 +13,29 @@ export function isSectionsShape(value: unknown): value is ChecklistSection[] {
   return typeof first?.items !== "undefined";
 }
 
+// Stored and imported checklist JSON is untrusted: runs and templates saved before the API
+// checked content, or edited by hand, can hold any shape. sanitizeStoredItem (shared with the
+// API) makes every task safe to render, count and save back, so one malformed task never
+// breaks a page or the Runs list.
 export function normalizeSections(raw: unknown): ChecklistSection[] {
   if (!Array.isArray(raw)) return [];
 
   return raw.map((section, sectionIndex) => {
-    const s = (section ?? {}) as Record<string, unknown>;
+    const s: JsonRecord = isRecord(section) ? section : {};
     const rawItems = Array.isArray(s.items) ? (s.items as unknown[]) : [];
 
     return {
       id: typeof s.id === "string" ? s.id : String(sectionIndex + 1),
       title: typeof s.title === "string" ? s.title : "Checklist",
       items: rawItems.map((item, itemIndex) => {
-        const it = (item ?? {}) as Record<string, unknown>;
+        const it = sanitizeStoredItem(isRecord(item) ? item : {});
         const isCompleted =
           typeof it.isCompleted === "boolean"
             ? it.isCompleted
             : typeof it.completed === "boolean"
               ? it.completed
               : false;
-
-        const rawContents = Array.isArray(it.contents) ? (it.contents as unknown[]) : undefined;
-        // Content entries are passed through from stored/imported JSON as-is (only legacy sub-item
-        // completion is normalized), so their shape is trusted here rather than validated.
-        const contents = rawContents?.map((c) => {
-          const content = (c ?? {}) as Record<string, unknown>;
-          if (content.type === "subItems" && Array.isArray(content.subItems)) {
-            return {
-              ...content,
-              subItems: (content.subItems as unknown[]).map((si) => {
-                const subItem = (si ?? {}) as Record<string, unknown>;
-                return {
-                  ...subItem,
-                  isCompleted:
-                    typeof subItem.isCompleted === "boolean"
-                      ? subItem.isCompleted
-                      : typeof subItem.completed === "boolean"
-                        ? subItem.completed
-                        : false,
-                };
-              }),
-            };
-          }
-          return content;
-        }) as ChecklistItemContent[] | undefined;
+        const contents = Array.isArray(it.contents) ? (it.contents as ChecklistItemContent[]) : undefined;
 
         const { completed: _completed, ...rest } = it;
         return {
@@ -74,7 +60,7 @@ export function calculateSectionsProgress(sections: ChecklistSection[]): number 
       if (item.isCompleted) completed++;
 
       item.contents?.forEach((content) => {
-        if (content.type === "subItems" && content.subItems) {
+        if (content.type === "subItems" && Array.isArray(content.subItems)) {
           content.subItems.forEach((subItem) => {
             total++;
             if (subItem.isCompleted) completed++;
@@ -95,7 +81,7 @@ export function resetSectionsCompletion(sections: ChecklistSection[]): Checklist
       isCompleted: false,
       contents: item.contents?.map((content) => {
         if (content.type !== "subItems") return content;
-        if (!content.subItems) return { ...content, subItems: [] };
+        if (!Array.isArray(content.subItems)) return { ...content, subItems: [] };
         return {
           ...content,
           subItems: content.subItems.map((subItem) => ({
