@@ -93,6 +93,10 @@ built from the current form values: find the block with `findTemplateEditorConte
 render-time `useWatch` snapshot, which still holds the old value (see
 `handleFileChange` in `ContentEditor`). Never delete the previous file: templates,
 runs, and copies may still use it ([R2 uploads](database-operations.md#r2-uploads)).
+Report each upload to the editor as it starts (`FileUpload`'s `onUploadStart`, bound to
+`useTrackTemplateEditorUpload` from `src/features/template-editor/pendingUploads.ts`):
+until it finishes the file is not in the form, so the editor disables Save and asks
+before leaving.
 
 ## Editor tabs
 

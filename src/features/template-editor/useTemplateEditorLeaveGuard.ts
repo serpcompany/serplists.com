@@ -14,7 +14,11 @@ import { registerLeaveGuard } from "@/lib/navigation/leaveGuard";
 //   browser Back/Forward) through useBlocker, which needs the app's data router;
 // - signing out, which unmounts the editor, through the leave-guard registry;
 // - reloads, tab closes, and external links through beforeunload.
-export const useTemplateEditorLeaveGuard = (shouldBlock: boolean) => {
+// `message` is the question asked in the app (browsers show their own on unload).
+export const useTemplateEditorLeaveGuard = (
+  shouldBlock: boolean,
+  message: string = EDITOR_UNSAVED_CHANGES_MESSAGE,
+) => {
   // Set once the user chose to leave, or the editor navigates away after a create
   // saved, so the same exit is not questioned twice.
   const leaveAllowedRef = useRef(false);
@@ -42,23 +46,23 @@ export const useTemplateEditorLeaveGuard = (shouldBlock: boolean) => {
       return;
     }
 
-    if (confirmTemplateEditorNavigation(true)) {
+    if (confirmTemplateEditorNavigation(true, undefined, message)) {
       blocker.proceed();
     } else {
       blocker.reset();
     }
-  }, [blocker]);
+  }, [blocker, message]);
 
   useEffect(
     () =>
       registerLeaveGuard({
-        message: EDITOR_UNSAVED_CHANGES_MESSAGE,
+        message,
         shouldConfirm: () => !leaveAllowedRef.current && shouldBlock,
         onLeaveConfirmed: () => {
           leaveAllowedRef.current = true;
         },
       }),
-    [shouldBlock],
+    [shouldBlock, message],
   );
 
   useEffect(() => {

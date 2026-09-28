@@ -7,6 +7,10 @@ import { ContentEditor } from '@/components/template-editor/ContentEditor';
 import { MediaContentEditor } from '@/components/template-editor/content-types/MediaContentEditor';
 import { FileUpload } from '@/components/ui/file-upload';
 import {
+  createPendingUploads,
+  type PendingUploads,
+} from '@/features/template-editor/pendingUploads';
+import {
   buildTemplateEditorFormValues,
   type TemplateEditorContent,
   type TemplateEditorFormValues,
@@ -21,6 +25,8 @@ const harness = vi.hoisted(() => ({
   form: null as unknown as ReturnType<typeof import('react-hook-form').createFormControl>,
   // The editor's writes, recorded so tests can check they mark the form dirty.
   editorSetValue: null as unknown as (...args: unknown[]) => void,
+  // The editor page's pending-upload store, which ContentEditor reads from context.
+  uploads: null as unknown,
 }));
 
 vi.mock('react', async (importOriginal) => {
@@ -29,6 +35,7 @@ vi.mock('react', async (importOriginal) => {
     useId: () => 'content-editor-test',
     useRef: () => ({ current: null }),
     useState: <T,>(initial: T) => [initial, () => undefined],
+    useContext: () => harness.uploads,
   };
   return { ...actual, ...stubs, default: { ...actual, ...stubs } };
 });
@@ -137,6 +144,7 @@ function contentAt(index: number): TemplateEditorContent | undefined {
 describe('ContentEditor media uploads', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    harness.uploads = createPendingUploads();
     vi.mocked(api.uploadToR2).mockResolvedValue({
       url: UPLOADED_URL,
       fileName: 'photo.png',
@@ -225,5 +233,41 @@ describe('ContentEditor media uploads', () => {
     await pending;
 
     expect(get(harness.form.getValues(), CONTENT_PATH)).toEqual([]);
+  });
+
+  // The editor disables Save and guards leaving while this count is above zero.
+  it('reports the upload to the editor until it finishes', async () => {
+    createForm([{ id: 'c1', type: 'image', value: '' }]);
+    const uploads = harness.uploads as PendingUploads;
+    let finishUpload: (value: unknown) => void = () => undefined;
+    vi.mocked(api.uploadToR2).mockReturnValue(
+      new Promise((resolve) => {
+        finishUpload = resolve;
+      }) as ReturnType<typeof api.uploadToR2>,
+    );
+
+    const pending = selectFile(renderFileUpload());
+    await Promise.resolve();
+    expect(uploads.count()).toBe(1);
+
+    finishUpload({ url: UPLOADED_URL, fileName: 'photo.png', fileSize: 123 });
+    await pending;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(uploads.count()).toBe(0);
+    expect(contentAt(0)?.value).toBe(UPLOADED_URL);
+  });
+
+  it('stops reporting an upload that fails', async () => {
+    createForm([{ id: 'c1', type: 'image', value: '' }]);
+    const uploads = harness.uploads as PendingUploads;
+    vi.mocked(api.uploadToR2).mockRejectedValue(new Error('Network down'));
+
+    const pending = selectFile(renderFileUpload());
+    expect(uploads.count()).toBe(1);
+    await pending;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(uploads.count()).toBe(0);
+    expect(contentAt(0)?.value).toBe('');
   });
 });

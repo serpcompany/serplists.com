@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   EDITOR_UNSAVED_CHANGES_MESSAGE,
+  EDITOR_UPLOAD_IN_PROGRESS_MESSAGE,
   applyTemplateBeforeUnloadWarning,
   confirmTemplateEditorNavigation,
+  getTemplateEditorLeaveMessage,
   shouldBlockTemplateEditorNavigation,
   shouldBlockTemplateEditorTransition,
 } from '@/features/template-editor/navigationGuards';
@@ -43,11 +45,51 @@ describe('template editor navigation guards', () => {
     ).toBe(false);
   });
 
+  // Picking a file does not change the form until the upload finishes, so a clean form
+  // must still ask: leaving would drop the file.
+  it('blocks leaving while a file is still uploading, even with no other edits', () => {
+    expect(
+      shouldBlockTemplateEditorNavigation({
+        isDirty: false,
+        isSaving: false,
+        loading: false,
+        hasPendingUploads: true,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldBlockTemplateEditorNavigation({
+        isDirty: false,
+        isSaving: false,
+        loading: true,
+        hasPendingUploads: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('says a file is still uploading when that is what would be lost', () => {
+    expect(getTemplateEditorLeaveMessage({ hasPendingUploads: true })).toBe(
+      EDITOR_UPLOAD_IN_PROGRESS_MESSAGE,
+    );
+    expect(getTemplateEditorLeaveMessage({ hasPendingUploads: false })).toBe(
+      EDITOR_UNSAVED_CHANGES_MESSAGE,
+    );
+  });
+
   it('uses a confirmation prompt for guarded in-app navigation', () => {
     const confirm = vi.fn(() => false);
 
     expect(confirmTemplateEditorNavigation(true, confirm)).toBe(false);
     expect(confirm).toHaveBeenCalledWith(EDITOR_UNSAVED_CHANGES_MESSAGE);
+  });
+
+  it('asks with the message it is given', () => {
+    const confirm = vi.fn(() => true);
+
+    expect(
+      confirmTemplateEditorNavigation(true, confirm, EDITOR_UPLOAD_IN_PROGRESS_MESSAGE),
+    ).toBe(true);
+    expect(confirm).toHaveBeenCalledWith(EDITOR_UPLOAD_IN_PROGRESS_MESSAGE);
   });
 
   it('allows unguarded navigation without prompting', () => {

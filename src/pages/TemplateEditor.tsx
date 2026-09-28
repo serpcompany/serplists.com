@@ -32,8 +32,13 @@ import {
 } from "@/features/template-editor/postSaveFormState";
 import {
   EDITOR_LOAD_LATEST_MESSAGE,
+  getTemplateEditorLeaveMessage,
   shouldBlockTemplateEditorNavigation,
 } from "@/features/template-editor/navigationGuards";
+import {
+  TemplateEditorUploadsContext,
+  usePendingTemplateEditorUploads,
+} from "@/features/template-editor/pendingUploads";
 import { useTemplateEditorLeaveGuard } from "@/features/template-editor/useTemplateEditorLeaveGuard";
 import { useTemplateEditorAccess } from "@/features/template-editor/useTemplateEditorAccess";
 import { TemplateEditorAccessNotices } from "@/components/template-editor/TemplateEditorAccessNotices";
@@ -74,17 +79,24 @@ const TemplateEditor = () => {
     resolver: zodResolver(templateEditorFormSchema),
     defaultValues: model.initialValues,
   });
+  // A picked file reaches the form only when its upload finishes.
+  const { uploads, pendingCount } = usePendingTemplateEditorUploads();
+  const hasPendingUploads = pendingCount > 0;
   const shouldBlockNavigation = shouldBlockTemplateEditorNavigation({
     isDirty: templateForm.formState.isDirty,
     isSaving: model.isSaving,
     loading: model.loading,
+    hasPendingUploads,
   });
 
   useEffect(() => {
     templateForm.reset(model.initialValues);
   }, [model.initialValues, templateForm]);
 
-  const { allowLeave, guardLeave } = useTemplateEditorLeaveGuard(shouldBlockNavigation);
+  const { allowLeave, guardLeave } = useTemplateEditorLeaveGuard(
+    shouldBlockNavigation,
+    getTemplateEditorLeaveMessage({ hasPendingUploads }),
+  );
   // Plan limits and an ended session: the upgrade or sign-in action, and the kept draft.
   const access = useTemplateEditorAccess({
     isCreate: !id,
@@ -94,6 +106,11 @@ const TemplateEditor = () => {
   });
 
   const handleSave = async () => {
+    // Save is disabled meanwhile; this also covers a call that skips the button.
+    if (uploads.count() > 0) {
+      return;
+    }
+
     // model.save validates first and returns errors that name the field; the alert
     // below shows them. The copy is what gets sent; the form stays editable meanwhile.
     const submitted = cloneTemplateEditorFormValues(templateForm.getValues());
@@ -159,6 +176,7 @@ const TemplateEditor = () => {
       <TemplateHeader
         isEditing={!!id}
         isSaving={model.isSaving}
+        isUploading={hasPendingUploads}
         onCancel={() => navigate(buildConsoleTemplatesPath())}
         onPreview={() => setIsPreviewOpen(true)}
         onSave={handleSave}
@@ -220,27 +238,29 @@ const TemplateEditor = () => {
           />
         ) : null}
 
-        <Form {...templateForm}>
-          <div className="flex min-h-[calc(100vh-3.5rem)]">
-            <OutlineSidebar
-              selectedItemIndex={selectedItemIndex}
-              selectedSectionIndex={selectedSectionIndex}
-              showingSEO={showingSEO}
-              showingTemplateInfo={showingTemplateInfo}
-              onSelectItem={handleSelectItem}
-              onSelectSEO={handleSelectSEO}
-              onSelectSection={handleSelectSection}
-              onSelectTemplateInfo={handleSelectTemplateInfo}
-            />
+        <TemplateEditorUploadsContext.Provider value={uploads}>
+          <Form {...templateForm}>
+            <div className="flex min-h-[calc(100vh-3.5rem)]">
+              <OutlineSidebar
+                selectedItemIndex={selectedItemIndex}
+                selectedSectionIndex={selectedSectionIndex}
+                showingSEO={showingSEO}
+                showingTemplateInfo={showingTemplateInfo}
+                onSelectItem={handleSelectItem}
+                onSelectSEO={handleSelectSEO}
+                onSelectSection={handleSelectSection}
+                onSelectTemplateInfo={handleSelectTemplateInfo}
+              />
 
-            <EditorPanels
-              selectedItemIndex={selectedItemIndex}
-              selectedSectionIndex={selectedSectionIndex}
-              showingSEO={showingSEO}
-              showingTemplateInfo={showingTemplateInfo}
-            />
-          </div>
-        </Form>
+              <EditorPanels
+                selectedItemIndex={selectedItemIndex}
+                selectedSectionIndex={selectedSectionIndex}
+                showingSEO={showingSEO}
+                showingTemplateInfo={showingTemplateInfo}
+              />
+            </div>
+          </Form>
+        </TemplateEditorUploadsContext.Provider>
       </fieldset>
 
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>

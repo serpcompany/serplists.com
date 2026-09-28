@@ -34,3 +34,39 @@ describe('TemplateHeader', () => {
     expect(html).not.toContain('Cancel');
   });
 });
+
+describe('TemplateHeader while a file uploads', () => {
+  // Saving now would store the block without the file (and a new template would leave
+  // the page, dropping the upload).
+  it('disables Save and says a file is uploading', () => {
+    const html = renderToStaticMarkup(
+      <TemplateHeader
+        isEditing
+        isSaving={false}
+        isUploading
+        title="New Employee Onboarding"
+        onCancel={() => undefined}
+        onSave={() => undefined}
+      />,
+    );
+
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Uploading\.\.\.<\/button>/);
+    expect(html).not.toMatch(/>\s*Save\s*<\/button>/);
+  });
+
+  it('keeps Save enabled when nothing is uploading', () => {
+    const html = renderToStaticMarkup(
+      <TemplateHeader
+        isEditing
+        isSaving={false}
+        isUploading={false}
+        title="New Employee Onboarding"
+        onCancel={() => undefined}
+        onSave={() => undefined}
+      />,
+    );
+
+    expect(html).not.toContain('Uploading...');
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Save<\/button>/);
+  });
+});

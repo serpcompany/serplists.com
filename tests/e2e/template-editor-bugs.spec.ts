@@ -549,6 +549,73 @@ test.describe("template editor regressions", () => {
     }
   });
 
+  test("waits for a file upload before saving or leaving", async ({ page }) => {
+    const stamp = Date.now();
+    const templateTitle = `QA Held upload ${stamp}`;
+    const uploadedUrl = `/api/uploads/file?key=${encodeURIComponent(`template-images/e2e/held-${stamp}.png`)}`;
+    const onePixelPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+      "base64",
+    );
+
+    // Hold the upload until the test releases it; storage itself is stubbed.
+    let releaseUpload: () => void = () => {};
+    const uploadHeld = new Promise<void>((resolve) => {
+      releaseUpload = resolve;
+    });
+    await page.route("**/api/uploads", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.fallback();
+        return;
+      }
+      await uploadHeld;
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ url: uploadedUrl, fileName: "held.png", fileSize: onePixelPng.length }),
+      });
+    });
+
+    await loginAsSeedUser(page);
+    const templateId = await createTemplateViaApi(page, templateTitle);
+    await page.goto(`/dashboard/templates/${templateId}/edit`);
+    await page.getByRole("button", { exact: true, name: "First task" }).click();
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("button", { name: "Image", exact: true }).last().click();
+    // Save the empty block first, so the form is clean when the file is picked.
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+      name: "held.png",
+      mimeType: "image/png",
+      buffer: onePixelPng,
+    });
+    await expect(page.locator("header").getByRole("button", { name: "Uploading..." })).toBeDisabled();
+
+    // Leaving asks, although nothing else changed: the file is not in the form yet.
+    let confirmMessage: string | null = null;
+    page.once("dialog", async (dialog) => {
+      confirmMessage = dialog.message();
+      await dialog.dismiss();
+    });
+    await page.getByRole("button", { name: "Back to templates" }).click();
+    await expect.poll(() => confirmMessage).toContain("still uploading");
+    await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/edit$`));
+
+    releaseUpload();
+    await expect(page.getByLabel("Image URL")).toHaveValue(uploadedUrl);
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect
+      .poll(async () => {
+        const savedTemplate = await findTemplateByTitle(page, templateTitle);
+        const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+        return sections[0]?.items[0]?.contents?.[0]?.value;
+      })
+      .toBe(uploadedUrl);
+
+    await deleteTemplate(page, templateId);
+  });
+
   test("keeps edits typed while a save is in flight", async ({ page }) => {
     await loginAsSeedUser(page);
     const templateTitle = `QA Save race ${Date.now()}`;

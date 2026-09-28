@@ -5,10 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TemplateEditor from '@/pages/TemplateEditor';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
+import { createPendingUploads } from '@/features/template-editor/pendingUploads';
 
 const mockUseTemplateEditorModel = vi.fn();
 const mockUseTemplateEditorState = vi.fn();
 const mockUseTemplateEditorAccess = vi.fn();
+const mockUsePendingTemplateEditorUploads = vi.fn();
 
 const buildAccess = (overrides: Record<string, unknown> = {}) => ({
   draft: null,
@@ -37,8 +39,18 @@ vi.mock('@/features/template-editor/useTemplateEditorAccess', () => ({
     mockUseTemplateEditorAccess(...args),
 }));
 
+vi.mock('@/features/template-editor/pendingUploads', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/template-editor/pendingUploads')>()),
+  usePendingTemplateEditorUploads: (...args: unknown[]) =>
+    mockUsePendingTemplateEditorUploads(...args),
+}));
+
 beforeEach(() => {
   mockUseTemplateEditorAccess.mockReturnValue(buildAccess());
+  mockUsePendingTemplateEditorUploads.mockImplementation(() => ({
+    uploads: createPendingUploads(),
+    pendingCount: 0,
+  }));
 });
 
 // The editor's leave guard (useBlocker) needs a data router, as in the app.
@@ -202,5 +214,40 @@ describe('TemplateEditor page', () => {
     expect(html).toContain('Launch checklist');
     expect(html).toMatch(/<button[^>]*>Restore draft<\/button>/);
     expect(html).toMatch(/<button[^>]*>Discard<\/button>/);
+  });
+
+  // Saving now would store the block without the file.
+  it('disables Save while a file is still uploading', async () => {
+    mockUsePendingTemplateEditorUploads.mockImplementation(() => ({
+      uploads: createPendingUploads(),
+      pendingCount: 1,
+    }));
+    mockUseTemplateEditorModel.mockReturnValue({
+      initialValues: buildTemplateEditorFormValues({ title: 'Existing template' }),
+      isSaving: false,
+      loading: false,
+      loadError: null,
+      save: vi.fn(),
+      templateSlug: 'existing-template',
+    });
+    mockUseTemplateEditorState.mockReturnValue({
+      selectedSectionIndex: 0,
+      selectedItemIndex: null,
+      showingSEO: false,
+      showingTemplateInfo: true,
+      errors: [],
+      setErrors: vi.fn(),
+      handleSelectSection: vi.fn(),
+      handleSelectItem: vi.fn(),
+      handleSelectSEO: vi.fn(),
+      handleSelectTemplateInfo: vi.fn(),
+    });
+
+    const html = await renderEditorAt(
+      '/dashboard/templates/template-1/edit',
+      '/dashboard/templates/:id/edit',
+    );
+
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Uploading\.\.\.<\/button>/);
   });
 });

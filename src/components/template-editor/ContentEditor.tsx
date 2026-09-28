@@ -9,6 +9,7 @@ import { SubItemsEditor } from "@/components/template-editor/content-types/SubIt
 import { TextContentEditor } from "@/components/template-editor/content-types/TextContentEditor";
 import { Button } from "@/components/ui/button";
 import type { FileUploadChange } from "@/components/ui/file-upload";
+import { useTrackTemplateEditorUpload } from "@/features/template-editor/pendingUploads";
 import {
   createTemplateEditorContent,
   findTemplateEditorContentPath,
@@ -29,6 +30,8 @@ export function ContentEditor({
 }: ContentEditorProps): JSX.Element {
   const { control, getValues, setValue } = useFormContext<TemplateEditorFormValues>();
   const [activeAddPanel, setActiveAddPanel] = useState<ActiveAddPanel>(null);
+  // The page holds Save and guards leaving until every upload has finished.
+  const trackUpload = useTrackTemplateEditorUpload();
   const contentsFieldArray = useFieldArray({
     control,
     keyName: "fieldId",
@@ -101,6 +104,7 @@ export function ContentEditor({
           <MediaContentEditor
             fileName={content.fileName}
             onFileChange={(change) => handleFileChange(content.id, change)}
+            onUploadStart={trackUpload}
             onValueChange={(value) => handleContentValueChange(contentIndex, value)}
             type={content.type}
             value={content.value}

@@ -31,6 +31,9 @@ interface FileUploadProps {
   // Typing or pasting in the URL field.
   onValueChange: (value: string) => void;
   onFileChange: (change: FileUploadChange) => void;
+  // Receives each upload as it starts, so the page can wait for it: the file reaches
+  // the form only when the upload finishes, and this field may unmount before then.
+  onUploadStart?: (upload: Promise<UploadResult>) => void;
   className?: string;
 }
 
@@ -40,6 +43,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   fileName,
   onValueChange,
   onFileChange,
+  onUploadStart,
   className = ''
 }) => {
   const [isUploading, setIsUploading] = useState(false);
@@ -82,7 +86,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     setIsUploading(true);
 
     try {
-      const result: UploadResult = await uploadFile(file, getBucketName(), user.id);
+      const upload = uploadFile(file, getBucketName(), user.id);
+      onUploadStart?.(upload);
+      const result: UploadResult = await upload;
 
       // The previous upload is never deleted here: the saved template, its runs,
       // versions, and copies may still reference it, and this change is unsaved.
