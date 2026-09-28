@@ -38,6 +38,12 @@ import { refreshAfterRunDelete, refreshAfterTemplateDelete, refreshAfterTemplate
 import { createTemplateListFetcher, fetchRunList, shouldRetryListFetch, type TemplateListRequest } from "./templateListFetchers";
 import { buildRunUpdatePayload, type RunUpdateOptions } from "./runUpdatePayload";
 import { assertWorkspaceReady } from "./workspaceSelection";
+import {
+  getTemplateListReadiness,
+  resolveTemplateListObservers,
+  type TemplateListOptions,
+  type TemplateListReadiness,
+} from "./templateListObservers";
 
 
 const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
@@ -47,7 +53,7 @@ const EMPTY_TEMPLATES: ChecklistTemplate[] = [];
 const EMPTY_RUNS: ChecklistRun[] = [];
 
 type TemplateListQuery = UseQueryOptions<ChecklistTemplate[]>;
-type TemplateListQueries = { catalog: TemplateListQuery; workspace: TemplateListQuery; ready: boolean };
+type TemplateListQueries = TemplateListReadiness & { catalog: TemplateListQuery; workspace: TemplateListQuery };
 const TemplateListQueriesContext = createContext<
   (TemplateListQueries & { runs: UseQueryOptions<ChecklistRun[]> }) | undefined
 >(undefined);
@@ -55,10 +61,10 @@ const TemplateListQueriesContext = createContext<
 // Lists load only on pages that call useTemplateLists(), because a catalog miss reads every
 // public Template from D1. The catalog (?scope=public) is identical for everyone and
 // edge-cached, so its key has no user. The workspace list is the user's own Personal
-// templates (?scope=personal) or the active Organization's. Nothing loads until the session
-// and active workspace are known, or a page would also fetch a list it does not need.
-export const buildTemplateListQueries = (params: {
-  ready: boolean;
+// templates (?scope=personal) or the active Organization's. The workspace list waits until the
+// session and active workspace are known (`ready`), or a page would also fetch a list it does
+// not need. The catalog waits only for the session (`catalogReady`, see templateListObservers).
+export const buildTemplateListQueries = (params: TemplateListReadiness & {
   userId?: string;
   activeTeamId?: string;
   workspaceScopeId: string;
@@ -78,6 +84,7 @@ export const buildTemplateListQueries = (params: {
     enabled: params.ready && Boolean(params.userId),
   },
   ready: params.ready,
+  catalogReady: params.catalogReady,
 });
 
 type CreateRunRequest = {
@@ -137,14 +144,13 @@ export const useTemplates = () => {
 
 // Loads data for pages that read `templates` (the catalog), `allTemplates` (the active
 // workspace, merged with the catalog in Personal), or `runs`. See buildTemplateListQueries.
-export const useTemplateLists = (options: { catalog?: boolean; workspace?: boolean; runs?: boolean } = {}) => {
+export const useTemplateLists = (options: TemplateListOptions = {}) => {
   const queries = useContext(TemplateListQueriesContext);
   if (!queries) {
     throw new Error("useTemplateLists must be used within a TemplatesProvider");
   }
-  const catalogEnabled = queries.ready && options.catalog === true;
-  const workspaceEnabled = queries.workspace.enabled !== false && options.workspace !== false;
-  const runsEnabled = queries.runs.enabled !== false && options.runs === true;
+  const { catalogEnabled, workspaceEnabled, runsEnabled, templatesWaiting, runsWaiting } =
+    resolveTemplateListObservers(queries, options);
   const catalog = useQuery({ ...queries.catalog, enabled: catalogEnabled });
   const workspace = useQuery({ ...queries.workspace, enabled: workspaceEnabled });
   const runs = useQuery({ ...queries.runs, enabled: runsEnabled });
@@ -153,8 +159,8 @@ export const useTemplateLists = (options: { catalog?: boolean; workspace?: boole
   const context = useTemplates();
   return {
     ...context,
-    templatesLoading: !queries.ready || catalog.isLoading || workspace.isLoading,
-    runsLoading: !queries.ready || runs.isLoading,
+    templatesLoading: templatesWaiting || catalog.isLoading || workspace.isLoading,
+    runsLoading: runsWaiting || runs.isLoading,
     templatesError: (workspaceEnabled ? workspace.error : null) ?? (catalogEnabled ? catalog.error : null),
     runsError: runsEnabled ? runs.error : null,
     refetchTemplates: () => Promise.all([workspaceEnabled && workspace.refetch(), catalogEnabled && catalog.refetch()]),
@@ -163,14 +169,21 @@ export const useTemplateLists = (options: { catalog?: boolean; workspace?: boole
 };
 
 export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const { activeTeamId, isWorkspaceLoading, workspaceScopeId, workspaceStatus } = useWorkspace();
   const queryClient = useQueryClient();
 
   // These observers read whatever useTemplateLists() has loaded, without fetching.
-  const ready = !isWorkspaceLoading;
+  const { ready, catalogReady } = getTemplateListReadiness({ isAuthLoading: Boolean(isAuthLoading), isWorkspaceLoading });
   const listQueryContext = useMemo(() => {
-    const lists = buildTemplateListQueries({ ready, userId: user?.id, activeTeamId, workspaceScopeId, fetchList: fetchTemplateList });
+    const lists = buildTemplateListQueries({
+      ready,
+      catalogReady,
+      userId: user?.id,
+      activeTeamId,
+      workspaceScopeId,
+      fetchList: fetchTemplateList,
+    });
     // Runs load on demand too: useTemplateLists({ runs: true }) on the runs page only.
     const runs: UseQueryOptions<ChecklistRun[]> = {
       queryKey: ['runs', user?.id, workspaceScopeId],
@@ -180,7 +193,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       retry: shouldRetryListFetch,
     };
     return { ...lists, runs };
-  }, [activeTeamId, ready, user, workspaceScopeId]);
+  }, [activeTeamId, catalogReady, ready, user, workspaceScopeId]);
   const { data: catalogApiTemplates = EMPTY_TEMPLATES, isLoading: catalogTemplatesLoading } = useQuery({ ...listQueryContext.catalog, enabled: false });
   const { data: loadedWorkspaceTemplates, isLoading: workspaceTemplatesLoading } = useQuery({ ...listQueryContext.workspace, enabled: false });
   const workspaceTemplates = loadedWorkspaceTemplates ?? EMPTY_TEMPLATES;

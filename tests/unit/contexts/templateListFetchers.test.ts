@@ -113,6 +113,7 @@ describe('template list queries with a failing API', () => {
     clients.push(client);
     const queries = buildTemplateListQueries({
       ready: true,
+      catalogReady: true,
       userId: 'user-1',
       workspaceScopeId: 'personal',
       fetchList: createTemplateListFetcher(api),

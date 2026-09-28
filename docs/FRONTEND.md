@@ -74,7 +74,9 @@ container must reset that element too.
   fetches its own run by id. A catalog miss reads every public Template from D1
   ([D1 cost](design-docs/d1-cost.md)), so pages that only need official templates use
   the bundled `repoTemplates`. The catalog's query key has no user id because the
-  catalog is the same for everyone. In Personal, `allTemplates` merges the catalog with
+  catalog is the same for everyone, so it waits only for the session; the workspace
+  and run lists also wait for the active context (`src/contexts/templateListObservers.ts`).
+  A failed teams request must not hide the public library. In Personal, `allTemplates` merges the catalog with
   the user's own list; once that list has loaded it is the source of truth for the
   user's Personal templates, so a cached catalog copy it lacks (deleted, made private,
   or moved to an Organization) is dropped.
