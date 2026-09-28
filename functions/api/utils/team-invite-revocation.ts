@@ -1,4 +1,4 @@
-import { and, eq, exists, gt, isNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, exists, gt, isNull, notExists, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { schema, type createDb } from "../db";
 import { buildAuditEventValues } from "./audit";
@@ -64,7 +64,8 @@ export async function selectPendingInvitesFromInviter(
 /**
  * The two batch statements that revoke a pending invite and record `team_invite.revoked`.
  * The revoke applies only while the invite is still pending (and `guard` holds, if given);
- * the audit event is written only when this revoke happened.
+ * the audit event is written only when this revoke happened. An invite is revoked once, so
+ * the event is also skipped if one exists: two revokes in the same millisecond share `now`.
  */
 export async function buildInviteRevocation({
   db,
@@ -83,8 +84,9 @@ export async function buildInviteRevocation({
   metadata?: Record<string, unknown>;
   guard?: SQL;
 }) {
-  const { team_invites } = schema;
+  const { audit_events, team_invites } = schema;
   const revoked = alias(team_invites, "revoked_invite");
+  const loggedRevoke = alias(audit_events, "logged_revoke");
   const auditEvent = await buildAuditEventValues({
     actorUserId,
     subject: { type: "team", id: invite.team_id },
@@ -121,6 +123,21 @@ export async function buildInviteRevocation({
           guard,
         ),
       ),
-    insertAuditEventWhere(db, auditEvent, revokedNow),
+    insertAuditEventWhere(
+      db,
+      auditEvent,
+      and(
+        revokedNow,
+        notExists(
+          db.select({ id: loggedRevoke.id }).from(loggedRevoke).where(
+            and(
+              eq(loggedRevoke.resource_type, "team_invite"),
+              eq(loggedRevoke.resource_id, invite.id),
+              eq(loggedRevoke.action, "team_invite.revoked"),
+            ),
+          ),
+        ),
+      ) as SQL,
+    ),
   ] as const;
 }

@@ -426,6 +426,24 @@ describe("Organization membership writes against SQLite", () => {
       expect(newUserMembership()).toEqual([{ role: "viewer", status: "active" }]);
     });
 
+    it("logs one revoke when two revokes of the same invite share a timestamp", async () => {
+      const inviteId = await createInvite();
+      vi.useFakeTimers({ toFake: ["Date"], now: Date.now() });
+      try {
+        d1.beforeNextBatch(async () => {
+          const first = await asUser("owner-user", "DELETE", `/team-1/invites/${inviteId}`);
+          expect(first.status).toBe(200);
+        });
+
+        const result = await asUser("admin-user", "DELETE", `/team-1/invites/${inviteId}`);
+
+        expect(result.status).toBe(404);
+        expect(revokedAudits()).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("logs one revoke when two admins revoke the same invite at once", async () => {
       const inviteId = await createInvite();
       d1.beforeNextBatch(async () => {
