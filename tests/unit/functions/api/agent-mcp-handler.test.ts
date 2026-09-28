@@ -1,5 +1,6 @@
 import type { SQL } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const dbMocks = vi.hoisted(() => {
@@ -351,6 +352,29 @@ describe("personal run MCP handler", () => {
       { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     ]);
     expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
+  });
+
+  it("lists never-edited templates by when they were created, not after every edited one", async () => {
+    await handleAgentMcp(callTool("list_templates"), env);
+    const orderBy = dbMocks.selectChain.orderBy.mock.calls[0].map((part: unknown) =>
+      new SQLiteSyncDialect().sqlToQuery(part as SQL));
+
+    // Run the handler's ORDER BY on real SQLite, which sorts NULL below every value.
+    const sqlite = new DatabaseSync(":memory:");
+    sqlite.exec('create table "templates" ("id" text, "created_at" text, "updated_at" text)');
+    const insert = sqlite.prepare('insert into "templates" values (?, ?, ?)');
+    insert.run("edited-long-ago", "2024-01-01T00:00:00.000Z", "2024-02-01T00:00:00.000Z");
+    insert.run("edited-recently", "2024-01-01T00:00:00.000Z", "2026-09-01T00:00:00.000Z");
+    insert.run("created-today", "2026-09-20T00:00:00.000Z", null);
+    insert.run("imported-a", "2025-05-05T00:00:00.000Z", null);
+    insert.run("imported-b", "2025-05-05T00:00:00.000Z", null);
+    const ordered = sqlite
+      .prepare(`select "id" from "templates" order by ${orderBy.map((part: { sql: string }) => part.sql).join(", ")}`)
+      .all(...orderBy.flatMap((part: { params: unknown[] }) => part.params as string[]))
+      .map((row) => row.id);
+    sqlite.close();
+
+    expect(ordered).toEqual(["created-today", "edited-recently", "imported-b", "imported-a", "edited-long-ago"]);
   });
 
   it("does not expose another user's or a team's templates", async () => {

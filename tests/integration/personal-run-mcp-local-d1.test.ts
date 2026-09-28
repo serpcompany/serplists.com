@@ -461,6 +461,32 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(await createdAudits()).toBe(auditsBefore + started.length);
   });
 
+  it("lists a never-edited template ahead of older edits when the list is cut to 100", async () => {
+    const insertTemplate = (id: string, createdAt: string, updatedAt: string | null) => env.DB.prepare(`
+      INSERT INTO templates (
+        id, user_id, title, items, is_public, created_at, updated_at, version, type, owner_type,
+        team_id, created_by_user_id, content_version
+      ) VALUES (?, 'user-a', ?, '[]', 0, ?, ?, 1, 'checklist', 'user', NULL, 'user-a', 1)
+    `).bind(id, `SOP ${id}`, createdAt, updatedAt);
+    await env.DB.batch(Array.from({ length: 101 }, (_, index) => {
+      const suffix = String(index).padStart(3, "0");
+      return insertTemplate(`edited-${suffix}`, "2024-01-01T00:00:00.000Z", `2025-01-01T00:00:00.${suffix}Z`);
+    }));
+    // Imported in one request: created in the same millisecond and never edited.
+    await env.DB.batch([
+      insertTemplate("imported-a", "2026-09-20T00:00:00.000Z", null),
+      insertTemplate("imported-b", "2026-09-20T00:00:00.000Z", null),
+    ]);
+
+    const payload = toolPayload(await bodyOf(await callTool("list_templates", {}, 71)));
+    const ids = (payload.templates as JsonRecord[]).map(({ id }) => id);
+
+    expect(ids.slice(0, 2)).toEqual(["imported-b", "imported-a"]);
+    expect(ids).toContain("template-a");
+    expect(ids).toHaveLength(100);
+    expect(payload.truncated).toBe(true);
+  });
+
   it("revokes immediately and cascades keys only with their owning user", async () => {
     await env.DB.prepare("UPDATE personal_run_keys SET revoked_at = ? WHERE id = ?")
       .bind("2026-09-19T03:00:00.000Z", keyId)

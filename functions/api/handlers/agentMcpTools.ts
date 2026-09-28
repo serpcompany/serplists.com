@@ -92,7 +92,8 @@ export function parseToolArguments<Schema extends z.ZodTypeAny>(schema: Schema, 
 export const toolDefinitions = [
   {
     name: "list_templates",
-    description: "List the authenticated user's active personal SOP templates. Templates are read-only.",
+    description: "List the authenticated user's active personal SOP templates, most recently edited or created "
+      + "first, up to 100 (truncated is true when there are more). Templates are read-only.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },

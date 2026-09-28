@@ -205,7 +205,12 @@ async function listTemplates(env: Env, identity: PersonalRunKeyIdentity): Promis
       isNull(schema.templates.team_id),
       isNull(schema.templates.deleted_at),
     ))
-    .orderBy(desc(schema.templates.updated_at), desc(schema.templates.created_at));
+    // A Template's updated_at stays NULL until its first edit, and SQLite sorts NULL
+    // last, so order by last change (edit, else creation). The id makes ties stable.
+    .orderBy(
+      desc(sql`coalesce(${schema.templates.updated_at}, ${schema.templates.created_at})`),
+      desc(schema.templates.id),
+    );
 
   return {
     templates: rows
