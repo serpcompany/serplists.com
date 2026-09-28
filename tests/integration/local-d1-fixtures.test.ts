@@ -3,8 +3,10 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { D1Database } from "@cloudflare/workers-types";
 import { count, eq, inArray } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { getPlatformProxy } from "wrangler";
 import {
   DEV_PASSWORD_HASH,
   TEST_RUN_IDS,
@@ -30,6 +32,11 @@ import {
   users,
 } from "../../db/schema/index";
 import { withLocalD1, type LocalDb } from "../../scripts/data/local-d1";
+import { handleTemplates } from "../../functions/api/handlers/templates";
+import { getSessionUserId } from "../../functions/api/utils/session";
+
+// The Template save test calls the API handler as a signed-in user.
+vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: vi.fn() }));
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const persistPath = mkdtempSync(path.join(tmpdir(), "serplists-local-fixtures-"));
@@ -400,6 +407,72 @@ describe("local Drizzle fixture commands", () => {
       await withLocalD1(persistPath, async (db) => {
         expect(await fixtureCounts(db)).toEqual([4, 4, 2, 2, 6, 1, 1, 7, 5, 5, 4, 3, 5]);
       });
+    },
+    60_000,
+  );
+
+  it(
+    "seeds Template versions that a save can advance",
+    async () => {
+      runLocalData("seed-test");
+      const seededTemplateIds = [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS];
+
+      await withLocalD1(persistPath, async (db) => {
+        const seeded = await db
+          .select({ id: templates.id, version: templates.version, contentVersion: templates.content_version })
+          .from(templates)
+          .where(inArray(templates.id, seededTemplateIds));
+        const history = await db
+          .select({ templateId: template_versions.template_id, version: template_versions.version })
+          .from(template_versions)
+          .where(inArray(template_versions.template_id, seededTemplateIds));
+        const runs = await db
+          .select({ id: checklist_runs.id, templateId: checklist_runs.template_id, templateVersion: checklist_runs.template_version })
+          .from(checklist_runs)
+          .where(inArray(checklist_runs.id, TEST_RUN_IDS));
+
+        // A save writes history row templates.version + 1, so no seeded history row may be newer.
+        for (const template of seeded) {
+          const newestHistory = Math.max(0, ...history.filter((row) => row.templateId === template.id).map((row) => row.version));
+          expect(newestHistory, template.id).toBeLessThanOrEqual(template.version);
+        }
+        for (const run of runs) {
+          const template = seeded.find(({ id }) => id === run.templateId);
+          if (template) expect(run.templateVersion, run.id).toBeLessThanOrEqual(template.contentVersion);
+        }
+      });
+
+      const platform = await getPlatformProxy<{ DB: D1Database }>({
+        configPath: path.join(repoRoot, "wrangler.toml"),
+        envFiles: [".local-d1-env-disabled"],
+        persist: { path: path.resolve(repoRoot, persistPath, "v3") },
+        remoteBindings: false,
+      });
+      try {
+        const env = { DB: platform.env.DB } as unknown as Parameters<typeof handleTemplates>[1];
+        const url = "http://localhost/api/templates/team-template-growth-launch";
+        const load = async () => {
+          const response = await handleTemplates(new Request(url), env);
+          expect(response.status).toBe(200);
+          return (await response.json()) as { title: string; version: number };
+        };
+        vi.mocked(getSessionUserId).mockResolvedValue("user-1");
+
+        const loaded = await load();
+        const response = await handleTemplates(
+          new Request(url, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: `${loaded.title} (edited)`, expected_version: loaded.version }),
+          }),
+          env,
+        );
+
+        expect(response.status, await response.clone().text()).toBe(200);
+        expect(await load()).toMatchObject({ title: `${loaded.title} (edited)`, version: loaded.version + 1 });
+      } finally {
+        await platform.dispose();
+      }
     },
     60_000,
   );

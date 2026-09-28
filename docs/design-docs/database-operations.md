@@ -108,6 +108,10 @@ baseline.
   Users and what they made while using the app: Organizations they created (with
   every Template, Run and invite in them), invites they sent and Template history
   they wrote in other Organizations. If any delete fails, nothing is deleted.
+  A seeded Template's `version` must be at least its newest `template_versions`
+  row: a save writes history row `version + 1`, so a lower value makes every save
+  fail with a 409 edit conflict. `tests/integration/local-d1-fixtures.test.ts`
+  checks this for every seeded Template and saves the seeded Organization Template.
 - Staging: `pnpm run db:seed:official:staging` for official templates only, unless
   there is a deliberate test-data plan.
 - Production: never seed test Users or Organization fixtures.

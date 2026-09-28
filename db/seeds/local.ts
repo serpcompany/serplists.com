@@ -662,6 +662,10 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       category: json(["Operations", "SEO"]),
       tags: json(["team", "launch", "qa"]),
       slug: "shared-growth-launch-checklist",
+      // Matches its newest template_versions row (version 2) below. A save writes history
+      // row version + 1, so a lower version makes every save collide and return 409.
+      // content_version stays 1: the seeded Run was started from that content.
+      version: 2,
       created_at: at(-3 * DAY),
       updated_at: at(-DAY),
     },
