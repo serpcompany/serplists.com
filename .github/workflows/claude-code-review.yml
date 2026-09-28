@@ -2,7 +2,8 @@ name: Code Review
 
 # Claude reviews each pull request with the code-review plugin and posts an inline
 # comment per issue it finds (or one summary comment when it finds none). Advisory:
-# it never blocks merging. Setup and limits: docs/design-docs/agent-workflow.md.
+# it never blocks merging, but the check goes red when Claude could not finish the
+# review. Setup and limits: docs/design-docs/agent-workflow.md.
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
@@ -48,7 +49,12 @@ jobs:
             cat docs/design-docs/core-beliefs.md
           } > CLAUDE.md
 
+      # Allow every tool in the plugin's allowed-tools frontmatter
+      # (plugins/code-review/commands/code-review.md in anthropics/claude-code) plus
+      # Task for its subagents. A tool left out is denied, the review stops early,
+      # and the action still exits 0; the next step turns that into a failure.
       - name: Review with Claude
+        id: review
         if: env.HAS_REVIEW_TOKEN == 'true'
         uses: anthropics/claude-code-action@v1
         with:
@@ -56,4 +62,43 @@ jobs:
           plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
           plugins: "code-review@claude-code-plugins"
           prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
-          claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment"'
+          claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Task"'
+
+      # Inline on purpose: this job can mint an OIDC token, so it runs no script from
+      # the PR checkout. tests/unit/workflows/claude-code-review.test.ts runs this code.
+      - name: Fail if Claude could not finish the review
+        if: env.HAS_REVIEW_TOKEN == 'true'
+        env:
+          EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+        shell: node {0}
+        run: |
+          const fs = require('node:fs');
+          // Workflow commands end at a newline and treat % as an escape.
+          const clean = (value, max = 120) => String(value).replace(/[\r\n%]+/g, ' ').slice(0, max);
+          const fail = (message) => {
+            console.log(`::error title=Claude review did not finish::${clean(message, 600)}`);
+            process.exit(1);
+          };
+          const file = process.env.EXECUTION_FILE;
+          if (!file || !fs.existsSync(file)) {
+            fail('The review wrote no execution log, so no review happened. The action also skips when this PR changes the review workflow (it must match main).');
+          }
+          let messages;
+          try {
+            messages = JSON.parse(fs.readFileSync(file, 'utf8'));
+          } catch (error) {
+            fail(`The review execution log is not valid JSON: ${error.message}`);
+          }
+          const results = Array.isArray(messages) ? messages.filter((entry) => entry && entry.type === 'result') : [];
+          const result = results[results.length - 1];
+          if (!result) fail('The review execution log has no result entry, so the review did not finish.');
+          const denials = Array.isArray(result.permission_denials) ? result.permission_denials : [];
+          if (denials.length > 0) {
+            const denied = [...new Set(denials.map((denial) => {
+              const command = denial && denial.tool_input && denial.tool_input.command;
+              return command ? `${denial.tool_name} (${clean(command)})` : String(denial && denial.tool_name);
+            }))];
+            fail(`Claude was denied ${denied.join(', ')}, so the review stopped early. Allow the tool in claude_args; see docs/design-docs/agent-workflow.md.`);
+          }
+          if (result.is_error) fail(`The review ended with ${result.subtype || 'an error'}.`);
+          console.log(`Claude review finished in ${result.num_turns} turns with no denied tools.`);
