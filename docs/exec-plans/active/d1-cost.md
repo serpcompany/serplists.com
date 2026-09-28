@@ -140,3 +140,8 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   `createRun` now takes the page's loaded template, and the run page always loads its
   own run by id. `tests/e2e/on-demand-lists.spec.ts` covers both; list pages take their
   loading state from their own queries; edge-cache keys name the resource, not the path.
+- 2026-09-28: The public catalog waits only for the session, not `isWorkspaceLoading`.
+  Its key is the same for visitors and users, so it cannot be fetched twice, and once
+  `isWorkspaceLoading` also covered an unconfirmed stored Organization, a failed teams
+  request kept the public library on the bundled starters. The workspace and run lists
+  still wait for the active context (`src/contexts/templateListObservers.ts`).
