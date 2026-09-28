@@ -1,5 +1,6 @@
 import { optimizeImage, isImageFile } from "@/lib/imageOptimization";
 import { api } from "@/lib/api";
+import { UPLOAD_MAX_BYTES, formatUploadLimit } from "@/lib/schemas/uploadLimits";
 
 export type TemplateUploadBucket =
   | 'template-images'
@@ -108,10 +109,12 @@ export const validateFile = (
   file: File,
   type: 'image' | 'video' | 'file'
 ): { valid: boolean; error?: string } => {
-  const maxSize = 50 * 1024 * 1024; // 50MB
+  const bucket: TemplateUploadBucket =
+    type === 'image' ? 'template-images' : type === 'video' ? 'template-videos' : 'template-files';
+  const maxSize = UPLOAD_MAX_BYTES[bucket]; // the API enforces the same limit
 
   if (file.size > maxSize) {
-    return { valid: false, error: 'File size must be less than 50MB' };
+    return { valid: false, error: `File size must be less than ${formatUploadLimit(maxSize)}` };
   }
 
   switch (type) {

@@ -1,8 +1,11 @@
 import type { Env } from '../types';
 import { getSessionUserId } from '../utils/session';
 import { serveR2Object } from '../utils/r2-file-response';
-
-type UploadBucket = 'avatars' | 'template-images' | 'template-videos' | 'template-files';
+import {
+  UPLOAD_MAX_BYTES,
+  formatUploadLimit,
+  type UploadBucket,
+} from '../../../src/lib/schemas/uploadLimits';
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -27,9 +30,35 @@ const allowedMimeTypesByBucket: Record<UploadBucket, Set<string>> = {
   ]),
 };
 
-function isAllowedUploadType(bucket: UploadBucket, file: File): boolean {
-  if (!file.type) return true;
-  return allowedMimeTypesByBucket[bucket].has(file.type);
+// Used only when the browser could not tell the type: no Content-Type, or the
+// generic application/octet-stream it sends for unregistered extensions.
+const mimeTypeByExtension: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
+  pdf: 'application/pdf',
+  zip: 'application/zip',
+  json: 'application/json',
+  txt: 'text/plain',
+  md: 'text/markdown',
+  markdown: 'text/markdown',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+
+/** The type to store the file as, or null when the bucket does not accept it. */
+function resolveUploadType(bucket: UploadBucket, file: File, extension: string): string | null {
+  const type =
+    !file.type || file.type === 'application/octet-stream'
+      ? mimeTypeByExtension[extension.toLowerCase()]
+      : file.type;
+  return type && allowedMimeTypesByBucket[bucket].has(type) ? type : null;
 }
 
 function assertBucket(value: string | null): UploadBucket | null {
@@ -95,10 +124,13 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
     const file = form.get('file');
     if (!(file instanceof File)) return json({ error: 'file required' }, 400);
 
-    const maxBytes = 50 * 1024 * 1024;
-    if (file.size > maxBytes) return json({ error: 'File too large (max 50MB)' }, 413);
+    const maxBytes = UPLOAD_MAX_BYTES[bucket];
+    if (file.size > maxBytes) return json({ error: `File too large (max ${formatUploadLimit(maxBytes)})` }, 413);
 
-    if (!isAllowedUploadType(bucket, file)) {
+    const filename = sanitizeFilename(file.name || 'upload');
+    const ext = filename.includes('.') ? filename.split('.').pop() ?? '' : '';
+    const contentType = resolveUploadType(bucket, file, ext);
+    if (!contentType) {
       return json(
         {
           error: 'Unsupported file type for bucket',
@@ -110,13 +142,11 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
       );
     }
 
-    const filename = sanitizeFilename(file.name || 'upload');
-    const ext = filename.includes('.') ? filename.split('.').pop() : '';
     const key = `${bucket}/${userId}/${crypto.randomUUID()}${ext ? `.${ext}` : ''}`;
 
     await env.R2_UPLOADS.put(key, await file.arrayBuffer(), {
       httpMetadata: {
-        contentType: file.type || 'application/octet-stream',
+        contentType,
         contentDisposition: bucket === 'template-files' ? `attachment; filename="${filename}"` : undefined,
       },
     });
@@ -129,7 +159,7 @@ export async function handleUploads(request: Request, env: Env): Promise<Respons
       url: apiUrl,
       fileName: file.name,
       fileSize: file.size,
-      contentType: file.type || null,
+      contentType,
     });
   }
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { handleUploads } from '@functions/api/handlers/uploads';
+import { UPLOAD_MAX_BYTES, type UploadBucket } from '@/lib/schemas/uploadLimits';
 
 vi.mock('@functions/api/utils/session', () => ({
   getSessionUserId: vi.fn(),
@@ -31,6 +32,123 @@ describe('Uploads Handler', () => {
     expect(response.status).toBe(415);
     expect(data.error).toBe('Unsupported file type for bucket');
     expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
+  });
+});
+
+const MB = 1024 * 1024;
+
+function uploadRequest(bucket: string, file: File) {
+  const form = new FormData();
+  form.set('bucket', bucket);
+  form.set('file', file);
+  return new Request('http://localhost/api/uploads', { method: 'POST', body: form });
+}
+
+/** Hands the handler the parsed form as-is, so a file keeps an empty content type. */
+function rawFormUpload(bucket: string, file: File) {
+  const form = new FormData();
+  form.set('bucket', bucket);
+  form.set('file', file);
+  return {
+    method: 'POST',
+    url: 'http://localhost/api/uploads',
+    headers: new Headers(),
+    formData: async () => form,
+  } as unknown as Request;
+}
+
+function uploadEnv() {
+  return {
+    BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
+    R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
+  } as any;
+}
+
+describe('Uploads Handler size and type limits', () => {
+  it('rejects an avatar over 5MB without storing it', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env = uploadEnv();
+
+    const response = await handleUploads(
+      uploadRequest('avatars', new File([new Uint8Array(5 * MB + 1)], 'me.png', { type: 'image/png' })),
+      env,
+    );
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toMatchObject({ error: 'File too large (max 5MB)' });
+    expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
+  });
+
+  it('accepts a 5MB avatar and a 6MB Template image', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env = uploadEnv();
+
+    const avatar = await handleUploads(
+      uploadRequest('avatars', new File([new Uint8Array(5 * MB)], 'me.png', { type: 'image/png' })),
+      env,
+    );
+    const image = await handleUploads(
+      uploadRequest('template-images', new File([new Uint8Array(6 * MB)], 'step.png', { type: 'image/png' })),
+      env,
+    );
+
+    expect(avatar.status).toBe(200);
+    expect(image.status).toBe(200);
+    expect(env.R2_UPLOADS.put).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(Object.entries(UPLOAD_MAX_BYTES) as Array<[UploadBucket, number]>)(
+    'rejects a %s upload one byte over its %d-byte limit before storing it',
+    async (bucket, limit) => {
+      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+      const env = uploadEnv();
+      // Reports the size without allocating it; the handler rejects before reading.
+      class OversizedFile extends File {
+        get size() {
+          return limit + 1;
+        }
+      }
+
+      const response = await handleUploads(rawFormUpload(bucket, new OversizedFile(['x'], 'big.bin')), env);
+
+      expect(response.status).toBe(413);
+      expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['avatars', 'page.html'],
+    ['avatars', 'no-extension'],
+    ['template-images', 'script.js'],
+    ['template-files', 'installer.exe'],
+  ])('rejects a %s upload named %s that has no content type', async (bucket, name) => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env = uploadEnv();
+    const file = new File(['<html></html>'], name);
+    expect(file.type).toBe('');
+
+    const response = await handleUploads(rawFormUpload(bucket, file), env);
+
+    expect(response.status).toBe(415);
+    expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no content type', rawFormUpload],
+    ['the generic binary type browsers send for unknown files', uploadRequest],
+  ])('stores a file with %s under the type its extension allows', async (_label, build) => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env = uploadEnv();
+
+    const response = await handleUploads(build('template-files', new File(['# Notes'], 'notes.md')), env);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ contentType: 'text/markdown' });
+    expect(env.R2_UPLOADS.put).toHaveBeenCalledWith(
+      expect.stringMatching(/^template-files\/user-123\/.+\.md$/),
+      expect.anything(),
+      expect.objectContaining({ httpMetadata: expect.objectContaining({ contentType: 'text/markdown' }) }),
+    );
   });
 });
 

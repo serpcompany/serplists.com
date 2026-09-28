@@ -148,8 +148,8 @@ npx wrangler d1 execute serp-checklists-db-restored --remote --file=./tmp/backup
 ## R2 uploads
 
 Bucket `serp-checklists-uploads` (binding `R2_UPLOADS`). `POST /api/uploads`
-enforces a per-bucket MIME allowlist (`functions/api/handlers/uploads.ts`) and
-writes keys under per-user prefixes:
+enforces a per-bucket MIME allowlist and size limit (`functions/api/handlers/uploads.ts`,
+limits in `src/lib/schemas/uploadLimits.ts`) and writes keys under per-user prefixes:
 
 - `avatars/<userId>/<uuid>.<ext>`
 - `template-images/<userId>/<uuid>.<ext>`

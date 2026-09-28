@@ -32,7 +32,11 @@
   Keys are stored hashed. The MCP routes are off on remote hosts unless
   `PERSONAL_RUN_MCP_ENABLED=true`.
 - **Uploads** are written under the uploader's key prefix, and deletes are
-  restricted to that prefix.
+  restricted to that prefix. Each bucket has a size limit (avatars 5MB, Template
+  images, videos and files 50MB; `src/lib/schemas/uploadLimits.ts`, shared with the
+  upload forms) and a MIME allowlist. A file with no type, or the generic
+  `application/octet-stream`, is typed from its extension and rejected if that
+  type is not allowed. There is no per-account storage quota yet (TD-16).
 - **Invites** store only a token hash, never the raw token.
 
 ## Secrets and environment
